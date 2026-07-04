@@ -62,6 +62,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("Diagnose project and deployment preflight readiness"));
     assert!(plain.contains("Audit declared Canic state metadata"));
     assert!(plain.contains("    scaffold"));
+    assert!(plain.contains("Inspect runtime-observed status for one deployed canister"));
     assert!(plain.contains("cycles"));
     assert!(plain.contains("token"));
     assert!(plain.contains("info"));
@@ -146,6 +147,9 @@ fn command_family_help_returns_ok() {
         &["fleet", "create", "help"],
         &["fleet", "list", "help"],
         &["fleet", "delete", "help"],
+        &["inspect", "help"],
+        &["inspect", "canister", "help"],
+        &["inspect", "deployment", "help"],
         &["scaffold"],
         &["scaffold", "help"],
         &["scaffold", "canister", "help"],
@@ -256,6 +260,7 @@ fn version_flags_return_ok() {
     assert!(run([OsString::from("build"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("cycles"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("inspect"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());
@@ -416,6 +421,31 @@ fn rejected_deploy_plan_command_forms_are_usage_errors() {
                 err,
                 CliError::Usage(_) | CliError::Deploy(deploy::DeployCommandError::Usage(_))
             ),
+            "wrong error for {raw_args:?}: {err}"
+        );
+        assert_eq!(
+            cli_error_exit_code(&err),
+            2,
+            "wrong exit code for {raw_args:?}: {err}"
+        );
+    }
+}
+
+#[test]
+fn rejected_inspect_command_forms_are_usage_errors() {
+    for raw_args in [
+        &["inspect"][..],
+        &["inspect", "demo-local"],
+        &["inspect", "deployment", "demo-local"],
+        &["inspect", "deployment", "demo-local", "--all"],
+        &["inspect", "canister", "aaaaa-aa", "--health"],
+        &["inspect", "canister", "aaaaa-aa", "--readiness"],
+    ] {
+        let err =
+            run(raw_args.iter().map(OsString::from)).expect_err("inspect form should be rejected");
+
+        assert!(
+            matches!(err, CliError::Usage(_) | CliError::Inspect(_)),
             "wrong error for {raw_args:?}: {err}"
         );
         assert_eq!(

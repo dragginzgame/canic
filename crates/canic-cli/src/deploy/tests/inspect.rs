@@ -108,6 +108,7 @@ fn deploy_inspect_help_uses_canonical_paths() {
     assert!(help.contains("canic deploy inspect catalog list"));
     assert!(help.contains("canic deploy inspect root --request root-verification.json"));
     assert!(help.contains("canic deploy inspect resume-report --receipt receipt.json demo"));
+    assert!(help.contains("Use `canic inspect` for live runtime-observed"));
     assert!(!help.contains("canic deploy plan demo"));
     assert!(!help.contains("canic deploy compare --left"));
     assert!(!help.contains("canic deploy catalog list"));

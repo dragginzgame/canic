@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.81.x] - 2026-07-04 - Runtime Introspection
+
+Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
+
+- `0.81.0` adds guarded runtime-introspection endpoints and top-level
+  `canic inspect` commands for one explicit live canister target, with typed
+  runtime reports, timer/state metadata projections, a bounded heap-only
+  recent-failure ring, and help wording that separates live inspection from
+  deployment-truth artifact inspection.
+
 ## [0.80.x] - 2026-07-04 - Packaged Wasm Store Bootstrap
 
 Detailed patch breakdown: [docs/changelog/0.80.md](docs/changelog/0.80.md)

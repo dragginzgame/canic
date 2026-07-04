@@ -45,6 +45,7 @@ pub mod page;
 pub mod placement;
 pub mod pool;
 pub mod rpc;
+pub mod runtime;
 pub mod state;
 pub mod subnet;
 pub mod topology;

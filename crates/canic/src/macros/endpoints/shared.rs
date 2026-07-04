@@ -25,6 +25,46 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
     };
 }
 
+/// Emit guarded runtime introspection endpoints shared by all Canic canisters.
+#[macro_export]
+macro_rules! canic_emit_runtime_introspection_endpoints {
+    () => {
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_health() -> Result<::canic::dto::runtime::CanicHealthStatus, ::canic::Error>
+        {
+            Ok(
+                $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
+                    $crate::cdk::api::time(),
+                )),
+            )
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_readiness()
+        -> Result<::canic::dto::runtime::CanicReadinessStatus, ::canic::Error> {
+            Ok(
+                $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::readiness(
+                    $crate::cdk::api::time(),
+                ),
+            )
+        }
+
+        #[$crate::canic_query(requires(caller::is_controller()))]
+        async fn canic_runtime_status()
+        -> Result<::canic::dto::runtime::CanicRuntimeStatus, ::canic::Error> {
+            Ok(
+                $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::runtime_status(
+                    $crate::cdk::api::time(),
+                    env!("CARGO_PKG_NAME"),
+                    env!("CARGO_PKG_VERSION"),
+                    $crate::VERSION,
+                    $crate::cdk::api::canister_version(),
+                ),
+            )
+        }
+    };
+}
+
 /// Emit the ICRC standards-facing query endpoints shared by all Canic canisters.
 #[macro_export]
 macro_rules! canic_emit_icrc_standards_endpoints {
@@ -124,6 +164,7 @@ macro_rules! canic_emit_log_observability_endpoints {
 #[macro_export]
 macro_rules! canic_bundle_observability_endpoints {
     () => {
+        $crate::canic_emit_runtime_introspection_endpoints!();
         #[cfg(not(canic_disable_bundle_observability_env))]
         $crate::canic_emit_env_observability_endpoints!();
         #[cfg(not(canic_disable_bundle_observability_log))]

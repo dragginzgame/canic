@@ -94,6 +94,9 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only("canic_get_delegated_token"),
+    query_read_only("canic_health"),
+    query_read_only("canic_readiness"),
+    query_read_only("canic_runtime_status"),
     update_monotonic_publish(
         "canic_template_prepare_admin",
         "wasm_store.template_prepare_admin.v1",

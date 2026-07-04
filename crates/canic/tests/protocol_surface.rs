@@ -34,6 +34,10 @@ use canic::{
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
+    dto::runtime::{
+        CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
+        RuntimeFieldVisibility,
+    },
     ids::{BuildNetwork, CanisterRole},
 };
 
@@ -1168,6 +1172,90 @@ fn memory_ledger_dto_candid_shape_includes_backing_memory_size() {
             && ledger_env.contains("bytes : nat64"),
         "memory ledger DTO Candid changed:\n{ledger_env}"
     );
+}
+
+#[test]
+fn runtime_introspection_endpoints_are_controller_guarded_by_default() {
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/shared.rs");
+    let source = read_text(&macro_path);
+    let endpoint_macro = source
+        .split("macro_rules! canic_emit_runtime_introspection_endpoints")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! canic_emit_icrc_standards_endpoints")
+                .next()
+        })
+        .expect("runtime introspection endpoint macro should exist");
+
+    for endpoint in [
+        "fn canic_health()",
+        "fn canic_readiness(",
+        "fn canic_runtime_status(",
+    ] {
+        assert!(
+            endpoint_macro.contains(endpoint),
+            "runtime introspection macro should emit {endpoint}"
+        );
+    }
+
+    assert!(
+        endpoint_macro
+            .matches("requires(caller::is_controller())")
+            .count()
+            >= 3,
+        "runtime introspection endpoints must be controller-guarded by default"
+    );
+    assert!(
+        !endpoint_macro.contains("public)]"),
+        "runtime introspection endpoints must not be public by default"
+    );
+}
+
+#[test]
+fn runtime_introspection_dto_candid_shapes_are_named() {
+    let status_env = candid_type_env::<CanicRuntimeStatus>();
+
+    assert!(
+        status_env.contains("type CanicRuntimeStatus = record")
+            && status_env.contains("schema_version : nat32")
+            && status_env.contains("observed_at_ns : nat64")
+            && status_env.contains("canister_id : principal")
+            && status_env.contains("readiness : CanicReadinessStatus")
+            && status_env.contains("recent_failures : vec RecentFailure")
+            && status_env.contains("visibility : vec RuntimeVisibilityEntry")
+            && status_env.contains("type CanicReadinessStatus = record")
+            && status_env.contains("type RecentFailure = record")
+            && status_env.contains("redacted : bool")
+            && status_env.contains("type RuntimeFieldVisibility = variant"),
+        "runtime introspection DTO Candid changed:\n{status_env}"
+    );
+
+    let health_env = candid_type_env::<CanicHealthStatus>();
+    assert!(
+        health_env.contains("type CanicHealthStatus = record")
+            && health_env.contains("status : HealthStatus")
+            && health_env.contains("checks : vec RuntimeCheck"),
+        "health DTO Candid changed:\n{health_env}"
+    );
+
+    let readiness_env = candid_type_env::<CanicReadinessStatus>();
+    assert!(
+        readiness_env.contains("type CanicReadinessStatus = record")
+            && readiness_env.contains("blockers : vec RuntimeDiagnostic")
+            && readiness_env.contains("warnings : vec RuntimeDiagnostic"),
+        "readiness DTO Candid changed:\n{readiness_env}"
+    );
+
+    let _ = RuntimeFieldVisibility::ControllerOnly;
+    let _ = RecentFailure {
+        occurred_at_ns: 0,
+        subsystem: String::new(),
+        code: String::new(),
+        severity: canic::dto::runtime::FailureSeverity::Info,
+        summary: String::new(),
+        correlation_id: None,
+        redacted: true,
+    };
 }
 
 #[test]

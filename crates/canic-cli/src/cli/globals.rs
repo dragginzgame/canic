@@ -141,7 +141,7 @@ pub fn apply_global_network(
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "blob-storage" | "cycles" | "medic" | "status" | "token" => true,
+        "blob-storage" | "cycles" | "inspect" | "medic" | "status" | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
         "info" => info_leaf_accepts_globals(tail),
         "replica" => matches!(
@@ -157,7 +157,8 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
 
 fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
     match command {
-        "blob-storage" | "build" | "cycles" | "install" | "medic" | "status" | "token" => true,
+        "blob-storage" | "build" | "cycles" | "inspect" | "install" | "medic" | "status"
+        | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
         "deploy" => deploy_leaf_accepts_global_network(tail),
         "info" => info_leaf_accepts_globals(tail),
@@ -247,6 +248,26 @@ mod tests {
             [
                 OsString::from(INTERNAL_NETWORK_OPTION),
                 OsString::from("ic")
+            ]
+        );
+    }
+
+    #[test]
+    fn inspect_accepts_global_icp_and_network() {
+        let mut tail = vec![OsString::from("canister"), OsString::from("aaaaa-aa")];
+
+        apply_global_icp("inspect", &mut tail, Some("icp".to_string()));
+        apply_global_network("inspect", &mut tail, Some("local".to_string()));
+
+        assert_eq!(
+            tail,
+            [
+                OsString::from("canister"),
+                OsString::from("aaaaa-aa"),
+                OsString::from(INTERNAL_ICP_OPTION),
+                OsString::from("icp"),
+                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from("local"),
             ]
         );
     }
