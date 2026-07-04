@@ -183,6 +183,26 @@ fn canister_status_is_manifested_as_read_only() {
 }
 
 #[test]
+fn runtime_introspection_endpoints_are_manifested_as_read_only_queries() {
+    for endpoint in ["canic_health", "canic_readiness", "canic_runtime_status"] {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == endpoint)
+            .expect("runtime introspection policy entry");
+
+        assert_eq!(
+            entry.implementation_status,
+            ReplayImplementationStatus::Implemented
+        );
+        assert_eq!(entry.endpoint_kind, EndpointKind::Query);
+        assert_eq!(entry.replay_policy, ReplayPolicy::QueryOrReadOnly);
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(entry.quota_policy, None);
+        assert_eq!(entry.cycle_reserve_policy, None);
+    }
+}
+
+#[test]
 fn canister_upgrade_is_manifested_as_implemented_response_idempotent() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()

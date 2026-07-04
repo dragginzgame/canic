@@ -22,7 +22,8 @@ Examples:
 
 These commands print raw deployment-truth JSON artifacts without installing,
 resuming, or mutating state. Use `canic deploy check --format text` for the
-compact operator summary.";
+compact operator summary. Use `canic inspect` for live runtime-observed
+canister status from `canic_runtime_status`.";
 
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
 where
