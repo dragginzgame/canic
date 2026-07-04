@@ -381,7 +381,7 @@ mod tests {
         TimerMetrics::reset();
         TimerMetrics::record_timer_scheduled(
             TimerMode::Interval,
-            Duration::from_secs(60),
+            Duration::from_mins(1),
             "cycles:interval",
         );
         TimerMetrics::record_timer_scheduled(
