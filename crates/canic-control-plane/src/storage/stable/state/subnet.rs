@@ -10,7 +10,7 @@ use canic_core::{
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-pub(crate) const SUBNET_STATE_ID: u8 = 84;
+pub const SUBNET_STATE_ID: u8 = 84;
 
 eager_static! {
     //

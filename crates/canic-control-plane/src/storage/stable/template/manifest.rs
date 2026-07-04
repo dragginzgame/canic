@@ -9,7 +9,7 @@ use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-pub(crate) const TEMPLATE_MANIFESTS_ID: u8 = 80;
+pub const TEMPLATE_MANIFESTS_ID: u8 = 80;
 
 eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<
