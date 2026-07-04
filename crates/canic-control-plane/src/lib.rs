@@ -31,6 +31,7 @@ pub(crate) mod ops;
 #[cfg(feature = "root-control-plane")]
 pub mod runtime;
 pub mod schema;
+pub mod state_contract;
 pub(crate) mod storage;
 pub(crate) mod support;
 #[cfg(feature = "root-control-plane")]

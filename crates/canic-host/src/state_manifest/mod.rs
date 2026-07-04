@@ -7,10 +7,11 @@
 //! Boundary: consumes passive declaration metadata from `canic-core` and emits
 //! diagnostic-only reports.
 
+use canic_control_plane::state_contract::canic_control_plane_state_manifest;
 use canic_core::state_contract::{
     MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest, STATE_MANIFEST_SCHEMA_VERSION,
     StateDomainManifest, StateManifest, StateMigrationManifest, StateRoleManifest, StateStorage,
-    canic_state_manifest_for_role,
+    canic_state_manifest,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -101,7 +102,60 @@ pub enum StateAuditSeverity {
 
 #[must_use]
 pub fn declared_state_manifest(role: Option<&str>) -> StateManifest {
-    canic_state_manifest_for_role(role)
+    let mut manifest = merge_manifests(vec![
+        canic_state_manifest(),
+        canic_control_plane_state_manifest(),
+    ]);
+    if let Some(role) = role {
+        manifest
+            .roles
+            .retain(|entry| entry.canister_role.as_str() == role);
+    }
+    manifest
+}
+
+fn merge_manifests(manifests: Vec<StateManifest>) -> StateManifest {
+    let mut by_role = BTreeMap::<String, StateRoleManifest>::new();
+
+    for manifest in manifests {
+        for role in manifest.roles {
+            let entry = by_role
+                .entry(role.canister_role.clone())
+                .or_insert_with(|| StateRoleManifest {
+                    canister_role: role.canister_role.clone(),
+                    state: Vec::new(),
+                    removed_state: Vec::new(),
+                    reserved_memory: Vec::new(),
+                });
+            entry.state.extend(role.state);
+            entry.removed_state.extend(role.removed_state);
+            entry.reserved_memory.extend(role.reserved_memory);
+        }
+    }
+
+    let mut roles = by_role.into_values().collect::<Vec<_>>();
+    sort_roles(&mut roles);
+    StateManifest {
+        schema_version: STATE_MANIFEST_SCHEMA_VERSION,
+        roles,
+    }
+}
+
+fn sort_roles(roles: &mut [StateRoleManifest]) {
+    roles.sort_by(|left, right| left.canister_role.cmp(&right.canister_role));
+    for role in roles {
+        role.state
+            .sort_by(|left, right| left.domain.cmp(&right.domain));
+        role.removed_state
+            .sort_by(|left, right| left.domain.cmp(&right.domain));
+        role.reserved_memory
+            .sort_by_key(|reservation| reservation.memory_id);
+        for domain in &mut role.state {
+            domain
+                .migrations
+                .sort_by_key(|migration| (migration.from, migration.to));
+        }
+    }
 }
 
 #[must_use]
@@ -338,6 +392,7 @@ fn role_state_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAu
         checks.extend(schema_checks(role, domain));
         checks.extend(storage_checks(role, domain));
         checks.extend(naming_checks(role, domain));
+        checks.extend(export_import_contract_checks(role, domain));
         checks.extend(migration_checks(role, domain));
         checks.extend(lifecycle_checks(role, domain));
     }
@@ -451,6 +506,32 @@ fn naming_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditChec
     };
 
     vec![record_check, snapshot_check]
+}
+
+fn export_import_contract_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
+    let subject = domain_subject(role, domain);
+    if domain.snapshot.ends_with("Data") {
+        vec![pass(
+            CATEGORY_SNAPSHOT,
+            "reserved_export_import_ok",
+            &subject,
+            format!(
+                "snapshot type {} is a canonical Data shape for export/import boundaries",
+                domain.snapshot
+            ),
+        )]
+    } else {
+        vec![warn(
+            CATEGORY_SNAPSHOT,
+            "reserved_export_import_violation",
+            &subject,
+            format!(
+                "snapshot type {} is not a canonical Data shape for export/import boundaries",
+                domain.snapshot
+            ),
+            "reserve export/import for canonical *Data snapshot shapes",
+        )]
+    }
 }
 
 fn migration_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditCheck> {
@@ -655,9 +736,10 @@ fn lifecycle_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditC
 fn removed_state_checks(role: &str, removed: &[RemovedStateManifest]) -> Vec<StateAuditCheck> {
     removed
         .iter()
-        .map(|entry| {
+        .flat_map(|entry| {
             let subject = format!("{role}/{}", entry.domain);
-            if entry.disposition.trim().is_empty() {
+            let mut checks = Vec::new();
+            checks.push(if entry.disposition.trim().is_empty() {
                 fail(
                     CATEGORY_REMOVED_STATE,
                     "removed_state_disposition_missing",
@@ -672,7 +754,42 @@ fn removed_state_checks(role: &str, removed: &[RemovedStateManifest]) -> Vec<Sta
                     &subject,
                     format!("removed state disposition declared: {}", entry.disposition),
                 )
-            }
+            });
+            checks.push(if entry.reason.trim().is_empty() {
+                warn(
+                    CATEGORY_REMOVED_STATE,
+                    "removed_state_reason_missing",
+                    &subject,
+                    "removed state disposition does not declare a reason".to_string(),
+                    "document why the removed state can be migrated, discarded, or manually handled",
+                )
+            } else {
+                pass(
+                    CATEGORY_REMOVED_STATE,
+                    "removed_state_reason_declared",
+                    &subject,
+                    format!("removed state reason declared: {}", entry.reason),
+                )
+            });
+            checks.push(
+                if entry.test.as_ref().is_some_and(|test| !test.trim().is_empty()) {
+                    pass(
+                        CATEGORY_TEST_COVERAGE,
+                        "removed_state_test_declared",
+                        &subject,
+                        "removed state declares upgrade test coverage".to_string(),
+                    )
+                } else {
+                    warn(
+                        CATEGORY_TEST_COVERAGE,
+                        "removed_state_test_missing",
+                        &subject,
+                        "removed state has no declared upgrade test coverage".to_string(),
+                        "declare upgrade test coverage for the removed-state disposition",
+                    )
+                },
+            );
+            checks
         })
         .collect()
 }
@@ -915,7 +1032,7 @@ mod tests {
     use canic_core::state_contract::{MigrationPolicy, StateRoleManifest};
 
     #[test]
-    fn builtin_report_is_warning_only_for_snapshot_names() {
+    fn builtin_report_is_warning_only_for_reserved_memory() {
         let report = build_state_audit_report(Some("root"));
 
         assert_eq!(report.status, StateAuditStatus::Warn);
@@ -927,7 +1044,19 @@ mod tests {
             report
                 .checks
                 .iter()
-                .any(|check| check.code == "snapshot_name_invalid")
+                .any(|check| check.code == "reserved_memory_id_declared")
+        );
+        assert!(
+            report
+                .checks
+                .iter()
+                .all(|check| check.code != "snapshot_name_invalid")
+        );
+        assert!(
+            report
+                .checks
+                .iter()
+                .any(|check| check.code == "reserved_export_import_ok")
         );
         assert!(
             report
@@ -935,6 +1064,37 @@ mod tests {
                 .iter()
                 .all(|check| check.status != StateAuditStatus::Fail)
         );
+    }
+
+    #[test]
+    fn builtin_manifest_merges_control_plane_state_by_role() {
+        let manifest = declared_state_manifest(Some("root"));
+        let role = manifest.roles.first().expect("root role");
+
+        assert!(role.state.iter().any(|domain| {
+            domain.domain == "template_manifests"
+                && domain.owner == "canic-control-plane"
+                && domain.memory_id == Some(80)
+        }));
+        assert!(
+            role.state
+                .iter()
+                .any(|domain| { domain.domain == "auth_state" && domain.owner == "canic-core" })
+        );
+    }
+
+    #[test]
+    fn wasm_store_role_audits_cleanly() {
+        let report = build_state_audit_report(Some("wasm_store"));
+
+        assert_eq!(report.status, StateAuditStatus::Pass);
+        assert!(report.manifest.roles.iter().any(|role| {
+            role.canister_role == "wasm_store"
+                && role
+                    .state
+                    .iter()
+                    .any(|domain| domain.domain == "wasm_store_gc_state")
+        }));
     }
 
     #[test]
@@ -1252,6 +1412,36 @@ mod tests {
                     && check.status == StateAuditStatus::Warn)
         );
         assert!(checks.iter().all(|check| check.code != "migration_missing"));
+    }
+
+    #[test]
+    fn removed_state_missing_reason_and_test_warn() {
+        let manifest = StateManifest {
+            schema_version: 1,
+            roles: vec![StateRoleManifest {
+                canister_role: "root".to_string(),
+                state: Vec::new(),
+                removed_state: vec![RemovedStateManifest {
+                    domain: "legacy_cache".to_string(),
+                    last_version: 1,
+                    removed_in_version: 2,
+                    memory_id: Some(99),
+                    disposition: "discarded".to_string(),
+                    reason: String::new(),
+                    test: None,
+                }],
+                reserved_memory: Vec::new(),
+            }],
+        };
+
+        let checks = audit_checks(&manifest, None);
+
+        assert!(checks.iter().any(|check| {
+            check.code == "removed_state_reason_missing" && check.status == StateAuditStatus::Warn
+        }));
+        assert!(checks.iter().any(|check| {
+            check.code == "removed_state_test_missing" && check.status == StateAuditStatus::Warn
+        }));
     }
 
     #[test]
