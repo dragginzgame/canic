@@ -9,6 +9,11 @@ use canic::{
         error::ErrorCode,
         log::LogEntry,
         page::{Page, PageRequest},
+        runtime::{
+            CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, HealthStatus,
+            RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus, RuntimeFieldVisibility,
+            RuntimeStatus,
+        },
         state::{AppStateResponse, SubnetStateResponse},
         topology::AppRegistryResponse,
     },
@@ -233,6 +238,68 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
 /// diagnostic queries are accepted, or if the default memory-ledger endpoint is
 /// present.
 pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principal) {
+    let health: Result<CanicHealthStatus, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_HEALTH, ());
+    let health = health.expect("root health application");
+    assert_eq!(health.schema_version, RUNTIME_INTROSPECTION_SCHEMA_VERSION);
+    assert_eq!(health.status, HealthStatus::Healthy);
+    assert!(
+        health.observed_at_ns.is_some(),
+        "health should include runtime observation time"
+    );
+    assert!(
+        health
+            .checks
+            .iter()
+            .any(|check| check.code == "canister_responsive"),
+        "health should report responsive canister check"
+    );
+
+    let readiness: Result<CanicReadinessStatus, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_READINESS, ());
+    let readiness = readiness.expect("root readiness application");
+    assert_eq!(
+        readiness.schema_version,
+        RUNTIME_INTROSPECTION_SCHEMA_VERSION
+    );
+    assert_eq!(readiness.role.as_deref(), Some(CanisterRole::ROOT.as_str()));
+    assert_eq!(readiness.status, ReadinessStatus::Ready);
+    assert!(
+        readiness.blockers.is_empty(),
+        "ready root should not report readiness blockers"
+    );
+
+    let runtime_status: Result<CanicRuntimeStatus, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_RUNTIME_STATUS, ());
+    let runtime_status = runtime_status.expect("root runtime status application");
+    assert_eq!(
+        runtime_status.schema_version,
+        RUNTIME_INTROSPECTION_SCHEMA_VERSION
+    );
+    assert_eq!(runtime_status.canister_id, root_id);
+    assert_eq!(
+        runtime_status.role.as_deref(),
+        Some(CanisterRole::ROOT.as_str())
+    );
+    assert_eq!(runtime_status.root, Some(root_id));
+    assert_eq!(runtime_status.readiness.status, ReadinessStatus::Ready);
+    assert_eq!(runtime_status.status, RuntimeStatus::Ok);
+    assert!(
+        runtime_status
+            .visibility
+            .iter()
+            .any(|entry| entry.field == "topology"
+                && entry.visibility == RuntimeFieldVisibility::ControllerOnly),
+        "runtime status should classify topology as controller-only"
+    );
+    assert!(
+        runtime_status
+            .state
+            .as_ref()
+            .is_some_and(|state| !state.domains.is_empty()),
+        "root runtime status should expose state metadata, not persisted values"
+    );
+
     let app_registry: Result<AppRegistryResponse, canic::Error> =
         pic.query_call_or_panic(root_id, protocol::CANIC_APP_REGISTRY, ());
     app_registry.expect("root app registry application");
@@ -260,6 +327,27 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
     assert_missing_method(&err, protocol::CANIC_MEMORY_LEDGER);
 
     let non_controller = Principal::from_slice(&[252; 29]);
+    let denied_health: Result<CanicHealthStatus, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_HEALTH, ());
+    let Err(denied_health) = denied_health else {
+        panic!("non-controller health query must be denied")
+    };
+    assert_eq!(denied_health.code, ErrorCode::Unauthorized);
+
+    let denied_readiness: Result<CanicReadinessStatus, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_READINESS, ());
+    let Err(denied_readiness) = denied_readiness else {
+        panic!("non-controller readiness query must be denied")
+    };
+    assert_eq!(denied_readiness.code, ErrorCode::Unauthorized);
+
+    let denied_runtime_status: Result<CanicRuntimeStatus, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_RUNTIME_STATUS, ());
+    let Err(denied_runtime_status) = denied_runtime_status else {
+        panic!("non-controller runtime status query must be denied")
+    };
+    assert_eq!(denied_runtime_status.code, ErrorCode::Unauthorized);
+
     let denied_app_registry: Result<AppRegistryResponse, canic::Error> =
         pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
     let Err(denied_app_registry) = denied_app_registry else {
@@ -285,6 +373,92 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         panic!("non-controller log query must be denied")
     };
     assert_eq!(denied_log.code, ErrorCode::Unauthorized);
+}
+
+/// Assert default child runtime introspection exposure and controller gating.
+///
+/// # Panics
+///
+/// Panics if the expected child runtime introspection queries fail, if returned
+/// child identity/topology fields are inconsistent, or if non-controller
+/// runtime introspection queries are accepted.
+pub fn assert_child_runtime_introspection_is_controller_gated(
+    pic: &Pic,
+    child_pid: Principal,
+    role: &CanisterRole,
+    expected_parent_id: Principal,
+    root_id: Principal,
+) {
+    let health: Result<CanicHealthStatus, canic::Error> =
+        pic.query_call_as_or_panic(child_pid, root_id, protocol::CANIC_HEALTH, ());
+    let health = health.expect("child health application");
+    assert_eq!(health.schema_version, RUNTIME_INTROSPECTION_SCHEMA_VERSION);
+    assert_eq!(health.status, HealthStatus::Healthy);
+    assert!(
+        health.observed_at_ns.is_some(),
+        "child health should include runtime observation time"
+    );
+
+    let readiness: Result<CanicReadinessStatus, canic::Error> =
+        pic.query_call_as_or_panic(child_pid, root_id, protocol::CANIC_READINESS, ());
+    let readiness = readiness.expect("child readiness application");
+    assert_eq!(
+        readiness.schema_version,
+        RUNTIME_INTROSPECTION_SCHEMA_VERSION
+    );
+    assert_eq!(readiness.role.as_deref(), Some(role.as_str()));
+    assert_eq!(readiness.status, ReadinessStatus::Ready);
+    assert!(
+        readiness.blockers.is_empty(),
+        "ready child should not report readiness blockers"
+    );
+
+    let runtime_status: Result<CanicRuntimeStatus, canic::Error> =
+        pic.query_call_as_or_panic(child_pid, root_id, protocol::CANIC_RUNTIME_STATUS, ());
+    let runtime_status = runtime_status.expect("child runtime status application");
+    assert_eq!(
+        runtime_status.schema_version,
+        RUNTIME_INTROSPECTION_SCHEMA_VERSION
+    );
+    assert_eq!(runtime_status.canister_id, child_pid);
+    assert_eq!(runtime_status.role.as_deref(), Some(role.as_str()));
+    assert_eq!(runtime_status.root, Some(root_id));
+    assert_eq!(runtime_status.readiness.status, ReadinessStatus::Ready);
+    assert_eq!(runtime_status.status, RuntimeStatus::Ok);
+
+    let topology = runtime_status
+        .topology
+        .as_ref()
+        .expect("child runtime status should include topology metadata");
+    assert_eq!(topology.root, Some(root_id));
+    assert_eq!(topology.parent, Some(expected_parent_id));
+
+    let non_controller = Principal::from_slice(&[253; 29]);
+    let denied_health: Result<CanicHealthStatus, canic::Error> =
+        pic.query_call_as_or_panic(child_pid, non_controller, protocol::CANIC_HEALTH, ());
+    let Err(denied_health) = denied_health else {
+        panic!("non-controller child health query must be denied")
+    };
+    assert_eq!(denied_health.code, ErrorCode::Unauthorized);
+
+    let denied_readiness: Result<CanicReadinessStatus, canic::Error> =
+        pic.query_call_as_or_panic(child_pid, non_controller, protocol::CANIC_READINESS, ());
+    let Err(denied_readiness) = denied_readiness else {
+        panic!("non-controller child readiness query must be denied")
+    };
+    assert_eq!(denied_readiness.code, ErrorCode::Unauthorized);
+
+    let denied_runtime_status: Result<CanicRuntimeStatus, canic::Error> = pic
+        .query_call_as_or_panic(
+            child_pid,
+            non_controller,
+            protocol::CANIC_RUNTIME_STATUS,
+            (),
+        );
+    let Err(denied_runtime_status) = denied_runtime_status else {
+        panic!("non-controller child runtime status query must be denied")
+    };
+    assert_eq!(denied_runtime_status.code, ErrorCode::Unauthorized);
 }
 
 // Match PocketIC missing-method failures without depending on one exact transport string.
