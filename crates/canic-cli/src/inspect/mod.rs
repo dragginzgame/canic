@@ -157,7 +157,7 @@ struct RuntimeStatusPayload {
     status: Option<CanicRuntimeStatus>,
     response_format: String,
     response_bytes_present: bool,
-    response_candid: Option<String>,
+    response_candid_present: bool,
 }
 
 pub fn run<I>(args: I) -> Result<(), InspectCommandError>
@@ -335,14 +335,14 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
 fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
     let value = serde_json::from_str::<serde_json::Value>(output)
         .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
-    let response_candid = response_candid(&value).map(str::to_string);
+    let response_candid_present = response_candid(&value).is_some();
     let response_bytes = value
         .get("response_bytes")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
     let response_bytes_present = response_bytes.is_some();
 
-    if !response_bytes_present && response_candid.is_none() {
+    if !response_bytes_present && !response_candid_present {
         return Err(InspectCommandError::InvalidResponse(
             "missing response_bytes and response_candid".to_string(),
         ));
@@ -357,7 +357,7 @@ fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, Inspec
         status,
         response_format: "candid".to_string(),
         response_bytes_present,
-        response_candid,
+        response_candid_present,
     })
 }
 
@@ -414,6 +414,10 @@ fn render_text_report(report: &InspectReport) -> String {
                 "response_bytes_present: {}",
                 runtime_status.response_bytes_present
             ),
+            format!(
+                "response_candid_present: {}",
+                runtime_status.response_candid_present
+            ),
         ]);
         if let Some(status) = &runtime_status.status {
             lines.extend([
@@ -427,9 +431,6 @@ fn render_text_report(report: &InspectReport) -> String {
             if let Some(state) = &status.state {
                 lines.push(format!("state_domains: {}", state.domains.len()));
             }
-        }
-        if let Some(response_candid) = &runtime_status.response_candid {
-            lines.extend(["response_candid:".to_string(), response_candid.clone()]);
         }
     }
     lines.join("\n")
@@ -711,10 +712,7 @@ mod tests {
         assert_eq!(payload.status, None);
         assert_eq!(payload.response_format, "candid");
         assert!(!payload.response_bytes_present);
-        assert_eq!(
-            payload.response_candid.as_deref(),
-            Some("(record { status = variant { Ok } })")
-        );
+        assert!(payload.response_candid_present);
     }
 
     #[test]
@@ -731,7 +729,7 @@ mod tests {
         assert_eq!(payload.status, Some(status));
         assert_eq!(payload.response_format, "candid");
         assert!(payload.response_bytes_present);
-        assert_eq!(payload.response_candid, None);
+        assert!(!payload.response_candid_present);
         assert_eq!(inspect_status_label(&payload), "ok");
     }
 
@@ -754,11 +752,12 @@ mod tests {
         assert!(rendered.contains("endpoint: canic_runtime_status"));
         assert!(rendered.contains("response_format: candid"));
         assert!(rendered.contains("response_bytes_present: true"));
+        assert!(rendered.contains("response_candid_present: true"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
         assert!(rendered.contains("schema_version: 1"));
         assert!(rendered.contains("role: root"));
-        assert!(rendered.contains("response_candid:"));
+        assert!(!rendered.contains("(record {})"));
         assert!(!rendered.contains("safe"));
     }
 
@@ -778,7 +777,8 @@ mod tests {
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
         assert_eq!(value["runtime_status"]["response_format"], "candid");
         assert_eq!(value["runtime_status"]["response_bytes_present"], true);
-        assert_eq!(value["runtime_status"]["response_candid"], "(record {})");
+        assert_eq!(value["runtime_status"]["response_candid_present"], true);
+        assert!(value["runtime_status"].get("response_candid").is_none());
     }
 
     #[test]
@@ -815,7 +815,7 @@ mod tests {
                 status: Some(sample_runtime_status(RuntimeStatus::Ok)),
                 response_format: "candid".to_string(),
                 response_bytes_present: true,
-                response_candid: Some("(record {})".to_string()),
+                response_candid_present: true,
             }),
             warnings: Vec::new(),
             next_actions: Vec::new(),
