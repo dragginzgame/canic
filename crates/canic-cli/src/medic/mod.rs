@@ -1439,13 +1439,53 @@ fn deployment_registry_observed_check(resolution: &InstalledDeploymentResolution
         "deployment_registry_observed",
         "registry",
         detail,
-        "none",
+        runtime_inspection_next(resolution),
         source,
     )
 }
 
 fn deploy_plan_next(deployment: &str) -> String {
     format!("run canic deploy plan {deployment} to inspect desired deployment shape")
+}
+
+fn runtime_inspection_next(resolution: &InstalledDeploymentResolution) -> String {
+    let deployment = &resolution.state.deployment_name;
+    let mut roles = resolution
+        .topology
+        .roles_by_canister
+        .values()
+        .cloned()
+        .collect::<Vec<_>>();
+    roles.sort();
+    roles.dedup();
+
+    if let Some(role) = roles
+        .iter()
+        .find(|role| role.as_str() == "root")
+        .or_else(|| roles.first())
+    {
+        return format!(
+            "run canic inspect deployment {deployment} --role {role} to inspect runtime-observed status for one explicit role"
+        );
+    }
+
+    let mut canisters = resolution
+        .registry
+        .entries
+        .iter()
+        .map(|entry| entry.pid.clone())
+        .collect::<Vec<_>>();
+    canisters.sort();
+    canisters.dedup();
+
+    canisters.first().map_or_else(
+        || "none".to_string(),
+        |canister| {
+            format!(
+                "run canic inspect canister {canister} to inspect runtime-observed status for one explicit canister"
+            )
+        },
+    )
 }
 
 fn deploy_plan_then(deployment: &str, next: impl AsRef<str>) -> String {

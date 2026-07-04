@@ -144,7 +144,9 @@ struct TargetResolution {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct RuntimeStatusPayload {
     source: String,
-    response_candid: String,
+    response_format: String,
+    response_bytes_present: bool,
+    response_candid: Option<String>,
 }
 
 pub fn run<I>(args: I) -> Result<(), InspectCommandError>
@@ -295,7 +297,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         Some("json"),
         target.candid_path.as_deref(),
     )?;
-    let response = runtime_response_candid(&output)?;
+    let runtime_status = runtime_response_payload(&output)?;
 
     Ok(InspectReport {
         schema_version: INSPECT_SCHEMA_VERSION,
@@ -311,21 +313,33 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         status: "ok".to_string(),
         health_status: None,
         readiness_status: None,
-        runtime_status: Some(RuntimeStatusPayload {
-            source: RUNTIME_OBSERVED_SOURCE.to_string(),
-            response_candid: response,
-        }),
+        runtime_status: Some(runtime_status),
         warnings: Vec::new(),
         next_actions: Vec::new(),
     })
 }
 
-fn runtime_response_candid(output: &str) -> Result<String, InspectCommandError> {
+fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
     let value = serde_json::from_str::<serde_json::Value>(output)
         .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
-    response_candid(&value)
-        .map(str::to_string)
-        .ok_or_else(|| InspectCommandError::InvalidResponse("missing response_candid".to_string()))
+    let response_candid = response_candid(&value).map(str::to_string);
+    let response_bytes_present = value
+        .get("response_bytes")
+        .and_then(serde_json::Value::as_str)
+        .is_some();
+
+    if !response_bytes_present && response_candid.is_none() {
+        return Err(InspectCommandError::InvalidResponse(
+            "missing response_bytes and response_candid".to_string(),
+        ));
+    }
+
+    Ok(RuntimeStatusPayload {
+        source: RUNTIME_OBSERVED_SOURCE.to_string(),
+        response_format: "candid".to_string(),
+        response_bytes_present,
+        response_candid,
+    })
 }
 
 fn render_text_report(report: &InspectReport) -> String {
@@ -348,8 +362,15 @@ fn render_text_report(report: &InspectReport) -> String {
             String::new(),
             "runtime_status".to_string(),
             format!("source: {}", runtime_status.source),
-            runtime_status.response_candid.clone(),
+            format!("response_format: {}", runtime_status.response_format),
+            format!(
+                "response_bytes_present: {}",
+                runtime_status.response_bytes_present
+            ),
         ]);
+        if let Some(response_candid) = &runtime_status.response_candid {
+            lines.extend(["response_candid:".to_string(), response_candid.clone()]);
+        }
     }
     lines.join("\n")
 }
@@ -541,18 +562,68 @@ mod tests {
     }
 
     #[test]
-    fn extracts_response_candid_from_icp_json() {
-        let response = runtime_response_candid(
+    fn extracts_response_candid_fallback_from_icp_json() {
+        let payload = runtime_response_payload(
             r#"{"response_candid":"(record { status = variant { Ok } })"}"#,
         )
         .expect("extract runtime status Candid");
 
-        assert_eq!(response, "(record { status = variant { Ok } })");
+        assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(payload.response_format, "candid");
+        assert!(!payload.response_bytes_present);
+        assert_eq!(
+            payload.response_candid.as_deref(),
+            Some("(record { status = variant { Ok } })")
+        );
+    }
+
+    #[test]
+    fn records_response_bytes_presence_from_icp_json() {
+        let payload = runtime_response_payload(r#"{"response_bytes":"4449444c0000"}"#)
+            .expect("record response bytes");
+
+        assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(payload.response_format, "candid");
+        assert!(payload.response_bytes_present);
+        assert_eq!(payload.response_candid, None);
     }
 
     #[test]
     fn text_report_labels_runtime_observed_payload() {
-        let report = InspectReport {
+        let report = sample_inspect_report();
+
+        let rendered = render_text_report(&report);
+
+        assert!(rendered.contains("source: cli_arg"));
+        assert!(rendered.contains("source: runtime_observed"));
+        assert!(rendered.contains("endpoint: canic_runtime_status"));
+        assert!(rendered.contains("response_format: candid"));
+        assert!(rendered.contains("response_bytes_present: true"));
+        assert!(rendered.contains("status: ok"));
+        assert!(rendered.contains("response_candid:"));
+        assert!(!rendered.contains("safe"));
+    }
+
+    #[test]
+    fn json_report_labels_runtime_observed_payload() {
+        let value = serde_json::to_value(sample_inspect_report()).expect("serialize report");
+
+        assert_eq!(value["schema_version"], INSPECT_SCHEMA_VERSION);
+        assert_eq!(value["command"], "canic inspect canister");
+        assert_eq!(value["target_resolution"]["source"], CLI_ARG_SOURCE);
+        assert_eq!(
+            value["endpoint"],
+            canic_core::protocol::CANIC_RUNTIME_STATUS
+        );
+        assert_eq!(value["status"], "ok");
+        assert_eq!(value["runtime_status"]["source"], RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(value["runtime_status"]["response_format"], "candid");
+        assert_eq!(value["runtime_status"]["response_bytes_present"], true);
+        assert_eq!(value["runtime_status"]["response_candid"], "(record {})");
+    }
+
+    fn sample_inspect_report() -> InspectReport {
+        InspectReport {
             schema_version: INSPECT_SCHEMA_VERSION,
             command: "canic inspect canister".to_string(),
             target_resolution: TargetResolution {
@@ -568,17 +639,12 @@ mod tests {
             readiness_status: None,
             runtime_status: Some(RuntimeStatusPayload {
                 source: RUNTIME_OBSERVED_SOURCE.to_string(),
-                response_candid: "(record {})".to_string(),
+                response_format: "candid".to_string(),
+                response_bytes_present: true,
+                response_candid: Some("(record {})".to_string()),
             }),
             warnings: Vec::new(),
             next_actions: Vec::new(),
-        };
-
-        let rendered = render_text_report(&report);
-
-        assert!(rendered.contains("source: cli_arg"));
-        assert!(rendered.contains("source: runtime_observed"));
-        assert!(rendered.contains("endpoint: canic_runtime_status"));
-        assert!(!rendered.contains("safe"));
+        }
     }
 }
