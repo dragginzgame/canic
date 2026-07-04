@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.5` surfaces deterministic guarded runtime feature metadata in
+  `canic_runtime_status` and mirrors that feature inventory in
+  `canic inspect` reports.
+
 - `0.81.4` hardens runtime-introspection privacy and report contracts by
   completing field-visibility metadata, bounding runtime-facing diagnostic
   labels, and replacing raw inspect Candid fallback output with presence

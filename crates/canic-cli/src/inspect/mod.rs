@@ -425,6 +425,7 @@ fn render_text_report(report: &InspectReport) -> String {
                 format!("schema_version: {}", status.schema_version),
                 format!("observed_at_ns: {}", status.observed_at_ns),
                 format!("role: {}", status.role.as_deref().unwrap_or("unknown")),
+                format!("features: {}", status.features.len()),
                 format!("timers: {}", status.timers.len()),
                 format!("recent_failures: {}", status.recent_failures.len()),
             ]);
@@ -757,6 +758,7 @@ mod tests {
         assert!(rendered.contains("runtime_status: ok"));
         assert!(rendered.contains("schema_version: 1"));
         assert!(rendered.contains("role: root"));
+        assert!(rendered.contains("features: 1"));
         assert!(!rendered.contains("(record {})"));
         assert!(!rendered.contains("safe"));
     }
@@ -775,6 +777,14 @@ mod tests {
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], RUNTIME_OBSERVED_SOURCE);
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
+        assert_eq!(
+            value["runtime_status"]["status"]["features"][0]["name"],
+            "sharding"
+        );
+        assert_eq!(
+            value["runtime_status"]["status"]["features"][0]["source"],
+            "compile_feature"
+        );
         assert_eq!(value["runtime_status"]["response_format"], "candid");
         assert_eq!(value["runtime_status"]["response_bytes_present"], true);
         assert_eq!(value["runtime_status"]["response_candid_present"], true);
@@ -823,7 +833,10 @@ mod tests {
     }
 
     fn sample_runtime_status(status: RuntimeStatus) -> CanicRuntimeStatus {
-        use canic_core::dto::runtime::{CanicReadinessStatus, ReadinessStatus, RuntimeBuildInfo};
+        use canic_core::dto::runtime::{
+            CanicReadinessStatus, ReadinessStatus, RuntimeBuildInfo, RuntimeFeatureStatus,
+            RuntimeFieldVisibility,
+        };
 
         CanicRuntimeStatus {
             schema_version: canic_core::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
@@ -838,7 +851,12 @@ mod tests {
                 canic_version: "0.81.0".to_string(),
                 canister_version: 7,
             },
-            features: Vec::new(),
+            features: vec![RuntimeFeatureStatus {
+                name: "sharding".to_string(),
+                enabled: false,
+                visibility: RuntimeFieldVisibility::OperatorOnly,
+                source: "compile_feature".to_string(),
+            }],
             topology: None,
             timers: Vec::new(),
             state: None,

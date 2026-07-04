@@ -8,9 +8,9 @@ use crate::{
             CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanicTimerStatus,
             FailureSeverity, RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus,
             RuntimeBuildInfo, RuntimeCheck, RuntimeCheckStatus, RuntimeDiagnostic,
-            RuntimeDiagnosticSeverity, RuntimeFieldVisibility, RuntimeStateDomainStatus,
-            RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeStatus, RuntimeTopologyStatus,
-            RuntimeVisibilityEntry, TimerStatus,
+            RuntimeDiagnosticSeverity, RuntimeFeatureStatus, RuntimeFieldVisibility,
+            RuntimeStateDomainStatus, RuntimeStateDomainSummary, RuntimeStateSummary,
+            RuntimeStatus, RuntimeTopologyStatus, RuntimeVisibilityEntry, TimerStatus,
         },
     },
     ops::{
@@ -28,6 +28,43 @@ use crate::{
 
 const MAX_TIMER_SUBSYSTEM_BYTES: usize = 64;
 const MAX_TIMER_NAME_BYTES: usize = 96;
+const RUNTIME_FEATURE_SOURCE: &str = "compile_feature";
+const RUNTIME_FEATURE_FLAGS: [(&str, bool); 10] = [
+    (
+        "auth-chain-key-ecdsa",
+        cfg!(feature = "auth-chain-key-ecdsa"),
+    ),
+    (
+        "auth-chain-key-root-sign",
+        cfg!(feature = "auth-chain-key-root-sign"),
+    ),
+    (
+        "auth-delegated-token-verify",
+        cfg!(feature = "auth-delegated-token-verify"),
+    ),
+    (
+        "auth-issuer-canister-sig-create",
+        cfg!(feature = "auth-issuer-canister-sig-create"),
+    ),
+    (
+        "auth-issuer-canister-sig-verify",
+        cfg!(feature = "auth-issuer-canister-sig-verify"),
+    ),
+    (
+        "auth-root-canister-sig-create",
+        cfg!(feature = "auth-root-canister-sig-create"),
+    ),
+    (
+        "auth-root-canister-sig-verify",
+        cfg!(feature = "auth-root-canister-sig-verify"),
+    ),
+    ("blob-storage", cfg!(feature = "blob-storage")),
+    (
+        "blob-storage-billing",
+        cfg!(feature = "blob-storage-billing"),
+    ),
+    ("sharding", cfg!(feature = "sharding")),
+];
 
 ///
 /// MemoryRuntimeApi
@@ -185,7 +222,7 @@ impl RuntimeIntrospectionApi {
                 canic_version: canic_version.to_string(),
                 canister_version,
             },
-            features: Vec::new(),
+            features: runtime_features(),
             topology: Some(RuntimeTopologyStatus {
                 root,
                 parent,
@@ -219,6 +256,18 @@ impl RuntimeIntrospectionApi {
             canister_version,
         )
     }
+}
+
+fn runtime_features() -> Vec<RuntimeFeatureStatus> {
+    RUNTIME_FEATURE_FLAGS
+        .into_iter()
+        .map(|(name, enabled)| RuntimeFeatureStatus {
+            name: name.to_string(),
+            enabled,
+            visibility: RuntimeFieldVisibility::OperatorOnly,
+            source: RUNTIME_FEATURE_SOURCE.to_string(),
+        })
+        .collect()
 }
 
 fn timer_statuses() -> Vec<CanicTimerStatus> {
@@ -438,6 +487,28 @@ mod tests {
         for (index, (field, visibility)) in expected.into_iter().enumerate() {
             assert_eq!(status.visibility[index].field, field);
             assert_eq!(status.visibility[index].visibility, visibility);
+        }
+    }
+
+    #[test]
+    fn runtime_status_reports_compile_features_deterministically() {
+        let status = RuntimeIntrospectionApi::runtime_status_for(
+            Principal::anonymous(),
+            100,
+            "test-canister",
+            "1.2.3",
+            "0.81.0",
+            7,
+        );
+        assert_eq!(status.features.len(), RUNTIME_FEATURE_FLAGS.len());
+        for (index, (name, enabled)) in RUNTIME_FEATURE_FLAGS.into_iter().enumerate() {
+            assert_eq!(status.features[index].name, name);
+            assert_eq!(status.features[index].enabled, enabled);
+            assert_eq!(
+                status.features[index].visibility,
+                RuntimeFieldVisibility::OperatorOnly
+            );
+            assert_eq!(status.features[index].source, RUNTIME_FEATURE_SOURCE);
         }
     }
 
