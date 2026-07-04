@@ -21,12 +21,14 @@ impl UpgradeScenario {
         Self { pic, canister_id }
     }
 
+    #[must_use]
     pub fn install_old_wasm(&self, wasm: Vec<u8>, args: Vec<u8>) -> &Self {
         self.pic
             .install_canister(self.canister_id, wasm, args, None);
         self
     }
 
+    #[must_use]
     pub fn seed_state<T>(&self, seed: impl FnOnce(&Pic, Principal) -> T) -> T {
         seed(&self.pic, self.canister_id)
     }
@@ -42,10 +44,12 @@ impl UpgradeScenario {
         Ok(self)
     }
 
+    #[must_use]
     pub fn query<T>(&self, query: impl FnOnce(&Pic, Principal) -> T) -> T {
         query(&self.pic, self.canister_id)
     }
 
+    #[must_use]
     pub fn assert_invariants(&self, assert: impl FnOnce(&Pic, Principal)) -> &Self {
         assert(&self.pic, self.canister_id);
         self
