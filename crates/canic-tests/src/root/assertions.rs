@@ -12,7 +12,7 @@ use canic::{
         runtime::{
             CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, HealthStatus,
             RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus, RuntimeFieldVisibility,
-            RuntimeStatus,
+            RuntimeStateDomainStatus, RuntimeStatus,
         },
         state::{AppStateResponse, SubnetStateResponse},
         topology::AppRegistryResponse,
@@ -291,6 +291,12 @@ fn assert_root_runtime_introspection_reports(pic: &Pic, root_id: Principal) {
     assert_eq!(runtime_status.root, Some(root_id));
     assert_eq!(runtime_status.readiness.status, ReadinessStatus::Ready);
     assert_eq!(runtime_status.status, RuntimeStatus::Ok);
+    assert_runtime_features(
+        &runtime_status,
+        &["auth-chain-key-root-sign", "auth-root-canister-sig-create"],
+    );
+    assert_runtime_timers(&runtime_status, true);
+    assert_runtime_state_metadata(&runtime_status, true);
     assert!(
         runtime_status
             .visibility
@@ -298,13 +304,6 @@ fn assert_root_runtime_introspection_reports(pic: &Pic, root_id: Principal) {
             .any(|entry| entry.field == "topology"
                 && entry.visibility == RuntimeFieldVisibility::ControllerOnly),
         "runtime status should classify topology as controller-only"
-    );
-    assert!(
-        runtime_status
-            .state
-            .as_ref()
-            .is_some_and(|state| !state.domains.is_empty()),
-        "root runtime status should expose state metadata, not persisted values"
     );
 }
 
@@ -439,6 +438,9 @@ pub fn assert_child_runtime_introspection_is_controller_gated(
     assert_eq!(runtime_status.root, Some(root_id));
     assert_eq!(runtime_status.readiness.status, ReadinessStatus::Ready);
     assert_eq!(runtime_status.status, RuntimeStatus::Ok);
+    assert_runtime_features(&runtime_status, &["auth-delegated-token-verify"]);
+    assert_runtime_timers(&runtime_status, false);
+    assert_runtime_state_metadata(&runtime_status, false);
 
     let topology = runtime_status
         .topology
@@ -473,6 +475,139 @@ pub fn assert_child_runtime_introspection_is_controller_gated(
         panic!("non-controller child runtime status query must be denied")
     };
     assert_eq!(denied_runtime_status.code, ErrorCode::Unauthorized);
+}
+
+fn assert_runtime_features(status: &CanicRuntimeStatus, expected_enabled: &[&str]) {
+    assert!(
+        !status.features.is_empty(),
+        "runtime status should include compile-feature inventory"
+    );
+
+    assert!(
+        status
+            .features
+            .windows(2)
+            .all(|features| features[0].name.as_str() <= features[1].name.as_str()),
+        "runtime features should be emitted in deterministic name order"
+    );
+
+    for feature in &status.features {
+        assert_eq!(
+            feature.visibility,
+            RuntimeFieldVisibility::OperatorOnly,
+            "runtime feature {} should not be public-safe",
+            feature.name
+        );
+        assert_eq!(
+            feature.source, "compile_feature",
+            "runtime feature {} should identify compile-feature source",
+            feature.name
+        );
+    }
+
+    for expected in expected_enabled {
+        assert!(
+            status
+                .features
+                .iter()
+                .any(|feature| feature.name == *expected && feature.enabled),
+            "runtime status should report enabled feature {expected}"
+        );
+    }
+}
+
+fn assert_runtime_timers(status: &CanicRuntimeStatus, require_timer: bool) {
+    if require_timer {
+        assert!(
+            !status.timers.is_empty(),
+            "runtime status should include registered timer metadata"
+        );
+    }
+
+    assert!(
+        status.timers.windows(2).all(|timers| {
+            timers[0].subsystem.as_str() < timers[1].subsystem.as_str()
+                || (timers[0].subsystem == timers[1].subsystem
+                    && timers[0].name.as_str() <= timers[1].name.as_str())
+        }),
+        "runtime timers should be emitted in deterministic subsystem/name order"
+    );
+
+    for timer in &status.timers {
+        assert!(
+            timer.enabled && timer.registered,
+            "runtime timer {}:{} should be enabled and registered",
+            timer.subsystem,
+            timer.name
+        );
+        assert_runtime_text(&timer.subsystem, "timer subsystem");
+        assert_runtime_text(&timer.name, "timer name");
+        if let Some(summary) = &timer.last_error_summary {
+            assert_runtime_text(summary, "timer error summary");
+        }
+    }
+}
+
+fn assert_runtime_state_metadata(status: &CanicRuntimeStatus, require_state: bool) {
+    let Some(state) = &status.state else {
+        assert!(
+            !require_state,
+            "runtime status should include state metadata for declared roles"
+        );
+        return;
+    };
+
+    assert_eq!(
+        state.manifest_schema_version, 1,
+        "runtime state summary should report state manifest schema version"
+    );
+    assert!(
+        state.total_stable_memory_pages.is_none(),
+        "runtime state summary should avoid value/count-like memory detail"
+    );
+    assert!(
+        !state.domains.is_empty(),
+        "runtime state summary should include declared state domains"
+    );
+    assert!(
+        state
+            .domains
+            .windows(2)
+            .all(|domains| domains[0].domain <= domains[1].domain),
+        "runtime state domains should be emitted in deterministic domain order"
+    );
+
+    for domain in &state.domains {
+        assert_runtime_text(&domain.domain, "state domain");
+        assert_ne!(
+            domain.version, 0,
+            "state domain versions should be explicit"
+        );
+        assert_eq!(
+            domain.status,
+            RuntimeStateDomainStatus::Ok,
+            "declared runtime state domain should report ok status"
+        );
+        match domain.storage.as_str() {
+            "stable_memory" => assert!(
+                domain.memory_id.is_some(),
+                "stable-memory state domains should expose memory id metadata"
+            ),
+            "heap_only" | "not_applicable" => assert!(
+                domain.memory_id.is_none(),
+                "non-stable state domains should not expose memory id metadata"
+            ),
+            other => panic!("unexpected runtime state storage mode {other}"),
+        }
+    }
+}
+
+fn assert_runtime_text(value: &str, field: &str) {
+    assert!(!value.is_empty(), "{field} should not be empty");
+    assert!(
+        !value.chars().any(char::is_control),
+        "{field} should not contain control characters"
+    );
 }
 
 // Match PocketIC missing-method failures without depending on one exact transport string.

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.6` hardens live runtime-introspection coverage for guarded feature,
+  timer, and state metadata and expands inspect text reports for decoded
+  metadata-only sections.
+
 - `0.81.5` surfaces deterministic guarded runtime feature metadata in
   `canic_runtime_status` and mirrors that feature inventory in
   `canic inspect` reports.

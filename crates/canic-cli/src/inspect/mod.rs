@@ -15,7 +15,9 @@ use crate::{
     version_text,
 };
 use candid::{Decode, Principal, types::principal::PrincipalError};
-use canic_core::dto::runtime::{CanicRuntimeStatus, RuntimeStatus};
+use canic_core::dto::runtime::{
+    CanicRuntimeStatus, FailureSeverity, RuntimeStateDomainStatus, RuntimeStatus, TimerStatus,
+};
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
@@ -432,9 +434,68 @@ fn render_text_report(report: &InspectReport) -> String {
             if let Some(state) = &status.state {
                 lines.push(format!("state_domains: {}", state.domains.len()));
             }
+            append_runtime_metadata_lines(&mut lines, status);
         }
     }
     lines.join("\n")
+}
+
+fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeStatus) {
+    lines.push(format!(
+        "enabled_features: {}",
+        enabled_runtime_features(status)
+    ));
+
+    for timer in &status.timers {
+        lines.push(format!(
+            "timer: {}/{} status={} enabled={} registered={}",
+            timer.subsystem,
+            timer.name,
+            timer_status_label(timer.status),
+            timer.enabled,
+            timer.registered
+        ));
+    }
+
+    if let Some(state) = &status.state {
+        for domain in &state.domains {
+            let memory_id = domain
+                .memory_id
+                .map_or_else(|| "none".to_string(), |memory_id| memory_id.to_string());
+            lines.push(format!(
+                "state_domain: {} version={} storage={} memory_id={} status={}",
+                domain.domain,
+                domain.version,
+                domain.storage,
+                memory_id,
+                state_domain_status_label(domain.status)
+            ));
+        }
+    }
+
+    for failure in &status.recent_failures {
+        lines.push(format!(
+            "recent_failure: {}/{} severity={} redacted={}",
+            failure.subsystem,
+            failure.code,
+            failure_severity_label(failure.severity),
+            failure.redacted
+        ));
+    }
+}
+
+fn enabled_runtime_features(status: &CanicRuntimeStatus) -> String {
+    let names = status
+        .features
+        .iter()
+        .filter(|feature| feature.enabled)
+        .map(|feature| feature.name.as_str())
+        .collect::<Vec<_>>();
+    if names.is_empty() {
+        "none".to_string()
+    } else {
+        names.join(", ")
+    }
 }
 
 fn inspect_status_label(payload: &RuntimeStatusPayload) -> &'static str {
@@ -450,6 +511,35 @@ const fn runtime_status_label(status: RuntimeStatus) -> &'static str {
         RuntimeStatus::Degraded => "degraded",
         RuntimeStatus::Failing => "failing",
         RuntimeStatus::Unknown => "unknown",
+    }
+}
+
+const fn timer_status_label(status: TimerStatus) -> &'static str {
+    match status {
+        TimerStatus::Healthy => "healthy",
+        TimerStatus::Delayed => "delayed",
+        TimerStatus::Failing => "failing",
+        TimerStatus::Disabled => "disabled",
+        TimerStatus::NotRegistered => "not_registered",
+        TimerStatus::Unknown => "unknown",
+    }
+}
+
+const fn state_domain_status_label(status: RuntimeStateDomainStatus) -> &'static str {
+    match status {
+        RuntimeStateDomainStatus::Ok => "ok",
+        RuntimeStateDomainStatus::Warning => "warning",
+        RuntimeStateDomainStatus::Failing => "failing",
+        RuntimeStateDomainStatus::NotEvaluated => "not_evaluated",
+    }
+}
+
+const fn failure_severity_label(severity: FailureSeverity) -> &'static str {
+    match severity {
+        FailureSeverity::Info => "info",
+        FailureSeverity::Warning => "warning",
+        FailureSeverity::Error => "error",
+        FailureSeverity::Critical => "critical",
     }
 }
 
@@ -758,7 +848,23 @@ mod tests {
         assert!(rendered.contains("runtime_status: ok"));
         assert!(rendered.contains("schema_version: 1"));
         assert!(rendered.contains("role: root"));
-        assert!(rendered.contains("features: 1"));
+        assert!(rendered.contains("features: 2"));
+        assert!(rendered.contains("timers: 1"));
+        assert!(rendered.contains("recent_failures: 1"));
+        assert!(rendered.contains("state_domains: 1"));
+        assert!(rendered.contains("enabled_features: sharding"));
+        assert!(
+            rendered
+                .contains("timer: runtime/heartbeat status=healthy enabled=true registered=true")
+        );
+        assert!(
+            rendered.contains(
+                "state_domain: env version=1 storage=stable_memory memory_id=1 status=ok"
+            )
+        );
+        assert!(rendered.contains(
+            "recent_failure: runtime/runtime_status_sample severity=warning redacted=true"
+        ));
         assert!(!rendered.contains("(record {})"));
         assert!(!rendered.contains("safe"));
     }
@@ -784,6 +890,18 @@ mod tests {
         assert_eq!(
             value["runtime_status"]["status"]["features"][0]["source"],
             "compile_feature"
+        );
+        assert_eq!(
+            value["runtime_status"]["status"]["timers"][0]["subsystem"],
+            "runtime"
+        );
+        assert_eq!(
+            value["runtime_status"]["status"]["state"]["domains"][0]["domain"],
+            "env"
+        );
+        assert_eq!(
+            value["runtime_status"]["status"]["recent_failures"][0]["redacted"],
+            true
         );
         assert_eq!(value["runtime_status"]["response_format"], "candid");
         assert_eq!(value["runtime_status"]["response_bytes_present"], true);
@@ -834,8 +952,9 @@ mod tests {
 
     fn sample_runtime_status(status: RuntimeStatus) -> CanicRuntimeStatus {
         use canic_core::dto::runtime::{
-            CanicReadinessStatus, ReadinessStatus, RuntimeBuildInfo, RuntimeFeatureStatus,
-            RuntimeFieldVisibility,
+            CanicReadinessStatus, CanicTimerStatus, FailureSeverity, ReadinessStatus,
+            RecentFailure, RuntimeBuildInfo, RuntimeFeatureStatus, RuntimeFieldVisibility,
+            RuntimeStateDomainStatus, RuntimeStateDomainSummary, RuntimeStateSummary, TimerStatus,
         };
 
         CanicRuntimeStatus {
@@ -851,16 +970,54 @@ mod tests {
                 canic_version: "0.81.0".to_string(),
                 canister_version: 7,
             },
-            features: vec![RuntimeFeatureStatus {
-                name: "sharding".to_string(),
-                enabled: false,
-                visibility: RuntimeFieldVisibility::OperatorOnly,
-                source: "compile_feature".to_string(),
-            }],
+            features: vec![
+                RuntimeFeatureStatus {
+                    name: "sharding".to_string(),
+                    enabled: true,
+                    visibility: RuntimeFieldVisibility::OperatorOnly,
+                    source: "compile_feature".to_string(),
+                },
+                RuntimeFeatureStatus {
+                    name: "blob-storage".to_string(),
+                    enabled: false,
+                    visibility: RuntimeFieldVisibility::OperatorOnly,
+                    source: "compile_feature".to_string(),
+                },
+            ],
             topology: None,
-            timers: Vec::new(),
-            state: None,
-            recent_failures: Vec::new(),
+            timers: vec![CanicTimerStatus {
+                name: "heartbeat".to_string(),
+                subsystem: "runtime".to_string(),
+                status: TimerStatus::Healthy,
+                enabled: true,
+                registered: true,
+                last_success_at_ns: None,
+                last_failure_at_ns: None,
+                next_due_at_ns: None,
+                consecutive_failures: 0,
+                last_error_code: None,
+                last_error_summary: None,
+            }],
+            state: Some(RuntimeStateSummary {
+                manifest_schema_version: 1,
+                domains: vec![RuntimeStateDomainSummary {
+                    domain: "env".to_string(),
+                    version: 1,
+                    storage: "stable_memory".to_string(),
+                    memory_id: Some(1),
+                    status: RuntimeStateDomainStatus::Ok,
+                }],
+                total_stable_memory_pages: None,
+            }),
+            recent_failures: vec![RecentFailure {
+                occurred_at_ns: 41,
+                subsystem: "runtime".to_string(),
+                code: "runtime_status_sample".to_string(),
+                severity: FailureSeverity::Warning,
+                summary: "redacted sample failure".to_string(),
+                correlation_id: None,
+                redacted: true,
+            }],
             visibility: Vec::new(),
             readiness: CanicReadinessStatus {
                 schema_version: canic_core::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
