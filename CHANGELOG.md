@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.2` makes runtime-introspection DTOs roundtrip through Candid correctly
+  and lets `canic inspect` decode typed runtime status, including failing
+  status exit behavior.
+
 - `0.81.1` connects deployment medic observations to explicit runtime
   inspection next actions and hardens `canic inspect` report metadata for
   Candid response bytes versus rendered Candid fallback.

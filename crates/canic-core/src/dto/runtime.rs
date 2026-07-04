@@ -193,82 +193,151 @@ pub struct RuntimeVisibilityEntry {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HealthStatus {
+    #[serde(alias = "Healthy")]
     Healthy,
+    #[serde(alias = "Degraded")]
     Degraded,
+    #[serde(alias = "Unhealthy")]
     Unhealthy,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReadinessStatus {
+    #[serde(alias = "Ready")]
     Ready,
+    #[serde(alias = "Degraded")]
     Degraded,
+    #[serde(alias = "NotReady")]
     NotReady,
+    #[serde(alias = "NotEvaluated")]
     NotEvaluated,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeStatus {
+    #[serde(alias = "Ok")]
     Ok,
+    #[serde(alias = "Degraded")]
     Degraded,
+    #[serde(alias = "Failing")]
     Failing,
+    #[serde(alias = "Unknown")]
     Unknown,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TimerStatus {
+    #[serde(alias = "Healthy")]
     Healthy,
+    #[serde(alias = "Delayed")]
     Delayed,
+    #[serde(alias = "Failing")]
     Failing,
+    #[serde(alias = "Disabled")]
     Disabled,
+    #[serde(alias = "NotRegistered")]
     NotRegistered,
+    #[serde(alias = "Unknown")]
     Unknown,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureSeverity {
+    #[serde(alias = "Info")]
     Info,
+    #[serde(alias = "Warning")]
     Warning,
+    #[serde(alias = "Error")]
     Error,
+    #[serde(alias = "Critical")]
     Critical,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeCheckStatus {
+    #[serde(alias = "Pass")]
     Pass,
+    #[serde(alias = "Warn")]
     Warn,
+    #[serde(alias = "Fail")]
     Fail,
+    #[serde(alias = "NotEvaluated")]
     NotEvaluated,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeDiagnosticSeverity {
+    #[serde(alias = "Info")]
     Info,
+    #[serde(alias = "Warning")]
     Warning,
+    #[serde(alias = "Blocked")]
     Blocked,
+    #[serde(alias = "Unsupported")]
     Unsupported,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeFieldVisibility {
+    #[serde(alias = "PublicSafe")]
     PublicSafe,
+    #[serde(alias = "OperatorOnly")]
     OperatorOnly,
+    #[serde(alias = "ControllerOnly")]
     ControllerOnly,
+    #[serde(alias = "FeatureGated")]
     FeatureGated,
+    #[serde(alias = "Disabled")]
     Disabled,
 }
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RuntimeStateDomainStatus {
+    #[serde(alias = "Ok")]
     Ok,
+    #[serde(alias = "Warning")]
     Warning,
+    #[serde(alias = "Failing")]
     Failing,
+    #[serde(alias = "NotEvaluated")]
     NotEvaluated,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{Decode, Encode};
+    use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
+
+    #[test]
+    fn runtime_enums_roundtrip_candid_with_runtime_variant_labels() {
+        assert_enum_candid_contract(HealthStatus::Unhealthy);
+        assert_enum_candid_contract(ReadinessStatus::NotEvaluated);
+        assert_enum_candid_contract(RuntimeStatus::Failing);
+        assert_enum_candid_contract(TimerStatus::NotRegistered);
+        assert_enum_candid_contract(FailureSeverity::Critical);
+        assert_enum_candid_contract(RuntimeCheckStatus::NotEvaluated);
+        assert_enum_candid_contract(RuntimeDiagnosticSeverity::Unsupported);
+        assert_enum_candid_contract(RuntimeFieldVisibility::OperatorOnly);
+        assert_enum_candid_contract(RuntimeStateDomainStatus::NotEvaluated);
+    }
+
+    fn assert_enum_candid_contract<T>(value: T)
+    where
+        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
+    {
+        let bytes = Encode!(&value).expect("encode runtime enum");
+        let decoded = Decode!(&bytes, T).expect("decode runtime enum");
+
+        assert_eq!(decoded, value);
+    }
 }

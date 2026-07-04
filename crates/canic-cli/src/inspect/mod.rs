@@ -14,7 +14,8 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use candid::{Principal, types::principal::PrincipalError};
+use candid::{Decode, Principal, types::principal::PrincipalError};
+use canic_core::dto::runtime::{CanicRuntimeStatus, RuntimeStatus};
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
@@ -65,6 +66,9 @@ pub enum InspectCommandError {
     #[error("invalid canic_runtime_status response: {0}")]
     InvalidResponse(String),
 
+    #[error("runtime status reported {0}")]
+    ReportStatus(String),
+
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(String),
 
@@ -83,7 +87,13 @@ impl InspectCommandError {
             | Self::InvalidResponse(_)
             | Self::IcpRoot(_)
             | Self::Json(_) => 2,
+            Self::ReportStatus(_) => 1,
         }
+    }
+
+    #[must_use]
+    pub const fn suppress_stderr(&self) -> bool {
+        matches!(self, Self::ReportStatus(_))
     }
 }
 
@@ -144,6 +154,7 @@ struct TargetResolution {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct RuntimeStatusPayload {
     source: String,
+    status: Option<CanicRuntimeStatus>,
     response_format: String,
     response_bytes_present: bool,
     response_candid: Option<String>,
@@ -169,6 +180,7 @@ where
     } else {
         println!("{}", render_text_report(&report));
     }
+    command_exit_result(&report)?;
     Ok(())
 }
 
@@ -298,6 +310,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         target.candid_path.as_deref(),
     )?;
     let runtime_status = runtime_response_payload(&output)?;
+    let status = inspect_status_label(&runtime_status).to_string();
 
     Ok(InspectReport {
         schema_version: INSPECT_SCHEMA_VERSION,
@@ -310,7 +323,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
             source: target.source.to_string(),
         },
         endpoint: canic_core::protocol::CANIC_RUNTIME_STATUS.to_string(),
-        status: "ok".to_string(),
+        status,
         health_status: None,
         readiness_status: None,
         runtime_status: Some(runtime_status),
@@ -323,23 +336,57 @@ fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, Inspec
     let value = serde_json::from_str::<serde_json::Value>(output)
         .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
     let response_candid = response_candid(&value).map(str::to_string);
-    let response_bytes_present = value
+    let response_bytes = value
         .get("response_bytes")
         .and_then(serde_json::Value::as_str)
-        .is_some();
+        .map(str::to_string);
+    let response_bytes_present = response_bytes.is_some();
 
     if !response_bytes_present && response_candid.is_none() {
         return Err(InspectCommandError::InvalidResponse(
             "missing response_bytes and response_candid".to_string(),
         ));
     }
+    let status = response_bytes
+        .as_deref()
+        .map(decode_runtime_status_response_hex)
+        .transpose()?;
 
     Ok(RuntimeStatusPayload {
         source: RUNTIME_OBSERVED_SOURCE.to_string(),
+        status,
         response_format: "candid".to_string(),
         response_bytes_present,
         response_candid,
     })
+}
+
+fn decode_runtime_status_response_hex(
+    response_bytes: &str,
+) -> Result<CanicRuntimeStatus, InspectCommandError> {
+    let bytes = hex_to_bytes(response_bytes).ok_or_else(|| {
+        InspectCommandError::InvalidResponse("response_bytes was not valid hex".to_string())
+    })?;
+    let response = Decode!(
+        &bytes,
+        Result<CanicRuntimeStatus, canic_core::dto::error::Error>
+    )
+    .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
+    response.map_err(|err| InspectCommandError::InvalidResponse(err.message))
+}
+
+fn command_exit_result(report: &InspectReport) -> Result<(), InspectCommandError> {
+    let status = report
+        .runtime_status
+        .as_ref()
+        .and_then(|payload| payload.status.as_ref())
+        .map(|status| status.status);
+    match status {
+        Some(RuntimeStatus::Failing) => Err(InspectCommandError::ReportStatus(
+            runtime_status_label(RuntimeStatus::Failing).to_string(),
+        )),
+        Some(RuntimeStatus::Ok | RuntimeStatus::Degraded | RuntimeStatus::Unknown) | None => Ok(()),
+    }
 }
 
 fn render_text_report(report: &InspectReport) -> String {
@@ -368,11 +415,63 @@ fn render_text_report(report: &InspectReport) -> String {
                 runtime_status.response_bytes_present
             ),
         ]);
+        if let Some(status) = &runtime_status.status {
+            lines.extend([
+                format!("runtime_status: {}", runtime_status_label(status.status)),
+                format!("schema_version: {}", status.schema_version),
+                format!("observed_at_ns: {}", status.observed_at_ns),
+                format!("role: {}", status.role.as_deref().unwrap_or("unknown")),
+                format!("timers: {}", status.timers.len()),
+                format!("recent_failures: {}", status.recent_failures.len()),
+            ]);
+            if let Some(state) = &status.state {
+                lines.push(format!("state_domains: {}", state.domains.len()));
+            }
+        }
         if let Some(response_candid) = &runtime_status.response_candid {
             lines.extend(["response_candid:".to_string(), response_candid.clone()]);
         }
     }
     lines.join("\n")
+}
+
+fn inspect_status_label(payload: &RuntimeStatusPayload) -> &'static str {
+    payload
+        .status
+        .as_ref()
+        .map_or("unknown", |status| runtime_status_label(status.status))
+}
+
+const fn runtime_status_label(status: RuntimeStatus) -> &'static str {
+    match status {
+        RuntimeStatus::Ok => "ok",
+        RuntimeStatus::Degraded => "degraded",
+        RuntimeStatus::Failing => "failing",
+        RuntimeStatus::Unknown => "unknown",
+    }
+}
+
+fn hex_to_bytes(text: &str) -> Option<Vec<u8>> {
+    if !text.len().is_multiple_of(2) {
+        return None;
+    }
+    text.as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let high = hex_value(pair[0])?;
+            let low = hex_value(pair[1])?;
+            Some((high << 4) | low)
+        })
+        .collect()
+}
+
+const fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn validate_principal(value: &str) -> Result<(), InspectCommandError> {
@@ -496,6 +595,7 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use candid::Encode;
 
     #[test]
     fn parses_direct_canister_target() {
@@ -569,6 +669,7 @@ mod tests {
         .expect("extract runtime status Candid");
 
         assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(payload.status, None);
         assert_eq!(payload.response_format, "candid");
         assert!(!payload.response_bytes_present);
         assert_eq!(
@@ -578,14 +679,29 @@ mod tests {
     }
 
     #[test]
-    fn records_response_bytes_presence_from_icp_json() {
-        let payload = runtime_response_payload(r#"{"response_bytes":"4449444c0000"}"#)
-            .expect("record response bytes");
+    fn decodes_runtime_status_from_response_bytes() {
+        let status = sample_runtime_status(RuntimeStatus::Ok);
+        let response = Ok::<_, canic_core::dto::error::Error>(status.clone());
+        let output = format!(
+            r#"{{"response_bytes":"{}"}}"#,
+            hex_bytes(&Encode!(&response).expect("encode runtime status response"))
+        );
+        let payload = runtime_response_payload(&output).expect("decode runtime status");
 
         assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(payload.status, Some(status));
         assert_eq!(payload.response_format, "candid");
         assert!(payload.response_bytes_present);
         assert_eq!(payload.response_candid, None);
+        assert_eq!(inspect_status_label(&payload), "ok");
+    }
+
+    #[test]
+    fn invalid_response_bytes_hex_is_rejected() {
+        let err = runtime_response_payload(r#"{"response_bytes":"not-hex"}"#)
+            .expect_err("invalid hex rejected");
+
+        assert!(matches!(err, InspectCommandError::InvalidResponse(_)));
     }
 
     #[test]
@@ -600,6 +716,9 @@ mod tests {
         assert!(rendered.contains("response_format: candid"));
         assert!(rendered.contains("response_bytes_present: true"));
         assert!(rendered.contains("status: ok"));
+        assert!(rendered.contains("runtime_status: ok"));
+        assert!(rendered.contains("schema_version: 1"));
+        assert!(rendered.contains("role: root"));
         assert!(rendered.contains("response_candid:"));
         assert!(!rendered.contains("safe"));
     }
@@ -617,9 +736,24 @@ mod tests {
         );
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(value["runtime_status"]["status"]["status"], "ok");
         assert_eq!(value["runtime_status"]["response_format"], "candid");
         assert_eq!(value["runtime_status"]["response_bytes_present"], true);
         assert_eq!(value["runtime_status"]["response_candid"], "(record {})");
+    }
+
+    #[test]
+    fn failing_runtime_status_maps_to_status_exit() {
+        let mut report = sample_inspect_report();
+        let payload = report.runtime_status.as_mut().expect("runtime status");
+        payload.status = Some(sample_runtime_status(RuntimeStatus::Failing));
+        report.status = inspect_status_label(payload).to_string();
+
+        let err = command_exit_result(&report).expect_err("failing status exits nonzero");
+
+        assert_eq!(report.status, "failing");
+        assert_eq!(err.exit_code(), 1);
+        assert!(err.suppress_stderr());
     }
 
     fn sample_inspect_report() -> InspectReport {
@@ -639,6 +773,7 @@ mod tests {
             readiness_status: None,
             runtime_status: Some(RuntimeStatusPayload {
                 source: RUNTIME_OBSERVED_SOURCE.to_string(),
+                status: Some(sample_runtime_status(RuntimeStatus::Ok)),
                 response_format: "candid".to_string(),
                 response_bytes_present: true,
                 response_candid: Some("(record {})".to_string()),
@@ -646,5 +781,50 @@ mod tests {
             warnings: Vec::new(),
             next_actions: Vec::new(),
         }
+    }
+
+    fn sample_runtime_status(status: RuntimeStatus) -> CanicRuntimeStatus {
+        use canic_core::dto::runtime::{CanicReadinessStatus, ReadinessStatus, RuntimeBuildInfo};
+
+        CanicRuntimeStatus {
+            schema_version: canic_core::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
+            observed_at_ns: 42,
+            canister_id: Principal::anonymous(),
+            role: Some("root".to_string()),
+            root: None,
+            network: Some("local".to_string()),
+            build: RuntimeBuildInfo {
+                package_name: "root".to_string(),
+                package_version: "0.81.0".to_string(),
+                canic_version: "0.81.0".to_string(),
+                canister_version: 7,
+            },
+            features: Vec::new(),
+            topology: None,
+            timers: Vec::new(),
+            state: None,
+            recent_failures: Vec::new(),
+            visibility: Vec::new(),
+            readiness: CanicReadinessStatus {
+                schema_version: canic_core::dto::runtime::RUNTIME_INTROSPECTION_SCHEMA_VERSION,
+                role: Some("root".to_string()),
+                status: ReadinessStatus::Ready,
+                observed_at_ns: 42,
+                checks: Vec::new(),
+                blockers: Vec::new(),
+                warnings: Vec::new(),
+            },
+            status,
+        }
+    }
+
+    fn hex_bytes(bytes: &[u8]) -> String {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut out = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            out.push(char::from(HEX[usize::from(byte >> 4)]));
+            out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+        out
     }
 }
