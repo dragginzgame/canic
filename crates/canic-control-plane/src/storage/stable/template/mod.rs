@@ -1,6 +1,6 @@
-pub(crate) mod chunked;
-pub(crate) mod gc;
-pub(crate) mod manifest;
+pub mod chunked;
+pub mod gc;
+pub mod manifest;
 
 pub use chunked::{
     TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,

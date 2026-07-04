@@ -41,14 +41,17 @@ pub fn canic_control_plane_state_manifest() -> StateManifest {
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 fn declared_roles() -> Vec<StateRoleManifest> {
-    let mut roles = Vec::new();
-
     #[cfg(feature = "root-control-plane")]
-    roles.push(root_role_manifest());
-    #[cfg(feature = "wasm-store-canister")]
-    roles.push(wasm_store_role_manifest());
+    let root_roles = [root_role_manifest()];
+    #[cfg(not(feature = "root-control-plane"))]
+    let root_roles = [];
 
-    roles
+    #[cfg(feature = "wasm-store-canister")]
+    let wasm_store_roles = [wasm_store_role_manifest()];
+    #[cfg(not(feature = "wasm-store-canister"))]
+    let wasm_store_roles = [];
+
+    root_roles.into_iter().chain(wasm_store_roles).collect()
 }
 
 #[cfg(not(any(feature = "root-control-plane", feature = "wasm-store-canister")))]

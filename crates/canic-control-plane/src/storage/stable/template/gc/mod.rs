@@ -5,7 +5,7 @@ use canic_core::impl_storable_bounded;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-pub(crate) const WASM_STORE_GC_STATE_ID: u8 = 85;
+pub const WASM_STORE_GC_STATE_ID: u8 = 85;
 
 eager_static! {
     static WASM_STORE_GC_STATE: RefCell<
