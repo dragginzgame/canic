@@ -238,6 +238,13 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
 /// diagnostic queries are accepted, or if the default memory-ledger endpoint is
 /// present.
 pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principal) {
+    assert_root_runtime_introspection_reports(pic, root_id);
+    assert_root_observability_queries(pic, root_id);
+    assert_root_runtime_introspection_rejects_non_controller(pic, root_id);
+    assert_root_observability_rejects_non_controller(pic, root_id);
+}
+
+fn assert_root_runtime_introspection_reports(pic: &Pic, root_id: Principal) {
     let health: Result<CanicHealthStatus, canic::Error> =
         pic.query_call_or_panic(root_id, protocol::CANIC_HEALTH, ());
     let health = health.expect("root health application");
@@ -299,7 +306,9 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
             .is_some_and(|state| !state.domains.is_empty()),
         "root runtime status should expose state metadata, not persisted values"
     );
+}
 
+fn assert_root_observability_queries(pic: &Pic, root_id: Principal) {
     let app_registry: Result<AppRegistryResponse, canic::Error> =
         pic.query_call_or_panic(root_id, protocol::CANIC_APP_REGISTRY, ());
     app_registry.expect("root app registry application");
@@ -325,7 +334,9 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         panic!("default root memory ledger endpoint should be absent")
     };
     assert_missing_method(&err, protocol::CANIC_MEMORY_LEDGER);
+}
 
+fn assert_root_runtime_introspection_rejects_non_controller(pic: &Pic, root_id: Principal) {
     let non_controller = Principal::from_slice(&[252; 29]);
     let denied_health: Result<CanicHealthStatus, canic::Error> =
         pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_HEALTH, ());
@@ -347,7 +358,10 @@ pub fn assert_root_diagnostics_are_controller_gated(pic: &Pic, root_id: Principa
         panic!("non-controller runtime status query must be denied")
     };
     assert_eq!(denied_runtime_status.code, ErrorCode::Unauthorized);
+}
 
+fn assert_root_observability_rejects_non_controller(pic: &Pic, root_id: Principal) {
+    let non_controller = Principal::from_slice(&[252; 29]);
     let denied_app_registry: Result<AppRegistryResponse, canic::Error> =
         pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
     let Err(denied_app_registry) = denied_app_registry else {
