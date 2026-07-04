@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.7` connects terminal bootstrap failures to guarded runtime
+  introspection as bounded recent-failure metadata while preserving detailed
+  bootstrap errors in the existing controller-gated bootstrap status.
+
 - `0.81.6` hardens live runtime-introspection coverage for guarded feature,
   timer, and state metadata and expands inspect text reports for decoded
   metadata-only sections.
