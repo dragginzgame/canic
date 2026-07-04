@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)
 
+- `0.81.8` hardens `canic inspect` reports by making untyped runtime-status
+  fallback responses explicit with warnings and next actions, while pinning
+  rejected command aliases such as `--format json`.
+
 - `0.81.7` connects terminal bootstrap failures to guarded runtime
   introspection as bounded recent-failure metadata while preserving detailed
   bootstrap errors in the existing controller-gated bootstrap status.

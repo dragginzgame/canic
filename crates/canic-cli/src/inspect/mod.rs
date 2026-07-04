@@ -36,6 +36,9 @@ const INSPECT_SCHEMA_VERSION: u32 = 1;
 const RUNTIME_OBSERVED_SOURCE: &str = "runtime_observed";
 const CLI_ARG_SOURCE: &str = "cli_arg";
 const DEPLOYMENT_RECORD_SOURCE: &str = "deployment_record";
+const UNTYPED_RUNTIME_STATUS_WARNING: &str = "canic_runtime_status response did not include decodable response_bytes; typed runtime sections are unavailable";
+const UNTYPED_RUNTIME_STATUS_NEXT: &str =
+    "use an ICP CLI/runtime response that includes response_bytes for typed Candid decoding";
 
 const INSPECT_HELP_AFTER: &str = "\
 Examples:
@@ -313,6 +316,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     )?;
     let runtime_status = runtime_response_payload(&output)?;
     let status = inspect_status_label(&runtime_status).to_string();
+    let (warnings, next_actions) = runtime_response_guidance(&runtime_status);
 
     Ok(InspectReport {
         schema_version: INSPECT_SCHEMA_VERSION,
@@ -329,8 +333,8 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         health_status: None,
         readiness_status: None,
         runtime_status: Some(runtime_status),
-        warnings: Vec::new(),
-        next_actions: Vec::new(),
+        warnings,
+        next_actions,
     })
 }
 
@@ -361,6 +365,17 @@ fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, Inspec
         response_bytes_present,
         response_candid_present,
     })
+}
+
+fn runtime_response_guidance(payload: &RuntimeStatusPayload) -> (Vec<String>, Vec<String>) {
+    if payload.status.is_some() {
+        return (Vec::new(), Vec::new());
+    }
+
+    (
+        vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()],
+        vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()],
+    )
 }
 
 fn decode_runtime_status_response_hex(
@@ -435,6 +450,20 @@ fn render_text_report(report: &InspectReport) -> String {
                 lines.push(format!("state_domains: {}", state.domains.len()));
             }
             append_runtime_metadata_lines(&mut lines, status);
+        }
+    }
+    if !report.warnings.is_empty() {
+        lines.push(String::new());
+        lines.push("warnings".to_string());
+        for warning in &report.warnings {
+            lines.push(format!("- {warning}"));
+        }
+    }
+    if !report.next_actions.is_empty() {
+        lines.push(String::new());
+        lines.push("next_actions".to_string());
+        for action in &report.next_actions {
+            lines.push(format!("- {action}"));
         }
     }
     lines.join("\n")
@@ -777,6 +806,30 @@ mod tests {
     }
 
     #[test]
+    fn rejects_format_json_alias() {
+        assert!(
+            InspectOptions::parse([
+                OsString::from("canister"),
+                OsString::from("aaaaa-aa"),
+                OsString::from("--format"),
+                OsString::from("json"),
+            ])
+            .is_err()
+        );
+        assert!(
+            InspectOptions::parse([
+                OsString::from("deployment"),
+                OsString::from("demo-local"),
+                OsString::from("--role"),
+                OsString::from("root"),
+                OsString::from("--format"),
+                OsString::from("json"),
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
     fn rejects_ambiguous_runtime_status_alias() {
         assert!(
             InspectOptions::parse([OsString::from("runtime"), OsString::from("aaaaa-aa")]).is_err()
@@ -804,6 +857,19 @@ mod tests {
         assert_eq!(payload.response_format, "candid");
         assert!(!payload.response_bytes_present);
         assert!(payload.response_candid_present);
+    }
+
+    #[test]
+    fn untyped_runtime_status_response_gets_guidance() {
+        let payload = runtime_response_payload(
+            r#"{"response_candid":"(record { status = variant { Ok } })"}"#,
+        )
+        .expect("extract runtime status Candid");
+
+        let (warnings, next_actions) = runtime_response_guidance(&payload);
+
+        assert_eq!(warnings, vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()]);
+        assert_eq!(next_actions, vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()]);
     }
 
     #[test]
@@ -870,6 +936,18 @@ mod tests {
     }
 
     #[test]
+    fn text_report_renders_warnings_and_next_actions() {
+        let mut report = sample_inspect_report();
+        report.warnings = vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()];
+        report.next_actions = vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()];
+
+        let rendered = render_text_report(&report);
+
+        assert!(rendered.contains("warnings\n- canic_runtime_status response"));
+        assert!(rendered.contains("next_actions\n- use an ICP CLI/runtime response"));
+    }
+
+    #[test]
     fn json_report_labels_runtime_observed_payload() {
         let value = serde_json::to_value(sample_inspect_report()).expect("serialize report");
 
@@ -907,6 +985,18 @@ mod tests {
         assert_eq!(value["runtime_status"]["response_bytes_present"], true);
         assert_eq!(value["runtime_status"]["response_candid_present"], true);
         assert!(value["runtime_status"].get("response_candid").is_none());
+    }
+
+    #[test]
+    fn json_report_renders_warnings_and_next_actions() {
+        let mut report = sample_inspect_report();
+        report.warnings = vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()];
+        report.next_actions = vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()];
+
+        let value = serde_json::to_value(report).expect("serialize report");
+
+        assert_eq!(value["warnings"][0], UNTYPED_RUNTIME_STATUS_WARNING);
+        assert_eq!(value["next_actions"][0], UNTYPED_RUNTIME_STATUS_NEXT);
     }
 
     #[test]
