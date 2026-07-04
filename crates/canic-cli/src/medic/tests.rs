@@ -665,6 +665,12 @@ fn deployment_registry_observed_check_reports_entry_count() {
     assert_eq!(check.source, MedicSource::LocalReplica);
     assert!(check.detail.contains("entries=2"));
     assert!(check.detail.contains("roles=2"));
+    assert!(
+        check
+            .next
+            .contains("canic inspect deployment demo --role root")
+    );
+    assert!(check.next.contains("one explicit role"));
 }
 
 // Ensure an empty observed registry remains visible as a warning.
@@ -678,6 +684,20 @@ fn deployment_registry_observed_check_warns_on_empty_registry() {
     assert_eq!(check.code, "deployment_registry_empty");
     assert!(check.next.contains("canic deploy plan demo"));
     assert!(check.next.contains("canic deploy check demo"));
+}
+
+// Ensure medic can still point at runtime inspection when registry entries have no roles.
+#[test]
+fn deployment_registry_runtime_next_falls_back_to_direct_canister() {
+    let resolution =
+        sample_installed_deployment_resolution(vec![registry_entry("cccccc-cc", None)]);
+
+    let check = deployment_registry_observed_check(&resolution);
+
+    assert_eq!(check.status, MedicStatus::Pass);
+    assert_eq!(check.code, "deployment_registry_observed");
+    assert!(check.next.contains("canic inspect canister cccccc-cc"));
+    assert!(check.next.contains("one explicit canister"));
 }
 
 // Ensure deployment-truth receipt diagnostics classify missing and complete local receipts.
