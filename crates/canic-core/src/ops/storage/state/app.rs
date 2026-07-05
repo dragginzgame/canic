@@ -5,9 +5,9 @@
 //! Boundary: storage ops facade over the stable app-state record.
 
 use crate::{
+    domain::state::AppStatus,
     dto::state::{
-        AppCommand, AppCommandResponse, AppStateInput, AppStateResponse, AppStatus,
-        SetStateResponse,
+        AppCommand, AppCommandResponse, AppStateInput, AppStateResponse, SetStateResponse,
     },
     ops::{
         prelude::*,

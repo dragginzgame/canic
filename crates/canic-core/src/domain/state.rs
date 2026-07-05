@@ -34,3 +34,14 @@ impl Display for AppMode {
         f.write_str(label)
     }
 }
+
+///
+/// AppStatus
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum AppStatus {
+    Active,
+    Readonly,
+    Stopped,
+}

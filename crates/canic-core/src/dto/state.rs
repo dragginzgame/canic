@@ -1,6 +1,6 @@
 use crate::dto::prelude::*;
 
-pub use crate::domain::state::AppMode;
+pub use crate::domain::state::{AppMode, AppStatus};
 
 //
 // AppCommand
@@ -31,17 +31,6 @@ pub struct SetStateResponse<T> {
     pub previous: T,
     pub current: T,
     pub changed: bool,
-}
-
-//
-// AppStatus
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum AppStatus {
-    Active,
-    Readonly,
-    Stopped,
 }
 
 //
@@ -110,6 +99,11 @@ mod tests {
     #[test]
     fn app_mode_roundtrips_candid_through_dto_path() {
         assert_enum_candid_contract(AppMode::Readonly);
+    }
+
+    #[test]
+    fn app_status_roundtrips_candid_through_dto_path() {
+        assert_enum_candid_contract(AppStatus::Readonly);
     }
 
     fn assert_enum_candid_contract<T>(value: T)

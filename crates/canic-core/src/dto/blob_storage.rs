@@ -1,6 +1,11 @@
 use crate::dto::prelude::*;
 
 #[cfg(feature = "blob-storage-billing")]
+pub use crate::domain::blob_storage::{
+    BlobStorageBillingWarning, BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
+    BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker,
+};
+#[cfg(feature = "blob-storage-billing")]
 use candid::Int;
 
 ///
@@ -220,87 +225,6 @@ pub struct BlobStorageStatusRequest {
 }
 
 ///
-/// BlobStoragePaymentModelStatus
-///
-/// Passive DTO for the configured blob-storage payment model.
-///
-
-#[cfg(feature = "blob-storage-billing")]
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum BlobStoragePaymentModelStatus {
-    NotConfigured,
-    ProjectAsPaymentAccount,
-}
-
-///
-/// BlobStorageGatewayPrincipalSyncAction
-///
-/// Passive DTO describing status-request gateway sync behavior.
-///
-
-#[cfg(feature = "blob-storage-billing")]
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum BlobStorageGatewayPrincipalSyncAction {
-    NotRequested,
-    SkippedConfigMissing,
-    SkippedReadOnlyStatus,
-}
-
-///
-/// BlobStorageFundingStatus
-///
-/// Passive DTO describing whether explicit project-cycle funding is needed.
-///
-
-#[cfg(feature = "blob-storage-billing")]
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum BlobStorageFundingStatus {
-    NotConfigured,
-    NotNeeded,
-    FundingRequired {
-        requested_cycles: Nat,
-    },
-    BalanceUnavailable,
-    BalanceMalformed,
-    ReserveWouldBeViolated {
-        requested_cycles: Nat,
-        transferable_cycles: Nat,
-    },
-}
-
-///
-/// BlobStorageReadinessBlocker
-///
-/// Passive DTO describing machine-readable billing readiness blockers.
-///
-
-#[cfg(feature = "blob-storage-billing")]
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum BlobStorageReadinessBlocker {
-    NotConfigured,
-    GatewayPrincipalsMissing,
-    CashierBalanceUnavailable,
-    CashierBalanceMalformed,
-    InsufficientCashierBalance,
-    ReserveWouldBeViolated,
-}
-
-///
-/// BlobStorageBillingWarning
-///
-/// Passive DTO describing non-fatal billing status warnings.
-///
-
-#[cfg(feature = "blob-storage-billing")]
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum BlobStorageBillingWarning {
-    GatewayPrincipalSetEmpty,
-    CashierBalanceUnavailable,
-    CashierBalanceMalformed,
-    SyncRequestedButStatusIsReadOnly,
-}
-
-///
 /// BlobStorageStatusResponse
 ///
 /// Passive DTO returned by `get_blob_storage_status`.
@@ -324,4 +248,33 @@ pub struct BlobStorageStatusResponse {
     pub ready: bool,
     pub blockers: Vec<BlobStorageReadinessBlocker>,
     pub warnings: Vec<BlobStorageBillingWarning>,
+}
+
+#[cfg(all(test, feature = "blob-storage-billing"))]
+mod tests {
+    use super::*;
+    use candid::{CandidType, Decode, Encode};
+    use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
+
+    #[test]
+    fn billing_status_enums_roundtrip_candid_through_dto_path() {
+        assert_enum_candid_contract(BlobStoragePaymentModelStatus::ProjectAsPaymentAccount);
+        assert_enum_candid_contract(BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus);
+        assert_enum_candid_contract(BlobStorageFundingStatus::FundingRequired {
+            requested_cycles: Nat::from(42_u64),
+        });
+        assert_enum_candid_contract(BlobStorageReadinessBlocker::InsufficientCashierBalance);
+        assert_enum_candid_contract(BlobStorageBillingWarning::SyncRequestedButStatusIsReadOnly);
+    }
+
+    fn assert_enum_candid_contract<T>(value: T)
+    where
+        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
+    {
+        let bytes = Encode!(&value).expect("encode blob-storage status enum");
+        let decoded = Decode!(&bytes, T).expect("decode blob-storage status enum");
+
+        assert_eq!(decoded, value);
+    }
 }

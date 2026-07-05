@@ -32,31 +32,19 @@ pub mod timer;
 pub mod wasm_store;
 
 use crate::{
-    domain::metrics::MetricsKind,
+    domain::{metrics::MetricsKind, runtime::TimerMode},
     dto::metrics::{MetricEntry, MetricValue},
     perf::{self, PerfKey},
 };
 use {
-    access::AccessMetrics,
-    auth::AuthMetrics,
-    canister_ops::CanisterOpsMetrics,
-    cascade::CascadeMetrics,
-    cycles_funding::CyclesFundingMetrics,
-    cycles_topup::CyclesTopupMetrics,
-    delegated_auth::DelegatedAuthMetrics,
-    directory::DirectoryMetrics,
-    http::HttpMetrics,
-    icp_refill::IcpRefillMetrics,
-    intent::IntentMetrics,
-    inter_canister_call::InterCanisterCallMetrics,
-    lifecycle::LifecycleMetrics,
-    platform_call::PlatformCallMetrics,
-    pool::PoolMetrics,
-    replay::ReplayMetrics,
-    root_capability::RootCapabilityMetrics,
-    scaling::ScalingMetrics,
-    timer::{TimerMetrics, TimerMode},
-    wasm_store::WasmStoreMetrics,
+    access::AccessMetrics, auth::AuthMetrics, canister_ops::CanisterOpsMetrics,
+    cascade::CascadeMetrics, cycles_funding::CyclesFundingMetrics,
+    cycles_topup::CyclesTopupMetrics, delegated_auth::DelegatedAuthMetrics,
+    directory::DirectoryMetrics, http::HttpMetrics, icp_refill::IcpRefillMetrics,
+    intent::IntentMetrics, inter_canister_call::InterCanisterCallMetrics,
+    lifecycle::LifecycleMetrics, platform_call::PlatformCallMetrics, pool::PoolMetrics,
+    replay::ReplayMetrics, root_capability::RootCapabilityMetrics, scaling::ScalingMetrics,
+    timer::TimerMetrics, wasm_store::WasmStoreMetrics,
 };
 
 #[cfg(feature = "sharding")]

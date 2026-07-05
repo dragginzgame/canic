@@ -7,6 +7,8 @@
 use crate::{ids::SystemMetricKind, ops::runtime::metrics::system::SystemMetrics};
 use std::{cell::RefCell, collections::HashMap, time::Duration};
 
+pub use crate::domain::runtime::TimerMode;
+
 thread_local! {
     /// Thread-local storage for timer execution counters.
     ///
@@ -25,19 +27,6 @@ thread_local! {
 #[derive(Clone)]
 pub struct TimerMetricsSnapshot {
     pub entries: Vec<(TimerMetricKey, u64)>,
-}
-
-///
-/// TimerMode
-///
-/// Timer scheduling mode dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum TimerMode {
-    Interval,
-    Once,
 }
 
 ///
