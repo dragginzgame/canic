@@ -1,25 +1,10 @@
 use crate::dto::prelude::*;
 
+pub use crate::domain::metrics::MetricsKind;
+
 //
 // Metrics DTOs
 //
-
-//
-// MetricsKind
-//
-// Metric tier selector.
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize)]
-#[remain::sorted]
-pub enum MetricsKind {
-    Core,
-    Placement,
-    Platform,
-    Runtime,
-    Security,
-    Storage,
-}
 
 //
 // MetricEntry
@@ -63,4 +48,19 @@ pub struct QueryPerfSample<T> {
 
     // Local instruction counter observed in the same query call context.
     pub local_instructions: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reexported_metrics_kind_roundtrips_through_candid() {
+        let kind = crate::domain::metrics::MetricsKind::Security;
+
+        let bytes = candid::encode_one(kind).expect("encode metrics kind");
+        let decoded: MetricsKind = candid::decode_one(&bytes).expect("decode metrics kind");
+
+        assert!(matches!(decoded, MetricsKind::Security));
+    }
 }

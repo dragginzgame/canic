@@ -7,7 +7,8 @@
 use crate::{
     InternalError,
     cdk::{candid::Nat, types::Principal},
-    dto::icp_refill::{IcpRefillErrorCode, IcpRefillRequest, IcpRefillResponse, IcpRefillStatus},
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+    dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ids::CanisterRole,
     infra::ic::icp_refill::{NotifyTopUpArg, NotifyTopUpError, TransferError},
     ops::{

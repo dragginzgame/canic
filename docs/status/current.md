@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-04
+Last updated: 2026-07-05
 
 ## Purpose
 
@@ -11,7 +11,68 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.81.x` runtime introspection. Source of truth:
+- The active line is `0.82.x` boundary hardening. Source of truth:
+  `docs/design/0.82-boundary-hardening/0.82-design.md`.
+
+- The current package/release-surface version is `0.82.1`. An accidental
+  next-minor workspace/version-surface bump was corrected back to `0.82.1` in
+  `Cargo.toml`, `Cargo.lock`, `scripts/dev/install_dev.sh`, and
+  `crates/canic-host/README.md`. A local stale next-minor tag was observed,
+  but it has not been deleted.
+
+- The current `0.82.1` working slice makes the pure-policy boundary explicit:
+  core policy modules live under `domain::policy::pure`, policy input/decision
+  shapes moved out of `view/`, and internal call sites use the explicit pure
+  namespace. This is a no-behavior-change slice with no CLI, endpoint, JSON,
+  Candid, stable-state, deployment-truth, or evidence/report surface changes.
+  The root and detailed `0.82.1` changelog entries are prepared.
+
+- The current `0.82.2` working slice starts with release-safety tooling:
+  `make minor` and `make major` require interactive confirmation before they
+  run release gates or bump version files; `release-minor` and `release-major`
+  inherit the guard.
+
+- The same `0.82.2` slice addresses the ICP refill DTO/view boundary:
+  `IcpRefillStatus` and `IcpRefillErrorCode` are now owned by
+  `domain::icp_refill`, `dto::icp_refill` re-exports them to preserve public
+  Rust paths and Candid shape, and internal view/storage/workflow/metrics code
+  imports the values from the domain owner. This has a docs-only hardening
+  report at
+  `docs/design/0.82-boundary-hardening/0.82-icp-refill-dto-boundary-report.md`.
+
+- The same `0.82.2` slice also moves root runtime subnet identity values to
+  `domain::subnet` while preserving `dto::subnet` re-exports for the macro/init
+  Candid boundary. Runtime root workflow imports the domain owner directly, and
+  the docs-only hardening report is
+  `docs/design/0.82-boundary-hardening/0.82-runtime-identity-dto-boundary-report.md`.
+
+- The current 0.82 follow-up slice continues DTO boundary cleanup by moving
+  cycle top-up event status ownership to `domain::cycles` while preserving the
+  public `dto::cycles::CycleTopupEventStatus` re-export and Candid shape.
+  Storage cycle ops now import the domain owner directly, with the docs-only
+  report at
+  `docs/design/0.82-boundary-hardening/0.82-cycle-topup-dto-boundary-report.md`.
+
+- The same 0.82 follow-up slice moves canister pool status ownership to
+  `domain::pool` while preserving the public
+  `dto::pool::CanisterPoolStatus` re-export and Candid shape. Pool storage
+  mapping and import/recycle workflow decisions now import the domain owner
+  directly, with the docs-only report at
+  `docs/design/0.82-boundary-hardening/0.82-pool-status-dto-boundary-report.md`.
+
+- The same 0.82 follow-up slice extends the ICP refill DTO boundary cleanup by
+  moving `IcpRefillMode` to `domain::icp_refill` while preserving the public
+  DTO re-export and request/dry-run Candid shape. Manual, hub, replay, storage,
+  and workflow tests now import the mode from the domain owner.
+
+- The same 0.82 follow-up slice moves metrics selector ownership to
+  `domain::metrics` while preserving the public `dto::metrics::MetricsKind`
+  re-export and Candid shape. Runtime metrics projection, metrics workflow
+  query, and lifecycle facade tests now import the domain owner directly, with
+  the docs-only report at
+  `docs/design/0.82-boundary-hardening/0.82-metrics-kind-dto-boundary-report.md`.
+
+- The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
 - The first post-0.80.0 working slice adds diagnostic state metadata surfaces:

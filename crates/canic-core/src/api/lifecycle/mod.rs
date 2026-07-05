@@ -123,8 +123,7 @@ pub mod metrics {
             WasmStoreMetricsApi,
         };
         use crate::{
-            dto::metrics::{MetricValue, MetricsKind},
-            ids::CanisterRole,
+            domain::metrics::MetricsKind, dto::metrics::MetricValue, ids::CanisterRole,
             ops::runtime::metrics,
         };
 

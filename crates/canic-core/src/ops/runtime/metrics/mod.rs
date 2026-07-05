@@ -32,7 +32,8 @@ pub mod timer;
 pub mod wasm_store;
 
 use crate::{
-    dto::metrics::{MetricEntry, MetricValue, MetricsKind},
+    domain::metrics::MetricsKind,
+    dto::metrics::{MetricEntry, MetricValue},
     perf::{self, PerfKey},
 };
 use {

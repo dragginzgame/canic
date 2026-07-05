@@ -4,8 +4,13 @@
 //! not perform storage access or orchestration.
 
 pub mod auth;
+pub mod cycles;
+pub mod icp_refill;
 pub mod icrc;
+pub mod metrics;
 pub mod policy;
+pub mod pool;
+pub mod subnet;
 pub mod value;
 
 use crate::{InternalError, InternalErrorOrigin};

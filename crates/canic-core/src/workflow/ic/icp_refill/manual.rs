@@ -6,7 +6,8 @@
 
 use crate::{
     InternalError,
-    dto::icp_refill::{IcpRefillDryRun, IcpRefillMode, IcpRefillRequest, IcpRefillResponse},
+    domain::icp_refill::IcpRefillMode,
+    dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest, IcpRefillResponse},
     ops::ic::IcOps,
     workflow::ic::icp_refill::{
         IcpRefillWorkflow, IcpRefillWorkflowError, RateQueryMode, estimate_cycles,

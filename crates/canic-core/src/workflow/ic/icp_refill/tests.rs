@@ -5,10 +5,8 @@ use crate::{
         candid::Nat,
         types::{Principal, TC},
     },
-    dto::{
-        error::ErrorCode,
-        icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
-    },
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
+    dto::error::ErrorCode,
     infra::ic::icp_refill::{NotifyTopUpError, TransferError},
     ops::{
         cost_guard::CostGuardOps,
