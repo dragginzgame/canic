@@ -6,6 +6,7 @@
 pub mod auth;
 pub mod icrc;
 pub mod policy;
+pub mod value;
 
 use crate::{InternalError, InternalErrorOrigin};
 use thiserror::Error as ThisError;

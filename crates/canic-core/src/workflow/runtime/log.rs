@@ -60,7 +60,14 @@ impl LogRetentionWorkflow {
             }
         };
         let now = IcOps::now_secs();
-        let params = policy::log::retention_params(&cfg, now);
+        let params = policy::log::retention_params(
+            policy::log::LogRetentionPolicyInput {
+                max_entries: cfg.max_entries,
+                max_entry_bytes: cfg.max_entry_bytes,
+                max_age_secs: cfg.max_age_secs,
+            },
+            now,
+        );
 
         match LogOps::apply_retention(params.cutoff, params.max_entries, params.max_entry_bytes) {
             Ok(summary) => {

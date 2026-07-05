@@ -1,5 +1,5 @@
 use super::AuthPolicyError;
-use crate::{cdk::types::Principal, ids::CanisterRole};
+use crate::{domain::value::Principal, ids::CanisterRole};
 
 ///
 /// RootDelegationAudiencePolicy

@@ -8,8 +8,7 @@ pub use metrics::{PoolMetrics, compute_pool_metrics};
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    cdk::types::Principal,
-    config::schema::{ShardPool, ShardPoolPolicy},
+    domain::value::Principal,
     view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement},
 };
 use backfill::plan_slot_backfill;
@@ -45,7 +44,7 @@ impl From<ShardingPolicyError> for InternalError {
 
 pub struct ShardingState<'a> {
     pub pool: &'a str,
-    pub config: ShardPool,
+    pub max_shards: u32,
     pub metrics: &'a PoolMetrics,
     pub entries: &'a [(Principal, ShardPlacement)],
     pub assignments: &'a [ShardPartitionKeyAssignment],
@@ -61,8 +60,8 @@ pub struct ShardingPolicy;
 
 impl ShardingPolicy {
     #[must_use]
-    pub const fn can_create(metrics: PoolMetrics, policy: &ShardPoolPolicy) -> bool {
-        metrics.active_count < policy.max_shards
+    pub const fn can_create(metrics: PoolMetrics, max_shards: u32) -> bool {
+        metrics.active_count < max_shards
     }
 
     #[must_use]
@@ -81,11 +80,10 @@ impl ShardingPolicy {
         partition_key: &str,
         exclude_pid: Option<Principal>,
     ) -> ShardingPlan {
-        let pool_cfg = state.config.clone();
         let metrics = state.metrics;
         let entries = state.entries;
 
-        let slot_plan = plan_slot_backfill(state.pool, entries, pool_cfg.policy.max_shards);
+        let slot_plan = plan_slot_backfill(state.pool, entries, state.max_shards);
 
         if let Some(pid) = Self::lookup_partition_key(partition_key, state.assignments)
             .filter(|pid| exclude_pid != Some(*pid))
@@ -113,7 +111,7 @@ impl ShardingPolicy {
             );
         }
 
-        let max_slots = pool_cfg.policy.max_shards;
+        let max_slots = state.max_shards;
         let free_slots: Vec<u32> = (0..max_slots)
             .filter(|slot| !slot_plan.occupied.contains(slot))
             .collect();
@@ -130,7 +128,7 @@ impl ShardingPolicy {
             );
         };
 
-        if Self::can_create(*metrics, &pool_cfg.policy) {
+        if Self::can_create(*metrics, state.max_shards) {
             Self::make_plan(
                 ShardingPlanState::CreateAllowed,
                 *metrics,

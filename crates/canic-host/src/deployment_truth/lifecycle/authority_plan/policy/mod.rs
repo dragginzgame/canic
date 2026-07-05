@@ -1,4 +1,9 @@
-use super::super::super::*;
+use super::super::super::stable_json_sha256_hex;
+use crate::deployment_truth::{
+    CanisterControlClassV1, ConsentChannelKindV1, ConsentRequirementV1, ConsentSubjectKindV1,
+    ExternalUpgradeAuthorizationModeV1, LifecycleModeV1, LifecycleUpgradeModeV1,
+    LifecycleVerificationRequirementV1,
+};
 use std::collections::BTreeSet;
 
 pub(super) fn required_lifecycle_controllers(

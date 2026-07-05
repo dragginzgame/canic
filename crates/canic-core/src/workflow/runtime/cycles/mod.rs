@@ -240,7 +240,17 @@ impl CycleTrackerWorkflow {
             return;
         }
 
-        let Some(plan) = policy::cycles::should_topup(cycles.to_u128(), &canister_cfg) else {
+        let topup_policy =
+            canister_cfg
+                .topup
+                .as_ref()
+                .map(|topup| policy::cycles::TopupPolicyInput {
+                    threshold: topup.threshold.clone(),
+                    amount: topup.amount.clone(),
+                });
+
+        let Some(plan) = policy::cycles::should_topup(cycles.to_u128(), topup_policy.as_ref())
+        else {
             CyclesTopupMetrics::record_above_threshold();
             return;
         };

@@ -6,11 +6,9 @@
 //! No IC calls. No async. No side effects.
 
 use crate::{
-    InternalError,
-    cdk::types::BoundedString64,
-    config::schema::{ScalePool, ScalingConfig},
-    domain::policy::PolicyError,
+    InternalError, domain::policy::PolicyError, domain::value::BoundedString64, ids::CanisterRole,
 };
+use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
 
 pub use crate::view::placement::scaling::ScalingWorkerPlanEntry;
@@ -61,6 +59,26 @@ pub enum ScalingPlanReason {
 }
 
 ///
+/// ScalingPolicyInput
+///
+
+#[derive(Clone, Debug, Default)]
+pub struct ScalingPolicyInput {
+    pub pools: BTreeMap<String, ScalingPoolPolicyInput>,
+}
+
+///
+/// ScalingPoolPolicyInput
+///
+
+#[derive(Clone, Debug)]
+pub struct ScalingPoolPolicyInput {
+    pub canister_role: CanisterRole,
+    pub min_workers: u32,
+    pub max_workers: u32,
+}
+
+///
 /// ScalingPolicy
 ///
 
@@ -70,29 +88,28 @@ impl ScalingPolicy {
     pub(crate) fn plan_create_worker(
         pool: &str,
         worker_count: u32,
-        scaling: Option<ScalingConfig>,
+        scaling: Option<&ScalingPolicyInput>,
     ) -> Result<ScalingPlan, InternalError> {
         let pool_cfg = Self::get_scaling_pool_cfg(pool, scaling)?;
-        let policy = pool_cfg.policy;
 
         // Max bound check
-        if policy.max_workers > 0 && worker_count >= policy.max_workers {
+        if pool_cfg.max_workers > 0 && worker_count >= pool_cfg.max_workers {
             return Ok(ScalingPlan {
                 should_spawn: false,
                 plan_reason: ScalingPlanReason::AtMaxWorkers,
                 reason: format!(
                     "pool '{pool}' at max_workers ({}/{})",
-                    worker_count, policy.max_workers
+                    worker_count, pool_cfg.max_workers
                 ),
                 worker_entry: None,
             });
         }
 
         // Min bound check
-        if worker_count < policy.min_workers {
+        if worker_count < pool_cfg.min_workers {
             let entry = ScalingWorkerPlanEntry {
                 pool: BoundedString64::new(pool),
-                canister_role: pool_cfg.canister_role,
+                canister_role: pool_cfg.canister_role.clone(),
             };
 
             return Ok(ScalingPlan {
@@ -100,7 +117,7 @@ impl ScalingPolicy {
                 plan_reason: ScalingPlanReason::BelowMinWorkers,
                 reason: format!(
                     "pool '{pool}' below min_workers (current {worker_count}, min {})",
-                    policy.min_workers
+                    pool_cfg.min_workers
                 ),
                 worker_entry: Some(entry),
             });
@@ -111,16 +128,16 @@ impl ScalingPolicy {
             plan_reason: ScalingPlanReason::WithinBounds,
             reason: format!(
                 "pool '{pool}' within policy bounds (current {worker_count}, min {}, max {})",
-                policy.min_workers, policy.max_workers
+                pool_cfg.min_workers, pool_cfg.max_workers
             ),
             worker_entry: None,
         })
     }
 
-    fn get_scaling_pool_cfg(
+    fn get_scaling_pool_cfg<'a>(
         pool: &str,
-        scaling: Option<ScalingConfig>,
-    ) -> Result<ScalePool, InternalError> {
+        scaling: Option<&'a ScalingPolicyInput>,
+    ) -> Result<&'a ScalingPoolPolicyInput, InternalError> {
         let Some(scaling) = scaling else {
             return Err(ScalingPolicyError::ScalingDisabled.into());
         };
@@ -129,6 +146,6 @@ impl ScalingPolicy {
             return Err(ScalingPolicyError::PoolNotFound(pool.to_string()).into());
         };
 
-        Ok(pool_cfg.clone())
+        Ok(pool_cfg)
     }
 }

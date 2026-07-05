@@ -2,7 +2,9 @@ pub mod registry;
 
 pub use crate::view::topology::{RegistryPolicyInput, TopologyPolicyInput};
 
-use crate::{InternalError, cdk::types::Principal, domain::policy::PolicyError, ids::CanisterRole};
+use crate::{
+    InternalError, domain::policy::PolicyError, domain::value::Principal, ids::CanisterRole,
+};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 

@@ -1,4 +1,4 @@
-use crate::config::schema::{IcpRefillPolicy, TopupPolicy};
+use crate::domain::value::Cycles;
 
 ///
 /// IcpRefillPolicyInput
@@ -12,6 +12,18 @@ pub struct IcpRefillPolicyInput {
     pub in_flight_for_key: bool,
     pub cycles_funding_enabled: bool,
     pub funding_cooldown_retry_after_secs: Option<u64>,
+}
+
+///
+/// IcpRefillPolicyRules
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IcpRefillPolicyRules {
+    pub enabled: bool,
+    pub min_hub_cycles_before_refill: Cycles,
+    pub max_refill_e8s_per_call: u64,
+    pub min_xdr_permyriad_per_icp: Option<u64>,
 }
 
 ///
@@ -62,7 +74,7 @@ pub enum IcpRefillPolicyViolation {
 /// concurrency key, but they do not require the hub to already be below its
 /// timer-driven self-refill threshold.
 pub const fn evaluate_manual_refill(
-    policy: Option<&IcpRefillPolicy>,
+    policy: Option<&IcpRefillPolicyRules>,
     input: IcpRefillPolicyInput,
 ) -> Result<IcpRefillDecision, IcpRefillPolicyViolation> {
     let Some(policy) = policy else {
@@ -74,13 +86,10 @@ pub const fn evaluate_manual_refill(
 
 /// Evaluate the timer-driven hub self-refill branch.
 pub const fn evaluate_hub_self_refill(
-    topup: Option<&TopupPolicy>,
+    policy: Option<&IcpRefillPolicyRules>,
     input: IcpRefillPolicyInput,
 ) -> Result<IcpRefillDecision, IcpRefillPolicyViolation> {
-    let Some(topup) = topup else {
-        return Err(IcpRefillPolicyViolation::NotConfigured);
-    };
-    let Some(policy) = topup.icp_refill.as_ref() else {
+    let Some(policy) = policy else {
         return Err(IcpRefillPolicyViolation::NotConfigured);
     };
 
@@ -99,7 +108,7 @@ pub const fn evaluate_hub_self_refill(
 }
 
 const fn evaluate_common(
-    policy: &IcpRefillPolicy,
+    policy: &IcpRefillPolicyRules,
     input: IcpRefillPolicyInput,
 ) -> Result<IcpRefillDecision, IcpRefillPolicyViolation> {
     if !input.cycles_funding_enabled {
@@ -151,17 +160,14 @@ const fn evaluate_common(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cdk::types::{Cycles, TC};
+    use crate::domain::value::{Cycles, TC};
 
-    fn policy() -> IcpRefillPolicy {
-        IcpRefillPolicy {
+    fn policy() -> IcpRefillPolicyRules {
+        IcpRefillPolicyRules {
             enabled: true,
             min_hub_cycles_before_refill: Cycles::new(2 * TC),
             max_refill_e8s_per_call: 100_000_000,
             min_xdr_permyriad_per_icp: Some(40_000),
-            ledger_canister_id: None,
-            cmc_canister_id: None,
-            allow_ic_system_canister_overrides: false,
         }
     }
 
@@ -192,12 +198,8 @@ mod tests {
     fn hub_self_refill_requires_balance_below_threshold() {
         let mut input = input();
         input.hub_cycles = 2 * TC;
-        let topup = TopupPolicy {
-            icp_refill: Some(policy()),
-            ..TopupPolicy::default()
-        };
 
-        let err = evaluate_hub_self_refill(Some(&topup), input).expect_err("threshold gate");
+        let err = evaluate_hub_self_refill(Some(&policy()), input).expect_err("threshold gate");
 
         assert_eq!(
             err,
@@ -210,12 +212,7 @@ mod tests {
 
     #[test]
     fn hub_self_refill_accepts_low_balance_request() {
-        let topup = TopupPolicy {
-            icp_refill: Some(policy()),
-            ..TopupPolicy::default()
-        };
-
-        let decision = evaluate_hub_self_refill(Some(&topup), input()).expect("low balance");
+        let decision = evaluate_hub_self_refill(Some(&policy()), input()).expect("low balance");
 
         assert_eq!(decision.amount_e8s, 50_000_000);
     }
@@ -291,12 +288,7 @@ mod tests {
     fn hub_self_refill_denies_when_cycles_funding_disabled() {
         let mut input = input();
         input.cycles_funding_enabled = false;
-        let topup = TopupPolicy {
-            icp_refill: Some(policy()),
-            ..TopupPolicy::default()
-        };
-
-        let err = evaluate_hub_self_refill(Some(&topup), input).expect_err("kill switch");
+        let err = evaluate_hub_self_refill(Some(&policy()), input).expect_err("kill switch");
 
         assert_eq!(err, IcpRefillPolicyViolation::CyclesFundingDisabled);
     }
@@ -320,12 +312,7 @@ mod tests {
     fn hub_self_refill_denies_when_funding_cooldown_active() {
         let mut input = input();
         input.funding_cooldown_retry_after_secs = Some(12);
-        let topup = TopupPolicy {
-            icp_refill: Some(policy()),
-            ..TopupPolicy::default()
-        };
-
-        let err = evaluate_hub_self_refill(Some(&topup), input).expect_err("cooldown");
+        let err = evaluate_hub_self_refill(Some(&policy()), input).expect_err("cooldown");
 
         assert_eq!(
             err,

@@ -89,13 +89,22 @@ fn usage_lists_command_families() {
 }
 
 #[test]
-fn inspect_report_status_suppresses_duplicate_stderr_and_exits_one() {
-    let error = CliError::Inspect(inspect::InspectCommandError::ReportStatus(
-        "failing".to_string(),
-    ));
+fn report_status_errors_delegate_suppression_and_exit_codes() {
+    let cases = [
+        CliError::Deploy(deploy::DeployCommandError::PlanBlocked(
+            "blocked".to_string(),
+        )),
+        CliError::Inspect(inspect::InspectCommandError::ReportStatus(
+            "failing".to_string(),
+        )),
+        CliError::Medic(medic::MedicCommandError::ReportFailed),
+        CliError::State(state::StateCommandError::AuditFailed),
+    ];
 
-    assert_eq!(render_cli_error(&error), "");
-    assert_eq!(cli_error_exit_code(&error), 1);
+    for error in cases {
+        assert_eq!(render_cli_error(&error), "");
+        assert_eq!(cli_error_exit_code(&error), 1);
+    }
 }
 
 // Ensure command-family help paths return successfully instead of erroring.
@@ -1110,6 +1119,37 @@ fn rejected_medic_command_forms_exit_as_usage_errors() {
     ] {
         let err =
             run(raw_args.iter().map(OsString::from)).expect_err("rejected medic form should fail");
+
+        assert_eq!(
+            cli_error_exit_code(&err),
+            2,
+            "wrong exit code for {raw_args:?}: {err}"
+        );
+        assert!(!render_cli_error(&err).is_empty());
+    }
+}
+
+#[test]
+fn rejected_legacy_operator_surfaces_exit_as_usage_errors() {
+    for raw_args in [
+        &["info", "medic", "demo"][..],
+        &["state"],
+        &["state", "audit", "root"],
+        &["state", "manifest", "root"],
+        &["state", "migrate"],
+        &["state", "repair"],
+        &["state", "explore"],
+        &["state", "dump"],
+        &["state", "audit", "--format", "json"],
+        &["state", "manifest", "--format", "json"],
+        &["inspect", "demo-local"],
+        &["inspect", "deployment", "demo-local"],
+        &["inspect", "deployment", "demo-local", "--all"],
+        &["topology", "demo-local"],
+        &["runtime", "status", "demo-local"],
+    ] {
+        let err = run(raw_args.iter().map(OsString::from))
+            .expect_err("legacy operator surface should fail");
 
         assert_eq!(
             cli_error_exit_code(&err),
