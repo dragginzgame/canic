@@ -162,6 +162,21 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-canister-ops-metric-domain-boundary-report.md`,
   `docs/design/0.82-boundary-hardening/0.82-management-call-metric-domain-boundary-report.md`.
 
+- The current `0.82.12` working slice moves lifecycle metric dimension
+  ownership to `domain::metrics` while preserving the public
+  `ops::runtime::metrics::lifecycle` and `api::lifecycle::metrics`
+  re-exports and public metric labels. Lifecycle metric recording and snapshot
+  storage remain unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-lifecycle-metric-domain-boundary-report.md`.
+
+- The current `0.82.13` working slice moves wasm-store metric dimension
+  ownership to `domain::metrics` while preserving the public
+  `ops::runtime::metrics::wasm_store` and `api::lifecycle::metrics`
+  re-exports and public metric labels. Install-source resolution now imports
+  the metric dimension values from the domain owner, while wasm-store metric
+  recording and snapshot storage remain unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-wasm-store-metric-domain-boundary-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

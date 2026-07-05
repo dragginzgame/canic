@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.12` continues lifecycle and storage metric boundary hardening by moving
+  lifecycle and wasm-store metric dimension values into domain ownership while
+  preserving existing runtime metrics and lifecycle facade import paths and
+  public metric labels.
+
 - `0.82.11` continues platform metric boundary hardening by moving canister-op
   and management-call metric dimension values into domain ownership while
   preserving existing runtime metrics import paths, public metric labels, and
