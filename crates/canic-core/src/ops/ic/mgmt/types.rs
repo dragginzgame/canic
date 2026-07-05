@@ -18,6 +18,8 @@ use crate::{
 };
 use candid::Nat;
 
+pub use crate::domain::canister::{CanisterStatusType, LogVisibility};
+
 ///
 /// CanisterInstallMode
 ///
@@ -40,20 +42,6 @@ pub enum CanisterInstallMode {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct UpgradeFlags {
     pub skip_pre_upgrade: Option<bool>,
-}
-
-///
-/// LogVisibility
-///
-/// If a type exists to represent a foreign contract or infra boundary,
-/// dead-code warnings on its variants are acceptable.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum LogVisibility {
-    Controllers,
-    Public,
-    AllowedViewers(Vec<Principal>),
 }
 
 ///
@@ -204,19 +192,6 @@ pub struct CanisterStatus {
     pub reserved_cycles: Nat,
     pub idle_cycles_burned_per_day: Nat,
     pub query_stats: QueryStatsSnapshot,
-}
-
-///
-/// CanisterStatusType
-///
-/// Operations-layer canister execution status.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum CanisterStatusType {
-    Running,
-    Stopping,
-    Stopped,
 }
 
 ///

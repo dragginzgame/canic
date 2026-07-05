@@ -10,7 +10,7 @@ impl MgmtOps {
     #[must_use]
     pub fn canister_status_to_dto(status: CanisterStatus) -> CanisterStatusResponse {
         CanisterStatusResponse {
-            status: status_type_to_dto(status.status),
+            status: status.status,
             settings: settings_to_dto(status.settings),
             module_hash: status.module_hash,
             memory_size: status.memory_size,
@@ -50,14 +50,6 @@ impl MgmtOps {
     }
 }
 
-const fn status_type_to_dto(status: CanisterStatusType) -> CanisterStatusTypeDto {
-    match status {
-        CanisterStatusType::Running => CanisterStatusTypeDto::Running,
-        CanisterStatusType::Stopping => CanisterStatusTypeDto::Stopping,
-        CanisterStatusType::Stopped => CanisterStatusTypeDto::Stopped,
-    }
-}
-
 fn settings_to_dto(settings: CanisterSettingsSnapshot) -> CanisterSettingsDto {
     CanisterSettingsDto {
         controllers: settings.controllers,
@@ -65,7 +57,7 @@ fn settings_to_dto(settings: CanisterSettingsSnapshot) -> CanisterSettingsDto {
         memory_allocation: settings.memory_allocation,
         freezing_threshold: settings.freezing_threshold,
         reserved_cycles_limit: settings.reserved_cycles_limit,
-        log_visibility: log_visibility_to_dto(settings.log_visibility),
+        log_visibility: settings.log_visibility,
         log_memory_limit: settings.log_memory_limit,
         wasm_memory_limit: settings.wasm_memory_limit,
         wasm_memory_threshold: settings.wasm_memory_threshold,
@@ -74,14 +66,6 @@ fn settings_to_dto(settings: CanisterSettingsSnapshot) -> CanisterSettingsDto {
             .into_iter()
             .map(environment_variable_to_dto)
             .collect(),
-    }
-}
-
-fn log_visibility_to_dto(log_visibility: LogVisibility) -> LogVisibilityDto {
-    match log_visibility {
-        LogVisibility::Controllers => LogVisibilityDto::Controllers,
-        LogVisibility::Public => LogVisibilityDto::Public,
-        LogVisibility::AllowedViewers(viewers) => LogVisibilityDto::AllowedViewers(viewers),
     }
 }
 

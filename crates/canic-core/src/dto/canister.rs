@@ -1,5 +1,7 @@
 use crate::dto::prelude::*;
 
+pub use crate::domain::canister::{CanisterStatusType, LogVisibility};
+
 //
 // CanisterInfo
 //
@@ -31,20 +33,6 @@ pub struct CanisterStatusResponse {
 }
 
 //
-// CanisterStatusType
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize)]
-pub enum CanisterStatusType {
-    #[serde(rename = "running")]
-    Running,
-    #[serde(rename = "stopping")]
-    Stopping,
-    #[serde(rename = "stopped")]
-    Stopped,
-}
-
-//
 // CanisterSettings
 //
 
@@ -60,20 +48,6 @@ pub struct CanisterSettings {
     pub wasm_memory_limit: Nat,
     pub wasm_memory_threshold: Nat,
     pub environment_variables: Vec<EnvironmentVariable>,
-}
-
-//
-// LogVisibility
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub enum LogVisibility {
-    #[serde(rename = "controllers")]
-    Controllers,
-    #[serde(rename = "public")]
-    Public,
-    #[serde(rename = "allowed_viewers")]
-    AllowedViewers(Vec<Principal>),
 }
 
 //
@@ -112,4 +86,28 @@ pub struct QueryStats {
     pub num_instructions_total: Nat,
     pub request_payload_bytes_total: Nat,
     pub response_payload_bytes_total: Nat,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{Decode, Encode};
+    use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
+
+    #[test]
+    fn canister_status_enums_roundtrip_candid_through_dto_path() {
+        assert_enum_candid_contract(CanisterStatusType::Stopping);
+        assert_enum_candid_contract(LogVisibility::AllowedViewers(vec![Principal::anonymous()]));
+    }
+
+    fn assert_enum_candid_contract<T>(value: T)
+    where
+        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
+    {
+        let bytes = Encode!(&value).expect("encode canister enum");
+        let decoded = Decode!(&bytes, T).expect("decode canister enum");
+
+        assert_eq!(decoded, value);
+    }
 }
