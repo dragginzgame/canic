@@ -72,6 +72,20 @@ before this compaction is archived at
   the docs-only report at
   `docs/design/0.82-boundary-hardening/0.82-metrics-kind-dto-boundary-report.md`.
 
+- The current 0.82 follow-up slice moves runtime failure severity, runtime
+  field visibility, and runtime diagnostic status ownership to
+  `domain::runtime` while preserving the public
+  `dto::runtime::FailureSeverity`,
+  `dto::runtime::RuntimeFieldVisibility`,
+  `dto::runtime::RuntimeCheckStatus`,
+  `dto::runtime::RuntimeDiagnosticSeverity`, and
+  `dto::runtime::RuntimeStateDomainStatus` re-exports and Candid/Serde shapes.
+  Runtime recent-failure, bootstrap ops, and runtime status builders now import
+  the domain owner directly. Docs-only reports:
+  `docs/design/0.82-boundary-hardening/0.82-runtime-failure-severity-dto-boundary-report.md`,
+  `docs/design/0.82-boundary-hardening/0.82-runtime-field-visibility-dto-boundary-report.md`,
+  `docs/design/0.82-boundary-hardening/0.82-runtime-diagnostic-status-dto-boundary-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

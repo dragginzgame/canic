@@ -4,7 +4,7 @@
 //! Does not own: durable logging, stable schemas, metrics, or repair behavior.
 //! Boundary: exposes metadata-only failure summaries for guarded runtime status.
 
-use crate::dto::runtime::{FailureSeverity, RecentFailure};
+use crate::{domain::runtime::FailureSeverity, dto::runtime::RecentFailure};
 use std::{cell::RefCell, collections::VecDeque};
 
 const MAX_RECENT_FAILURES: usize = 16;
