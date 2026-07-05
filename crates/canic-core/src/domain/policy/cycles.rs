@@ -1,4 +1,4 @@
-use crate::{cdk::types::Cycles, config::schema::CanisterConfig};
+use crate::domain::value::Cycles;
 
 ///
 /// CycleTracker retention policy.
@@ -20,9 +20,19 @@ pub struct TopupPlan {
     pub amount: Cycles,
 }
 
+///
+/// TopupPolicyInput
+///
+
+#[derive(Clone, Debug)]
+pub struct TopupPolicyInput {
+    pub threshold: Cycles,
+    pub amount: Cycles,
+}
+
 #[must_use]
-pub fn should_topup(cycles: u128, cfg: &CanisterConfig) -> Option<TopupPlan> {
-    let topup = cfg.topup.as_ref()?;
+pub fn should_topup(cycles: u128, topup: Option<&TopupPolicyInput>) -> Option<TopupPlan> {
+    let topup = topup?;
     if cycles >= topup.threshold.to_u128() {
         return None;
     }

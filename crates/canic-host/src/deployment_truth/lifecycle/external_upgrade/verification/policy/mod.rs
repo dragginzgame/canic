@@ -1,8 +1,13 @@
-use super::super::super::super::*;
-use super::super::super::digest::*;
+use super::super::super::super::DEPLOYMENT_TRUTH_SCHEMA_VERSION;
+use super::super::super::digest::external_upgrade_verification_policy_digest;
 use super::super::super::error::ExternalUpgradeVerificationPolicyError;
 use super::super::validation::ensure_external_verification_policy_field;
 use super::shared::control_class_value;
+use crate::deployment_truth::{
+    ExternalUpgradeProposalV1, ExternalUpgradeVerificationPolicyRequirementV1,
+    ExternalUpgradeVerificationPolicyV1, ExternalUpgradeVerificationRequirementStatusV1,
+    LifecycleVerificationRequirementV1,
+};
 
 /// Build a passive live-inventory verification policy from an external
 /// lifecycle proposal.

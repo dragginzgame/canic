@@ -3,7 +3,7 @@
 // - side-effect free (no ops calls)
 // - does NOT log, schedule, or mutate storage
 
-use crate::{cdk::types::Principal, domain::policy::pool::PoolPolicyError};
+use crate::{domain::policy::pool::PoolPolicyError, domain::value::Principal};
 
 /// Policy: may this canister *enter or remain* in the pool?
 ///

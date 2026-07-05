@@ -1,5 +1,5 @@
 use crate::{
-    cdk::types::Principal,
+    domain::value::Principal,
     ids::{BuildNetwork, CanisterRole, SubnetRole},
 };
 use thiserror::Error as ThisError;

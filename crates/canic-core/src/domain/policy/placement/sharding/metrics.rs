@@ -1,4 +1,4 @@
-use crate::{cdk::types::Principal, view::placement::sharding::ShardPlacement};
+use crate::{domain::value::Principal, view::placement::sharding::ShardPlacement};
 
 ///
 /// PoolMetrics

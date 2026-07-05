@@ -9,7 +9,11 @@ pub mod query;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::BoundedString64,
-    domain::policy::placement::scaling::{ScalingPlan, ScalingPolicy, ScalingWorkerPlanEntry},
+    config::schema::{ScalePool, ScalingConfig},
+    domain::policy::placement::scaling::{
+        ScalingPlan, ScalingPolicy, ScalingPolicyInput, ScalingPoolPolicyInput,
+        ScalingWorkerPlanEntry,
+    },
     ops::{
         config::ConfigOps,
         ic::IcOps,
@@ -80,12 +84,13 @@ impl ScalingWorkflow {
         crate::perf!("observe_state");
 
         // 1. Evaluate policy
+        let scaling_policy = scaling.as_ref().map(scaling_policy_input);
         let ScalingPlan {
             should_spawn,
             plan_reason,
             reason,
             worker_entry,
-        } = match ScalingPolicy::plan_create_worker(pool, worker_count, scaling) {
+        } = match ScalingPolicy::plan_create_worker(pool, worker_count, scaling_policy.as_ref()) {
             Ok(plan) => plan,
             Err(err) => {
                 MetricEvent::failed(MetricOperation::PlanCreate, &err);
@@ -135,13 +140,15 @@ impl ScalingWorkflow {
             }
         };
         crate::perf!("observe_state");
-        let plan = match ScalingPolicy::plan_create_worker(pool, worker_count, scaling) {
-            Ok(plan) => plan,
-            Err(err) => {
-                MetricEvent::failed(MetricOperation::PlanCreate, &err);
-                return Err(err);
-            }
-        };
+        let scaling_policy = scaling.as_ref().map(scaling_policy_input);
+        let plan =
+            match ScalingPolicy::plan_create_worker(pool, worker_count, scaling_policy.as_ref()) {
+                Ok(plan) => plan,
+                Err(err) => {
+                    MetricEvent::failed(MetricOperation::PlanCreate, &err);
+                    return Err(err);
+                }
+            };
         crate::perf!("plan_spawn");
 
         MetricEvent::record(
@@ -160,7 +167,7 @@ impl ScalingWorkflow {
     // Create enough workers to satisfy one pool's startup warmup target.
     async fn bootstrap_initial_workers_for_pool(
         pool: &str,
-        pool_cfg: &crate::config::schema::ScalePool,
+        pool_cfg: &ScalePool,
     ) -> Result<(), InternalError> {
         MetricEvent::started(MetricOperation::BootstrapPool);
         let target = pool_cfg.policy.initial_workers;
@@ -247,5 +254,24 @@ impl ScalingWorkflow {
         crate::perf!("register_worker");
 
         Ok(pid)
+    }
+}
+
+fn scaling_policy_input(scaling: &ScalingConfig) -> ScalingPolicyInput {
+    ScalingPolicyInput {
+        pools: scaling
+            .pools
+            .iter()
+            .map(|(pool, pool_cfg)| {
+                (
+                    pool.clone(),
+                    ScalingPoolPolicyInput {
+                        canister_role: pool_cfg.canister_role.clone(),
+                        min_workers: pool_cfg.policy.min_workers,
+                        max_workers: pool_cfg.policy.max_workers,
+                    },
+                )
+            })
+            .collect(),
     }
 }

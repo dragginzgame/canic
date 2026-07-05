@@ -10,7 +10,8 @@ use crate::{
         StandardsCanisterConfig,
     },
     domain::policy::topology::registry::{
-        RegistryPolicy, RegistryPolicyError, RegistryRegistrationObservation,
+        RegistryCanisterKind, RegistryCanisterShape, RegistryPolicy, RegistryPolicyError,
+        RegistryRegistrationObservation,
     },
     domain::policy::topology::{RegistryPolicyInput, TopologyPolicyError, TopologyPolicyInput},
     dto::error::{Error, ErrorCode},
@@ -212,6 +213,26 @@ fn instance_canister_config() -> CanisterConfig {
     }
 }
 
+fn registry_shape(cfg: &CanisterConfig) -> RegistryCanisterShape {
+    RegistryCanisterShape {
+        kind: registry_kind(cfg.kind),
+        has_scaling: cfg.scaling.is_some(),
+        has_sharding: cfg.sharding.is_some(),
+        has_directory: cfg.directory.is_some(),
+    }
+}
+
+const fn registry_kind(kind: CanisterKind) -> RegistryCanisterKind {
+    match kind {
+        CanisterKind::Root => RegistryCanisterKind::Root,
+        CanisterKind::Service => RegistryCanisterKind::Service,
+        CanisterKind::Singleton => RegistryCanisterKind::Singleton,
+        CanisterKind::Replica => RegistryCanisterKind::Replica,
+        CanisterKind::Shard => RegistryCanisterKind::Shard,
+        CanisterKind::Instance => RegistryCanisterKind::Instance,
+    }
+}
+
 #[test]
 fn registry_kind_policy_blocks_but_ops_allows() {
     let _guard = lock();
@@ -238,9 +259,9 @@ fn registry_kind_policy_blocks_but_ops_allows() {
         &role,
         root_pid,
         &data,
-        &root_canister_config(),
+        registry_shape(&root_canister_config()),
         &parent_role,
-        &root_canister_config(),
+        registry_shape(&root_canister_config()),
     )
     .expect_err("policy should reject duplicate singleton role");
     match &err {
@@ -300,9 +321,9 @@ fn registry_service_policy_blocks_duplicate_role() {
         &role,
         root_pid,
         &data,
-        &service_canister_config(),
+        registry_shape(&service_canister_config()),
         &parent_role,
-        &root_canister_config(),
+        registry_shape(&root_canister_config()),
     )
     .expect_err("policy should reject duplicate service role");
 
@@ -334,9 +355,9 @@ fn registry_service_policy_requires_root_parent() {
         &role,
         parent_pid,
         &RegistryPolicyInput { entries: vec![] },
-        &service_canister_config(),
+        registry_shape(&service_canister_config()),
         &parent_role,
-        &singleton_canister_config(),
+        registry_shape(&singleton_canister_config()),
     )
     .expect_err("service roles should be rejected under non-root parents");
 
@@ -378,9 +399,9 @@ fn registry_singleton_policy_blocks_under_parent() {
         &role,
         parent_pid,
         &data,
-        &singleton_canister_config(),
+        registry_shape(&singleton_canister_config()),
         &parent_role,
-        &singleton_canister_config(),
+        registry_shape(&singleton_canister_config()),
     )
     .expect_err("policy should reject duplicate singleton role under parent");
 
@@ -431,9 +452,9 @@ fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
         &role,
         parent_pid,
         &data,
-        &singleton_canister_config(),
+        registry_shape(&singleton_canister_config()),
         &parent_role,
-        &root_canister_config(),
+        registry_shape(&root_canister_config()),
     )
     .expect("wasm_store fleet role should allow multiple stores under the same root");
 }
@@ -449,9 +470,9 @@ fn instance_creation_requires_service_directory_parent() {
         &role,
         parent_pid,
         &data,
-        &instance_canister_config(),
+        registry_shape(&instance_canister_config()),
         &parent_role,
-        &root_canister_config(),
+        registry_shape(&root_canister_config()),
     )
     .expect_err("policy should reject instance creation under non-service parent");
 
@@ -489,9 +510,9 @@ fn instance_creation_requires_directory_config_on_service_parent() {
         &role,
         parent_pid,
         &data,
-        &instance_canister_config(),
+        registry_shape(&instance_canister_config()),
         &parent_role,
-        &service_canister_config(),
+        registry_shape(&service_canister_config()),
     )
     .expect_err("policy should reject instance creation under service parent without directory");
 
@@ -518,9 +539,9 @@ fn instance_creation_rejects_singleton_directory_parent() {
         &role,
         parent_pid,
         &data,
-        &instance_canister_config(),
+        registry_shape(&instance_canister_config()),
         &parent_role,
-        &singleton_directory_parent_config(),
+        registry_shape(&singleton_directory_parent_config()),
     )
     .expect_err("singleton directory parents should not create instances");
 
@@ -547,9 +568,9 @@ fn instance_creation_succeeds_under_service_directory_parent() {
         &role,
         parent_pid,
         &data,
-        &instance_canister_config(),
+        registry_shape(&instance_canister_config()),
         &parent_role,
-        &service_directory_parent_config(),
+        registry_shape(&service_directory_parent_config()),
     )
     .expect("instance should be allowed under service directory parent");
 }
@@ -565,9 +586,9 @@ fn replica_creation_rejects_singleton_scaling_parent() {
         &role,
         parent_pid,
         &data,
-        &replica_canister_config(),
+        registry_shape(&replica_canister_config()),
         &parent_role,
-        &singleton_scaling_parent_config(),
+        registry_shape(&singleton_scaling_parent_config()),
     )
     .expect_err("singleton scaling parents should not create replicas");
 
@@ -594,9 +615,9 @@ fn replica_creation_succeeds_under_service_scaling_parent() {
         &role,
         parent_pid,
         &data,
-        &replica_canister_config(),
+        registry_shape(&replica_canister_config()),
         &parent_role,
-        &service_scaling_parent_config(),
+        registry_shape(&service_scaling_parent_config()),
     )
     .expect("replica should be allowed under service scaling parent");
 }
@@ -612,9 +633,9 @@ fn shard_creation_rejects_singleton_sharding_parent() {
         &role,
         parent_pid,
         &data,
-        &shard_canister_config(),
+        registry_shape(&shard_canister_config()),
         &parent_role,
-        &singleton_sharding_parent_config(),
+        registry_shape(&singleton_sharding_parent_config()),
     )
     .expect_err("singleton sharding parents should not create shards");
 
@@ -641,9 +662,9 @@ fn shard_creation_succeeds_under_service_sharding_parent() {
         &role,
         parent_pid,
         &data,
-        &shard_canister_config(),
+        registry_shape(&shard_canister_config()),
         &parent_role,
-        &service_sharding_parent_config(),
+        registry_shape(&service_sharding_parent_config()),
     )
     .expect("shard should be allowed under service sharding parent");
 }
@@ -662,9 +683,9 @@ fn observed_registration_policy_matches_duplicate_singleton_decision() {
             existing_role_pid: Some(existing_pid),
             existing_singleton_under_parent_pid: Some(existing_pid),
         },
-        &singleton_canister_config(),
+        registry_shape(&singleton_canister_config()),
         &parent_role,
-        &singleton_canister_config(),
+        registry_shape(&singleton_canister_config()),
     )
     .expect_err("observed policy should reject duplicate singleton role under parent");
 
@@ -691,9 +712,9 @@ fn observed_registration_policy_accepts_replica_without_registry_snapshot() {
         &role,
         p(13),
         RegistryRegistrationObservation::default(),
-        &replica_canister_config(),
+        registry_shape(&replica_canister_config()),
         &parent_role,
-        &service_scaling_parent_config(),
+        registry_shape(&service_scaling_parent_config()),
     )
     .expect("replica should be allowed from observed parent config without full registry input");
 }

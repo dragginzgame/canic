@@ -1,8 +1,4 @@
-use crate::{
-    cdk::types::Principal,
-    config::schema::{CanisterConfig, CanisterKind},
-    ids::CanisterRole,
-};
+use crate::{domain::value::Principal, ids::CanisterRole};
 use thiserror::Error as ThisError;
 
 #[cfg(test)]
@@ -67,6 +63,34 @@ pub struct RegistryRegistrationObservation {
 }
 
 ///
+/// RegistryCanisterKind
+/// Canister topology kind needed by registry policy.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RegistryCanisterKind {
+    Root,
+    Service,
+    Singleton,
+    Replica,
+    Shard,
+    Instance,
+}
+
+///
+/// RegistryCanisterShape
+/// Pure canister shape facts needed by registry policy.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RegistryCanisterShape {
+    pub kind: RegistryCanisterKind,
+    pub has_scaling: bool,
+    pub has_sharding: bool,
+    pub has_directory: bool,
+}
+
+///
 /// RegistryPolicy
 ///
 
@@ -78,17 +102,17 @@ impl RegistryPolicy {
         role: &CanisterRole,
         parent_pid: Principal,
         observed: RegistryRegistrationObservation,
-        canister_cfg: &CanisterConfig,
+        canister_shape: RegistryCanisterShape,
         parent_role: &CanisterRole,
-        parent_cfg: &CanisterConfig,
+        parent_shape: RegistryCanisterShape,
     ) -> Result<(), RegistryPolicyError> {
         Self::can_register_role_with_observation(
             role,
             parent_pid,
             observed,
-            canister_cfg,
+            canister_shape,
             parent_role,
-            parent_cfg,
+            parent_shape,
         )
     }
 
@@ -98,9 +122,9 @@ impl RegistryPolicy {
         role: &CanisterRole,
         parent_pid: Principal,
         data: &RegistryPolicyInput,
-        canister_cfg: &CanisterConfig,
+        canister_shape: RegistryCanisterShape,
         parent_role: &CanisterRole,
-        parent_cfg: &CanisterConfig,
+        parent_shape: RegistryCanisterShape,
     ) -> Result<(), RegistryPolicyError> {
         let observed = RegistryRegistrationObservation {
             existing_role_pid: data
@@ -119,9 +143,9 @@ impl RegistryPolicy {
             role,
             parent_pid,
             observed,
-            canister_cfg,
+            canister_shape,
             parent_role,
-            parent_cfg,
+            parent_shape,
         )
     }
 
@@ -130,12 +154,12 @@ impl RegistryPolicy {
         role: &CanisterRole,
         parent_pid: Principal,
         observed: RegistryRegistrationObservation,
-        canister_cfg: &CanisterConfig,
+        canister_shape: RegistryCanisterShape,
         parent_role: &CanisterRole,
-        parent_cfg: &CanisterConfig,
+        parent_shape: RegistryCanisterShape,
     ) -> Result<(), RegistryPolicyError> {
-        match canister_cfg.kind {
-            CanisterKind::Root => {
+        match canister_shape.kind {
+            RegistryCanisterKind::Root => {
                 if let Some(pid) = observed.existing_role_pid {
                     return Err(RegistryPolicyError::RoleAlreadyRegistered {
                         role: role.clone(),
@@ -143,7 +167,7 @@ impl RegistryPolicy {
                     });
                 }
             }
-            CanisterKind::Service => {
+            RegistryCanisterKind::Service => {
                 if !parent_role.is_root() {
                     return Err(RegistryPolicyError::ServiceRequiresRootParent {
                         role: role.clone(),
@@ -158,7 +182,7 @@ impl RegistryPolicy {
                     });
                 }
             }
-            CanisterKind::Singleton => {
+            RegistryCanisterKind::Singleton => {
                 if role.is_wasm_store() {
                     return Ok(());
                 }
@@ -171,17 +195,16 @@ impl RegistryPolicy {
                     });
                 }
             }
-            CanisterKind::Replica => {
-                if !is_service_manager_parent_kind(parent_cfg.kind) || parent_cfg.scaling.is_none()
-                {
+            RegistryCanisterKind::Replica => {
+                if !is_service_manager_parent_kind(parent_shape.kind) || !parent_shape.has_scaling {
                     return Err(RegistryPolicyError::ReplicaRequiresServiceWithScaling {
                         role: role.clone(),
                         parent_role: parent_role.clone(),
                     });
                 }
             }
-            CanisterKind::Shard => {
-                if !is_service_manager_parent_kind(parent_cfg.kind) || parent_cfg.sharding.is_none()
+            RegistryCanisterKind::Shard => {
+                if !is_service_manager_parent_kind(parent_shape.kind) || !parent_shape.has_sharding
                 {
                     return Err(RegistryPolicyError::ShardRequiresServiceWithSharding {
                         role: role.clone(),
@@ -189,9 +212,8 @@ impl RegistryPolicy {
                     });
                 }
             }
-            CanisterKind::Instance => {
-                if !is_service_manager_parent_kind(parent_cfg.kind)
-                    || parent_cfg.directory.is_none()
+            RegistryCanisterKind::Instance => {
+                if !is_service_manager_parent_kind(parent_shape.kind) || !parent_shape.has_directory
                 {
                     return Err(RegistryPolicyError::InstanceRequiresServiceWithDirectory {
                         role: role.clone(),
@@ -205,6 +227,6 @@ impl RegistryPolicy {
     }
 }
 
-const fn is_service_manager_parent_kind(kind: CanisterKind) -> bool {
-    matches!(kind, CanisterKind::Service)
+const fn is_service_manager_parent_kind(kind: RegistryCanisterKind) -> bool {
+    matches!(kind, RegistryCanisterKind::Service)
 }

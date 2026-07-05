@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.82.x] - 2026-07-05 - Boundary Hardening
+
+Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
+
+- `0.82.0` starts the boundary-hardening line by formalizing controlled cleanup
+  slices, pinning legacy command hard cuts, and tightening diagnostic/report
+  and policy-purity ownership without changing CLI, endpoint, JSON, or stable
+  state surfaces.
+
 ## [0.81.x] - 2026-07-04 - Runtime Introspection
 
 Detailed patch breakdown: [docs/changelog/0.81.md](docs/changelog/0.81.md)

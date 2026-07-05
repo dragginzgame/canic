@@ -7,7 +7,7 @@
 use crate::{
     InternalError,
     cdk::types::Principal,
-    config::schema::{ShardPool, ShardPoolPolicy},
+    config::schema::ShardPoolPolicy,
     domain::policy::placement::sharding::{
         ShardingPlanState, ShardingPolicy, ShardingState, compute_pool_metrics,
     },
@@ -113,10 +113,7 @@ impl ShardingWorkflow {
 
         let state = ShardingState {
             pool,
-            config: ShardPool {
-                canister_role: canister_role.clone(),
-                policy: policy.clone(),
-            },
+            max_shards: policy.max_shards,
             metrics: &metrics,
             entries: &entry_views,
             assignments: &assignment_views,
@@ -260,7 +257,7 @@ impl ShardingWorkflow {
 
         let state = ShardingState {
             pool,
-            config: pool_cfg,
+            max_shards: pool_cfg.policy.max_shards,
             metrics: &metrics,
             entries: &entry_views,
             assignments: &assignment_views,

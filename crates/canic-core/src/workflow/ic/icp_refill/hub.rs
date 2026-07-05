@@ -15,8 +15,8 @@ use crate::{
     },
     workflow::ic::icp_refill::{
         IcpRefillWorkflow, RateQueryMode, build_network, configured_rate, current_topup_policy,
-        funding_cooldown_retry_after_secs, in_flight_for_request, policy_denied, policy_input,
-        refill_canister_overrides,
+        funding_cooldown_retry_after_secs, icp_refill_policy_rules, in_flight_for_request,
+        policy_denied, policy_input, refill_canister_overrides,
     },
 };
 use sha2::{Digest, Sha256};
@@ -65,8 +65,9 @@ impl IcpRefillWorkflow {
             mode: IcpRefillMode::Canister,
         };
 
+        let policy_rules = icp_refill_policy_rules(icp_refill);
         evaluate_hub_self_refill(
-            Some(&topup),
+            Some(&policy_rules),
             policy_input(
                 hub_cycles.to_u128(),
                 &request,

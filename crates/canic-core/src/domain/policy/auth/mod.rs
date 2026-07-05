@@ -5,7 +5,7 @@
 //! Boundary: called by workflow before auth ops prepare delegated-token proofs.
 
 use crate::{
-    cdk::types::Principal,
+    domain::value::Principal,
     ids::{CanisterRole, cap},
 };
 use thiserror::Error as ThisError;

@@ -18,7 +18,8 @@ use crate::{
     },
     config::schema::{IcpRefillPolicy, TopupPolicy},
     domain::policy::icp_refill::{
-        IcpRefillPolicyInput, IcpRefillPolicyViolation, evaluate_manual_refill,
+        IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
+        evaluate_manual_refill,
     },
     dto::icp_refill::IcpRefillRequest,
     ids::BuildNetwork,
@@ -108,14 +109,14 @@ struct IcpRefillExecutionContext {
 /// Owned by workflow and evaluated before mutation or IC calls proceed.
 ///
 
-struct ManualRefillPreflight<'a> {
-    policy: Option<&'a IcpRefillPolicy>,
+struct ManualRefillPreflight {
+    policy: Option<IcpRefillPolicyRules>,
     input: IcpRefillPolicyInput,
     rate_gate_configured: bool,
 }
 
-impl<'a> ManualRefillPreflight<'a> {
-    fn new(policy: Option<&'a IcpRefillPolicy>, request: &IcpRefillRequest) -> Self {
+impl ManualRefillPreflight {
+    fn new(policy: Option<&IcpRefillPolicy>, request: &IcpRefillRequest) -> Self {
         let input = policy_input(
             0,
             request,
@@ -124,17 +125,19 @@ impl<'a> ManualRefillPreflight<'a> {
             AppStateOps::cycles_funding_enabled(),
             funding_cooldown_retry_after_secs(request, IcOps::now_secs()),
         );
+        let rate_gate_configured = policy_requires_rate(policy);
+        let policy = policy.map(icp_refill_policy_rules);
 
         Self {
             policy,
             input,
-            rate_gate_configured: policy_requires_rate(policy),
+            rate_gate_configured,
         }
     }
 
     fn evaluate(&self, observed_xdr_permyriad_per_icp: Option<u64>) -> Result<(), InternalError> {
         evaluate_manual_refill(
-            self.policy,
+            self.policy.as_ref(),
             IcpRefillPolicyInput {
                 observed_xdr_permyriad_per_icp,
                 ..self.input
@@ -227,6 +230,15 @@ fn refill_canister_overrides(policy: Option<&IcpRefillPolicy>) -> IcpRefillCanis
         ledger_canister_id: policy.ledger_canister_id,
         cmc_canister_id: policy.cmc_canister_id,
         allow_ic_overrides: policy.allow_ic_system_canister_overrides,
+    }
+}
+
+fn icp_refill_policy_rules(policy: &IcpRefillPolicy) -> IcpRefillPolicyRules {
+    IcpRefillPolicyRules {
+        enabled: policy.enabled,
+        min_hub_cycles_before_refill: policy.min_hub_cycles_before_refill.clone(),
+        max_refill_e8s_per_call: policy.max_refill_e8s_per_call,
+        min_xdr_permyriad_per_icp: policy.min_xdr_permyriad_per_icp,
     }
 }
 

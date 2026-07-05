@@ -1,6 +1,6 @@
-use super::super::super::*;
 use super::super::append_hard_failure_items;
 use super::shared::{append_promotion_policy_decision_items, promotion_readiness_status_label};
+use crate::deployment_truth::PromotionPolicyCheckV1;
 
 /// Render a promotion policy check as passive operator text.
 #[must_use]
