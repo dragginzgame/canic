@@ -2,10 +2,9 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     storage::{prelude::*, stable::memory::env::APP_STATE_ID},
 };
-use std::{
-    cell::RefCell,
-    fmt::{self, Display},
-};
+use std::cell::RefCell;
+
+pub use crate::domain::state::AppMode;
 
 //
 // APP_STATE
@@ -17,31 +16,6 @@ eager_static! {
             crate::ic_memory_key!("canic.core.app_state.v1", AppState, APP_STATE_ID),
             AppStateRecord::default(),
         ));
-}
-
-///
-/// AppMode
-/// Application mode used by query/update guards.
-///
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AppMode {
-    #[default]
-    Enabled,
-    Readonly,
-    Disabled,
-}
-
-impl Display for AppMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = match self {
-            Self::Enabled => "Enabled",
-            Self::Readonly => "Readonly",
-            Self::Disabled => "Disabled",
-        };
-
-        f.write_str(label)
-    }
 }
 
 ///
@@ -120,6 +94,7 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cdk::structures::storable::Storable;
 
     fn reset_state(mode: AppMode) {
         AppState::import(AppStateRecord {
@@ -160,6 +135,19 @@ mod tests {
 
         let exported = AppState::export();
         assert_eq!(exported, data);
+    }
+
+    #[test]
+    fn app_state_record_storable_roundtrips_shared_app_mode() {
+        let data = AppStateRecord {
+            mode: AppMode::Readonly,
+            cycles_funding_enabled: false,
+        };
+
+        let bytes = data.to_bytes();
+        let decoded = AppStateRecord::from_bytes(bytes);
+
+        assert_eq!(decoded, data);
     }
 
     #[test]

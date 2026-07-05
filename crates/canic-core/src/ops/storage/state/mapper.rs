@@ -6,12 +6,12 @@
 
 use crate::{
     dto::state::{
-        AppCommand, AppMode as AppModeDto, AppStateInput, AppStateResponse, SubnetAuthStateInput,
-        SubnetStateInput, SubnetStateResponse,
+        AppCommand, AppStateInput, AppStateResponse, SubnetAuthStateInput, SubnetStateInput,
+        SubnetStateResponse,
     },
     ops::storage::state::app::AppStateCommand,
     storage::stable::state::{
-        app::{AppMode as StorageAppMode, AppStateRecord},
+        app::AppStateRecord,
         subnet::{SubnetAuthStateRecord, SubnetStateRecord},
     },
 };
@@ -19,15 +19,6 @@ use crate::{
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
-
-// Map stored app mode values into the shared DTO enum.
-const fn app_mode_to_dto(mode: StorageAppMode) -> AppModeDto {
-    match mode {
-        StorageAppMode::Enabled => AppModeDto::Enabled,
-        StorageAppMode::Readonly => AppModeDto::Readonly,
-        StorageAppMode::Disabled => AppModeDto::Disabled,
-    }
-}
 
 ///
 /// AppStateMapper
@@ -42,7 +33,7 @@ impl AppStateMapper {
     #[must_use]
     pub const fn record_to_input(data: AppStateRecord) -> AppStateInput {
         AppStateInput {
-            mode: app_mode_to_dto(data.mode),
+            mode: data.mode,
             cycles_funding_enabled: data.cycles_funding_enabled,
         }
     }
@@ -51,7 +42,7 @@ impl AppStateMapper {
     #[must_use]
     pub const fn record_to_response(data: AppStateRecord) -> AppStateResponse {
         AppStateResponse {
-            mode: app_mode_to_dto(data.mode),
+            mode: data.mode,
             cycles_funding_enabled: data.cycles_funding_enabled,
         }
     }
@@ -61,11 +52,7 @@ impl AppStateMapper {
     pub const fn input_to_record(view: AppStateInput) -> AppStateRecord {
         // Keep DTO-to-record conversion in ops so workflow never mutates storage records.
         AppStateRecord {
-            mode: match view.mode {
-                AppModeDto::Enabled => StorageAppMode::Enabled,
-                AppModeDto::Readonly => StorageAppMode::Readonly,
-                AppModeDto::Disabled => StorageAppMode::Disabled,
-            },
+            mode: view.mode,
             cycles_funding_enabled: view.cycles_funding_enabled,
         }
     }

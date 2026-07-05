@@ -1,5 +1,7 @@
 use crate::dto::prelude::*;
 
+pub use crate::domain::state::AppMode;
+
 //
 // AppCommand
 //
@@ -40,17 +42,6 @@ pub enum AppStatus {
     Active,
     Readonly,
     Stopped,
-}
-
-//
-// AppMode
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum AppMode {
-    Enabled,
-    Readonly,
-    Disabled,
 }
 
 //
@@ -107,4 +98,27 @@ pub struct BootstrapStatusResponse {
     pub ready: bool,
     pub phase: String,
     pub last_error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{Decode, Encode};
+    use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
+
+    #[test]
+    fn app_mode_roundtrips_candid_through_dto_path() {
+        assert_enum_candid_contract(AppMode::Readonly);
+    }
+
+    fn assert_enum_candid_contract<T>(value: T)
+    where
+        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
+    {
+        let bytes = Encode!(&value).expect("encode state enum");
+        let decoded = Decode!(&bytes, T).expect("decode state enum");
+
+        assert_eq!(decoded, value);
+    }
 }
