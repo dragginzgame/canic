@@ -18,6 +18,8 @@ use crate::{
     dto::{prelude::*, rpc::RootRequestMetadata},
 };
 
+pub use crate::domain::pool::CanisterPoolStatus;
+
 //
 // CanisterPoolResponse
 // Read-only pool snapshot for endpoints.
@@ -41,17 +43,6 @@ pub struct CanisterPoolEntry {
     pub role: Option<CanisterRole>,
     pub parent: Option<Principal>,
     pub module_hash: Option<Vec<u8>>,
-}
-
-//
-// CanisterPoolStatus
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub enum CanisterPoolStatus {
-    PendingReset,
-    Ready,
-    Failed { reason: String },
 }
 
 //
@@ -119,4 +110,39 @@ pub struct PoolBatchResult {
     pub added: u64,
     pub requeued: u64,
     pub skipped: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reexported_pool_status_roundtrips_through_candid() {
+        let entry = CanisterPoolEntry {
+            pid: Principal::from_slice(&[3; 29]),
+            created_at: 42,
+            cycles: Cycles::new(10_000),
+            status: crate::domain::pool::CanisterPoolStatus::Failed {
+                reason: "bounded reset failure".to_string(),
+            },
+            role: Some(CanisterRole::new("worker")),
+            parent: None,
+            module_hash: Some(vec![1, 2, 3]),
+        };
+
+        let bytes = candid::encode_one(&entry).expect("encode pool entry");
+        let decoded: CanisterPoolEntry = candid::decode_one(&bytes).expect("decode pool entry");
+
+        let dto_status: CanisterPoolStatus = crate::domain::pool::CanisterPoolStatus::Failed {
+            reason: "bounded reset failure".to_string(),
+        };
+
+        assert_eq!(decoded.pid, Principal::from_slice(&[3; 29]));
+        assert_eq!(decoded.created_at, 42);
+        assert_eq!(decoded.cycles, Cycles::new(10_000));
+        assert_eq!(decoded.status, dto_status);
+        assert_eq!(decoded.role, Some(CanisterRole::new("worker")));
+        assert_eq!(decoded.parent, None);
+        assert_eq!(decoded.module_hash, Some(vec![1, 2, 3]));
+    }
 }

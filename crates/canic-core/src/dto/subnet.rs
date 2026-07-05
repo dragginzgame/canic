@@ -1,32 +1,28 @@
-use crate::dto::prelude::*;
+pub use crate::domain::subnet::{SubnetContextParams, SubnetIdentity};
 
-//
-// SubnetIdentity
-//
-// Represents the *runtime identity* of the subnet this canister is executing in.
-// Must never be constructed from configuration alone.
-//
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{cdk::types::Principal, ids::SubnetRole};
 
-#[derive(CandidType, Debug, Deserialize)]
-pub enum SubnetIdentity {
-    Prime,
+    #[test]
+    fn reexported_subnet_identity_roundtrips_through_candid() {
+        let identity = SubnetIdentity::Standard(SubnetContextParams {
+            subnet_type: SubnetRole::new("app"),
+            prime_root_pid: Principal::from_slice(&[1; 29]),
+        });
 
-    PrimeWithModuleHash(Vec<u8>),
+        let bytes = candid::encode_one(&identity).expect("encode subnet identity");
+        let decoded: SubnetIdentity = candid::decode_one(&bytes).expect("decode subnet identity");
 
-    // this subnet is general-purpose subnet that syncs from Prime
-    Standard(SubnetContextParams),
-
-    // do not attempt subnet discovery (test / support mode)
-    Manual,
-}
-
-//
-// SubnetContextParams
-// everything we need to populate the SubnetContext on a non-Prime subnet
-//
-
-#[derive(CandidType, Debug, Deserialize)]
-pub struct SubnetContextParams {
-    pub subnet_type: SubnetRole,
-    pub prime_root_pid: Principal,
+        match decoded {
+            SubnetIdentity::Standard(params) => {
+                assert_eq!(params.subnet_type, SubnetRole::new("app"));
+                assert_eq!(params.prime_root_pid, Principal::from_slice(&[1; 29]));
+            }
+            SubnetIdentity::Prime
+            | SubnetIdentity::PrimeWithModuleHash(_)
+            | SubnetIdentity::Manual => panic!("decoded unexpected subnet identity"),
+        }
+    }
 }

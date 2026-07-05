@@ -5,7 +5,8 @@
 //! Boundary: storage ops conversion layer for stable pool records.
 
 use crate::{
-    dto::pool::{CanisterPoolEntry, CanisterPoolResponse, CanisterPoolStatus},
+    domain::pool::CanisterPoolStatus,
+    dto::pool::{CanisterPoolEntry, CanisterPoolResponse},
     ops::{
         prelude::*,
         storage::pool::{PoolRecord, PoolStatus, PoolStoreRecord},

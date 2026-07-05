@@ -6,9 +6,10 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    domain::icp_refill::IcpRefillMode,
     dto::{
         error::Error,
-        icp_refill::{IcpRefillMode, IcpRefillRequest, IcpRefillResponse},
+        icp_refill::{IcpRefillRequest, IcpRefillResponse},
     },
     ops::{
         ic::IcOps,

@@ -5,8 +5,9 @@
 //! Boundary: workflow query facade over runtime metrics projections.
 
 use crate::{
+    domain::metrics::MetricsKind,
     dto::{
-        metrics::{MetricEntry, MetricsKind, QueryPerfSample},
+        metrics::{MetricEntry, QueryPerfSample},
         page::{Page, PageRequest},
     },
     ops::runtime::metrics,

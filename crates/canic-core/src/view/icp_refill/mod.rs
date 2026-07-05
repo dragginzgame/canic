@@ -9,7 +9,7 @@ use crate::{
         candid::Nat,
         types::{Principal, Subaccount},
     },
-    dto::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
 };
 
 ///

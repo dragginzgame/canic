@@ -7,7 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
-    dto::subnet::SubnetIdentity,
+    domain::subnet::SubnetIdentity,
     ids::{CanisterRole, SubnetRole},
     ops::{
         config::ConfigOps,

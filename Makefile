@@ -44,11 +44,11 @@ help:
 	@echo "  version          Show current version"
 	@echo "  tags             List available git tags"
 	@echo "  patch            Run release gate, then bump patch version files (0.0.x)"
-	@echo "  minor            Run release gate, then bump minor version files (0.x.0)"
-	@echo "  major            Run full release gate, then bump major version files (x.0.0)"
+	@echo "  minor            Confirm, run release gate, then bump minor version files (0.x.0)"
+	@echo "  major            Confirm, run full release gate, then bump major version files (x.0.0)"
 	@echo "  release-patch    Bump, stage, commit, tag, and push a patch release"
-	@echo "  release-minor    Bump, stage, commit, tag, and push a minor release"
-	@echo "  release-major    Bump, stage, commit, tag, and push a major release"
+	@echo "  release-minor    Confirm, bump, stage, commit, tag, and push a minor release"
+	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-commit   Commit and tag the staged release"
 	@echo "  release-push     Push the release commit and tags"
@@ -137,10 +137,19 @@ tags:
 patch: ensure-clean fmt test-bump
 	@scripts/ci/bump-version.sh patch
 
-minor: ensure-clean fmt test-bump
+minor:
+	@scripts/ci/confirm-version-bump.sh minor
+	@$(MAKE) ensure-clean
+	@$(MAKE) fmt
+	@$(MAKE) test-bump
 	@scripts/ci/bump-version.sh minor
 
-major: ensure-clean fmt clippy test
+major:
+	@scripts/ci/confirm-version-bump.sh major
+	@$(MAKE) ensure-clean
+	@$(MAKE) fmt
+	@$(MAKE) clippy
+	@$(MAKE) test
 	@scripts/ci/bump-version.sh major
 
 release-patch: patch release-stage release-commit release-push

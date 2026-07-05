@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    dto::pool::CanisterPoolStatus,
+    domain::pool::CanisterPoolStatus,
     ops::{
         ic::IcOps,
         runtime::metrics::{

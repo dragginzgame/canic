@@ -10,9 +10,8 @@ use crate::{
         candid::Nat,
         types::{Principal, Subaccount},
     },
-    dto::icp_refill::{
-        IcpRefillErrorCode, IcpRefillMode, IcpRefillRequest, IcpRefillResponse, IcpRefillStatus,
-    },
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
+    dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ops::storage::StorageOpsError,
     storage::stable::icp_refill::{
         IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordKey, IcpRefillRecordStatus,

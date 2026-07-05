@@ -12,7 +12,7 @@ use crate::ops::runtime::metrics::sharding::{
 use crate::{
     cdk::candid::Nat,
     cdk::types::Principal,
-    dto::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
     ids::{AccessMetricKind, CanisterRole, EndpointCall, EndpointCallKind, EndpointId},
     ops::runtime::metrics::{
         auth::{AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface},

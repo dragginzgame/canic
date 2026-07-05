@@ -6,7 +6,8 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    dto::pool::{CanisterPoolStatus, PoolBatchResult},
+    domain::pool::CanisterPoolStatus,
+    dto::pool::PoolBatchResult,
     ids::{IntentId, IntentResourceKey},
     ops::{
         ic::IcOps,

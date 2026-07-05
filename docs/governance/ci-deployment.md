@@ -87,6 +87,8 @@ reviewed, humans finish the release with `make release-stage`,
 For one-shot releases, humans may run `make release-patch`,
 `make release-minor`, or `make release-major`, which perform those steps in
 order.
+Minor and major release bumps require interactive command-line confirmation
+before running their release gates.
 
 Tags are immutable.
 
