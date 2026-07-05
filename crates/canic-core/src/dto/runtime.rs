@@ -1,8 +1,8 @@
 use crate::dto::prelude::*;
 
 pub use crate::domain::runtime::{
-    FailureSeverity, RuntimeCheckStatus, RuntimeDiagnosticSeverity, RuntimeFieldVisibility,
-    RuntimeStateDomainStatus,
+    FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus, RuntimeDiagnosticSeverity,
+    RuntimeFieldVisibility, RuntimeStateDomainStatus, RuntimeStatus, TimerStatus,
 };
 
 pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 1;
@@ -209,66 +209,6 @@ pub struct RecentFailure {
 pub struct RuntimeVisibilityEntry {
     pub field: String,
     pub visibility: RuntimeFieldVisibility,
-}
-
-//
-// Status enums
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HealthStatus {
-    #[serde(alias = "Healthy")]
-    Healthy,
-    #[serde(alias = "Degraded")]
-    Degraded,
-    #[serde(alias = "Unhealthy")]
-    Unhealthy,
-    #[serde(alias = "Unknown")]
-    Unknown,
-}
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ReadinessStatus {
-    #[serde(alias = "Ready")]
-    Ready,
-    #[serde(alias = "Degraded")]
-    Degraded,
-    #[serde(alias = "NotReady")]
-    NotReady,
-    #[serde(alias = "NotEvaluated")]
-    NotEvaluated,
-}
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeStatus {
-    #[serde(alias = "Ok")]
-    Ok,
-    #[serde(alias = "Degraded")]
-    Degraded,
-    #[serde(alias = "Failing")]
-    Failing,
-    #[serde(alias = "Unknown")]
-    Unknown,
-}
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TimerStatus {
-    #[serde(alias = "Healthy")]
-    Healthy,
-    #[serde(alias = "Delayed")]
-    Delayed,
-    #[serde(alias = "Failing")]
-    Failing,
-    #[serde(alias = "Disabled")]
-    Disabled,
-    #[serde(alias = "NotRegistered")]
-    NotRegistered,
-    #[serde(alias = "Unknown")]
-    Unknown,
 }
 
 #[cfg(test)]

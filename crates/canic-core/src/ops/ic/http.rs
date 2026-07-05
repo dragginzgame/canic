@@ -18,7 +18,7 @@ use crate::{
     ops::{
         ic::IcOpsError,
         runtime::metrics::{
-            http::{HttpMethod as MetricsHttpMethod, HttpMetrics},
+            http::HttpMetrics,
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
                 PlatformCallMetricSurface, PlatformCallMetrics,
@@ -45,18 +45,7 @@ pub struct HttpHeader {
     pub value: String,
 }
 
-///
-/// HttpMethod
-///
-/// Operations-layer HTTP method shape for management HTTP outcalls.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HttpMethod {
-    Get,
-    Head,
-    Post,
-}
+pub use crate::domain::http::HttpMethod;
 
 ///
 /// HttpRequestArgs
@@ -191,7 +180,7 @@ impl HttpOps {
         HttpRequestArgs {
             url: args.url,
             max_response_bytes: args.max_response_bytes,
-            method: method_from_dto(args.method),
+            method: args.method,
             headers: args.headers.into_iter().map(header_from_dto).collect(),
             body: args.body,
             is_replicated: args.is_replicated,
@@ -245,7 +234,7 @@ impl HttpOps {
     /// URL-derived fallback labels strip query/fragment only; callers own path cardinality.
     fn record_metrics(method: HttpMethod, url: &str, label: Option<&str>) {
         SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-        HttpMetrics::record_http_request(metrics_method(method), url, label);
+        HttpMetrics::record_http_request(method, url, label);
     }
 
     fn headers_from_pairs(headers: &[(&str, &str)]) -> Vec<HttpHeader> {
@@ -256,14 +245,6 @@ impl HttpOps {
                 value: (*value).to_string(),
             })
             .collect()
-    }
-}
-
-const fn method_from_dto(method: http::HttpMethod) -> HttpMethod {
-    match method {
-        http::HttpMethod::GET => HttpMethod::Get,
-        http::HttpMethod::POST => HttpMethod::Post,
-        http::HttpMethod::HEAD => HttpMethod::Head,
     }
 }
 
@@ -289,14 +270,6 @@ fn record_http_call(outcome: PlatformCallMetricOutcome, reason: PlatformCallMetr
         outcome,
         reason,
     );
-}
-
-const fn metrics_method(method: HttpMethod) -> MetricsHttpMethod {
-    match method {
-        HttpMethod::Get => MetricsHttpMethod::Get,
-        HttpMethod::Post => MetricsHttpMethod::Post,
-        HttpMethod::Head => MetricsHttpMethod::Head,
-    }
 }
 
 impl From<HttpMethod> for InfraHttpMethod {

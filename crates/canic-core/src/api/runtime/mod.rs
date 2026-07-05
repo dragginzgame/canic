@@ -3,17 +3,18 @@ pub mod install;
 use crate::{
     cdk::types::Principal,
     domain::runtime::{
-        FailureSeverity, RuntimeCheckStatus, RuntimeDiagnosticSeverity, RuntimeFieldVisibility,
-        RuntimeStateDomainStatus,
+        FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus,
+        RuntimeDiagnosticSeverity, RuntimeFieldVisibility, RuntimeStateDomainStatus, RuntimeStatus,
+        TimerStatus,
     },
     dto::{
         error::Error,
         runtime::{
             CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanicTimerStatus,
-            RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus, RuntimeAuthStatusSummary,
+            RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeAuthStatusSummary,
             RuntimeBlobStorageStatusSummary, RuntimeBuildInfo, RuntimeCheck, RuntimeDiagnostic,
-            RuntimeFeatureStatus, RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeStatus,
-            RuntimeTopologyStatus, RuntimeVisibilityEntry, TimerStatus,
+            RuntimeFeatureStatus, RuntimeStateDomainSummary, RuntimeStateSummary,
+            RuntimeTopologyStatus, RuntimeVisibilityEntry,
         },
     },
     ops::{
@@ -115,7 +116,7 @@ impl RuntimeIntrospectionApi {
     pub fn health(observed_at_ns: Option<u64>) -> CanicHealthStatus {
         CanicHealthStatus {
             schema_version: RUNTIME_INTROSPECTION_SCHEMA_VERSION,
-            status: crate::dto::runtime::HealthStatus::Healthy,
+            status: HealthStatus::Healthy,
             observed_at_ns,
             checks: vec![RuntimeCheck {
                 category: "health".to_string(),
@@ -458,7 +459,7 @@ mod tests {
         let health = RuntimeIntrospectionApi::health(Some(42));
 
         assert_eq!(health.schema_version, RUNTIME_INTROSPECTION_SCHEMA_VERSION);
-        assert_eq!(health.status, crate::dto::runtime::HealthStatus::Healthy);
+        assert_eq!(health.status, HealthStatus::Healthy);
         assert_eq!(health.observed_at_ns, Some(42));
         assert_eq!(health.checks.len(), 1);
         assert_eq!(health.checks[0].code, "canister_responsive");

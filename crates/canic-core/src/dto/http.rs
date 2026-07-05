@@ -1,5 +1,7 @@
 use crate::dto::prelude::*;
 
+pub use crate::domain::http::HttpMethod;
+
 //
 // HttpRequestArgs
 //
@@ -27,20 +29,6 @@ pub struct HttpRequestResult {
 }
 
 //
-// HttpMethod
-//
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize)]
-pub enum HttpMethod {
-    #[serde(rename = "get")]
-    GET,
-    #[serde(rename = "post")]
-    POST,
-    #[serde(rename = "head")]
-    HEAD,
-}
-
-//
 // HttpHeader
 //
 
@@ -48,4 +36,34 @@ pub enum HttpMethod {
 pub struct HttpHeader {
     pub name: String,
     pub value: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{CandidType, Decode, Encode};
+    use serde::Deserialize;
+
+    #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+    enum LegacyHttpMethod {
+        #[serde(rename = "get")]
+        GET,
+        #[serde(rename = "post")]
+        POST,
+        #[serde(rename = "head")]
+        HEAD,
+    }
+
+    #[test]
+    fn http_method_roundtrips_candid_through_dto_path() {
+        let bytes = Encode!(&HttpMethod::Get).expect("encode domain http method");
+        let legacy = Decode!(&bytes, LegacyHttpMethod).expect("decode legacy http method");
+
+        assert_eq!(legacy, LegacyHttpMethod::GET);
+
+        let legacy_bytes = Encode!(&LegacyHttpMethod::HEAD).expect("encode legacy http method");
+        let method = Decode!(&legacy_bytes, HttpMethod).expect("decode domain http method");
+
+        assert_eq!(method, HttpMethod::Head);
+    }
 }
