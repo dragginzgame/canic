@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.9` continues boundary hardening by moving app command status,
+  blob-storage billing status, and timer scheduling mode values into domain
+  ownership while preserving existing DTO/ops import paths and serialized or
+  projected shapes.
+
 - `0.82.8` continues boundary hardening by moving HTTP method and runtime
   endpoint status values into domain ownership while preserving existing DTO,
   ops, metrics, runtime introspection, and serialized shapes.

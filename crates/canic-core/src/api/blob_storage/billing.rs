@@ -7,14 +7,17 @@
 use super::BlobStorageApi;
 use crate::{
     cdk::{candid::Nat, types::Principal},
+    domain::blob_storage::{
+        BlobStorageBillingWarning, BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
+        BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker,
+    },
     dto::{
         blob_storage::{
-            BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
+            BlobProjectCyclesTopUpReport, BlobStorageBillingConfig,
             BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetResult,
             BlobStorageCashierAccountTopUpError, BlobStorageCashierAccountTopUpRequest,
-            BlobStorageCashierAccountTopUpResult, BlobStorageFundingStatus,
-            BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
-            BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
+            BlobStorageCashierAccountTopUpResult, BlobStorageStatusRequest,
+            BlobStorageStatusResponse,
         },
         error::{Error, ErrorCode},
     },

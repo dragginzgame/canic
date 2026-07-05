@@ -123,6 +123,26 @@ before this compaction is archived at
   re-exports and serialized Candid/Serde shapes. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-runtime-status-domain-boundary-report.md`.
 
+- The current `0.82.9` working slice moves app command status ownership to
+  `domain::state` while preserving the public `dto::state::AppStatus`
+  re-export and Candid command shape. App-state storage ops now import the
+  status value from the domain owner, while app command/response DTOs and
+  stable app-state serialization remain unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-app-status-domain-boundary-report.md`.
+  The same slice moves feature-gated blob-storage billing status ownership to
+  `domain::blob_storage` while preserving the public `dto::blob_storage`
+  re-exports and serialized Candid/Serde shapes. Blob-storage billing status
+  builders now import the status values from the domain owner, while Cashier
+  request/result DTOs and billing behavior remain unchanged. The docs-only
+  report is
+  `docs/design/0.82-boundary-hardening/0.82-blob-storage-status-domain-boundary-report.md`.
+  The same slice moves timer scheduling mode ownership to `domain::runtime`
+  while preserving the public `ops::runtime::metrics::timer::TimerMode`
+  re-export and projected metric labels. Timer scheduling ops and metrics
+  projection now import the mode value from the domain owner, while timer
+  recording behavior remains unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-timer-mode-domain-boundary-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

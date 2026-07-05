@@ -168,3 +168,14 @@ pub enum TimerStatus {
     #[serde(alias = "Unknown")]
     Unknown,
 }
+
+///
+/// TimerMode
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum TimerMode {
+    Interval,
+    Once,
+}

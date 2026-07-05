@@ -450,8 +450,8 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
 mod tests {
     use super::*;
     use crate::ops::runtime::bootstrap::BootstrapStatusOps;
-    use crate::ops::runtime::metrics::timer::{TimerMetrics, TimerMode};
     use crate::ops::runtime::recent_failure::RecentFailureOps;
+    use crate::{domain::runtime::TimerMode, ops::runtime::metrics::timer::TimerMetrics};
     use std::time::Duration;
 
     #[test]
