@@ -96,3 +96,75 @@ pub enum RuntimeStateDomainStatus {
     #[serde(alias = "NotEvaluated")]
     NotEvaluated,
 }
+
+///
+/// HealthStatus
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HealthStatus {
+    #[serde(alias = "Healthy")]
+    Healthy,
+    #[serde(alias = "Degraded")]
+    Degraded,
+    #[serde(alias = "Unhealthy")]
+    Unhealthy,
+    #[serde(alias = "Unknown")]
+    Unknown,
+}
+
+///
+/// ReadinessStatus
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReadinessStatus {
+    #[serde(alias = "Ready")]
+    Ready,
+    #[serde(alias = "Degraded")]
+    Degraded,
+    #[serde(alias = "NotReady")]
+    NotReady,
+    #[serde(alias = "NotEvaluated")]
+    NotEvaluated,
+}
+
+///
+/// RuntimeStatus
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeStatus {
+    #[serde(alias = "Ok")]
+    Ok,
+    #[serde(alias = "Degraded")]
+    Degraded,
+    #[serde(alias = "Failing")]
+    Failing,
+    #[serde(alias = "Unknown")]
+    Unknown,
+}
+
+///
+/// TimerStatus
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimerStatus {
+    #[serde(alias = "Healthy")]
+    Healthy,
+    #[serde(alias = "Delayed")]
+    Delayed,
+    #[serde(alias = "Failing")]
+    Failing,
+    #[serde(alias = "Disabled")]
+    Disabled,
+    #[serde(alias = "NotRegistered")]
+    NotRegistered,
+    #[serde(alias = "Unknown")]
+    Unknown,
+}

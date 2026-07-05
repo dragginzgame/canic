@@ -6,6 +6,7 @@
 pub mod auth;
 pub mod canister;
 pub mod cycles;
+pub mod http;
 pub mod icp_refill;
 pub mod icrc;
 pub mod memory;

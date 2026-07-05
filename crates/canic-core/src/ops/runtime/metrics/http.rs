@@ -6,6 +6,8 @@
 
 use std::{cell::RefCell, collections::HashMap};
 
+pub use crate::domain::http::HttpMethod;
+
 thread_local! {
     static HTTP_METRICS: RefCell<HashMap<HttpMetricKey, u64>> = RefCell::new(HashMap::new());
 }
@@ -31,31 +33,6 @@ pub struct HttpMetricKey {
 #[derive(Clone)]
 pub struct HttpMetricsSnapshot {
     pub entries: Vec<(HttpMetricKey, u64)>,
-}
-
-///
-/// HttpMethod
-///
-/// HTTP method dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
-#[remain::sorted]
-pub enum HttpMethod {
-    Get,
-    Head,
-    Post,
-}
-
-impl HttpMethod {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Get => "GET",
-            Self::Head => "HEAD",
-            Self::Post => "POST",
-        }
-    }
 }
 
 ///

@@ -8,13 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Boundary hardening continues by moving canister status and log-visibility
-  ownership into the domain layer while preserving existing management-ops and
-  DTO import paths and serialized Candid shapes.
-
 ## [0.82.x] - 2026-07-05 - Boundary Hardening
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
+
+- `0.82.8` continues boundary hardening by moving HTTP method and runtime
+  endpoint status values into domain ownership while preserving existing DTO,
+  ops, metrics, runtime introspection, and serialized shapes.
+
+- `0.82.7` continues management-status boundary hardening by moving canister
+  status and log-visibility values into domain ownership while preserving
+  existing management-ops and DTO import paths and serialized Candid shapes.
 
 - `0.82.6` continues app-state DTO/storage boundary hardening by moving app
   mode into domain ownership while preserving storage and DTO re-exports,
