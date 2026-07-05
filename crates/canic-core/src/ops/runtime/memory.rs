@@ -6,11 +6,13 @@
 
 use crate::{
     InternalError,
+    domain::memory::{
+        MemoryAllocationState, MemoryCommitRecoveryErrorResponse, MemoryRangeAuthorityMode,
+    },
     dto::memory::{
-        MemoryAllocationRecordEntry, MemoryAllocationSizeEntry, MemoryAllocationState,
-        MemoryCommitRecoveryErrorResponse, MemoryCommitRecoveryResponse, MemoryCommitSlotResponse,
-        MemoryLedgerGenerationEntry, MemoryLedgerMemoryEntry, MemoryLedgerResponse,
-        MemoryRangeAuthorityEntry, MemoryRangeAuthorityMode, MemorySchemaMetadataEntry,
+        MemoryAllocationRecordEntry, MemoryAllocationSizeEntry, MemoryCommitRecoveryResponse,
+        MemoryCommitSlotResponse, MemoryLedgerGenerationEntry, MemoryLedgerMemoryEntry,
+        MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemorySchemaMetadataEntry,
     },
     memory::{self, ledger, registry::MemoryRegistryError, runtime::init_eager_tls},
     ops::runtime::RuntimeOpsError,

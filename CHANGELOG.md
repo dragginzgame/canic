@@ -8,14 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Boundary hardening continues by moving runtime failure severity, field
-  visibility, and diagnostic status ownership into the domain layer while
-  preserving existing runtime DTO import paths and serialized Candid/Serde
-  shapes.
-
 ## [0.82.x] - 2026-07-05 - Boundary Hardening
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
+
+- `0.82.5` continues memory DTO/domain boundary hardening by moving memory
+  diagnostic values into domain ownership while preserving DTO re-exports and
+  serialized Candid shapes.
+
+- `0.82.4` continues runtime DTO/domain boundary hardening by moving runtime
+  diagnostic semantics into domain ownership while preserving DTO re-exports
+  and serialized Candid/Serde shapes.
 
 - `0.82.3` continues DTO/domain boundary hardening by moving internal value
   selectors and statuses into domain ownership while preserving DTO re-exports

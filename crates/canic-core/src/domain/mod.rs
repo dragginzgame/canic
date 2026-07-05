@@ -7,6 +7,7 @@ pub mod auth;
 pub mod cycles;
 pub mod icp_refill;
 pub mod icrc;
+pub mod memory;
 pub mod metrics;
 pub mod policy;
 pub mod pool;

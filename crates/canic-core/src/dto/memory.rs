@@ -1,5 +1,9 @@
 use crate::dto::prelude::*;
 
+pub use crate::domain::memory::{
+    MemoryAllocationState, MemoryCommitRecoveryErrorResponse, MemoryRangeAuthorityMode,
+};
+
 ///
 /// MemoryLedgerResponse
 ///
@@ -40,19 +44,6 @@ pub struct MemoryCommitSlotResponse {
 }
 
 ///
-/// MemoryCommitRecoveryErrorResponse
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum MemoryCommitRecoveryErrorResponse {
-    NoValidGeneration,
-    AmbiguousGeneration,
-    GenerationOverflow,
-    UnexpectedGeneration,
-    Unknown,
-}
-
-///
 /// MemoryRangeAuthorityEntry
 ///
 
@@ -63,16 +54,6 @@ pub struct MemoryRangeAuthorityEntry {
     pub end: u8,
     pub mode: MemoryRangeAuthorityMode,
     pub purpose: String,
-}
-
-///
-/// MemoryRangeAuthorityMode
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum MemoryRangeAuthorityMode {
-    Reserved,
-    Allowed,
 }
 
 ///
@@ -114,17 +95,6 @@ pub struct MemoryAllocationSizeEntry {
 }
 
 ///
-/// MemoryAllocationState
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum MemoryAllocationState {
-    Reserved,
-    Active,
-    Retired,
-}
-
-///
 /// MemorySchemaMetadataEntry
 ///
 
@@ -146,4 +116,29 @@ pub struct MemoryLedgerGenerationEntry {
     pub runtime_fingerprint: Option<String>,
     pub declaration_count: u32,
     pub committed_at: Option<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::{Decode, Encode};
+    use serde::de::DeserializeOwned;
+    use std::fmt::Debug;
+
+    #[test]
+    fn memory_enums_roundtrip_candid_with_existing_variant_labels() {
+        assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::UnexpectedGeneration);
+        assert_enum_candid_contract(MemoryRangeAuthorityMode::Allowed);
+        assert_enum_candid_contract(MemoryAllocationState::Retired);
+    }
+
+    fn assert_enum_candid_contract<T>(value: T)
+    where
+        T: CandidType + Clone + Debug + DeserializeOwned + Eq,
+    {
+        let bytes = Encode!(&value).expect("encode memory enum");
+        let decoded = Decode!(&bytes, T).expect("decode memory enum");
+
+        assert_eq!(decoded, value);
+    }
 }
