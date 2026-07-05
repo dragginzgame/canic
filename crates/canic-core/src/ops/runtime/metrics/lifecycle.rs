@@ -6,109 +6,13 @@
 
 use std::{cell::RefCell, collections::HashMap};
 
+pub use crate::domain::metrics::{
+    LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricStage,
+};
+
 thread_local! {
     static LIFECYCLE_METRICS: RefCell<HashMap<LifecycleMetricKey, u64>> =
         RefCell::new(HashMap::new());
-}
-
-///
-/// LifecycleMetricPhase
-///
-/// Lifecycle phase dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum LifecycleMetricPhase {
-    Init,
-    PostUpgrade,
-}
-
-impl LifecycleMetricPhase {
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Init => "init",
-            Self::PostUpgrade => "post_upgrade",
-        }
-    }
-}
-
-///
-/// LifecycleMetricRole
-///
-/// Lifecycle canister role dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum LifecycleMetricRole {
-    Nonroot,
-    Root,
-}
-
-impl LifecycleMetricRole {
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Nonroot => "nonroot",
-            Self::Root => "root",
-        }
-    }
-}
-
-///
-/// LifecycleMetricStage
-///
-/// Lifecycle stage dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum LifecycleMetricStage {
-    Bootstrap,
-    Runtime,
-}
-
-impl LifecycleMetricStage {
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Bootstrap => "bootstrap",
-            Self::Runtime => "runtime",
-        }
-    }
-}
-
-///
-/// LifecycleMetricOutcome
-///
-/// Lifecycle outcome dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum LifecycleMetricOutcome {
-    Completed,
-    Failed,
-    Scheduled,
-    Skipped,
-    Started,
-    Waiting,
-}
-
-impl LifecycleMetricOutcome {
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-            Self::Scheduled => "scheduled",
-            Self::Skipped => "skipped",
-            Self::Started => "started",
-            Self::Waiting => "waiting",
-        }
-    }
 }
 
 ///

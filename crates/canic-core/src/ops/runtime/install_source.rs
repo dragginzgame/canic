@@ -7,12 +7,13 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::{types::Principal, utils::hash::wasm_hash},
+    domain::metrics::{
+        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+        WasmStoreMetricSource,
+    },
     format::byte_size,
     ids::CanisterRole,
-    ops::runtime::metrics::wasm_store::{
-        WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
-        WasmStoreMetricSource, WasmStoreMetrics,
-    },
+    ops::runtime::metrics::wasm_store::WasmStoreMetrics,
 };
 use async_trait::async_trait;
 use std::{

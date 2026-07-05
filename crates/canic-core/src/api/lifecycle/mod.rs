@@ -14,11 +14,11 @@ pub mod metrics {
         CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
     };
 
-    pub use crate::ops::runtime::metrics::lifecycle::{
+    pub use crate::domain::metrics::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricStage,
     };
 
-    pub use crate::ops::runtime::metrics::wasm_store::{
+    pub use crate::domain::metrics::{
         WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
         WasmStoreMetricSource,
     };

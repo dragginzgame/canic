@@ -140,6 +140,246 @@ impl CanisterOpsMetricReason {
 }
 
 ///
+/// LifecycleMetricPhase
+///
+/// Lifecycle phase dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum LifecycleMetricPhase {
+    Init,
+    PostUpgrade,
+}
+
+impl LifecycleMetricPhase {
+    /// Return the stable public metrics label for this phase.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Init => "init",
+            Self::PostUpgrade => "post_upgrade",
+        }
+    }
+}
+
+///
+/// LifecycleMetricRole
+///
+/// Lifecycle canister role dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum LifecycleMetricRole {
+    Nonroot,
+    Root,
+}
+
+impl LifecycleMetricRole {
+    /// Return the stable public metrics label for this role.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Nonroot => "nonroot",
+            Self::Root => "root",
+        }
+    }
+}
+
+///
+/// LifecycleMetricStage
+///
+/// Lifecycle stage dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum LifecycleMetricStage {
+    Bootstrap,
+    Runtime,
+}
+
+impl LifecycleMetricStage {
+    /// Return the stable public metrics label for this stage.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Bootstrap => "bootstrap",
+            Self::Runtime => "runtime",
+        }
+    }
+}
+
+///
+/// LifecycleMetricOutcome
+///
+/// Lifecycle outcome dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum LifecycleMetricOutcome {
+    Completed,
+    Failed,
+    Scheduled,
+    Skipped,
+    Started,
+    Waiting,
+}
+
+impl LifecycleMetricOutcome {
+    /// Return the stable public metrics label for this outcome.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Scheduled => "scheduled",
+            Self::Skipped => "skipped",
+            Self::Started => "started",
+            Self::Waiting => "waiting",
+        }
+    }
+}
+
+///
+/// WasmStoreMetricOperation
+///
+/// Wasm-store operation dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum WasmStoreMetricOperation {
+    BootstrapChunkSync,
+    ChunkPublish,
+    ChunkUpload,
+    ManifestPromote,
+    Prepare,
+    ReleasePublish,
+    SourceResolve,
+}
+
+impl WasmStoreMetricOperation {
+    /// Return the stable public metrics label for this operation.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::BootstrapChunkSync => "bootstrap_chunk_sync",
+            Self::ChunkPublish => "chunk_publish",
+            Self::ChunkUpload => "chunk_upload",
+            Self::ManifestPromote => "manifest_promote",
+            Self::Prepare => "prepare",
+            Self::ReleasePublish => "release_publish",
+            Self::SourceResolve => "source_resolve",
+        }
+    }
+}
+
+///
+/// WasmStoreMetricSource
+///
+/// Wasm-store source dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum WasmStoreMetricSource {
+    Bootstrap,
+    Embedded,
+    ManagedFleet,
+    Resolver,
+    Store,
+    TargetStore,
+}
+
+impl WasmStoreMetricSource {
+    /// Return the stable public metrics label for this source.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Bootstrap => "bootstrap",
+            Self::Embedded => "embedded",
+            Self::ManagedFleet => "managed_fleet",
+            Self::Resolver => "resolver",
+            Self::Store => "store",
+            Self::TargetStore => "target_store",
+        }
+    }
+}
+
+///
+/// WasmStoreMetricOutcome
+///
+/// Wasm-store outcome dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum WasmStoreMetricOutcome {
+    Completed,
+    Failed,
+    Skipped,
+    Started,
+}
+
+impl WasmStoreMetricOutcome {
+    /// Return the stable public metrics label for this outcome.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Skipped => "skipped",
+            Self::Started => "started",
+        }
+    }
+}
+
+///
+/// WasmStoreMetricReason
+///
+/// Bounded wasm-store reason dimension used by public metrics projection.
+///
+
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[remain::sorted]
+pub enum WasmStoreMetricReason {
+    CacheHit,
+    CacheMiss,
+    Capacity,
+    HashMismatch,
+    InvalidState,
+    ManagementCall,
+    MissingChunk,
+    MissingManifest,
+    Ok,
+    StoreCall,
+    UnsupportedInline,
+}
+
+impl WasmStoreMetricReason {
+    /// Return the stable public metrics label for this reason.
+    #[must_use]
+    pub const fn metric_label(self) -> &'static str {
+        match self {
+            Self::CacheHit => "cache_hit",
+            Self::CacheMiss => "cache_miss",
+            Self::Capacity => "capacity",
+            Self::HashMismatch => "hash_mismatch",
+            Self::InvalidState => "invalid_state",
+            Self::ManagementCall => "management_call",
+            Self::MissingChunk => "missing_chunk",
+            Self::MissingManifest => "missing_manifest",
+            Self::Ok => "ok",
+            Self::StoreCall => "store_call",
+            Self::UnsupportedInline => "unsupported_inline",
+        }
+    }
+}
+
+///
 /// ManagementCallMetricOperation
 ///
 /// Management canister operation dimension used by runtime metrics recording.
