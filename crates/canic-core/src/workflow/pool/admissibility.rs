@@ -5,7 +5,7 @@
 //! Boundary: workflow helper gathering observable state before pure policy evaluation.
 
 use crate::{
-    domain::policy::pool::{PoolPolicyError, admissibility::policy_can_enter_pool},
+    domain::policy::pure::pool::{PoolPolicyError, admissibility::policy_can_enter_pool},
     ids::BuildNetwork,
     ops::{
         ic::{mgmt::MgmtOps, network::NetworkOps},

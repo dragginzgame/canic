@@ -2,7 +2,7 @@
 
 use crate::{
     config::schema::CanisterKind,
-    domain::policy::topology::{
+    domain::policy::pure::topology::{
         RegistryPolicyInput, TopologyPolicy, TopologyPolicyError, TopologyPolicyInput,
     },
     ids::CanisterRole,

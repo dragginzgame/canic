@@ -5,7 +5,7 @@
 //! Boundary: storage ops convert stable records into DTO response shapes.
 
 use crate::{
-    domain::policy::cycles_funding::FundingLedgerSnapshot,
+    domain::policy::pure::cycles_funding::FundingLedgerSnapshot,
     dto::{
         cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
         page::Page,

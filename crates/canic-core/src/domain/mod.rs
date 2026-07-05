@@ -18,7 +18,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum DomainError {
     #[error(transparent)]
-    Policy(#[from] policy::PolicyError),
+    Policy(#[from] policy::pure::PolicyError),
 }
 
 impl From<DomainError> for InternalError {

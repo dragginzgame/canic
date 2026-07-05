@@ -5,7 +5,7 @@
 //! Boundary: runtime workflow timer coordinating log policy and log ops.
 
 use crate::{
-    domain::policy,
+    domain::policy::pure as policy,
     ops::{
         config::ConfigOps,
         ic::IcOps,

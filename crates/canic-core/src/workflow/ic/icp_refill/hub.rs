@@ -7,7 +7,7 @@
 use crate::{
     InternalError,
     cdk::types::{Cycles, Principal},
-    domain::policy::icp_refill::{IcpRefillPolicyViolation, evaluate_hub_self_refill},
+    domain::policy::pure::icp_refill::{IcpRefillPolicyViolation, evaluate_hub_self_refill},
     dto::icp_refill::{IcpRefillMode, IcpRefillRequest, IcpRefillResponse},
     ops::{
         ic::{IcOps, icp_refill::IcpRefillOps},

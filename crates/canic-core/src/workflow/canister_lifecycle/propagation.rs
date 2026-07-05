@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    domain::policy::topology::TopologyPolicy,
+    domain::policy::pure::topology::TopologyPolicy,
     ops::{
         storage::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},

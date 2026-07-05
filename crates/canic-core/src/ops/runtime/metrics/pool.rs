@@ -5,7 +5,8 @@
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
 use crate::{
-    InternalError, InternalErrorClass, InternalErrorOrigin, domain::policy::pool::PoolPolicyError,
+    InternalError, InternalErrorClass, InternalErrorOrigin,
+    domain::policy::pure::pool::PoolPolicyError,
 };
 use std::{cell::RefCell, collections::HashMap};
 

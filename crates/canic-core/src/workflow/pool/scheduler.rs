@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    domain::policy::pool::PoolPolicyError,
+    domain::policy::pure::pool::PoolPolicyError,
     ops::{
         ic::IcOps,
         runtime::{

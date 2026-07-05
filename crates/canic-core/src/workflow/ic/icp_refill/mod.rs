@@ -17,7 +17,7 @@ use crate::{
         types::{Cycles, Principal},
     },
     config::schema::{IcpRefillPolicy, TopupPolicy},
-    domain::policy::icp_refill::{
+    domain::policy::pure::icp_refill::{
         IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
         evaluate_manual_refill,
     },

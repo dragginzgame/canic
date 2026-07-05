@@ -18,7 +18,7 @@ use super::{
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
         RootIssuerRenewalOutcome, RootIssuerRenewalState,
         validate_root_delegation_proof_prepare_policy,

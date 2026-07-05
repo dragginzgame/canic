@@ -2,16 +2,65 @@ mod backfill;
 mod hrw;
 mod metrics;
 
-pub use crate::view::placement::sharding::{CreateBlockedReason, ShardingPlanState};
 pub use hrw::HrwSelector;
 pub use metrics::{PoolMetrics, compute_pool_metrics};
 
-use crate::{
-    InternalError, InternalErrorOrigin,
-    domain::value::Principal,
-    view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement},
-};
+use crate::{InternalError, InternalErrorOrigin, domain::value::Principal};
 use backfill::plan_slot_backfill;
+
+///
+/// ShardPlacement
+///
+
+#[derive(Clone, Debug)]
+pub struct ShardPlacement {
+    pub pool: String,
+    pub slot: u32,
+    pub capacity: u32,
+    pub count: u32,
+}
+
+impl ShardPlacement {
+    pub const UNASSIGNED_SLOT: u32 = u32::MAX;
+}
+
+///
+/// ShardPartitionKeyAssignment
+///
+
+#[derive(Clone, Debug)]
+pub struct ShardPartitionKeyAssignment {
+    pub partition_key: String,
+    pub pid: Principal,
+}
+
+///
+/// ShardingPlanState
+///
+
+#[derive(Clone, Debug)]
+pub enum ShardingPlanState {
+    AlreadyAssigned { pid: Principal },
+    UseExisting { pid: Principal },
+    CreateAllowed,
+    CreateBlocked { reason: CreateBlockedReason },
+}
+
+///
+/// CreateBlockedReason
+///
+
+#[derive(Clone, Debug, Eq, thiserror::Error, PartialEq)]
+pub enum CreateBlockedReason {
+    #[error("pool at capacity")]
+    PoolAtCapacity,
+
+    #[error("no free shard slots")]
+    NoFreeSlots,
+
+    #[error("{0}")]
+    PolicyViolation(String),
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ShardingPolicyError {

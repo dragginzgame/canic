@@ -9,7 +9,7 @@ mod propagation;
 use crate::{
     InternalError,
     cdk::types::TC,
-    domain::policy::{
+    domain::policy::pure::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
     },

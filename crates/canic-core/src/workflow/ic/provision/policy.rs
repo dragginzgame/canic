@@ -7,8 +7,8 @@
 use crate::{
     InternalError,
     config::schema::{CanisterConfig, CanisterKind},
-    domain::policy,
-    domain::policy::topology::registry::{RegistryCanisterKind, RegistryCanisterShape},
+    domain::policy::pure as policy,
+    domain::policy::pure::topology::registry::{RegistryCanisterKind, RegistryCanisterShape},
     ops::{config::ConfigOps, storage::registry::subnet::SubnetRegistryOps},
     workflow::prelude::*,
 };

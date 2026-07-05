@@ -14,7 +14,7 @@ use super::{
 };
 use crate::{
     InternalError,
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
         RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalTemplate,
         validate_root_issuer_renewal_template_policy,

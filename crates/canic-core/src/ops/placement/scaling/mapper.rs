@@ -5,8 +5,8 @@
 //! Boundary: ops mapper used by scaling workflows and storage facades.
 
 use crate::{
+    domain::policy::pure::placement::scaling::ScalingWorkerPlanEntry,
     dto::placement::scaling::WorkerEntry, storage::stable::scaling::WorkerEntryRecord,
-    view::placement::scaling::ScalingWorkerPlanEntry,
 };
 
 ///

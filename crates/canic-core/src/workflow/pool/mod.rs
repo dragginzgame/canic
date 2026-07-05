@@ -16,7 +16,7 @@ pub mod scheduler;
 
 use crate::{
     InternalError,
-    domain::policy::pool::authority::require_pool_admin,
+    domain::policy::pure::pool::authority::require_pool_admin,
     ops::{
         ic::IcOps,
         runtime::{

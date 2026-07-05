@@ -10,7 +10,7 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::BoundedString64,
     config::schema::{ScalePool, ScalingConfig},
-    domain::policy::placement::scaling::{
+    domain::policy::pure::placement::scaling::{
         ScalingPlan, ScalingPolicy, ScalingPolicyInput, ScalingPoolPolicyInput,
         ScalingWorkerPlanEntry,
     },

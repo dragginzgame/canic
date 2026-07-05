@@ -1,7 +1,7 @@
 pub mod query;
 
 use crate::{
-    domain::policy,
+    domain::policy::pure as policy,
     dto::icp_refill::IcpRefillStatus,
     ops::{
         config::ConfigOps,

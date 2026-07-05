@@ -1,4 +1,4 @@
-//! Module: domain::policy::auth
+//! Module: domain::policy::pure::auth
 //!
 //! Responsibility: pure auth issuance policy decisions.
 //! Does not own: proof verification, storage access, replay, or signing.

@@ -1,41 +1,7 @@
-pub mod auth;
-pub mod cycles;
-pub mod cycles_funding;
-pub mod env;
-pub mod icp_refill;
-pub mod log;
-pub mod placement;
-pub mod pool;
-pub mod topology;
-pub mod upgrade;
+//! Domain policy namespace.
+//!
+//! Pure, side-effect-free policy decisions live under [`pure`]. Keeping the
+//! implementation behind that namespace makes policy call sites auditably
+//! distinct from workflow, ops, storage, runtime, and endpoint layers.
 
-use crate::{InternalError, domain::DomainError};
-use thiserror::Error as ThisError;
-
-///
-/// PolicyError
-///
-
-#[derive(Debug, ThisError)]
-pub enum PolicyError {
-    #[error(transparent)]
-    AuthPolicy(#[from] auth::AuthPolicyError),
-
-    #[error(transparent)]
-    EnvPolicy(#[from] env::EnvPolicyError),
-
-    #[error(transparent)]
-    PoolPolicy(#[from] pool::PoolPolicyError),
-
-    #[error(transparent)]
-    TopologyPolicy(#[from] topology::TopologyPolicyError),
-
-    #[error(transparent)]
-    ScalingPolicy(#[from] placement::scaling::ScalingPolicyError),
-}
-
-impl From<PolicyError> for InternalError {
-    fn from(err: PolicyError) -> Self {
-        DomainError::from(err).into()
-    }
-}
+pub mod pure;

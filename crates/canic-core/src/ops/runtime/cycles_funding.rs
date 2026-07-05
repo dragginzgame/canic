@@ -5,7 +5,7 @@
 //! Boundary: routes runtime grant totals through stable storage accounting.
 
 use crate::{
-    cdk::types::Principal, domain::policy::cycles_funding::FundingLedgerSnapshot,
+    cdk::types::Principal, domain::policy::pure::cycles_funding::FundingLedgerSnapshot,
     ops::storage::cycles::CyclesFundingLedgerStoreOps,
 };
 

@@ -3,7 +3,7 @@
 // - side-effect free
 // - does not log / mutate / schedule
 
-use crate::domain::policy::pool::PoolPolicyError;
+use crate::domain::policy::pure::pool::PoolPolicyError;
 
 /// Require that the caller is authorized to perform pool admin operations.
 ///

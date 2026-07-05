@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,
-    domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
+    domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::subnet::SubnetIdentity,
     ids::{CanisterRole, SubnetRole},
     ops::{

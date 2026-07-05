@@ -13,7 +13,7 @@ use crate::{
             RoleAttestationConfig, ScalingConfig, SubnetConfig,
         },
     },
-    domain::policy::cycles_funding::FundingPolicy,
+    domain::policy::pure::cycles_funding::FundingPolicy,
     ids::{CanisterRole, SubnetRole},
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::app::AppMode,
