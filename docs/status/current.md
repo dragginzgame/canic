@@ -151,6 +151,17 @@ before this compaction is archived at
   and operation behavior remain unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-platform-call-metric-domain-boundary-report.md`.
 
+- The current `0.82.11` working slice moves canister-op and management-call
+  metric dimension ownership to `domain::metrics` while preserving the public
+  `ops::runtime::metrics::canister_ops` and
+  `ops::runtime::metrics::management_call` re-exports, canister-op public
+  metric labels, and management-call counter behavior. Lifecycle,
+  provisioning, and management ops now import the metric dimension values from
+  the domain owner, while metric recording and snapshot storage remain
+  unchanged. Docs-only reports:
+  `docs/design/0.82-boundary-hardening/0.82-canister-ops-metric-domain-boundary-report.md`,
+  `docs/design/0.82-boundary-hardening/0.82-management-call-metric-domain-boundary-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

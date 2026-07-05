@@ -7,6 +7,10 @@
 use crate::{InternalError, InternalErrorClass, InternalErrorOrigin, ids::CanisterRole};
 use std::{cell::RefCell, collections::HashMap};
 
+pub use crate::domain::metrics::{
+    CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+};
+
 const UNSCOPED_ROLE_LABEL: &str = "unscoped";
 const UNKNOWN_ROLE_LABEL: &str = "unknown";
 
@@ -15,117 +19,7 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
-///
-/// CanisterOpsMetricOperation
-///
-/// Canister operation metric dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum CanisterOpsMetricOperation {
-    Create,
-    Delete,
-    Install,
-    Reinstall,
-    Restore,
-    Snapshot,
-    Upgrade,
-}
-
-impl CanisterOpsMetricOperation {
-    /// Return the stable public metrics label for this operation.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Create => "create",
-            Self::Delete => "delete",
-            Self::Install => "install",
-            Self::Reinstall => "reinstall",
-            Self::Restore => "restore",
-            Self::Snapshot => "snapshot",
-            Self::Upgrade => "upgrade",
-        }
-    }
-}
-
-///
-/// CanisterOpsMetricOutcome
-///
-/// Canister operation outcome dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum CanisterOpsMetricOutcome {
-    Completed,
-    Failed,
-    Skipped,
-    Started,
-}
-
-impl CanisterOpsMetricOutcome {
-    /// Return the stable public metrics label for this outcome.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::Completed => "completed",
-            Self::Failed => "failed",
-            Self::Skipped => "skipped",
-            Self::Started => "started",
-        }
-    }
-}
-
-///
-/// CanisterOpsMetricReason
-///
-/// Bounded canister operation reason dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum CanisterOpsMetricReason {
-    AlreadyExists,
-    Cycles,
-    InvalidState,
-    ManagementCall,
-    MissingWasm,
-    NewAllocation,
-    NotFound,
-    Ok,
-    PolicyDenied,
-    PoolReuse,
-    PoolTopup,
-    StatePropagation,
-    Topology,
-    TopologyPropagation,
-    Unknown,
-}
-
 impl CanisterOpsMetricReason {
-    /// Return the stable public metrics label for this reason.
-    #[must_use]
-    pub const fn metric_label(self) -> &'static str {
-        match self {
-            Self::AlreadyExists => "already_exists",
-            Self::NewAllocation => "new_allocation",
-            Self::Cycles => "cycles",
-            Self::InvalidState => "invalid_state",
-            Self::ManagementCall => "management_call",
-            Self::MissingWasm => "missing_wasm",
-            Self::NotFound => "not_found",
-            Self::Ok => "ok",
-            Self::PolicyDenied => "policy_denied",
-            Self::PoolReuse => "pool_reuse",
-            Self::PoolTopup => "pool_topup",
-            Self::StatePropagation => "state_propagation",
-            Self::Topology => "topology",
-            Self::TopologyPropagation => "topology_propagation",
-            Self::Unknown => "unknown",
-        }
-    }
-
     /// Classify one internal error into a bounded metric reason.
     #[must_use]
     pub(crate) const fn from_error(err: &InternalError) -> Self {

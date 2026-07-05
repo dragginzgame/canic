@@ -14,6 +14,8 @@ mod types;
 use crate::{
     InternalError,
     domain::metrics::{
+        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+        ManagementCallMetricOperation, ManagementCallMetricOutcome, ManagementCallMetricReason,
         PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
         PlatformCallMetricSurface,
     },
@@ -27,16 +29,8 @@ use crate::{
         ic::IcOpsError,
         prelude::*,
         runtime::metrics::{
-            canister_ops::{
-                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-                CanisterOpsMetrics,
-            },
-            management_call::{
-                ManagementCallMetricOperation, ManagementCallMetricOutcome,
-                ManagementCallMetricReason, ManagementCallMetrics,
-            },
-            platform_call::PlatformCallMetrics,
-            system::SystemMetrics,
+            canister_ops::CanisterOpsMetrics, management_call::ManagementCallMetrics,
+            platform_call::PlatformCallMetrics, system::SystemMetrics,
         },
     },
 };

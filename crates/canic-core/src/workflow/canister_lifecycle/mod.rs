@@ -9,6 +9,9 @@ mod propagation;
 use crate::{
     InternalError,
     cdk::types::TC,
+    domain::metrics::{
+        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    },
     domain::policy::pure::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
@@ -21,10 +24,7 @@ use crate::{
         },
         replay::model::CommandKind,
         runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
-        runtime::metrics::canister_ops::{
-            CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-            CanisterOpsMetrics,
-        },
+        runtime::metrics::canister_ops::CanisterOpsMetrics,
         runtime::metrics::provisioning::{
             ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
             ProvisioningMetrics,

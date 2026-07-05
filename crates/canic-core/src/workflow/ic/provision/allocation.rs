@@ -6,6 +6,9 @@
 
 use crate::{
     InternalError,
+    domain::metrics::{
+        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    },
     ops::{
         config::ConfigOps,
         cost_guard::CostGuardPermit,
@@ -13,13 +16,8 @@ use crate::{
             IcOps,
             mgmt::{CanisterSettings, MgmtOps, UpdateSettingsArgs},
         },
-        runtime::metrics::{
-            canister_ops::{
-                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-            },
-            provisioning::{
-                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
-            },
+        runtime::metrics::provisioning::{
+            ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
         },
     },
     workflow::{

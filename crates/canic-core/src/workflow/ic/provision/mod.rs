@@ -14,18 +14,15 @@ mod policy;
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    domain::metrics::{
+        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    },
     ops::{
         cost_guard::CostGuardPermit,
         runtime::{
             install_source::ModuleSourceRuntimeApi,
-            metrics::{
-                canister_ops::{
-                    CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-                },
-                provisioning::{
-                    ProvisioningMetricOperation, ProvisioningMetricOutcome,
-                    ProvisioningMetricReason,
-                },
+            metrics::provisioning::{
+                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
             },
         },
     },
