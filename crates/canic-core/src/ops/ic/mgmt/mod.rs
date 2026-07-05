@@ -15,8 +15,7 @@ use crate::{
     InternalError,
     dto::canister::{
         CanisterSettings as CanisterSettingsDto, CanisterStatusResponse,
-        CanisterStatusType as CanisterStatusTypeDto, EnvironmentVariable as EnvironmentVariableDto,
-        LogVisibility as LogVisibilityDto, MemoryMetrics, QueryStats,
+        EnvironmentVariable as EnvironmentVariableDto, MemoryMetrics, QueryStats,
     },
     ids::SystemMetricKind,
     infra::{InfraError, ic::mgmt::MgmtInfra},
@@ -49,10 +48,15 @@ use std::future::Future;
 pub use types::UpgradeFlags;
 pub use types::{
     CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterSnapshot,
-    CanisterStatus, CanisterStatusType, EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs,
-    EcdsaPublicKeyResult, EnvironmentVariable, LogVisibility, MemoryMetricsSnapshot,
-    QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult, UpdateSettingsArgs,
+    CanisterStatus, EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult,
+    EnvironmentVariable, MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs,
+    SignWithEcdsaResult, UpdateSettingsArgs,
 };
+#[expect(
+    unused_imports,
+    reason = "preserves public management ops value paths while domain owns the values"
+)]
+pub use types::{CanisterStatusType, LogVisibility};
 
 use types::{
     canister_snapshot_from_infra, canister_status_from_infra, ecdsa_public_key_args_to_infra,

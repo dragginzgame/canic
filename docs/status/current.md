@@ -101,6 +101,15 @@ before this compaction is archived at
   the shared domain value directly, with the docs-only report at
   `docs/design/0.82-boundary-hardening/0.82-app-mode-domain-boundary-report.md`.
 
+- The current `0.82.7` working slice moves canister status and log-visibility
+  ownership to `domain::canister` while preserving the public
+  `dto::canister::{CanisterStatusType, LogVisibility}` and
+  `ops::ic::mgmt::{CanisterStatusType, LogVisibility}` re-exports and Candid
+  shapes. Management status DTO projection now uses the shared domain values
+  directly, while raw management-canister infra payload types remain separate.
+  The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-canister-status-domain-boundary-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
