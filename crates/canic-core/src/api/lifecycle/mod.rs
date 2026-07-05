@@ -10,7 +10,7 @@ pub mod metrics {
         },
     };
 
-    pub use crate::ops::runtime::metrics::canister_ops::{
+    pub use crate::domain::metrics::{
         CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
     };
 

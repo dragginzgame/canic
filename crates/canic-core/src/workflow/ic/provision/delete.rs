@@ -6,15 +6,12 @@
 
 use crate::{
     InternalError,
+    domain::metrics::{
+        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    },
     ops::{
         ic::mgmt::MgmtOps,
-        runtime::{
-            env::EnvOps,
-            metrics::canister_ops::{
-                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-                CanisterOpsMetrics,
-            },
-        },
+        runtime::{env::EnvOps, metrics::canister_ops::CanisterOpsMetrics},
         storage::registry::subnet::SubnetRegistryOps,
     },
     workflow::{

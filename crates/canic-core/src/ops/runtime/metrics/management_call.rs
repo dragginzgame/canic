@@ -6,65 +6,13 @@
 
 use std::{cell::RefCell, collections::HashMap};
 
+pub use crate::domain::metrics::{
+    ManagementCallMetricOperation, ManagementCallMetricOutcome, ManagementCallMetricReason,
+};
+
 thread_local! {
     static MANAGEMENT_CALL_METRICS: RefCell<HashMap<ManagementCallMetricKey, u64>> =
         RefCell::new(HashMap::new());
-}
-
-///
-/// ManagementCallMetricOperation
-///
-/// Management canister operation dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum ManagementCallMetricOperation {
-    CanisterStatus,
-    ClearChunkStore,
-    CreateCanister,
-    DeleteCanister,
-    DepositCycles,
-    EcdsaPublicKey,
-    GetCycles,
-    InstallChunkedCode,
-    InstallCode,
-    LoadCanisterSnapshot,
-    RawRand,
-    SignWithEcdsa,
-    StopCanister,
-    StoredChunks,
-    TakeCanisterSnapshot,
-    UninstallCode,
-    UpdateSettings,
-    UploadChunk,
-}
-
-///
-/// ManagementCallMetricOutcome
-///
-/// Management canister outcome dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum ManagementCallMetricOutcome {
-    Completed,
-    Failed,
-    Started,
-}
-
-///
-/// ManagementCallMetricReason
-///
-/// Bounded management canister reason dimension used by public metrics projection.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum ManagementCallMetricReason {
-    Infra,
-    Ok,
 }
 
 ///

@@ -6,11 +6,11 @@
 
 use crate::{
     InternalError,
+    domain::metrics::{
+        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    },
     ops::runtime::metrics::{
-        canister_ops::{
-            CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-            CanisterOpsMetrics,
-        },
+        canister_ops::CanisterOpsMetrics,
         provisioning::{
             ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
             ProvisioningMetrics,

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.11` continues platform metric boundary hardening by moving canister-op
+  and management-call metric dimension values into domain ownership while
+  preserving existing runtime metrics import paths, public metric labels, and
+  counter behavior.
+
 - `0.82.10` continues platform metric boundary hardening by moving
   platform-call metric dimension values into domain ownership while preserving
   existing runtime metrics import paths and projected metric labels.

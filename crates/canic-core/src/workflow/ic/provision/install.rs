@@ -6,17 +6,15 @@
 
 use crate::{
     InternalError,
+    domain::metrics::{
+        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    },
     ops::{
         cost_guard::CostGuardPermit,
         ic::{IcOps, mgmt::CanisterInstallMode},
         runtime::install_source::ApprovedModuleSource,
-        runtime::metrics::{
-            canister_ops::{
-                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
-            },
-            provisioning::{
-                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
-            },
+        runtime::metrics::provisioning::{
+            ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
         },
         storage::registry::subnet::SubnetRegistryOps,
     },
