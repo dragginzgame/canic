@@ -94,6 +94,13 @@ before this compaction is archived at
   memory ops now import the domain owner directly, with the docs-only report at
   `docs/design/0.82-boundary-hardening/0.82-memory-diagnostic-dto-boundary-report.md`.
 
+- The `0.82.6` slice moves app mode ownership to `domain::state` while
+  preserving the public
+  `storage::stable::state::app::AppMode` and `dto::state::AppMode` re-exports,
+  Candid shape, and stable app-state serialization. App-state mapping now uses
+  the shared domain value directly, with the docs-only report at
+  `docs/design/0.82-boundary-hardening/0.82-app-mode-domain-boundary-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
