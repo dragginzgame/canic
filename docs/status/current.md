@@ -72,8 +72,8 @@ before this compaction is archived at
   the docs-only report at
   `docs/design/0.82-boundary-hardening/0.82-metrics-kind-dto-boundary-report.md`.
 
-- The current 0.82 follow-up slice moves runtime failure severity, runtime
-  field visibility, and runtime diagnostic status ownership to
+- The `0.82.4` slice moved runtime failure severity, runtime field visibility,
+  and runtime diagnostic status ownership to
   `domain::runtime` while preserving the public
   `dto::runtime::FailureSeverity`,
   `dto::runtime::RuntimeFieldVisibility`,
@@ -85,6 +85,14 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-runtime-failure-severity-dto-boundary-report.md`,
   `docs/design/0.82-boundary-hardening/0.82-runtime-field-visibility-dto-boundary-report.md`,
   `docs/design/0.82-boundary-hardening/0.82-runtime-diagnostic-status-dto-boundary-report.md`.
+
+- The `0.82.5` slice moves memory diagnostic value ownership to
+  `domain::memory` while preserving the public
+  `dto::memory::MemoryCommitRecoveryErrorResponse`,
+  `dto::memory::MemoryRangeAuthorityMode`, and
+  `dto::memory::MemoryAllocationState` re-exports and Candid shapes. Runtime
+  memory ops now import the domain owner directly, with the docs-only report at
+  `docs/design/0.82-boundary-hardening/0.82-memory-diagnostic-dto-boundary-report.md`.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
