@@ -143,6 +143,14 @@ before this compaction is archived at
   recording behavior remains unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-timer-mode-domain-boundary-report.md`.
 
+- The current `0.82.10` working slice moves platform-call metric dimension
+  ownership to `domain::metrics` while preserving the public
+  `ops::runtime::metrics::platform_call` re-exports and projected metric
+  labels. IC call, HTTP, ledger, and management ops now import the metric
+  dimension values from the domain owner, while platform-call metric recording
+  and operation behavior remain unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-platform-call-metric-domain-boundary-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
