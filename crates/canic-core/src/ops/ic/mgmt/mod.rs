@@ -13,6 +13,10 @@ mod types;
 
 use crate::{
     InternalError,
+    domain::metrics::{
+        PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+        PlatformCallMetricSurface,
+    },
     dto::canister::{
         CanisterSettings as CanisterSettingsDto, CanisterStatusResponse,
         EnvironmentVariable as EnvironmentVariableDto, MemoryMetrics, QueryStats,
@@ -31,10 +35,7 @@ use crate::{
                 ManagementCallMetricOperation, ManagementCallMetricOutcome,
                 ManagementCallMetricReason, ManagementCallMetrics,
             },
-            platform_call::{
-                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
-                PlatformCallMetricSurface, PlatformCallMetrics,
-            },
+            platform_call::PlatformCallMetrics,
             system::SystemMetrics,
         },
     },

@@ -6,6 +6,10 @@
 
 use crate::{
     InternalError,
+    domain::metrics::{
+        PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+        PlatformCallMetricSurface,
+    },
     dto::http,
     ids::SystemMetricKind,
     infra::{
@@ -18,12 +22,7 @@ use crate::{
     ops::{
         ic::IcOpsError,
         runtime::metrics::{
-            http::HttpMetrics,
-            platform_call::{
-                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
-                PlatformCallMetricSurface, PlatformCallMetrics,
-            },
-            system::SystemMetrics,
+            http::HttpMetrics, platform_call::PlatformCallMetrics, system::SystemMetrics,
         },
     },
 };

@@ -6,6 +6,10 @@
 
 use crate::{
     InternalError,
+    domain::metrics::{
+        PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+        PlatformCallMetricSurface,
+    },
     infra::{
         InfraError,
         ic::call::{
@@ -16,11 +20,7 @@ use crate::{
         ic::IcOpsError,
         prelude::*,
         runtime::metrics::{
-            inter_canister_call::InterCanisterCallMetrics,
-            platform_call::{
-                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
-                PlatformCallMetricSurface, PlatformCallMetrics,
-            },
+            inter_canister_call::InterCanisterCallMetrics, platform_call::PlatformCallMetrics,
         },
     },
 };

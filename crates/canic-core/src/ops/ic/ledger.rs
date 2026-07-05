@@ -7,15 +7,12 @@
 use crate::{
     InternalError,
     cdk::spec::standards::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
-    infra::{InfraError, ic::ledger::LedgerInfra},
-    ops::{
-        ic::IcOpsError,
-        prelude::*,
-        runtime::metrics::platform_call::{
-            PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
-            PlatformCallMetricSurface, PlatformCallMetrics,
-        },
+    domain::metrics::{
+        PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+        PlatformCallMetricSurface,
     },
+    infra::{InfraError, ic::ledger::LedgerInfra},
+    ops::{ic::IcOpsError, prelude::*, runtime::metrics::platform_call::PlatformCallMetrics},
 };
 use thiserror::Error as ThisError;
 
