@@ -6,8 +6,8 @@
 
 use super::recent_failure::{RecentFailureInput, RecentFailureOps};
 use crate::{
-    cdk::utils::time::now_nanos,
-    dto::{runtime::FailureSeverity, state::BootstrapStatusResponse},
+    cdk::utils::time::now_nanos, domain::runtime::FailureSeverity,
+    dto::state::BootstrapStatusResponse,
 };
 use std::cell::RefCell;
 
@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(failures[0].code, "bootstrap_failed");
         assert_eq!(
             failures[0].severity,
-            crate::dto::runtime::FailureSeverity::Error
+            crate::domain::runtime::FailureSeverity::Error
         );
         assert_eq!(
             failures[0].summary,

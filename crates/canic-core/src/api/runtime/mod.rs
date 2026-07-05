@@ -2,16 +2,18 @@ pub mod install;
 
 use crate::{
     cdk::types::Principal,
+    domain::runtime::{
+        FailureSeverity, RuntimeCheckStatus, RuntimeDiagnosticSeverity, RuntimeFieldVisibility,
+        RuntimeStateDomainStatus,
+    },
     dto::{
         error::Error,
         runtime::{
             CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanicTimerStatus,
-            FailureSeverity, RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus,
-            RuntimeAuthStatusSummary, RuntimeBlobStorageStatusSummary, RuntimeBuildInfo,
-            RuntimeCheck, RuntimeCheckStatus, RuntimeDiagnostic, RuntimeDiagnosticSeverity,
-            RuntimeFeatureStatus, RuntimeFieldVisibility, RuntimeStateDomainStatus,
-            RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeStatus, RuntimeTopologyStatus,
-            RuntimeVisibilityEntry, TimerStatus,
+            RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus, RuntimeAuthStatusSummary,
+            RuntimeBlobStorageStatusSummary, RuntimeBuildInfo, RuntimeCheck, RuntimeDiagnostic,
+            RuntimeFeatureStatus, RuntimeStateDomainSummary, RuntimeStateSummary, RuntimeStatus,
+            RuntimeTopologyStatus, RuntimeVisibilityEntry, TimerStatus,
         },
     },
     ops::{

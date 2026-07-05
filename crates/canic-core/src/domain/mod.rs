@@ -10,6 +10,7 @@ pub mod icrc;
 pub mod metrics;
 pub mod policy;
 pub mod pool;
+pub mod runtime;
 pub mod subnet;
 pub mod value;
 
