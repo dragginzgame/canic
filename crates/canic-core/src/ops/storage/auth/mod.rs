@@ -12,7 +12,7 @@ pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalState,
         RootIssuerRenewalTemplate,
     },
@@ -376,7 +376,7 @@ const fn delegated_session_bootstrap_binding_view_to_record(
 mod tests {
     use super::*;
     use crate::{
-        domain::policy::auth::{
+        domain::policy::pure::auth::{
             RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
             RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
             RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,

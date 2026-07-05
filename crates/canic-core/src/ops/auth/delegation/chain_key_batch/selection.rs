@@ -10,7 +10,7 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    domain::policy::auth::{RootIssuerRenewalState, RootIssuerRenewalTemplate},
+    domain::policy::pure::auth::{RootIssuerRenewalState, RootIssuerRenewalTemplate},
     ops::storage::auth::{AuthStateOps, ChainKeyRootDelegationBatchStatus},
 };
 

@@ -6,11 +6,11 @@
 
 use crate::{
     cdk::types::Principal,
+    domain::policy::pure::placement::sharding::ShardPlacement,
     ops::{
         placement::sharding::mapper::ShardPlacementPolicyInputMapper,
         storage::{children::CanisterChildrenOps, placement::sharding::ShardingRegistryOps},
     },
-    view::placement::sharding::ShardPlacement,
     workflow::placement::sharding::ShardingWorkflow,
 };
 use std::collections::BTreeSet;

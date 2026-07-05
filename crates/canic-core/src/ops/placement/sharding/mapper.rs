@@ -6,9 +6,11 @@
 
 use crate::{
     cdk::types::Principal,
+    domain::policy::pure::placement::sharding::{
+        ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState,
+    },
     dto::placement::sharding::{ShardEntry, ShardingPlanStateResponse},
     storage::stable::sharding::{ShardEntryRecord, ShardKey},
-    view::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState},
 };
 
 ///

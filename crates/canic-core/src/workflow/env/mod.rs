@@ -8,7 +8,7 @@ pub mod query;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    domain::policy::env::{EnvInput, EnvPolicyError, validate_or_default},
+    domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvBootstrapArgs,
     ops::{ic::network::NetworkOps, runtime::env::EnvOps},
     workflow::prelude::*,

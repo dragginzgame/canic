@@ -6,8 +6,8 @@
 
 use crate::{
     cdk::types::Principal,
+    domain::policy::pure::topology::{RegistryPolicyInput, TopologyPolicyInput},
     storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistryRecord},
-    view::topology::{RegistryPolicyInput, TopologyPolicyInput},
 };
 
 ///

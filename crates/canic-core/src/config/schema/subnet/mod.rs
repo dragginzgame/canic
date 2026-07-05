@@ -31,15 +31,15 @@ mod defaults {
     }
 
     pub const fn cycles_funding_max_per_request() -> Cycles {
-        Cycles::new(crate::domain::policy::cycles_funding::DEFAULT_MAX_PER_REQUEST)
+        Cycles::new(crate::domain::policy::pure::cycles_funding::DEFAULT_MAX_PER_REQUEST)
     }
 
     pub const fn cycles_funding_max_per_child() -> Cycles {
-        Cycles::new(crate::domain::policy::cycles_funding::DEFAULT_MAX_PER_CHILD)
+        Cycles::new(crate::domain::policy::pure::cycles_funding::DEFAULT_MAX_PER_CHILD)
     }
 
     pub const fn cycles_funding_cooldown_secs() -> u64 {
-        crate::domain::policy::cycles_funding::DEFAULT_COOLDOWN_SECS
+        crate::domain::policy::pure::cycles_funding::DEFAULT_COOLDOWN_SECS
     }
 }
 

@@ -1,17 +1,16 @@
 //! This module is PURE policy:
-//! - reads config
+//! - reads policy input
 //! - evaluates observed state
 //! - computes decisions
 //!
 //! No IC calls. No async. No side effects.
 
 use crate::{
-    InternalError, domain::policy::PolicyError, domain::value::BoundedString64, ids::CanisterRole,
+    InternalError, domain::policy::pure::PolicyError, domain::value::BoundedString64,
+    ids::CanisterRole,
 };
 use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
-
-pub use crate::view::placement::scaling::ScalingWorkerPlanEntry;
 
 ///
 /// ScalingPolicyError
@@ -33,8 +32,6 @@ impl From<ScalingPolicyError> for InternalError {
     }
 }
 
-// ScalingWorkerPlanEntry lives in view/placement/scaling.
-
 ///
 /// ScalingPlan
 ///
@@ -45,6 +42,16 @@ pub struct ScalingPlan {
     pub plan_reason: ScalingPlanReason,
     pub reason: String,
     pub worker_entry: Option<ScalingWorkerPlanEntry>,
+}
+
+///
+/// ScalingWorkerPlanEntry
+///
+
+#[derive(Clone, Debug)]
+pub struct ScalingWorkerPlanEntry {
+    pub pool: BoundedString64,
+    pub canister_role: CanisterRole,
 }
 
 ///

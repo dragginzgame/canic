@@ -5,10 +5,10 @@
 //! Boundary: storage ops facade over stable scaling registry records.
 
 use crate::{
+    domain::policy::pure::placement::scaling::ScalingWorkerPlanEntry,
     dto::placement::scaling::{ScalingRegistryEntry, ScalingRegistryResponse},
     ops::{placement::scaling::mapper::WorkerEntryRecordMapper, prelude::*},
     storage::stable::scaling::ScalingRegistry,
-    view::placement::scaling::ScalingWorkerPlanEntry,
 };
 
 ///

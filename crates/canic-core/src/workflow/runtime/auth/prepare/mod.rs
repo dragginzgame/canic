@@ -7,7 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         AuthPolicyError, DelegatedRoleGrantPolicy, validate_public_delegated_token_prepare,
     },
     dto::{

@@ -5,7 +5,7 @@
 
 use crate::{
     InternalError,
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
     },
     dto::auth::{

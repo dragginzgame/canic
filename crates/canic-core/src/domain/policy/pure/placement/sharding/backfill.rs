@@ -4,8 +4,10 @@
 //! shard placement decisions. It must never be persisted or exposed
 //! outside the policy layer.
 
-use crate::{domain::value::Principal, view::placement::sharding::ShardPlacement};
+use crate::domain::value::Principal;
 use std::collections::{BTreeMap, BTreeSet};
+
+use super::ShardPlacement;
 
 ///
 /// SlotBackfillPlan

@@ -9,7 +9,7 @@ use super::{
     ChainKeyRootDelegationBatchStatus,
 };
 use crate::{
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
         RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
         RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,

@@ -1,7 +1,8 @@
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 
 use crate::{
-    cdk::types::Cycles, domain::policy, ops::storage::cycles::CycleTrackerOps, test::seams::lock,
+    cdk::types::Cycles, domain::policy::pure as policy, ops::storage::cycles::CycleTrackerOps,
+    test::seams::lock,
 };
 
 #[test]

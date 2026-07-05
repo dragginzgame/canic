@@ -14,7 +14,7 @@ mod release;
 use crate::{
     InternalError, InternalErrorOrigin,
     config::schema::ShardPool,
-    domain::policy::placement::sharding::{CreateBlockedReason, ShardingPolicyError},
+    domain::policy::pure::placement::sharding::{CreateBlockedReason, ShardingPolicyError},
     ops::config::ConfigOps,
 };
 use thiserror::Error as ThisError;

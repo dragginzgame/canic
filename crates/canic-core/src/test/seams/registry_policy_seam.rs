@@ -9,11 +9,13 @@ use crate::{
         RandomnessConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardingConfig,
         StandardsCanisterConfig,
     },
-    domain::policy::topology::registry::{
+    domain::policy::pure::topology::registry::{
         RegistryCanisterKind, RegistryCanisterShape, RegistryPolicy, RegistryPolicyError,
         RegistryRegistrationObservation,
     },
-    domain::policy::topology::{RegistryPolicyInput, TopologyPolicyError, TopologyPolicyInput},
+    domain::policy::pure::topology::{
+        RegistryPolicyInput, TopologyPolicyError, TopologyPolicyInput,
+    },
     dto::error::{Error, ErrorCode},
     ids::CanisterRole,
     ops::storage::registry::subnet::SubnetRegistryOps,

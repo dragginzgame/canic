@@ -12,10 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.1` makes the pure-policy boundary explicit by moving core policy
+  modules under `domain::policy::pure` and keeping policy input/decision shapes
+  out of `view/`, without changing CLI, endpoint, JSON, Candid, stable-state,
+  deployment-truth, or evidence/report surfaces.
+
 - `0.82.0` starts the boundary-hardening line by formalizing controlled cleanup
-  slices, pinning legacy command hard cuts, and tightening diagnostic/report
-  and policy-purity ownership without changing CLI, endpoint, JSON, or stable
-  state surfaces.
+  slices and tightening diagnostic/report and policy-purity ownership without
+  changing CLI, endpoint, JSON, or stable state surfaces.
 
 ## [0.81.x] - 2026-07-04 - Runtime Introspection
 

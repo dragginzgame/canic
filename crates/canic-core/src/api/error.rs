@@ -76,7 +76,7 @@ mod tests {
     use crate::{
         access::AccessError,
         cdk::types::Principal,
-        domain::policy::topology::{TopologyPolicyError, registry::RegistryPolicyError},
+        domain::policy::pure::topology::{TopologyPolicyError, registry::RegistryPolicyError},
         ids::CanisterRole,
     };
 

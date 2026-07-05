@@ -4,7 +4,7 @@
 //! Does not own: storage mutation, scheduling decisions, or install outcome handling.
 
 use crate::{
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
         RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalState,
         RootIssuerRenewalTemplate,

@@ -2,7 +2,7 @@ use super::merkle::chain_key_batch_node_hash;
 use super::selection::chain_key_template_due;
 use super::*;
 use crate::{
-    domain::policy::auth::{
+    domain::policy::pure::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
         RootIssuerRenewalOutcome, RootIssuerRenewalTemplate,
     },

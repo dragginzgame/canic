@@ -8,7 +8,7 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::schema::ShardPoolPolicy,
-    domain::policy::placement::sharding::{
+    domain::policy::pure::placement::sharding::{
         ShardingPlanState, ShardingPolicy, ShardingState, compute_pool_metrics,
     },
     dto::placement::sharding::ShardingPlanStateResponse,

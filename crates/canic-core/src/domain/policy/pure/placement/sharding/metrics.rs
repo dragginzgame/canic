@@ -1,4 +1,6 @@
-use crate::{domain::value::Principal, view::placement::sharding::ShardPlacement};
+use crate::domain::value::Principal;
+
+use super::ShardPlacement;
 
 ///
 /// PoolMetrics

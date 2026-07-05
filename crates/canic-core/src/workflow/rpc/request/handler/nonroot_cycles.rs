@@ -11,7 +11,7 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    domain::policy::cycles_funding::FundingPolicyViolation,
+    domain::policy::pure::cycles_funding::FundingPolicyViolation,
     dto::rpc::{CyclesRequest, CyclesResponse},
     ids::CanisterRole,
     log,

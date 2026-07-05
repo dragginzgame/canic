@@ -172,7 +172,7 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        domain::policy::auth::{
+        domain::policy::pure::auth::{
             RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
             RootIssuerRenewalTemplate,
         },

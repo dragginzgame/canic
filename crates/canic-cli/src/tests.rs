@@ -209,7 +209,6 @@ fn info_help_uses_deployment_target_wording() {
     assert!(text.contains("Query Canic runtime telemetry"));
     assert!(text.contains("List callable Candid endpoints"));
     assert!(text.contains("Print sourceable canister ID exports"));
-    assert!(!text.contains("canic info medic"));
     assert!(!text.contains("deployed-fleet"));
     assert!(!text.contains("deployed fleet"));
 }
@@ -1094,70 +1093,12 @@ fn command_local_global_options_are_hard_rejected() {
     );
     std::assert_matches!(
         run([
-            OsString::from("info"),
-            OsString::from("medic"),
-            OsString::from("test"),
+            OsString::from("status"),
             OsString::from("--icp"),
             OsString::from("icp")
         ]),
         Err(CliError::Usage(_))
     );
-}
-
-#[test]
-fn rejected_medic_command_forms_exit_as_usage_errors() {
-    for raw_args in [
-        &["medic", "demo"][..],
-        &["medic", "--blob-storage", "backend"],
-        &[
-            "medic",
-            "project",
-            "--auth-renewal",
-            "rrkah-fqaaa-aaaaa-aaaaq-cai",
-        ],
-        &["info", "medic", "demo"],
-    ] {
-        let err =
-            run(raw_args.iter().map(OsString::from)).expect_err("rejected medic form should fail");
-
-        assert_eq!(
-            cli_error_exit_code(&err),
-            2,
-            "wrong exit code for {raw_args:?}: {err}"
-        );
-        assert!(!render_cli_error(&err).is_empty());
-    }
-}
-
-#[test]
-fn rejected_legacy_operator_surfaces_exit_as_usage_errors() {
-    for raw_args in [
-        &["info", "medic", "demo"][..],
-        &["state"],
-        &["state", "audit", "root"],
-        &["state", "manifest", "root"],
-        &["state", "migrate"],
-        &["state", "repair"],
-        &["state", "explore"],
-        &["state", "dump"],
-        &["state", "audit", "--format", "json"],
-        &["state", "manifest", "--format", "json"],
-        &["inspect", "demo-local"],
-        &["inspect", "deployment", "demo-local"],
-        &["inspect", "deployment", "demo-local", "--all"],
-        &["topology", "demo-local"],
-        &["runtime", "status", "demo-local"],
-    ] {
-        let err = run(raw_args.iter().map(OsString::from))
-            .expect_err("legacy operator surface should fail");
-
-        assert_eq!(
-            cli_error_exit_code(&err),
-            2,
-            "wrong exit code for {raw_args:?}: {err}"
-        );
-        assert!(!render_cli_error(&err).is_empty());
-    }
 }
 
 // Assert that a CLI argv slice returns successfully.

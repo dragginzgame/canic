@@ -9,13 +9,13 @@ pub mod mapper;
 use crate::{
     InternalError,
     cdk::api::canister_self,
+    domain::policy::pure::env::ValidatedEnv,
     dto::env::EnvSnapshotResponse,
     ids::SubnetRole,
     memory::runtime::is_memory_bootstrap_ready,
     ops::runtime::env::mapper::EnvRecordMapper,
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvRecord},
-    view::env::ValidatedEnv,
 };
 use thiserror::Error as ThisError;
 

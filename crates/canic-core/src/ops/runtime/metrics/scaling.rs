@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError, InternalErrorClass, InternalErrorOrigin,
-    domain::policy::placement::scaling::ScalingPlanReason,
+    domain::policy::pure::placement::scaling::ScalingPlanReason,
 };
 use std::{cell::RefCell, collections::HashMap};
 

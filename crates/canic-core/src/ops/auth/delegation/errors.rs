@@ -6,7 +6,9 @@
 use super::super::delegated::{
     active_proof::InstallActiveDelegationProofError, delegation_cert::PrepareDelegationCertError,
 };
-use crate::{InternalError, domain::policy::auth::AuthPolicyError, ops::auth::AuthValidationError};
+use crate::{
+    InternalError, domain::policy::pure::auth::AuthPolicyError, ops::auth::AuthValidationError,
+};
 
 pub(super) fn map_prepare_delegation_cert_error(err: PrepareDelegationCertError) -> InternalError {
     AuthValidationError::Auth(err.to_string()).into()

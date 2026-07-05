@@ -8,7 +8,7 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     config::schema::{ShardPool, ShardPoolPolicy},
-    domain::policy::placement::sharding::HrwSelector,
+    domain::policy::pure::placement::sharding::HrwSelector,
     ids::CanisterRole,
     log::Topic,
     ops::{

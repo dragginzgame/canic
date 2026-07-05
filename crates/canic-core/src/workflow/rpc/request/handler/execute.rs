@@ -10,7 +10,7 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::{Principal, TC},
-    domain::policy::topology::TopologyPolicyError,
+    domain::policy::pure::topology::TopologyPolicyError,
     dto::rpc::{
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
         RecycleCanisterRequest, RecycleCanisterResponse, Response, UpgradeCanisterRequest,
