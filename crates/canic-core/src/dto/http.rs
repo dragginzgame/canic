@@ -44,6 +44,10 @@ mod tests {
     use candid::{CandidType, Decode, Encode};
     use serde::Deserialize;
 
+    #[expect(
+        clippy::upper_case_acronyms,
+        reason = "legacy HTTP method variants model the previous Candid enum contract"
+    )]
     #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
     enum LegacyHttpMethod {
         #[serde(rename = "get")]
