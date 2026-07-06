@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.20` finishes the host `response_candid` parser hard cut by requiring
+  structured JSON for ICP CLI cycle-balance and bootstrap-readiness fallback
+  responses while keeping local typed-byte decoding unchanged.
+
 - `0.82.19` hard-cuts more `response_candid` compatibility parsing by
   requiring structured JSON for CLI metrics/cycles report pages and host
   `canic_metadata` version discovery.
