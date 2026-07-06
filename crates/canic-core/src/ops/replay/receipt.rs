@@ -5,14 +5,12 @@
 //! Boundary: workflow and replay guards call this API for receipt lifecycle.
 
 use crate::{
-    ops::{
-        replay::model::{
-            CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
-            REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayReceipt,
-            ReplayReceiptStatus, ReplayTerminalErrorCode, bounded_terminal_error_bytes,
-        },
-        storage::replay::ReplayReceiptOps,
+    model::replay::{
+        CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
+        REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayReceipt,
+        ReplayReceiptStatus, ReplayTerminalErrorCode, bounded_terminal_error_bytes,
     },
+    ops::storage::replay::ReplayReceiptOps,
     storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptSlotKey},
 };
 
@@ -622,7 +620,7 @@ mod tests {
         commit_terminal_failure(
             &token,
             ReplayTerminalErrorCode::ExecutionFailed,
-            &vec![7; super::super::model::MAX_REPLAY_TERMINAL_ERROR_BYTES + 1],
+            &vec![7; crate::model::replay::MAX_REPLAY_TERMINAL_ERROR_BYTES + 1],
             300,
         );
 
@@ -639,7 +637,7 @@ mod tests {
         assert_eq!(error_code, ReplayTerminalErrorCode::ExecutionFailed);
         assert_eq!(
             error_bytes.len(),
-            super::super::model::MAX_REPLAY_TERMINAL_ERROR_BYTES
+            crate::model::replay::MAX_REPLAY_TERMINAL_ERROR_BYTES
         );
         assert!(error_bytes_truncated);
     }

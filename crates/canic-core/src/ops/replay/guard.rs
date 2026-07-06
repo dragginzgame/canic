@@ -6,8 +6,8 @@
 
 use crate::{
     cdk::types::Principal,
+    model::replay::{CommandKind, OperationId, ReplayActor},
     ops::replay::{
-        model::{CommandKind, OperationId, ReplayActor},
         receipt::{
             ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
             ReplayReceiptToken, prepare_replay_receipt,
@@ -241,10 +241,8 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        ops::{
-            replay::model::{REPLAY_RECEIPT_SCHEMA_VERSION, ReplayReceiptStatus},
-            storage::replay::ReplayReceiptOps,
-        },
+        model::replay::{REPLAY_RECEIPT_SCHEMA_VERSION, ReplayReceiptStatus},
+        ops::storage::replay::ReplayReceiptOps,
         storage::stable::replay::ReplayReceiptRecord,
     };
 
@@ -276,7 +274,7 @@ mod tests {
                 operation_id: input.operation_id.into_bytes(),
                 actor,
                 payload_hash_schema_version:
-                    crate::ops::replay::model::REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
+                    crate::model::replay::REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
                 payload_hash: input.payload_hash,
                 status,
                 created_at_ns: secs_to_ns(900),
@@ -313,7 +311,7 @@ mod tests {
                 operation_id: input.operation_id.into_bytes(),
                 actor,
                 payload_hash_schema_version:
-                    crate::ops::replay::model::REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
+                    crate::model::replay::REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
                 payload_hash: input.payload_hash,
                 status: ReplayReceiptStatus::Committed,
                 created_at_ns: secs_to_ns(900),

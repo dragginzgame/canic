@@ -18,14 +18,12 @@ use crate::{
     },
     log,
     log::Topic,
+    model::replay::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
     ops::{
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::IcOps,
-        replay::{
-            guard::ReplayPending,
-            model::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
-        },
+        replay::guard::ReplayPending,
         storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,

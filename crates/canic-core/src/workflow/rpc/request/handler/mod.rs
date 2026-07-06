@@ -152,7 +152,7 @@ impl RootResponseWorkflow {
         if let Err(err) = Self::commit_replay(&prepared.pending, &response) {
             Self::mark_replay_recovery_required(
                 &prepared.pending,
-                crate::ops::replay::model::RecoveryReason::ResponseCommitFailed,
+                crate::model::replay::RecoveryReason::ResponseCommitFailed,
             );
             log!(
                 Topic::Rpc,
@@ -281,7 +281,7 @@ impl RootResponseWorkflow {
 
     fn mark_replay_recovery_required(
         pending: &ReplayPending,
-        reason: crate::ops::replay::model::RecoveryReason,
+        reason: crate::model::replay::RecoveryReason,
     ) {
         replay::mark_recovery_required(pending, reason);
     }

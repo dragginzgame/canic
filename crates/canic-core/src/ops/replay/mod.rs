@@ -5,7 +5,6 @@
 //! Boundary: workflow calls replay ops after deciding which command is protected.
 
 pub mod guard;
-pub mod model;
 pub mod receipt;
 pub mod slot;
 pub mod ttl;
@@ -18,9 +17,9 @@ use crate::{
         pool::PoolAdminResponse,
         rpc::{CyclesResponse, Response},
     },
+    model::replay::{ExternalEffectDescriptor, RecoveryReason, ReplayReceipt},
     ops::replay::{
         guard::ReplayPending,
-        model::{ExternalEffectDescriptor, RecoveryReason, ReplayReceipt},
         receipt::{abort_reserved_receipt, mark_external_effect_in_flight, mark_recovery_required},
         slot as replay_slot,
     },
@@ -402,10 +401,10 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
+        model::replay::{CommandKind, OperationId, ReplayActor},
         ops::{
             replay::{
                 guard::secs_to_ns,
-                model::{CommandKind, OperationId, ReplayActor},
                 receipt::{
                     ReplayReceiptDecision, ReplayReceiptReserveInput, prepare_replay_receipt,
                 },

@@ -11,14 +11,14 @@ use crate::{
         error::Error,
         icp_refill::{IcpRefillRequest, IcpRefillResponse},
     },
+    model::replay::{
+        CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
+        ReplayPayloadHasher, ReplayReceipt,
+    },
     ops::{
         ic::IcOps,
         replay::{
             self as replay_ops, ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
-            model::{
-                CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
-                ReplayPayloadHasher, ReplayReceipt,
-            },
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
                 ReplayReceiptToken, abort_uncommitted_receipt, commit_receipt_response,

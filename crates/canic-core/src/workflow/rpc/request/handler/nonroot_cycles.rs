@@ -16,6 +16,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
+    model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
     ops::{
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
@@ -23,7 +24,6 @@ use crate::{
         replay::{
             self as replay_ops, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
-            model::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
         },
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
@@ -555,8 +555,8 @@ pub(super) fn request_cycles_cost_guard_request(
     }
 }
 
-fn root_request_cycles_command_kind()
--> Result<CommandKind, crate::ops::replay::model::CommandKindError> {
+fn root_request_cycles_command_kind() -> Result<CommandKind, crate::model::replay::CommandKindError>
+{
     CommandKind::new(ROOT_REQUEST_CYCLES_COMMAND_KIND)
 }
 

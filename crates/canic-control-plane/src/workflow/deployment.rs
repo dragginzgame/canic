@@ -3,6 +3,7 @@ use canic_core::{
     control_plane_support::{
         cdk::types::{Principal, TC},
         error::{InternalError, InternalErrorOrigin},
+        model::replay::CommandKind,
         ops::{
             config::ConfigOps,
             cost_guard::{
@@ -10,7 +11,6 @@ use canic_core::{
                 CostGuardReservePublicKind,
             },
             ic::{IcOps, mgmt::MgmtOps},
-            replay::model::CommandKind,
         },
         replay_policy::CostClass,
         workflow::canister_lifecycle::{

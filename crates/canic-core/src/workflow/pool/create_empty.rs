@@ -12,16 +12,16 @@ use crate::{
         pool::{CreateEmptyPoolRequest, PoolAdminResponse},
         rpc::RootRequestMetadata,
     },
+    model::replay::{
+        CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
+        ReplayPayloadHasher, ReplayReceipt,
+    },
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
         replay::{
             self as replay_ops, POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
             guard::secs_to_ns,
-            model::{
-                CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
-                ReplayPayloadHasher, ReplayReceipt,
-            },
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
                 ReplayReceiptToken, abort_reserved_receipt, commit_receipt_response,
@@ -368,7 +368,7 @@ mod tests {
     use super::*;
     use crate::{
         dto::error::ErrorCode,
-        ops::replay::model::{
+        model::replay::{
             REPLAY_PAYLOAD_HASH_SCHEMA_VERSION, REPLAY_RECEIPT_SCHEMA_VERSION, ReplayReceipt,
             ReplayReceiptStatus,
         },

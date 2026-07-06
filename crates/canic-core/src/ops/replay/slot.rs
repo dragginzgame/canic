@@ -4,15 +4,17 @@
 //! Does not own: replay policy, response encoding, or command execution.
 //! Boundary: `ops::replay` uses this while root replay callers migrate.
 
-use crate::cdk::types::Principal;
-use crate::ops::{
-    replay::{
-        ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
-        guard::ReplayPending,
-        model::ReplayActor,
-        receipt::{commit_receipt_response, reserve_receipt_token},
+use crate::{
+    cdk::types::Principal,
+    model::replay::ReplayActor,
+    ops::{
+        replay::{
+            ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
+            guard::ReplayPending,
+            receipt::{commit_receipt_response, reserve_receipt_token},
+        },
+        storage::replay::ReplayReceiptOps,
     },
-    storage::replay::ReplayReceiptOps,
 };
 
 /// reserve_root_slot

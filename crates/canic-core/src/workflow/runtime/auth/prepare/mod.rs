@@ -19,6 +19,9 @@ use crate::{
         error::{Error, ErrorCode},
         rpc::RootRequestMetadata,
     },
+    model::replay::{
+        CommandKind, OperationId, RecoveryReason, ReplayActor, ReplayPayloadHasher, ReplayReceipt,
+    },
     ops::{
         auth::{AuthOps, PrepareDelegatedTokenIssuerProofInput, PrepareRootRoleAttestationInput},
         config::ConfigOps,
@@ -30,10 +33,6 @@ use crate::{
             self as replay_ops, DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             guard::secs_to_ns,
-            model::{
-                CommandKind, OperationId, RecoveryReason, ReplayActor, ReplayPayloadHasher,
-                ReplayReceipt,
-            },
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
                 abort_reserved_receipt, commit_receipt_response, mark_recovery_required,
