@@ -2220,9 +2220,9 @@ enum MedicCategory {
     Network,
     DeploymentState,
     Topology,
-    #[expect(dead_code, reason = "0.78 report schema reserves artifact checks")]
+    #[expect(dead_code, reason = "medic report schema reserves artifact checks")]
     Artifact,
-    #[expect(dead_code, reason = "0.78 report schema reserves feature checks")]
+    #[expect(dead_code, reason = "medic report schema reserves feature checks")]
     Feature,
     Auth,
     BlobStorage,
