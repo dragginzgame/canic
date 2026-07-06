@@ -10,20 +10,22 @@
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
+// CandidType supports explicit serde(rename) labels, but not rename_all. Keep
+// runtime introspection enum labels canonical and alias-free.
+
 ///
 /// FailureSeverity
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum FailureSeverity {
-    #[serde(alias = "Info")]
+    #[serde(rename = "info")]
     Info,
-    #[serde(alias = "Warning")]
+    #[serde(rename = "warning")]
     Warning,
-    #[serde(alias = "Error")]
+    #[serde(rename = "error")]
     Error,
-    #[serde(alias = "Critical")]
+    #[serde(rename = "critical")]
     Critical,
 }
 
@@ -32,17 +34,16 @@ pub enum FailureSeverity {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum RuntimeFieldVisibility {
-    #[serde(alias = "PublicSafe")]
+    #[serde(rename = "public_safe")]
     PublicSafe,
-    #[serde(alias = "OperatorOnly")]
+    #[serde(rename = "operator_only")]
     OperatorOnly,
-    #[serde(alias = "ControllerOnly")]
+    #[serde(rename = "controller_only")]
     ControllerOnly,
-    #[serde(alias = "FeatureGated")]
+    #[serde(rename = "feature_gated")]
     FeatureGated,
-    #[serde(alias = "Disabled")]
+    #[serde(rename = "disabled")]
     Disabled,
 }
 
@@ -51,15 +52,14 @@ pub enum RuntimeFieldVisibility {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum RuntimeCheckStatus {
-    #[serde(alias = "Pass")]
+    #[serde(rename = "pass")]
     Pass,
-    #[serde(alias = "Warn")]
+    #[serde(rename = "warn")]
     Warn,
-    #[serde(alias = "Fail")]
+    #[serde(rename = "fail")]
     Fail,
-    #[serde(alias = "NotEvaluated")]
+    #[serde(rename = "not_evaluated")]
     NotEvaluated,
 }
 
@@ -68,15 +68,14 @@ pub enum RuntimeCheckStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum RuntimeDiagnosticSeverity {
-    #[serde(alias = "Info")]
+    #[serde(rename = "info")]
     Info,
-    #[serde(alias = "Warning")]
+    #[serde(rename = "warning")]
     Warning,
-    #[serde(alias = "Blocked")]
+    #[serde(rename = "blocked")]
     Blocked,
-    #[serde(alias = "Unsupported")]
+    #[serde(rename = "unsupported")]
     Unsupported,
 }
 
@@ -85,15 +84,14 @@ pub enum RuntimeDiagnosticSeverity {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum RuntimeStateDomainStatus {
-    #[serde(alias = "Ok")]
+    #[serde(rename = "ok")]
     Ok,
-    #[serde(alias = "Warning")]
+    #[serde(rename = "warning")]
     Warning,
-    #[serde(alias = "Failing")]
+    #[serde(rename = "failing")]
     Failing,
-    #[serde(alias = "NotEvaluated")]
+    #[serde(rename = "not_evaluated")]
     NotEvaluated,
 }
 
@@ -102,15 +100,14 @@ pub enum RuntimeStateDomainStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum HealthStatus {
-    #[serde(alias = "Healthy")]
+    #[serde(rename = "healthy")]
     Healthy,
-    #[serde(alias = "Degraded")]
+    #[serde(rename = "degraded")]
     Degraded,
-    #[serde(alias = "Unhealthy")]
+    #[serde(rename = "unhealthy")]
     Unhealthy,
-    #[serde(alias = "Unknown")]
+    #[serde(rename = "unknown")]
     Unknown,
 }
 
@@ -119,15 +116,14 @@ pub enum HealthStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum ReadinessStatus {
-    #[serde(alias = "Ready")]
+    #[serde(rename = "ready")]
     Ready,
-    #[serde(alias = "Degraded")]
+    #[serde(rename = "degraded")]
     Degraded,
-    #[serde(alias = "NotReady")]
+    #[serde(rename = "not_ready")]
     NotReady,
-    #[serde(alias = "NotEvaluated")]
+    #[serde(rename = "not_evaluated")]
     NotEvaluated,
 }
 
@@ -136,15 +132,14 @@ pub enum ReadinessStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum RuntimeStatus {
-    #[serde(alias = "Ok")]
+    #[serde(rename = "ok")]
     Ok,
-    #[serde(alias = "Degraded")]
+    #[serde(rename = "degraded")]
     Degraded,
-    #[serde(alias = "Failing")]
+    #[serde(rename = "failing")]
     Failing,
-    #[serde(alias = "Unknown")]
+    #[serde(rename = "unknown")]
     Unknown,
 }
 
@@ -153,19 +148,18 @@ pub enum RuntimeStatus {
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum TimerStatus {
-    #[serde(alias = "Healthy")]
+    #[serde(rename = "healthy")]
     Healthy,
-    #[serde(alias = "Delayed")]
+    #[serde(rename = "delayed")]
     Delayed,
-    #[serde(alias = "Failing")]
+    #[serde(rename = "failing")]
     Failing,
-    #[serde(alias = "Disabled")]
+    #[serde(rename = "disabled")]
     Disabled,
-    #[serde(alias = "NotRegistered")]
+    #[serde(rename = "not_registered")]
     NotRegistered,
-    #[serde(alias = "Unknown")]
+    #[serde(rename = "unknown")]
     Unknown,
 }
 

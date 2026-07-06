@@ -1235,6 +1235,19 @@ fn runtime_introspection_dto_candid_shapes_are_named() {
             && status_env.contains("type RuntimeFieldVisibility = variant"),
         "runtime introspection DTO Candid changed:\n{status_env}"
     );
+    for label in [
+        "controller_only",
+        "feature_gated",
+        "not_evaluated",
+        "not_registered",
+        "operator_only",
+        "public_safe",
+    ] {
+        assert!(
+            status_env.contains(label),
+            "runtime introspection Candid labels must be canonical snake_case; missing {label}:\n{status_env}"
+        );
+    }
 
     let health_env = candid_type_env::<CanicHealthStatus>();
     assert!(
@@ -1243,6 +1256,12 @@ fn runtime_introspection_dto_candid_shapes_are_named() {
             && health_env.contains("checks : vec RuntimeCheck"),
         "health DTO Candid changed:\n{health_env}"
     );
+    for label in ["degraded", "healthy", "unhealthy", "unknown"] {
+        assert!(
+            health_env.contains(label),
+            "health Candid labels must be canonical snake_case; missing {label}:\n{health_env}"
+        );
+    }
 
     let readiness_env = candid_type_env::<CanicReadinessStatus>();
     assert!(

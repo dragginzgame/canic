@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.14`. Earlier in the
+- The current package/release-surface version is `0.82.15`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -228,6 +228,36 @@ before this compaction is archived at
   endpoint surfaces, CLI behavior, Candid, JSON, deployment truth, and
   evidence/report schemas are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-control-plane-prelude-support-boundary-report.md`.
+
+- The current 0.82 follow-up slice adds maintained boundary guard tests for
+  pure policy and passive DTO ownership. Pure policy modules are now checked
+  against forbidden side-effect imports, async/timer/IC call fragments, and
+  wire serialization fragments. Non-error DTO trees in `canic-core` and
+  `canic-control-plane` are checked against internal behavior-layer imports
+  and side-effect fragments, with `dto::error` documented as the public error
+  boundary-adapter exception. Runtime behavior, endpoint surfaces, CLI
+  behavior, Candid, JSON, deployment truth, and evidence/report schemas are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-policy-dto-boundary-guard-report.md`.
+
+- The same 0.82 follow-up slice adds a maintained lifecycle boundary guard.
+  Before-bootstrap lifecycle adapters in `canic-core` and
+  `canic-control-plane` are checked to remain synchronous and timer-free, while
+  root and non-root async bootstrap schedule helpers are checked to keep their
+  explicit zero-delay lifecycle timer boundary. Runtime behavior, lifecycle
+  macro behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment
+  truth, and evidence/report schemas are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-lifecycle-boundary-guard-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts runtime introspection enum labels to
+  canonical snake_case Candid/Serde labels. Candid supports explicit
+  per-variant `serde(rename)` labels but not `rename_all`, so the previous
+  `rename_all` plus PascalCase `serde(alias)` workaround has been removed.
+  Public Rust re-export paths, endpoint routes, endpoint guards, runtime status
+  builder behavior, deployment truth, evidence/report schemas, and stable-state
+  layout are unchanged; the serialized runtime enum label surface is
+  intentionally changed to snake_case only. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-runtime-enum-label-hard-cut-report.md`.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.16` adds maintained policy, DTO, and lifecycle boundary guards and
+  hard-cuts runtime introspection enum labels to canonical snake_case
+  Candid/Serde labels, removing PascalCase compatibility aliases.
+
 - `0.82.15` continues no-behavior-change support-boundary hardening by
   narrowing hidden control-plane support facades while preserving pool,
   wasm-store GC, bootstrap, and all public serialized surfaces.

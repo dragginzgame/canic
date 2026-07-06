@@ -215,11 +215,12 @@ pub struct RuntimeVisibilityEntry {
 mod tests {
     use super::*;
     use candid::{Decode, Encode};
+    use serde::Serialize;
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 
     #[test]
-    fn runtime_enums_roundtrip_candid_with_runtime_variant_labels() {
+    fn runtime_enums_roundtrip_candid_with_canonical_variant_labels() {
         assert_enum_candid_contract(HealthStatus::Unknown);
         assert_enum_candid_contract(ReadinessStatus::NotEvaluated);
         assert_enum_candid_contract(RuntimeStatus::Failing);
@@ -231,6 +232,19 @@ mod tests {
         assert_enum_candid_contract(RuntimeStateDomainStatus::NotEvaluated);
     }
 
+    #[test]
+    fn runtime_enums_serialize_canonical_snake_case_labels() {
+        assert_enum_serde_contract(HealthStatus::Unknown, "unknown");
+        assert_enum_serde_contract(ReadinessStatus::NotEvaluated, "not_evaluated");
+        assert_enum_serde_contract(RuntimeStatus::Failing, "failing");
+        assert_enum_serde_contract(TimerStatus::NotRegistered, "not_registered");
+        assert_enum_serde_contract(FailureSeverity::Critical, "critical");
+        assert_enum_serde_contract(RuntimeCheckStatus::NotEvaluated, "not_evaluated");
+        assert_enum_serde_contract(RuntimeDiagnosticSeverity::Unsupported, "unsupported");
+        assert_enum_serde_contract(RuntimeFieldVisibility::OperatorOnly, "operator_only");
+        assert_enum_serde_contract(RuntimeStateDomainStatus::NotEvaluated, "not_evaluated");
+    }
+
     fn assert_enum_candid_contract<T>(value: T)
     where
         T: CandidType + Clone + Debug + DeserializeOwned + Eq,
@@ -238,6 +252,21 @@ mod tests {
         let bytes = Encode!(&value).expect("encode runtime enum");
         let decoded = Decode!(&bytes, T).expect("decode runtime enum");
 
+        assert_eq!(decoded, value);
+    }
+
+    fn assert_enum_serde_contract<T>(value: T, label: &str)
+    where
+        T: Clone + Debug + DeserializeOwned + Eq + Serialize,
+    {
+        let encoded = serde_cbor::to_vec(&value).expect("encode runtime enum label");
+        let serialized_label: String =
+            serde_cbor::from_slice(&encoded).expect("decode runtime enum label");
+        assert_eq!(serialized_label, label);
+
+        let label_bytes = serde_cbor::to_vec(&label).expect("encode canonical runtime enum label");
+        let decoded: T =
+            serde_cbor::from_slice(&label_bytes).expect("decode canonical runtime enum label");
         assert_eq!(decoded, value);
     }
 }
