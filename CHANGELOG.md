@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.17` hard-cuts Candid/Serde and inspect compatibility fallbacks by
+  guarding Candid DTO serde attributes, removing HTTP method uppercase aliases,
+  requiring typed inspect response bytes, and dropping the legacy root replay
+  test layout.
+
 - `0.82.16` adds maintained policy, DTO, and lifecycle boundary guards and
   hard-cuts runtime introspection enum labels to canonical snake_case
   Candid/Serde labels, removing PascalCase compatibility aliases.
