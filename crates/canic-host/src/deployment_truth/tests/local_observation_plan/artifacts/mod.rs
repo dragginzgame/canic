@@ -100,8 +100,8 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
 }
 
 #[test]
-fn local_artifact_manifest_reports_network_artifact_fallback() {
-    let temp = TempWorkspace::new("canic-host-local-artifact-manifest-fallback");
+fn local_artifact_manifest_requires_selected_network_artifact_root() {
+    let temp = TempWorkspace::new("canic-host-local-artifact-manifest-network-root");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
     let config_dir = workspace_root.join("fleets");
@@ -116,11 +116,20 @@ fn local_artifact_manifest_reports_network_artifact_fallback() {
         config_path: None,
     });
 
+    assert_eq!(manifest.artifact_root, None);
+    assert!(manifest.role_artifacts.is_empty());
     assert!(
         manifest
             .unresolved_artifacts
             .iter()
-            .any(|gap| gap.key == "local_artifacts.network_fallback")
+            .any(|gap| gap.key == "local_artifacts.root"
+                && gap.description.contains(".icp/ic/canisters"))
+    );
+    assert!(
+        manifest
+            .unresolved_artifacts
+            .iter()
+            .all(|gap| gap.key != "local_artifacts.network_fallback")
     );
 }
 

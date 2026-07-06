@@ -6,6 +6,8 @@ use crate::release_set::{
 };
 use std::path::Path;
 
+const UNKNOWN_FLEET_NAME: &str = "unknown";
+
 pub(super) struct LocalConfigObservation {
     pub(super) fleet_name: String,
     pub(super) roles: Vec<String>,
@@ -14,7 +16,6 @@ pub(super) struct LocalConfigObservation {
 
 pub(super) fn observe_local_config_facts(
     config: &Path,
-    fallback_fleet_name: &str,
     unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
 ) -> LocalConfigObservation {
     let fleet_name = configured_fleet_name(config).unwrap_or_else(|err| {
@@ -25,7 +26,7 @@ pub(super) fn observe_local_config_facts(
                 config.display()
             ),
         ));
-        fallback_fleet_name.to_string()
+        UNKNOWN_FLEET_NAME.to_string()
     });
     let roles = configured_deployable_roles(config).map_or_else(
         |err| {

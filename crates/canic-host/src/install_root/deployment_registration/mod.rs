@@ -51,9 +51,8 @@ pub struct VerifyDeploymentRootOptions {
 
 /// Register minimal local deployment-target state for an existing root canister.
 ///
-/// Registration is an explicit operator recovery path after the 0.46 hard cut.
-/// It does not migrate legacy fleet state, verify live inventory, copy receipts,
-/// or claim artifact/controller truth.
+/// Registration is an explicit operator acknowledgement path. It does not
+/// verify live inventory, copy receipts, or claim artifact/controller truth.
 pub fn register_deployment_state(
     options: RegisterDeploymentStateOptions,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {

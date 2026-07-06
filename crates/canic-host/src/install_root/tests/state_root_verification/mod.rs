@@ -1,7 +1,7 @@
 use super::*;
 
 mod install_truth;
-mod legacy;
 mod state;
+mod targets;
 mod unverified;
 mod verify;

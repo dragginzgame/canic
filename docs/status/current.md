@@ -373,6 +373,42 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-inspect-response-candid-metadata-hard-cut-report.md`.
   The root and detailed `0.82.21` changelog entries are prepared.
 
+- The current 0.82 follow-up slice hard-cuts deployment-truth artifact
+  observation across network roots. Non-local deployment-truth/deploy-plan
+  artifact observation now requires `.icp/<network>/canisters` and no longer
+  falls back to `.icp/local/canisters`; missing selected-network artifacts are
+  reported through the existing `local_artifacts.root` gap. Deployment truth,
+  deploy plan, evidence, Candid, and stable-state schemas are unchanged. The
+  docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-artifact-root-network-fallback-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts deployment-truth local config
+  fleet-name fallback. When local config cannot resolve a fleet name,
+  deployment-truth root observations now report the existing
+  `local_config.fleet_name` gap and use `fleet_template = "unknown"` instead
+  of copying the deployment target name into fleet-template identity. Schemas,
+  command surfaces, evidence, Candid, and stable-state layout are unchanged.
+  The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-local-config-fleet-name-fallback-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts the deployment catalog's active
+  legacy fleet-state warning. Catalog reports now read only current
+  `.canic/<network>/deployments` state and no longer probe removed
+  `.canic/<network>/fleets` paths to emit `catalog.legacy_fleet_state_ignored`.
+  Current catalog schema, command surfaces, deployment truth, evidence, Candid,
+  and stable-state layout are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-deployment-catalog-legacy-fleet-warning-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts install-root legacy fleet-state
+  lookup. `read_deployment_install_state` now reads only current
+  `.canic/<network>/deployments/<deployment>.json` state and returns no state
+  when that file is absent; it no longer probes removed
+  `.canic/<network>/fleets/<name>.json` paths. Deployment registration help now
+  describes the current deployment-target boundary without 0.46 legacy recovery
+  language. Schemas and command surfaces are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-install-root-legacy-fleet-state-hard-cut-report.md`.
+  The root and detailed `0.82.22` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

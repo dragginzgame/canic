@@ -38,11 +38,7 @@ pub fn collect_local_deployment_inventory(
 ) -> Result<DeploymentInventoryV1, DeploymentTruthError> {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_observations = Vec::new();
-    let local_config_facts = observe_local_config_facts(
-        &config,
-        &request.deployment_name,
-        &mut unresolved_observations,
-    );
+    let local_config_facts = observe_local_config_facts(&config, &mut unresolved_observations);
 
     let install_state = read_named_deployment_install_state_from_root(
         &request.icp_root,

@@ -15,8 +15,6 @@ use thiserror::Error as ThisError;
 pub const DEPLOYMENT_CATALOG_REPORT_SCHEMA_ID: &str = "canic.deployment_catalog_report.v1";
 const NO_DEPLOYMENT_STATE_WARNING_CODE: &str = "catalog.no_deployment_state";
 const LOCAL_STATE_FINGERPRINT_FAILED_WARNING_CODE: &str = "catalog.local_state_fingerprint_failed";
-const LEGACY_FLEET_STATE_IGNORED_WARNING_CODE: &str = "catalog.legacy_fleet_state_ignored";
-const LEGACY_FLEET_STATE_IGNORED_WARNING_MESSAGE: &str = "legacy fleet-named install state was ignored; catalog entries come only from current deployment-target state";
 const MALFORMED_DEPLOYMENT_STATE_WARNING_CODE: &str = "catalog.malformed_deployment_state";
 
 ///
@@ -99,7 +97,6 @@ pub fn build_deployment_catalog_report(
             ),
             Some(path_subject(&deployments_dir, &request.icp_root)),
         ));
-        append_legacy_state_warning(&request.icp_root, &request.network, &mut warnings);
         return Ok(report(request, entries, warnings));
     }
 
@@ -129,7 +126,6 @@ pub fn build_deployment_catalog_report(
         }
     }
 
-    append_legacy_state_warning(&request.icp_root, &request.network, &mut warnings);
     entries.sort_by(|left, right| left.deployment.cmp(&right.deployment));
     Ok(report(request, entries, warnings))
 }
@@ -279,17 +275,6 @@ fn catalog_entry_from_path(
         local_state_ref,
         warnings,
     })
-}
-
-fn append_legacy_state_warning(root: &Path, network: &str, warnings: &mut Vec<EvidenceMessageV1>) {
-    let path = root.join(".canic").join(network).join("fleets");
-    if path.exists() {
-        warnings.push(catalog_warning(
-            LEGACY_FLEET_STATE_IGNORED_WARNING_CODE,
-            LEGACY_FLEET_STATE_IGNORED_WARNING_MESSAGE,
-            Some(path_subject(&path, root)),
-        ));
-    }
 }
 
 fn deployment_state_dir(root: &Path, network: &str) -> PathBuf {
