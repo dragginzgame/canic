@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.13` removes the internal replay-model compatibility shim by moving
+  replay ops and replay-protected workflows to the canonical model owner while
+  preserving replay behavior and stable receipt layout.
+
 - `0.82.12` continues lifecycle and storage metric boundary hardening by moving
   lifecycle and wasm-store metric dimension values into domain ownership while
   preserving existing runtime metrics and lifecycle facade import paths and

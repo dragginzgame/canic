@@ -8,11 +8,9 @@ use crate::{
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
     dto::error::ErrorCode,
     infra::ic::icp_refill::{NotifyTopUpError, TransferError},
+    model::replay::{ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus},
     ops::{
         cost_guard::CostGuardOps,
-        replay::model::{
-            ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus,
-        },
         storage::icp_refill::{IcpRefillRecordOps, IcpRefillStoreOps},
         storage::replay::ReplayReceiptOps,
     },

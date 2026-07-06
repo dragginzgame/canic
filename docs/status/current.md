@@ -173,6 +173,15 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-lifecycle-metric-domain-boundary-report.md`,
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-metric-domain-boundary-report.md`.
 
+- The current 0.82 follow-up slice removes the internal
+  `ops::replay::model` compatibility shim after moving replay ops and
+  replay-protected workflows to the canonical `model::replay` owner. Hidden
+  control-plane support now exposes `CommandKind` through a model-shaped support
+  namespace. Replay behavior, stable replay receipt layout, endpoint surfaces,
+  CLI behavior, Candid, JSON, deployment truth, and evidence/report schemas are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-replay-model-shim-removal-report.md`.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

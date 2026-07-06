@@ -16,13 +16,13 @@ use crate::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
     },
+    model::replay::CommandKind,
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{
             IcOps,
             mgmt::{CanisterInstallMode, MgmtOps},
         },
-        replay::model::CommandKind,
         runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
         runtime::metrics::canister_ops::CanisterOpsMetrics,
         runtime::metrics::provisioning::{

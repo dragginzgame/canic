@@ -8,7 +8,8 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     ids::{IntentId, IntentResourceKey},
-    ops::{replay::model::CommandKind, storage::intent::IntentStoreOps},
+    model::replay::CommandKind,
+    ops::storage::intent::IntentStoreOps,
     replay_policy::CostClass,
 };
 use sha2::{Digest, Sha256};

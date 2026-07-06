@@ -41,6 +41,12 @@ pub mod ids {
     pub use crate::ids::{BuildNetwork, CanisterRole};
 }
 
+pub mod model {
+    pub mod replay {
+        pub use crate::model::replay::CommandKind;
+    }
+}
+
 pub mod ops {
     pub mod config {
         pub use crate::ops::config::ConfigOps;
@@ -80,12 +86,6 @@ pub mod ops {
 
         pub mod ready {
             pub use crate::ops::runtime::ready::ReadyOps;
-        }
-    }
-
-    pub mod replay {
-        pub mod model {
-            pub use crate::ops::replay::model::CommandKind;
         }
     }
 

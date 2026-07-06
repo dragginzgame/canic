@@ -11,15 +11,14 @@ use crate::{
         },
     },
     ids::CanisterRole,
+    model::replay::{
+        CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
+        REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayReceiptStatus,
+    },
     ops::{
         cost_guard::CostGuardOps,
         replay::{
             guard::secs_to_ns,
-            model::{
-                CommandKind, ExternalEffectDescriptor, OperationId,
-                REPLAY_PAYLOAD_HASH_SCHEMA_VERSION, REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason,
-                ReplayActor, ReplayReceiptStatus,
-            },
             receipt::{mark_external_effect_in_flight, mark_recovery_required},
         },
         runtime::{
