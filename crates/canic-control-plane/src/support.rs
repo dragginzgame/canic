@@ -23,12 +23,10 @@ use crate::{
         WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse,
         WasmStoreOverviewResponse, WasmStorePublicationSlotResponse,
     },
-    ids::{CanisterRole, WasmStoreBinding},
+    ids::CanisterRole,
     ops::storage::state::subnet::SubnetStateOps,
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
-#[cfg(feature = "root-control-plane")]
-use canic_core::cdk::types::Principal;
 use canic_core::{control_plane_support::ops::ic::IcOps, dto::error::Error};
 
 /// Return the current replica time in whole seconds.
@@ -83,42 +81,6 @@ pub async fn publication_admin(
         .map_err(Error::from)
 }
 
-/// Publish the current release set into one subnet-local wasm store.
-#[cfg(feature = "root-control-plane")]
-pub async fn publish_current_release_set_to_store(store_pid: Principal) -> Result<(), Error> {
-    WasmStorePublicationWorkflow::publish_current_release_set_to_store(store_pid)
-        .await
-        .map_err(Error::from)
-}
-
-/// Publish the current release set into the current subnet's selected publication store.
-#[cfg(feature = "root-control-plane")]
-pub async fn publish_current_release_set_to_current_store() -> Result<(), Error> {
-    WasmStorePublicationWorkflow::publish_current_release_set_to_current_store()
-        .await
-        .map_err(Error::from)
-}
-
-/// Persist one explicit publication binding for the current subnet.
-#[cfg(feature = "root-control-plane")]
-pub fn set_current_publication_store_binding(binding: WasmStoreBinding) -> Result<(), Error> {
-    WasmStorePublicationWorkflow::set_current_publication_store_binding(binding)
-        .map_err(Error::from)
-}
-
-/// Clear the explicit publication binding for the current subnet.
-#[cfg(feature = "root-control-plane")]
-pub fn clear_current_publication_store_binding() -> Result<(), Error> {
-    WasmStorePublicationWorkflow::clear_current_publication_store_binding().map_err(Error::from)
-}
-
-/// Retire the current detached publication binding for the current subnet.
-#[cfg(feature = "root-control-plane")]
-#[must_use]
-pub fn retire_detached_publication_store_binding() -> Option<WasmStoreBinding> {
-    WasmStorePublicationWorkflow::retire_detached_publication_store_binding()
-}
-
 /// Return the current root-owned approved-release overview for every tracked runtime-managed wasm store.
 #[cfg(feature = "root-control-plane")]
 #[must_use]
@@ -167,51 +129,6 @@ pub fn publication_overview() -> WasmStoreOverviewResponse {
         publication,
         stores,
     }
-}
-
-/// Mark the current retired publication store as prepared for store-local GC execution.
-#[cfg(feature = "root-control-plane")]
-pub async fn prepare_retired_publication_store_for_gc() -> Result<Option<WasmStoreBinding>, Error> {
-    WasmStorePublicationWorkflow::prepare_retired_publication_store_for_gc()
-        .await
-        .map_err(Error::from)
-}
-
-/// Mark the current retired publication store as actively executing store-local GC.
-#[cfg(feature = "root-control-plane")]
-pub async fn begin_retired_publication_store_gc() -> Result<Option<WasmStoreBinding>, Error> {
-    WasmStorePublicationWorkflow::begin_retired_publication_store_gc()
-        .await
-        .map_err(Error::from)
-}
-
-/// Mark the current retired publication store as having completed its local GC pass.
-#[cfg(feature = "root-control-plane")]
-pub async fn complete_retired_publication_store_gc() -> Result<Option<WasmStoreBinding>, Error> {
-    WasmStorePublicationWorkflow::complete_retired_publication_store_gc()
-        .await
-        .map_err(Error::from)
-}
-
-/// Finalize the retired publication binding once store-local GC has completed.
-#[cfg(feature = "root-control-plane")]
-pub async fn finalize_retired_publication_store_binding() -> Result<Option<WasmStoreBinding>, Error>
-{
-    WasmStorePublicationWorkflow::finalize_retired_publication_store_binding()
-        .await
-        .map(|result| result.map(|(binding, _)| binding))
-        .map_err(Error::from)
-}
-
-/// Delete one finalized runtime-managed publication store canister.
-#[cfg(feature = "root-control-plane")]
-pub async fn delete_finalized_publication_store(
-    binding: WasmStoreBinding,
-    store_pid: Principal,
-) -> Result<(), Error> {
-    WasmStorePublicationWorkflow::delete_finalized_publication_store(binding, store_pid)
-        .await
-        .map_err(Error::from)
 }
 
 /// Return the current approved release catalog stored in this local wasm store.

@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.20`. Earlier in the
+- The current package/release-surface version is `0.82.25`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -479,6 +479,21 @@ before this compaction is archived at
   unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-active-source-release-comment-cleanup-report.md`.
   The root and detailed `0.82.25` changelog entries are prepared.
+
+- The current 0.82 follow-up slice hard-cuts unused wasm-store Rust API facade
+  names and direct publication helpers.
+  `canic::api::canister::template::EmbeddedTemplateApi`,
+  `canic::api::canister::template::WasmStoreApi`, and the direct
+  `canic-control-plane::api::template::WasmStoreApi` helper surface are
+  removed; the endpoint-facing `WasmStoreCanisterApi` remains the canonical
+  public wasm-store canister facade, and the local helper is private. Direct
+  `WasmStorePublicationApi` action helpers are removed in favor of the typed
+  `WasmStorePublicationApi::admin` / `WasmStoreAdminCommand` path. Operator
+  commands, endpoint method names, Candid request/response shapes, JSON,
+  deployment truth, evidence/report schemas, stable-state layout, wasm-store
+  storage behavior, and GC behavior are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-wasm-store-api-facade-hard-cut-report.md`.
+  The root and detailed `0.82.26` changelog entries are prepared.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
