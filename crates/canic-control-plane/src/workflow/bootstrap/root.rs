@@ -19,7 +19,6 @@ use canic_core::control_plane_support::{
     cdk::types::Principal,
     config::schema::SubnetConfig,
     domain::pool::CanisterPoolStatus,
-    dto::validation::{ValidationIssue, ValidationReport},
     error::{InternalError, InternalErrorOrigin},
     ops::{
         config::ConfigOps,
@@ -37,7 +36,11 @@ use canic_core::control_plane_support::{
         topology::guard::TopologyGuard,
     },
 };
-use canic_core::{log, log::Topic};
+use canic_core::{
+    dto::validation::{ValidationIssue, ValidationReport},
+    log,
+    log::Topic,
+};
 use std::collections::BTreeMap;
 
 ///
