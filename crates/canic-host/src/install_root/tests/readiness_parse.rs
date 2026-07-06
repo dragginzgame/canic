@@ -31,21 +31,19 @@ fn parse_bootstrap_status_accepts_wrapped_ok_record() {
 }
 
 #[test]
-fn parse_bootstrap_status_accepts_icp_cli_response_candid() {
-    let status = parse_bootstrap_status_value(&json!({
-        "response_candid": r#"(
+fn parse_bootstrap_status_rejects_icp_cli_response_candid() {
+    assert_eq!(
+        parse_bootstrap_status_value(&json!({
+            "response_candid": r#"(
   record {
     89_620_959 = opt "registry phase failed";
     3_253_282_875 = "failed";
     3_870_990_435 = false;
   },
 )"#
-    }))
-    .expect("icp cli response_candid bootstrap status must parse");
-
-    assert!(!status.ready);
-    assert_eq!(status.phase, "failed");
-    assert_eq!(status.last_error.as_deref(), Some("registry phase failed"));
+        })),
+        None
+    );
 }
 
 #[test]

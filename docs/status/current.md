@@ -340,6 +340,26 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-canic-metadata-response-candid-hard-cut-report.md`.
   The root and detailed `0.82.19` changelog entries are prepared.
 
+- The current 0.82 follow-up slice hard-cuts host cycle-balance
+  `response_candid` fallback parsing. ICP CLI `canic_cycle_balance` output now
+  requires a structured JSON `Ok` value, while the local replica fast path
+  still decodes typed Candid bytes directly. Raw Candid text and text-only
+  `response_candid` wrapper output are rejected. The endpoint Candid
+  signature, CLI list/cycles command surfaces, successful live-list rendering,
+  deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-cycle-balance-response-candid-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts root bootstrap-readiness
+  `response_candid` fallback parsing. ICP CLI `canic_bootstrap_status` output
+  now requires a structured JSON status record or wrapped `Ok` record, while
+  the local replica fast path still decodes typed Candid bytes directly. The
+  bootstrap-status endpoint Candid signature, root bootstrap lifecycle
+  behavior, install command surfaces, deployment truth, evidence/report
+  schemas, and stable-state layout are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-bootstrap-readiness-response-candid-hard-cut-report.md`.
+  The root and detailed `0.82.20` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
