@@ -389,7 +389,7 @@ fn root_removed_state_domains() -> Vec<RemovedStateManifest> {
         memory_id: Some(ROOT_REPLAY_ID),
         disposition: "moved_to_replay_receipts".to_string(),
         reason: "root replay receipts moved into the shared replay receipt store".to_string(),
-        test: Some("root_replay_record_round_trips_populated_response".to_string()),
+        test: Some("replay_receipt_record_round_trips_through_cbor_storable".to_string()),
     }]
 }
 

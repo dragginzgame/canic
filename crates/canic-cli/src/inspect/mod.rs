@@ -26,7 +26,6 @@ use canic_host::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
-    response_parse::response_candid,
 };
 use clap::{Arg, Command as ClapCommand};
 use serde::Serialize;
@@ -37,9 +36,6 @@ const INSPECT_SCHEMA_VERSION: u32 = 1;
 const RUNTIME_OBSERVED_SOURCE: &str = "runtime_observed";
 const CLI_ARG_SOURCE: &str = "cli_arg";
 const DEPLOYMENT_RECORD_SOURCE: &str = "deployment_record";
-const UNTYPED_RUNTIME_STATUS_WARNING: &str = "canic_runtime_status response did not include decodable response_bytes; typed runtime sections are unavailable";
-const UNTYPED_RUNTIME_STATUS_NEXT: &str =
-    "use an ICP CLI/runtime response that includes response_bytes for typed Candid decoding";
 
 const INSPECT_HELP_AFTER: &str = "\
 Examples:
@@ -160,7 +156,7 @@ struct TargetResolution {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct RuntimeStatusPayload {
     source: String,
-    status: Option<CanicRuntimeStatus>,
+    status: CanicRuntimeStatus,
     response_format: String,
     response_bytes_present: bool,
     response_candid_present: bool,
@@ -317,7 +313,6 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     )?;
     let runtime_status = runtime_response_payload(&output)?;
     let status = inspect_status_label(&runtime_status).to_string();
-    let (warnings, next_actions) = runtime_response_guidance(&runtime_status);
 
     Ok(InspectReport {
         schema_version: INSPECT_SCHEMA_VERSION,
@@ -334,30 +329,32 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         health_status: None,
         readiness_status: None,
         runtime_status: Some(runtime_status),
-        warnings,
-        next_actions,
+        warnings: Vec::new(),
+        next_actions: Vec::new(),
     })
 }
 
 fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
     let value = serde_json::from_str::<serde_json::Value>(output)
         .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
-    let response_candid_present = response_candid(&value).is_some();
+    let response_candid_present = value.get("response_candid").is_some();
     let response_bytes = value
         .get("response_bytes")
         .and_then(serde_json::Value::as_str)
         .map(str::to_string);
     let response_bytes_present = response_bytes.is_some();
 
-    if !response_bytes_present && !response_candid_present {
+    if !response_bytes_present {
         return Err(InspectCommandError::InvalidResponse(
-            "missing response_bytes and response_candid".to_string(),
+            "missing response_bytes; typed canic_runtime_status response requires response_bytes"
+                .to_string(),
         ));
     }
-    let status = response_bytes
-        .as_deref()
-        .map(decode_runtime_status_response_hex)
-        .transpose()?;
+    let status = decode_runtime_status_response_hex(
+        response_bytes
+            .as_deref()
+            .expect("response_bytes presence checked"),
+    )?;
 
     Ok(RuntimeStatusPayload {
         source: RUNTIME_OBSERVED_SOURCE.to_string(),
@@ -366,17 +363,6 @@ fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, Inspec
         response_bytes_present,
         response_candid_present,
     })
-}
-
-fn runtime_response_guidance(payload: &RuntimeStatusPayload) -> (Vec<String>, Vec<String>) {
-    if payload.status.is_some() {
-        return (Vec::new(), Vec::new());
-    }
-
-    (
-        vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()],
-        vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()],
-    )
 }
 
 fn decode_runtime_status_response_hex(
@@ -397,8 +383,7 @@ fn command_exit_result(report: &InspectReport) -> Result<(), InspectCommandError
     let status = report
         .runtime_status
         .as_ref()
-        .and_then(|payload| payload.status.as_ref())
-        .map(|status| status.status);
+        .map(|payload| payload.status.status);
     match status {
         Some(RuntimeStatus::Failing) => Err(InspectCommandError::ReportStatus(
             runtime_status_label(RuntimeStatus::Failing).to_string(),
@@ -437,21 +422,20 @@ fn render_text_report(report: &InspectReport) -> String {
                 runtime_status.response_candid_present
             ),
         ]);
-        if let Some(status) = &runtime_status.status {
-            lines.extend([
-                format!("runtime_status: {}", runtime_status_label(status.status)),
-                format!("schema_version: {}", status.schema_version),
-                format!("observed_at_ns: {}", status.observed_at_ns),
-                format!("role: {}", status.role.as_deref().unwrap_or("unknown")),
-                format!("features: {}", status.features.len()),
-                format!("timers: {}", status.timers.len()),
-                format!("recent_failures: {}", status.recent_failures.len()),
-            ]);
-            if let Some(state) = &status.state {
-                lines.push(format!("state_domains: {}", state.domains.len()));
-            }
-            append_runtime_metadata_lines(&mut lines, status);
+        let status = &runtime_status.status;
+        lines.extend([
+            format!("runtime_status: {}", runtime_status_label(status.status)),
+            format!("schema_version: {}", status.schema_version),
+            format!("observed_at_ns: {}", status.observed_at_ns),
+            format!("role: {}", status.role.as_deref().unwrap_or("unknown")),
+            format!("features: {}", status.features.len()),
+            format!("timers: {}", status.timers.len()),
+            format!("recent_failures: {}", status.recent_failures.len()),
+        ]);
+        if let Some(state) = &status.state {
+            lines.push(format!("state_domains: {}", state.domains.len()));
         }
+        append_runtime_metadata_lines(&mut lines, status);
     }
     if !report.warnings.is_empty() {
         lines.push(String::new());
@@ -543,11 +527,8 @@ fn enabled_runtime_feature_rows(features: &[RuntimeFeatureStatus]) -> String {
     }
 }
 
-fn inspect_status_label(payload: &RuntimeStatusPayload) -> &'static str {
-    payload
-        .status
-        .as_ref()
-        .map_or("unknown", |status| runtime_status_label(status.status))
+const fn inspect_status_label(payload: &RuntimeStatusPayload) -> &'static str {
+    runtime_status_label(payload.status.status)
 }
 
 const fn runtime_status_label(status: RuntimeStatus) -> &'static str {
@@ -862,30 +843,13 @@ mod tests {
     }
 
     #[test]
-    fn extracts_response_candid_fallback_from_icp_json() {
-        let payload = runtime_response_payload(
+    fn response_candid_without_response_bytes_is_rejected() {
+        let err = runtime_response_payload(
             r#"{"response_candid":"(record { status = variant { Ok } })"}"#,
         )
-        .expect("extract runtime status Candid");
+        .expect_err("text-only Candid fallback is rejected");
 
-        assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
-        assert_eq!(payload.status, None);
-        assert_eq!(payload.response_format, "candid");
-        assert!(!payload.response_bytes_present);
-        assert!(payload.response_candid_present);
-    }
-
-    #[test]
-    fn untyped_runtime_status_response_gets_guidance() {
-        let payload = runtime_response_payload(
-            r#"{"response_candid":"(record { status = variant { Ok } })"}"#,
-        )
-        .expect("extract runtime status Candid");
-
-        let (warnings, next_actions) = runtime_response_guidance(&payload);
-
-        assert_eq!(warnings, vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()]);
-        assert_eq!(next_actions, vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()]);
+        assert!(matches!(err, InspectCommandError::InvalidResponse(_)));
     }
 
     #[test]
@@ -899,7 +863,7 @@ mod tests {
         let payload = runtime_response_payload(&output).expect("decode runtime status");
 
         assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
-        assert_eq!(payload.status, Some(status));
+        assert_eq!(payload.status, status);
         assert_eq!(payload.response_format, "candid");
         assert!(payload.response_bytes_present);
         assert!(!payload.response_candid_present);
@@ -954,13 +918,13 @@ mod tests {
     #[test]
     fn text_report_renders_warnings_and_next_actions() {
         let mut report = sample_inspect_report();
-        report.warnings = vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()];
-        report.next_actions = vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()];
+        report.warnings = vec!["runtime status warning".to_string()];
+        report.next_actions = vec!["inspect the runtime endpoint".to_string()];
 
         let rendered = render_text_report(&report);
 
-        assert!(rendered.contains("warnings\n- canic_runtime_status response"));
-        assert!(rendered.contains("next_actions\n- use an ICP CLI/runtime response"));
+        assert!(rendered.contains("warnings\n- runtime status warning"));
+        assert!(rendered.contains("next_actions\n- inspect the runtime endpoint"));
     }
 
     #[test]
@@ -1006,20 +970,20 @@ mod tests {
     #[test]
     fn json_report_renders_warnings_and_next_actions() {
         let mut report = sample_inspect_report();
-        report.warnings = vec![UNTYPED_RUNTIME_STATUS_WARNING.to_string()];
-        report.next_actions = vec![UNTYPED_RUNTIME_STATUS_NEXT.to_string()];
+        report.warnings = vec!["runtime status warning".to_string()];
+        report.next_actions = vec!["inspect the runtime endpoint".to_string()];
 
         let value = serde_json::to_value(report).expect("serialize report");
 
-        assert_eq!(value["warnings"][0], UNTYPED_RUNTIME_STATUS_WARNING);
-        assert_eq!(value["next_actions"][0], UNTYPED_RUNTIME_STATUS_NEXT);
+        assert_eq!(value["warnings"][0], "runtime status warning");
+        assert_eq!(value["next_actions"][0], "inspect the runtime endpoint");
     }
 
     #[test]
     fn failing_runtime_status_maps_to_status_exit() {
         let mut report = sample_inspect_report();
         let payload = report.runtime_status.as_mut().expect("runtime status");
-        payload.status = Some(sample_runtime_status(RuntimeStatus::Failing));
+        payload.status = sample_runtime_status(RuntimeStatus::Failing);
         report.status = inspect_status_label(payload).to_string();
 
         let err = command_exit_result(&report).expect_err("failing status exits nonzero");
@@ -1046,7 +1010,7 @@ mod tests {
             readiness_status: None,
             runtime_status: Some(RuntimeStatusPayload {
                 source: RUNTIME_OBSERVED_SOURCE.to_string(),
-                status: Some(sample_runtime_status(RuntimeStatus::Ok)),
+                status: sample_runtime_status(RuntimeStatus::Ok),
                 response_format: "candid".to_string(),
                 response_bytes_present: true,
                 response_candid_present: true,

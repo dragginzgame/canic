@@ -41,33 +41,27 @@ pub struct HttpHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use candid::{CandidType, Decode, Encode};
-    use serde::Deserialize;
+    use candid::{Decode, Encode};
 
-    #[expect(
-        clippy::upper_case_acronyms,
-        reason = "legacy HTTP method variants model the previous Candid enum contract"
-    )]
-    #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-    enum LegacyHttpMethod {
-        #[serde(rename = "get")]
-        GET,
-        #[serde(rename = "post")]
-        POST,
-        #[serde(rename = "head")]
-        HEAD,
+    #[test]
+    fn http_method_roundtrips_candid_with_canonical_labels() {
+        let bytes = Encode!(&HttpMethod::Get).expect("encode domain http method");
+        let method = Decode!(&bytes, HttpMethod).expect("decode domain http method");
+
+        assert_eq!(method, HttpMethod::Get);
     }
 
     #[test]
-    fn http_method_roundtrips_candid_through_dto_path() {
-        let bytes = Encode!(&HttpMethod::Get).expect("encode domain http method");
-        let legacy = Decode!(&bytes, LegacyHttpMethod).expect("decode legacy http method");
+    fn http_method_deserializes_canonical_lowercase_labels() {
+        assert_http_method_label(HttpMethod::Get, "get");
+        assert_http_method_label(HttpMethod::Head, "head");
+        assert_http_method_label(HttpMethod::Post, "post");
+    }
 
-        assert_eq!(legacy, LegacyHttpMethod::GET);
-
-        let legacy_bytes = Encode!(&LegacyHttpMethod::HEAD).expect("encode legacy http method");
-        let method = Decode!(&legacy_bytes, HttpMethod).expect("decode domain http method");
-
-        assert_eq!(method, HttpMethod::Head);
+    fn assert_http_method_label(method: HttpMethod, label: &str) {
+        let label_bytes = serde_cbor::to_vec(&label).expect("encode HTTP method label");
+        let decoded: HttpMethod =
+            serde_cbor::from_slice(&label_bytes).expect("decode HTTP method label");
+        assert_eq!(decoded, method);
     }
 }

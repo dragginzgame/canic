@@ -18,9 +18,6 @@ use crate::{
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
-#[cfg(test)]
-const ROOT_REPLAY_RECORD_MIN_BYTES: usize = 1 + 32 + 8 + 8 + 4;
-
 eager_static! {
     static REPLAY_RECEIPTS: RefCell<
         StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, VirtualMemory<DefaultMemoryImpl>>
@@ -148,110 +145,6 @@ impl Storable for ReplayReceiptRecord {
 
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
         serde_cbor::from_slice(bytes.as_ref()).expect("replay receipt record decodes from cbor")
-    }
-}
-
-///
-/// RootReplayRecord
-///
-/// Legacy test-only root replay record shape.
-/// Owned by stable storage tests to preserve manual encoding coverage.
-///
-
-#[cfg(test)]
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootReplayRecord {
-    pub caller: Principal,
-    pub payload_hash: [u8; 32],
-    pub issued_at: u64,
-    pub expires_at: u64,
-    pub response_bytes: Vec<u8>,
-}
-
-#[cfg(test)]
-impl Storable for RootReplayRecord {
-    const BOUND: Bound = Bound::Unbounded;
-
-    fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.clone().into_bytes())
-    }
-
-    fn into_bytes(self) -> Vec<u8> {
-        let caller = self.caller.as_slice();
-        let caller_len = u8::try_from(caller.len()).expect("root replay caller principal fits u8");
-        let response_len =
-            u32::try_from(self.response_bytes.len()).expect("root replay response bytes fit u32");
-        let mut bytes = Vec::with_capacity(
-            ROOT_REPLAY_RECORD_MIN_BYTES
-                + caller.len()
-                + usize::try_from(response_len).unwrap_or(usize::MAX),
-        );
-        bytes.push(caller_len);
-        bytes.extend_from_slice(caller);
-        bytes.extend_from_slice(&self.payload_hash);
-        bytes.extend_from_slice(&self.issued_at.to_le_bytes());
-        bytes.extend_from_slice(&self.expires_at.to_le_bytes());
-        bytes.extend_from_slice(&response_len.to_le_bytes());
-        bytes.extend_from_slice(&self.response_bytes);
-        bytes
-    }
-
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        let bytes = bytes.as_ref();
-        assert!(
-            bytes.len() >= ROOT_REPLAY_RECORD_MIN_BYTES,
-            "root replay record shorter than minimum header"
-        );
-
-        let caller_len = bytes[0] as usize;
-        let caller_start = 1usize;
-        let caller_end = caller_start
-            .checked_add(caller_len)
-            .expect("root replay caller length overflow");
-        assert!(
-            bytes.len() >= caller_end + 32 + 8 + 8 + 4,
-            "root replay record shorter than caller and fixed fields"
-        );
-        let caller = Principal::from_slice(&bytes[caller_start..caller_end]);
-
-        let mut payload_hash = [0u8; 32];
-        let payload_hash_end = caller_end + 32;
-        payload_hash.copy_from_slice(&bytes[caller_end..payload_hash_end]);
-
-        let issued_at = u64::from_le_bytes(
-            bytes[payload_hash_end..payload_hash_end + 8]
-                .try_into()
-                .expect("root replay record issued_at"),
-        );
-        let expires_at_start = payload_hash_end + 8;
-        let expires_at = u64::from_le_bytes(
-            bytes[expires_at_start..expires_at_start + 8]
-                .try_into()
-                .expect("root replay record expires_at"),
-        );
-        let response_len_start = expires_at_start + 8;
-        let response_len = u32::from_le_bytes(
-            bytes[response_len_start..response_len_start + 4]
-                .try_into()
-                .expect("root replay record response length"),
-        ) as usize;
-        let response_start = response_len_start + 4;
-        let response_end = response_start
-            .checked_add(response_len)
-            .expect("root replay response length overflow");
-        assert_eq!(
-            bytes.len(),
-            response_end,
-            "root replay record response length mismatch"
-        );
-
-        Self {
-            caller,
-            payload_hash,
-            issued_at,
-            expires_at,
-            response_bytes: bytes[response_start..response_end].to_vec(),
-        }
     }
 }
 
@@ -413,45 +306,6 @@ mod tests {
         ReplayReceiptRecord::from_bytes(Cow::Owned(encoded))
             .into_receipt()
             .expect("stable replay receipt decodes")
-    }
-
-    fn round_trip_record(record: RootReplayRecord) {
-        let encoded = record.clone().into_bytes();
-        let decoded = RootReplayRecord::from_bytes(Cow::Owned(encoded.clone()));
-
-        assert_eq!(
-            decoded, record,
-            "manual replay record round-trip must match"
-        );
-        assert_eq!(
-            encoded.len(),
-            ROOT_REPLAY_RECORD_MIN_BYTES
-                + record.caller.as_slice().len()
-                + record.response_bytes.len(),
-            "encoded replay record length must match caller, fixed fields, and payload bytes"
-        );
-    }
-
-    #[test]
-    fn root_replay_record_round_trips_empty_response() {
-        round_trip_record(RootReplayRecord {
-            caller: p(1),
-            payload_hash: [7u8; 32],
-            issued_at: 11,
-            expires_at: 22,
-            response_bytes: vec![],
-        });
-    }
-
-    #[test]
-    fn root_replay_record_round_trips_populated_response() {
-        round_trip_record(RootReplayRecord {
-            caller: p(2),
-            payload_hash: [9u8; 32],
-            issued_at: 111,
-            expires_at: 222,
-            response_bytes: vec![1, 2, 3, 4, 5, 6],
-        });
     }
 
     #[test]

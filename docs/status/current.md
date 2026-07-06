@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.15`. Earlier in the
+- The current package/release-surface version is `0.82.16`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -258,6 +258,36 @@ before this compaction is archived at
   layout are unchanged; the serialized runtime enum label surface is
   intentionally changed to snake_case only. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-runtime-enum-label-hard-cut-report.md`.
+
+- The current 0.82 follow-up slice adds a maintained Candid serde boundary
+  guard. Canic-owned Candid source roots are checked so `CandidType` items do
+  not use unsupported `serde(rename_all)` / `rename_all_fields` attributes or
+  `serde(alias)`. The guard was tightened to catch combined serde attributes
+  such as `#[serde(rename = "...", alias = "...")]`.
+
+- The same 0.82 follow-up slice hard-cuts the shared HTTP method value to
+  canonical lowercase labels only. `HttpMethod` keeps the canonical Candid/Serde
+  labels `get`, `head`, and `post`, but no longer accepts uppercase `GET`,
+  `HEAD`, or `POST` compatibility aliases. Public Rust re-export paths, HTTP
+  execution, metrics labels, endpoint routes, CLI behavior, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged. Docs-only
+  reports:
+  `docs/design/0.82-boundary-hardening/0.82-candid-serde-boundary-guard-report.md`
+  and
+  `docs/design/0.82-boundary-hardening/0.82-http-method-alias-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice performs a targeted hard-cut compatibility
+  sweep. `canic inspect` now rejects `canic_runtime_status` query output that
+  only contains `response_candid`; the canonical path requires typed
+  `response_bytes` so `CanicRuntimeStatus` is decoded from Candid bytes. The
+  test-only legacy `RootReplayRecord` manual encoder/decoder was removed, and
+  the removed root replay state declaration now points at the active shared
+  replay receipt round-trip test. Public error-code compatibility names, auth
+  metric mirroring, and non-IC root bootstrap fallback behavior were classified
+  as separate explicit hard-cut candidates rather than changed in this slice.
+  The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-hard-cut-compatibility-sweep-report.md`.
+  The root and detailed `0.82.17` changelog entries are prepared.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.

@@ -17,11 +17,11 @@ use serde::Deserialize;
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq)]
 pub enum HttpMethod {
-    #[serde(rename = "get", alias = "GET")]
+    #[serde(rename = "get")]
     Get,
-    #[serde(rename = "head", alias = "HEAD")]
+    #[serde(rename = "head")]
     Head,
-    #[serde(rename = "post", alias = "POST")]
+    #[serde(rename = "post")]
     Post,
 }
 
