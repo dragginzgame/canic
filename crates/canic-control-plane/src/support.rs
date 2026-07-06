@@ -1,6 +1,3 @@
-#[cfg(feature = "wasm-store-canister")]
-pub use crate::ops::storage::template::WasmStoreGcExecutionStats;
-
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
 use crate::ids::WasmStoreGcStatus;
 use crate::{
@@ -9,7 +6,9 @@ use crate::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
         TemplateManifestInput,
     },
-    ops::storage::template::{TemplateChunkedOps, TemplateManifestOps, WasmStoreLimits},
+    ops::storage::template::{
+        TemplateChunkedOps, TemplateManifestOps, WasmStoreGcExecutionStats, WasmStoreLimits,
+    },
 };
 #[cfg(feature = "wasm-store-canister")]
 use crate::{

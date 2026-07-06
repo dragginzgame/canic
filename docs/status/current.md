@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.13`. Earlier in the
+- The current package/release-surface version is `0.82.14`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -204,6 +204,30 @@ before this compaction is archived at
   behavior, Candid, JSON, deployment truth, and evidence/report schemas are
   unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-timer-id-workflow-boundary-report.md`.
+
+- The current 0.82 follow-up slice tightens the hidden control-plane support
+  facade for pool status by exposing `CanisterPoolStatus` through
+  `control_plane_support::domain::pool` instead of a DTO-shaped support
+  namespace. Public `dto::pool` compatibility, pool behavior, endpoint
+  surfaces, CLI behavior, Candid, JSON, deployment truth, and evidence/report
+  schemas are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-control-plane-pool-status-support-boundary-report.md`.
+
+- The same 0.82 follow-up slice removes the crate-private
+  `support::WasmStoreGcExecutionStats` re-export in `canic-control-plane` so
+  the template API imports GC stats from template storage ops directly.
+  Wasm-store GC behavior, endpoint surfaces, CLI behavior, Candid, JSON,
+  deployment truth, and evidence/report schemas are unchanged. The docs-only
+  report is
+  `docs/design/0.82-boundary-hardening/0.82-control-plane-template-gc-support-boundary-report.md`.
+
+- The same 0.82 follow-up slice removes the hidden
+  `control_plane_support::workflow::prelude` wildcard support path after
+  root bootstrap was narrowed to import `Principal` from
+  `control_plane_support::cdk::types` directly. Root bootstrap behavior,
+  endpoint surfaces, CLI behavior, Candid, JSON, deployment truth, and
+  evidence/report schemas are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-control-plane-prelude-support-boundary-report.md`.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.

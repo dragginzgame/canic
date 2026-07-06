@@ -28,12 +28,14 @@ pub mod format {
 }
 
 pub mod dto {
-    pub mod pool {
-        pub use crate::dto::pool::CanisterPoolStatus;
-    }
-
     pub mod validation {
         pub use crate::dto::validation::{ValidationIssue, ValidationReport};
+    }
+}
+
+pub mod domain {
+    pub mod pool {
+        pub use crate::domain::pool::CanisterPoolStatus;
     }
 }
 
@@ -141,10 +143,6 @@ pub mod workflow {
         pub mod query {
             pub use crate::workflow::pool::query::PoolQuery;
         }
-    }
-
-    pub mod prelude {
-        pub use crate::workflow::prelude::*;
     }
 
     pub mod topology {

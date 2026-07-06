@@ -12,8 +12,7 @@ use crate::{
         TemplateChunkResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
     },
     ids::{TemplateVersion, WasmStoreGcMode, WasmStoreGcStatus},
-    ops::storage::template::WasmStoreGcOps,
-    support::WasmStoreGcExecutionStats,
+    ops::storage::template::{WasmStoreGcExecutionStats, WasmStoreGcOps},
 };
 #[cfg(feature = "root-control-plane")]
 use crate::{
