@@ -9,9 +9,8 @@ use crate::{
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
-use canic_core::control_plane_support::{
-    cdk::types::Principal, error::InternalError, ops::ic::IcOps,
-};
+use canic_core::cdk::types::Principal;
+use canic_core::control_plane_support::{error::InternalError, ops::ic::IcOps};
 
 use super::metrics::{
     WasmStorePublicationError, record_wasm_store_metric, record_wasm_store_publish_failed,

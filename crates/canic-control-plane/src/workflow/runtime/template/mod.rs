@@ -17,8 +17,8 @@ use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricsApi,
 };
 use canic_core::api::runtime::install::ApprovedModuleSource;
+use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    cdk::types::Principal,
     error::{InternalError, InternalErrorOrigin},
     ops::ic::{IcOps, mgmt::MgmtOps},
 };
@@ -336,7 +336,7 @@ fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, Intern
 mod tests {
     use super::{WasmStoreInternalClient, release_source_label};
     use crate::ids::{TemplateId, TemplateVersion};
-    use canic_core::control_plane_support::protocol;
+    use canic_core::protocol;
 
     #[test]
     fn release_source_label_includes_version() {

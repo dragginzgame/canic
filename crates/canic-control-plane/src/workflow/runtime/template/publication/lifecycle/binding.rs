@@ -4,8 +4,8 @@ use crate::{
     ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps,
     storage::stable::state::subnet::PublicationStoreStateRecord,
 };
+use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    cdk::types::Principal,
     error::{InternalError, InternalErrorOrigin},
     ops::ic::IcOps,
 };

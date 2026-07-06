@@ -6,8 +6,8 @@ use crate::{
     storage::stable::state::subnet::{PublicationStoreStateRecord, WasmStoreRecord},
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
 };
+use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    cdk::types::Principal,
     error::{InternalError, InternalErrorOrigin},
     format::byte_size,
 };

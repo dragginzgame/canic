@@ -119,7 +119,7 @@ fn deploy_plan_is_top_level_deploy_command() {
 
     let help = usage();
     assert!(help.contains("canic deploy plan demo"));
-    assert!(help.contains("0.79 operator planning report"));
+    assert!(help.contains("operator planning report"));
 }
 
 #[test]

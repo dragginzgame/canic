@@ -74,7 +74,7 @@ Examples:
 
 Use `canic deploy inspect help` for raw plan, inventory, diff, report,
 comparison, local catalog, root-verification, and resume-safety JSON artifacts.
-Use `canic deploy plan <deployment>` for the 0.79 operator planning report.
+Use `canic deploy plan <deployment>` for the operator planning report.
 Use `canic inspect` for live runtime-observed canister status.
 Plan-mediated deployment-target mutation flows through `canic deploy install
 <deployment> --plan <file>`. `canic install <fleet>` remains the fleet-template

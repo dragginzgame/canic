@@ -1,7 +1,7 @@
 use crate::ids::CanisterRole;
 use canic_core::{
+    cdk::types::{Principal, TC},
     control_plane_support::{
-        cdk::types::{Principal, TC},
         error::{InternalError, InternalErrorOrigin},
         model::replay::CommandKind,
         ops::{

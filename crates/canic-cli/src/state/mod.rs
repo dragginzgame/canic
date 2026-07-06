@@ -59,8 +59,8 @@ Examples:
   canic state manifest --role root
   canic state manifest --json
 
-Renders the derived state manifest to stdout. 0.80 does not write manifest
-files or accept --format json.";
+Renders the derived state manifest to stdout. This command does not write
+manifest files or accept --format json.";
 
 ///
 /// StateCommandError

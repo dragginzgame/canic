@@ -28,7 +28,7 @@ use crate::{
     workflow::runtime::template::WasmStorePublicationWorkflow,
 };
 #[cfg(feature = "root-control-plane")]
-use canic_core::control_plane_support::cdk::types::Principal;
+use canic_core::cdk::types::Principal;
 use canic_core::{control_plane_support::ops::ic::IcOps, dto::error::Error};
 
 /// Return the current replica time in whole seconds.

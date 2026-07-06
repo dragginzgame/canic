@@ -435,6 +435,34 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-control-plane-core-owner-support-boundary-report.md`.
   The root and detailed `0.82.23` changelog entries are prepared.
 
+- The current 0.82 follow-up slice removes the broad hidden
+  `control_plane_support::cdk` mirror. Control-plane code now imports public
+  CDK types directly from `canic_core::cdk::types`, while support facades remain
+  reserved for crate-private core mediation. Runtime template publication,
+  root bootstrap behavior, endpoint surfaces, CLI behavior, Candid, JSON,
+  deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-control-plane-cdk-support-boundary-report.md`.
+
+- The same 0.82 follow-up slice removes the hidden
+  `control_plane_support::protocol` mirror. The control-plane wasm-store
+  template client and protocol manifest tests now import public endpoint-name
+  constants directly from `canic_core::protocol`, while endpoint names,
+  endpoint classifications, endpoint surfaces, CLI behavior, Candid, JSON,
+  deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-control-plane-protocol-support-boundary-report.md`.
+
+- The same 0.82 follow-up slice cleans stale release-line wording out of
+  active CLI help and error text for state manifest, deploy plan, and inspect
+  output. The commands now describe the current command contracts without
+  implying those surfaces are tied to their original 0.79-0.81 release lines.
+  Command parsing, accepted/rejected forms, exit codes, JSON/report fields,
+  Candid, deployment truth, evidence/report schemas, and stable-state layout
+  are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-active-cli-release-wording-cleanup-report.md`.
+  The root and detailed `0.82.24` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

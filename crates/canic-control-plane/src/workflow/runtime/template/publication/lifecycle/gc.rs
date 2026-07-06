@@ -7,8 +7,8 @@ use crate::{
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::subnet::SubnetStateOps,
 };
+use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    cdk::types::Principal,
     error::{InternalError, InternalErrorOrigin},
     ops::ic::IcOps,
     workflow::ic::provision::ProvisionWorkflow,
