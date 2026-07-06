@@ -492,7 +492,7 @@ fn instance_creation_requires_service_directory_parent() {
     let public = Error::from(InternalError::from(TopologyPolicyError::from(err)));
     assert_eq!(
         public.code,
-        ErrorCode::PolicyInstanceRequiresSingletonWithDirectory
+        ErrorCode::PolicyInstanceRequiresServiceWithDirectory
     );
     assert!(
         public

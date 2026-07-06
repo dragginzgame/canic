@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.16`. Earlier in the
+- The current package/release-surface version is `0.82.17`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -283,11 +283,42 @@ before this compaction is archived at
   test-only legacy `RootReplayRecord` manual encoder/decoder was removed, and
   the removed root replay state declaration now points at the active shared
   replay receipt round-trip test. Public error-code compatibility names, auth
-  metric mirroring, and non-IC root bootstrap fallback behavior were classified
-  as separate explicit hard-cut candidates rather than changed in this slice.
+  metric mirroring, and the non-IC root bootstrap subnet-identity fallback were
+  classified as separate explicit hard-cut candidates in this sweep and are now
+  closed in follow-up hard-cut reports.
   The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-hard-cut-compatibility-sweep-report.md`.
   The root and detailed `0.82.17` changelog entries are prepared.
+
+- The current 0.82 follow-up slice hard-cuts the public registry policy error
+  codes that still used pre-service-topology singleton names. The public
+  `ErrorCode` variants, host direct-query wire decoder, and checked-in
+  wasm-store DID now use service-owned names for replica scaling, shard
+  sharding, and instance directory policy failures. Registry policy behavior,
+  messages, endpoint routes, CLI command surfaces, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged. The docs-only
+  report is
+  `docs/design/0.82-boundary-hardening/0.82-policy-error-code-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts auth metric compatibility mirroring.
+  Auth session, bootstrap, identity-fallback, and role-attestation events now
+  record only the canonical Auth metric family instead of also writing older
+  Access-family rows. Auth behavior, auth identity resolution, access-expression
+  guard metrics, metrics query sorting/pagination, endpoint routes, CLI command
+  surfaces, Candid, JSON, deployment truth, evidence/report schemas, and
+  stable-state layout are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-auth-metric-mirror-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts the root bootstrap subnet identity
+  fallback. Root bootstrap no longer invents a subnet principal from
+  `canister_self()` when registry discovery is unavailable; local/test builds
+  use the explicit subnet identity seeded by lifecycle init, while IC builds
+  fail the bootstrap phase if NNS registry subnet discovery returns no subnet
+  or errors. Root init argument shape, endpoint routes, CLI command surfaces,
+  Candid, JSON, deployment truth, evidence/report schemas, and stable-state
+  layout are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-root-bootstrap-subnet-identity-hard-cut-report.md`.
+  The root and detailed `0.82.18` changelog entries are prepared.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.

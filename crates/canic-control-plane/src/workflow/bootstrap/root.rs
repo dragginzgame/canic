@@ -20,7 +20,7 @@ use canic_core::control_plane_support::{
     config::schema::SubnetConfig,
     domain::pool::CanisterPoolStatus,
     dto::validation::{ValidationIssue, ValidationReport},
-    error::InternalError,
+    error::{InternalError, InternalErrorOrigin},
     ops::{
         config::ConfigOps,
         ic::{IcOps, network::NetworkOps},
@@ -214,7 +214,12 @@ pub async fn bootstrap_init_root_canister() {
     log!(Topic::Init, Info, "bootstrap (root:init) start");
 
     BootstrapStatusOps::set_phase("root:init:set_subnet_id");
-    root_set_subnet_id().await;
+    if let Err(err) = root_set_subnet_id().await {
+        let message = format!("subnet identity phase failed: {err}");
+        log!(Topic::Init, Error, "{message}");
+        mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message);
+        return;
+    }
 
     // On fresh init, only wait for the configured initial import slice before
     // auto-create. Remaining static imports are queued for the pool worker.
@@ -318,7 +323,12 @@ pub async fn bootstrap_post_upgrade_root_canister() {
     // Environment already exists; only enrich + reconcile
     log!(Topic::Init, Info, "bootstrap (root:upgrade) start");
     BootstrapStatusOps::set_phase("root:upgrade:set_subnet_id");
-    root_set_subnet_id().await;
+    if let Err(err) = root_set_subnet_id().await {
+        let message = format!("subnet identity phase failed: {err}");
+        log!(Topic::Init, Error, "{message}");
+        mark_root_bootstrap_failed(LifecycleMetricPhase::PostUpgrade, message);
+        return;
+    }
     // Keep post-upgrade non-blocking; queued imports continue in background.
     BootstrapStatusOps::set_phase("root:upgrade:import_pool");
     root_import_pool_from_config(false).await;
@@ -340,48 +350,44 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 
 /// Resolve and persist the subnet identifier for the root canister.
 ///
-/// On IC:
-/// - Failure to resolve subnet ID is fatal.
-///
-/// On local / test networks:
-/// - Falls back to `canister_self()` deterministically.
-pub async fn root_set_subnet_id() {
-    let network = NetworkOps::build_network();
+/// IC builds resolve the authoritative subnet from the NNS registry. Local and
+/// test builds use the explicit subnet identity seeded by lifecycle init.
+pub async fn root_set_subnet_id() -> Result<(), InternalError> {
+    let network = NetworkOps::build_network().ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "runtime network unavailable; set ICP_ENVIRONMENT=local|ic at build time",
+        )
+    })?;
+
+    if network != BuildNetwork::Ic {
+        let subnet_pid = EnvOps::subnet_pid()?;
+        AppRegistryOps::upsert(subnet_pid, IcOps::canister_self());
+        log!(
+            Topic::Topology,
+            Info,
+            "root subnet identity initialized from lifecycle env: {subnet_pid}"
+        );
+        return Ok(());
+    }
 
     match IcWorkflow::try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
             EnvOps::set_subnet_pid(subnet_pid);
             AppRegistryOps::upsert(subnet_pid, IcOps::canister_self());
-            return;
+            Ok(())
         }
 
-        Ok(None) => {
-            if network == Some(BuildNetwork::Ic) {
-                let msg = "try_get_current_subnet_pid returned None on ic; refusing to fall back";
-                log!(Topic::Topology, Error, "{msg}");
-                return;
-            }
-        }
+        Ok(None) => Err(InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "try_get_current_subnet_pid returned None on ic",
+        )),
 
-        Err(err) => {
-            if network == Some(BuildNetwork::Ic) {
-                let msg = format!("try_get_current_subnet_pid failed on ic: {err}");
-                log!(Topic::Topology, Error, "{msg}");
-                return;
-            }
-        }
+        Err(err) => Err(InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            format!("try_get_current_subnet_pid failed on ic: {err}"),
+        )),
     }
-
-    // Fallback path for non-IC environments
-    let fallback = IcOps::canister_self();
-    EnvOps::set_subnet_pid(fallback);
-    AppRegistryOps::upsert(fallback, fallback);
-
-    log!(
-        Topic::Topology,
-        Info,
-        "try_get_current_subnet_pid unavailable; using self as subnet: {fallback}"
-    );
 }
 
 /// ---------------------------------------------------------------------------

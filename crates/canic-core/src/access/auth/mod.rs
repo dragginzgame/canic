@@ -196,8 +196,11 @@ fn caller_not_registered_denial(caller: Principal) -> AccessError {
 mod tests {
     use super::*;
     use crate::{
-        ids::{AccessMetricKind, cap},
-        ops::runtime::metrics::access::AccessMetrics,
+        ids::cap,
+        ops::runtime::metrics::auth::{
+            AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
+            AuthMetrics,
+        },
         test::seams,
     };
 
@@ -205,14 +208,14 @@ mod tests {
         Principal::from_slice(&[id; 29])
     }
 
-    fn auth_session_metric_count(predicate: &str) -> u64 {
-        AccessMetrics::snapshot()
-            .entries
+    fn auth_identity_fallback_metric_count(reason: AuthMetricReason) -> u64 {
+        AuthMetrics::snapshot()
             .into_iter()
             .find_map(|(key, count)| {
-                if key.endpoint == "auth_session"
-                    && key.kind == AccessMetricKind::Auth
-                    && key.predicate == predicate
+                if key.surface == AuthMetricSurface::Session
+                    && key.operation == AuthMetricOperation::IdentityFallback
+                    && key.outcome == AuthMetricOutcome::Completed
+                    && key.reason == reason
                 {
                     Some(count)
                 } else {
@@ -259,13 +262,13 @@ mod tests {
     #[test]
     fn resolve_authenticated_identity_defaults_to_wallet_when_no_override_exists() {
         let _guard = seams::lock();
-        AccessMetrics::reset();
+        AuthMetrics::reset();
         let wallet = p(9);
         crate::ops::storage::auth::AuthStateOps::clear_delegated_session(wallet);
         let resolved = resolve_authenticated_identity(wallet);
         assert_eq!(resolved.authenticated_subject, wallet);
         assert_eq!(
-            auth_session_metric_count("session_fallback_raw_caller"),
+            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
             1,
             "missing delegated session should record raw-caller fallback"
         );
@@ -274,7 +277,7 @@ mod tests {
     #[test]
     fn resolve_authenticated_identity_prefers_active_delegated_session() {
         let _guard = seams::lock();
-        AccessMetrics::reset();
+        AuthMetrics::reset();
         let wallet = p(8);
         let delegated = p(7);
         crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
@@ -296,7 +299,7 @@ mod tests {
             AuthenticatedIdentitySource::DelegatedSession
         );
         assert_eq!(
-            auth_session_metric_count("session_fallback_raw_caller"),
+            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
             0,
             "active delegated session should not fallback to raw caller"
         );
@@ -307,7 +310,7 @@ mod tests {
     #[test]
     fn resolve_authenticated_identity_falls_back_when_session_expired() {
         let _guard = seams::lock();
-        AccessMetrics::reset();
+        AuthMetrics::reset();
         let wallet = p(6);
         let delegated = p(5);
         crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
@@ -328,7 +331,7 @@ mod tests {
             AuthenticatedIdentitySource::RawCaller
         );
         assert_eq!(
-            auth_session_metric_count("session_fallback_raw_caller"),
+            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
             1,
             "expired delegated session should fallback to raw caller"
         );
@@ -339,7 +342,7 @@ mod tests {
     #[test]
     fn resolve_authenticated_identity_falls_back_at_session_expiry_boundary() {
         let _guard = seams::lock();
-        AccessMetrics::reset();
+        AuthMetrics::reset();
         let wallet = p(16);
         let delegated = p(15);
         crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
@@ -360,7 +363,7 @@ mod tests {
             AuthenticatedIdentitySource::RawCaller
         );
         assert_eq!(
-            auth_session_metric_count("session_fallback_raw_caller"),
+            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
             1,
             "delegated session expiry must match token expiry boundary"
         );
@@ -371,7 +374,7 @@ mod tests {
     #[test]
     fn resolve_authenticated_identity_falls_back_after_clear() {
         let _guard = seams::lock();
-        AccessMetrics::reset();
+        AuthMetrics::reset();
         let wallet = p(4);
         let delegated = p(3);
         crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
@@ -392,13 +395,16 @@ mod tests {
             resolved.identity_source,
             AuthenticatedIdentitySource::RawCaller
         );
-        assert_eq!(auth_session_metric_count("session_fallback_raw_caller"), 1);
+        assert_eq!(
+            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
+            1
+        );
     }
 
     #[test]
     fn resolve_authenticated_identity_records_invalid_subject_fallback() {
         let _guard = seams::lock();
-        AccessMetrics::reset();
+        AuthMetrics::reset();
         let wallet = p(23);
         crate::ops::storage::auth::AuthStateOps::upsert_delegated_session(
             crate::ops::storage::auth::DelegatedSession {
@@ -418,10 +424,13 @@ mod tests {
             AuthenticatedIdentitySource::RawCaller
         );
         assert_eq!(
-            auth_session_metric_count("session_fallback_invalid_subject"),
+            auth_identity_fallback_metric_count(AuthMetricReason::InvalidSubject),
             1
         );
-        assert_eq!(auth_session_metric_count("session_fallback_raw_caller"), 1);
+        assert_eq!(
+            auth_identity_fallback_metric_count(AuthMetricReason::RawCaller),
+            1
+        );
         assert!(
             crate::ops::storage::auth::AuthStateOps::delegated_session(wallet, 20).is_none(),
             "invalid delegated session should be cleared"
