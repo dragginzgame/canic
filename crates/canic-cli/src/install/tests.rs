@@ -138,7 +138,6 @@ fn install_usage_explains_fleet_config() {
     assert!(normalized.contains("fresh local creation"));
     assert!(normalized.contains("project upgrade flow"));
     assert!(normalized.contains("canic medic deployment"));
-    assert!(!normalized.contains("canic info medic"));
     assert!(text.contains("[fleet]"));
     assert!(text.contains("name = \"test\""));
 }

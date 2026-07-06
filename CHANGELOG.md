@@ -12,14 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
-- `0.82.22` hard-cuts deployment observation and install-state legacy
-  fallbacks by requiring selected-network artifacts, explicit unknown fleet
-  identity, current deployment-target catalog state, and current install-state
-  paths only.
+- `0.82.22` removes obsolete CLI anti-resurrection test fixtures and stale
+  compatibility wording so maintained tests cover current command behavior and
+  active guard invariants only.
 
-- `0.82.21` hard-cuts the remaining `canic inspect` runtime response-wrapper
-  metadata by requiring typed response bytes for decoding while removing
-  response-presence fields from text and JSON inspect reports.
+- `0.82.21` hard-cuts remaining inspect runtime response-wrapper metadata and
+  deployment observation/install-state fallbacks by requiring typed inspect
+  responses, selected-network artifacts, explicit unknown fleet identity, and
+  current deployment-target state paths only.
 
 - `0.82.20` finishes the host `response_candid` parser hard cut by requiring
   structured JSON for ICP CLI cycle-balance and bootstrap-readiness fallback

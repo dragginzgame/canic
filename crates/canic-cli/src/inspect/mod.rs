@@ -783,37 +783,6 @@ mod tests {
     }
 
     #[test]
-    fn rejects_format_json_alias() {
-        assert!(
-            InspectOptions::parse([
-                OsString::from("canister"),
-                OsString::from("aaaaa-aa"),
-                OsString::from("--format"),
-                OsString::from("json"),
-            ])
-            .is_err()
-        );
-        assert!(
-            InspectOptions::parse([
-                OsString::from("deployment"),
-                OsString::from("demo-local"),
-                OsString::from("--role"),
-                OsString::from("root"),
-                OsString::from("--format"),
-                OsString::from("json"),
-            ])
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn rejects_ambiguous_runtime_status_alias() {
-        assert!(
-            InspectOptions::parse([OsString::from("runtime"), OsString::from("aaaaa-aa")]).is_err()
-        );
-    }
-
-    #[test]
     fn usage_distinguishes_runtime_inspect_from_deploy_artifacts() {
         let text = usage();
 

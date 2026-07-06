@@ -48,51 +48,6 @@ fn parses_supported_manifest_options() {
 }
 
 #[test]
-fn rejects_hard_cut_state_forms() {
-    assert!(matches!(run([]), Err(StateCommandError::Usage(_))));
-    for command in ["migrate", "repair", "explore", "dump"] {
-        assert!(matches!(
-            run([OsString::from(command)]),
-            Err(StateCommandError::Usage(_))
-        ));
-        assert!(parse_required_subcommand(state_command(), [OsString::from(command)]).is_err());
-    }
-
-    for args in [
-        vec![OsString::from("root")],
-        vec![OsString::from("--force")],
-        vec![OsString::from("--format"), OsString::from("json")],
-        vec![OsString::from("--out"), OsString::from("state.json")],
-    ] {
-        assert!(matches!(
-            StateOptions::parse_audit(args.clone()),
-            Err(StateCommandError::Usage(_))
-        ));
-        assert!(matches!(
-            StateOptions::parse_manifest(args),
-            Err(StateCommandError::Usage(_))
-        ));
-    }
-
-    for args in [
-        vec![OsString::from(AUDIT_COMMAND), OsString::from("root")],
-        vec![OsString::from(MANIFEST_COMMAND), OsString::from("root")],
-        vec![
-            OsString::from(AUDIT_COMMAND),
-            OsString::from("--format"),
-            OsString::from("json"),
-        ],
-        vec![
-            OsString::from(MANIFEST_COMMAND),
-            OsString::from("--format"),
-            OsString::from("json"),
-        ],
-    ] {
-        assert!(matches!(run(args), Err(StateCommandError::Usage(_))));
-    }
-}
-
-#[test]
 fn audit_json_uses_schema_version_one() {
     let report = build_state_audit_report(Some("root"));
     let json = serde_json::to_value(&report).expect("state audit report serializes");
