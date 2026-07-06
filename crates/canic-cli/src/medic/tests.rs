@@ -97,34 +97,6 @@ fn parses_deployment_auth_renewal_medic_target() {
     );
 }
 
-// Ensure hard-cut rejected command forms do not parse as compatibility aliases.
-#[test]
-fn rejects_legacy_or_shorthand_medic_forms() {
-    for args in [
-        vec![OsString::from("demo")],
-        vec![OsString::from("--blob-storage"), OsString::from("backend")],
-        vec![
-            OsString::from("--auth-renewal"),
-            OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
-        ],
-        vec![
-            OsString::from("project"),
-            OsString::from("--blob-storage"),
-            OsString::from("backend"),
-        ],
-        vec![
-            OsString::from("project"),
-            OsString::from("--auth-renewal"),
-            OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
-        ],
-    ] {
-        assert!(matches!(
-            MedicOptions::parse(args),
-            Err(MedicCommandError::Usage(_))
-        ));
-    }
-}
-
 // Ensure medic help explains the new top-level command surface.
 #[test]
 fn medic_usage_includes_top_level_examples() {
@@ -138,7 +110,6 @@ fn medic_usage_includes_top_level_examples() {
     assert!(text.contains("canic medic deployment test --blob-storage backend"));
     assert!(text.contains("canic medic deployment test --auth-renewal"));
     assert!(text.contains("--json"));
-    assert!(!text.contains("canic info medic"));
 }
 
 // Ensure subcommand help requests stop before project or deployment checks run.

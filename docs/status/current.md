@@ -360,7 +360,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-bootstrap-readiness-response-candid-hard-cut-report.md`.
   The root and detailed `0.82.20` changelog entries are prepared.
 
-- The current 0.82 follow-up slice hard-cuts the remaining
+- The `0.82.21` slice hard-cuts the remaining
   `response_candid` metadata from `canic inspect` runtime reports. Inspect
   still requires typed `response_bytes` for `canic_runtime_status` decoding and
   still reports `response_format: candid`, but text/JSON output no longer
@@ -371,9 +371,8 @@ before this compaction is archived at
   Candid, deployment truth, evidence/report schemas, and stable-state layout
   are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-inspect-response-candid-metadata-hard-cut-report.md`.
-  The root and detailed `0.82.21` changelog entries are prepared.
 
-- The current 0.82 follow-up slice hard-cuts deployment-truth artifact
+- The same `0.82.21` slice hard-cuts deployment-truth artifact
   observation across network roots. Non-local deployment-truth/deploy-plan
   artifact observation now requires `.icp/<network>/canisters` and no longer
   falls back to `.icp/local/canisters`; missing selected-network artifacts are
@@ -382,7 +381,7 @@ before this compaction is archived at
   docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-artifact-root-network-fallback-hard-cut-report.md`.
 
-- The same 0.82 follow-up slice hard-cuts deployment-truth local config
+- The same `0.82.21` slice hard-cuts deployment-truth local config
   fleet-name fallback. When local config cannot resolve a fleet name,
   deployment-truth root observations now report the existing
   `local_config.fleet_name` gap and use `fleet_template = "unknown"` instead
@@ -391,7 +390,7 @@ before this compaction is archived at
   The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-local-config-fleet-name-fallback-hard-cut-report.md`.
 
-- The same 0.82 follow-up slice hard-cuts the deployment catalog's active
+- The same `0.82.21` slice hard-cuts the deployment catalog's active
   legacy fleet-state warning. Catalog reports now read only current
   `.canic/<network>/deployments` state and no longer probe removed
   `.canic/<network>/fleets` paths to emit `catalog.legacy_fleet_state_ignored`.
@@ -399,7 +398,7 @@ before this compaction is archived at
   and stable-state layout are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-deployment-catalog-legacy-fleet-warning-hard-cut-report.md`.
 
-- The same 0.82 follow-up slice hard-cuts install-root legacy fleet-state
+- The same `0.82.21` slice hard-cuts install-root legacy fleet-state
   lookup. `read_deployment_install_state` now reads only current
   `.canic/<network>/deployments/<deployment>.json` state and returns no state
   when that file is absent; it no longer probes removed
@@ -407,6 +406,19 @@ before this compaction is archived at
   describes the current deployment-target boundary without 0.46 legacy recovery
   language. Schemas and command surfaces are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-install-root-legacy-fleet-state-hard-cut-report.md`.
+  The root and detailed `0.82.21` changelog entries include these hard cuts.
+
+- The current `0.82.22` working slice removes CLI anti-resurrection tests for
+  removed command aliases and obsolete hard-cut forms while preserving current
+  positive parser, help, JSON, report, and exit-code coverage. Command
+  behavior, command surfaces, endpoint surfaces, Candid, JSON, deployment
+  truth, evidence/report schemas, and stable-state layout are unchanged. The
+  slice also removes negative help assertions that mentioned the retired
+  `canic info medic` route and renames endpoint macro guard-grammar coverage
+  away from compatibility-alias wording. The auth verifier legacy
+  root-proof-mode rejection test remains because it protects an active
+  security/config invariant. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-cli-anti-resurrection-test-cleanup-report.md`.
   The root and detailed `0.82.22` changelog entries are prepared.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:

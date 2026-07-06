@@ -160,10 +160,9 @@ mod tests {
     }
 
     #[test]
-    fn info_usage_does_not_include_top_level_medic() {
+    fn info_usage_includes_current_info_example() {
         let text = usage();
 
-        assert!(!text.contains("canic info medic"));
         assert!(text.contains("canic info env test"));
     }
 }

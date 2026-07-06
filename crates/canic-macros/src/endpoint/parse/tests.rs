@@ -198,8 +198,8 @@ fn authenticated_rejects_multiple_arguments() {
 }
 
 #[test]
-fn authenticated_rejects_bare_alias_path() {
-    let err = parse_args(quote!(requires(authenticated()))).expect_err("bare alias must fail");
+fn authenticated_requires_builtin_namespace() {
+    let err = parse_args(quote!(requires(authenticated()))).expect_err("unqualified path fails");
     assert!(
         err.to_string()
             .contains("built-in predicates must use short paths like auth::authenticated()")

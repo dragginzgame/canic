@@ -172,45 +172,6 @@ fn deploy_plan_options_parse_supported_surface() {
 }
 
 #[test]
-fn deploy_plan_rejects_hard_cut_forms() {
-    for args in [
-        vec![],
-        vec![OsString::from("--deployment"), OsString::from("demo-local")],
-        vec![OsString::from("demo-local"), OsString::from("--apply")],
-        vec![
-            OsString::from("demo-local"),
-            OsString::from("--write-truth"),
-        ],
-        vec![OsString::from("demo-local"), OsString::from("--evidence")],
-        vec![
-            OsString::from("demo-local"),
-            OsString::from("--format"),
-            OsString::from("json"),
-        ],
-        vec![
-            OsString::from("demo-local"),
-            OsString::from("--from-check"),
-            OsString::from("deployment-check.json"),
-        ],
-        vec![
-            OsString::from("demo-local"),
-            OsString::from("--observe-local"),
-        ],
-        vec![
-            OsString::from("demo-local"),
-            OsString::from("--out"),
-            OsString::from("deployment-plan.json"),
-            OsString::from("--force"),
-        ],
-    ] {
-        assert!(matches!(
-            deploy_plan::DeployPlanOptions::parse(args),
-            Err(DeployCommandError::Usage(_))
-        ));
-    }
-}
-
-#[test]
 fn deploy_plan_report_builds_from_config_without_installed_state() {
     let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-report");
     write_artifact(&icp_root, "root", b"root-artifact");
