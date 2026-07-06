@@ -158,3 +158,31 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
         Some("local_install_state")
     );
 }
+
+#[test]
+fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
+    let temp = TempWorkspace::new("canic-host-local-root-evidence-missing-config");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    write_deployment_state_json(&icp_root, "local", sample_install_state("prod", "aaaaa-aa"));
+
+    let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
+        deployment_name: "prod".to_string(),
+        network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        config_path: None,
+        observed_at: "2026-05-27T00:00:00Z".to_string(),
+    })
+    .expect("collect inventory");
+
+    assert!(
+        inventory
+            .unresolved_observations
+            .iter()
+            .any(|gap| gap.key == "local_config.fleet_name")
+    );
+    let observed_root = inventory.observed_root.as_ref().expect("root evidence");
+    assert_eq!(observed_root.deployment_name, "prod");
+    assert_eq!(observed_root.fleet_template, "unknown");
+}

@@ -3,8 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path, path::PathBuf};
 
 pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 2;
-pub(super) const CURRENT_DEPLOYMENT_STATE_BOUNDARY_MESSAGE: &str =
-    "Current Canic reads live deployment state by deployment target, not fleet template.";
 
 ///
 /// RootVerificationStatus
@@ -50,7 +48,6 @@ pub(super) fn read_deployment_install_state(
     validate_state_name(deployment)?;
     let path = deployment_install_state_path(icp_root, network, deployment);
     if !path.is_file() {
-        reject_legacy_fleet_state(icp_root, network, deployment)?;
         return Ok(None);
     }
 
@@ -77,16 +74,6 @@ pub fn read_named_deployment_install_state_from_root(
     read_deployment_install_state(icp_root, network, deployment)
 }
 
-/// Return the legacy project-local fleet state path.
-#[must_use]
-pub(super) fn legacy_fleet_install_state_path(
-    icp_root: &Path,
-    network: &str,
-    fleet: &str,
-) -> PathBuf {
-    fleets_dir(icp_root, network).join(format!("{fleet}.json"))
-}
-
 /// Return the project-local state path for one deployment target.
 #[must_use]
 pub(super) fn deployment_install_state_path(
@@ -95,11 +82,6 @@ pub(super) fn deployment_install_state_path(
     deployment: &str,
 ) -> PathBuf {
     deployments_dir(icp_root, network).join(format!("{deployment}.json"))
-}
-
-// Return the directory that owns named fleet state files.
-fn fleets_dir(icp_root: &Path, network: &str) -> PathBuf {
-    icp_root.join(".canic").join(network).join("fleets")
 }
 
 // Return the directory that owns deployment-target state files.
@@ -128,23 +110,6 @@ pub(super) fn write_install_state(
     }
     fs::write(&path, serde_json::to_vec_pretty(state)?)?;
     Ok(path)
-}
-
-fn reject_legacy_fleet_state(
-    icp_root: &Path,
-    network: &str,
-    deployment: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let path = legacy_fleet_install_state_path(icp_root, network, deployment);
-    if path.exists() {
-        return Err(format!(
-            "legacy fleet install state found: {}\n\n{CURRENT_DEPLOYMENT_STATE_BOUNDARY_MESSAGE}\nCreate explicit deployment state with the fleet template that owns this target:\n  canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified\n\nOr reinstall using the fleet template/config that should produce this deployment:\n  canic install <fleet-template>\n\nIf the old state is obsolete, remove:\n  {}",
-            path.display(),
-            path.display()
-        )
-        .into());
-    }
-    Ok(())
 }
 
 // Keep deployment and template names filesystem-safe and easy to type.

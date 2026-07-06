@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.22` hard-cuts deployment observation and install-state legacy
+  fallbacks by requiring selected-network artifacts, explicit unknown fleet
+  identity, current deployment-target catalog state, and current install-state
+  paths only.
+
 - `0.82.21` hard-cuts the remaining `canic inspect` runtime response-wrapper
   metadata by requiring typed response bytes for decoding while removing
   response-presence fields from text and JSON inspect reports.

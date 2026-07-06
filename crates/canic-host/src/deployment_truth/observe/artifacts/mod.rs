@@ -50,11 +50,9 @@ pub fn collect_local_role_artifact_manifest(
         },
         deployment_truth_roles_with_implicit_wasm_store,
     );
-    let artifact_root = match resolve_artifact_root_for_observation(
-        &request.icp_root,
-        &request.network,
-        &mut unresolved_artifacts,
-    ) {
+    let artifact_root_result =
+        resolve_artifact_root_for_observation(&request.icp_root, &request.network);
+    let artifact_root = match artifact_root_result {
         Ok(root) => Some(root),
         Err(err) => {
             unresolved_artifacts.push(observation_gap(
@@ -100,17 +98,16 @@ pub(super) fn collect_observed_artifacts(
     roles: &[String],
     unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedArtifactV1> {
-    let artifact_root =
-        match resolve_artifact_root_for_observation(icp_root, network, unresolved_observations) {
-            Ok(root) => root,
-            Err(err) => {
-                unresolved_observations.push(observation_gap(
-                    "local_artifacts.root",
-                    format!("could not resolve artifact root for network {network}: {err}"),
-                ));
-                return Vec::new();
-            }
-        };
+    let artifact_root = match resolve_artifact_root_for_observation(icp_root, network) {
+        Ok(root) => root,
+        Err(err) => {
+            unresolved_observations.push(observation_gap(
+                "local_artifacts.root",
+                format!("could not resolve artifact root for network {network}: {err}"),
+            ));
+            return Vec::new();
+        }
+    };
 
     roles
         .iter()
@@ -179,24 +176,10 @@ fn load_release_entries(
 fn resolve_artifact_root_for_observation(
     icp_root: &Path,
     network: &str,
-    unresolved_artifacts: &mut Vec<DeploymentObservationGapV1>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let preferred = icp_root.join(".icp").join(network).join("canisters");
     if preferred.is_dir() {
         return Ok(preferred);
-    }
-
-    let local_fallback = icp_root.join(".icp/local/canisters");
-    if network != "local" && local_fallback.is_dir() {
-        unresolved_artifacts.push(observation_gap(
-            "local_artifacts.network_fallback",
-            format!(
-                "artifact root {} was missing; observing fallback {}",
-                preferred.display(),
-                local_fallback.display()
-            ),
-        ));
-        return Ok(local_fallback);
     }
 
     Err(format!("missing built ICP artifacts under {}", preferred.display()).into())
@@ -207,7 +190,7 @@ pub(in crate::deployment_truth) fn release_set_manifest_digest(
     network: &str,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Option<String> {
-    let artifact_root = match resolve_artifact_root_for_observation(icp_root, network, gaps) {
+    let artifact_root = match resolve_artifact_root_for_observation(icp_root, network) {
         Ok(root) => root,
         Err(err) => {
             gaps.push(observation_gap(

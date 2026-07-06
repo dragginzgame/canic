@@ -157,15 +157,15 @@ fn live_status_gap_key(observed: &ObservedCanisterV1) -> String {
 }
 
 fn classify_registry_observed_control(
-    fallback: CanisterControlClassV1,
+    registry_control_class: CanisterControlClassV1,
     controllers: &[String],
     root_trust_anchor: Option<&str>,
 ) -> CanisterControlClassV1 {
     let Some(anchor) = root_trust_anchor else {
-        return fallback;
+        return registry_control_class;
     };
     if controllers.iter().any(|controller| controller == anchor) {
-        fallback
+        registry_control_class
     } else {
         CanisterControlClassV1::UnknownUnsafe
     }

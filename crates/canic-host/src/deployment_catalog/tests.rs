@@ -56,32 +56,6 @@ fn catalog_returns_empty_warning_when_deployment_state_is_missing() {
 }
 
 #[test]
-fn catalog_ignores_legacy_fleet_state() {
-    let root = temp_dir("canic-catalog-legacy");
-    let legacy = root.join(".canic/local/fleets");
-    fs::create_dir_all(&legacy).expect("legacy dir");
-    fs::write(legacy.join("demo.json"), "{}").expect("legacy state");
-    let request = request(&root);
-
-    let report = build_deployment_catalog_report(&request).expect("catalog");
-
-    fs::remove_dir_all(root).expect("clean");
-    assert!(report.entries.is_empty());
-    assert!(
-        report
-            .warnings
-            .iter()
-            .any(|warning| warning.code == LEGACY_FLEET_STATE_IGNORED_WARNING_CODE)
-    );
-    assert!(
-        report
-            .warnings
-            .iter()
-            .any(|warning| warning.message == LEGACY_FLEET_STATE_IGNORED_WARNING_MESSAGE)
-    );
-}
-
-#[test]
 fn catalog_warns_and_keeps_valid_entries_when_one_entry_is_malformed() {
     let root = temp_dir("canic-catalog-malformed");
     write_state(&root, "local", sample_state("demo", "demo", "root"));
