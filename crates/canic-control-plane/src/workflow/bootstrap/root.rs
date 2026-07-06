@@ -16,11 +16,10 @@ use canic_core::api::lifecycle::metrics::{
 };
 use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
 use canic_core::control_plane_support::{
+    cdk::types::Principal,
     config::schema::SubnetConfig,
-    dto::{
-        pool::CanisterPoolStatus,
-        validation::{ValidationIssue, ValidationReport},
-    },
+    domain::pool::CanisterPoolStatus,
+    dto::validation::{ValidationIssue, ValidationReport},
     error::InternalError,
     ops::{
         config::ConfigOps,
@@ -35,7 +34,6 @@ use canic_core::control_plane_support::{
     workflow::{
         ic::{IcWorkflow, provision::ProvisionWorkflow},
         pool::{PoolWorkflow, query::PoolQuery},
-        prelude::*,
         topology::guard::TopologyGuard,
     },
 };
