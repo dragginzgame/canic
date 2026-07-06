@@ -25,7 +25,6 @@ use crate::{
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
     api::runtime::install::ModuleSourceRuntimeApi, bootstrap::EmbeddedRootBootstrapEntry,
-    cdk::types::Principal,
 };
 use canic_core::{dto::error::Error, log, log::Topic};
 
@@ -239,112 +238,55 @@ impl WasmStorePublicationApi {
         support::publication_admin(cmd).await
     }
 
-    // Publish the current release set into one subnet-local wasm store.
-    pub async fn publish_current_release_set_to_store(store_pid: Principal) -> Result<(), Error> {
-        support::publish_current_release_set_to_store(store_pid).await
-    }
-
-    // Publish the current release set into the current subnet's selected publication wasm store.
-    pub async fn publish_current_release_set_to_current_store() -> Result<(), Error> {
-        support::publish_current_release_set_to_current_store().await
-    }
-
-    // Persist one explicit publication binding for the current subnet.
-    pub fn set_current_publication_store_binding(binding: WasmStoreBinding) -> Result<(), Error> {
-        support::set_current_publication_store_binding(binding)
-    }
-
-    // Clear the explicit publication binding for the current subnet.
-    pub fn clear_current_publication_store_binding() -> Result<(), Error> {
-        support::clear_current_publication_store_binding()
-    }
-
-    // Retire the current detached publication binding for the current subnet.
-    #[must_use]
-    pub fn retire_detached_publication_store_binding() -> Option<WasmStoreBinding> {
-        support::retire_detached_publication_store_binding()
-    }
-
     // Return one root-owned overview for every tracked runtime-managed wasm store.
     pub fn overview() -> Result<WasmStoreOverviewResponse, Error> {
         Ok(support::publication_overview())
     }
-
-    // Mark the current retired publication store as prepared for store-local GC execution.
-    pub async fn prepare_retired_publication_store_for_gc()
-    -> Result<Option<WasmStoreBinding>, Error> {
-        support::prepare_retired_publication_store_for_gc().await
-    }
-
-    // Mark the current retired publication store as actively executing store-local GC.
-    pub async fn begin_retired_publication_store_gc() -> Result<Option<WasmStoreBinding>, Error> {
-        support::begin_retired_publication_store_gc().await
-    }
-
-    // Mark the current retired publication store as having completed its local GC pass.
-    pub async fn complete_retired_publication_store_gc() -> Result<Option<WasmStoreBinding>, Error>
-    {
-        support::complete_retired_publication_store_gc().await
-    }
-
-    // Finalize the retired publication binding once store-local GC has completed.
-    pub async fn finalize_retired_publication_store_binding()
-    -> Result<Option<WasmStoreBinding>, Error> {
-        support::finalize_retired_publication_store_binding().await
-    }
-
-    // Delete one finalized runtime-managed publication store canister.
-    pub async fn delete_finalized_publication_store(
-        binding: WasmStoreBinding,
-        store_pid: Principal,
-    ) -> Result<(), Error> {
-        support::delete_finalized_publication_store(binding, store_pid).await
-    }
 }
 
 ///
-/// WasmStoreApi
+/// LocalWasmStoreApi
 ///
 
 #[cfg(feature = "wasm-store-canister")]
-pub struct WasmStoreApi;
+struct LocalWasmStoreApi;
 
 #[cfg(feature = "wasm-store-canister")]
-impl WasmStoreApi {
+impl LocalWasmStoreApi {
     // Return the current approved release catalog stored in this local wasm store.
-    pub fn template_catalog() -> Result<Vec<WasmStoreCatalogEntryResponse>, Error> {
-        Ok(support::local_template_catalog())
+    fn template_catalog() -> Vec<WasmStoreCatalogEntryResponse> {
+        support::local_template_catalog()
     }
 
     // Return occupied-byte and retention state for this local wasm store.
-    pub fn template_status(gc: WasmStoreGcStatus) -> Result<WasmStoreStatusResponse, Error> {
+    fn template_status(gc: WasmStoreGcStatus) -> Result<WasmStoreStatusResponse, Error> {
         support::local_template_status(gc)
     }
 
     // Prepare one approved template release for chunk-by-chunk publication in this local wasm store.
-    pub fn prepare_chunk_set(
+    fn prepare_chunk_set(
         request: TemplateChunkSetPrepareInput,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
         support::local_prepare_chunk_set(request)
     }
 
     // Stage one approved manifest in this local wasm store.
-    pub fn stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
+    fn stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
         support::local_stage_manifest(request)
     }
 
     // Publish one deterministic chunk into an already prepared local template release.
-    pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
+    fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
         support::local_publish_chunk(request)
     }
 
     // Clear all local template records, chunk metadata, and staged chunk hashes for store-local GC.
-    pub async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, Error> {
+    async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, Error> {
         support::execute_local_store_gc().await
     }
 
     // Return deterministic chunk-set metadata for one local template release.
-    pub fn template_info(
+    fn template_info(
         template_id: TemplateId,
         version: TemplateVersion,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
@@ -352,7 +294,7 @@ impl WasmStoreApi {
     }
 
     // Return one deterministic chunk for one local template release.
-    pub fn template_chunk(
+    fn template_chunk(
         template_id: TemplateId,
         version: TemplateVersion,
         chunk_index: u32,
@@ -372,24 +314,24 @@ pub struct WasmStoreCanisterApi;
 impl WasmStoreCanisterApi {
     // Return the current approved release catalog stored in this local wasm store.
     pub fn catalog() -> Result<Vec<WasmStoreCatalogEntryResponse>, Error> {
-        WasmStoreApi::template_catalog()
+        Ok(LocalWasmStoreApi::template_catalog())
     }
 
     // Prepare one approved template release for chunk-by-chunk publication.
     pub fn prepare(
         request: TemplateChunkSetPrepareInput,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
-        WasmStoreApi::prepare_chunk_set(request)
+        LocalWasmStoreApi::prepare_chunk_set(request)
     }
 
     // Stage one approved manifest in this local wasm store.
     pub fn stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
-        WasmStoreApi::stage_manifest(request)
+        LocalWasmStoreApi::stage_manifest(request)
     }
 
     // Publish one deterministic chunk into an already prepared local template release.
     pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
-        WasmStoreApi::publish_chunk(request)
+        LocalWasmStoreApi::publish_chunk(request)
     }
 
     // Return deterministic chunk-set metadata for one local template release.
@@ -397,12 +339,12 @@ impl WasmStoreCanisterApi {
         template_id: TemplateId,
         version: TemplateVersion,
     ) -> Result<TemplateChunkSetInfoResponse, Error> {
-        WasmStoreApi::template_info(template_id, version)
+        LocalWasmStoreApi::template_info(template_id, version)
     }
 
     // Return occupied-byte and retention state for this local wasm store.
     pub fn status() -> Result<WasmStoreStatusResponse, Error> {
-        WasmStoreApi::template_status(WasmStoreGcOps::snapshot())
+        LocalWasmStoreApi::template_status(WasmStoreGcOps::snapshot())
     }
 
     // Mark this local wasm store as prepared for store-local GC execution.
@@ -432,7 +374,7 @@ impl WasmStoreCanisterApi {
         }
 
         WasmStoreGcOps::begin_clearing(now_secs)?;
-        let stats = match WasmStoreApi::execute_local_store_gc().await {
+        let stats = match LocalWasmStoreApi::execute_local_store_gc().await {
             Ok(stats) => stats,
             Err(err) => {
                 let _ = WasmStoreGcOps::begin(support::now_secs());
@@ -461,6 +403,6 @@ impl WasmStoreCanisterApi {
         version: TemplateVersion,
         chunk_index: u32,
     ) -> Result<TemplateChunkResponse, Error> {
-        WasmStoreApi::template_chunk(template_id, version, chunk_index)
+        LocalWasmStoreApi::template_chunk(template_id, version, chunk_index)
     }
 }

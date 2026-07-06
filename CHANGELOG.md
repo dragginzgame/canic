@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.26` hard-cuts unused wasm-store Rust API facade aliases and direct
+  publication helpers by keeping the canonical endpoint-facing canister facade
+  and typed publication admin command.
+
 - `0.82.25` continues no-behavior-change boundary hardening by narrowing
   control-plane format support exports and removing stale release-line labels
   from active medic source comments.

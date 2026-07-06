@@ -72,9 +72,7 @@ pub mod canister {
     #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
     pub mod template {
         #[cfg(feature = "wasm-store-canister")]
-        pub use canic_control_plane::api::template::WasmStoreApi as EmbeddedTemplateApi;
-        #[cfg(feature = "wasm-store-canister")]
-        pub use canic_control_plane::api::template::{WasmStoreApi, WasmStoreCanisterApi};
+        pub use canic_control_plane::api::template::WasmStoreCanisterApi;
         #[cfg(feature = "control-plane")]
         pub use canic_control_plane::api::template::{
             WasmStoreBootstrapApi, WasmStorePublicationApi,
