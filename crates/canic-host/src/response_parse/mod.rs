@@ -39,13 +39,6 @@ pub fn response_candid(value: &serde_json::Value) -> Option<&str> {
 }
 
 #[must_use]
-pub(crate) fn parse_candid_text_field(output: &str, field: &str) -> Option<String> {
-    let after_eq = field_value_after_equals(output, field)?;
-    let after_quote = after_eq.trim_start().strip_prefix('"')?;
-    parse_candid_quoted_text(after_quote)
-}
-
-#[must_use]
 pub(crate) fn parse_candid_text_like_field(output: &str, field: &str) -> Option<String> {
     let after_eq = field_value_after_equals(output, field)?;
     let after_quote = after_eq

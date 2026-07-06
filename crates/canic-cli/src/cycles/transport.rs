@@ -6,10 +6,7 @@ use crate::{
             CyclesCanisterReport, CyclesReport, CyclesTopupSummary,
         },
         options::CyclesOptions,
-        parse::{
-            parse_cycle_tracker_page, parse_cycle_tracker_page_text, parse_topup_event_page,
-            parse_topup_event_page_text,
-        },
+        parse::{parse_cycle_tracker_page, parse_topup_event_page},
     },
     support::{
         candid::registry_entry_candid_path,
@@ -303,7 +300,6 @@ fn query_topup_event_page(
         .map_err(|err| err.to_string())?;
 
     parse_topup_event_page(&output)
-        .or_else(|| parse_topup_event_page_text(&output))
         .ok_or_else(|| "could not parse canic_cycle_topups response".to_string())
 }
 
@@ -334,7 +330,6 @@ fn query_cycle_tracker_page(
         .map_err(|err| err.to_string())?;
 
     parse_cycle_tracker_page(&output)
-        .or_else(|| parse_cycle_tracker_page_text(&output))
         .ok_or_else(|| "could not parse canic_cycle_tracker response".to_string())
 }
 

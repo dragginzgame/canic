@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.19` hard-cuts more `response_candid` compatibility parsing by
+  requiring structured JSON for CLI metrics/cycles report pages and host
+  `canic_metadata` version discovery.
+
 - `0.82.18` continues the pre-1.0 hard-cut cleanup by renaming stale registry
   policy error codes, removing auth metric compatibility mirroring, and making
   root bootstrap subnet identity explicit instead of fallback-derived.

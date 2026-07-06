@@ -2,8 +2,8 @@
 set -euo pipefail
 
 LABEL="runner disk"
-MIN_FREE_MIB="${CANIC_CI_MIN_FREE_MIB:-0}"
-TOP_LIMIT="${CANIC_CI_DISK_TOP_LIMIT:-16}"
+MIN_FREE_MIB=0
+TOP_LIMIT=16
 
 usage() {
     cat >&2 <<'USAGE'

@@ -50,20 +50,24 @@ run_test() {
     record_summary "$label" "$elapsed" "test"
 }
 
-clear_pocketic_wasm_targets() {
+clear_pocketic_build_targets() {
     local label="$1"
     local cleared=0
     local target_dir
     local target_dirs=(
+        "target/icp-build"
         "target/pic-wasm"
         "target/pic-wasm-no-test-material"
         "target/delegation_root_stub_bootstrap_wasm_store"
         "target/delegation_root_stub_embedded_wasm"
     )
 
-    if ! should_clear_pocketic_wasm_targets; then
-        return
-    fi
+    # CI clears aggressive build caches to avoid runner disk exhaustion. Local
+    # runs keep Cargo's wasm build cache.
+    case "${CI:-}" in
+        1 | true | TRUE | yes | YES) ;;
+        *) return ;;
+    esac
 
     for target_dir in "${target_dirs[@]}"; do
         if [[ ! -e "$target_dir" ]]; then
@@ -71,38 +75,17 @@ clear_pocketic_wasm_targets() {
         fi
 
         if [[ "$cleared" -eq 0 ]]; then
-            echo "==> clearing PocketIC wasm build targets before $label"
+            echo "==> clearing PocketIC build targets before $label"
             cleared=1
         fi
         rm -rf "$target_dir"
     done
 }
 
-should_clear_pocketic_wasm_targets() {
-    # CI keeps the aggressive cleanup to avoid runner disk exhaustion; local
-    # runs keep Cargo's wasm build cache unless cleanup is explicitly requested.
-    case "${CANIC_CLEAR_PIC_WASM_TARGETS:-}" in
-        1 | true | TRUE | yes | YES)
-            return 0
-            ;;
-        0 | false | FALSE | no | NO)
-            return 1
-            ;;
-    esac
-
-    case "${CI:-}" in
-        1 | true | TRUE | yes | YES)
-            return 0
-            ;;
-    esac
-
-    return 1
-}
-
 run_pic_test() {
     local label="$1"
     shift
-    clear_pocketic_wasm_targets "$label"
+    clear_pocketic_build_targets "$label"
     run_test "$label" "$@"
 }
 
