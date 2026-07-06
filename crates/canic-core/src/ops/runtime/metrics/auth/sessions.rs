@@ -4,27 +4,8 @@
 //! Does not own: session storage, delegated-token verification, or endpoint DTOs.
 //! Boundary: auth workflow calls these ops helpers after typed outcomes are known.
 
-use crate::{
-    ids::AccessMetricKind,
-    ops::runtime::metrics::{
-        access::AccessMetrics,
-        auth::{
-            AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
-            AuthMetrics, auth_session_endpoint, session_bootstrap_rejected_capacity_predicate,
-            session_bootstrap_rejected_disabled_predicate,
-            session_bootstrap_rejected_replay_conflict_predicate,
-            session_bootstrap_rejected_replay_reused_predicate,
-            session_bootstrap_rejected_subject_mismatch_predicate,
-            session_bootstrap_rejected_subject_rejected_predicate,
-            session_bootstrap_rejected_token_invalid_predicate,
-            session_bootstrap_rejected_ttl_invalid_predicate,
-            session_bootstrap_rejected_wallet_caller_rejected_predicate,
-            session_bootstrap_replay_idempotent_predicate, session_cleared_predicate,
-            session_created_predicate, session_fallback_invalid_subject_predicate,
-            session_fallback_raw_caller_predicate, session_pruned_predicate,
-            session_replaced_predicate,
-        },
-    },
+use crate::ops::runtime::metrics::auth::{
+    AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface, AuthMetrics,
 };
 
 /// Record a rejected session bootstrap when delegated-token auth is disabled.
@@ -33,7 +14,6 @@ pub fn record_session_bootstrap_rejected_disabled() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::Disabled,
-        session_bootstrap_rejected_disabled_predicate(),
     );
 }
 
@@ -43,7 +23,6 @@ pub fn record_session_bootstrap_rejected_capacity() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::Capacity,
-        session_bootstrap_rejected_capacity_predicate(),
     );
 }
 
@@ -53,7 +32,6 @@ pub fn record_session_bootstrap_rejected_wallet_caller_rejected() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::WalletCallerRejected,
-        session_bootstrap_rejected_wallet_caller_rejected_predicate(),
     );
 }
 
@@ -63,7 +41,6 @@ pub fn record_session_bootstrap_rejected_subject_rejected() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::SubjectRejected,
-        session_bootstrap_rejected_subject_rejected_predicate(),
     );
 }
 
@@ -73,7 +50,6 @@ pub fn record_session_bootstrap_rejected_replay_conflict() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::ReplayConflict,
-        session_bootstrap_rejected_replay_conflict_predicate(),
     );
 }
 
@@ -83,7 +59,6 @@ pub fn record_session_bootstrap_rejected_replay_reused() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::ReplayReused,
-        session_bootstrap_rejected_replay_reused_predicate(),
     );
 }
 
@@ -93,7 +68,6 @@ pub fn record_session_bootstrap_rejected_token_invalid() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::TokenInvalid,
-        session_bootstrap_rejected_token_invalid_predicate(),
     );
 }
 
@@ -103,7 +77,6 @@ pub fn record_session_bootstrap_rejected_subject_mismatch() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::SubjectMismatch,
-        session_bootstrap_rejected_subject_mismatch_predicate(),
     );
 }
 
@@ -113,7 +86,6 @@ pub fn record_session_bootstrap_rejected_ttl_invalid() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Rejected,
         AuthMetricReason::TtlInvalid,
-        session_bootstrap_rejected_ttl_invalid_predicate(),
     );
 }
 
@@ -123,7 +95,6 @@ pub fn record_session_bootstrap_replay_idempotent() {
         AuthMetricOperation::Bootstrap,
         AuthMetricOutcome::Idempotent,
         AuthMetricReason::Replay,
-        session_bootstrap_replay_idempotent_predicate(),
     );
 }
 
@@ -133,7 +104,6 @@ pub fn record_session_created() {
         AuthMetricOperation::Session,
         AuthMetricOutcome::Completed,
         AuthMetricReason::Created,
-        session_created_predicate(),
     );
 }
 
@@ -143,7 +113,6 @@ pub fn record_session_replaced() {
         AuthMetricOperation::Session,
         AuthMetricOutcome::Completed,
         AuthMetricReason::Replaced,
-        session_replaced_predicate(),
     );
 }
 
@@ -153,7 +122,6 @@ pub fn record_session_cleared() {
         AuthMetricOperation::Session,
         AuthMetricOutcome::Completed,
         AuthMetricReason::Cleared,
-        session_cleared_predicate(),
     );
 }
 
@@ -164,7 +132,6 @@ pub fn record_session_pruned(removed: usize) {
             AuthMetricOperation::Session,
             AuthMetricOutcome::Completed,
             AuthMetricReason::Pruned,
-            session_pruned_predicate(),
         );
     }
 }
@@ -175,7 +142,6 @@ pub fn record_session_fallback_raw_caller() {
         AuthMetricOperation::IdentityFallback,
         AuthMetricOutcome::Completed,
         AuthMetricReason::RawCaller,
-        session_fallback_raw_caller_predicate(),
     );
 }
 
@@ -185,17 +151,13 @@ pub fn record_session_fallback_invalid_subject() {
         AuthMetricOperation::IdentityFallback,
         AuthMetricOutcome::Completed,
         AuthMetricReason::InvalidSubject,
-        session_fallback_invalid_subject_predicate(),
     );
 }
 
-// Record one session auth metric in both the dedicated Auth family and legacy Access rows.
 fn record_session_metric(
     operation: AuthMetricOperation,
     outcome: AuthMetricOutcome,
     reason: AuthMetricReason,
-    predicate: &'static str,
 ) {
     AuthMetrics::record(AuthMetricSurface::Session, operation, outcome, reason);
-    AccessMetrics::increment(auth_session_endpoint(), AccessMetricKind::Auth, predicate);
 }

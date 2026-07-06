@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.18` continues the pre-1.0 hard-cut cleanup by renaming stale registry
+  policy error codes, removing auth metric compatibility mirroring, and making
+  root bootstrap subnet identity explicit instead of fallback-derived.
+
 - `0.82.17` hard-cuts Candid/Serde and inspect compatibility fallbacks by
   guarding Candid DTO serde attributes, removing HTTP method uppercase aliases,
   requiring typed inspect response bytes, and dropping the legacy root replay

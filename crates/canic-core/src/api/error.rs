@@ -10,16 +10,14 @@ fn registry_policy_error_code(message: &str) -> Option<ErrorCode> {
     if message.contains("already registered under parent") {
         return Some(ErrorCode::PolicySingletonAlreadyRegisteredUnderParent);
     }
-    // These wire codes keep their pre-0.64 names for compatibility; the
-    // policy messages now describe service-owned manager pools.
     if message.contains("must be created by a service parent with scaling config") {
-        return Some(ErrorCode::PolicyReplicaRequiresSingletonWithScaling);
+        return Some(ErrorCode::PolicyReplicaRequiresServiceWithScaling);
     }
     if message.contains("must be created by a service parent with sharding config") {
-        return Some(ErrorCode::PolicyShardRequiresSingletonWithSharding);
+        return Some(ErrorCode::PolicyShardRequiresServiceWithSharding);
     }
     if message.contains("must be created by a service parent with directory config") {
-        return Some(ErrorCode::PolicyInstanceRequiresSingletonWithDirectory);
+        return Some(ErrorCode::PolicyInstanceRequiresServiceWithDirectory);
     }
 
     None
@@ -128,5 +126,39 @@ mod tests {
         let internal: InternalError = TopologyPolicyError::from(err).into();
         let public: Error = internal.into();
         assert_eq!(public.code, ErrorCode::PolicyRoleAlreadyRegistered);
+    }
+
+    #[test]
+    fn registry_policy_service_parent_errors_use_service_owned_public_codes() {
+        let cases = [
+            (
+                RegistryPolicyError::ReplicaRequiresServiceWithScaling {
+                    role: CanisterRole::new("replica"),
+                    parent_role: CanisterRole::new("plain_parent"),
+                },
+                ErrorCode::PolicyReplicaRequiresServiceWithScaling,
+            ),
+            (
+                RegistryPolicyError::ShardRequiresServiceWithSharding {
+                    role: CanisterRole::new("shard"),
+                    parent_role: CanisterRole::new("plain_parent"),
+                },
+                ErrorCode::PolicyShardRequiresServiceWithSharding,
+            ),
+            (
+                RegistryPolicyError::InstanceRequiresServiceWithDirectory {
+                    role: CanisterRole::new("instance"),
+                    parent_role: CanisterRole::new("plain_parent"),
+                },
+                ErrorCode::PolicyInstanceRequiresServiceWithDirectory,
+            ),
+        ];
+
+        for (err, expected) in cases {
+            let internal: InternalError = TopologyPolicyError::from(err).into();
+            let public: Error = internal.into();
+
+            assert_eq!(public.code, expected);
+        }
     }
 }

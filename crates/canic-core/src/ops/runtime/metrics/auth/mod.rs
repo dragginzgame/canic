@@ -5,24 +5,8 @@
 //! Boundary: ops-layer counters consumed by metrics projection and auth recorders.
 
 mod attestation;
-mod labels;
 mod sessions;
 
-use crate::ops::runtime::metrics::auth::labels::{
-    attestation_epoch_rejected_predicate, attestation_verify_failed_predicate,
-    auth_attestation_verifier_endpoint, auth_session_endpoint,
-    session_bootstrap_rejected_capacity_predicate, session_bootstrap_rejected_disabled_predicate,
-    session_bootstrap_rejected_replay_conflict_predicate,
-    session_bootstrap_rejected_replay_reused_predicate,
-    session_bootstrap_rejected_subject_mismatch_predicate,
-    session_bootstrap_rejected_subject_rejected_predicate,
-    session_bootstrap_rejected_token_invalid_predicate,
-    session_bootstrap_rejected_ttl_invalid_predicate,
-    session_bootstrap_rejected_wallet_caller_rejected_predicate,
-    session_bootstrap_replay_idempotent_predicate, session_cleared_predicate,
-    session_created_predicate, session_fallback_invalid_subject_predicate,
-    session_fallback_raw_caller_predicate, session_pruned_predicate, session_replaced_predicate,
-};
 use std::{cell::RefCell, collections::HashMap};
 
 pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
@@ -240,28 +224,6 @@ impl AuthMetrics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ids::AccessMetricKind, ops::runtime::metrics::access::AccessMetrics};
-
-    fn metric_count(endpoint: &str, predicate: &str) -> u64 {
-        AccessMetrics::snapshot()
-            .entries
-            .into_iter()
-            .find_map(|(key, count)| {
-                if key.endpoint == endpoint
-                    && key.kind == AccessMetricKind::Auth
-                    && key.predicate == predicate
-                {
-                    Some(count)
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0)
-    }
-
-    fn assert_auth_metric_count(endpoint: &str, predicate: &str, expected: u64) {
-        assert_eq!(metric_count(endpoint, predicate), expected);
-    }
 
     fn auth_metric_count(
         surface: AuthMetricSurface,
@@ -298,18 +260,71 @@ mod tests {
         );
     }
 
+    fn assert_session_metric_count(
+        operation: AuthMetricOperation,
+        outcome: AuthMetricOutcome,
+        reason: AuthMetricReason,
+        expected: u64,
+    ) {
+        assert_metric_count(
+            AuthMetricSurface::Session,
+            operation,
+            outcome,
+            reason,
+            expected,
+        );
+    }
+
     #[test]
-    fn session_metrics_increment_expected_predicates() {
-        AccessMetrics::reset();
+    fn session_lifecycle_metrics_increment_expected_auth_dimensions() {
+        AuthMetrics::reset();
+
+        record_session_created();
+        record_session_replaced();
+        record_session_cleared();
+        record_session_pruned(2);
+
+        for (reason, expected) in [
+            (AuthMetricReason::Created, 1),
+            (AuthMetricReason::Replaced, 1),
+            (AuthMetricReason::Cleared, 1),
+            (AuthMetricReason::Pruned, 2),
+        ] {
+            assert_session_metric_count(
+                AuthMetricOperation::Session,
+                AuthMetricOutcome::Completed,
+                reason,
+                expected,
+            );
+        }
+    }
+
+    #[test]
+    fn session_identity_fallback_metrics_increment_expected_auth_dimensions() {
+        AuthMetrics::reset();
+
+        record_session_fallback_raw_caller();
+        record_session_fallback_invalid_subject();
+
+        for reason in [
+            AuthMetricReason::RawCaller,
+            AuthMetricReason::InvalidSubject,
+        ] {
+            assert_session_metric_count(
+                AuthMetricOperation::IdentityFallback,
+                AuthMetricOutcome::Completed,
+                reason,
+                1,
+            );
+        }
+    }
+
+    #[test]
+    fn session_bootstrap_metrics_increment_expected_auth_dimensions() {
         AuthMetrics::reset();
 
         for action in [
-            record_session_created as fn(),
-            record_session_replaced,
-            record_session_cleared,
-            record_session_fallback_raw_caller,
-            record_session_fallback_invalid_subject,
-            record_session_bootstrap_rejected_capacity,
+            record_session_bootstrap_rejected_capacity as fn(),
             record_session_bootstrap_rejected_disabled,
             record_session_bootstrap_rejected_wallet_caller_rejected,
             record_session_bootstrap_rejected_subject_rejected,
@@ -318,66 +333,30 @@ mod tests {
             record_session_bootstrap_rejected_token_invalid,
             record_session_bootstrap_rejected_subject_mismatch,
             record_session_bootstrap_rejected_ttl_invalid,
-            record_session_bootstrap_replay_idempotent,
         ] {
             action();
         }
-        record_session_pruned(2);
+        record_session_bootstrap_replay_idempotent();
 
-        for (predicate, expected) in [
-            (session_created_predicate(), 1),
-            (session_replaced_predicate(), 1),
-            (session_cleared_predicate(), 1),
-            (session_pruned_predicate(), 2),
-            (session_fallback_raw_caller_predicate(), 1),
-            (session_fallback_invalid_subject_predicate(), 1),
-            (session_bootstrap_rejected_capacity_predicate(), 1),
-            (session_bootstrap_rejected_disabled_predicate(), 1),
-            (
-                session_bootstrap_rejected_wallet_caller_rejected_predicate(),
-                1,
-            ),
-            (session_bootstrap_rejected_subject_rejected_predicate(), 1),
-            (session_bootstrap_rejected_replay_conflict_predicate(), 1),
-            (session_bootstrap_rejected_replay_reused_predicate(), 1),
-            (session_bootstrap_rejected_token_invalid_predicate(), 1),
-            (session_bootstrap_rejected_subject_mismatch_predicate(), 1),
-            (session_bootstrap_rejected_ttl_invalid_predicate(), 1),
-            (session_bootstrap_replay_idempotent_predicate(), 1),
-        ] {
-            assert_auth_metric_count(auth_session_endpoint(), predicate, expected);
-        }
-
-        assert_metric_count(
-            AuthMetricSurface::Session,
-            AuthMetricOperation::Session,
-            AuthMetricOutcome::Completed,
-            AuthMetricReason::Created,
-            1,
-        );
-        assert_metric_count(
-            AuthMetricSurface::Session,
-            AuthMetricOperation::Session,
-            AuthMetricOutcome::Completed,
-            AuthMetricReason::Pruned,
-            2,
-        );
-        assert_metric_count(
-            AuthMetricSurface::Session,
-            AuthMetricOperation::Bootstrap,
-            AuthMetricOutcome::Rejected,
-            AuthMetricReason::TokenInvalid,
-            1,
-        );
-        assert_metric_count(
-            AuthMetricSurface::Session,
-            AuthMetricOperation::Bootstrap,
-            AuthMetricOutcome::Rejected,
+        for reason in [
             AuthMetricReason::Capacity,
-            1,
-        );
-        assert_metric_count(
-            AuthMetricSurface::Session,
+            AuthMetricReason::Disabled,
+            AuthMetricReason::WalletCallerRejected,
+            AuthMetricReason::SubjectRejected,
+            AuthMetricReason::ReplayConflict,
+            AuthMetricReason::ReplayReused,
+            AuthMetricReason::TokenInvalid,
+            AuthMetricReason::SubjectMismatch,
+            AuthMetricReason::TtlInvalid,
+        ] {
+            assert_session_metric_count(
+                AuthMetricOperation::Bootstrap,
+                AuthMetricOutcome::Rejected,
+                reason,
+                1,
+            );
+        }
+        assert_session_metric_count(
             AuthMetricOperation::Bootstrap,
             AuthMetricOutcome::Idempotent,
             AuthMetricReason::Replay,
@@ -386,25 +365,24 @@ mod tests {
     }
 
     #[test]
-    fn attestation_metrics_increment_expected_predicates() {
-        AccessMetrics::reset();
+    fn attestation_metrics_increment_expected_auth_dimensions() {
         AuthMetrics::reset();
 
         record_attestation_verify_failed();
         record_attestation_epoch_rejected();
-
-        for predicate in [
-            attestation_verify_failed_predicate(),
-            attestation_epoch_rejected_predicate(),
-        ] {
-            assert_auth_metric_count(auth_attestation_verifier_endpoint(), predicate, 1);
-        }
 
         assert_metric_count(
             AuthMetricSurface::Attestation,
             AuthMetricOperation::Verify,
             AuthMetricOutcome::Failed,
             AuthMetricReason::VerifyFailed,
+            1,
+        );
+        assert_metric_count(
+            AuthMetricSurface::Attestation,
+            AuthMetricOperation::Verify,
+            AuthMetricOutcome::Failed,
+            AuthMetricReason::EpochRejected,
             1,
         );
     }

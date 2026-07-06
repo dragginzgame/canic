@@ -4,16 +4,8 @@
 //! Does not own: attestation verification, access policy, or endpoint DTOs.
 //! Boundary: auth workflow calls these ops helpers after typed outcomes are known.
 
-use crate::{
-    ids::AccessMetricKind,
-    ops::runtime::metrics::{
-        access::AccessMetrics,
-        auth::{
-            AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface,
-            AuthMetrics, attestation_epoch_rejected_predicate, attestation_verify_failed_predicate,
-            auth_attestation_verifier_endpoint,
-        },
-    },
+use crate::ops::runtime::metrics::auth::{
+    AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface, AuthMetrics,
 };
 
 /// Record an attestation verification failure.
@@ -22,7 +14,6 @@ pub fn record_attestation_verify_failed() {
         AuthMetricOperation::Verify,
         AuthMetricOutcome::Failed,
         AuthMetricReason::VerifyFailed,
-        attestation_verify_failed_predicate(),
     );
 }
 
@@ -32,21 +23,13 @@ pub fn record_attestation_epoch_rejected() {
         AuthMetricOperation::Verify,
         AuthMetricOutcome::Failed,
         AuthMetricReason::EpochRejected,
-        attestation_epoch_rejected_predicate(),
     );
 }
 
-// Record one attestation auth metric in both the dedicated Auth family and legacy Access rows.
 fn record_attestation_metric(
     operation: AuthMetricOperation,
     outcome: AuthMetricOutcome,
     reason: AuthMetricReason,
-    predicate: &'static str,
 ) {
     AuthMetrics::record(AuthMetricSurface::Attestation, operation, outcome, reason);
-    AccessMetrics::increment(
-        auth_attestation_verifier_endpoint(),
-        AccessMetricKind::Auth,
-        predicate,
-    );
 }

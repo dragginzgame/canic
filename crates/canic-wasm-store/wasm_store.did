@@ -58,13 +58,13 @@ type ErrorCode = variant {
   PolicyRoleAlreadyRegistered;
   InvalidInput;
   InvariantViolation;
-  PolicyShardRequiresSingletonWithSharding;
+  PolicyShardRequiresServiceWithSharding;
   NotFound;
   AuthMaterialStale;
   PolicySingletonAlreadyRegisteredUnderParent;
-  PolicyInstanceRequiresSingletonWithDirectory;
+  PolicyInstanceRequiresServiceWithDirectory;
   Unauthorized;
-  PolicyReplicaRequiresSingletonWithScaling;
+  PolicyReplicaRequiresServiceWithScaling;
   AuthProofExpired;
   InternalRpcMalformed;
   ResourceExhausted;
