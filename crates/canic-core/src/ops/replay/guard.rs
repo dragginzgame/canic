@@ -12,7 +12,7 @@ use crate::{
             ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
             ReplayReceiptToken, prepare_replay_receipt,
         },
-        slot, ttl,
+        ttl,
     },
     ops::storage::replay::ReplayReceiptOps,
 };
@@ -125,7 +125,7 @@ pub fn evaluate_root_replay(
         },
     )?;
     if matches!(decision, ReplayReceiptDecision::Fresh(_)) {
-        let _ = slot::purge_root_expired(now_ns, input.purge_scan_limit);
+        let _ = ReplayReceiptOps::purge_expired(now_ns, input.purge_scan_limit);
     }
     Ok(map_receipt_decision(decision))
 }

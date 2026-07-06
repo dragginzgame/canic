@@ -14,10 +14,11 @@ use crate::{
         ScalingPlan, ScalingPolicy, ScalingPolicyInput, ScalingPoolPolicyInput,
         ScalingWorkerPlanEntry,
     },
+    dto::rpc::CreateCanisterParent,
     ops::{
         config::ConfigOps,
         ic::IcOps,
-        rpc::request::{CreateCanisterParent, RequestOps},
+        rpc::request::RequestOps,
         runtime::metrics::{
             recording::ScalingMetricEvent as MetricEvent,
             scaling::{

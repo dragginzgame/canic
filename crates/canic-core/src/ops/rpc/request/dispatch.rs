@@ -4,13 +4,14 @@
 //! Does not own: workflow policy, capability proof verification, or replay storage.
 //! Boundary: delegates transport to `RpcOps` after attaching request metadata.
 
-use super::{
-    CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
-    CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse, Request, RequestOpsError,
-    Response, RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
-};
+use super::RequestOpsError;
 use crate::{
     InternalError, InternalErrorOrigin,
+    dto::rpc::{
+        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
+        CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse, Request, Response,
+        RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
+    },
     ops::{
         ic::IcOps,
         prelude::*,

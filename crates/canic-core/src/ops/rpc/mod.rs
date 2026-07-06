@@ -16,7 +16,7 @@ use crate::{
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
-        rpc::{CreateCanisterParent, Request as DtoRequest},
+        rpc::{CreateCanisterParent, Request, Response},
     },
     ops::{
         OpsError,
@@ -25,7 +25,7 @@ use crate::{
             call::{CallOps, CallResult},
         },
         prelude::*,
-        rpc::request::{Request, RequestOpsError, Response},
+        rpc::request::RequestOpsError,
         runtime::env::EnvOps,
     },
     protocol,
@@ -188,7 +188,6 @@ const fn uses_structural_capability_proof(request: &Request) -> bool {
 }
 
 fn non_structural_capability_proof_error(request: &Request) -> InternalError {
-    let request: DtoRequest = request.clone();
     InternalError::ops(
         InternalErrorOrigin::Ops,
         format!(

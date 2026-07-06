@@ -7,16 +7,19 @@
 use crate::{
     ops::{
         ic::IcOps,
-        runtime::metrics::intent::{
-            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
-            IntentMetrics,
+        runtime::{
+            metrics::intent::{
+                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
+                IntentMetricSurface, IntentMetrics,
+            },
+            timer::TimerId,
         },
         storage::intent::IntentStoreOps,
     },
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_INTENT_CLEANUP_INTERVAL},
         prelude::*,
-        runtime::timer::{TimerId, TimerWorkflow},
+        runtime::timer::TimerWorkflow,
     },
 };
 use std::{cell::RefCell, time::Duration};

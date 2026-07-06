@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-05
+Last updated: 2026-07-06
 
 ## Purpose
 
@@ -14,11 +14,10 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.1`. An accidental
-  next-minor workspace/version-surface bump was corrected back to `0.82.1` in
-  `Cargo.toml`, `Cargo.lock`, `scripts/dev/install_dev.sh`, and
-  `crates/canic-host/README.md`. A local stale next-minor tag was observed,
-  but it has not been deleted.
+- The current package/release-surface version is `0.82.13`. Earlier in the
+  0.82 line, an accidental next-minor workspace/version-surface bump was
+  corrected before patch work continued. A local stale next-minor tag was
+  observed then, but it has not been deleted.
 
 - The current `0.82.1` working slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision
@@ -181,6 +180,30 @@ before this compaction is archived at
   CLI behavior, Candid, JSON, deployment truth, and evidence/report schemas are
   unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-replay-model-shim-removal-report.md`.
+
+- The current 0.82 follow-up slice removes the internal
+  `ops::replay::slot` legacy root replay adapter after routing root replay
+  quota checks, reservation, commit, and purge mechanics through shared replay
+  receipt helpers/storage directly. Replay behavior, stable replay receipt
+  layout, endpoint surfaces, CLI behavior, Candid, JSON, deployment truth, and
+  evidence/report schemas are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-root-replay-slot-adapter-removal-report.md`.
+
+- The same 0.82 follow-up slice removes `dto::rpc` re-exports from
+  `ops::rpc::request` so RPC request/response DTOs are imported from their DTO
+  owner while request ops keep only dispatch helpers/errors. RPC behavior,
+  capability metadata, Candid shapes, endpoint surfaces, CLI behavior, JSON,
+  deployment truth, and evidence/report schemas are unchanged. The docs-only
+  report is
+  `docs/design/0.82-boundary-hardening/0.82-rpc-request-dto-boundary-report.md`.
+
+- The same 0.82 follow-up slice removes the workflow-layer `TimerId` re-export
+  so timer handles are imported from `ops::runtime::timer`, while
+  `TimerWorkflow` keeps scheduling orchestration. Timer behavior, lifecycle
+  facade behavior, runtime timer metric labels, endpoint surfaces, CLI
+  behavior, Candid, JSON, deployment truth, and evidence/report schemas are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-timer-id-workflow-boundary-report.md`.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
