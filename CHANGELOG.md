@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.21` hard-cuts the remaining `canic inspect` runtime response-wrapper
+  metadata by requiring typed response bytes for decoding while removing
+  response-presence fields from text and JSON inspect reports.
+
 - `0.82.20` finishes the host `response_candid` parser hard cut by requiring
   structured JSON for ICP CLI cycle-balance and bootstrap-readiness fallback
   responses while keeping local typed-byte decoding unchanged.
