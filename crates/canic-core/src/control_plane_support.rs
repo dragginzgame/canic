@@ -27,20 +27,10 @@ pub mod format {
     pub use crate::shared_support::format::{byte_size, cycles_tc, truncate};
 }
 
-pub mod dto {
-    pub mod validation {
-        pub use crate::dto::validation::{ValidationIssue, ValidationReport};
-    }
-}
-
 pub mod domain {
     pub mod pool {
         pub use crate::domain::pool::CanisterPoolStatus;
     }
-}
-
-pub mod ids {
-    pub use crate::ids::{BuildNetwork, CanisterRole};
 }
 
 pub mod model {
@@ -116,10 +106,6 @@ pub mod ops {
             }
         }
     }
-}
-
-pub mod replay_policy {
-    pub use crate::replay_policy::CostClass;
 }
 
 pub mod workflow {

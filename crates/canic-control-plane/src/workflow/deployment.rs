@@ -12,7 +12,6 @@ use canic_core::{
             },
             ic::{IcOps, mgmt::MgmtOps},
         },
-        replay_policy::CostClass,
         workflow::canister_lifecycle::{
             CanisterLifecycleEvent, CanisterLifecycleResult, CanisterLifecycleWorkflow,
         },
@@ -20,6 +19,7 @@ use canic_core::{
     dto::error::Error,
     log,
     log::Topic,
+    replay_policy::CostClass,
 };
 
 const CONTROL_PLANE_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;

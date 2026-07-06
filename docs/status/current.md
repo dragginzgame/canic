@@ -421,6 +421,20 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-cli-anti-resurrection-test-cleanup-report.md`.
   The root and detailed `0.82.22` changelog entries are prepared.
 
+- The current 0.82 follow-up slice removes hidden
+  `control_plane_support` facades that mirrored public validation DTO, ids, and
+  replay-policy owners. Control-plane root bootstrap now imports validation
+  report DTOs from `canic_core::dto::validation`, deployment workflow now
+  imports `CostClass` from `canic_core::replay_policy`, and the unused ids
+  support namespace is removed. Support facades for crate-private
+  `SubnetConfig`, `CanisterPoolStatus`, and `CommandKind` remain because they
+  are real control-plane mediation boundaries. Root bootstrap validation
+  behavior, deployment cost-guard behavior, endpoint surfaces, CLI behavior,
+  Candid, JSON, deployment truth, evidence/report schemas, and stable-state
+  layout are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-control-plane-core-owner-support-boundary-report.md`.
+  The root and detailed `0.82.23` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

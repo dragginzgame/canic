@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.23` removes remaining public-owner `control_plane_support` facades for
+  validation DTOs, ids, and replay policy while preserving real mediation for
+  crate-private core owners.
+
 - `0.82.22` removes obsolete CLI anti-resurrection test fixtures and stale
   compatibility wording so maintained tests cover current command behavior and
   active guard invariants only.
