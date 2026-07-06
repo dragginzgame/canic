@@ -10,7 +10,8 @@ use crate::{
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
-use canic_core::control_plane_support::{cdk::types::Principal, error::InternalError};
+use canic_core::cdk::types::Principal;
+use canic_core::control_plane_support::error::InternalError;
 use canic_core::{log, log::Topic};
 
 use super::metrics::{

@@ -6,11 +6,11 @@ use crate::{
     ids::{TemplateId, TemplateVersion},
 };
 use candid::{CandidType, utils::ArgumentEncoder};
+use canic_core::cdk::types::Principal;
 use canic_core::{
-    control_plane_support::{
-        cdk::types::Principal, error::InternalError, ops::ic::call::CallOps, protocol,
-    },
+    control_plane_support::{error::InternalError, ops::ic::call::CallOps},
     dto::error::Error,
+    protocol,
 };
 
 ///
@@ -211,7 +211,7 @@ struct TemplateChunkInputRef<'a> {
 #[cfg(test)]
 mod tests {
     use super::WasmStoreInternalClient;
-    use canic_core::control_plane_support::protocol;
+    use canic_core::protocol;
     use std::collections::BTreeSet;
 
     #[test]

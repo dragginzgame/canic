@@ -1336,7 +1336,7 @@ mod tests {
         let unsupported_key = format!("{ASSUMPTION_PREFIX_UNSUPPORTED}pool_relationship");
         let plan = plan_with_assumptions([assumption(
             &unsupported_key,
-            "pool relationship is outside the 0.79 planner contract",
+            "pool relationship is outside the deploy-plan planner contract",
         )]);
 
         let blockers = plan_blockers(&plan);

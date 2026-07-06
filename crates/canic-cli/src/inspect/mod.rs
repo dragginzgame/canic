@@ -278,7 +278,7 @@ fn resolve_deployment_target(
         [entry] => *entry,
         _ => {
             return Err(InspectCommandError::Target(format!(
-                "role {role} resolves to multiple canisters in deployment target {deployment}; explicit disambiguation is not supported in 0.81"
+                "role {role} resolves to multiple canisters in deployment target {deployment}; explicit disambiguation is not supported by canic inspect deployment"
             )));
         }
     };

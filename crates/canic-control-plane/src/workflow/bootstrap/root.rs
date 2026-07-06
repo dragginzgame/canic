@@ -15,8 +15,8 @@ use canic_core::api::lifecycle::metrics::{
     LifecycleMetricsApi,
 };
 use canic_core::api::runtime::install::ModuleSourceRuntimeApi;
+use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    cdk::types::Principal,
     config::schema::SubnetConfig,
     domain::pool::CanisterPoolStatus,
     error::{InternalError, InternalErrorOrigin},

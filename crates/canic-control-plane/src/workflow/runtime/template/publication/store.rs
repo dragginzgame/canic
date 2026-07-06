@@ -6,10 +6,8 @@ use crate::{
     ids::{TemplateId, TemplateVersion, WasmStoreBinding},
     ops::storage::{state::subnet::SubnetStateOps, template::TemplateChunkedOps},
 };
-use canic_core::control_plane_support::{
-    cdk::types::Principal,
-    error::{InternalError, InternalErrorOrigin},
-};
+use canic_core::cdk::types::Principal;
+use canic_core::control_plane_support::error::{InternalError, InternalErrorOrigin};
 
 use super::super::WasmStoreInternalClient;
 

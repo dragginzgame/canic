@@ -2,9 +2,8 @@ use crate::dto::template::{
     TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
 };
 use crate::ids::{TemplateReleaseKey, WasmStoreBinding};
-use canic_core::control_plane_support::{
-    cdk::types::Principal, error::InternalError, ops::ic::mgmt::MgmtOps,
-};
+use canic_core::cdk::types::Principal;
+use canic_core::control_plane_support::{error::InternalError, ops::ic::mgmt::MgmtOps};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
