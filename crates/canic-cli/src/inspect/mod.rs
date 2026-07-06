@@ -158,8 +158,6 @@ struct RuntimeStatusPayload {
     source: String,
     status: CanicRuntimeStatus,
     response_format: String,
-    response_bytes_present: bool,
-    response_candid_present: bool,
 }
 
 pub fn run<I>(args: I) -> Result<(), InspectCommandError>
@@ -337,31 +335,21 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
 fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
     let value = serde_json::from_str::<serde_json::Value>(output)
         .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
-    let response_candid_present = value.get("response_candid").is_some();
-    let response_bytes = value
+    let Some(response_bytes) = value
         .get("response_bytes")
         .and_then(serde_json::Value::as_str)
-        .map(str::to_string);
-    let response_bytes_present = response_bytes.is_some();
-
-    if !response_bytes_present {
+    else {
         return Err(InspectCommandError::InvalidResponse(
             "missing response_bytes; typed canic_runtime_status response requires response_bytes"
                 .to_string(),
         ));
-    }
-    let status = decode_runtime_status_response_hex(
-        response_bytes
-            .as_deref()
-            .expect("response_bytes presence checked"),
-    )?;
+    };
+    let status = decode_runtime_status_response_hex(response_bytes)?;
 
     Ok(RuntimeStatusPayload {
         source: RUNTIME_OBSERVED_SOURCE.to_string(),
         status,
         response_format: "candid".to_string(),
-        response_bytes_present,
-        response_candid_present,
     })
 }
 
@@ -413,14 +401,6 @@ fn render_text_report(report: &InspectReport) -> String {
             "runtime_status".to_string(),
             format!("source: {}", runtime_status.source),
             format!("response_format: {}", runtime_status.response_format),
-            format!(
-                "response_bytes_present: {}",
-                runtime_status.response_bytes_present
-            ),
-            format!(
-                "response_candid_present: {}",
-                runtime_status.response_candid_present
-            ),
         ]);
         let status = &runtime_status.status;
         lines.extend([
@@ -843,11 +823,8 @@ mod tests {
     }
 
     #[test]
-    fn response_candid_without_response_bytes_is_rejected() {
-        let err = runtime_response_payload(
-            r#"{"response_candid":"(record { status = variant { Ok } })"}"#,
-        )
-        .expect_err("text-only Candid fallback is rejected");
+    fn response_without_response_bytes_is_rejected() {
+        let err = runtime_response_payload("{}").expect_err("typed response bytes are required");
 
         assert!(matches!(err, InspectCommandError::InvalidResponse(_)));
     }
@@ -865,8 +842,6 @@ mod tests {
         assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
         assert_eq!(payload.status, status);
         assert_eq!(payload.response_format, "candid");
-        assert!(payload.response_bytes_present);
-        assert!(!payload.response_candid_present);
         assert_eq!(inspect_status_label(&payload), "ok");
     }
 
@@ -888,8 +863,6 @@ mod tests {
         assert!(rendered.contains("source: runtime_observed"));
         assert!(rendered.contains("endpoint: canic_runtime_status"));
         assert!(rendered.contains("response_format: candid"));
-        assert!(rendered.contains("response_bytes_present: true"));
-        assert!(rendered.contains("response_candid_present: true"));
         assert!(rendered.contains("status: ok"));
         assert!(rendered.contains("runtime_status: ok"));
         assert!(rendered.contains("schema_version: 1"));
@@ -962,9 +935,6 @@ mod tests {
             true
         );
         assert_eq!(value["runtime_status"]["response_format"], "candid");
-        assert_eq!(value["runtime_status"]["response_bytes_present"], true);
-        assert_eq!(value["runtime_status"]["response_candid_present"], true);
-        assert!(value["runtime_status"].get("response_candid").is_none());
     }
 
     #[test]
@@ -1012,8 +982,6 @@ mod tests {
                 source: RUNTIME_OBSERVED_SOURCE.to_string(),
                 status: sample_runtime_status(RuntimeStatus::Ok),
                 response_format: "candid".to_string(),
-                response_bytes_present: true,
-                response_candid_present: true,
             }),
             warnings: Vec::new(),
             next_actions: Vec::new(),

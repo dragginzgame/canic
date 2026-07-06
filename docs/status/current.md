@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.17`. Earlier in the
+- The current package/release-surface version is `0.82.20`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -359,6 +359,19 @@ before this compaction is archived at
   schemas, and stable-state layout are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-bootstrap-readiness-response-candid-hard-cut-report.md`.
   The root and detailed `0.82.20` changelog entries are prepared.
+
+- The current 0.82 follow-up slice hard-cuts the remaining
+  `response_candid` metadata from `canic inspect` runtime reports. Inspect
+  still requires typed `response_bytes` for `canic_runtime_status` decoding and
+  still reports `response_format: candid`, but text/JSON output no longer
+  exposes response-wrapper presence fields such as
+  `runtime_status.response_candid_present` or
+  `runtime_status.response_bytes_present`. Inspect
+  command surfaces, target resolution, endpoint guards, runtime endpoint DTOs,
+  Candid, deployment truth, evidence/report schemas, and stable-state layout
+  are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-inspect-response-candid-metadata-hard-cut-report.md`.
+  The root and detailed `0.82.21` changelog entries are prepared.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
