@@ -2,17 +2,11 @@ use crate::cycles::model::{
     CycleTopupEventPage, CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage,
     CycleTrackerSample,
 };
-use canic_host::response_parse::{
-    field_value_after_equals, find_field, parse_json_u64, parse_json_u128, parse_u64_digits,
-    parse_u128_digits, response_candid,
-};
+use canic_host::response_parse::{find_field, parse_json_u64, parse_json_u128};
 
 pub(super) fn parse_cycle_tracker_page(output: &str) -> Option<CycleTrackerPage> {
     let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    if let Some(page) = parse_cycle_tracker_page_json(&value) {
-        return Some(page);
-    }
-    response_candid(&value).and_then(parse_cycle_tracker_page_text)
+    parse_cycle_tracker_page_json(&value)
 }
 
 fn parse_cycle_tracker_page_json(value: &serde_json::Value) -> Option<CycleTrackerPage> {
@@ -38,10 +32,7 @@ fn parse_cycle_tracker_sample_json(value: &serde_json::Value) -> Option<CycleTra
 
 pub(super) fn parse_topup_event_page(output: &str) -> Option<CycleTopupEventPage> {
     let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    if let Some(page) = parse_topup_event_page_json(&value) {
-        return Some(page);
-    }
-    response_candid(&value).and_then(parse_topup_event_page_text)
+    parse_topup_event_page_json(&value)
 }
 
 fn parse_topup_event_page_json(value: &serde_json::Value) -> Option<CycleTopupEventPage> {
@@ -83,49 +74,6 @@ fn parse_topup_status_json(value: &serde_json::Value) -> Option<CycleTopupStatus
     }
 }
 
-pub(super) fn parse_cycle_tracker_page_text(output: &str) -> Option<CycleTrackerPage> {
-    let mut entries = Vec::new();
-    for chunk in output.split("record") {
-        if !(chunk.contains("timestamp_secs") && chunk.contains("cycles")) {
-            continue;
-        }
-        let timestamp_secs =
-            field_number_after(chunk, "timestamp_secs").and_then(parse_u64_digits)?;
-        let cycles = field_number_after(chunk, "cycles").and_then(parse_u128_digits)?;
-        entries.push(CycleTrackerSample {
-            timestamp_secs,
-            cycles,
-        });
-    }
-    let total = field_number_after(output, "total")
-        .and_then(parse_u64_digits)
-        .unwrap_or(entries.len() as u64);
-    Some(CycleTrackerPage { entries, total })
-}
-
-pub(super) fn parse_topup_event_page_text(output: &str) -> Option<CycleTopupEventPage> {
-    let mut entries = Vec::new();
-    for chunk in output.split("record") {
-        if !(chunk.contains("timestamp_secs") && chunk.contains("status")) {
-            continue;
-        }
-        let timestamp_secs =
-            field_number_after(chunk, "timestamp_secs").and_then(parse_u64_digits)?;
-        let transferred_cycles =
-            field_number_after(chunk, "transferred_cycles").and_then(parse_u128_digits);
-        let status = parse_topup_status(chunk)?;
-        entries.push(CycleTopupEventSample {
-            timestamp_secs,
-            transferred_cycles,
-            status,
-        });
-    }
-    let total = field_number_after(output, "total")
-        .and_then(parse_u64_digits)
-        .unwrap_or(entries.len() as u64);
-    Some(CycleTopupEventPage { entries, total })
-}
-
 fn parse_topup_status(text: &str) -> Option<CycleTopupStatus> {
     if text.contains("RequestOk") || text.contains("request_ok") {
         Some(CycleTopupStatus::RequestOk)
@@ -136,8 +84,4 @@ fn parse_topup_status(text: &str) -> Option<CycleTopupStatus> {
     } else {
         None
     }
-}
-
-fn field_number_after<'a>(text: &'a str, field: &str) -> Option<&'a str> {
-    field_value_after_equals(text, field)
 }

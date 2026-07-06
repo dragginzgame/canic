@@ -320,6 +320,26 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-root-bootstrap-subnet-identity-hard-cut-report.md`.
   The root and detailed `0.82.18` changelog entries are prepared.
 
+- The current 0.82 follow-up slice hard-cuts CLI metrics/cycles
+  `response_candid` fallback parsing. `canic info metrics` and
+  `canic info cycles` now require structured JSON values for metrics, cycle
+  tracker, and top-up report pages; text-only `response_candid` payloads and
+  malformed structured entries with `response_candid` present are rejected.
+  CLI command names/options, successful report output, endpoint Candid
+  signatures, deployment truth, evidence/report schemas, and stable-state
+  layout are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-cli-metrics-cycles-response-candid-hard-cut-report.md`.
+
+- The same 0.82 follow-up slice hard-cuts host `canic_metadata`
+  `response_candid` fallback parsing. Metadata version discovery now requires
+  a structured JSON `canic_version` field; raw Candid text and text-only
+  `response_candid` wrapper output are rejected. The `canic_metadata` endpoint
+  Candid signature, CLI list command surfaces, successful live-list rendering,
+  deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-canic-metadata-response-candid-hard-cut-report.md`.
+  The root and detailed `0.82.19` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
