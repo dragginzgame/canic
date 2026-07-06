@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.14` continues no-behavior-change boundary hardening by removing legacy
+  internal replay/RPC/timer ownership shortcuts while preserving runtime
+  behavior, stable replay layout, and public serialized surfaces.
+
 - `0.82.13` removes the internal replay-model compatibility shim by moving
   replay ops and replay-protected workflows to the canonical model owner while
   preserving replay behavior and stable receipt layout.

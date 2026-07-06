@@ -8,10 +8,10 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     config::schema::DirectoryPool,
-    dto::placement::directory::DirectoryEntryStatusResponse,
+    dto::{placement::directory::DirectoryEntryStatusResponse, rpc::CreateCanisterParent},
     ops::{
         ic::IcOps,
-        rpc::request::{CreateCanisterParent, RequestOps},
+        rpc::request::RequestOps,
         runtime::metrics::{
             directory::{
                 DirectoryMetricOperation as MetricOperation, DirectoryMetricReason as MetricReason,

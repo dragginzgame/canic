@@ -4,7 +4,7 @@
 //! Does not own: timer persistence, lifecycle hooks, or scheduling policy.
 //! Boundary: delegates timer creation and clearing to runtime timer workflow.
 
-use crate::workflow::runtime::timer::{TimerId, TimerWorkflow};
+use crate::{ops::runtime::timer::TimerId, workflow::runtime::timer::TimerWorkflow};
 use std::{cell::RefCell, future::Future, rc::Rc, thread::LocalKey, time::Duration};
 
 ///

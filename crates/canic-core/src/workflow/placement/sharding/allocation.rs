@@ -8,10 +8,11 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     config::schema::ShardPoolPolicy,
+    dto::rpc::CreateCanisterParent,
     ids::CanisterRole,
     log::Topic,
     ops::{
-        rpc::request::{CreateCanisterParent, RequestOps},
+        rpc::request::RequestOps,
         runtime::metrics::{
             recording::ShardingMetricEvent as MetricEvent,
             sharding::{

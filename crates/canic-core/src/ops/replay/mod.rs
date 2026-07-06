@@ -6,7 +6,6 @@
 
 pub mod guard;
 pub mod receipt;
-pub mod slot;
 pub mod ttl;
 
 use crate::{
@@ -17,12 +16,15 @@ use crate::{
         pool::PoolAdminResponse,
         rpc::{CyclesResponse, Response},
     },
-    model::replay::{ExternalEffectDescriptor, RecoveryReason, ReplayReceipt},
+    model::replay::{ExternalEffectDescriptor, RecoveryReason, ReplayActor, ReplayReceipt},
     ops::replay::{
         guard::ReplayPending,
-        receipt::{abort_reserved_receipt, mark_external_effect_in_flight, mark_recovery_required},
-        slot as replay_slot,
+        receipt::{
+            abort_reserved_receipt, commit_receipt_response, mark_external_effect_in_flight,
+            mark_recovery_required, reserve_receipt_token,
+        },
     },
+    ops::storage::replay::ReplayReceiptOps,
 };
 use candid::{decode_one, encode_one};
 
@@ -85,8 +87,10 @@ pub fn reserve_root_replay(
     max_entries: usize,
     max_entries_per_caller: usize,
 ) -> Result<(), ReplayReserveError> {
-    if replay_slot::active_root_slot_len_for_caller(pending.caller, pending.issued_at_ns)
-        >= max_entries_per_caller
+    if ReplayReceiptOps::active_len_for_actor(
+        ReplayActor::direct_caller(pending.caller),
+        pending.issued_at_ns,
+    ) >= max_entries_per_caller
     {
         return Err(ReplayReserveError::CallerCapacityReached {
             caller: pending.caller,
@@ -94,11 +98,11 @@ pub fn reserve_root_replay(
         });
     }
 
-    if replay_slot::root_slot_len() >= max_entries {
+    if ReplayReceiptOps::len() >= max_entries {
         return Err(ReplayReserveError::CapacityReached { max_entries });
     }
 
-    replay_slot::reserve_root_slot(pending);
+    reserve_receipt_token(&pending.receipt_token);
     Ok(())
 }
 
@@ -110,7 +114,12 @@ pub fn commit_root_replay(
     response: &Response,
 ) -> Result<(), ReplayCommitError> {
     let response_bytes = encode_root_replay_response(response)?;
-    replay_slot::commit_root_slot(pending, response_bytes);
+    commit_receipt_response(
+        &pending.receipt_token,
+        ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
+        response_bytes,
+        pending.issued_at_ns,
+    );
     Ok(())
 }
 
@@ -141,7 +150,12 @@ pub fn mark_root_replay_recovery_required(
 /// Persist a cached cycles response without rebuilding the enum wrapper at the call site.
 pub fn commit_root_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
     let response_bytes = encode_root_cycles_replay_response(response);
-    replay_slot::commit_root_slot(&pending, response_bytes);
+    commit_receipt_response(
+        &pending.receipt_token,
+        ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
+        response_bytes,
+        pending.issued_at_ns,
+    );
 }
 
 /// decode_root_replay_response
