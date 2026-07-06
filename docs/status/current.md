@@ -463,6 +463,23 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-active-cli-release-wording-cleanup-report.md`.
   The root and detailed `0.82.24` changelog entries are prepared.
 
+- The current 0.82 follow-up slice narrows
+  `control_plane_support::format` to the single formatting helper used by
+  `canic-control-plane`. The hidden support namespace now exports only
+  `byte_size`; host-side `cycles_tc` and `truncate` usage remains on its
+  existing support path. Control-plane byte-size labels, endpoint surfaces,
+  CLI behavior, Candid, JSON, deployment truth, evidence/report schemas, and
+  stable-state layout are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-control-plane-format-support-boundary-report.md`.
+
+- The same 0.82 follow-up slice cleans stale release-line labels out of active
+  medic source comments and lint-expectation reasons. Medic report categories,
+  exit-code behavior, endpoint surfaces, CLI behavior, Candid, JSON,
+  deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-active-source-release-comment-cleanup-report.md`.
+  The root and detailed `0.82.25` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

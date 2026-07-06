@@ -185,7 +185,7 @@ fn medic_subcommand_help_requests_are_not_targets() {
     ]));
 }
 
-// Ensure aggregate status follows the 0.78 report contract.
+// Ensure aggregate status follows the medic report contract.
 #[test]
 fn aggregate_status_follows_report_contract() {
     assert_eq!(aggregate_status(&[]), MedicStatus::NotEvaluated);
@@ -360,7 +360,7 @@ fn renders_medic_ci_report_without_failures() {
     );
 }
 
-// Ensure medic errors keep the process-level exit-code contract from the 0.78 design.
+// Ensure medic errors keep the designed process-level exit-code contract.
 #[test]
 fn medic_cli_errors_map_to_designed_exit_codes() {
     let usage = CliError::from(MedicCommandError::Usage("bad medic args".to_string()));

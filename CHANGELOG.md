@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.25` continues no-behavior-change boundary hardening by narrowing
+  control-plane format support exports and removing stale release-line labels
+  from active medic source comments.
+
 - `0.82.24` continues no-behavior-change support and CLI boundary hardening by
   removing hidden CDK/protocol control-plane mirrors and replacing stale
   release-line wording in active CLI help/errors.
