@@ -502,7 +502,7 @@ fn token_icp_error(error: IcpCommandError) -> TokenCommandError {
 mod tests {
     use super::*;
 
-    // Keep canic token compatible with ICP's optional token prefix shape.
+    // Accept ICP's optional token prefix shape.
     #[test]
     fn splits_optional_token_prefix() {
         let default = split_token_command(vec![OsString::from("balance")]).expect("split default");

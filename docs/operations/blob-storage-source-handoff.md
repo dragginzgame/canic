@@ -77,7 +77,7 @@ Record each finding under the correct evidence class:
   for `account_balance_get_v1`, `account_top_up_v1`, and
   `storage_gateway_principal_list_v1`.
 - Toko consumer evidence: downstream caller, wrapper, generated declaration, or
-  compatibility evidence.
+  interoperability evidence.
 
 The Toko project-instance canister endpoint source is now recorded in
 `docs/contracts/BLOB_STORAGE_INVENTORY.md` as complete 0.69 protocol evidence.

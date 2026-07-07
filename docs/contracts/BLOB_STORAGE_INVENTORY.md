@@ -42,7 +42,7 @@ for:
 - `_immutableObjectStorageFundFromProjectCycles`
 
 The current Toko `boss` evidence is accepted as the protocol source for the
-0.69 project-side blob-storage gateway contract. The Toko compatibility answer
+0.69 project-side blob-storage gateway contract. The Toko interoperability answer
 is direct Caffeine root adoption through `blob_root_hash` for current source.
 Actual Cashier implementation source remains separated into the 0.70 Cashier
 inventory and does not block the 0.69 non-billing gateway implementation.
@@ -93,7 +93,7 @@ Result:
   changelog notes, guard scripts, and inventory-gate tests.
 - The only sibling checkout matching the local project search was
   `/home/adam/projects/toko`, which remains useful for first-consumer
-  compatibility evidence but does not contain the gateway protocol source or
+  interoperability evidence but does not contain the gateway protocol source or
   method literals.
 - Candid files discovered under `/home/adam/projects/icydb/artifacts` are
   unrelated local wasm-size artifacts and are not gateway protocol evidence.
@@ -178,7 +178,7 @@ Superseded next-step note:
 - Locate any separate immutable object-storage gateway implementation or
   generated/deployed gateway `.did`, if that is required beyond the
   project-instance endpoint source.
-- Continue to keep Toko compatibility evidence and Cashier/billing evidence
+- Continue to keep Toko interoperability evidence and Cashier/billing evidence
   separate from the 0.69 project-side endpoint evidence.
 
 ### 2026-06-19 Local Toko Development Commit Inspection
@@ -245,7 +245,7 @@ Inventory effect:
 - This does not identify a separate gateway service implementation or deployed
   gateway `.did`.
 - The inventory remains incomplete until the method sections are completed
-  from accepted protocol evidence and the Toko compatibility/migration answer
+  from accepted protocol evidence and the Toko interoperability/migration answer
   is resolved.
 
 ### 2026-06-20 Local Toko Boss Commit Inspection
@@ -295,7 +295,7 @@ Inventory effect:
   `9ca150b396a2bde42f2b8977a04a7ca2c6172b56`.
 - The Toko project-instance source is accepted as the 0.69 project-side
   protocol source.
-- The current Toko compatibility strategy is direct Caffeine root adoption
+- The current Toko interoperability strategy is direct Caffeine root adoption
   through `blob_root_hash`.
 - Cashier implementation source remains a separate 0.70 blocker.
 
@@ -333,7 +333,7 @@ Required behavior metadata:
 - Idempotency expectations.
 - Production-vs-local behavior differences.
 - 0.69 or 0.70 ownership classification.
-- Toko behavior-level compatibility notes.
+- Toko behavior-level interoperability notes.
 
 ### Status Vocabulary
 
@@ -344,13 +344,13 @@ Method status values are intentionally narrow:
   provenance, and per-method source path are recorded, but Candid or behavior
   fields remain incomplete.
 - `Snapshot captured`: source metadata and exact Candid are recorded, but
-  behavior fields or compatibility notes remain incomplete.
-- `Complete`: every required source, Candid, behavior, and compatibility field
+  behavior fields or interoperability notes remain incomplete.
+- `Complete`: every required source, Candid, behavior, and interoperability field
   is filled from cited protocol evidence.
 
 Design-note statements may describe expected ownership or implementation
 direction, but they do not satisfy source, Candid, DTO, behavior, or
-compatibility fields. Keep unknown protocol facts as `TBD` instead of inferring
+interoperability fields. Keep unknown protocol facts as `TBD` instead of inferring
 them from the 0.69 design.
 
 ## Method Inventory
@@ -666,7 +666,7 @@ Required fields:
 - Funding success/failure behavior: see source-backed Toko evidence
 - Production-vs-local differences: see source-backed Toko evidence
 
-## Compatibility Notes
+## Interoperability Notes
 
 ### Toko
 
@@ -687,7 +687,7 @@ Source evidence captured:
 - Historical development inspection note: inspected locally with `git show` /
   `git grep` without checking out or mutating the Toko worktree; this evidence
   is now superseded by the checked-out `boss` source above.
-- Legacy asset/chunk compatibility evidence commit:
+- Historical asset/chunk interoperability evidence commit:
   `600dcfbe91c30311c5896f3ac0399d27e2e36ab6`.
 
 Current Toko blob-storage source state:
@@ -717,7 +717,7 @@ Current Toko blob-storage source state:
   `_immutableObjectStorageCreateCertificate` with the resulting
   `sha256:<64-hex>` string.
 
-Compatibility findings:
+Interoperability findings:
 
 - Current Toko live blob state uses `StoredBlob.root_hash` with the Caffeine
   `sha256:<64-hex>` root string and therefore matches Canic's planned
@@ -730,7 +730,7 @@ Compatibility findings:
   accepts placeholder blob root hashes on local builds and does not require
   corresponding `StoredBlob` rows. Production builds require the blob to be
   registered and not pending deletion.
-- Deletion compatibility: deleting current Toko `RemoteAsset` rows marks the
+- Deletion interoperability: deleting current Toko `RemoteAsset` rows marks the
   associated `RemoteAsset.blob_root_hash` pending deletion, then deletes the
   project-local remote asset row. Gateway scrubber confirmation clears pending
   and stored blob rows through `_immutableObjectStorageConfirmBlobDeletion`.
@@ -746,7 +746,7 @@ Compatibility findings:
   this current-source protocol inventory.
 
 The 0.69 storage schema can now be designed around current Toko
-`blob_root_hash` compatibility.
+`blob_root_hash` fit.
 
 ## Implementation Gate
 
@@ -772,7 +772,7 @@ protocol inventory/design documentation. When this inventory is marked
 `Complete`, the same guard verifies that all six method sections are present and
 individually complete, have no `TBD` fields, include required common and
 method-specific evidence labels, reject placeholder field values, validate
-method source commit SHA shape, and confirm that the Toko compatibility section
+method source commit SHA shape, and confirm that the Toko interoperability section
 is also complete with local source, commit, blob-root mapping, and
 migration/read-through strategy evidence.
 

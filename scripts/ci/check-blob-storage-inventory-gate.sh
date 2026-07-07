@@ -178,35 +178,35 @@ if [[ "$status" == "Complete" ]]; then
         )"
 
         if [[ -z "$section" ]]; then
-            echo "blob-storage inventory missing Toko compatibility section" >&2
+            echo "blob-storage inventory missing Toko interoperability section" >&2
             failed=1
             return
         fi
 
         if ! grep -q "^Status: \*\*Complete\*\*$" <<<"$section"; then
-            echo "blob-storage Toko compatibility notes are not complete" >&2
+            echo "blob-storage Toko interoperability notes are not complete" >&2
             failed=1
         fi
 
         if grep -q "TBD" <<<"$section"; then
-            echo "blob-storage Toko compatibility notes still have TBD fields" >&2
+            echo "blob-storage Toko interoperability notes still have TBD fields" >&2
             failed=1
         fi
 
         for field in "${required_toko_fields[@]}"; do
             if ! grep -Eq "^- ${field}: .+$" <<<"$section"; then
-                echo "blob-storage Toko compatibility notes missing required field: $field" >&2
+                echo "blob-storage Toko interoperability notes missing required field: $field" >&2
                 failed=1
             fi
         done
 
         if grep -Eiq "^- [^:]+: *(TODO|unknown|unresolved|missing source|placeholder|source-backed evidence)([[:space:].,;]|$)" <<<"$section"; then
-            echo "blob-storage Toko compatibility notes still have placeholder evidence" >&2
+            echo "blob-storage Toko interoperability notes still have placeholder evidence" >&2
             failed=1
         fi
 
         if ! grep -Eq "^- Source commit SHA: [0-9a-fA-F]{40}([0-9a-fA-F]{24})?$" <<<"$section"; then
-            echo "blob-storage Toko compatibility notes have invalid source commit SHA" >&2
+            echo "blob-storage Toko interoperability notes have invalid source commit SHA" >&2
             failed=1
         fi
     }

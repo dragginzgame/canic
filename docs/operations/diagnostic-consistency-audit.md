@@ -44,9 +44,9 @@ generated artifacts.
 
 ## Public-Output Boundary
 
-Diagnostic surfaces have different compatibility weight:
+Diagnostic surfaces have different stability weight:
 
-| Surface | Compatibility note |
+| Surface | Stability note |
 | --- | --- |
 | Internal runtime log | May be improved when needed, but should avoid sensitive payloads and must state whether log text is the only changed output. |
 | Developer-only tool output | Requires changelog/status coverage when changed. |

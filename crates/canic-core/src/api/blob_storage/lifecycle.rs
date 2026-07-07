@@ -29,7 +29,7 @@ impl BlobStorageApi {
             .map_err(Self::map_lifecycle_error)
     }
 
-    /// Register an upload certificate request and return the gateway-compatible DTO.
+    /// Register an upload certificate request and return the gateway protocol DTO.
     ///
     /// The gateway contract echoes the request hash in the response; Canic stores
     /// the canonical normalized hash internally.

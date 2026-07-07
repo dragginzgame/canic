@@ -41,7 +41,7 @@ Outside the Canic workspace, enable the feature on the canister's existing
 
 ## Endpoint Macro
 
-Emit the four gateway-compatible endpoints from the canister root:
+Emit the four gateway protocol endpoints from the canister root:
 
 ```rust
 canic::canic_emit_blob_storage_endpoints!(guard = caller::is_controller());
@@ -71,7 +71,7 @@ internal lifecycle work instead of calling `_immutableObjectStorage*` endpoints.
 Use these helpers for the 0.69 lifecycle:
 
 - `create_certificate(root_hash)` registers a live root and returns the
-  gateway-compatible certificate DTO. The DTO echoes the request hash to match
+  gateway protocol certificate DTO. The DTO echoes the request hash to match
   the gateway protocol; Canic stores the canonical normalized hash internally.
 - `register_live(root_hash, now_ns)` registers a root when certificate creation
   happens outside the endpoint path.
