@@ -128,10 +128,11 @@ pub fn query_cycle_balance_from_root(
 pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {
     match data {
         serde_json::Value::Bool(value) => *value,
-        serde_json::Value::String(value) => value.trim() == "(true)",
         serde_json::Value::Array(values) => values.iter().any(parse_ready_json_value),
-        serde_json::Value::Object(map) => map.values().any(parse_ready_json_value),
-        _ => false,
+        serde_json::Value::Object(map) => map.get("Ok").is_some_and(parse_ready_json_value),
+        serde_json::Value::String(_) | serde_json::Value::Number(_) | serde_json::Value::Null => {
+            false
+        }
     }
 }
 

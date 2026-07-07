@@ -127,8 +127,7 @@ fn registry_entries_parse_icp_response_bytes_json() {
     ]));
     let bytes = candid::Encode!(&response).expect("encode registry response");
     let payload = serde_json::json!({
-        "response_bytes": hex_bytes(&bytes),
-        "response_candid": "(variant { Ok = vec { ... } })"
+        "response_bytes": hex_bytes(&bytes)
     })
     .to_string();
     let entries = parse_registry_entries(&payload).expect("parse response bytes registry");

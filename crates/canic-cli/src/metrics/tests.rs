@@ -122,34 +122,10 @@ fn parses_metrics_json_page() {
 }
 
 #[test]
-fn metrics_response_candid_without_structured_entries_is_rejected() {
-    assert_eq!(
-        parse_metrics_page(
-            r#"{"response_candid":"(\n  variant {\n    Ok = record {\n      total = 2 : nat64;\n      entries = vec {\n        record {\n          \"principal\" = null;\n          value = variant { Count = 1 : nat64 };\n          labels = vec { \"canister_ops\"; \"create\"; \"app\"; \"completed\"; \"ok\" };\n        };\n      };\n    }\n  },\n)"}"#,
-        ),
-        None
-    );
-}
-
-#[test]
-fn metrics_json_rejects_malformed_entries_even_when_response_candid_is_present() {
+fn metrics_json_rejects_malformed_entries() {
     assert_eq!(
         parse_metrics_page(
             r#"{"Ok":{"entries":[{"labels":["timer"],"principal":null}],"total":1}}"#
-        ),
-        None
-    );
-
-    assert_eq!(
-        parse_metrics_page(
-            r#"{"response_candid":"(\n  variant {\n    Ok = record {\n      total = 2 : nat64;\n      entries = vec {\n        record {\n          \"principal\" = null;\n          value = variant { Count = 1 : nat64 };\n          labels = vec { \"canister_ops\"; \"create\"; \"app\"; \"completed\"; \"ok\" };\n        };\n        record {\n          \"principal\" = opt principal \"aaaaa-aa\";\n          value = variant { CountAndU64 = record { count = 3 : nat64; value_u64 = 12 : nat64 } };\n          labels = vec { \"timer\"; \"tick\" };\n        };\n      };\n    }\n  },\n)"}"#,
-        ),
-        None
-    );
-
-    assert_eq!(
-        parse_metrics_page(
-            r#"{"Ok":{"entries":[{"labels":["timer"],"principal":null}],"total":1},"response_candid":"(\n  variant {\n    Ok = record {\n      total = 1 : nat64;\n      entries = vec {\n        record {\n          \"principal\" = null;\n          value = variant { Count = 1 : nat64 };\n          labels = vec { \"timer\"; \"tick\" };\n        };\n      };\n    }\n  },\n)"}"#,
         ),
         None
     );

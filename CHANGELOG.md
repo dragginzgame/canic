@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.32` removes remaining host/CLI `response_candid` parser fixtures and
+  hard-cuts local readiness JSON parsing so only boolean JSON and explicit
+  `Ok` result shapes can count as ready.
+
 - `0.82.31` hard-cuts unused Rust fallback surfaces by removing the
   `access::expr::requires` alias for `all` and the core-crate metadata fallback
   helper, while preserving endpoint macro `requires(...)` grammar and metadata

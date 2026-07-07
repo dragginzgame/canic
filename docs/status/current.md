@@ -561,6 +561,18 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-access-metadata-fallback-hard-cut-report.md`.
   The root and detailed `0.82.31` changelog entries are prepared.
 
+- The current `0.82.32` slice removes remaining host/CLI `response_candid` and
+  raw Candid parser fixtures from active tests and hard-cuts
+  `replica_query::parse_ready_json_value` so Candid text strings such as
+  `"(true)"` and unrelated truthy object fields no longer count as readiness
+  success. Maintained structured JSON boolean and explicit `Ok` shapes plus
+  typed response-byte decoding remain covered. Operator
+  commands, endpoint method names, Candid, JSON report schemas, deployment
+  truth, evidence/report schemas, and stable-state layout are unchanged. The
+  docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-response-candid-test-fixture-hard-cut-report.md`.
+  The root and detailed `0.82.32` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
