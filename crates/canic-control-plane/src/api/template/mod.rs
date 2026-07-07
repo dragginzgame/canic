@@ -20,7 +20,7 @@ use crate::{
         WasmStoreAdminCommand, WasmStoreAdminResponse, WasmStoreBootstrapDebugResponse,
         WasmStoreOverviewResponse,
     },
-    ids::{CanisterRole, WasmStoreBinding},
+    ids::CanisterRole,
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
@@ -30,8 +30,6 @@ use canic_core::{dto::error::Error, log, log::Topic};
 
 #[cfg(feature = "root-control-plane")]
 const ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID: TemplateId = TemplateId::new("embedded:wasm_store");
-#[cfg(feature = "root-control-plane")]
-const ROOT_WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
 
 ///
 /// WasmStoreBootstrapApi
@@ -83,66 +81,6 @@ impl WasmStoreBootstrapApi {
             entry.decompressed_size_bytes,
             entry.decompressed_sha256_hex,
         );
-    }
-
-    // Validate that one staged template request targets the root-local WasmStore bootstrap source.
-    fn ensure_root_wasm_store_bootstrap_template(template_id: &TemplateId) -> Result<(), Error> {
-        if template_id == &ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID {
-            Ok(())
-        } else {
-            Err(Error::invalid(format!(
-                "bootstrap only accepts template '{ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID}'"
-            )))
-        }
-    }
-
-    // Normalize one staged manifest onto the root-local WasmStore bootstrap source of truth.
-    fn normalize_root_wasm_store_bootstrap_manifest(
-        request: TemplateManifestInput,
-    ) -> Result<TemplateManifestInput, Error> {
-        if request.role != CanisterRole::WASM_STORE {
-            return Err(Error::invalid(format!(
-                "bootstrap only accepts role '{}'",
-                CanisterRole::WASM_STORE
-            )));
-        }
-
-        Self::ensure_root_wasm_store_bootstrap_template(&request.template_id)?;
-
-        let now_secs = support::now_secs();
-
-        Ok(TemplateManifestInput {
-            template_id: ROOT_WASM_STORE_BOOTSTRAP_TEMPLATE_ID,
-            role: CanisterRole::WASM_STORE,
-            version: request.version,
-            payload_hash: request.payload_hash,
-            payload_size_bytes: request.payload_size_bytes,
-            store_binding: ROOT_WASM_STORE_BOOTSTRAP_BINDING,
-            chunking_mode: crate::ids::TemplateChunkingMode::Chunked,
-            manifest_state: crate::ids::TemplateManifestState::Approved,
-            approved_at: Some(now_secs),
-            created_at: now_secs,
-        })
-    }
-
-    // Stage the normalized root-local bootstrap manifest for `embedded:wasm_store`.
-    pub fn stage_root_wasm_store_manifest(request: TemplateManifestInput) -> Result<(), Error> {
-        Self::stage_manifest(Self::normalize_root_wasm_store_bootstrap_manifest(request)?);
-        Ok(())
-    }
-
-    // Prepare root-local chunk metadata for the staged `embedded:wasm_store` bootstrap source.
-    pub fn prepare_root_wasm_store_chunk_set(
-        request: TemplateChunkSetPrepareInput,
-    ) -> Result<TemplateChunkSetInfoResponse, Error> {
-        Self::ensure_root_wasm_store_bootstrap_template(&request.template_id)?;
-        Self::prepare_chunk_set(request)
-    }
-
-    // Publish one root-local chunk into the staged `embedded:wasm_store` bootstrap source.
-    pub fn publish_root_wasm_store_chunk(request: TemplateChunkInput) -> Result<(), Error> {
-        Self::ensure_root_wasm_store_bootstrap_template(&request.template_id)?;
-        Self::publish_chunk(request)
     }
 
     // Stage one approved manifest in the current canister's local bootstrap source.
@@ -211,11 +149,6 @@ impl WasmStoreBootstrapApi {
             chunk_index,
         );
         Ok(())
-    }
-
-    // Publish all root-local staged releases into the current subnet's selected wasm store.
-    pub async fn publish_staged_release_set_to_current_store() -> Result<(), Error> {
-        support::publish_staged_release_set_to_current_store().await
     }
 
     // Return root-owned staged bootstrap visibility for the bootstrap role and current release buffer.

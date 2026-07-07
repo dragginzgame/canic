@@ -55,14 +55,6 @@ pub fn publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     TemplateChunkedOps::publish_chunk_from_input(request).map_err(Error::from)
 }
 
-/// Publish all root-local staged releases into the current subnet's selected wasm store.
-#[cfg(feature = "root-control-plane")]
-pub async fn publish_staged_release_set_to_current_store() -> Result<(), Error> {
-    WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store()
-        .await
-        .map_err(Error::from)
-}
-
 /// Return root-owned staged bootstrap visibility for the bootstrap role and release buffer.
 #[cfg(feature = "root-control-plane")]
 pub fn bootstrap_debug(
