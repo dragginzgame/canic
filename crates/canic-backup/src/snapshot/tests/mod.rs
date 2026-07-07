@@ -185,22 +185,32 @@ impl SnapshotDriver for FakeSnapshotDriver {
     fn registry_entries(
         &mut self,
         _root: &str,
-    ) -> Result<Vec<crate::registry::RegistryEntry>, SnapshotDriverError> {
+    ) -> Result<Vec<crate::registry::RegistryEntry>, Box<dyn StdError + Send + Sync + 'static>>
+    {
         Err(Box::new(FakeDriverError("registry unavailable")))
     }
 
     /// Return a deterministic fake snapshot id.
-    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, SnapshotDriverError> {
+    fn create_snapshot(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<String, Box<dyn StdError + Send + Sync + 'static>> {
         Ok(format!("snapshot-{canister_id}"))
     }
 
     /// Record a successful fake stop operation.
-    fn stop_canister(&mut self, _canister_id: &str) -> Result<(), SnapshotDriverError> {
+    fn stop_canister(
+        &mut self,
+        _canister_id: &str,
+    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
         Ok(())
     }
 
     /// Record a successful fake start operation.
-    fn start_canister(&mut self, _canister_id: &str) -> Result<(), SnapshotDriverError> {
+    fn start_canister(
+        &mut self,
+        _canister_id: &str,
+    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
         Ok(())
     }
 
@@ -210,7 +220,7 @@ impl SnapshotDriver for FakeSnapshotDriver {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-    ) -> Result<(), SnapshotDriverError> {
+    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
         fs::create_dir_all(artifact_path)?;
         fs::write(
             artifact_path.join("snapshot.txt"),
