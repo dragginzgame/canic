@@ -14,18 +14,23 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.32`. Earlier in the
+- The current package/release-surface version is `0.82.33`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.82.33` working slice hard-cuts backup/restore compatibility
+- The `0.82.33` slice hard-cuts backup/restore parser and layout fallback
   paths by rejecting plan-only backup create layouts without
   `backup-execution-journal.json`, requiring restore upload helper output to be
-  JSON with `snapshot_id`, requiring restore stopped precondition output to be
-  JSON, rejecting unknown backup/restore JSON contract fields, and removing
-  unused plan-facing backup receipt types. The docs-only report is
+  JSON with `snapshot_id`, and requiring restore stopped precondition output to
+  be JSON. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-backup-restore-legacy-repair-hard-cut-report.md`.
+
+- The current `0.82.34` working slice hard-cuts backup/restore JSON contract
+  tolerance by rejecting unknown fields across current backup/restore manifests,
+  plans, journals, receipts, command previews, and reports, and removing unused
+  plan-facing backup receipt types. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-backup-restore-json-contract-hard-cut-report.md`.
 
 - The current `0.82.1` working slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision
