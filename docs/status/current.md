@@ -536,8 +536,6 @@ before this compaction is archived at
   topology-index, placement-scaling, and cycle-tracking workflow modules now
   import passive values from concrete `cdk`, `ids`, and `log` owners instead
   of `workflow::prelude::*`. The unused `workflow::prelude` module is removed.
-  A maintained `workflow_prelude_boundary_guard` test now checks that the
-  workflow tree does not reintroduce the removed prelude surface.
   Operator command surfaces, endpoint names, Candid, JSON, deployment truth,
   evidence/report schemas, stable-state layout, runtime startup behavior,
   auth renewal behavior, timer behavior, cascade behavior, canister lifecycle
@@ -545,6 +543,10 @@ before this compaction is archived at
   unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-workflow-prelude-hard-cut-report.md`.
   The root and detailed `0.82.30` changelog entries are prepared.
+
+- Pre-1.0 hard-cut policy is now explicit in `AGENTS.md`: do not add aliases,
+  shims, compatibility wrappers, legacy fallback paths, backwards-compatibility
+  layers, or anti-resurrection tests unless the maintainer explicitly asks.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.

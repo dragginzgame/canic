@@ -30,6 +30,16 @@ with this file, the code is wrong.
 - `scripts/dev/*` are intentional maintainer helpers, not stale CLI leftovers.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
 
+## Pre-1.0 Hard Cuts
+- Before 1.0, removed surfaces are hard-cut. Do not add aliases, shims,
+  compatibility wrappers, legacy fallback paths, or backwards-compatibility
+  layers unless the maintainer explicitly asks.
+- Do not add anti-resurrection tests for removed legacy behavior or command
+  forms. Current behavior tests should cover the maintained surface only.
+- When deleting stale code, remove the old path completely and update active
+  docs/examples to the current surface instead of preserving compatibility
+  breadcrumbs.
+
 ## Layering
 Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model`.
 - `dto/` is passive boundary data only.
