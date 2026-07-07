@@ -4,8 +4,8 @@
 //! lifecycle initialization.
 //! Does not own: config parsing, endpoint DTO structs, or stable subnet
 //! records.
-//! Boundary: DTOs re-export these values for init-argument compatibility while
-//! workflow consumes the domain owner directly.
+//! Boundary: DTOs re-export these values for the init-argument Candid boundary
+//! while workflow consumes the domain owner directly.
 
 use crate::{cdk::types::Principal, ids::SubnetRole};
 use candid::CandidType;

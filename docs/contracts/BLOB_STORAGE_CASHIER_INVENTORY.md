@@ -210,7 +210,7 @@ Inventory effect:
 - Maintainer-approved Toko wrapper evidence is accepted as the 0.70 MVP
   protocol source for the three Cashier methods used by blob-storage billing.
 - Actual Cashier implementation source or deployed Cashier Candid remains
-  useful follow-up evidence, but is not required to begin the Toko-compatible
+  useful follow-up evidence, but is not required to begin the Toko-backed
   0.70 MVP.
 
 ## Completion Criteria
@@ -258,13 +258,13 @@ Method status values are intentionally narrow:
   provenance, and per-method source path are recorded, but Candid or behavior
   fields remain incomplete.
 - `Snapshot captured`: source metadata and exact Candid are recorded, but
-  behavior fields or wrapper compatibility notes remain incomplete.
-- `Complete`: every required source, Candid, behavior, and compatibility field
+  behavior fields or wrapper interoperability notes remain incomplete.
+- `Complete`: every required source, Candid, behavior, and interoperability field
   is filled from cited protocol evidence.
 
 Design-note statements may describe expected ownership or implementation
 direction, but they do not satisfy source, Candid, DTO, behavior, or
-compatibility fields. Keep unknown protocol facts unresolved instead of
+interoperability fields. Keep unknown protocol facts unresolved instead of
 inferring them from the 0.70 design.
 
 ## Method Inventory
@@ -534,7 +534,7 @@ Accepted MVP scope:
 ## Implementation Gate
 
 The following actions were blocked while this document was incomplete and are
-now unblocked for the Toko-compatible 0.70 MVP:
+now unblocked for the Toko-backed 0.70 MVP:
 
 - Adding the `blob-storage-billing` feature.
 - Adding Cashier DTOs or Candid snapshots.

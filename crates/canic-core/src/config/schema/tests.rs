@@ -447,7 +447,7 @@ fn delegated_tokens_root_proof_mode_must_be_chain_key_batch() {
 
     let err = cfg
         .validate()
-        .expect_err("expected legacy root proof mode to fail");
+        .expect_err("expected non-chain-key root proof mode to fail");
 
     assert!(
         err.to_string().contains("must be chain_key_batch"),

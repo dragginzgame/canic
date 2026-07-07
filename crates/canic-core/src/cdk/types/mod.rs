@@ -2,7 +2,8 @@
 //!
 //! Responsibility: common IC-facing value types re-exported through Canic CDK.
 //! Does not own: CDK API wrappers, stable structures, or serialization policy.
-//! Boundary: centralizes type aliases and wrappers used by Canic-facing code.
+//! Boundary: centralizes named value types and wrappers used by Canic-facing
+//! code.
 
 pub mod cycles;
 pub mod string;

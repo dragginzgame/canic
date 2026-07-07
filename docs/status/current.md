@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.38`. Earlier in the
+- The current package/release-surface version is `0.82.39`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -71,7 +71,7 @@ before this compaction is archived at
   docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-core-rust-alias-hard-cut-report.md`.
 
-- The current `0.82.39` working slice hard-cuts the public ICRC-21 dispatch
+- The `0.82.39` slice hard-cuts the public ICRC-21 dispatch
   handler alias. `ConsentHandlerFn` is removed in favor of the concrete
   `Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>`
   handler shape wrapped by a private dispatcher registry value, and
@@ -85,14 +85,29 @@ before this compaction is archived at
   and
   `docs/design/0.82-boundary-hardening/0.82-snapshot-driver-error-alias-hard-cut-report.md`.
 
-- The current `0.82.1` working slice makes the pure-policy boundary explicit:
+- The current `0.82.40` working slice renames active Toko blob-storage
+  inventory/gate wording from compatibility notes to interoperability notes.
+  The gate still requires the same source, commit, blob-root mapping, and
+  migration/read-through evidence. The same slice tightens active source/test
+  wording around aliases, init-argument Candid boundaries, non-chain-key
+  root proof rejection, gateway protocol fit, ICP token-prefix parsing, and
+  diagnostic public-output stability. The final sweep classifies the remaining
+  compatibility/fallback/alias wording as real current behavior, stable
+  upgrade/output policy, historical operational inventory, or semantic helper
+  aliases rather than retained backwards-compatibility machinery. Runtime
+  behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged. The
+  docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-blob-storage-inventory-interoperability-wording-report.md`.
+
+- The `0.82.1` slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision
   shapes moved out of `view/`, and internal call sites use the explicit pure
   namespace. This is a no-behavior-change slice with no CLI, endpoint, JSON,
   Candid, stable-state, deployment-truth, or evidence/report surface changes.
   The root and detailed `0.82.1` changelog entries are prepared.
 
-- The current `0.82.2` working slice starts with release-safety tooling:
+- The `0.82.2` slice starts with release-safety tooling:
   `make minor` and `make major` require interactive confirmation before they
   run release gates or bump version files; `release-minor` and `release-major`
   inherit the guard.
@@ -111,7 +126,7 @@ before this compaction is archived at
   the docs-only hardening report is
   `docs/design/0.82-boundary-hardening/0.82-runtime-identity-dto-boundary-report.md`.
 
-- The current 0.82 follow-up slice continues DTO boundary cleanup by moving
+- A 0.82 follow-up slice continues DTO boundary cleanup by moving
   cycle top-up event status ownership to `domain::cycles` while preserving the
   public `dto::cycles::CycleTopupEventStatus` re-export and Candid shape.
   Storage cycle ops now import the domain owner directly, with the docs-only
@@ -175,7 +190,7 @@ before this compaction is archived at
   The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-canister-status-domain-boundary-report.md`.
 
-- The current `0.82.8` working slice moves HTTP method ownership to
+- The `0.82.8` slice moves HTTP method ownership to
   `domain::http` while preserving the public `dto::http::HttpMethod`,
   `ops::ic::http::HttpMethod`, and `ops::runtime::metrics::http::HttpMethod`
   re-exports and Candid method labels. IC HTTP ops and runtime HTTP metrics now
@@ -188,7 +203,7 @@ before this compaction is archived at
   re-exports and serialized Candid/Serde shapes. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-runtime-status-domain-boundary-report.md`.
 
-- The current `0.82.9` working slice moves app command status ownership to
+- The `0.82.9` slice moves app command status ownership to
   `domain::state` while preserving the public `dto::state::AppStatus`
   re-export and Candid command shape. App-state storage ops now import the
   status value from the domain owner, while app command/response DTOs and
@@ -208,7 +223,7 @@ before this compaction is archived at
   recording behavior remains unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-timer-mode-domain-boundary-report.md`.
 
-- The current `0.82.10` working slice moves platform-call metric dimension
+- The `0.82.10` slice moves platform-call metric dimension
   ownership to `domain::metrics` while preserving the public
   `ops::runtime::metrics::platform_call` re-exports and projected metric
   labels. IC call, HTTP, ledger, and management ops now import the metric
@@ -216,7 +231,7 @@ before this compaction is archived at
   and operation behavior remain unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-platform-call-metric-domain-boundary-report.md`.
 
-- The current `0.82.11` working slice moves canister-op and management-call
+- The `0.82.11` slice moves canister-op and management-call
   metric dimension ownership to `domain::metrics` while preserving the public
   `ops::runtime::metrics::canister_ops` and
   `ops::runtime::metrics::management_call` re-exports, canister-op public
@@ -227,7 +242,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-canister-ops-metric-domain-boundary-report.md`,
   `docs/design/0.82-boundary-hardening/0.82-management-call-metric-domain-boundary-report.md`.
 
-- The current `0.82.12` working slice moves lifecycle and wasm-store metric
+- The `0.82.12` slice moves lifecycle and wasm-store metric
   dimension ownership to `domain::metrics` while preserving the public
   `ops::runtime::metrics::lifecycle`,
   `ops::runtime::metrics::wasm_store`, and `api::lifecycle::metrics`
@@ -238,7 +253,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-lifecycle-metric-domain-boundary-report.md`,
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-metric-domain-boundary-report.md`.
 
-- The current 0.82 follow-up slice removes the internal
+- A 0.82 follow-up slice removes the internal
   `ops::replay::model` compatibility shim after moving replay ops and
   replay-protected workflows to the canonical `model::replay` owner. Hidden
   control-plane support now exposes `CommandKind` through a model-shaped support
@@ -247,7 +262,7 @@ before this compaction is archived at
   unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-replay-model-shim-removal-report.md`.
 
-- The current 0.82 follow-up slice removes the internal
+- A 0.82 follow-up slice removes the internal
   `ops::replay::slot` legacy root replay adapter after routing root replay
   quota checks, reservation, commit, and purge mechanics through shared replay
   receipt helpers/storage directly. Replay behavior, stable replay receipt
@@ -271,7 +286,7 @@ before this compaction is archived at
   unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-timer-id-workflow-boundary-report.md`.
 
-- The current 0.82 follow-up slice tightens the hidden control-plane support
+- A 0.82 follow-up slice tightens the hidden control-plane support
   facade for pool status by exposing `CanisterPoolStatus` through
   `control_plane_support::domain::pool` instead of a DTO-shaped support
   namespace. Public `dto::pool` compatibility, pool behavior, endpoint
@@ -295,7 +310,7 @@ before this compaction is archived at
   evidence/report schemas are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-control-plane-prelude-support-boundary-report.md`.
 
-- The current 0.82 follow-up slice adds maintained boundary guard tests for
+- A 0.82 follow-up slice adds maintained boundary guard tests for
   pure policy and passive DTO ownership. Pure policy modules are now checked
   against forbidden side-effect imports, async/timer/IC call fragments, and
   wire serialization fragments. Non-error DTO trees in `canic-core` and
@@ -325,7 +340,7 @@ before this compaction is archived at
   intentionally changed to snake_case only. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-runtime-enum-label-hard-cut-report.md`.
 
-- The current 0.82 follow-up slice adds a maintained Candid serde boundary
+- A 0.82 follow-up slice adds a maintained Candid serde boundary
   guard. Canic-owned Candid source roots are checked so `CandidType` items do
   not use unsupported `serde(rename_all)` / `rename_all_fields` attributes or
   `serde(alias)`. The guard was tightened to catch combined serde attributes
@@ -356,7 +371,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-hard-cut-compatibility-sweep-report.md`.
   The root and detailed `0.82.17` changelog entries are prepared.
 
-- The current 0.82 follow-up slice hard-cuts the public registry policy error
+- A 0.82 follow-up slice hard-cuts the public registry policy error
   codes that still used pre-service-topology singleton names. The public
   `ErrorCode` variants, host direct-query wire decoder, and checked-in
   wasm-store DID now use service-owned names for replica scaling, shard
@@ -386,7 +401,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-root-bootstrap-subnet-identity-hard-cut-report.md`.
   The root and detailed `0.82.18` changelog entries are prepared.
 
-- The current 0.82 follow-up slice hard-cuts CLI metrics/cycles
+- A 0.82 follow-up slice hard-cuts CLI metrics/cycles
   `response_candid` fallback parsing. `canic info metrics` and
   `canic info cycles` now require structured JSON values for metrics, cycle
   tracker, and top-up report pages; text-only `response_candid` payloads and
@@ -406,7 +421,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-canic-metadata-response-candid-hard-cut-report.md`.
   The root and detailed `0.82.19` changelog entries are prepared.
 
-- The current 0.82 follow-up slice hard-cuts host cycle-balance
+- A 0.82 follow-up slice hard-cuts host cycle-balance
   `response_candid` fallback parsing. ICP CLI `canic_cycle_balance` output now
   requires a structured JSON `Ok` value, while the local replica fast path
   still decodes typed Candid bytes directly. Raw Candid text and text-only
@@ -474,7 +489,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-install-root-legacy-fleet-state-hard-cut-report.md`.
   The root and detailed `0.82.21` changelog entries include these hard cuts.
 
-- The current `0.82.22` working slice removes CLI anti-resurrection tests for
+- The `0.82.22` slice removes CLI anti-resurrection tests for
   removed command aliases and obsolete hard-cut forms while preserving current
   positive parser, help, JSON, report, and exit-code coverage. Command
   behavior, command surfaces, endpoint surfaces, Candid, JSON, deployment
@@ -487,7 +502,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-cli-anti-resurrection-test-cleanup-report.md`.
   The root and detailed `0.82.22` changelog entries are prepared.
 
-- The current 0.82 follow-up slice removes hidden
+- A 0.82 follow-up slice removes hidden
   `control_plane_support` facades that mirrored public validation DTO, ids, and
   replay-policy owners. Control-plane root bootstrap now imports validation
   report DTOs from `canic_core::dto::validation`, deployment workflow now
@@ -501,7 +516,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-control-plane-core-owner-support-boundary-report.md`.
   The root and detailed `0.82.23` changelog entries are prepared.
 
-- The current 0.82 follow-up slice removes the broad hidden
+- A 0.82 follow-up slice removes the broad hidden
   `control_plane_support::cdk` mirror. Control-plane code now imports public
   CDK types directly from `canic_core::cdk::types`, while support facades remain
   reserved for crate-private core mediation. Runtime template publication,
@@ -529,7 +544,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-active-cli-release-wording-cleanup-report.md`.
   The root and detailed `0.82.24` changelog entries are prepared.
 
-- The current 0.82 follow-up slice narrows
+- A 0.82 follow-up slice narrows
   `control_plane_support::format` to the single formatting helper used by
   `canic-control-plane`. The hidden support namespace now exports only
   `byte_size`; host-side `cycles_tc` and `truncate` usage remains on its
@@ -546,7 +561,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-active-source-release-comment-cleanup-report.md`.
   The root and detailed `0.82.25` changelog entries are prepared.
 
-- The current 0.82 follow-up slice hard-cuts unused wasm-store Rust API facade
+- A 0.82 follow-up slice hard-cuts unused wasm-store Rust API facade
   names and direct publication helpers.
   `canic::api::canister::template::EmbeddedTemplateApi`,
   `canic::api::canister::template::WasmStoreApi`, and the direct
@@ -561,7 +576,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-api-facade-hard-cut-report.md`.
   The root and detailed `0.82.26` changelog entries are prepared.
 
-- The current 0.82 follow-up slice hard-cuts unused wasm-store bootstrap Rust
+- A 0.82 follow-up slice hard-cuts unused wasm-store bootstrap Rust
   helpers. Root-specific direct staging helpers, their manifest normalization
   code, the unused bootstrap binding constant, and the direct staged-release
   publication support wrapper are removed. Lifecycle-used embedded release-set
@@ -572,7 +587,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-bootstrap-helper-hard-cut-report.md`.
   The root and detailed `0.82.27` changelog entries are prepared.
 
-- The current 0.82 follow-up slice removes the private wasm-store
+- A 0.82 follow-up slice removes the private wasm-store
   `LocalWasmStoreApi` pass-through helper and collapses the remaining
   crate-private template support module into private template API helpers.
   `WasmStoreCanisterApi` now calls private template helpers directly, while
@@ -584,7 +599,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-template-support-cleanup-report.md`.
   The root and detailed `0.82.28` changelog entries are prepared.
 
-- The current 0.82 follow-up slice narrows workflow prelude usage in the pool
+- A 0.82 follow-up slice narrows workflow prelude usage in the pool
   and IC workflow clusters. Pool import/recycle/reset/scheduler/query/admin,
   IC call/ledger/management, provisioning, and ICP refill workflow modules now
   import boundary values from concrete `cdk`, `ids`, and `log` owners instead
@@ -597,7 +612,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-workflow-prelude-boundary-report.md`.
   The root and detailed `0.82.29` changelog entries are prepared.
 
-- The current 0.82 follow-up slice finishes the workflow prelude hard cut.
+- A 0.82 follow-up slice finishes the workflow prelude hard cut.
   Env, runtime, auth, cascade, lifecycle, RPC request, bootstrap,
   topology-index, placement-scaling, and cycle-tracking workflow modules now
   import passive values from concrete `cdk`, `ids`, and `log` owners instead
@@ -614,7 +629,7 @@ before this compaction is archived at
   shims, compatibility wrappers, legacy fallback paths, backwards-compatibility
   layers, or anti-resurrection tests unless the maintainer explicitly asks.
 
-- The current `0.82.31` slice hard-cuts two unused Rust fallback surfaces.
+- The `0.82.31` slice hard-cuts two unused Rust fallback surfaces.
   `access::expr::requires` is removed in favor of the canonical
   `access::expr::all` Rust helper, while endpoint macro `requires(...)`
   grammar remains unchanged. `CanicMetadataApi::metadata` and its core-package
@@ -627,7 +642,7 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-access-metadata-fallback-hard-cut-report.md`.
   The root and detailed `0.82.31` changelog entries are prepared.
 
-- The current `0.82.32` slice removes remaining host/CLI `response_candid` and
+- The `0.82.32` slice removes remaining host/CLI `response_candid` and
   raw Candid parser fixtures from active tests and hard-cuts
   `replica_query::parse_ready_json_value` so Candid text strings such as
   `"(true)"` and unrelated truthy object fields no longer count as readiness
@@ -683,7 +698,7 @@ before this compaction is archived at
   automatic dependency feature editing. The 0.80.6 changelog entries are
   staged in the root ledger and detailed 0.80 notes.
 
-- The current `0.80.7` working slice returns to the stable-state design by
+- The `0.80.7` slice returns to the stable-state design by
   adding explicit `reserved_memory` manifest rows for allocated stable-memory
   IDs that are not yet precise active or removed state domains. Root now
   reserves the raw cycle tracker and the two stable-log memories so those
@@ -696,7 +711,7 @@ before this compaction is archived at
   should be preserved. The 0.80.7 changelog entries are staged in the root
   ledger and detailed 0.80 notes.
 
-- The current `0.80.8` working slice tightens state-audit upgrade-window
+- The `0.80.8` slice tightens state-audit upgrade-window
   validation so a domain whose `min_supported_version` is zero or greater than
   its current `version` fails with `state_domain_invalid_support_window`
   instead of being treated as a no-migration case. The same slice rejects
@@ -705,7 +720,7 @@ before this compaction is archived at
   role. The 0.80.8 changelog entries are staged in the root ledger and
   detailed 0.80 notes.
 
-- The current `0.80.9` working slice starts by making the top-level state
+- The `0.80.9` slice starts by making the top-level state
   manifest schema version part of `canic state audit`: supported manifest
   schemas emit `state_manifest_schema_version_supported`, while unsupported
   schemas fail with `state_manifest_schema_version_unsupported` before domain

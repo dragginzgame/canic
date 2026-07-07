@@ -2,7 +2,7 @@
 //!
 //! Responsibility: ICRC-2 Candid DTOs used by Canic callers.
 //! Does not own: allowance policy, ledger behavior, or transfer workflows.
-//! Boundary: mirrors the external ICRC-2 surface with Canic account aliases.
+//! Boundary: mirrors the external ICRC-2 surface with the Canic account type.
 
 use crate::cdk::spec::prelude::*;
 
@@ -18,7 +18,7 @@ pub struct Allowance {
 
 //
 // AllowanceArgs
-// wrapped to use the canic Account
+// wrapped to use the Canic Account
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -982,12 +982,12 @@ mod tests {
     }
 
     #[test]
-    fn auth_proof_verifier_config_rejects_legacy_root_proof_mode() {
+    fn auth_proof_verifier_config_rejects_non_chain_key_root_proof_mode() {
         let mut cfg = cfg("mainnet", Some(mainnet_key()));
         cfg.root_proof_mode = "canister_signature".to_string();
 
         let err = AuthOps::auth_proof_verifier_config_from(&cfg)
-            .expect_err("0.76 must reject legacy root proof mode");
+            .expect_err("0.76 must reject non-chain-key root proof mode");
 
         assert!(
             err.to_string().contains("must be chain_key_batch"),

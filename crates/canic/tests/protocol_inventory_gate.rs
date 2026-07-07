@@ -169,7 +169,7 @@ fn complete_inventory_with_toko_section(toko_section: &str) -> String {
         write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
             .expect("writing to String should not fail");
     }
-    inventory.push_str("\n## Compatibility Notes\n\n### Toko\n\n");
+    inventory.push_str("\n## Interoperability Notes\n\n### Toko\n\n");
     inventory.push_str(toko_section);
     inventory
 }
@@ -186,7 +186,7 @@ fn complete_inventory_missing_method(omitted_suffix: &str) -> String {
         write!(&mut inventory, "\n### `{method}`\n\n{method_section}")
             .expect("writing to String should not fail");
     }
-    inventory.push_str("\n## Compatibility Notes\n\n### Toko\n\n");
+    inventory.push_str("\n## Interoperability Notes\n\n### Toko\n\n");
     inventory.push_str(&complete_toko_section());
     inventory
 }
@@ -218,7 +218,7 @@ fn complete_inventory_with_method_section(method_suffix: &str, method_section: &
                 .expect("writing to String should not fail");
         }
     }
-    inventory.push_str("\n## Compatibility Notes\n\n### Toko\n\n");
+    inventory.push_str("\n## Interoperability Notes\n\n### Toko\n\n");
     inventory.push_str(&complete_toko_section());
     inventory
 }
@@ -771,7 +771,7 @@ fn complete_inventory_rejects_unresolved_toko_fields() {
         !output.status.success(),
         "gate should reject unresolved Toko fields in a Complete inventory"
     );
-    assert!(text.contains("Toko compatibility notes still have TBD fields"));
+    assert!(text.contains("Toko interoperability notes still have TBD fields"));
 }
 
 #[test]
@@ -789,9 +789,9 @@ fn complete_inventory_rejects_missing_toko_evidence_fields() {
 
     assert!(
         !output.status.success(),
-        "gate should reject Toko compatibility notes without required evidence fields"
+        "gate should reject Toko interoperability notes without required evidence fields"
     );
-    assert!(text.contains("Toko compatibility notes missing required field"));
+    assert!(text.contains("Toko interoperability notes missing required field"));
 }
 
 #[test]
@@ -815,7 +815,7 @@ fn complete_inventory_rejects_invalid_toko_source_commit_sha() {
         !output.status.success(),
         "gate should reject invalid Toko source commit SHA"
     );
-    assert!(text.contains("Toko compatibility notes have invalid source commit SHA"));
+    assert!(text.contains("Toko interoperability notes have invalid source commit SHA"));
 }
 
 #[test]
@@ -830,9 +830,9 @@ fn complete_inventory_rejects_missing_toko_section() {
 
     assert!(
         !output.status.success(),
-        "gate should reject a Complete inventory without Toko compatibility notes"
+        "gate should reject a Complete inventory without Toko interoperability notes"
     );
-    assert!(text.contains("missing Toko compatibility section"));
+    assert!(text.contains("missing Toko interoperability section"));
 }
 
 #[test]

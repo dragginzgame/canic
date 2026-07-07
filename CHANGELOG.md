@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.40` renames active Toko blob-storage inventory/gate wording from
+  compatibility notes to interoperability notes and tightens active hard-cut
+  terminology in source comments/tests and operations docs while preserving
+  behavior.
+
 - `0.82.39` hard-cuts the public ICRC-21 dispatch handler alias and public
   ICRC-21 lookup helper, and replaces the backup snapshot driver error alias
   with a real named error type while preserving dispatcher behavior, snapshot
