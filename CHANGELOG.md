@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.37` removes a remaining protocol-surface test guard for retired
+  single-proof root delegation endpoint names while preserving current root
+  delegation protocol coverage.
+
 - `0.82.36` removes active removed-endpoint auth/replay test guards and a
   host-local bootstrap readiness alias while preserving current replay,
   protocol-surface, and install-root readiness behavior.
