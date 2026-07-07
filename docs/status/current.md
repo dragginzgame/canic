@@ -548,6 +548,19 @@ before this compaction is archived at
   shims, compatibility wrappers, legacy fallback paths, backwards-compatibility
   layers, or anti-resurrection tests unless the maintainer explicitly asks.
 
+- The current `0.82.31` slice hard-cuts two unused Rust fallback surfaces.
+  `access::expr::requires` is removed in favor of the canonical
+  `access::expr::all` Rust helper, while endpoint macro `requires(...)`
+  grammar remains unchanged. `CanicMetadataApi::metadata` and its core-package
+  constants are removed so metadata construction stays on
+  `CanicMetadataApi::metadata_for(...)`, which is the path used by the
+  endpoint metadata macro with exporting-canister package metadata. Operator
+  commands, endpoint method names, Candid, JSON, metadata response fields,
+  deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-access-metadata-fallback-hard-cut-report.md`.
+  The root and detailed `0.82.31` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

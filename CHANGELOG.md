@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.31` hard-cuts unused Rust fallback surfaces by removing the
+  `access::expr::requires` alias for `all` and the core-crate metadata fallback
+  helper, while preserving endpoint macro `requires(...)` grammar and metadata
+  endpoint response shape.
+
 - `0.82.30` finishes the workflow prelude hard cut by replacing the remaining
   workflow wildcard imports with concrete owners and removing
   `workflow::prelude`, and documents the pre-1.0 no-shim/no-alias hard-cut
