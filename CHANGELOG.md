@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.28` removes the private wasm-store local helper facade and collapses
+  the remaining crate-private template support wrappers into the template API.
+
 - `0.82.27` hard-cuts unused wasm-store bootstrap Rust helpers while keeping
   lifecycle and endpoint-used bootstrap APIs unchanged.
 

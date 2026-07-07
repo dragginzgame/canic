@@ -506,6 +506,18 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-bootstrap-helper-hard-cut-report.md`.
   The root and detailed `0.82.27` changelog entries are prepared.
 
+- The current 0.82 follow-up slice removes the private wasm-store
+  `LocalWasmStoreApi` pass-through helper and collapses the remaining
+  crate-private template support module into private template API helpers.
+  `WasmStoreCanisterApi` now calls private template helpers directly, while
+  root bootstrap and publication APIs keep the same public method surfaces.
+  Endpoint surfaces, CLI behavior, Candid, JSON, deployment truth,
+  evidence/report schemas, stable-state layout, wasm-store storage behavior,
+  publication workflow behavior, bootstrap behavior, and GC behavior are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-wasm-store-template-support-cleanup-report.md`.
+  The root and detailed `0.82.28` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 
