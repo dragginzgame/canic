@@ -50,6 +50,7 @@ impl DownloadJournal {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct JournalResumeReport {
     pub backup_id: String,
     pub discovery_topology_hash: Option<String>,
@@ -70,6 +71,7 @@ pub struct JournalResumeReport {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct JournalStateCounts {
     pub created: usize,
     pub downloaded: usize,
@@ -107,6 +109,7 @@ impl JournalStateCounts {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ArtifactResumeReport {
     pub canister_id: String,
     pub snapshot_id: String,

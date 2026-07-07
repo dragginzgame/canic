@@ -51,6 +51,7 @@ impl RestoreApplyJournalStateCounts {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyOperationKindCounts {
     #[serde(default)]
     pub canister_stops: usize,

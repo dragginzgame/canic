@@ -17,6 +17,7 @@ use thiserror::Error as ThisError;
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupExecutionJournal {
     pub journal_version: u16,
     pub plan_id: String,
@@ -36,6 +37,7 @@ pub struct BackupExecutionJournal {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupExecutionJournalOperation {
     pub sequence: usize,
     pub operation_id: String,
@@ -72,6 +74,7 @@ pub enum BackupExecutionOperationState {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupExecutionOperationReceipt {
     pub plan_id: String,
     pub run_id: String,
@@ -115,6 +118,7 @@ pub enum BackupExecutionOperationReceiptOutcome {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupExecutionResumeSummary {
     pub plan_id: String,
     pub run_id: String,

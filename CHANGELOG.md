@@ -12,10 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.34` hard-cuts backup/restore JSON contract tolerance by rejecting
+  unknown fields across current backup/restore manifests, plans, journals,
+  receipts, command previews, and reports, and removes unused plan-facing
+  backup receipt types.
+
 - `0.82.33` hard-cuts backup/restore fallback paths by rejecting plan-only
   backup layouts without execution journals, requiring structured JSON restore
-  upload/status command output, rejecting unknown backup manifest/plan fields,
-  and removing unused plan-facing backup receipt types.
+  upload/status command output.
 
 - `0.82.32` removes remaining host/CLI `response_candid` parser fixtures and
   hard-cuts local readiness JSON parsing so only boolean JSON and explicit

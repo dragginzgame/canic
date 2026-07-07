@@ -37,6 +37,17 @@ fn accepted_journal() -> BackupExecutionJournal {
     journal
 }
 
+#[test]
+fn execution_journal_unknown_field_fails_deserialize() {
+    let mut value = serde_json::to_value(journal()).expect("serialize journal");
+    value["unexpected_field"] = serde_json::Value::Bool(true);
+
+    let err =
+        serde_json::from_value::<BackupExecutionJournal>(value).expect_err("unknown field rejects");
+
+    assert!(err.is_data());
+}
+
 fn complete_operation(journal: &mut BackupExecutionJournal, sequence: usize) {
     journal
         .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))

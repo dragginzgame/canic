@@ -23,8 +23,8 @@ before this compaction is archived at
   paths by rejecting plan-only backup create layouts without
   `backup-execution-journal.json`, requiring restore upload helper output to be
   JSON with `snapshot_id`, requiring restore stopped precondition output to be
-  JSON, rejecting unknown backup manifest/plan/preflight JSON fields, and
-  removing unused plan-facing backup receipt types. The docs-only report is
+  JSON, rejecting unknown backup/restore JSON contract fields, and removing
+  unused plan-facing backup receipt types. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-backup-restore-legacy-repair-hard-cut-report.md`.
 
 - The current `0.82.1` working slice makes the pure-policy boundary explicit:

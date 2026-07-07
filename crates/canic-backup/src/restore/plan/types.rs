@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreMapping {
     pub members: Vec<RestoreMappingEntry>,
 }
@@ -38,6 +39,7 @@ impl RestoreMapping {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreMappingEntry {
     pub source_canister: String,
     pub target_canister: String,
@@ -51,6 +53,7 @@ pub struct RestoreMappingEntry {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestorePlan {
     pub backup_id: String,
     pub source_environment: String,
@@ -84,6 +87,7 @@ impl RestorePlan {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreIdentitySummary {
     pub mapping_supplied: bool,
     pub all_sources_mapped: bool,
@@ -102,6 +106,7 @@ pub struct RestoreIdentitySummary {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreSnapshotSummary {
     pub all_members_have_module_hash: bool,
     pub all_members_have_code_version: bool,
@@ -119,6 +124,7 @@ pub struct RestoreSnapshotSummary {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreVerificationSummary {
     pub verification_required: bool,
     pub all_members_have_checks: bool,
@@ -137,6 +143,7 @@ pub struct RestoreVerificationSummary {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreReadinessSummary {
     pub ready: bool,
     pub reasons: Vec<String>,
@@ -150,6 +157,7 @@ pub struct RestoreReadinessSummary {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreOperationSummary {
     #[serde(default)]
     pub planned_canister_stops: usize,
@@ -169,6 +177,7 @@ pub struct RestoreOperationSummary {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreOrderingSummary {
     pub ordered_members: usize,
     pub dependency_free_members: usize,
@@ -183,6 +192,7 @@ pub struct RestoreOrderingSummary {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestorePlanMember {
     pub source_canister: String,
     pub target_canister: String,
@@ -204,6 +214,7 @@ pub struct RestorePlanMember {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreOrderingDependency {
     pub source_canister: String,
     pub target_canister: String,

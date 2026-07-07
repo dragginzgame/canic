@@ -48,6 +48,7 @@ use types::{
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyJournal {
     pub journal_version: u16,
     pub backup_id: String,

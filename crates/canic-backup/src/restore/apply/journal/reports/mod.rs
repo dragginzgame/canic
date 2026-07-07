@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(in crate::restore) struct RestoreApplyJournalReport {
     pub report_version: u16,
     pub backup_id: String,
@@ -87,6 +88,7 @@ impl RestoreApplyJournalReport {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyPendingSummary {
     pub pending_operations: usize,
     pub pending_operation_available: bool,
@@ -133,6 +135,7 @@ fn known_state_update_marker(value: &str) -> bool {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyProgressSummary {
     pub operation_count: usize,
     pub completed_operations: usize,
@@ -225,6 +228,7 @@ impl RestoreApplyReportOutcome {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyReportOperation {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,

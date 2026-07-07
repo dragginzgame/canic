@@ -19,6 +19,7 @@ use thiserror::Error as ThisError;
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyJournalOperation {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,
