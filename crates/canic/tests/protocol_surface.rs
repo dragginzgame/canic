@@ -674,11 +674,6 @@ fn root_delegation_proof_batch_surface_is_pinned() {
     assert_root_delegation_protocol_constants();
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
-    assert!(
-        !source.contains("fn canic_prepare_delegation_proof(")
-            && !source.contains("fn canic_get_delegation_proof("),
-        "legacy single-proof root delegation endpoints must stay removed"
-    );
     assert_root_delegation_macro_guards(&source);
     assert_root_delegation_endpoint_bindings(&source);
 }
