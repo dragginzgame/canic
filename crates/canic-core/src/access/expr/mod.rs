@@ -205,16 +205,6 @@ pub fn not(expr: AccessExpr) -> AccessExpr {
     AccessExpr::Not(Box::new(expr))
 }
 
-/// requires
-///
-/// Alias for `all` used by endpoint declarations.
-pub fn requires<I>(exprs: I) -> AccessExpr
-where
-    I: IntoIterator<Item = AccessExpr>,
-{
-    all(exprs)
-}
-
 /// custom
 ///
 /// Wrap a custom async predicate as an access expression leaf.
