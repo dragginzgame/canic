@@ -531,6 +531,21 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-workflow-prelude-boundary-report.md`.
   The root and detailed `0.82.29` changelog entries are prepared.
 
+- The current 0.82 follow-up slice finishes the workflow prelude hard cut.
+  Env, runtime, auth, cascade, lifecycle, RPC request, bootstrap,
+  topology-index, placement-scaling, and cycle-tracking workflow modules now
+  import passive values from concrete `cdk`, `ids`, and `log` owners instead
+  of `workflow::prelude::*`. The unused `workflow::prelude` module is removed.
+  A maintained `workflow_prelude_boundary_guard` test now checks that the
+  workflow tree does not reintroduce the removed prelude surface.
+  Operator command surfaces, endpoint names, Candid, JSON, deployment truth,
+  evidence/report schemas, stable-state layout, runtime startup behavior,
+  auth renewal behavior, timer behavior, cascade behavior, canister lifecycle
+  behavior, RPC behavior, scaling behavior, and cycle tracking behavior are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-workflow-prelude-hard-cut-report.md`.
+  The root and detailed `0.82.30` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

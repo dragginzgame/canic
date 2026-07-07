@@ -5,6 +5,8 @@
 //! Boundary: runtime workflow timer coordinating intent storage cleanup and metrics.
 
 use crate::{
+    log,
+    log::Topic,
     ops::{
         ic::IcOps,
         runtime::{
@@ -18,7 +20,6 @@ use crate::{
     },
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_INTENT_CLEANUP_INTERVAL},
-        prelude::*,
         runtime::timer::TimerWorkflow,
     },
 };

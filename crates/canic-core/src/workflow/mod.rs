@@ -22,19 +22,3 @@ pub mod runtime;
 pub mod state;
 pub mod topology;
 pub mod view;
-
-///
-/// Prelude
-///
-
-pub mod prelude {
-    pub use crate::{
-        cdk::{
-            candid::CandidType,
-            types::{Cycles, Principal},
-        },
-        ids::CanisterRole,
-        log,
-        log::Topic,
-    };
-}
