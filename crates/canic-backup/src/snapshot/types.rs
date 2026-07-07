@@ -10,6 +10,34 @@ use std::{
 use thiserror::Error as ThisError;
 
 ///
+/// SnapshotDriverError
+///
+
+#[derive(Debug, ThisError)]
+#[error(transparent)]
+pub struct SnapshotDriverError {
+    source: Box<dyn StdError + Send + Sync + 'static>,
+}
+
+impl SnapshotDriverError {
+    #[must_use]
+    pub fn new<E>(source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        Self {
+            source: Box::new(source),
+        }
+    }
+}
+
+impl From<std::io::Error> for SnapshotDriverError {
+    fn from(source: std::io::Error) -> Self {
+        Self::new(source)
+    }
+}
+
+///
 /// SnapshotArtifact
 ///
 
@@ -98,7 +126,7 @@ pub enum SnapshotDownloadError {
     SnapshotRequiresStoppedCanister,
 
     #[error("snapshot driver failed: {0}")]
-    Driver(#[source] Box<dyn StdError + Send + Sync + 'static>),
+    Driver(#[source] SnapshotDriverError),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -125,28 +153,16 @@ pub enum SnapshotDownloadError {
 
 pub trait SnapshotDriver {
     /// Load the root registry entries used to resolve child snapshot targets.
-    fn registry_entries(
-        &mut self,
-        root: &str,
-    ) -> Result<Vec<RegistryEntry>, Box<dyn StdError + Send + Sync + 'static>>;
+    fn registry_entries(&mut self, root: &str) -> Result<Vec<RegistryEntry>, SnapshotDriverError>;
 
     /// Create one canister snapshot and return its snapshot id.
-    fn create_snapshot(
-        &mut self,
-        canister_id: &str,
-    ) -> Result<String, Box<dyn StdError + Send + Sync + 'static>>;
+    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, SnapshotDriverError>;
 
     /// Stop one canister before snapshot creation.
-    fn stop_canister(
-        &mut self,
-        canister_id: &str,
-    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>>;
+    fn stop_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError>;
 
     /// Start one canister after snapshot capture.
-    fn start_canister(
-        &mut self,
-        canister_id: &str,
-    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>>;
+    fn start_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError>;
 
     /// Download one snapshot into the supplied artifact directory.
     fn download_snapshot(
@@ -154,7 +170,7 @@ pub trait SnapshotDriver {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>>;
+    ) -> Result<(), SnapshotDriverError>;
 
     /// Render the planned create command for dry-run output.
     fn create_snapshot_command(&self, canister_id: &str) -> String;

@@ -12,10 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
-- `0.82.39` hard-cuts the public ICRC-21 dispatch handler alias, public
-  ICRC-21 lookup helper, and backup snapshot driver error alias while
-  preserving dispatcher behavior, snapshot behavior, and serialized protocol
-  surfaces.
+- `0.82.39` hard-cuts the public ICRC-21 dispatch handler alias and public
+  ICRC-21 lookup helper, and replaces the backup snapshot driver error alias
+  with a real named error type while preserving dispatcher behavior, snapshot
+  behavior, and serialized protocol surfaces.
 
 - `0.82.38` hard-cuts unused core Rust aliases for ICRC-21 consent results,
   hash bytes, NNS registry responses, and ICP refill result shapes while
