@@ -85,19 +85,6 @@ fn auth_076_chain_key_batch_renews_without_external_liveness() {
 }
 
 #[test]
-fn auth_076_legacy_bridge_root_proof_surface_absent_for_chain_key_only_issuers() {
-    let setup = setup_cached_root(RootSetupProfile::Capability);
-
-    assert_legacy_update_absent(&setup, "canic_upsert_delegation_renewal_provisioner");
-    assert_legacy_query_absent(&setup, "canic_delegation_renewal_provisioners");
-    assert_legacy_query_absent(&setup, "canic_delegation_renewal_work");
-    assert_legacy_update_absent(&setup, "canic_prepare_delegation_proof_batch");
-    assert_legacy_query_absent(&setup, "canic_get_delegation_proof_batch");
-    assert_legacy_query_absent(&setup, "canic_get_delegation_renewal_proof_batch");
-    assert_legacy_update_absent(&setup, "canic_install_delegation_proof_batch");
-}
-
-#[test]
 fn auth_076_lazy_repair_uses_cached_batch_and_does_not_sign_per_login() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
@@ -303,22 +290,6 @@ fn auth_076_timer_batches_multiple_issuers_with_one_signature() {
     assert_ne!(
         statuses[0].issuer_pid, statuses[1].issuer_pid,
         "test must cover two distinct issuer canisters"
-    );
-}
-
-fn assert_legacy_update_absent(setup: &RootSetup, method: &str) {
-    let result: Result<Result<(), Error>, _> = setup.pic.update_call(setup.root_id, method, ());
-    assert!(
-        result.is_err(),
-        "{method} must not remain as a callable bridge root-proof update endpoint",
-    );
-}
-
-fn assert_legacy_query_absent(setup: &RootSetup, method: &str) {
-    let result: Result<Result<(), Error>, _> = setup.pic.query_call(setup.root_id, method, ());
-    assert!(
-        result.is_err(),
-        "{method} must not remain as a callable bridge root-proof query endpoint",
     );
 }
 

@@ -10,7 +10,7 @@ fn renders_registry_roles_from_decoded_role_list() {
 }
 
 #[test]
-fn registry_roles_json_fallback_preserves_diagnostic_summaries() {
+fn registry_roles_json_query_preserves_diagnostic_summaries() {
     assert_eq!(
         registry_roles_from_json(r#"{"Ok":[{"role":"root"},{"role":"worker"}]}"#),
         "root, worker"

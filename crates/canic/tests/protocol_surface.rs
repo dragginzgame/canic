@@ -741,11 +741,9 @@ fn assert_root_delegation_macro_guards(source: &str) {
         lazy_repair_attr.contains("canic_update")
             && lazy_repair_attr.contains("internal")
             && lazy_repair_attr.contains("caller::is_registered_to_subnet()")
-            && !lazy_repair_attr.contains("caller::is_controller()")
-            && !lazy_repair_attr.contains("caller::is_delegation_renewal_provisioner()"),
+            && !lazy_repair_attr.contains("caller::is_controller()"),
         "root chain-key lazy repair must remain an internal subnet-issuer update"
     );
-    assert_bridge_backed_root_proof_endpoints_absent(source);
 }
 
 fn assert_root_delegation_endpoint_bindings(source: &str) {
@@ -776,25 +774,6 @@ fn assert_root_delegation_endpoint_bindings(source: &str) {
             && source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"),
         "root auth endpoint bundle must expose chain-key lazy repair"
     );
-    assert_bridge_backed_root_proof_endpoints_absent(source);
-}
-
-fn assert_bridge_backed_root_proof_endpoints_absent(source: &str) {
-    for removed in [
-        "fn canic_upsert_delegation_renewal_provisioner(",
-        "fn canic_delegation_renewal_provisioners(",
-        "fn canic_delegation_renewal_work(",
-        "fn canic_prepare_delegation_proof_batch(",
-        "fn canic_get_delegation_proof_batch(",
-        "fn canic_get_delegation_renewal_proof_batch(",
-        "fn canic_install_delegation_proof_batch(",
-        "caller::is_delegation_renewal_provisioner()",
-    ] {
-        assert!(
-            !source.contains(removed),
-            "bridge-backed root proof surface must stay removed: {removed}"
-        );
-    }
 }
 
 #[test]

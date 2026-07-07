@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.36` removes active removed-endpoint auth/replay test guards and a
+  host-local bootstrap readiness alias while preserving current replay,
+  protocol-surface, and install-root readiness behavior.
+
 - `0.82.35` hard-cuts CLI help/version word aliases by keeping canonical
   `--help`/`-h` and `--version`/`-V` flag forms only, and removes stale
   removed-command fixtures from global forwarding tests.
