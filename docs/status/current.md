@@ -76,8 +76,8 @@ before this compaction is archived at
   `Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>`
   handler shape wrapped by a private dispatcher registry value, and
   `Icrc21Dispatcher::get_handler` is narrowed to a private lookup helper. The
-  same slice removes the backup `SnapshotDriverError` alias in favor of
-  concrete `Box<dyn StdError + Send + Sync + 'static>` driver failures.
+  same slice replaces the backup `SnapshotDriverError` alias with a concrete
+  `SnapshotDriverError` struct that wraps the boxed driver source error.
   Runtime behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment
   truth, evidence/report schemas, and stable-state layout are unchanged. The
   docs-only reports are

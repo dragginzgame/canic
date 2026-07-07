@@ -16,22 +16,9 @@ thread_local! {
     static ICRC_21_REGISTRY: RefCell<HashMap<String, RegisteredConsentHandler>> = RefCell::new(HashMap::new());
 }
 
-trait ConsentMessageHandler {
-    fn handle(&self, req: ConsentMessageRequest) -> ConsentMessageResponse;
-}
-
-impl<F> ConsentMessageHandler for F
-where
-    F: Fn(ConsentMessageRequest) -> ConsentMessageResponse,
-{
-    fn handle(&self, req: ConsentMessageRequest) -> ConsentMessageResponse {
-        self(req)
-    }
-}
-
 #[derive(Clone)]
 struct RegisteredConsentHandler {
-    inner: Arc<dyn ConsentMessageHandler + 'static>,
+    handler: Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>,
 }
 
 impl RegisteredConsentHandler {
@@ -40,12 +27,12 @@ impl RegisteredConsentHandler {
         F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
     {
         Self {
-            inner: Arc::new(handler),
+            handler: Arc::new(handler),
         }
     }
 
     fn handle(&self, req: ConsentMessageRequest) -> ConsentMessageResponse {
-        self.inner.handle(req)
+        self.handler.as_ref()(req)
     }
 }
 

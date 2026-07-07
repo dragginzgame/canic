@@ -24,7 +24,8 @@ use crate::{
 use canic_backup::{
     registry::RegistryEntry as BackupRegistryEntry,
     snapshot::{
-        SnapshotDownloadConfig, SnapshotDownloadResult, SnapshotDriver, SnapshotLifecycleMode,
+        SnapshotDownloadConfig, SnapshotDownloadResult, SnapshotDriver, SnapshotDriverError,
+        SnapshotLifecycleMode,
     },
     timestamp::current_timestamp_marker,
 };
@@ -41,7 +42,6 @@ use canic_host::{
 };
 use clap::Command as ClapCommand;
 use std::{
-    error::Error as StdError,
     ffi::OsString,
     path::{Path, PathBuf},
 };
@@ -330,7 +330,7 @@ impl SnapshotDriver for IcpSnapshotDriver<'_> {
     fn registry_entries(
         &mut self,
         root: &str,
-    ) -> Result<Vec<BackupRegistryEntry>, Box<dyn StdError + Send + Sync + 'static>> {
+    ) -> Result<Vec<BackupRegistryEntry>, SnapshotDriverError> {
         if self.request.root.as_deref() == Some(root)
             && let Some(entries) = &self.request.registry_entries
         {
@@ -343,24 +343,15 @@ impl SnapshotDriver for IcpSnapshotDriver<'_> {
         Ok(backup_registry_entries(&entries))
     }
 
-    fn create_snapshot(
-        &mut self,
-        canister_id: &str,
-    ) -> Result<String, Box<dyn StdError + Send + Sync + 'static>> {
+    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, SnapshotDriverError> {
         create_snapshot(self.request, canister_id).map_err(driver_error)
     }
 
-    fn stop_canister(
-        &mut self,
-        canister_id: &str,
-    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
+    fn stop_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError> {
         stop_canister(self.request, canister_id).map_err(driver_error)
     }
 
-    fn start_canister(
-        &mut self,
-        canister_id: &str,
-    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
+    fn start_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError> {
         start_canister(self.request, canister_id).map_err(driver_error)
     }
 
@@ -369,7 +360,7 @@ impl SnapshotDriver for IcpSnapshotDriver<'_> {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>> {
+    ) -> Result<(), SnapshotDriverError> {
         download_snapshot(self.request, canister_id, snapshot_id, artifact_path)
             .map_err(driver_error)
     }
@@ -396,8 +387,8 @@ impl SnapshotDriver for IcpSnapshotDriver<'_> {
     }
 }
 
-fn driver_error(error: SnapshotCommandError) -> Box<dyn StdError + Send + Sync + 'static> {
-    Box::new(error)
+fn driver_error(error: SnapshotCommandError) -> SnapshotDriverError {
+    SnapshotDriverError::new(error)
 }
 
 fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
