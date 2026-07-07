@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-06
+Last updated: 2026-07-07
 
 ## Purpose
 
@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.25`. Earlier in the
+- The current package/release-surface version is `0.82.26`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -494,6 +494,17 @@ before this compaction is archived at
   storage behavior, and GC behavior are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-api-facade-hard-cut-report.md`.
   The root and detailed `0.82.26` changelog entries are prepared.
+
+- The current 0.82 follow-up slice hard-cuts unused wasm-store bootstrap Rust
+  helpers. Root-specific direct staging helpers, their manifest normalization
+  code, the unused bootstrap binding constant, and the direct staged-release
+  publication support wrapper are removed. Lifecycle-used embedded release-set
+  helpers, endpoint-used bootstrap helpers, endpoint method names, Candid,
+  JSON, deployment truth, evidence/report schemas, stable-state layout,
+  wasm-store storage behavior, publication workflow behavior, and lifecycle
+  behavior are unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-wasm-store-bootstrap-helper-hard-cut-report.md`.
+  The root and detailed `0.82.27` changelog entries are prepared.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
