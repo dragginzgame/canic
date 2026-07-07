@@ -85,7 +85,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("restore"));
     assert!(!plain.contains("    endpoints"));
     assert!(!plain.contains("    metrics"));
-    assert!(plain.contains("Tip: Run `canic <command> help`"));
+    assert!(plain.contains("Tip: Run `canic <command> --help`"));
 }
 
 #[test]
@@ -527,20 +527,13 @@ fn global_icp_is_forwarded_to_info_query_commands() {
         OsString::from("app"),
     ];
     let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
-    let mut removed_medic_tail = vec![OsString::from("medic"), OsString::from("test")];
-    let mut help_tail = vec![OsString::from("help")];
-    let original_removed_medic_tail = removed_medic_tail.clone();
+    let mut help_tail = vec![OsString::from("--help")];
 
     apply_global_icp("info", &mut list_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut cycles_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut metrics_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut endpoints_tail, Some("/tmp/icp".to_string()));
     apply_global_icp("info", &mut env_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp(
-        "info",
-        &mut removed_medic_tail,
-        Some("/tmp/icp".to_string()),
-    );
     apply_global_icp("info", &mut help_tail, Some("/tmp/icp".to_string()));
 
     assert_eq!(
@@ -589,17 +582,11 @@ fn global_icp_is_forwarded_to_info_query_commands() {
             OsString::from("/tmp/icp")
         ]
     );
-    assert_eq!(removed_medic_tail, original_removed_medic_tail);
-    assert_eq!(help_tail, vec![OsString::from("help")]);
+    assert_eq!(help_tail, vec![OsString::from("--help")]);
 }
 
 #[test]
 fn global_icp_is_forwarded_only_to_active_auth_renewal_status() {
-    let mut removed_run_once_tail = vec![
-        OsString::from("renewal"),
-        OsString::from("run-once"),
-        OsString::from("downstream"),
-    ];
     let mut status_tail = vec![
         OsString::from("renewal"),
         OsString::from("status"),
@@ -607,57 +594,16 @@ fn global_icp_is_forwarded_only_to_active_auth_renewal_status() {
         OsString::from("--issuer"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ];
-    let mut removed_provisioner_list_tail = vec![
-        OsString::from("renewal"),
-        OsString::from("provisioner"),
-        OsString::from("list"),
-        OsString::from("downstream"),
-    ];
-    let mut removed_provisioner_enable_tail = vec![
-        OsString::from("renewal"),
-        OsString::from("provisioner"),
-        OsString::from("enable"),
-        OsString::from("downstream"),
-        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
-    ];
-    let mut help_tail = vec![OsString::from("help")];
+    let mut help_tail = vec![OsString::from("--help")];
 
-    let original_removed_run_once_tail = removed_run_once_tail.clone();
-    let original_removed_provisioner_list_tail = removed_provisioner_list_tail.clone();
-    let original_removed_provisioner_enable_tail = removed_provisioner_enable_tail.clone();
-
-    apply_global_icp(
-        "auth",
-        &mut removed_run_once_tail,
-        Some("/tmp/icp".to_string()),
-    );
     apply_global_icp("auth", &mut status_tail, Some("/tmp/icp".to_string()));
-    apply_global_icp(
-        "auth",
-        &mut removed_provisioner_list_tail,
-        Some("/tmp/icp".to_string()),
-    );
-    apply_global_icp(
-        "auth",
-        &mut removed_provisioner_enable_tail,
-        Some("/tmp/icp".to_string()),
-    );
     apply_global_icp("auth", &mut help_tail, Some("/tmp/icp".to_string()));
 
-    assert_eq!(removed_run_once_tail, original_removed_run_once_tail);
     assert!(status_tail.ends_with(&[
         OsString::from(INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp")
     ]));
-    assert_eq!(
-        removed_provisioner_list_tail,
-        original_removed_provisioner_list_tail
-    );
-    assert_eq!(
-        removed_provisioner_enable_tail,
-        original_removed_provisioner_enable_tail
-    );
-    assert_eq!(help_tail, vec![OsString::from("help")]);
+    assert_eq!(help_tail, vec![OsString::from("--help")]);
 }
 
 #[test]
@@ -861,16 +807,13 @@ fn global_network_is_forwarded_to_info_query_commands() {
         OsString::from("app"),
     ];
     let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
-    let mut removed_medic_tail = vec![OsString::from("medic"), OsString::from("test")];
-    let mut help_tail = vec![OsString::from("help")];
-    let original_removed_medic_tail = removed_medic_tail.clone();
+    let mut help_tail = vec![OsString::from("--help")];
 
     apply_global_network("info", &mut list_tail, Some("local".to_string()));
     apply_global_network("info", &mut cycles_tail, Some("local".to_string()));
     apply_global_network("info", &mut metrics_tail, Some("local".to_string()));
     apply_global_network("info", &mut endpoints_tail, Some("local".to_string()));
     apply_global_network("info", &mut env_tail, Some("local".to_string()));
-    apply_global_network("info", &mut removed_medic_tail, Some("local".to_string()));
     apply_global_network("info", &mut help_tail, Some("local".to_string()));
 
     assert_eq!(
@@ -919,17 +862,11 @@ fn global_network_is_forwarded_to_info_query_commands() {
             OsString::from("local")
         ]
     );
-    assert_eq!(removed_medic_tail, original_removed_medic_tail);
-    assert_eq!(help_tail, vec![OsString::from("help")]);
+    assert_eq!(help_tail, vec![OsString::from("--help")]);
 }
 
 #[test]
 fn global_network_is_forwarded_only_to_active_auth_renewal_status() {
-    let mut removed_run_once_tail = vec![
-        OsString::from("renewal"),
-        OsString::from("run-once"),
-        OsString::from("downstream"),
-    ];
     let mut status_tail = vec![
         OsString::from("renewal"),
         OsString::from("status"),
@@ -937,57 +874,16 @@ fn global_network_is_forwarded_only_to_active_auth_renewal_status() {
         OsString::from("--issuer"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
     ];
-    let mut removed_provisioner_list_tail = vec![
-        OsString::from("renewal"),
-        OsString::from("provisioner"),
-        OsString::from("list"),
-        OsString::from("downstream"),
-    ];
-    let mut removed_provisioner_disable_tail = vec![
-        OsString::from("renewal"),
-        OsString::from("provisioner"),
-        OsString::from("disable"),
-        OsString::from("downstream"),
-        OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
-    ];
-    let mut help_tail = vec![OsString::from("help")];
+    let mut help_tail = vec![OsString::from("--help")];
 
-    let original_removed_run_once_tail = removed_run_once_tail.clone();
-    let original_removed_provisioner_list_tail = removed_provisioner_list_tail.clone();
-    let original_removed_provisioner_disable_tail = removed_provisioner_disable_tail.clone();
-
-    apply_global_network(
-        "auth",
-        &mut removed_run_once_tail,
-        Some("fixture".to_string()),
-    );
     apply_global_network("auth", &mut status_tail, Some("fixture".to_string()));
-    apply_global_network(
-        "auth",
-        &mut removed_provisioner_list_tail,
-        Some("fixture".to_string()),
-    );
-    apply_global_network(
-        "auth",
-        &mut removed_provisioner_disable_tail,
-        Some("fixture".to_string()),
-    );
     apply_global_network("auth", &mut help_tail, Some("fixture".to_string()));
 
-    assert_eq!(removed_run_once_tail, original_removed_run_once_tail);
     assert!(status_tail.ends_with(&[
         OsString::from(INTERNAL_NETWORK_OPTION),
         OsString::from("fixture")
     ]));
-    assert_eq!(
-        removed_provisioner_list_tail,
-        original_removed_provisioner_list_tail
-    );
-    assert_eq!(
-        removed_provisioner_disable_tail,
-        original_removed_provisioner_disable_tail
-    );
-    assert_eq!(help_tail, vec![OsString::from("help")]);
+    assert_eq!(help_tail, vec![OsString::from("--help")]);
 }
 
 #[test]

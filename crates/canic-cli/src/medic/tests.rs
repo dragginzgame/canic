@@ -117,7 +117,7 @@ fn medic_usage_includes_top_level_examples() {
 fn medic_subcommand_help_requests_are_not_targets() {
     assert!(medic_subcommand_help_requested(&[
         OsString::from("project"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("project"),
@@ -126,11 +126,11 @@ fn medic_subcommand_help_requests_are_not_targets() {
     assert!(medic_subcommand_help_requested(&[
         OsString::from("--ci"),
         OsString::from("project"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("deployment"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("deployment"),
@@ -139,35 +139,35 @@ fn medic_subcommand_help_requests_are_not_targets() {
     assert!(medic_subcommand_help_requested(&[
         OsString::from("--json"),
         OsString::from("deployment"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("deployment"),
         OsString::from("--json"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("project"),
         OsString::from("--json"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
         OsString::from("local"),
         OsString::from("deployment"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
         OsString::from("project"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("deployment"),
         OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
         OsString::from("local"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
     assert!(!medic_subcommand_help_requested(&[
         OsString::from("deployment"),
@@ -181,7 +181,7 @@ fn medic_subcommand_help_requests_are_not_targets() {
     assert!(!medic_subcommand_help_requested(&[
         OsString::from("deployment"),
         OsString::from("demo"),
-        OsString::from("help")
+        OsString::from("--help")
     ]));
 }
 

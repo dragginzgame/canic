@@ -72,7 +72,7 @@ Examples:
   canic deploy promote plan --request promotion-plan.json
   canic deploy root verify demo-local --from-check deployment-check.json
 
-Use `canic deploy inspect help` for raw plan, inventory, diff, report,
+Use `canic deploy inspect --help` for raw plan, inventory, diff, report,
 comparison, local catalog, root-verification, and resume-safety JSON artifacts.
 Use `canic deploy plan <deployment>` for the operator planning report.
 Use `canic inspect` for live runtime-observed canister status.

@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.33`. Earlier in the
+- The current package/release-surface version is `0.82.34`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -26,11 +26,18 @@ before this compaction is archived at
   be JSON. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-backup-restore-legacy-repair-hard-cut-report.md`.
 
-- The current `0.82.34` working slice hard-cuts backup/restore JSON contract
+- The `0.82.34` slice hard-cuts backup/restore JSON contract
   tolerance by rejecting unknown fields across current backup/restore manifests,
   plans, journals, receipts, command previews, and reports, and removing unused
   plan-facing backup receipt types. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-backup-restore-json-contract-hard-cut-report.md`.
+
+- The current `0.82.35` working slice hard-cuts CLI help/version word aliases
+  by keeping canonical `--help`/`-h` and `--version`/`-V` flag forms only,
+  removing bare `help`/`version` preflight handling, and dropping stale
+  removed-command fixtures from global forwarding tests. The docs-only report
+  is
+  `docs/design/0.82-boundary-hardening/0.82-cli-help-word-alias-hard-cut-report.md`.
 
 - The current `0.82.1` working slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision
@@ -731,7 +738,7 @@ before this compaction is archived at
   adding focused tests for the documented exit-code contract: planned and
   warning reports exit successfully, while blocked and unsupported reports
   return `PlanBlocked` with exit code 1. The same slice now smoke-tests
-  `canic deploy plan help` and `canic deploy plan --help` so the planning
+  `canic deploy plan --help` so the planning
   command's safety-contract help remains reachable through the shared CLI
   help path. Deploy-plan coverage also pins the command help's no-mutation /
   JSON `--out` wording and the deterministic diagnostic sort order used by
@@ -853,7 +860,7 @@ before this compaction is archived at
   `canic info medic <deployment>` route, removes the same retired `info medic`
   leaf from top-level global ICP/network option forwarding, and keeps medic
   subcommand help usage-only:
-  `canic medic project help` and `canic medic deployment help` render medic
+  `canic medic project --help` and `canic medic deployment --help` render medic
   usage instead of entering project/deployment report construction, including
   when medic-local flags such as `--json` appear around the subcommand. The
   same slice wraps unbroken long diagnostic values within `MEDIC_REPORT_WIDTH`.
