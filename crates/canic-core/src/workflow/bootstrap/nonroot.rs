@@ -8,9 +8,8 @@
 use crate::workflow::placement::sharding::ShardingWorkflow;
 use crate::workflow::runtime::auth::RuntimeAuthWorkflow;
 use crate::{
-    InternalError,
-    ops::runtime::ready::ReadyOps,
-    workflow::{placement::scaling::ScalingWorkflow, prelude::*},
+    InternalError, log, log::Topic, ops::runtime::ready::ReadyOps,
+    workflow::placement::scaling::ScalingWorkflow,
 };
 
 ///

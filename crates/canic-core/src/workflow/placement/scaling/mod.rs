@@ -8,13 +8,14 @@ pub mod query;
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    cdk::types::BoundedString64,
+    cdk::types::{BoundedString64, Principal},
     config::schema::{ScalePool, ScalingConfig},
     domain::policy::pure::placement::scaling::{
         ScalingPlan, ScalingPolicy, ScalingPolicyInput, ScalingPoolPolicyInput,
         ScalingWorkerPlanEntry,
     },
     dto::rpc::CreateCanisterParent,
+    log::Topic,
     ops::{
         config::ConfigOps,
         ic::IcOps,
@@ -28,7 +29,6 @@ use crate::{
         },
         storage::placement::scaling::ScalingRegistryOps,
     },
-    workflow::prelude::*,
 };
 
 ///

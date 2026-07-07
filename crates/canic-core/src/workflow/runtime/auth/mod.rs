@@ -15,6 +15,8 @@ use crate::{
     dto::auth::SignedRoleAttestation,
     format::display_optional,
     ids::CanisterRole,
+    log,
+    log::Topic,
     ops::{
         auth::{AuthExpiryError, AuthOps, AuthOpsError},
         config::ConfigOps,
@@ -24,7 +26,6 @@ use crate::{
             record_attestation_epoch_rejected, record_attestation_verify_failed,
         },
     },
-    workflow::prelude::*,
 };
 
 ///

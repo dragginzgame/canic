@@ -8,6 +8,7 @@ use crate::{
     InternalError, InternalErrorOrigin,
     dto::abi::v1::CanisterInitPayload,
     ids::CanisterRole,
+    log::Topic,
     ops::{
         config::ConfigOps,
         runtime::memory::MemoryRegistryOps,
@@ -18,7 +19,6 @@ use crate::{
     },
     workflow::{
         env::EnvWorkflow,
-        prelude::*,
         runtime::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary},
     },
 };

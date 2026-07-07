@@ -5,12 +5,14 @@
 //! Boundary: workflow query facade over index storage ops.
 
 use crate::{
+    cdk::types::Principal,
     dto::{
         page::{Page, PageRequest},
         topology::IndexEntryResponse,
     },
+    ids::CanisterRole,
     ops::storage::index::{app::AppIndexOps, mapper::IndexResponseMapper, subnet::SubnetIndexOps},
-    workflow::{prelude::*, view::paginate::paginate_vec},
+    workflow::view::paginate::paginate_vec,
 };
 
 ///

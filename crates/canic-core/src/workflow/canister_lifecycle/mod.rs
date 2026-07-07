@@ -8,7 +8,7 @@ mod propagation;
 
 use crate::{
     InternalError,
-    cdk::types::TC,
+    cdk::types::{Principal, TC},
     domain::metrics::{
         CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
     },
@@ -16,6 +16,9 @@ use crate::{
         topology::{TopologyPolicy, TopologyPolicyError},
         upgrade::plan_upgrade,
     },
+    ids::CanisterRole,
+    log,
+    log::Topic,
     model::replay::CommandKind,
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
@@ -35,7 +38,7 @@ use crate::{
     replay_policy::CostClass,
     workflow::{
         canister_lifecycle::propagation::PropagationWorkflow,
-        cost_guard::map_cost_guard_reserve_error, ic::provision::ProvisionWorkflow, prelude::*,
+        cost_guard::map_cost_guard_reserve_error, ic::provision::ProvisionWorkflow,
         runtime::install::ModuleInstallWorkflow,
     },
 };

@@ -15,8 +15,9 @@ pub mod timer;
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    log::Topic,
     ops::runtime::{env::EnvOps, memory::MemoryRegistryOps},
-    workflow::{self, prelude::*},
+    workflow,
 };
 
 pub use nonroot::{init_nonroot_canister, post_upgrade_nonroot_canister_after_memory_init};

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.30` finishes the workflow prelude hard cut by replacing the remaining
+  workflow wildcard imports with concrete owners and removing
+  `workflow::prelude`, with a maintained boundary guard to keep it removed.
+
 - `0.82.29` narrows workflow prelude usage across pool and IC workflow
   clusters by replacing wildcard imports with direct owners and removing the
   stale `workflow::prelude::Account` re-export.
