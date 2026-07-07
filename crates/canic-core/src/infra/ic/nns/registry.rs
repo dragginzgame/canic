@@ -30,15 +30,6 @@ pub struct GetSubnetForCanisterRequest {
 }
 
 ///
-/// GetSubnetForCanisterResponse
-///
-/// Raw NNS registry subnet lookup result.
-/// Owned by NNS registry infra and normalized by the adapter.
-///
-
-pub type GetSubnetForCanisterResponse = Result<GetSubnetForCanisterPayload, String>;
-
-///
 /// GetSubnetForCanisterPayload
 ///
 /// Successful NNS registry subnet lookup payload.
@@ -92,7 +83,7 @@ impl NnsRegistryInfra {
             .with_arg(request)?
             .execute()
             .await?
-            .candid::<GetSubnetForCanisterResponse>()?;
+            .candid::<Result<GetSubnetForCanisterPayload, String>>()?;
 
         match result {
             Ok(payload) => Ok(payload.subnet_id),

@@ -15,8 +15,8 @@ use crate::{
         InfraError,
         ic::icp_refill::{
             IcpRefillCanisterOverrides, IcpRefillCanisters, IcpRefillInfra,
-            IcpXdrConversionRateResponse, Icrc1TransferResult, NotifyTopUpArg, NotifyTopUpResult,
-            TransferArg,
+            IcpXdrConversionRateResponse, NotifyTopUpArg, NotifyTopUpError, TransferArg,
+            TransferError,
         },
     },
     ops::{cost_guard::CostGuardPermit, ic::IcOpsError},
@@ -107,7 +107,7 @@ impl IcpRefillOps {
         _permit: &CostGuardPermit,
         ledger_id: Principal,
         args: TransferArg,
-    ) -> Result<Icrc1TransferResult, InternalError> {
+    ) -> Result<Result<Nat, TransferError>, InternalError> {
         map_infra(IcpRefillInfra::icrc1_transfer(ledger_id, args).await)
     }
 
@@ -115,7 +115,7 @@ impl IcpRefillOps {
         _permit: &CostGuardPermit,
         cmc_id: Principal,
         args: NotifyTopUpArg,
-    ) -> Result<NotifyTopUpResult, InternalError> {
+    ) -> Result<Result<Nat, NotifyTopUpError>, InternalError> {
         map_infra(IcpRefillInfra::notify_top_up(cmc_id, args).await)
     }
 

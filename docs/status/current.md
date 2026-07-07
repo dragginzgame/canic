@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.36`. Earlier in the
+- The current package/release-surface version is `0.82.37`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -50,7 +50,7 @@ before this compaction is archived at
   unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-replay-policy-test-and-readiness-alias-cleanup-report.md`.
 
-- The current `0.82.37` working slice removes a remaining protocol-surface
+- The `0.82.37` slice removes a remaining protocol-surface
   anti-resurrection assertion for retired single-proof root delegation endpoint
   names while preserving positive coverage for maintained root issuer policy,
   renewal-template, renewal-status, chain-key lazy-repair endpoint constants,
@@ -58,6 +58,18 @@ before this compaction is archived at
   Candid, JSON, deployment truth, evidence/report schemas, and stable-state
   layout are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-root-delegation-protocol-test-cleanup-report.md`.
+
+- The current `0.82.38` working slice hard-cuts unused public Rust aliases
+  from core helper and infra boundaries. `ConsentResult`, `HashBytes`, and
+  `GetSubnetForCanisterResponse`, `Icrc1TransferResult`, and
+  `NotifyTopUpResult` are removed in favor of concrete
+  `Result<ConsentInfo, Icrc21Error>`, `Vec<u8>`,
+  `Result<GetSubnetForCanisterPayload, String>`,
+  `Result<Nat, TransferError>`, and `Result<Nat, NotifyTopUpError>` shapes.
+  Runtime behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment
+  truth, evidence/report schemas, and stable-state layout are unchanged. The
+  docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-core-rust-alias-hard-cut-report.md`.
 
 - The current `0.82.1` working slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision
