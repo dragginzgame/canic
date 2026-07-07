@@ -6,6 +6,7 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    cdk::{candid::CandidType, types::Principal},
     ids::{IntentId, IntentResourceKey},
     ops::{
         ic::{
@@ -18,7 +19,7 @@ use crate::{
         },
         storage::intent::IntentStoreOps,
     },
-    workflow::{prelude::*, runtime::intent::IntentCleanupWorkflow},
+    workflow::runtime::intent::IntentCleanupWorkflow,
 };
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use serde::de::DeserializeOwned;

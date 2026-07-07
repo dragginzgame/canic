@@ -518,6 +518,19 @@ before this compaction is archived at
   `docs/design/0.82-boundary-hardening/0.82-wasm-store-template-support-cleanup-report.md`.
   The root and detailed `0.82.28` changelog entries are prepared.
 
+- The current 0.82 follow-up slice narrows workflow prelude usage in the pool
+  and IC workflow clusters. Pool import/recycle/reset/scheduler/query/admin,
+  IC call/ledger/management, provisioning, and ICP refill workflow modules now
+  import boundary values from concrete `cdk`, `ids`, and `log` owners instead
+  of `workflow::prelude::*`. The stale `workflow::prelude::Account` Rust
+  re-export is removed in favor of the canonical `cdk::types::Account` owner.
+  Operator command surfaces, endpoint names, Candid, JSON, deployment truth,
+  evidence/report schemas, stable-state layout, pool behavior, IC call
+  behavior, ledger behavior, ICP refill behavior, and provisioning behavior are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-workflow-prelude-boundary-report.md`.
+  The root and detailed `0.82.29` changelog entries are prepared.
+
 - The previous line was `0.81.x` runtime introspection. Source of truth:
   `docs/design/0.81-runtime-introspection/0.81-design.md`.
 

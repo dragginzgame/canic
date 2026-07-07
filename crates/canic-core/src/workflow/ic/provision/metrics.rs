@@ -9,6 +9,7 @@ use crate::{
     domain::metrics::{
         CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
     },
+    ids::CanisterRole,
     ops::runtime::metrics::{
         canister_ops::CanisterOpsMetrics,
         provisioning::{
@@ -16,7 +17,6 @@ use crate::{
             ProvisioningMetrics,
         },
     },
-    workflow::prelude::*,
 };
 
 // Record one canister operation metric for a known role.

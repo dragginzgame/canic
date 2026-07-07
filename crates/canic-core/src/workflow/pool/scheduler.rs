@@ -7,6 +7,8 @@
 use crate::{
     InternalError,
     domain::policy::pure::pool::PoolPolicyError,
+    log,
+    log::Topic,
     ops::{
         ic::IcOps,
         runtime::{
@@ -24,7 +26,6 @@ use crate::{
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_POOL_CHECK_INTERVAL},
         pool::{PoolWorkflow, admissibility::check_can_enter_pool},
-        prelude::*,
         runtime::timer::TimerWorkflow,
     },
 };

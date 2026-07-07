@@ -6,6 +6,7 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    cdk::types::Principal,
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::IcOps,
@@ -19,7 +20,6 @@ use crate::{
             ICP_REFILL_REPLAY_COMMAND_KIND,
             replay::{icp_refill_command_kind, operation_id_display},
         },
-        prelude::*,
     },
 };
 

@@ -6,11 +6,12 @@
 
 use crate::{
     InternalError,
+    cdk::types::Principal,
     config::schema::{CanisterConfig, CanisterKind},
     domain::policy::pure as policy,
     domain::policy::pure::topology::registry::{RegistryCanisterKind, RegistryCanisterShape},
+    ids::CanisterRole,
     ops::{config::ConfigOps, storage::registry::subnet::SubnetRegistryOps},
-    workflow::prelude::*,
 };
 
 // Validate create-time registry policy using targeted registry lookups instead of a full export.
