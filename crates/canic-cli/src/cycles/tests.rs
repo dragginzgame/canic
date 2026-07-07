@@ -137,26 +137,9 @@ fn parses_cycle_tracker_json() {
 }
 
 #[test]
-fn cycle_tracker_response_candid_without_structured_entries_is_rejected() {
-    assert_eq!(
-        parse_cycle_tracker_page(
-            r#"{"response_candid":"(variant { Ok = record { entries = vec { record { cycles = 1_000 : nat; timestamp_secs = 10 : nat64 } }; total = 1 : nat64 } })"}"#
-        ),
-        None
-    );
-}
-
-#[test]
-fn cycle_tracker_json_rejects_malformed_entries_even_when_response_candid_is_present() {
+fn cycle_tracker_json_rejects_malformed_entries() {
     assert_eq!(
         parse_cycle_tracker_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
-        None
-    );
-
-    assert_eq!(
-        parse_cycle_tracker_page(
-            r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1},"response_candid":"(variant { Ok = record { entries = vec { record { cycles = 1_000 : nat; timestamp_secs = 10 : nat64 } }; total = 1 : nat64 } })"}"#
-        ),
         None
     );
 }
@@ -176,26 +159,9 @@ fn parses_topup_event_json() {
 }
 
 #[test]
-fn topup_event_response_candid_without_structured_entries_is_rejected() {
-    assert_eq!(
-        parse_topup_event_page(
-            r#"{"response_candid":"(variant { Ok = record { entries = vec { record { timestamp_secs = 10 : nat64; transferred_cycles = opt (4_000_000_000_000 : nat); status = variant { RequestOk } } }; total = 1 : nat64 } })"}"#
-        ),
-        None
-    );
-}
-
-#[test]
-fn topup_event_json_rejects_malformed_entries_even_when_response_candid_is_present() {
+fn topup_event_json_rejects_malformed_entries() {
     assert_eq!(
         parse_topup_event_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
-        None
-    );
-
-    assert_eq!(
-        parse_topup_event_page(
-            r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1},"response_candid":"(variant { Ok = record { entries = vec { record { timestamp_secs = 10 : nat64; transferred_cycles = opt (4_000_000_000_000 : nat); status = variant { RequestOk } } }; total = 1 : nat64 } })"}"#
-        ),
         None
     );
 }

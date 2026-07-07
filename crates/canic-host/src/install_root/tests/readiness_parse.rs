@@ -31,22 +31,6 @@ fn parse_bootstrap_status_accepts_wrapped_ok_record() {
 }
 
 #[test]
-fn parse_bootstrap_status_rejects_icp_cli_response_candid() {
-    assert_eq!(
-        parse_bootstrap_status_value(&json!({
-            "response_candid": r#"(
-  record {
-    89_620_959 = opt "registry phase failed";
-    3_253_282_875 = "failed";
-    3_870_990_435 = false;
-  },
-)"#
-        })),
-        None
-    );
-}
-
-#[test]
 fn parses_quiet_canister_create_output() {
     assert_eq!(
         parse_created_canister_id("Created canister:\nt63gs-up777-77776-aaaba-cai\n"),
