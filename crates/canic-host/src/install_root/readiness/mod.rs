@@ -2,7 +2,6 @@ use self::diagnostics::{
     print_bootstrap_failure_diagnostics, print_bootstrap_status, print_current_registry_roles,
     print_root_diagnostics,
 };
-use self::parsing::BootstrapStatusSnapshot;
 pub(super) use self::parsing::parse_bootstrap_status_value;
 use crate::{
     canister_ready::query_canister_ready,
@@ -10,7 +9,7 @@ use crate::{
     release_set::{icp_query_on_network, icp_root},
     replica_query,
 };
-use canic_core::protocol;
+use canic_core::{dto::state::BootstrapStatusResponse, protocol};
 use serde_json::Value;
 use std::{thread, time::Duration};
 
@@ -77,7 +76,7 @@ fn root_ready(network: &str, root_canister: &str) -> Result<bool, Box<dyn std::e
 fn root_bootstrap_status(
     network: &str,
     root_canister: &str,
-) -> Result<Option<BootstrapStatusSnapshot>, Box<dyn std::error::Error>> {
+) -> Result<Option<BootstrapStatusResponse>, Box<dyn std::error::Error>> {
     if let Some(status) = local_bootstrap_status(network, root_canister) {
         return Ok(Some(status));
     }
@@ -105,7 +104,7 @@ fn root_bootstrap_status(
     Ok(parse_bootstrap_status_value(&data))
 }
 
-fn local_bootstrap_status(network: &str, root_canister: &str) -> Option<BootstrapStatusSnapshot> {
+fn local_bootstrap_status(network: &str, root_canister: &str) -> Option<BootstrapStatusResponse> {
     if !replica_query::should_use_local_replica_query(Some(network)) {
         return None;
     }

@@ -1,16 +1,15 @@
 use super::super::commands::{icp_command_in_network, icp_command_on_network};
-use super::parsing::BootstrapStatusSnapshot;
 use crate::{
     release_set::{icp_query_on_network, icp_root},
     replica_query,
 };
-use canic_core::protocol;
+use canic_core::{dto::state::BootstrapStatusResponse, protocol};
 use serde_json::Value;
 
 pub(super) fn print_bootstrap_failure_diagnostics(
     network: &str,
     root_canister: &str,
-    status: &BootstrapStatusSnapshot,
+    status: &BootstrapStatusResponse,
     last_error: &str,
 ) {
     eprintln!(
@@ -20,7 +19,7 @@ pub(super) fn print_bootstrap_failure_diagnostics(
     print_root_diagnostics(network, root_canister);
 }
 
-pub(super) fn print_bootstrap_status(status: &BootstrapStatusSnapshot) {
+pub(super) fn print_bootstrap_status(status: &BootstrapStatusResponse) {
     match status.last_error.as_deref() {
         Some(last_error) => println!(
             "Current bootstrap status: phase={} ready={} error={}",

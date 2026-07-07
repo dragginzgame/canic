@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.34`. Earlier in the
+- The current package/release-surface version is `0.82.35`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -32,12 +32,23 @@ before this compaction is archived at
   plan-facing backup receipt types. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-backup-restore-json-contract-hard-cut-report.md`.
 
-- The current `0.82.35` working slice hard-cuts CLI help/version word aliases
+- The `0.82.35` slice hard-cuts CLI help/version word aliases
   by keeping canonical `--help`/`-h` and `--version`/`-V` flag forms only,
   removing bare `help`/`version` preflight handling, and dropping stale
   removed-command fixtures from global forwarding tests. The docs-only report
   is
   `docs/design/0.82-boundary-hardening/0.82-cli-help-word-alias-hard-cut-report.md`.
+
+- The current `0.82.36` working slice removes remaining active
+  anti-resurrection-style tests for retired bridge-backed delegation-proof
+  endpoints and guards, and removes the host-local `BootstrapStatusSnapshot`
+  alias so install-root readiness code consumes the canonical
+  `BootstrapStatusResponse` DTO directly. The same slice renames stale
+  fallback wording in the registry-role diagnostics JSON test. Replay behavior,
+  install-root readiness behavior, endpoint surfaces, CLI behavior, Candid,
+  JSON, deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged. The docs-only report is
+  `docs/design/0.82-boundary-hardening/0.82-replay-policy-test-and-readiness-alias-cleanup-report.md`.
 
 - The current `0.82.1` working slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision

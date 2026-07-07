@@ -8,23 +8,6 @@ use super::*;
 use crate::replay_policy::quota::ROOT_CHAIN_KEY_SIGNING_QUOTA_V1;
 
 #[test]
-fn bridge_backed_root_proof_endpoints_are_removed_from_manifest() {
-    for endpoint in [
-        "canic_upsert_delegation_renewal_provisioner",
-        "canic_prepare_delegation_proof_batch",
-        "canic_get_delegation_proof_batch",
-        "canic_install_delegation_proof_batch",
-    ] {
-        assert!(
-            ENDPOINT_REPLAY_POLICY_MANIFEST
-                .iter()
-                .all(|entry| entry.endpoint != endpoint),
-            "{endpoint} must not remain in the active replay manifest",
-        );
-    }
-}
-
-#[test]
 fn chain_key_lazy_repair_is_manifested_as_costed_snapshot_convergent() {
     let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
         .iter()
