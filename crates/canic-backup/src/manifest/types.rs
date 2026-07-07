@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeploymentBackupManifest {
     pub manifest_version: u16,
     pub backup_id: String,
@@ -33,6 +34,7 @@ pub struct DeploymentBackupManifest {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ToolMetadata {
     pub name: String,
     pub version: String,
@@ -46,6 +48,7 @@ pub struct ToolMetadata {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceMetadata {
     pub environment: String,
     pub root_canister: String,
@@ -59,6 +62,7 @@ pub struct SourceMetadata {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConsistencySection {
     pub backup_units: Vec<BackupUnit>,
 }
@@ -71,6 +75,7 @@ pub struct ConsistencySection {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupUnit {
     pub unit_id: String,
     pub kind: BackupUnitKind,
@@ -99,6 +104,7 @@ pub enum BackupUnitKind {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeploymentSection {
     pub topology_hash_algorithm: String,
     pub topology_hash_input: String,
@@ -116,6 +122,7 @@ pub struct DeploymentSection {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DeploymentMember {
     pub role: String,
     pub canister_id: String,
@@ -149,6 +156,7 @@ pub enum IdentityMode {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceSnapshot {
     pub snapshot_id: String,
     pub module_hash: Option<String>,
@@ -167,6 +175,7 @@ pub struct SourceSnapshot {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct VerificationPlan {
     pub deployment_checks: Vec<VerificationCheck>,
     pub member_checks: Vec<MemberVerificationChecks>,
@@ -180,6 +189,7 @@ pub struct VerificationPlan {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct MemberVerificationChecks {
     pub role: String,
     pub checks: Vec<VerificationCheck>,
@@ -193,6 +203,7 @@ pub struct MemberVerificationChecks {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct VerificationCheck {
     pub kind: String,
     pub roles: Vec<String>,

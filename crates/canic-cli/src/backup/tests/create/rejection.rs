@@ -7,6 +7,7 @@
 use super::super::super::*;
 use super::super::fixtures::*;
 use crate::test_support::temp_dir;
+use canic_backup::persistence::BackupLayout;
 use std::fs;
 
 // Ensure backup create does not reuse an output layout for a different request.
@@ -51,6 +52,27 @@ fn backup_create_persistence_rejects_dry_run_layout_for_execute_request() {
             existing,
             requested,
         } if existing == "true" && requested == "false"
+    );
+}
+
+// Ensure existing plan layouts do not synthesize a missing execution journal.
+#[test]
+fn backup_create_persistence_rejects_plan_layout_missing_execution_journal() {
+    let root = temp_dir("canic-cli-backup-create-plan-missing-execution-journal");
+    let plan = valid_backup_plan();
+    BackupLayout::new(root.clone())
+        .write_backup_plan(&plan)
+        .expect("write backup plan");
+
+    let err = persist_backup_create_dry_run(&root, &plan)
+        .expect_err("plan layout missing execution journal rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    std::assert_matches!(
+        err,
+        BackupCommandError::BackupLayoutIncomplete {
+            missing: "backup-execution-journal.json"
+        }
     );
 }
 

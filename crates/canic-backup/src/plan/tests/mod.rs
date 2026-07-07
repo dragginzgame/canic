@@ -242,6 +242,17 @@ fn reset_phase_order(phases: &mut [BackupOperation]) {
     }
 }
 
+// Ensure backup plans fail closed when unknown fields are present.
+#[test]
+fn backup_plan_unknown_field_fails_deserialize() {
+    let mut value = serde_json::to_value(subtree_plan()).expect("serialize plan");
+    value["unexpected_field"] = serde_json::Value::Bool(true);
+
+    let err = serde_json::from_value::<BackupPlan>(value).expect_err("unknown field rejects");
+
+    assert!(err.is_data());
+}
+
 fn phase(
     operation_id: &str,
     order: u32,

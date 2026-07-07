@@ -436,7 +436,7 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
             .stdout
             .as_ref()
             .map(|output| output.text.as_str()),
-        Some("Uploaded snapshot: target-snap-root\n")
+        Some("{\"snapshot_id\":\"target-snap-root\"}\n")
     );
     assert_eq!(
         preview.command.expect("next upload command").args,

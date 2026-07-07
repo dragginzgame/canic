@@ -113,31 +113,17 @@ pub(super) fn restore_command_unavailable_error(
     }
 }
 
+#[must_use]
 pub fn parse_uploaded_snapshot_id(output: &str) -> Option<String> {
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(output) {
-        return parse_uploaded_snapshot_id_json(&value);
-    }
-
-    output
-        .lines()
-        .filter_map(|line| {
-            line.split_once(':')
-                .filter(|(label, _)| label.trim().eq_ignore_ascii_case("uploaded snapshot"))
-                .map(|(_, value)| value.trim())
-        })
-        .find(|value| !value.is_empty())
-        .map(str::to_string)
+    serde_json::from_str::<serde_json::Value>(output)
+        .ok()
+        .and_then(|value| parse_uploaded_snapshot_id_json(&value))
 }
 
 fn parse_uploaded_snapshot_id_json(value: &serde_json::Value) -> Option<String> {
     value
         .get("snapshot_id")
         .and_then(serde_json::Value::as_str)
-        .or_else(|| {
-            value
-                .get("uploaded_snapshot_id")
-                .and_then(serde_json::Value::as_str)
-        })
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(str::to_string)
@@ -159,39 +145,23 @@ mod tests {
     }
 
     #[test]
-    fn parses_uploaded_snapshot_id_legacy_json_key() {
-        let snapshot_id =
-            parse_uploaded_snapshot_id(r#"{"uploaded_snapshot_id":"target-snapshot"}"#);
-
-        assert_eq!(snapshot_id.as_deref(), Some("target-snapshot"));
-    }
-
-    #[test]
-    fn rejects_json_without_uploaded_snapshot_id() {
+    fn rejects_json_without_snapshot_id() {
         let snapshot_id = parse_uploaded_snapshot_id(r#"{"message":"upload completed"}"#);
 
         assert_eq!(snapshot_id, None);
     }
 
     #[test]
-    fn rejects_json_with_blank_uploaded_snapshot_id() {
+    fn rejects_json_with_blank_snapshot_id() {
         let snapshot_id = parse_uploaded_snapshot_id(r#"{"snapshot_id":"   "}"#);
 
         assert_eq!(snapshot_id, None);
     }
 
     #[test]
-    fn rejects_unrelated_colon_text() {
-        let snapshot_id = parse_uploaded_snapshot_id("Message: upload completed\n");
+    fn rejects_non_json_upload_output() {
+        let snapshot_id = parse_uploaded_snapshot_id("snapshot upload completed\n");
 
         assert_eq!(snapshot_id, None);
-    }
-
-    // Keep older human output accepted for existing restore journals and tests.
-    #[test]
-    fn parses_uploaded_snapshot_id_legacy_text() {
-        let snapshot_id = parse_uploaded_snapshot_id("Uploaded snapshot: target-snapshot\n");
-
-        assert_eq!(snapshot_id.as_deref(), Some("target-snapshot"));
     }
 }

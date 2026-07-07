@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupPlan {
     pub plan_id: String,
     pub run_id: String,
@@ -58,6 +59,7 @@ pub enum BackupScopeKind {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupTarget {
     pub canister_id: String,
     pub role: Option<String>,
@@ -92,6 +94,7 @@ pub enum AuthorityEvidence {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ControlAuthority {
     pub source: ControlAuthoritySource,
     pub evidence: AuthorityEvidence,
@@ -173,6 +176,7 @@ pub enum ControlAuthoritySource {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SnapshotReadAuthority {
     pub source: SnapshotReadAuthoritySource,
     pub evidence: AuthorityEvidence,
@@ -266,6 +270,7 @@ pub enum QuiescencePolicy {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupOperation {
     pub operation_id: String,
     pub order: u32,
@@ -296,38 +301,6 @@ pub enum BackupOperationKind {
 }
 
 ///
-/// BackupReceipt
-///
-/// Legacy per-operation backup receipt retained for plan-facing contracts.
-/// Owned by backup planning and superseded by execution operation receipts.
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct BackupReceipt {
-    pub plan_id: String,
-    pub operation_id: String,
-    pub status: BackupReceiptStatus,
-    pub target_canister_id: Option<String>,
-    pub snapshot_id: Option<String>,
-    pub message: Option<String>,
-}
-
-///
-/// BackupReceiptStatus
-///
-/// Terminal status for a plan-facing backup receipt.
-/// Owned by backup planning and serialized with legacy receipt contracts.
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum BackupReceiptStatus {
-    Completed,
-    Failed,
-    Skipped,
-}
-
-///
 /// BackupExecutionPreflightReceipts
 ///
 /// Complete preflight receipt bundle required before backup mutation.
@@ -335,6 +308,7 @@ pub enum BackupReceiptStatus {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupExecutionPreflightReceipts {
     pub plan_id: String,
     pub preflight_id: String,
@@ -354,6 +328,7 @@ pub struct BackupExecutionPreflightReceipts {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ControlAuthorityReceipt {
     pub plan_id: String,
     pub preflight_id: String,
@@ -373,6 +348,7 @@ pub struct ControlAuthorityReceipt {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SnapshotReadAuthorityReceipt {
     pub plan_id: String,
     pub preflight_id: String,
@@ -409,6 +385,7 @@ pub enum AuthorityProofSource {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ControlAuthorityPreflightRequest {
     pub plan_id: String,
     pub run_id: String,
@@ -427,6 +404,7 @@ pub struct ControlAuthorityPreflightRequest {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ControlAuthorityPreflightTarget {
     pub canister_id: String,
     pub role: Option<String>,
@@ -453,6 +431,7 @@ impl From<&BackupTarget> for ControlAuthorityPreflightTarget {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SnapshotReadAuthorityPreflightRequest {
     pub plan_id: String,
     pub run_id: String,
@@ -470,6 +449,7 @@ pub struct SnapshotReadAuthorityPreflightRequest {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SnapshotReadAuthorityPreflightTarget {
     pub canister_id: String,
     pub role: Option<String>,
@@ -496,6 +476,7 @@ impl From<&BackupTarget> for SnapshotReadAuthorityPreflightTarget {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TopologyPreflightRequest {
     pub plan_id: String,
     pub run_id: String,
@@ -516,6 +497,7 @@ pub struct TopologyPreflightRequest {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TopologyPreflightTarget {
     pub canister_id: String,
     pub parent_canister_id: Option<String>,
@@ -540,6 +522,7 @@ impl From<&BackupTarget> for TopologyPreflightTarget {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct TopologyPreflightReceipt {
     pub plan_id: String,
     pub preflight_id: String,
@@ -559,6 +542,7 @@ pub struct TopologyPreflightReceipt {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct QuiescencePreflightRequest {
     pub plan_id: String,
     pub run_id: String,
@@ -578,6 +562,7 @@ pub struct QuiescencePreflightRequest {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct QuiescencePreflightTarget {
     pub canister_id: String,
     pub role: Option<String>,
@@ -602,6 +587,7 @@ impl From<&BackupTarget> for QuiescencePreflightTarget {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct QuiescencePreflightReceipt {
     pub plan_id: String,
     pub preflight_id: String,

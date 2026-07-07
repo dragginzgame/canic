@@ -108,7 +108,7 @@ fn write_fake_icp_upload(root: &Path, uploaded_snapshot_id: &str) -> PathBuf {
     let path = root.join("icp-upload-ok");
     fs::write(
         &path,
-        format!("#!/bin/sh\nprintf 'Uploaded snapshot: {uploaded_snapshot_id}\\n'\n"),
+        format!("#!/bin/sh\nprintf '%s\\n' '{{\"snapshot_id\":\"{uploaded_snapshot_id}\"}}'\n"),
     )
     .expect("write fake icp");
     let mut permissions = fs::metadata(&path)

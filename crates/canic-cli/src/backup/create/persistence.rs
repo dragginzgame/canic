@@ -23,13 +23,7 @@ pub(super) fn persist_backup_create_layout(
     if layout.backup_plan_path().is_file() {
         let existing = layout.read_backup_plan()?;
         ensure_resume_plan_compatible(&existing, plan)?;
-        if !layout.execution_journal_path().is_file() {
-            if layout.manifest_path().is_file() {
-                ensure_execution_journal_exists(&layout)?;
-            }
-            let journal = BackupExecutionJournal::from_plan(&existing)?;
-            layout.write_execution_journal(&journal)?;
-        }
+        ensure_execution_journal_exists(&layout)?;
         layout.verify_execution_integrity()?;
         return Ok(PersistedBackupCreateLayout {
             plan: existing,
