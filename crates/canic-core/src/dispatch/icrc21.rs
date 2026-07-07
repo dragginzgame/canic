@@ -13,16 +13,41 @@ use std::{cell::RefCell, collections::HashMap, sync::Arc};
 //
 
 thread_local! {
-    static ICRC_21_REGISTRY: RefCell<HashMap<String, ConsentHandlerFn>> = RefCell::new(HashMap::new());
+    static ICRC_21_REGISTRY: RefCell<HashMap<String, RegisteredConsentHandler>> = RefCell::new(HashMap::new());
 }
 
-///
-/// ConsentHandlerFn
-///
-/// Shared handler shape for registered ICRC-21 consent message builders.
-///
+trait ConsentMessageHandler {
+    fn handle(&self, req: ConsentMessageRequest) -> ConsentMessageResponse;
+}
 
-pub type ConsentHandlerFn = Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>;
+impl<F> ConsentMessageHandler for F
+where
+    F: Fn(ConsentMessageRequest) -> ConsentMessageResponse,
+{
+    fn handle(&self, req: ConsentMessageRequest) -> ConsentMessageResponse {
+        self(req)
+    }
+}
+
+#[derive(Clone)]
+struct RegisteredConsentHandler {
+    inner: Arc<dyn ConsentMessageHandler + 'static>,
+}
+
+impl RegisteredConsentHandler {
+    fn new<F>(handler: F) -> Self
+    where
+        F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
+    {
+        Self {
+            inner: Arc::new(handler),
+        }
+    }
+
+    fn handle(&self, req: ConsentMessageRequest) -> ConsentMessageResponse {
+        self.inner.handle(req)
+    }
+}
 
 ///
 /// Icrc21Registry
@@ -50,7 +75,7 @@ impl Icrc21Dispatcher {
         F: Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static,
     {
         ICRC_21_REGISTRY.with_borrow_mut(|reg| {
-            let replaced = reg.insert(method.to_string(), Arc::new(handler));
+            let replaced = reg.insert(method.to_string(), RegisteredConsentHandler::new(handler));
             if replaced.is_some() {
                 log!(
                     Topic::Icrc,
@@ -79,7 +104,7 @@ impl Icrc21Dispatcher {
     }
 
     #[must_use]
-    pub fn get_handler(method: &str) -> Option<ConsentHandlerFn> {
+    fn get_handler(method: &str) -> Option<RegisteredConsentHandler> {
         ICRC_21_REGISTRY.with_borrow(|reg| reg.get(method).cloned())
     }
 
@@ -87,7 +112,7 @@ impl Icrc21Dispatcher {
     /// Resolve and execute the registered consent handler for the request.
     pub fn consent_message(req: ConsentMessageRequest) -> ConsentMessageResponse {
         match Self::get_handler(&req.method) {
-            Some(handler) => handler(req),
+            Some(handler) => handler.handle(req),
             None => ConsentMessageResponse::Err(Icrc21Error::UnsupportedCanisterCall(ErrorInfo {
                 description: "No handler registered for this method.".to_string(),
             })),

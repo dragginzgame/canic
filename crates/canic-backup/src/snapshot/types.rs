@@ -9,8 +9,6 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-pub type SnapshotDriverError = Box<dyn StdError + Send + Sync + 'static>;
-
 ///
 /// SnapshotArtifact
 ///
@@ -100,7 +98,7 @@ pub enum SnapshotDownloadError {
     SnapshotRequiresStoppedCanister,
 
     #[error("snapshot driver failed: {0}")]
-    Driver(#[source] SnapshotDriverError),
+    Driver(#[source] Box<dyn StdError + Send + Sync + 'static>),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -127,16 +125,28 @@ pub enum SnapshotDownloadError {
 
 pub trait SnapshotDriver {
     /// Load the root registry entries used to resolve child snapshot targets.
-    fn registry_entries(&mut self, root: &str) -> Result<Vec<RegistryEntry>, SnapshotDriverError>;
+    fn registry_entries(
+        &mut self,
+        root: &str,
+    ) -> Result<Vec<RegistryEntry>, Box<dyn StdError + Send + Sync + 'static>>;
 
     /// Create one canister snapshot and return its snapshot id.
-    fn create_snapshot(&mut self, canister_id: &str) -> Result<String, SnapshotDriverError>;
+    fn create_snapshot(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<String, Box<dyn StdError + Send + Sync + 'static>>;
 
     /// Stop one canister before snapshot creation.
-    fn stop_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError>;
+    fn stop_canister(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>>;
 
     /// Start one canister after snapshot capture.
-    fn start_canister(&mut self, canister_id: &str) -> Result<(), SnapshotDriverError>;
+    fn start_canister(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>>;
 
     /// Download one snapshot into the supplied artifact directory.
     fn download_snapshot(
@@ -144,7 +154,7 @@ pub trait SnapshotDriver {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
-    ) -> Result<(), SnapshotDriverError>;
+    ) -> Result<(), Box<dyn StdError + Send + Sync + 'static>>;
 
     /// Render the planned create command for dry-run output.
     fn create_snapshot_command(&self, canister_id: &str) -> String;

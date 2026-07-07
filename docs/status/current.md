@@ -14,7 +14,7 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.37`. Earlier in the
+- The current package/release-surface version is `0.82.38`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
@@ -59,7 +59,7 @@ before this compaction is archived at
   layout are unchanged. The docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-root-delegation-protocol-test-cleanup-report.md`.
 
-- The current `0.82.38` working slice hard-cuts unused public Rust aliases
+- The `0.82.38` slice hard-cuts unused public Rust aliases
   from core helper and infra boundaries. `ConsentResult`, `HashBytes`, and
   `GetSubnetForCanisterResponse`, `Icrc1TransferResult`, and
   `NotifyTopUpResult` are removed in favor of concrete
@@ -70,6 +70,20 @@ before this compaction is archived at
   truth, evidence/report schemas, and stable-state layout are unchanged. The
   docs-only report is
   `docs/design/0.82-boundary-hardening/0.82-core-rust-alias-hard-cut-report.md`.
+
+- The current `0.82.39` working slice hard-cuts the public ICRC-21 dispatch
+  handler alias. `ConsentHandlerFn` is removed in favor of the concrete
+  `Arc<dyn Fn(ConsentMessageRequest) -> ConsentMessageResponse + 'static>`
+  handler shape wrapped by a private dispatcher registry value, and
+  `Icrc21Dispatcher::get_handler` is narrowed to a private lookup helper. The
+  same slice removes the backup `SnapshotDriverError` alias in favor of
+  concrete `Box<dyn StdError + Send + Sync + 'static>` driver failures.
+  Runtime behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment
+  truth, evidence/report schemas, and stable-state layout are unchanged. The
+  docs-only reports are
+  `docs/design/0.82-boundary-hardening/0.82-icrc21-handler-alias-hard-cut-report.md`
+  and
+  `docs/design/0.82-boundary-hardening/0.82-snapshot-driver-error-alias-hard-cut-report.md`.
 
 - The current `0.82.1` working slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision
