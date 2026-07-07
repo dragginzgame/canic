@@ -6,9 +6,9 @@
 
 use crate::{
     InternalError,
+    cdk::types::Principal,
     ops::{config::ConfigOps, ic::IcOps},
     workflow::pool::PoolWorkflow,
-    workflow::prelude::*,
 };
 
 /// Return the parked controller set for pool canisters.

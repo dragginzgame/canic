@@ -6,9 +6,12 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    cdk::types::Principal,
     domain::pool::CanisterPoolStatus,
     dto::pool::PoolBatchResult,
     ids::{IntentId, IntentResourceKey},
+    log,
+    log::Topic,
     ops::{
         ic::IcOps,
         runtime::metrics::{
@@ -26,7 +29,6 @@ use crate::{
     },
     workflow::{
         pool::{PoolWorkflow, admissibility, query::PoolQuery, scheduler::PoolSchedulerWorkflow},
-        prelude::*,
         runtime::intent::IntentCleanupWorkflow,
     },
 };
@@ -330,6 +332,8 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::cdk::types::Cycles;
+
     use super::*;
     use futures::executor::block_on;
 

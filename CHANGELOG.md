@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.29` narrows workflow prelude usage across pool and IC workflow
+  clusters by replacing wildcard imports with direct owners and removing the
+  stale `workflow::prelude::Account` re-export.
+
 - `0.82.28` removes the private wasm-store local helper facade and collapses
   the remaining crate-private template support wrappers into the template API.
 

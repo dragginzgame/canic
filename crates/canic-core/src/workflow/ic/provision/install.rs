@@ -6,9 +6,13 @@
 
 use crate::{
     InternalError,
+    cdk::types::Principal,
     domain::metrics::{
         CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
     },
+    ids::CanisterRole,
+    log,
+    log::Topic,
     ops::{
         cost_guard::CostGuardPermit,
         ic::{IcOps, mgmt::CanisterInstallMode},
@@ -27,7 +31,6 @@ use crate::{
             },
             policy::validate_registration_policy,
         },
-        prelude::*,
         runtime::install::ModuleInstallWorkflow,
     },
 };

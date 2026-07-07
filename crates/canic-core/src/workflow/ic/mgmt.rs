@@ -5,8 +5,8 @@
 //! Boundary: delegates management calls to ops and maps results into DTOs.
 
 use crate::{
-    InternalError, dto::canister::CanisterStatusResponse, ops::ic::mgmt::MgmtOps,
-    workflow::prelude::*,
+    InternalError, cdk::types::Principal, dto::canister::CanisterStatusResponse,
+    ops::ic::mgmt::MgmtOps,
 };
 
 ///

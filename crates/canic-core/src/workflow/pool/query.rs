@@ -5,12 +5,12 @@
 //! Boundary: workflow query facade over pool storage ops.
 
 use crate::{
+    cdk::types::Principal,
     dto::pool::{CanisterPoolEntry, CanisterPoolResponse},
     ops::storage::pool::{
         PoolOps,
         mapper::{CanisterPoolEntryMapper, CanisterPoolResponseMapper},
     },
-    workflow::prelude::*,
 };
 
 ///

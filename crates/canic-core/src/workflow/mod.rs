@@ -31,7 +31,7 @@ pub mod prelude {
     pub use crate::{
         cdk::{
             candid::CandidType,
-            types::{Account, Cycles, Principal},
+            types::{Cycles, Principal},
         },
         ids::CanisterRole,
         log,

@@ -6,6 +6,7 @@
 
 use crate::{
     InternalError,
+    cdk::types::Principal,
     domain::pool::CanisterPoolStatus,
     ops::{
         ic::IcOps,
@@ -18,10 +19,7 @@ use crate::{
             registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow::{
-        pool::{PoolWorkflow, query::PoolQuery, scheduler::PoolSchedulerWorkflow},
-        prelude::*,
-    },
+    workflow::pool::{PoolWorkflow, query::PoolQuery, scheduler::PoolSchedulerWorkflow},
 };
 
 impl PoolWorkflow {
@@ -81,6 +79,8 @@ fn mark_pool_recycle_pending(pid: Principal, metadata: &PoolRegistrationMetadata
 
 #[cfg(test)]
 mod tests {
+    use crate::cdk::types::Cycles;
+
     use super::*;
     use crate::ids::CanisterRole;
 
