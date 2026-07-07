@@ -7,17 +7,9 @@
 use sha2::{Digest, Sha256};
 use std::{error::Error, fmt};
 
-///
-/// HashBytes
-///
-/// Owned byte buffer containing a decoded or computed hash.
-///
-
-pub type HashBytes = Vec<u8>;
-
 /// Compute SHA-256 bytes from an in-memory byte slice.
 #[must_use]
-pub fn sha256_bytes(bytes: &[u8]) -> HashBytes {
+pub fn sha256_bytes(bytes: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hasher.finalize().to_vec()
@@ -31,7 +23,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 
 /// Compute raw wasm module hash bytes.
 #[must_use]
-pub fn wasm_hash(bytes: &[u8]) -> HashBytes {
+pub fn wasm_hash(bytes: &[u8]) -> Vec<u8> {
     sha256_bytes(bytes)
 }
 
@@ -56,7 +48,7 @@ pub fn hex_bytes(bytes: impl AsRef<[u8]>) -> String {
 }
 
 /// Decode one even-length hexadecimal string into bytes.
-pub fn decode_hex(hex: &str) -> Result<HashBytes, DecodeHexError> {
+pub fn decode_hex(hex: &str) -> Result<Vec<u8>, DecodeHexError> {
     if !hex.len().is_multiple_of(2) {
         return Err(DecodeHexError::OddLength(hex.len()));
     }

@@ -24,9 +24,6 @@ use serde_bytes::ByteBuf;
 use std::fmt;
 use thiserror::Error as ThisError;
 
-pub type Icrc1TransferResult = Result<Nat, TransferError>;
-pub type NotifyTopUpResult = Result<Nat, NotifyTopUpError>;
-
 const CMC_TOPUP_MEMO_BYTES: &[u8] = b"TPUP\0\0\0\0";
 const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
 
@@ -341,7 +338,7 @@ impl IcpRefillInfra {
     pub async fn icrc1_transfer(
         ledger_id: Principal,
         args: TransferArg,
-    ) -> Result<Icrc1TransferResult, InfraError> {
+    ) -> Result<Result<Nat, TransferError>, InfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_transfer")
             .with_arg(args)?
             .execute()
@@ -353,7 +350,7 @@ impl IcpRefillInfra {
     pub async fn notify_top_up(
         cmc_id: Principal,
         args: NotifyTopUpArg,
-    ) -> Result<NotifyTopUpResult, InfraError> {
+    ) -> Result<Result<Nat, NotifyTopUpError>, InfraError> {
         Call::unbounded_wait(cmc_id, "notify_top_up")
             .with_arg(args)?
             .execute()
