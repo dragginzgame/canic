@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyOperationReceipt {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,
@@ -258,6 +259,7 @@ struct RestoreApplyOperationReceiptDetails {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyCommandOutput {
     pub text: String,
     pub truncated: bool,
@@ -283,6 +285,7 @@ impl RestoreApplyCommandOutput {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(in crate::restore) struct RestoreApplyCommandOutputPair {
     pub stdout: RestoreApplyCommandOutput,
     pub stderr: RestoreApplyCommandOutput,

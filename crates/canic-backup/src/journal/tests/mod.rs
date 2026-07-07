@@ -31,6 +31,16 @@ fn valid_journal_passes_validation() {
 }
 
 #[test]
+fn download_journal_unknown_field_fails_deserialize() {
+    let mut value = serde_json::to_value(valid_journal()).expect("serialize journal");
+    value["unexpected_field"] = serde_json::Value::Bool(true);
+
+    let err = serde_json::from_value::<DownloadJournal>(value).expect_err("unknown field rejects");
+
+    assert!(err.is_data());
+}
+
+#[test]
 fn resume_action_matches_artifact_state() {
     let mut entry = valid_journal().artifacts.remove(0);
 

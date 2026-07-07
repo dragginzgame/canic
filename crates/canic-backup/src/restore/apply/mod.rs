@@ -26,6 +26,7 @@ pub use journal::{
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyDryRun {
     pub dry_run_version: u16,
     pub backup_id: String,
@@ -227,6 +228,7 @@ fn safe_restore_artifact_path(
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyArtifactValidation {
     pub backup_root: String,
     pub checked_members: usize,
@@ -241,6 +243,7 @@ pub struct RestoreApplyArtifactValidation {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyArtifactCheck {
     pub source_canister: String,
     pub target_canister: String,
@@ -397,6 +400,7 @@ fn push_deployment_operation(
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyDryRunOperation {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,

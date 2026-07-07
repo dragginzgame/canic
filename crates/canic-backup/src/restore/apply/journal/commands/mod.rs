@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "runner preview exposes machine-readable availability and safety flags"
@@ -77,6 +78,7 @@ impl RestoreApplyCommandPreview {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyCommandConfig {
     pub program: String,
     pub network: Option<String>,
@@ -100,6 +102,7 @@ impl Default for RestoreApplyCommandConfig {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RestoreApplyRunnerCommand {
     pub program: String,
     pub args: Vec<String>,

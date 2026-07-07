@@ -44,6 +44,19 @@ fn in_place_plan_orders_parent_before_child() {
     );
 }
 
+// Ensure restore plans fail closed when unknown fields are present.
+#[test]
+fn restore_plan_unknown_field_fails_deserialize() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let mut value = serde_json::to_value(plan).expect("serialize restore plan");
+    value["unexpected_field"] = serde_json::Value::Bool(true);
+
+    let err = serde_json::from_value::<RestorePlan>(value).expect_err("unknown field rejects");
+
+    assert!(err.is_data());
+}
+
 // Ensure fixed identities cannot be remapped.
 #[test]
 fn fixed_identity_member_cannot_be_remapped() {

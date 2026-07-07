@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DownloadJournal {
     pub journal_version: u16,
     pub backup_id: String,
@@ -36,6 +37,7 @@ pub struct DownloadJournal {
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DownloadOperationMetrics {
     pub target_count: usize,
     pub snapshot_create_started: usize,
@@ -56,6 +58,7 @@ pub struct DownloadOperationMetrics {
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ArtifactJournalEntry {
     pub canister_id: String,
     pub snapshot_id: String,

@@ -208,6 +208,22 @@ fn apply_journal_marks_validated_operations_ready() {
     assert!(journal.operations[0].blocking_reasons.is_empty());
 }
 
+// Ensure restore apply journals fail closed when unknown fields are present.
+#[test]
+fn apply_journal_unknown_field_fails_deserialize() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut value = serde_json::to_value(journal).expect("serialize journal");
+    value["unexpected_field"] = serde_json::Value::Bool(true);
+
+    let err =
+        serde_json::from_value::<RestoreApplyJournal>(value).expect_err("unknown field rejects");
+
+    assert!(err.is_data());
+}
+
 // Ensure apply journals block when artifact validation was not supplied.
 #[test]
 fn apply_journal_blocks_without_artifact_validation() {

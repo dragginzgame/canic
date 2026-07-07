@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupIntegrityReport {
     pub backup_id: String,
     pub verified: bool,
@@ -31,6 +32,7 @@ pub struct BackupIntegrityReport {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackupExecutionIntegrityReport {
     pub plan_id: String,
     pub run_id: String,
@@ -47,6 +49,7 @@ pub struct BackupExecutionIntegrityReport {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ArtifactIntegrityReport {
     pub canister_id: String,
     pub snapshot_id: String,
