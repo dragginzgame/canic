@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.35` hard-cuts CLI help/version word aliases by keeping canonical
+  `--help`/`-h` and `--version`/`-V` flag forms only, and removes stale
+  removed-command fixtures from global forwarding tests.
+
 - `0.82.34` hard-cuts backup/restore JSON contract tolerance by rejecting
   unknown fields across current backup/restore manifests, plans, journals,
   receipts, command previews, and reports, and removes unused plan-facing

@@ -245,7 +245,7 @@ fn skip_medic_options(args: &[OsString], mut index: usize) -> usize {
 }
 
 fn is_medic_help_arg(arg: &OsString) -> bool {
-    matches!(arg.to_str(), Some("help" | "--help" | "-h"))
+    matches!(arg.to_str(), Some("--help" | "-h"))
 }
 
 fn medic_command() -> ClapCommand {

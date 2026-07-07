@@ -145,12 +145,12 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
 
 fn is_help_arg(arg: &OsString) -> bool {
     arg.to_str()
-        .is_some_and(|arg| matches!(arg, "help" | "--help" | "-h"))
+        .is_some_and(|arg| matches!(arg, "--help" | "-h"))
 }
 
 fn is_version_arg(arg: &OsString) -> bool {
     arg.to_str()
-        .is_some_and(|arg| matches!(arg, "version" | "--version" | "-V"))
+        .is_some_and(|arg| matches!(arg, "--version" | "-V"))
 }
 
 /// Return whether the first CLI argument requests help.
@@ -200,7 +200,7 @@ pub fn top_level_command() -> Command {
         .subcommand_help_heading("Commands")
         .help_template(TOP_LEVEL_HELP_TEMPLATE)
         .before_help(grouped_command_section(COMMAND_SPECS).join("\n"))
-        .after_help("Run `canic <command> help` for command-specific help.");
+        .after_help("Run `canic <command> --help` for command-specific help.");
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
         command.subcommand(Command::new(spec.name).about(spec.about))
@@ -232,7 +232,7 @@ pub fn usage() -> String {
             "{}Tip:{} Run {} for command-specific help.",
             COLOR_TIP,
             COLOR_RESET,
-            color(COLOR_COMMAND, "`canic <command> help`")
+            color(COLOR_COMMAND, "`canic <command> --help`")
         ),
     ]);
     lines.join("\n")
@@ -292,11 +292,9 @@ mod tests {
     }
 
     #[test]
-    fn first_arg_help_and_version_detection_accepts_aliases() {
-        assert!(first_arg_is_help(&[OsString::from("help")]));
+    fn first_arg_help_and_version_detection_accepts_flags() {
         assert!(first_arg_is_help(&[OsString::from("--help")]));
         assert!(first_arg_is_help(&[OsString::from("-h")]));
-        assert!(first_arg_is_version(&[OsString::from("version")]));
         assert!(first_arg_is_version(&[OsString::from("--version")]));
         assert!(first_arg_is_version(&[OsString::from("-V")]));
     }

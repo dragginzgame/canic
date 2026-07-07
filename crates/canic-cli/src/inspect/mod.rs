@@ -678,11 +678,11 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
         return false;
     };
     match arg {
-        "help" | "--help" | "-h" => {
+        "--help" | "-h" => {
             println!("{}", usage());
             true
         }
-        "version" | "--version" | "-V" => {
+        "--version" | "-V" => {
             println!("{}", version_text());
             true
         }
