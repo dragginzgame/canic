@@ -57,7 +57,7 @@ fn restore_leaf_usage_lists_row_reference_examples() {
 // Ensure uploaded snapshot IDs are parsed from command upload output.
 #[test]
 fn parses_uploaded_snapshot_id_from_icp_output() {
-    let snapshot_id = parse_uploaded_snapshot_id("Uploaded snapshot: target-snap-001\n");
+    let snapshot_id = parse_uploaded_snapshot_id(r#"{"snapshot_id":"target-snap-001"}"#);
 
     assert_eq!(snapshot_id.as_deref(), Some("target-snap-001"));
 }

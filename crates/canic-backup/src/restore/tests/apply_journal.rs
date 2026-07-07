@@ -34,7 +34,7 @@ fn apply_journal_rejects_duplicate_operation_receipt_attempts() {
         "exit:0".to_string(),
         Some("unix:1".to_string()),
         RestoreApplyCommandOutputPair::from_bytes(
-            b"Uploaded snapshot: target-snap-root\n",
+            br#"{"snapshot_id":"target-snap-root"}"#,
             b"",
             1024,
         ),
@@ -83,7 +83,7 @@ fn apply_journal_command_receipts_require_audit_fields() {
         "exit:0".to_string(),
         Some("unix:1".to_string()),
         RestoreApplyCommandOutputPair::from_bytes(
-            b"Uploaded snapshot: target-snap-root\n",
+            br#"{"snapshot_id":"target-snap-root"}"#,
             b"",
             1024,
         ),

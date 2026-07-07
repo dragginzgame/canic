@@ -69,10 +69,6 @@ fn stopped_canister_status_command(
 fn status_output_reports_stopped(output: &RestoreApplyCommandOutputPair) -> bool {
     status_json_reports_stopped(&output.stdout.text)
         || status_json_reports_stopped(&output.stderr.text)
-        || output.stdout.text.contains("Status: Stopped")
-        || output.stdout.text.contains("status: stopped")
-        || output.stderr.text.contains("Status: Stopped")
-        || output.stderr.text.contains("status: stopped")
 }
 
 fn status_json_reports_stopped(output: &str) -> bool {
@@ -120,15 +116,16 @@ mod tests {
 
     #[test]
     fn status_output_rejects_running_status() {
-        let output = RestoreApplyCommandOutputPair::from_bytes(b"Status: Running\n", b"", 1024);
+        let output =
+            RestoreApplyCommandOutputPair::from_bytes(br#"{"status":"Running"}"#, b"", 1024);
 
         assert!(!status_output_reports_stopped(&output));
     }
 
     #[test]
-    fn status_output_reports_legacy_stopped_status() {
-        let output = RestoreApplyCommandOutputPair::from_bytes(b"Status: Stopped\n", b"", 1024);
+    fn status_output_rejects_non_json_status() {
+        let output = RestoreApplyCommandOutputPair::from_bytes(b"canister is stopped\n", b"", 1024);
 
-        assert!(status_output_reports_stopped(&output));
+        assert!(!status_output_reports_stopped(&output));
     }
 }

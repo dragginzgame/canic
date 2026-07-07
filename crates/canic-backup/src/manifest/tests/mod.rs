@@ -53,26 +53,17 @@ fn valid_manifest_passes_validation() {
     manifest.validate().expect("manifest should validate");
 }
 
-// Ensure older manifests with the removed wasm_hash field still deserialize.
+// Ensure manifests fail closed when a source snapshot carries unknown fields.
 #[test]
-fn legacy_wasm_hash_field_is_ignored() {
+fn source_snapshot_unknown_field_fails_deserialize() {
     let mut value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
-    value["deployment"]["members"][0]["source_snapshot"]["wasm_hash"] =
-        serde_json::Value::String(HASH.to_string());
+    value["deployment"]["members"][0]["source_snapshot"]["unexpected_field"] =
+        serde_json::Value::Bool(true);
 
-    let manifest: DeploymentBackupManifest =
-        serde_json::from_value(value).expect("deserialize legacy manifest");
+    let err = serde_json::from_value::<DeploymentBackupManifest>(value)
+        .expect_err("unknown field rejects");
 
-    manifest
-        .validate()
-        .expect("legacy manifest should validate");
-    assert_eq!(
-        manifest.deployment.members[0]
-            .source_snapshot
-            .module_hash
-            .as_deref(),
-        Some(HASH)
-    );
+    assert!(err.is_data());
 }
 
 // Ensure snapshot checksum provenance stays canonical when present.

@@ -1,6 +1,6 @@
 //! Module: backup::tests::fixtures::download
 //!
-//! Responsibility: build legacy download-journal test fixtures.
+//! Responsibility: build download-journal test fixtures.
 //! Does not own: execution journals, manifests, or artifact files.
 //! Boundary: deterministic durable/incomplete download journal state.
 
