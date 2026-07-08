@@ -58,14 +58,6 @@ const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
 const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 2;
-const AUTH_RENEWAL_STATUS_KIND: &str = "auth_renewal_status";
-const AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT: &str = "active_attempt";
-const AUTH_RENEWAL_STATUS_CONFIGURED: &str = "configured";
-const AUTH_RENEWAL_STATUS_DISABLED: &str = "disabled";
-const AUTH_RENEWAL_STATUS_MISSING: &str = "missing";
-const AUTH_RENEWAL_STATUS_UNAVAILABLE: &str = "unavailable";
-const AUTH_RENEWAL_STATUS_DRIFT_DETECTED: &str = "drift_detected";
-const AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
 
 const HELP_AFTER: &str = "\
 Examples:
@@ -371,12 +363,12 @@ fn renewal_status_result_with_runtime(
 
     Ok(AuthRenewalStatusResult {
         schema_version: AUTH_RENEWAL_STATUS_SCHEMA_VERSION,
-        kind: AUTH_RENEWAL_STATUS_KIND.to_string(),
+        kind: AuthRenewalReportKind::Status,
         deployment: options.deployment.clone(),
         network: options.common.network.clone(),
         target: target.target,
         issuer_pid,
-        status: renewal_status_code(&status, &issuer_observation).to_string(),
+        status: renewal_status_code(&status, &issuer_observation),
         renewal: status,
         issuer_observation,
     })
@@ -442,6 +434,54 @@ impl AuthRenewalMethodMode {
 }
 
 ///
+/// AuthRenewalReportKind
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+enum AuthRenewalReportKind {
+    #[serde(rename = "auth_renewal_status")]
+    Status,
+}
+
+///
+/// AuthRenewalCandidSource
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum AuthRenewalCandidSource {
+    InstalledDeployment,
+}
+
+///
+/// AuthRenewalStatusCode
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum AuthRenewalStatusCode {
+    ActiveAttempt,
+    Configured,
+    Disabled,
+    DriftDetected,
+    Missing,
+    Unavailable,
+}
+
+impl AuthRenewalStatusCode {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::ActiveAttempt => "active_attempt",
+            Self::Configured => "configured",
+            Self::Disabled => "disabled",
+            Self::DriftDetected => "drift_detected",
+            Self::Missing => "missing",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
+///
 /// AuthRootTarget
 ///
 
@@ -450,7 +490,7 @@ struct AuthRootTarget {
     input: String,
     role: String,
     canister_id: String,
-    candid_source: String,
+    candid_source: AuthRenewalCandidSource,
 }
 
 ///
@@ -474,7 +514,7 @@ struct AuthIssuerTarget {
     input: String,
     role: Option<String>,
     canister_id: String,
-    candid_source: String,
+    candid_source: AuthRenewalCandidSource,
 }
 
 ///
@@ -561,12 +601,12 @@ struct AuthIssuerObservation {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct AuthRenewalStatusResult {
     schema_version: u16,
-    kind: String,
+    kind: AuthRenewalReportKind,
     deployment: String,
     network: String,
     target: AuthRootTarget,
     issuer_pid: String,
-    status: String,
+    status: AuthRenewalStatusCode,
     renewal: AuthRenewalStatusSummary,
     issuer_observation: AuthIssuerObservation,
 }
@@ -628,7 +668,7 @@ fn resolve_auth_root_call_target(
             input: ROOT_ROLE.to_string(),
             role: ROOT_ROLE.to_string(),
             canister_id: installed.state.root_canister_id,
-            candid_source: AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string(),
+            candid_source: AuthRenewalCandidSource::InstalledDeployment,
         },
         candid_path,
         icp_root,
@@ -669,7 +709,7 @@ fn resolve_auth_issuer_call_target(
             input: issuer_pid.to_string(),
             role: entry.role.clone(),
             canister_id: issuer_pid.to_string(),
-            candid_source: AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string(),
+            candid_source: AuthRenewalCandidSource::InstalledDeployment,
         },
         candid_path,
         icp_root: root_target.icp_root.clone(),
@@ -801,7 +841,7 @@ fn issuer_observation_with_runtime(
 fn unavailable_issuer_observation(reason: &str) -> AuthIssuerObservation {
     AuthIssuerObservation {
         available: false,
-        status: AUTH_RENEWAL_STATUS_UNAVAILABLE.to_string(),
+        status: AuthRenewalStatusCode::Unavailable.label().to_string(),
         drift_detected: false,
         reason: Some(reason.to_string()),
         cert_hash: None,
@@ -855,17 +895,17 @@ fn issuer_observation_drift_detected(
 fn renewal_status_code(
     status: &AuthRenewalStatusSummary,
     issuer_observation: &AuthIssuerObservation,
-) -> &'static str {
+) -> AuthRenewalStatusCode {
     if issuer_observation.drift_detected {
-        AUTH_RENEWAL_STATUS_DRIFT_DETECTED
+        AuthRenewalStatusCode::DriftDetected
     } else if status.active_attempt.present {
-        AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT
+        AuthRenewalStatusCode::ActiveAttempt
     } else if status.template.enabled == Some(false) {
-        AUTH_RENEWAL_STATUS_DISABLED
+        AuthRenewalStatusCode::Disabled
     } else if status.template.present {
-        AUTH_RENEWAL_STATUS_CONFIGURED
+        AuthRenewalStatusCode::Configured
     } else {
-        AUTH_RENEWAL_STATUS_MISSING
+        AuthRenewalStatusCode::Missing
     }
 }
 
@@ -887,7 +927,7 @@ fn auth_renewal_medic_summary_from_result(
     let issuer_cert_hash = observation.cert_hash.as_deref().unwrap_or("-");
     let detail = format!(
         "status={}; issuer_observation={}; root_cert_hash={}; issuer_cert_hash={}; drift_detected={}",
-        result.status,
+        result.status.label(),
         render_issuer_observation(observation),
         root_cert_hash,
         issuer_cert_hash,

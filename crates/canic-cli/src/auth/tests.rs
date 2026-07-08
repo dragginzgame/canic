@@ -96,14 +96,14 @@ fn renewal_status_queries_root_status_endpoint() {
     )
     .expect("status should query scripted endpoint");
 
-    assert_eq!(result.kind, AUTH_RENEWAL_STATUS_KIND);
+    assert_eq!(result.kind, AuthRenewalReportKind::Status);
     assert_eq!(result.schema_version, AUTH_RENEWAL_STATUS_SCHEMA_VERSION);
     assert_eq!(result.issuer_pid, issuer);
-    assert_eq!(result.status, AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT);
+    assert_eq!(result.status, AuthRenewalStatusCode::ActiveAttempt);
     assert_eq!(result.renewal.template.enabled, Some(true));
     assert_eq!(
         result.issuer_observation.status,
-        AUTH_RENEWAL_STATUS_UNAVAILABLE
+        AuthRenewalStatusCode::Unavailable.label()
     );
     assert_eq!(
         result.issuer_observation.reason.as_deref(),
@@ -117,6 +117,11 @@ fn renewal_status_queries_root_status_endpoint() {
         result.renewal.active_attempt.status.as_deref(),
         Some("prepared")
     );
+    let json = serde_json::to_value(&result).expect("serialize auth renewal result");
+    assert_eq!(json["kind"], "auth_renewal_status");
+    assert_eq!(json["target"]["candid_source"], "installed_deployment");
+    assert_eq!(json["status"], "active_attempt");
+    assert_eq!(json["issuer_observation"]["status"], "unavailable");
     assert_eq!(
         runtime.called_methods(),
         vec![CANIC_ROOT_ISSUER_RENEWAL_STATUS]
@@ -145,7 +150,7 @@ fn renewal_status_reports_matching_issuer_observation() {
     let result = renewal_status_result_with_runtime(&runtime, &renewal_status_options(issuer))
         .expect("status should include issuer observation");
 
-    assert_eq!(result.status, AUTH_RENEWAL_STATUS_CONFIGURED);
+    assert_eq!(result.status, AuthRenewalStatusCode::Configured);
     assert!(result.issuer_observation.available);
     assert!(!result.issuer_observation.drift_detected);
     assert_eq!(
@@ -184,7 +189,7 @@ fn renewal_status_reports_root_issuer_drift() {
         .expect("status should include drift observation");
     let rendered = render::render_renewal_status_result(&result);
 
-    assert_eq!(result.status, AUTH_RENEWAL_STATUS_DRIFT_DETECTED);
+    assert_eq!(result.status, AuthRenewalStatusCode::DriftDetected);
     assert!(result.issuer_observation.drift_detected);
     assert!(rendered.contains("Issuer observation: drift_detected"));
     assert!(rendered.contains(&hex_bytes(&[4; 32])));
@@ -313,7 +318,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                 input: ROOT_ROLE.to_string(),
                 role: ROOT_ROLE.to_string(),
                 canister_id: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
-                candid_source: AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string(),
+                candid_source: AuthRenewalCandidSource::InstalledDeployment,
             },
             candid_path: PathBuf::from(".icp/local/canisters/root/root.did"),
             icp_root: PathBuf::from("."),
@@ -360,7 +365,7 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                     input: issuer_pid.to_string(),
                     role: Some("issuer".to_string()),
                     canister_id: issuer_pid.to_string(),
-                    candid_source: AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string(),
+                    candid_source: AuthRenewalCandidSource::InstalledDeployment,
                 },
                 candid_path: PathBuf::from(".icp/local/canisters/issuer/issuer.did"),
                 icp_root: PathBuf::from("."),

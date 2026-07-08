@@ -4,8 +4,8 @@
 //! Does not own: command parsing, transport, or response decoding.
 
 use super::{
-    AUTH_RENEWAL_STATUS_DRIFT_DETECTED, AuthCommandError, AuthIssuerObservation,
-    AuthRenewalActiveAttemptStatus, AuthRenewalStatusResult, AuthRenewalTemplateStatus,
+    AuthCommandError, AuthIssuerObservation, AuthRenewalActiveAttemptStatus, AuthRenewalStatusCode,
+    AuthRenewalStatusResult, AuthRenewalTemplateStatus,
 };
 
 pub(super) fn write_renewal_status_result(
@@ -25,7 +25,7 @@ pub(super) fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> 
         format!("Auth renewal status: {}", result.issuer_pid),
         format!("Deployment: {}", result.deployment),
         format!("Root: {}", result.target.canister_id),
-        format!("Status: {}", result.status),
+        format!("Status: {}", result.status.label()),
         format!(
             "Template: {}",
             render_template_status(&result.renewal.template)
@@ -138,7 +138,8 @@ pub(super) fn render_issuer_observation(observation: &AuthIssuerObservation) -> 
     if observation.drift_detected {
         format!(
             "{} ({})",
-            AUTH_RENEWAL_STATUS_DRIFT_DETECTED, observation.status
+            AuthRenewalStatusCode::DriftDetected.label(),
+            observation.status
         )
     } else {
         observation.status.clone()

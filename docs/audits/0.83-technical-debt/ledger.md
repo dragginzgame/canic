@@ -17,7 +17,10 @@ families to JSON by default plus `--text` for human-readable output. The third
 follow-up fix tightens the runtime inspect report wrapper so command,
 endpoint, health/readiness slots, source, response format, and aggregate status
 labels are typed internally while preserving the existing JSON/text output
-contract.
+contract. The fourth follow-up fix tightens the auth renewal status report
+wrapper so CLI-owned report kind, local Candid source, and aggregate status
+labels are typed internally while preserving decoded canister response strings
+as data.
 
 ## Baseline Validation
 
@@ -365,6 +368,69 @@ Fix validation:
 | --- | --- | --- |
 | `cargo test --locked -p canic-cli inspect` | pass | 35 filtered inspect-related CLI tests passed. |
 | `cargo fmt --all` | pass | Formatted the inspect report typing change. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+
+## CANIC-083-DEBT-005: Auth Renewal Status Report Owns CLI Labels As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / auth
+Status: fixed
+Owner: auth renewal CLI report wrapper
+Current location: `crates/canic-cli/src/auth/mod.rs`
+Intended owner: typed auth renewal report model, with renderers formatting
+typed CLI-owned labels and preserving decoded canister response strings as data
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.3
+
+Evidence:
+- file: `crates/canic-cli/src/auth/mod.rs`
+- line or anchor: `AuthRootTarget`, `AuthIssuerTarget`, and
+  `AuthRenewalStatusResult`
+- module/function: auth renewal status report wrapper
+- command/search: `rg -n "AUTH_RENEWAL_STATUS_KIND|AUTH_RENEWAL_STATUS_ACTIVE_ATTEMPT|AUTH_RENEWAL_CANDID_SOURCE_INSTALLED_DEPLOYMENT|kind: String|candid_source: String|status: String" crates/canic-cli/src/auth`
+- reachability: active `canic auth renewal status` JSON/text report path
+- exact issue: the report wrapper stored the CLI-owned report kind, local
+  Candid-source label, and aggregate renewal status as strings even though
+  those values are closed within the CLI report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by tests, but raw
+strings let the CLI report wrapper drift from its own stable labels without
+compiler help. Decoded issuer and active-attempt status strings are response
+data from canisters and intentionally remain strings.
+
+Recommendation:
+
+Use typed local values for the report kind, local Candid source, and aggregate
+renewal status. Keep serialization labels identical so JSON/text output does
+not change.
+
+Regression test:
+
+Keep focused auth renewal tests asserting the typed values and JSON labels:
+`auth_renewal_status`, `installed_deployment`, `active_attempt`, and
+`unavailable`.
+
+Resolution:
+
+- `AuthRenewalStatusResult.kind` now stores `AuthRenewalReportKind`.
+- `AuthRootTarget.candid_source` and `AuthIssuerTarget.candid_source` now store
+  `AuthRenewalCandidSource`.
+- `AuthRenewalStatusResult.status` now stores `AuthRenewalStatusCode`.
+- Renderers format the typed status label, and JSON labels remain unchanged.
+- Decoded canister response fields such as active-attempt and issuer-observed
+  status remain strings.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo test --locked -p canic-cli auth` | pass | 23 filtered auth-related CLI tests passed. |
+| `cargo fmt --all` | pass | Formatted the auth report typing change. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `git diff --check` | pass | Whitespace diff check passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
