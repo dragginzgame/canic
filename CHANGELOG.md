@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.14` tightens runtime bootstrap status phase ownership by replacing
+  raw internal phase labels with `BootstrapPhaseLabel` while preserving
+  `canic_bootstrap_status` phase strings, runtime introspection metadata,
+  endpoint surfaces, Candid, JSON, deployment truth, evidence/report schemas,
+  and stable-state layout.
+
 - `0.83.13` tightens replay-policy manifest construction by requiring typed
   command-kind, command-manifest, quota-policy, and cycle-reserve labels at
   manifest call sites instead of accepting loose helper arguments, while

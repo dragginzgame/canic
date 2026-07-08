@@ -8,7 +8,11 @@ use crate::{
     lifecycle::{LifecyclePhase, lifecycle_trap},
     log,
     log::Topic,
-    ops::runtime::{bootstrap::BootstrapStatusOps, env::EnvOps, timer::TimerOps},
+    ops::runtime::{
+        bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
+        env::EnvOps,
+        timer::TimerOps,
+    },
     workflow,
 };
 use std::time::Duration;
@@ -86,13 +90,13 @@ pub fn schedule_post_upgrade_nonroot_bootstrap() {
         LifecycleMetricRole::Nonroot,
         LifecycleMetricOutcome::Scheduled,
     );
-    BootstrapStatusOps::set_phase("nonroot:upgrade:scheduled");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_UPGRADE_SCHEDULED);
 
     TimerOps::set(
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_nonroot_canister",
         async {
-            BootstrapStatusOps::set_phase("nonroot:upgrade");
+            BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_UPGRADE);
             LifecycleMetricsApi::record_bootstrap(
                 LifecycleMetricPhase::PostUpgrade,
                 LifecycleMetricRole::Nonroot,

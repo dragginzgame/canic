@@ -697,3 +697,46 @@ Explicit non-scope:
 - no changes to runtime replay `CommandKind`, receipt storage, operation IDs,
   cost guards, workflow replay descriptors, endpoint-name labels, or
   quota/reserve policy string values
+
+## 0.83 Runtime Bootstrap Phase Label Typing
+
+Status:
+completed in 0.83.14 for the accepted `CANIC-083-DEBT-019` scope.
+
+Source findings:
+- CANIC-083-DEBT-019
+
+Boundary:
+Runtime bootstrap status phase labels.
+
+Previous owner:
+Bootstrap status storage and lifecycle scheduling call sites used raw
+`&'static str` phase labels.
+
+Intended owner:
+Runtime bootstrap ops own typed `BootstrapPhaseLabel` values. DTO projection
+formats the same stable phase strings.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust bootstrap ops API only. No CLI or endpoint surface changes.
+
+Serialized surfaces affected:
+None.
+
+Validation:
+- `cargo test --locked -p canic-core bootstrap --lib`
+- `cargo clippy --locked -p canic-core --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no endpoint changes
+- no command changes
+- no Candid changes
+- no JSON field changes
+- no runtime introspection behavior changes
+- no recent-failure content changes
+- no lifecycle scheduling behavior changes
+- no deployment truth or evidence schema changes
+- no stable-state layout changes

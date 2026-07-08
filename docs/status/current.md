@@ -14,12 +14,22 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.12`. Earlier in the
+- The current package/release-surface version is `0.83.13`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.13` working slice fixes `CANIC-083-DEBT-018` by tightening
+- The current `0.83.14` working slice fixes `CANIC-083-DEBT-019` by tightening
+  runtime bootstrap diagnostic phase labels. Process-local bootstrap status now
+  stores `BootstrapPhaseLabel` values, and lifecycle bootstrap scheduling passes
+  typed labels into `BootstrapStatusOps::set_phase`. `snapshot()` still emits
+  the same `BootstrapStatusResponse.phase` strings, and
+  `canic_bootstrap_status`, runtime introspection recent-failure metadata,
+  lifecycle scheduling behavior, command behavior, endpoint surfaces, Candid,
+  JSON, deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged.
+
+- The `0.83.13` slice fixes `CANIC-083-DEBT-018` by tightening
   replay-policy manifest constructor command labels. Endpoint, pool-admin, and
   root-capability manifest call sites now construct typed
   `ReplayCommandKindLabel` values explicitly, command-dispatch rows construct

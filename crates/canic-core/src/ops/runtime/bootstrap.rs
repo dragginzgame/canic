@@ -14,14 +14,40 @@ use std::cell::RefCell;
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct BootstrapStatusRecord {
     ready: bool,
-    phase: &'static str,
+    phase: BootstrapPhaseLabel,
     last_error: Option<String>,
+}
+
+/// Runtime-owned bootstrap diagnostic phase label.
+/// Serialized bootstrap status responses still expose the label as a string.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct BootstrapPhaseLabel(&'static str);
+
+impl BootstrapPhaseLabel {
+    pub const IDLE: Self = Self("idle");
+    pub const FAILED: Self = Self("failed");
+    pub const READY: Self = Self("ready");
+    pub const NONROOT_INIT_SCHEDULED: Self = Self("nonroot:init:scheduled");
+    pub const NONROOT_INIT: Self = Self("nonroot:init");
+    pub const NONROOT_UPGRADE_SCHEDULED: Self = Self("nonroot:upgrade:scheduled");
+    pub const NONROOT_UPGRADE: Self = Self("nonroot:upgrade");
+    pub const ROOT_INIT: Self = Self("root:init");
+
+    #[must_use]
+    pub const fn new(label: &'static str) -> Self {
+        Self(label)
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
 }
 
 thread_local! {
     static BOOTSTRAP_STATUS: RefCell<BootstrapStatusRecord> = const { RefCell::new(BootstrapStatusRecord {
         ready: false,
-        phase: "idle",
+        phase: BootstrapPhaseLabel::IDLE,
         last_error: None,
     }) };
 }
@@ -40,13 +66,13 @@ impl BootstrapStatusOps {
     pub fn snapshot() -> BootstrapStatusResponse {
         BOOTSTRAP_STATUS.with_borrow(|status| BootstrapStatusResponse {
             ready: status.ready,
-            phase: status.phase.to_string(),
+            phase: status.phase.as_str().to_string(),
             last_error: status.last_error.clone(),
         })
     }
 
     // Reset bootstrap progress to one new phase and clear any previous error.
-    pub fn set_phase(phase: &'static str) {
+    pub fn set_phase(phase: BootstrapPhaseLabel) {
         BOOTSTRAP_STATUS.with_borrow_mut(|status| {
             status.ready = false;
             status.phase = phase;
@@ -60,7 +86,7 @@ impl BootstrapStatusOps {
         BOOTSTRAP_STATUS.with_borrow_mut(|status| {
             let failed_phase = status.phase;
             status.ready = false;
-            status.phase = "failed";
+            status.phase = BootstrapPhaseLabel::FAILED;
             status.last_error = Some(message);
             RecentFailureOps::record(RecentFailureInput {
                 occurred_at_ns: now_nanos(),
@@ -68,7 +94,7 @@ impl BootstrapStatusOps {
                 code: "bootstrap_failed".to_string(),
                 severity: FailureSeverity::Error,
                 summary: "bootstrap failed; inspect canic_bootstrap_status for details".to_string(),
-                correlation_id: Some(failed_phase.to_string()),
+                correlation_id: Some(failed_phase.as_str().to_string()),
             });
         });
     }
@@ -77,7 +103,7 @@ impl BootstrapStatusOps {
     pub fn mark_ready() {
         BOOTSTRAP_STATUS.with_borrow_mut(|status| {
             status.ready = true;
-            status.phase = "ready";
+            status.phase = BootstrapPhaseLabel::READY;
             status.last_error = None;
         });
     }
@@ -89,12 +115,12 @@ impl BootstrapStatusOps {
 
 #[cfg(test)]
 mod tests {
-    use super::BootstrapStatusOps;
+    use super::{BootstrapPhaseLabel, BootstrapStatusOps};
     use crate::ops::runtime::recent_failure::RecentFailureOps;
 
     #[test]
     fn bootstrap_status_starts_idle_and_not_ready() {
-        BootstrapStatusOps::set_phase("idle");
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::IDLE);
 
         let status = BootstrapStatusOps::snapshot();
 
@@ -133,7 +159,7 @@ mod tests {
 
     #[test]
     fn bootstrap_status_tracks_ready() {
-        BootstrapStatusOps::set_phase("root:init:validate");
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::new("root:init:validate"));
         BootstrapStatusOps::mark_ready();
 
         let status = BootstrapStatusOps::snapshot();
