@@ -277,48 +277,6 @@ Explicit non-scope:
 - no blob-storage behavior changes
 - no typing of free-form command strings or error messages
 
-## 0.83 Blob-Storage Method Mode Typing
-
-Status:
-completed in 0.83.8 for the accepted `CANIC-083-DEBT-011` scope.
-
-Source findings:
-- CANIC-083-DEBT-011
-
-Boundary:
-Blob-storage CLI action report method-mode labels.
-
-Previous owner:
-Target resolution derived the typed call mode to a raw `query`/`update` string
-before action report construction, and `BlobStorageAction.mode` stored that
-label as a string.
-
-Intended owner:
-The blob-storage report model owns the typed action method mode, target
-resolution supplies the typed value, and renderers/JSON serialization format
-the label at the output boundary.
-
-Behavior impact label:
-no_behavior_change.
-
-Public surfaces affected:
-None.
-
-Serialized surfaces affected:
-None. JSON labels remain unchanged.
-
-Validation:
-- `cargo test --locked -p canic-cli blob_storage`
-
-Explicit non-scope:
-- no endpoint changes
-- no Candid changes
-- no JSON field changes
-- no command changes
-- no blob-storage behavior changes
-- no typing of decoded canister response labels, next-action guidance strings,
-  delegated command strings, or error text
-
 ## 0.83 Backup Report Status Typing
 
 Status:
@@ -399,3 +357,124 @@ Explicit non-scope:
 - no token symbol typing
 - no receiver or deployment-target behavior changes
 - no pending-operation log schema changes
+
+## 0.83 Blob-Storage Method Mode Typing
+
+Status:
+completed in 0.83.8 for the accepted `CANIC-083-DEBT-011` scope.
+
+Source findings:
+- CANIC-083-DEBT-011
+
+Boundary:
+Blob-storage CLI action report method-mode labels.
+
+Previous owner:
+Target resolution derived the typed call mode to a raw `query`/`update` string
+before action report construction, and `BlobStorageAction.mode` stored that
+label as a string.
+
+Intended owner:
+The blob-storage report model owns the typed action method mode, target
+resolution supplies the typed value, and renderers/JSON serialization format
+the label at the output boundary.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli blob_storage`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no blob-storage behavior changes
+- no typing of decoded canister response labels, next-action guidance strings,
+  delegated command strings, or error text
+
+## 0.83 Replica Status Source Typing
+
+Status:
+completed in 0.83.9 for the accepted `CANIC-083-DEBT-012` scope.
+
+Source findings:
+- CANIC-083-DEBT-012
+
+Boundary:
+Replica status JSON report source labels.
+
+Previous owner:
+`canic replica status --json` stored the closed `status_source` labels as
+string literals inside the status builder.
+
+Intended owner:
+The replica status report model owns typed status-source values, and JSON
+serialization formats the stable source labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli replica`
+
+Explicit non-scope:
+- no command changes
+- no help text changes
+- no ICP CLI execution changes
+- no local replica probing behavior changes
+- no typing of delegated ICP command/error text or embedded status payloads
+
+## 0.83 Deploy-Plan Preview Label Typing
+
+Status:
+completed in 0.83.9 for the accepted `CANIC-083-DEBT-013` scope.
+
+Source findings:
+- CANIC-083-DEBT-013
+
+Boundary:
+Deploy-plan future-apply preview phase, operation, and status labels.
+
+Previous owner:
+`canic deploy plan` stored proposed-operation phase, label, and status values
+as raw string constants in the report builder.
+
+Intended owner:
+The deploy-plan report model owns typed future-apply preview labels, and
+text/JSON serialization formats the stable labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli deploy_plan`
+
+Explicit non-scope:
+- no command changes
+- no help text changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth or evidence schema changes
+- no typing of diagnostic codes, subjects, details, next actions, or embedded
+  `DeploymentPlanV1` data

@@ -14,12 +14,24 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.7`. Earlier in the
+- The current package/release-surface version is `0.83.8`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.8` working slice fixes `CANIC-083-DEBT-011` by tightening
+- The current `0.83.9` working slice fixes `CANIC-083-DEBT-012` and
+  `CANIC-083-DEBT-013` by tightening `canic replica status --json` reports and
+  `canic deploy plan` future-apply preview rows. Replica `status_source`
+  labels and deploy-plan preview phase, operation, and status labels are now
+  represented by typed internal report values instead of string literals.
+  Delegated ICP CLI command/error strings, embedded ICP status payloads,
+  deploy-plan diagnostic codes, subjects, details, next actions, and embedded
+  `DeploymentPlanV1` data remain in their existing report shapes. Command
+  behavior, JSON fields, JSON labels, text output meaning, endpoint surfaces,
+  Candid, deployment truth, evidence/report schemas, and stable-state layout
+  are unchanged.
+
+- The `0.83.8` slice fixes `CANIC-083-DEBT-011` by tightening
   `canic blob-storage` action reports so the closed `query`/`update`
   method-mode labels are represented by typed internal report-model values
   instead of raw strings. Response-derived gateway `sync_action`, next-action

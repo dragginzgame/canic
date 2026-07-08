@@ -171,10 +171,19 @@ struct ReplicaStatusJsonReport {
     network: &'static str,
     running: bool,
     configured_gateway_port: String,
-    status_source: &'static str,
+    status_source: ReplicaStatusSource,
     icp_cli_running: bool,
     local_gateway_reachable: bool,
     icp_status: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ReplicaStatusSource {
+    IcpCli,
+    IcpCliStale,
+    HttpStatus,
+    None,
 }
 
 pub fn run<I>(args: I) -> Result<(), ReplicaCommandError>
@@ -306,9 +315,9 @@ fn run_status_json(
                 running: local_gateway_reachable,
                 configured_gateway_port: port.to_string(),
                 status_source: if local_gateway_reachable {
-                    "icp_cli"
+                    ReplicaStatusSource::IcpCli
                 } else {
-                    "icp_cli_stale"
+                    ReplicaStatusSource::IcpCliStale
                 },
                 icp_cli_running: true,
                 local_gateway_reachable,
@@ -322,9 +331,9 @@ fn run_status_json(
                 running: local_gateway_reachable,
                 configured_gateway_port: port.to_string(),
                 status_source: if local_gateway_reachable {
-                    "http_status"
+                    ReplicaStatusSource::HttpStatus
                 } else {
-                    "none"
+                    ReplicaStatusSource::None
                 },
                 icp_cli_running: false,
                 local_gateway_reachable,

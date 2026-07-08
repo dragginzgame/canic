@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.7
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.8
 Status: pass_with_followups
 
 ## Scope
@@ -31,7 +31,12 @@ labels. The ninth follow-up fix tightens token and cycles wallet command
 parsing so maintained subcommand sets are represented by typed parser values.
 The tenth follow-up fix tightens blob-storage action method-mode ownership so
 the closed `query`/`update` action-report labels are stored as typed model
-values instead of being derived to strings before report construction.
+values instead of being derived to strings before report construction. The
+eleventh follow-up fix tightens replica status-source ownership so the closed
+`canic replica status --json` source labels are represented by typed internal
+report values. The twelfth follow-up fix tightens deploy-plan future-apply
+preview rows so phase, operation, and status labels are represented by typed
+internal report values.
 
 ## Baseline Validation
 
@@ -847,6 +852,130 @@ Fix validation:
 | --- | --- | --- |
 | `cargo fmt --all` | pass | Formatted the blob-storage method-mode typing change. |
 | `cargo test --locked -p canic-cli blob_storage` | pass | Focused blob-storage-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-012: Replica Status Reports Own Status Source As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / replica
+Status: fixed
+Owner: replica status JSON report wrapper
+Current location: `crates/canic-cli/src/replica/mod.rs`
+Intended owner: typed replica status report model, with JSON serialization
+formatting the stable source labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.9
+
+Evidence:
+- file: `crates/canic-cli/src/replica/mod.rs`
+- line or anchor: `ReplicaStatusJsonReport.status_source` and
+  `run_status_json`
+- module/function: replica status JSON report builder
+- command/search: `rg -n "status_source|icp_cli_stale|http_status" crates/canic-cli/src/replica -g '*.rs'`
+- reachability: active `canic replica status --json` report path
+- exact issue: replica status JSON reports stored the closed source labels
+  `icp_cli`, `icp_cli_stale`, `http_status`, and `none` as string literals
+  rather than as a typed report value.
+
+Risk:
+
+Low. The emitted JSON labels were correct and covered by focused tests, but
+the source-label set was owned by string literals in the status builder rather
+than the report model.
+
+Recommendation:
+
+Use a private typed source enum for the closed replica status-source labels.
+Keep delegated ICP command/error text and HTTP status payloads as runtime
+data.
+
+Regression test:
+
+Keep focused replica tests asserting unchanged `status_source` JSON labels for
+HTTP fallback and stale ICP CLI status cases.
+
+Resolution:
+
+- `ReplicaStatusJsonReport.status_source` now stores a private
+  `ReplicaStatusSource` enum.
+- `ReplicaStatusSource` serializes to the existing `icp_cli`,
+  `icp_cli_stale`, `http_status`, and `none` labels.
+- `run_status_json` constructs typed source variants instead of string
+  literals.
+- JSON labels and command behavior remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the replica status-source typing change. |
+| `cargo test --locked -p canic-cli replica` | pass | 18 filtered replica/status-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-013: Deploy-Plan Future-Apply Preview Rows Own Labels As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / deploy_plan
+Status: fixed
+Owner: deploy-plan report wrapper
+Current location: `crates/canic-cli/src/deploy/plan.rs`
+Intended owner: typed deploy-plan report model, with text/JSON serialization
+formatting stable future-apply preview labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.9
+
+Evidence:
+- file: `crates/canic-cli/src/deploy/plan.rs`
+- line or anchor: `ProposedOperationLabel`,
+  `proposed_operations`, `operation`, and `append_operations`
+- module/function: deploy-plan report builder and renderer
+- command/search: `rg -n "FUTURE_APPLY_PREVIEW_PHASE|PROPOSED_OPERATION_NOT_EXECUTED|OP_" crates/canic-cli/src/deploy/plan.rs`
+- reachability: active `canic deploy plan <deployment>` text and JSON report
+  paths
+- exact issue: deploy-plan future-apply preview rows stored the closed phase
+  label, operation label, and status label as raw strings even though the
+  value sets are owned by the deploy-plan report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by deploy-plan
+renderer tests, but raw strings let proposed operation labels drift from the
+stable 0.79 report contract without compiler help.
+
+Recommendation:
+
+Use private typed values for deploy-plan future-apply preview phase,
+operation, and status labels. Keep diagnostic codes, subjects, details, next
+actions, and embedded `DeploymentPlanV1` data as their existing report data.
+
+Regression test:
+
+Keep focused deploy-plan tests asserting unchanged text/JSON labels,
+deterministic proposed-operation ordering, duplicate suppression, and
+no-apply-safety wording.
+
+Resolution:
+
+- `ProposedOperationLabel.phase` now stores `ProposedOperationPhase`.
+- `ProposedOperationLabel.label` now stores `ProposedOperationKind`.
+- `ProposedOperationLabel.status` now stores `ProposedOperationStatus`.
+- Text rendering formats typed labels through explicit label methods.
+- JSON serialization still emits the existing `future_apply_preview`,
+  operation, and `not_executed` labels.
+- Command behavior, JSON fields, and text output remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the deploy-plan preview label typing change. |
+| `cargo test --locked -p canic-cli deploy_plan` | pass | 20 filtered deploy-plan/medic-related CLI tests passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |

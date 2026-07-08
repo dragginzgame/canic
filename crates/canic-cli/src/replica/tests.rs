@@ -90,7 +90,7 @@ fn replica_status_json_exposes_status_source() {
         network: "local",
         running: true,
         configured_gateway_port: "8000".to_string(),
-        status_source: "http_status",
+        status_source: ReplicaStatusSource::HttpStatus,
         icp_cli_running: false,
         local_gateway_reachable: true,
         icp_status: None,
@@ -112,7 +112,7 @@ fn replica_status_json_exposes_stale_icp_status() {
         network: "local",
         running: false,
         configured_gateway_port: "8001".to_string(),
-        status_source: "icp_cli_stale",
+        status_source: ReplicaStatusSource::IcpCliStale,
         icp_cli_running: true,
         local_gateway_reachable: false,
         icp_status: Some(serde_json::json!({

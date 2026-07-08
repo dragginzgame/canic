@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.9` tightens `canic replica status --json` and `canic deploy plan`
+  report ownership by replacing raw-string replica `status_source` labels and
+  deploy-plan future-apply preview labels with typed internal values while
+  preserving existing JSON/text labels, command behavior, endpoint surfaces,
+  Candid, and stable-state layout.
+
 - `0.83.8` tightens `canic blob-storage` action report ownership by replacing
   raw-string `query`/`update` method-mode labels with a typed internal value
   while preserving response-derived gateway sync actions, next-action guidance
@@ -96,6 +102,8 @@ canic cycles balance
 canic cycles transfer 4T <principal>
 canic cycles transfer 4T <deployment>/<role-or-canister>
 canic cycles topup <deployment> <role-or-canister> 4T
+canic replica status --json
+canic deploy plan <deployment> --json
 ```
 
 ## [0.82.x] - 2026-07-05 - Boundary Hardening

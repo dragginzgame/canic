@@ -32,8 +32,6 @@ use std::{
 
 const REPORT_SCHEMA_VERSION: u16 = 1;
 const REPORT_COMMAND: &str = "canic deploy plan";
-const FUTURE_APPLY_PREVIEW_PHASE: &str = "future_apply_preview";
-const PROPOSED_OPERATION_NOT_EXECUTED: &str = "not_executed";
 const SEVERITY_INFO: &str = "info";
 const SEVERITY_WARNING: &str = "warning";
 const SEVERITY_BLOCKED: &str = "blocked";
@@ -55,16 +53,20 @@ const SOURCE_DEPLOYMENT_PLAN_BUILDER: &str = "deployment_plan_builder";
 const SOURCE_FLEET_CONFIG: &str = "fleet_config";
 const SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
 const SOURCE_LOCAL_OBSERVATION: &str = "local_observation";
-const OP_CREATE_CANISTER: &str = "create_canister";
-const OP_INSTALL_WASM: &str = "install_wasm";
-const OP_UPGRADE_WASM: &str = "upgrade_wasm";
-const OP_APPLY_POLICY: &str = "apply_policy";
-const OP_SET_CONTROLLERS: &str = "set_controllers";
-const OP_REGISTER_CHILD: &str = "register_child";
-const OP_REGISTER_ROOT: &str = "register_root";
-const OP_VERIFY_READINESS: &str = "verify_readiness";
-const OP_VERIFY_TOPOLOGY: &str = "verify_topology";
-const OP_UPLOAD_ARTIFACT: &str = "upload_artifact";
+const FUTURE_APPLY_PREVIEW_PHASE: ProposedOperationPhase =
+    ProposedOperationPhase::FutureApplyPreview;
+const PROPOSED_OPERATION_NOT_EXECUTED: ProposedOperationStatus =
+    ProposedOperationStatus::NotExecuted;
+const OP_CREATE_CANISTER: ProposedOperationKind = ProposedOperationKind::CreateCanister;
+const OP_INSTALL_WASM: ProposedOperationKind = ProposedOperationKind::InstallWasm;
+const OP_UPGRADE_WASM: ProposedOperationKind = ProposedOperationKind::UpgradeWasm;
+const OP_APPLY_POLICY: ProposedOperationKind = ProposedOperationKind::ApplyPolicy;
+const OP_SET_CONTROLLERS: ProposedOperationKind = ProposedOperationKind::SetControllers;
+const OP_REGISTER_CHILD: ProposedOperationKind = ProposedOperationKind::RegisterChild;
+const OP_REGISTER_ROOT: ProposedOperationKind = ProposedOperationKind::RegisterRoot;
+const OP_VERIFY_READINESS: ProposedOperationKind = ProposedOperationKind::VerifyReadiness;
+const OP_VERIFY_TOPOLOGY: ProposedOperationKind = ProposedOperationKind::VerifyTopology;
+const OP_UPLOAD_ARTIFACT: ProposedOperationKind = ProposedOperationKind::UploadArtifact;
 const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
 const ASSUMPTION_PREFIX_LOCAL_CONFIG: &str = "local_config.";
 const ASSUMPTION_PREFIX_LOCAL_STATE: &str = "local_state.";
@@ -163,10 +165,70 @@ struct PlanDiagnostic {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct ProposedOperationLabel {
-    phase: &'static str,
-    label: &'static str,
+    phase: ProposedOperationPhase,
+    label: ProposedOperationKind,
     subject: String,
-    status: &'static str,
+    status: ProposedOperationStatus,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ProposedOperationPhase {
+    FutureApplyPreview,
+}
+
+impl ProposedOperationPhase {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::FutureApplyPreview => "future_apply_preview",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ProposedOperationKind {
+    ApplyPolicy,
+    CreateCanister,
+    InstallWasm,
+    RegisterChild,
+    RegisterRoot,
+    SetControllers,
+    UpgradeWasm,
+    UploadArtifact,
+    VerifyReadiness,
+    VerifyTopology,
+}
+
+impl ProposedOperationKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::ApplyPolicy => "apply_policy",
+            Self::CreateCanister => "create_canister",
+            Self::InstallWasm => "install_wasm",
+            Self::RegisterChild => "register_child",
+            Self::RegisterRoot => "register_root",
+            Self::SetControllers => "set_controllers",
+            Self::UpgradeWasm => "upgrade_wasm",
+            Self::UploadArtifact => "upload_artifact",
+            Self::VerifyReadiness => "verify_readiness",
+            Self::VerifyTopology => "verify_topology",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ProposedOperationStatus {
+    NotExecuted,
+}
+
+impl ProposedOperationStatus {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::NotExecuted => "not_executed",
+        }
+    }
 }
 
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -902,7 +964,7 @@ const fn verifier_readiness_required(plan: &DeploymentPlanV1) -> bool {
             .is_empty()
 }
 
-fn registration_operation_label(role: &str) -> &'static str {
+fn registration_operation_label(role: &str) -> ProposedOperationKind {
     if role == "root" {
         OP_REGISTER_ROOT
     } else {
@@ -917,7 +979,7 @@ fn pool_operation_subject(pool: &str, role: Option<&str>) -> String {
     }
 }
 
-fn wasm_operation_label(plan: &DeploymentPlanV1, role: &str) -> &'static str {
+fn wasm_operation_label(plan: &DeploymentPlanV1, role: &str) -> ProposedOperationKind {
     if plan
         .expected_canisters
         .iter()
@@ -929,7 +991,7 @@ fn wasm_operation_label(plan: &DeploymentPlanV1, role: &str) -> &'static str {
     }
 }
 
-fn operation(label: &'static str, subject: &str) -> ProposedOperationLabel {
+fn operation(label: ProposedOperationKind, subject: &str) -> ProposedOperationLabel {
     ProposedOperationLabel {
         phase: FUTURE_APPLY_PREVIEW_PHASE,
         label,
@@ -1063,10 +1125,10 @@ fn diagnostic_severity_rank(severity: &str) -> u8 {
 fn sort_proposed_operations(operations: &mut Vec<ProposedOperationLabel>) {
     operations.sort_by(|left, right| {
         left.phase
-            .cmp(right.phase)
-            .then_with(|| left.label.cmp(right.label))
+            .cmp(&right.phase)
+            .then_with(|| left.label.cmp(&right.label))
             .then_with(|| left.subject.cmp(&right.subject))
-            .then_with(|| left.status.cmp(right.status))
+            .then_with(|| left.status.cmp(&right.status))
     });
     operations.dedup();
 }
@@ -1176,7 +1238,10 @@ fn append_operations(lines: &mut Vec<String>, operations: &[ProposedOperationLab
     for operation in operations {
         lines.push(format!(
             "  - phase: {} label: {} subject: {} status: {}",
-            operation.phase, operation.label, operation.subject, operation.status
+            operation.phase.label(),
+            operation.label.label(),
+            operation.subject,
+            operation.status.label()
         ));
     }
     lines.push(String::new());
@@ -1563,7 +1628,10 @@ mod tests {
     fn operation_key(operation: &ProposedOperationLabel) -> String {
         format!(
             "{}|{}|{}|{}",
-            operation.phase, operation.label, operation.subject, operation.status
+            operation.phase.label(),
+            operation.label.label(),
+            operation.subject,
+            operation.status.label()
         )
     }
 
@@ -1702,7 +1770,11 @@ mod tests {
         }
     }
 
-    fn assert_proposed_operation(plan: &DeploymentPlanV1, label: &str, subject: &str) {
+    fn assert_proposed_operation(
+        plan: &DeploymentPlanV1,
+        label: ProposedOperationKind,
+        subject: &str,
+    ) {
         assert!(
             proposed_operations(plan).iter().any(|operation| {
                 operation.phase == FUTURE_APPLY_PREVIEW_PHASE
@@ -1710,7 +1782,8 @@ mod tests {
                     && operation.subject == subject
                     && operation.status == PROPOSED_OPERATION_NOT_EXECUTED
             }),
-            "missing proposed operation {label} for {subject}"
+            "missing proposed operation {} for {subject}",
+            label.label()
         );
     }
 }
