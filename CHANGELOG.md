@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.4` tightens `canic info metrics` and `canic info cycles` report
+  ownership by replacing raw-string canister row status and coverage labels
+  with typed internal values while preserving existing `ok`, `empty`,
+  `unavailable`, `error`, `covered`, `partial`, and `none` JSON/text labels,
+  command behavior, endpoint surfaces, Candid, and stable-state layout.
+
 - `0.83.3` tightens `canic auth renewal status` report ownership by replacing
   raw-string report-kind, local Candid-source, and aggregate-status labels with
   typed internal values while preserving decoded canister response statuses,
@@ -47,6 +53,8 @@ canic deploy check <deployment> --json
 canic deploy check <deployment> --evidence-envelope
 canic fleet adoption report <fleet> --profile <profile> --json
 canic fleet adoption report <fleet> --profile <profile> --evidence-envelope
+canic info metrics <deployment> --json
+canic info cycles <deployment> --json
 ```
 
 ## [0.82.x] - 2026-07-05 - Boundary Hardening

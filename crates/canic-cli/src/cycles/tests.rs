@@ -1,7 +1,8 @@
 use super::*;
 use crate::cycles::{
     model::{
-        CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample, CyclesReport,
+        CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample,
+        CyclesCanisterStatus, CyclesCoverageStatus, CyclesReport,
     },
     parse::{parse_cycle_tracker_page, parse_topup_event_page},
     transport::summarize_cycle_tracker,
@@ -198,7 +199,11 @@ fn summarizes_partial_cycle_window() {
         Some(Vec::new()),
     );
 
-    assert_eq!(report.coverage_status, "partial");
+    assert_eq!(report.status, CyclesCanisterStatus::Ok);
+    assert_eq!(report.coverage_status, CyclesCoverageStatus::Partial);
+    let value = serde_json::to_value(&report).expect("serialize cycles canister report");
+    assert_eq!(value["status"], "ok");
+    assert_eq!(value["coverage_status"], "partial");
     assert_eq!(report.latest_timestamp_secs, Some(250));
     assert_eq!(report.latest_cycles, Some(900));
     assert_eq!(report.delta_cycles, Some(-100));

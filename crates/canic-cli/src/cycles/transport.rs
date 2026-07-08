@@ -3,7 +3,8 @@ use crate::{
         CyclesCommandError,
         model::{
             CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample,
-            CyclesCanisterReport, CyclesReport, CyclesTopupSummary,
+            CyclesCanisterReport, CyclesCanisterStatus, CyclesCoverageStatus, CyclesReport,
+            CyclesTopupSummary,
         },
         options::CyclesOptions,
         parse::{parse_cycle_tracker_page, parse_topup_event_page},
@@ -119,12 +120,12 @@ fn cycle_tracker_report(
             role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
             tree_prefix,
             canister_id: entry.pid.clone(),
-            status: "error".to_string(),
+            status: CyclesCanisterStatus::Error,
             sample_count: 0,
             total_samples: 0,
             requested_since_secs,
             coverage_seconds: None,
-            coverage_status: "none".to_string(),
+            coverage_status: CyclesCoverageStatus::None,
             latest_timestamp_secs: live_cycles.map(|_| generated_at_secs),
             latest_cycles: live_cycles,
             baseline_timestamp_secs: None,
@@ -205,13 +206,17 @@ pub(super) fn summarize_cycle_tracker(
         .and_then(|((_, burn), coverage)| unsigned_hourly_rate(burn, coverage));
     let visible_topups = topup_summary.filter(|summary| !topup_summary_is_empty(summary));
     let coverage_status = coverage_status(baseline.as_ref(), requested_since_secs);
-    let status = if latest.is_some() { "ok" } else { "empty" };
+    let status = if latest.is_some() {
+        CyclesCanisterStatus::Ok
+    } else {
+        CyclesCanisterStatus::Empty
+    };
 
     CyclesCanisterReport {
         role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
         tree_prefix,
         canister_id: entry.pid.clone(),
-        status: status.to_string(),
+        status,
         sample_count: page.entries.len(),
         total_samples: page.total,
         requested_since_secs,
@@ -387,11 +392,16 @@ const fn inferred_burn_cycles(topup_cycles: u128, delta_cycles: i128) -> Option<
     topup_cycles.checked_sub(delta)
 }
 
-fn coverage_status(baseline: Option<&CycleTrackerSample>, requested_since_secs: u64) -> String {
+const fn coverage_status(
+    baseline: Option<&CycleTrackerSample>,
+    requested_since_secs: u64,
+) -> CyclesCoverageStatus {
     match baseline {
-        Some(sample) if sample.timestamp_secs <= requested_since_secs => "covered".to_string(),
-        Some(_) => "partial".to_string(),
-        None => "none".to_string(),
+        Some(sample) if sample.timestamp_secs <= requested_since_secs => {
+            CyclesCoverageStatus::Covered
+        }
+        Some(_) => CyclesCoverageStatus::Partial,
+        None => CyclesCoverageStatus::None,
     }
 }
 
