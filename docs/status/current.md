@@ -14,12 +14,22 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.0`. Earlier in the
+- The current package/release-surface version is `0.83.1`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.1` working slice fixes `CANIC-083-DEBT-002` by
+- The current `0.83.2` working slice fixes `CANIC-083-DEBT-004` by tightening
+  the `canic inspect` report wrapper so command and endpoint labels,
+  health/readiness slots, source attribution, response format, and aggregate
+  runtime status are typed internally instead of owned as loose JSON/raw
+  strings. The emitted JSON labels and text output remain unchanged, including
+  `canic inspect canister`, `canic inspect deployment`, `canic_runtime_status`,
+  `cli_arg`, `deployment_record`, `runtime_observed`, `candid`, and the runtime
+  status labels. Command behavior, endpoint surfaces, Candid, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged.
+
+- The `0.83.1` slice fixes `CANIC-083-DEBT-002` by
   hard-cutting default-JSON advanced deploy report families from
   `--format json|text` to JSON by default plus `--text` for human-readable
   output. The affected families are deploy compare, root verification,
