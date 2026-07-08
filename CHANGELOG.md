@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.6` tightens `canic backup` report ownership by replacing raw-string
+  create mode/layout/status, list status, prune status/action, and
+  status/inspect layout-status labels with typed internal values while
+  preserving JSON/text labels, command behavior, endpoint surfaces, Candid,
+  and stable-state layout.
+
 - `0.83.5` tightens `canic blob-storage` report ownership by replacing
   raw-string report kind, Candid source, action, funding status, and readiness
   state labels with typed internal values while preserving JSON/text labels,
@@ -63,6 +69,11 @@ canic info cycles <deployment> --json
 canic blob-storage status <deployment> <canister-or-role> --json
 canic blob-storage sync-gateways <deployment> <canister-or-role> --json
 canic blob-storage fund <deployment> <canister-or-role> --cycles <cycles> --json
+canic backup create <deployment> --dry-run
+canic backup status <backup-ref>
+canic backup inspect <backup-ref> --json
+canic backup list
+canic backup prune --failed --dry-run
 ```
 
 ## [0.82.x] - 2026-07-05 - Boundary Hardening

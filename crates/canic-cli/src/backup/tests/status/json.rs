@@ -13,7 +13,7 @@ use canic_backup::execution::BackupExecutionJournal;
 fn backup_dry_run_status_json_uses_deployment_identity_field() {
     let plan = valid_backup_plan();
     let report = BackupDryRunStatusReport {
-        layout_status: "dry-run".to_string(),
+        layout_status: BackupExecutionLayoutStatus::DryRun,
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
         deployment: plan.fleet.clone(),
@@ -27,6 +27,7 @@ fn backup_dry_run_status_json_uses_deployment_identity_field() {
 
     let value = serde_json::to_value(&report).expect("serialize status report");
 
+    assert_eq!(value["layout_status"], "dry-run");
     assert_eq!(value["deployment"], "demo");
     assert!(value.get("fleet").is_none());
 }

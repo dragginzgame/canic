@@ -14,15 +14,27 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.4`. Earlier in the
+- The current package/release-surface version is `0.83.5`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.5` working slice fixes `CANIC-083-DEBT-008` by tightening
-  the `canic blob-storage` report wrapper so report kind, Candid source,
-  action, funding status, and readiness state labels are typed internally
-  instead of owned as raw strings. Free-form command strings, error messages,
+- The current `0.83.6` working slice fixes `CANIC-083-DEBT-009` by tightening
+  the `canic backup` report wrapper so create mode/layout/status, list status,
+  prune status/action, and status/inspect layout-status labels are typed
+  internally instead of owned as raw strings. Dynamic backup scope labels,
+  paths, operation kind/state labels, errors, and canister-derived data remain
+  strings. The emitted JSON labels and text output remain unchanged, including
+  `dry-run`, `execute`, `existing`, `new`, `planned`, `running`, `complete`,
+  `paused`, `failed`, `invalid-manifest`, `invalid-plan`,
+  `invalid-plan-journal`, `ok`, `would-remove`, and `removed`.
+  Command behavior, endpoint surfaces, Candid, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged.
+
+- The `0.83.5` slice fixes `CANIC-083-DEBT-008` by tightening the
+  `canic blob-storage` report wrapper so report kind, Candid source, action,
+  funding status, and readiness state labels are typed internally instead of
+  owned as raw strings. Free-form command strings, error messages,
   blocker/warning code arrays, and canister-derived text values remain strings.
   The emitted JSON labels and text output remain unchanged, including
   `blob_storage_status`, `blob_storage_error`,

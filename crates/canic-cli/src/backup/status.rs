@@ -1,5 +1,6 @@
 use super::{
-    BackupCommandError, BackupDryRunStatusReport, BackupStatusOptions, BackupStatusReport,
+    BackupCommandError, BackupDryRunStatusReport, BackupExecutionLayoutStatus, BackupStatusOptions,
+    BackupStatusReport,
 };
 use crate::backup::{
     labels::{execution_is_complete, execution_layout_status},
@@ -60,7 +61,8 @@ fn ensure_complete_status(report: &BackupStatusReport) -> Result<(), BackupComma
             pending_artifacts: report.pending_artifacts,
         }),
         BackupStatusReport::DryRun(report)
-            if report.layout_status == "complete" && execution_is_complete(&report.execution) =>
+            if report.layout_status == BackupExecutionLayoutStatus::Complete
+                && execution_is_complete(&report.execution) =>
         {
             Ok(())
         }

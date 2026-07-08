@@ -53,11 +53,14 @@ fn backup_list_reports_execution_backed_manifest_status() {
         entries
             .iter()
             .find(|entry| entry.dir == dir)
-            .map(|entry| entry.status.as_str())
+            .map(|entry| entry.status)
             .expect("entry exists")
     };
-    assert_eq!(status_for(&running), "running");
-    assert_eq!(status_for(&complete), "complete");
-    assert_eq!(status_for(&invalid), "invalid-plan-journal");
-    assert_eq!(status_for(&missing_journal), "invalid-plan-journal");
+    assert_eq!(status_for(&running), BackupListStatus::Running);
+    assert_eq!(status_for(&complete), BackupListStatus::Complete);
+    assert_eq!(status_for(&invalid), BackupListStatus::InvalidPlanJournal);
+    assert_eq!(
+        status_for(&missing_journal),
+        BackupListStatus::InvalidPlanJournal
+    );
 }

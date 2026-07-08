@@ -1,4 +1,7 @@
-use super::{BackupCommandError, BackupCreateOptions, BackupCreateReport};
+use super::{
+    BackupCommandError, BackupCreateLayout, BackupCreateMode, BackupCreateOptions,
+    BackupCreateReport, BackupRunStatus,
+};
 use crate::backup::labels::backup_scope_label;
 #[cfg(test)]
 use canic_backup::plan::BackupPlan;
@@ -79,11 +82,10 @@ pub(super) fn backup_create(
     })?;
     let persisted = persist_backup_create_layout(&out, &planned)?;
     let layout = if persisted.reused_existing {
-        "existing"
+        BackupCreateLayout::Existing
     } else {
-        "new"
-    }
-    .to_string();
+        BackupCreateLayout::New
+    };
     let plan = persisted.plan;
 
     let run = if options.dry_run {
@@ -109,15 +111,14 @@ pub(super) fn backup_create(
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
         mode: if options.dry_run {
-            "dry-run"
+            BackupCreateMode::DryRun
         } else {
-            "execute"
-        }
-        .to_string(),
+            BackupCreateMode::Execute
+        },
         layout,
         status: run
             .as_ref()
-            .map_or_else(|| "planned".to_string(), backup_run_status),
+            .map_or(BackupRunStatus::Planned, backup_run_status),
         scope: backup_scope_label(&plan),
         targets: plan.targets.len(),
         operations: plan.phases.len(),
@@ -141,15 +142,14 @@ pub(super) fn persist_backup_create_dry_run_with_layout(
     persist_backup_create_layout(out, plan).map(|layout| (layout.plan, layout.reused_existing))
 }
 
-fn backup_run_status(run: &BackupRunResponse) -> String {
+const fn backup_run_status(run: &BackupRunResponse) -> BackupRunStatus {
     if run.complete {
-        "complete"
+        BackupRunStatus::Complete
     } else if run.max_steps_reached {
-        "paused"
+        BackupRunStatus::Paused
     } else {
-        "running"
+        BackupRunStatus::Running
     }
-    .to_string()
 }
 
 fn backup_installed_deployment_error(error: InstalledDeploymentError) -> BackupCommandError {

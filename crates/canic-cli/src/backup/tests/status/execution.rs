@@ -4,6 +4,7 @@
 //! Does not own: generic completion gate assertions.
 //! Boundary: status reports for running, failed, and finalized execution layouts.
 
+use super::super::super::BackupExecutionLayoutStatus;
 use super::super::fixtures::*;
 
 // Ensure backup status reports an execution layout as running once preflight is accepted.
@@ -15,7 +16,7 @@ fn backup_status_reports_running_execution_layout() {
         false,
     );
 
-    assert_eq!(report.layout_status, "running");
+    assert_eq!(report.layout_status, BackupExecutionLayoutStatus::Running);
     assert!(report.execution.preflight_accepted);
     assert_eq!(report.execution.failed_operations, 0);
     assert!(report.execution.ready_operations > 0);
@@ -31,7 +32,7 @@ fn backup_status_reports_failed_execution_layout() {
     let report =
         backup_status_for_execution_journal("canic-cli-backup-status-failed", journal, false);
 
-    assert_eq!(report.layout_status, "failed");
+    assert_eq!(report.layout_status, BackupExecutionLayoutStatus::Failed);
     assert_eq!(report.execution.failed_operations, 1);
     assert_eq!(
         report
@@ -54,7 +55,7 @@ fn backup_status_reports_complete_execution_layout() {
     let report =
         backup_status_for_execution_journal("canic-cli-backup-status-complete", journal, true);
 
-    assert_eq!(report.layout_status, "complete");
+    assert_eq!(report.layout_status, BackupExecutionLayoutStatus::Complete);
     assert_eq!(
         report.execution.completed_operations + report.execution.skipped_operations,
         report.execution.total_operations
