@@ -14,12 +14,25 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.9`. Earlier in the
+- The current package/release-surface version is `0.83.10`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.10` working slice fixes `CANIC-083-DEBT-014` by tightening
+- The current `0.83.11` working slice fixes `CANIC-083-DEBT-015` and
+  `CANIC-083-DEBT-016` by tightening host-owned report labels.
+  `canic state audit` report scope and check category/source labels are now
+  represented by typed internal report values instead of raw strings.
+  Deployment-root verification identity/evidence check-row names are also
+  represented by typed internal values in the report builder and validator.
+  Audit codes, subjects, details, next actions, command strings, embedded
+  manifest data, and serialized `DeploymentRootVerificationCheckV1.name`
+  labels remain in their existing report shapes. Command behavior, JSON
+  fields, JSON labels, text output meaning, endpoint surfaces, Candid,
+  deployment truth, evidence/report schemas, and stable-state layout are
+  unchanged.
+
+- The `0.83.10` slice fixes `CANIC-083-DEBT-014` by tightening
   `canic deploy plan` diagnostic labels. Diagnostic category, severity, and
   source labels are now represented by typed internal report values instead of
   raw strings. Diagnostic codes, subjects, details, next actions, and embedded

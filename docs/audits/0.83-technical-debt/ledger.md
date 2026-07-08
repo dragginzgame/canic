@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.9
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.10
 Status: pass_with_followups
 
 ## Scope
@@ -38,7 +38,10 @@ report values. The twelfth follow-up fix tightens deploy-plan future-apply
 preview rows so phase, operation, and status labels are represented by typed
 internal report values. The thirteenth follow-up fix tightens deploy-plan
 diagnostic category, severity, and source labels into typed internal report
-values.
+values. The fourteenth follow-up fix tightens state-audit report scope,
+category, and source labels into typed internal report values. The fifteenth
+follow-up fix tightens deployment-root verification check names into typed
+internal report values.
 
 ## Baseline Validation
 
@@ -1043,6 +1046,137 @@ Fix validation:
 | `cargo fmt --all` | pass | Formatted the deploy-plan diagnostic typing change. |
 | `cargo test --locked -p canic-cli deploy_plan` | pass | 20 filtered deploy-plan/medic-related CLI tests passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-015: State-Audit Reports Own Scope, Category, And Source As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / state_audit
+Status: fixed
+Owner: state-audit report producer
+Current location: `crates/canic-host/src/state_manifest/mod.rs` and
+`crates/canic-cli/src/state/mod.rs`
+Intended owner: typed state-audit report model, with text/JSON serialization
+formatting stable report labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.11
+
+Evidence:
+- file: `crates/canic-host/src/state_manifest/mod.rs`
+- line or anchor: `StateAuditReport`, `StateAuditCheck`, `SCOPE_*`,
+  `CATEGORY_*`, `SOURCE_*`, `pass`, `warn`, `fail`, and `sort_checks`
+- module/function: state-audit report builder
+- command/search: `rg -n "category: &'static str|source: &'static str|scope: &'static str|SCOPE_|CATEGORY_|SOURCE_" crates/canic-host/src/state_manifest/mod.rs`
+- reachability: active `canic state audit` text and JSON report paths
+- exact issue: state-audit reports stored closed scope, category, and source
+  labels as raw string values even though those label sets are owned by the
+  state-audit report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by state-audit
+tests, but raw strings left state-audit scope/category/source semantics
+without compiler ownership.
+
+Recommendation:
+
+Use typed values for state-audit scope, category, and source labels. Keep audit
+codes, subjects, details, next actions, manifest data, and command strings in
+their existing report shapes.
+
+Regression test:
+
+Keep focused state-audit tests asserting unchanged JSON schema version, scope,
+check labels, text rendering, exit-code behavior, and medic summary behavior.
+
+Resolution:
+
+- `StateAuditReport.scope` now stores `StateAuditScope`.
+- `StateAuditCheck.category` now stores `StateAuditCategory`.
+- `StateAuditCheck.source` now stores `StateAuditSource`.
+- Text rendering formats typed labels explicitly.
+- JSON serialization still emits the existing scope, category, and source
+  labels.
+- Command behavior, JSON fields, and text output remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the state-audit typing change. |
+| `cargo test --locked -p canic-host state_manifest --lib` | pass | 17 filtered state-manifest tests passed. |
+| `cargo test --locked -p canic-cli state` | pass | 12 filtered state/medic/deploy-plan CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-016: Deployment-Root Verification Reports Own Check Names As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / deployment_truth
+Status: fixed
+Owner: deployment-root verification report producer
+Current location:
+`crates/canic-host/src/deployment_truth/root/report/checks.rs` and
+`crates/canic-host/src/deployment_truth/root/report/validation.rs`
+Intended owner: typed deployment-root verification report builder and
+validator, with serialized `DeploymentRootVerificationCheckV1` names remaining
+stable strings
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.11
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/root/report/checks.rs`
+- line or anchor: `root_verification_identity_checks`,
+  `root_verification_evidence_checks`, and `push_check`
+- module/function: deployment-root verification report builder
+- command/search: `rg -n '"deployment_name"|"root_observation_source"|"source_check_id"' crates/canic-host/src/deployment_truth/root/report`
+- reachability: active `canic deploy inspect root` and
+  `canic deploy root verify` report/receipt paths
+- exact issue: deployment-root verification report check names were repeated
+  as raw strings in the report builder and validator even though the allowed
+  row names are a closed report vocabulary.
+
+Risk:
+
+Low. The emitted report shape was correct and covered by root-verification
+tests, but duplicated raw strings left the builder and validator free to drift.
+
+Recommendation:
+
+Use a typed internal check-name value for root-verification report rows. Keep
+the persisted/serialized `DeploymentRootVerificationCheckV1.name` field as a
+string so existing JSON reports, receipts, and digests remain unchanged.
+
+Regression test:
+
+Keep focused root-verification tests asserting accepted evidence, rejected
+stale/missing check rows, digest stability, and CLI root command parsing.
+
+Resolution:
+
+- Added `RootVerificationCheckName` for the closed identity/evidence check-row
+  names.
+- The report builder now converts typed check names to the existing serialized
+  labels at the `DeploymentRootVerificationCheckV1` boundary.
+- The report validator now uses the same typed names for expected row lists and
+  value checks.
+- JSON report labels, report digest semantics, command behavior, and text
+  output remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the root-verification check-name typing change. |
+| `cargo test --locked -p canic-host root_verification --lib` | pass | 56 filtered deployment-root verification tests passed. |
+| `cargo test --locked -p canic-cli deploy_root` | pass | 5 filtered deploy-root CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
 | `git diff --check` | pass | Whitespace diff check passed. |

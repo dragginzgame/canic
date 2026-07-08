@@ -253,7 +253,7 @@ fn render_audit_text(report: &StateAuditReport) -> String {
         report.command.to_string(),
         format!("status: {}", status_label(report.status)),
         format!("schema_version: {}", report.schema_version),
-        format!("scope: {}", report.scope),
+        format!("scope: {}", report.scope.label()),
     ];
     if let Some(role) = &report.role {
         lines.push(format!("role: {role}"));
@@ -263,7 +263,7 @@ fn render_audit_text(report: &StateAuditReport) -> String {
     for check in &report.checks {
         lines.push(format!(
             "{} [{}] {}",
-            check.category,
+            check.category.label(),
             status_label(check.status),
             check.code
         ));
@@ -272,7 +272,7 @@ fn render_audit_text(report: &StateAuditReport) -> String {
         if let Some(next) = &check.next {
             lines.push(format!("  next: {next}"));
         }
-        lines.push(format!("  source: {}", check.source));
+        lines.push(format!("  source: {}", check.source.label()));
     }
     if !report.next_actions.is_empty() {
         lines.push(String::new());
