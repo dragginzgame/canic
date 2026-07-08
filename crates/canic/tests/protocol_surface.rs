@@ -198,7 +198,7 @@ fn blob_storage_gateway_protocol_surface_is_pinned() {
     for method in canic::protocol::BLOB_STORAGE_069_GATEWAY_METHODS {
         assert!(
             service.iter().any(|(name, _)| name == method),
-            "blob-storage fixture missing 0.69 method: {method}"
+            "blob-storage fixture missing gateway method: {method}"
         );
     }
 }
@@ -291,7 +291,7 @@ fn blob_storage_billing_gateway_protocol_names_are_pinned() {
             && source.contains("requires($fund_guard)")
             && source.contains("name = \"get_blob_storage_status\"")
             && source.contains("requires($status_guard)"),
-        "0.70 billing endpoints must stay update endpoints with separate guards"
+        "billing endpoints must stay update endpoints with separate guards"
     );
     assert!(
         source.contains("requested_cycles: u128")
@@ -565,7 +565,7 @@ fn blob_storage_endpoint_macro_emits_only_non_billing_gateway_methods() {
         ) && source.contains(
             "canic_update(requires($guard), name = \"_immutableObjectStorageCreateCertificate\")"
         ),
-        "blob-storage endpoint modes/guards must match the 0.69 gateway contract"
+        "blob-storage endpoint modes/guards must match the gateway contract"
     );
 
     let live_attr = preceding_attribute(&source, "fn canic_blob_storage_blobs_are_live(");
@@ -596,7 +596,7 @@ fn blob_storage_endpoint_macro_emits_only_non_billing_gateway_methods() {
             "_immutableObjectStorage",
             "UpdateGatewayPrincipals"
         )) && !source.contains(concat!("_immutableObjectStorage", "FundFromProjectCycles")),
-        "0.69 endpoint macro must not emit deferred billing/sync gateway methods"
+        "endpoint macro must not emit deferred billing/sync gateway methods"
     );
 }
 

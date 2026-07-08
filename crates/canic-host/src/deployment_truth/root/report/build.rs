@@ -8,7 +8,7 @@ use super::{
     shared::{root_verification_next_actions, root_verification_transition},
 };
 
-/// Build a passive 0.47 root-verification report from an existing
+/// Build a passive root-verification report from an existing
 /// deployment-truth check.
 ///
 /// This report can prove evidence consistency, but it does not mutate local

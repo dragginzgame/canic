@@ -6,7 +6,7 @@ use crate::deployment_truth::{
     DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentComparisonReportV1, DeploymentComparisonTargetV1,
 };
 
-/// Validate archived 0.46 comparison report consistency and digest stability.
+/// Validate archived comparison report consistency and digest stability.
 pub fn validate_deployment_comparison_report(
     report: &DeploymentComparisonReportV1,
 ) -> Result<(), DeploymentComparisonReportError> {

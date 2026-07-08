@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-07
+Last updated: 2026-07-08
 
 ## Purpose
 
@@ -14,30 +14,37 @@ before this compaction is archived at
 - The active line is `0.82.x` boundary hardening. Source of truth:
   `docs/design/0.82-boundary-hardening/0.82-design.md`.
 
-- The current package/release-surface version is `0.82.39`. Earlier in the
+- The current package/release-surface version is `0.82.40`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
+
+- The `0.82.41` docs-only organization slice keeps the canonical 0.82 design
+  at `docs/design/0.82-boundary-hardening/0.82-design.md` and moves
+  supplemental docs-only hardening reports under
+  `docs/design/0.82-boundary-hardening/reports/`. No source, command,
+  endpoint, serialized-surface, deployment-truth, evidence/report schema, or
+  stable-state behavior is changed by this organization slice.
 
 - The `0.82.33` slice hard-cuts backup/restore parser and layout fallback
   paths by rejecting plan-only backup create layouts without
   `backup-execution-journal.json`, requiring restore upload helper output to be
   JSON with `snapshot_id`, and requiring restore stopped precondition output to
   be JSON. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-backup-restore-legacy-repair-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-backup-restore-legacy-repair-hard-cut-report.md`.
 
 - The `0.82.34` slice hard-cuts backup/restore JSON contract
   tolerance by rejecting unknown fields across current backup/restore manifests,
   plans, journals, receipts, command previews, and reports, and removing unused
   plan-facing backup receipt types. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-backup-restore-json-contract-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-backup-restore-json-contract-hard-cut-report.md`.
 
 - The `0.82.35` slice hard-cuts CLI help/version word aliases
   by keeping canonical `--help`/`-h` and `--version`/`-V` flag forms only,
   removing bare `help`/`version` preflight handling, and dropping stale
   removed-command fixtures from global forwarding tests. The docs-only report
   is
-  `docs/design/0.82-boundary-hardening/0.82-cli-help-word-alias-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-cli-help-word-alias-hard-cut-report.md`.
 
 - The `0.82.36` slice removes remaining active
   anti-resurrection-style tests for retired bridge-backed delegation-proof
@@ -48,7 +55,7 @@ before this compaction is archived at
   install-root readiness behavior, endpoint surfaces, CLI behavior, Candid,
   JSON, deployment truth, evidence/report schemas, and stable-state layout are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-replay-policy-test-and-readiness-alias-cleanup-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-replay-policy-test-and-readiness-alias-cleanup-report.md`.
 
 - The `0.82.37` slice removes a remaining protocol-surface
   anti-resurrection assertion for retired single-proof root delegation endpoint
@@ -57,7 +64,7 @@ before this compaction is archived at
   guards, bindings, and DTO round-trips. Endpoint surfaces, CLI behavior,
   Candid, JSON, deployment truth, evidence/report schemas, and stable-state
   layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-root-delegation-protocol-test-cleanup-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-root-delegation-protocol-test-cleanup-report.md`.
 
 - The `0.82.38` slice hard-cuts unused public Rust aliases
   from core helper and infra boundaries. `ConsentResult`, `HashBytes`, and
@@ -69,7 +76,7 @@ before this compaction is archived at
   Runtime behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment
   truth, evidence/report schemas, and stable-state layout are unchanged. The
   docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-core-rust-alias-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-core-rust-alias-hard-cut-report.md`.
 
 - The `0.82.39` slice hard-cuts the public ICRC-21 dispatch
   handler alias. `ConsentHandlerFn` is removed in favor of the concrete
@@ -81,9 +88,9 @@ before this compaction is archived at
   Runtime behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment
   truth, evidence/report schemas, and stable-state layout are unchanged. The
   docs-only reports are
-  `docs/design/0.82-boundary-hardening/0.82-icrc21-handler-alias-hard-cut-report.md`
+  `docs/design/0.82-boundary-hardening/reports/0.82-icrc21-handler-alias-hard-cut-report.md`
   and
-  `docs/design/0.82-boundary-hardening/0.82-snapshot-driver-error-alias-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-snapshot-driver-error-alias-hard-cut-report.md`.
 
 - The current `0.82.40` working slice renames active Toko blob-storage
   inventory/gate wording from compatibility notes to interoperability notes.
@@ -98,7 +105,7 @@ before this compaction is archived at
   behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment truth,
   evidence/report schemas, and stable-state layout are unchanged. The
   docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-blob-storage-inventory-interoperability-wording-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-blob-storage-inventory-interoperability-wording-report.md`.
 
 - The `0.82.1` slice makes the pure-policy boundary explicit:
   core policy modules live under `domain::policy::pure`, policy input/decision
@@ -118,27 +125,27 @@ before this compaction is archived at
   Rust paths and Candid shape, and internal view/storage/workflow/metrics code
   imports the values from the domain owner. This has a docs-only hardening
   report at
-  `docs/design/0.82-boundary-hardening/0.82-icp-refill-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-icp-refill-dto-boundary-report.md`.
 
 - The same `0.82.2` slice also moves root runtime subnet identity values to
   `domain::subnet` while preserving `dto::subnet` re-exports for the macro/init
   Candid boundary. Runtime root workflow imports the domain owner directly, and
   the docs-only hardening report is
-  `docs/design/0.82-boundary-hardening/0.82-runtime-identity-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-runtime-identity-dto-boundary-report.md`.
 
 - A 0.82 follow-up slice continues DTO boundary cleanup by moving
   cycle top-up event status ownership to `domain::cycles` while preserving the
   public `dto::cycles::CycleTopupEventStatus` re-export and Candid shape.
   Storage cycle ops now import the domain owner directly, with the docs-only
   report at
-  `docs/design/0.82-boundary-hardening/0.82-cycle-topup-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-cycle-topup-dto-boundary-report.md`.
 
 - The same 0.82 follow-up slice moves canister pool status ownership to
   `domain::pool` while preserving the public
   `dto::pool::CanisterPoolStatus` re-export and Candid shape. Pool storage
   mapping and import/recycle workflow decisions now import the domain owner
   directly, with the docs-only report at
-  `docs/design/0.82-boundary-hardening/0.82-pool-status-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-pool-status-dto-boundary-report.md`.
 
 - The same 0.82 follow-up slice extends the ICP refill DTO boundary cleanup by
   moving `IcpRefillMode` to `domain::icp_refill` while preserving the public
@@ -150,7 +157,7 @@ before this compaction is archived at
   re-export and Candid shape. Runtime metrics projection, metrics workflow
   query, and lifecycle facade tests now import the domain owner directly, with
   the docs-only report at
-  `docs/design/0.82-boundary-hardening/0.82-metrics-kind-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-metrics-kind-dto-boundary-report.md`.
 
 - The `0.82.4` slice moved runtime failure severity, runtime field visibility,
   and runtime diagnostic status ownership to
@@ -162,9 +169,9 @@ before this compaction is archived at
   `dto::runtime::RuntimeStateDomainStatus` re-exports and Candid/Serde shapes.
   Runtime recent-failure, bootstrap ops, and runtime status builders now import
   the domain owner directly. Docs-only reports:
-  `docs/design/0.82-boundary-hardening/0.82-runtime-failure-severity-dto-boundary-report.md`,
-  `docs/design/0.82-boundary-hardening/0.82-runtime-field-visibility-dto-boundary-report.md`,
-  `docs/design/0.82-boundary-hardening/0.82-runtime-diagnostic-status-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-runtime-failure-severity-dto-boundary-report.md`,
+  `docs/design/0.82-boundary-hardening/reports/0.82-runtime-field-visibility-dto-boundary-report.md`,
+  `docs/design/0.82-boundary-hardening/reports/0.82-runtime-diagnostic-status-dto-boundary-report.md`.
 
 - The `0.82.5` slice moves memory diagnostic value ownership to
   `domain::memory` while preserving the public
@@ -172,14 +179,14 @@ before this compaction is archived at
   `dto::memory::MemoryRangeAuthorityMode`, and
   `dto::memory::MemoryAllocationState` re-exports and Candid shapes. Runtime
   memory ops now import the domain owner directly, with the docs-only report at
-  `docs/design/0.82-boundary-hardening/0.82-memory-diagnostic-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-memory-diagnostic-dto-boundary-report.md`.
 
 - The `0.82.6` slice moves app mode ownership to `domain::state` while
   preserving the public
   `storage::stable::state::app::AppMode` and `dto::state::AppMode` re-exports,
   Candid shape, and stable app-state serialization. App-state mapping now uses
   the shared domain value directly, with the docs-only report at
-  `docs/design/0.82-boundary-hardening/0.82-app-mode-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-app-mode-domain-boundary-report.md`.
 
 - The `0.82.7` slice moves canister status and log-visibility ownership to
   `domain::canister` while preserving the public
@@ -188,7 +195,7 @@ before this compaction is archived at
   shapes. Management status DTO projection now uses the shared domain values
   directly, while raw management-canister infra payload types remain separate.
   The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-canister-status-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-canister-status-domain-boundary-report.md`.
 
 - The `0.82.8` slice moves HTTP method ownership to
   `domain::http` while preserving the public `dto::http::HttpMethod`,
@@ -196,32 +203,32 @@ before this compaction is archived at
   re-exports and Candid method labels. IC HTTP ops and runtime HTTP metrics now
   use the shared domain value directly, while raw management-canister HTTP
   infra payload types remain separate. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-http-method-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-http-method-domain-boundary-report.md`.
   The same slice moves runtime endpoint status ownership to `domain::runtime`
   while preserving the public
   `dto::runtime::{HealthStatus, ReadinessStatus, RuntimeStatus, TimerStatus}`
   re-exports and serialized Candid/Serde shapes. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-runtime-status-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-runtime-status-domain-boundary-report.md`.
 
 - The `0.82.9` slice moves app command status ownership to
   `domain::state` while preserving the public `dto::state::AppStatus`
   re-export and Candid command shape. App-state storage ops now import the
   status value from the domain owner, while app command/response DTOs and
   stable app-state serialization remain unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-app-status-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-app-status-domain-boundary-report.md`.
   The same slice moves feature-gated blob-storage billing status ownership to
   `domain::blob_storage` while preserving the public `dto::blob_storage`
   re-exports and serialized Candid/Serde shapes. Blob-storage billing status
   builders now import the status values from the domain owner, while Cashier
   request/result DTOs and billing behavior remain unchanged. The docs-only
   report is
-  `docs/design/0.82-boundary-hardening/0.82-blob-storage-status-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-blob-storage-status-domain-boundary-report.md`.
   The same slice moves timer scheduling mode ownership to `domain::runtime`
   while preserving the public `ops::runtime::metrics::timer::TimerMode`
   re-export and projected metric labels. Timer scheduling ops and metrics
   projection now import the mode value from the domain owner, while timer
   recording behavior remains unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-timer-mode-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-timer-mode-domain-boundary-report.md`.
 
 - The `0.82.10` slice moves platform-call metric dimension
   ownership to `domain::metrics` while preserving the public
@@ -229,7 +236,7 @@ before this compaction is archived at
   labels. IC call, HTTP, ledger, and management ops now import the metric
   dimension values from the domain owner, while platform-call metric recording
   and operation behavior remain unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-platform-call-metric-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-platform-call-metric-domain-boundary-report.md`.
 
 - The `0.82.11` slice moves canister-op and management-call
   metric dimension ownership to `domain::metrics` while preserving the public
@@ -239,8 +246,8 @@ before this compaction is archived at
   provisioning, and management ops now import the metric dimension values from
   the domain owner, while metric recording and snapshot storage remain
   unchanged. Docs-only reports:
-  `docs/design/0.82-boundary-hardening/0.82-canister-ops-metric-domain-boundary-report.md`,
-  `docs/design/0.82-boundary-hardening/0.82-management-call-metric-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-canister-ops-metric-domain-boundary-report.md`,
+  `docs/design/0.82-boundary-hardening/reports/0.82-management-call-metric-domain-boundary-report.md`.
 
 - The `0.82.12` slice moves lifecycle and wasm-store metric
   dimension ownership to `domain::metrics` while preserving the public
@@ -250,8 +257,8 @@ before this compaction is archived at
   wasm-store metric dimension values from the domain owner, while lifecycle and
   wasm-store metric recording and snapshot storage remain unchanged. Docs-only
   reports:
-  `docs/design/0.82-boundary-hardening/0.82-lifecycle-metric-domain-boundary-report.md`,
-  `docs/design/0.82-boundary-hardening/0.82-wasm-store-metric-domain-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-lifecycle-metric-domain-boundary-report.md`,
+  `docs/design/0.82-boundary-hardening/reports/0.82-wasm-store-metric-domain-boundary-report.md`.
 
 - A 0.82 follow-up slice removes the internal
   `ops::replay::model` compatibility shim after moving replay ops and
@@ -260,7 +267,7 @@ before this compaction is archived at
   namespace. Replay behavior, stable replay receipt layout, endpoint surfaces,
   CLI behavior, Candid, JSON, deployment truth, and evidence/report schemas are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-replay-model-shim-removal-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-replay-model-shim-removal-report.md`.
 
 - A 0.82 follow-up slice removes the internal
   `ops::replay::slot` legacy root replay adapter after routing root replay
@@ -268,7 +275,7 @@ before this compaction is archived at
   receipt helpers/storage directly. Replay behavior, stable replay receipt
   layout, endpoint surfaces, CLI behavior, Candid, JSON, deployment truth, and
   evidence/report schemas are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-root-replay-slot-adapter-removal-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-root-replay-slot-adapter-removal-report.md`.
 
 - The same 0.82 follow-up slice removes `dto::rpc` re-exports from
   `ops::rpc::request` so RPC request/response DTOs are imported from their DTO
@@ -276,7 +283,7 @@ before this compaction is archived at
   capability metadata, Candid shapes, endpoint surfaces, CLI behavior, JSON,
   deployment truth, and evidence/report schemas are unchanged. The docs-only
   report is
-  `docs/design/0.82-boundary-hardening/0.82-rpc-request-dto-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-rpc-request-dto-boundary-report.md`.
 
 - The same 0.82 follow-up slice removes the workflow-layer `TimerId` re-export
   so timer handles are imported from `ops::runtime::timer`, while
@@ -284,7 +291,7 @@ before this compaction is archived at
   facade behavior, runtime timer metric labels, endpoint surfaces, CLI
   behavior, Candid, JSON, deployment truth, and evidence/report schemas are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-timer-id-workflow-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-timer-id-workflow-boundary-report.md`.
 
 - A 0.82 follow-up slice tightens the hidden control-plane support
   facade for pool status by exposing `CanisterPoolStatus` through
@@ -292,7 +299,7 @@ before this compaction is archived at
   namespace. Public `dto::pool` compatibility, pool behavior, endpoint
   surfaces, CLI behavior, Candid, JSON, deployment truth, and evidence/report
   schemas are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-control-plane-pool-status-support-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-control-plane-pool-status-support-boundary-report.md`.
 
 - The same 0.82 follow-up slice removes the crate-private
   `support::WasmStoreGcExecutionStats` re-export in `canic-control-plane` so
@@ -300,7 +307,7 @@ before this compaction is archived at
   Wasm-store GC behavior, endpoint surfaces, CLI behavior, Candid, JSON,
   deployment truth, and evidence/report schemas are unchanged. The docs-only
   report is
-  `docs/design/0.82-boundary-hardening/0.82-control-plane-template-gc-support-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-control-plane-template-gc-support-boundary-report.md`.
 
 - The same 0.82 follow-up slice removes the hidden
   `control_plane_support::workflow::prelude` wildcard support path after
@@ -308,7 +315,7 @@ before this compaction is archived at
   `control_plane_support::cdk::types` directly. Root bootstrap behavior,
   endpoint surfaces, CLI behavior, Candid, JSON, deployment truth, and
   evidence/report schemas are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-control-plane-prelude-support-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-control-plane-prelude-support-boundary-report.md`.
 
 - A 0.82 follow-up slice adds maintained boundary guard tests for
   pure policy and passive DTO ownership. Pure policy modules are now checked
@@ -319,7 +326,7 @@ before this compaction is archived at
   boundary-adapter exception. Runtime behavior, endpoint surfaces, CLI
   behavior, Candid, JSON, deployment truth, and evidence/report schemas are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-policy-dto-boundary-guard-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-policy-dto-boundary-guard-report.md`.
 
 - The same 0.82 follow-up slice adds a maintained lifecycle boundary guard.
   Before-bootstrap lifecycle adapters in `canic-core` and
@@ -328,7 +335,7 @@ before this compaction is archived at
   explicit zero-delay lifecycle timer boundary. Runtime behavior, lifecycle
   macro behavior, endpoint surfaces, CLI behavior, Candid, JSON, deployment
   truth, and evidence/report schemas are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-lifecycle-boundary-guard-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-lifecycle-boundary-guard-report.md`.
 
 - The same 0.82 follow-up slice hard-cuts runtime introspection enum labels to
   canonical snake_case Candid/Serde labels. Candid supports explicit
@@ -338,7 +345,7 @@ before this compaction is archived at
   builder behavior, deployment truth, evidence/report schemas, and stable-state
   layout are unchanged; the serialized runtime enum label surface is
   intentionally changed to snake_case only. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-runtime-enum-label-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-runtime-enum-label-hard-cut-report.md`.
 
 - A 0.82 follow-up slice adds a maintained Candid serde boundary
   guard. Canic-owned Candid source roots are checked so `CandidType` items do
@@ -353,9 +360,9 @@ before this compaction is archived at
   execution, metrics labels, endpoint routes, CLI behavior, deployment truth,
   evidence/report schemas, and stable-state layout are unchanged. Docs-only
   reports:
-  `docs/design/0.82-boundary-hardening/0.82-candid-serde-boundary-guard-report.md`
+  `docs/design/0.82-boundary-hardening/reports/0.82-candid-serde-boundary-guard-report.md`
   and
-  `docs/design/0.82-boundary-hardening/0.82-http-method-alias-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-http-method-alias-hard-cut-report.md`.
 
 - The same 0.82 follow-up slice performs a targeted hard-cut compatibility
   sweep. `canic inspect` now rejects `canic_runtime_status` query output that
@@ -368,7 +375,7 @@ before this compaction is archived at
   classified as separate explicit hard-cut candidates in this sweep and are now
   closed in follow-up hard-cut reports.
   The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-hard-cut-compatibility-sweep-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-hard-cut-compatibility-sweep-report.md`.
   The root and detailed `0.82.17` changelog entries are prepared.
 
 - A 0.82 follow-up slice hard-cuts the public registry policy error
@@ -379,7 +386,7 @@ before this compaction is archived at
   messages, endpoint routes, CLI command surfaces, deployment truth,
   evidence/report schemas, and stable-state layout are unchanged. The docs-only
   report is
-  `docs/design/0.82-boundary-hardening/0.82-policy-error-code-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-policy-error-code-hard-cut-report.md`.
 
 - The same 0.82 follow-up slice hard-cuts auth metric compatibility mirroring.
   Auth session, bootstrap, identity-fallback, and role-attestation events now
@@ -388,7 +395,7 @@ before this compaction is archived at
   guard metrics, metrics query sorting/pagination, endpoint routes, CLI command
   surfaces, Candid, JSON, deployment truth, evidence/report schemas, and
   stable-state layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-auth-metric-mirror-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-auth-metric-mirror-hard-cut-report.md`.
 
 - The same 0.82 follow-up slice hard-cuts the root bootstrap subnet identity
   fallback. Root bootstrap no longer invents a subnet principal from
@@ -398,7 +405,7 @@ before this compaction is archived at
   or errors. Root init argument shape, endpoint routes, CLI command surfaces,
   Candid, JSON, deployment truth, evidence/report schemas, and stable-state
   layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-root-bootstrap-subnet-identity-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-root-bootstrap-subnet-identity-hard-cut-report.md`.
   The root and detailed `0.82.18` changelog entries are prepared.
 
 - A 0.82 follow-up slice hard-cuts CLI metrics/cycles
@@ -409,7 +416,7 @@ before this compaction is archived at
   CLI command names/options, successful report output, endpoint Candid
   signatures, deployment truth, evidence/report schemas, and stable-state
   layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-cli-metrics-cycles-response-candid-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-cli-metrics-cycles-response-candid-hard-cut-report.md`.
 
 - The same 0.82 follow-up slice hard-cuts host `canic_metadata`
   `response_candid` fallback parsing. Metadata version discovery now requires
@@ -418,7 +425,7 @@ before this compaction is archived at
   Candid signature, CLI list command surfaces, successful live-list rendering,
   deployment truth, evidence/report schemas, and stable-state layout are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-canic-metadata-response-candid-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-canic-metadata-response-candid-hard-cut-report.md`.
   The root and detailed `0.82.19` changelog entries are prepared.
 
 - A 0.82 follow-up slice hard-cuts host cycle-balance
@@ -429,7 +436,7 @@ before this compaction is archived at
   signature, CLI list/cycles command surfaces, successful live-list rendering,
   deployment truth, evidence/report schemas, and stable-state layout are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-cycle-balance-response-candid-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-cycle-balance-response-candid-hard-cut-report.md`.
 
 - The same 0.82 follow-up slice hard-cuts root bootstrap-readiness
   `response_candid` fallback parsing. ICP CLI `canic_bootstrap_status` output
@@ -438,7 +445,7 @@ before this compaction is archived at
   bootstrap-status endpoint Candid signature, root bootstrap lifecycle
   behavior, install command surfaces, deployment truth, evidence/report
   schemas, and stable-state layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-bootstrap-readiness-response-candid-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-bootstrap-readiness-response-candid-hard-cut-report.md`.
   The root and detailed `0.82.20` changelog entries are prepared.
 
 - The `0.82.21` slice hard-cuts the remaining
@@ -451,7 +458,7 @@ before this compaction is archived at
   command surfaces, target resolution, endpoint guards, runtime endpoint DTOs,
   Candid, deployment truth, evidence/report schemas, and stable-state layout
   are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-inspect-response-candid-metadata-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-inspect-response-candid-metadata-hard-cut-report.md`.
 
 - The same `0.82.21` slice hard-cuts deployment-truth artifact
   observation across network roots. Non-local deployment-truth/deploy-plan
@@ -460,7 +467,7 @@ before this compaction is archived at
   reported through the existing `local_artifacts.root` gap. Deployment truth,
   deploy plan, evidence, Candid, and stable-state schemas are unchanged. The
   docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-artifact-root-network-fallback-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-artifact-root-network-fallback-hard-cut-report.md`.
 
 - The same `0.82.21` slice hard-cuts deployment-truth local config
   fleet-name fallback. When local config cannot resolve a fleet name,
@@ -469,7 +476,7 @@ before this compaction is archived at
   of copying the deployment target name into fleet-template identity. Schemas,
   command surfaces, evidence, Candid, and stable-state layout are unchanged.
   The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-local-config-fleet-name-fallback-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-local-config-fleet-name-fallback-hard-cut-report.md`.
 
 - The same `0.82.21` slice hard-cuts the deployment catalog's active
   legacy fleet-state warning. Catalog reports now read only current
@@ -477,7 +484,7 @@ before this compaction is archived at
   `.canic/<network>/fleets` paths to emit `catalog.legacy_fleet_state_ignored`.
   Current catalog schema, command surfaces, deployment truth, evidence, Candid,
   and stable-state layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-deployment-catalog-legacy-fleet-warning-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-deployment-catalog-legacy-fleet-warning-hard-cut-report.md`.
 
 - The same `0.82.21` slice hard-cuts install-root legacy fleet-state
   lookup. `read_deployment_install_state` now reads only current
@@ -486,7 +493,7 @@ before this compaction is archived at
   `.canic/<network>/fleets/<name>.json` paths. Deployment registration help now
   describes the current deployment-target boundary without 0.46 legacy recovery
   language. Schemas and command surfaces are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-install-root-legacy-fleet-state-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-install-root-legacy-fleet-state-hard-cut-report.md`.
   The root and detailed `0.82.21` changelog entries include these hard cuts.
 
 - The `0.82.22` slice removes CLI anti-resurrection tests for
@@ -499,7 +506,7 @@ before this compaction is archived at
   away from compatibility-alias wording. The auth verifier legacy
   root-proof-mode rejection test remains because it protects an active
   security/config invariant. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-cli-anti-resurrection-test-cleanup-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-cli-anti-resurrection-test-cleanup-report.md`.
   The root and detailed `0.82.22` changelog entries are prepared.
 
 - A 0.82 follow-up slice removes hidden
@@ -513,7 +520,7 @@ before this compaction is archived at
   behavior, deployment cost-guard behavior, endpoint surfaces, CLI behavior,
   Candid, JSON, deployment truth, evidence/report schemas, and stable-state
   layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-control-plane-core-owner-support-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-control-plane-core-owner-support-boundary-report.md`.
   The root and detailed `0.82.23` changelog entries are prepared.
 
 - A 0.82 follow-up slice removes the broad hidden
@@ -523,7 +530,7 @@ before this compaction is archived at
   root bootstrap behavior, endpoint surfaces, CLI behavior, Candid, JSON,
   deployment truth, evidence/report schemas, and stable-state layout are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-control-plane-cdk-support-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-control-plane-cdk-support-boundary-report.md`.
 
 - The same 0.82 follow-up slice removes the hidden
   `control_plane_support::protocol` mirror. The control-plane wasm-store
@@ -532,7 +539,7 @@ before this compaction is archived at
   endpoint classifications, endpoint surfaces, CLI behavior, Candid, JSON,
   deployment truth, evidence/report schemas, and stable-state layout are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-control-plane-protocol-support-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-control-plane-protocol-support-boundary-report.md`.
 
 - The same 0.82 follow-up slice cleans stale release-line wording out of
   active CLI help and error text for state manifest, deploy plan, and inspect
@@ -541,7 +548,7 @@ before this compaction is archived at
   Command parsing, accepted/rejected forms, exit codes, JSON/report fields,
   Candid, deployment truth, evidence/report schemas, and stable-state layout
   are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-active-cli-release-wording-cleanup-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-active-cli-release-wording-cleanup-report.md`.
   The root and detailed `0.82.24` changelog entries are prepared.
 
 - A 0.82 follow-up slice narrows
@@ -551,14 +558,14 @@ before this compaction is archived at
   existing support path. Control-plane byte-size labels, endpoint surfaces,
   CLI behavior, Candid, JSON, deployment truth, evidence/report schemas, and
   stable-state layout are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-control-plane-format-support-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-control-plane-format-support-boundary-report.md`.
 
 - The same 0.82 follow-up slice cleans stale release-line labels out of active
   medic source comments and lint-expectation reasons. Medic report categories,
   exit-code behavior, endpoint surfaces, CLI behavior, Candid, JSON,
   deployment truth, evidence/report schemas, and stable-state layout are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-active-source-release-comment-cleanup-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-active-source-release-comment-cleanup-report.md`.
   The root and detailed `0.82.25` changelog entries are prepared.
 
 - A 0.82 follow-up slice hard-cuts unused wasm-store Rust API facade
@@ -573,7 +580,7 @@ before this compaction is archived at
   commands, endpoint method names, Candid request/response shapes, JSON,
   deployment truth, evidence/report schemas, stable-state layout, wasm-store
   storage behavior, and GC behavior are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-wasm-store-api-facade-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-wasm-store-api-facade-hard-cut-report.md`.
   The root and detailed `0.82.26` changelog entries are prepared.
 
 - A 0.82 follow-up slice hard-cuts unused wasm-store bootstrap Rust
@@ -584,7 +591,7 @@ before this compaction is archived at
   JSON, deployment truth, evidence/report schemas, stable-state layout,
   wasm-store storage behavior, publication workflow behavior, and lifecycle
   behavior are unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-wasm-store-bootstrap-helper-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-wasm-store-bootstrap-helper-hard-cut-report.md`.
   The root and detailed `0.82.27` changelog entries are prepared.
 
 - A 0.82 follow-up slice removes the private wasm-store
@@ -596,7 +603,7 @@ before this compaction is archived at
   evidence/report schemas, stable-state layout, wasm-store storage behavior,
   publication workflow behavior, bootstrap behavior, and GC behavior are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-wasm-store-template-support-cleanup-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-wasm-store-template-support-cleanup-report.md`.
   The root and detailed `0.82.28` changelog entries are prepared.
 
 - A 0.82 follow-up slice narrows workflow prelude usage in the pool
@@ -609,7 +616,7 @@ before this compaction is archived at
   evidence/report schemas, stable-state layout, pool behavior, IC call
   behavior, ledger behavior, ICP refill behavior, and provisioning behavior are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-workflow-prelude-boundary-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-workflow-prelude-boundary-report.md`.
   The root and detailed `0.82.29` changelog entries are prepared.
 
 - A 0.82 follow-up slice finishes the workflow prelude hard cut.
@@ -622,7 +629,7 @@ before this compaction is archived at
   auth renewal behavior, timer behavior, cascade behavior, canister lifecycle
   behavior, RPC behavior, scaling behavior, and cycle tracking behavior are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-workflow-prelude-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-workflow-prelude-hard-cut-report.md`.
   The root and detailed `0.82.30` changelog entries are prepared.
 
 - Pre-1.0 hard-cut policy is now explicit in `AGENTS.md`: do not add aliases,
@@ -639,7 +646,7 @@ before this compaction is archived at
   commands, endpoint method names, Candid, JSON, metadata response fields,
   deployment truth, evidence/report schemas, and stable-state layout are
   unchanged. The docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-access-metadata-fallback-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-access-metadata-fallback-hard-cut-report.md`.
   The root and detailed `0.82.31` changelog entries are prepared.
 
 - The `0.82.32` slice removes remaining host/CLI `response_candid` and
@@ -651,7 +658,7 @@ before this compaction is archived at
   commands, endpoint method names, Candid, JSON report schemas, deployment
   truth, evidence/report schemas, and stable-state layout are unchanged. The
   docs-only report is
-  `docs/design/0.82-boundary-hardening/0.82-response-candid-test-fixture-hard-cut-report.md`.
+  `docs/design/0.82-boundary-hardening/reports/0.82-response-candid-test-fixture-hard-cut-report.md`.
   The root and detailed `0.82.32` changelog entries are prepared.
 
 - The previous line was `0.81.x` runtime introspection. Source of truth:

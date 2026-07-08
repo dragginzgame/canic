@@ -2,7 +2,7 @@
 //!
 //! Responsibility: build and persist root chain-key delegation batches.
 //! Does not own: management-canister signing, timers, issuer install calls, or endpoint guards.
-//! Boundary: deterministic preparation state for the 0.76 bridge-free renewal workflow.
+//! Boundary: deterministic preparation state for the bridge-free renewal workflow.
 
 mod batch_id;
 mod install;

@@ -232,7 +232,7 @@ pub(super) fn audit_metadata() -> AuditMetadata {
     }
 }
 
-// Return the current workspace minor line like `0.24`.
+// Return the current workspace minor line as `<major>.<minor>`.
 pub(super) fn current_minor_line() -> String {
     let version = env!("CARGO_PKG_VERSION");
     let mut parts = version.split('.');

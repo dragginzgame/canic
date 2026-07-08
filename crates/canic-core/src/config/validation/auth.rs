@@ -103,7 +103,7 @@ fn validate_root_proof_mode(mode: &str) -> Result<(), ConfigSchemaError> {
         Ok(())
     } else {
         Err(ConfigSchemaError::ValidationError(
-            "auth.delegated_tokens.root_proof_mode must be chain_key_batch in 0.76".into(),
+            "auth.delegated_tokens.root_proof_mode must be chain_key_batch".into(),
         ))
     }
 }

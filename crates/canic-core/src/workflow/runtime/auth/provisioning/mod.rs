@@ -147,7 +147,7 @@ fn require_chain_key_root_proof_mode(config: &DelegatedTokenConfig) -> Result<()
     }
     Err(InternalError::invariant(
         InternalErrorOrigin::Workflow,
-        "0.76 delegated-auth lazy repair requires root_proof_mode=\"chain_key_batch\"",
+        "delegated-auth lazy repair requires root_proof_mode=\"chain_key_batch\"",
     ))
 }
 

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)
 
+- `0.82.41` organizes supplemental 0.82 boundary-hardening reports under
+  `docs/design/0.82-boundary-hardening/reports/` while keeping the canonical
+  design document at the design-folder root.
+
 - `0.82.40` renames active Toko blob-storage inventory/gate wording from
   compatibility notes to interoperability notes and tightens active hard-cut
   terminology in source comments/tests and operations docs while preserving

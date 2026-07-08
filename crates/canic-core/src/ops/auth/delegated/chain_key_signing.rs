@@ -142,7 +142,7 @@ pub(in crate::ops::auth) fn chain_key_signing_policy_from_config(
 ) -> Result<ChainKeySigningPolicy, InternalError> {
     if config.root_proof_mode.trim() != "chain_key_batch" {
         return Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.root_proof_mode must be chain_key_batch in 0.76".to_string(),
+            "auth.delegated_tokens.root_proof_mode must be chain_key_batch".to_string(),
         )
         .into());
     }

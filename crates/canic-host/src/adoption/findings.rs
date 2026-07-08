@@ -312,7 +312,7 @@ pub(super) fn observed_canister_findings(
             wasm_evidence: None,
             deployment_target_evidence: Some(format!("pool={}", pool.pool)),
             recommendations: Vec::new(),
-            warnings: vec!["pool import is outside 0.50.0".to_string()],
+            warnings: vec!["pool import is outside the current adoption workflow".to_string()],
         });
     }
 

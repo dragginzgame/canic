@@ -2,7 +2,7 @@
 //!
 //! Responsibility: convert boundary blob-storage hash inputs into model values.
 //! Does not own: blob lifecycle storage, gateway-principal checks, or workflows.
-//! Boundary: mirrors Toko 0.69 wire inputs while returning typed Canic errors.
+//! Boundary: mirrors Toko wire inputs while returning typed Canic errors.
 
 use std::{error::Error, fmt};
 

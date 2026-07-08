@@ -114,7 +114,7 @@ fn test_fleet_configs_validate_with_chain_key_batch_policy() {
 
         assert_eq!(
             cfg.auth.delegated_tokens.root_proof_mode, "chain_key_batch",
-            "{rel_path} should use the 0.76 hard-cut root proof mode",
+            "{rel_path} should use the current hard-cut root proof mode",
         );
         assert_eq!(
             cfg.auth

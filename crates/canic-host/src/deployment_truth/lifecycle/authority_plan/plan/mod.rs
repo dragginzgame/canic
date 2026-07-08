@@ -8,7 +8,7 @@ use super::validation::{
     ensure_unique_role_upgrade_subjects,
 };
 
-/// Build the central 0.45 lifecycle plan from deployment truth.
+/// Build the central lifecycle plan from deployment truth.
 ///
 /// This partitions roles into directly executable, externally proposed, and
 /// blocked lifecycle rows. It is passive and does not perform proposal

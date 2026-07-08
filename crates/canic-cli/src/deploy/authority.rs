@@ -44,7 +44,7 @@ Examples:
   canic deploy authority receipt demo
   canic --network local deploy authority check --profile fast demo
 
-0.42 authority commands are dry-run reports. They do not apply controller
+Authority commands are dry-run reports. They do not apply controller
 changes. A successful command means the local authority artifact was produced,
 not that the deployment is globally safe or that controller state was changed.";
 const DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER: &str = "\
