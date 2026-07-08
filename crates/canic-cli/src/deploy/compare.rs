@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, render_usage, required_path, required_typed, string_option},
+        clap::{flag_arg, parse_matches, render_usage, required_path, string_option},
         help::print_help_or_version,
     },
     version_text,
@@ -19,7 +19,7 @@ use std::{ffi::OsString, path::PathBuf};
 const DEPLOY_COMPARE_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect compare --left staging-check.json --right prod-check.json
-  canic deploy inspect compare --left staging-check.json --right prod-check.json --format text
+  canic deploy inspect compare --left staging-check.json --right prod-check.json --text
 
 Compares two existing DeploymentCheckV1 JSON artifacts. It does not query live
 state, install code, or mutate deployments. Each input check's embedded
@@ -30,7 +30,7 @@ const LEFT_ARG: &str = "left";
 const RIGHT_ARG: &str = "right";
 const LEFT_LABEL_ARG: &str = "left-label";
 const RIGHT_LABEL_ARG: &str = "right-label";
-const FORMAT_ARG: &str = "format";
+const TEXT_ARG: &str = "text";
 
 ///
 /// DeployCompareOptions
@@ -114,7 +114,7 @@ impl DeployCompareOptions {
             right: required_path(&matches, RIGHT_ARG),
             left_label: string_option(&matches, LEFT_LABEL_ARG),
             right_label: string_option(&matches, RIGHT_LABEL_ARG),
-            format: required_typed(&matches, FORMAT_ARG),
+            format: compare_output_format(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -141,7 +141,7 @@ pub(super) fn command() -> ClapCommand {
             RIGHT_LABEL_ARG,
             "Optional display label for the right artifact",
         ))
-        .arg(format_arg())
+        .arg(text_arg())
         .after_help(DEPLOY_COMPARE_HELP_AFTER)
 }
 
@@ -157,14 +157,18 @@ fn label_arg(name: &'static str, help: &'static str) -> clap::Arg {
     value_arg(name).long(name).value_name("label").help(help)
 }
 
-fn format_arg() -> clap::Arg {
-    value_arg(FORMAT_ARG)
-        .long(FORMAT_ARG)
-        .value_name("json|text")
-        .num_args(1)
-        .default_value("json")
-        .value_parser(clap::value_parser!(CompareOutputFormat))
-        .help("Output format; defaults to json")
+fn text_arg() -> clap::Arg {
+    flag_arg(TEXT_ARG)
+        .long(TEXT_ARG)
+        .help("Print human-readable text output")
+}
+
+const fn compare_output_format(text: bool) -> CompareOutputFormat {
+    if text {
+        CompareOutputFormat::Text
+    } else {
+        CompareOutputFormat::Json
+    }
 }
 
 pub(super) fn usage() -> String {

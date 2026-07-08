@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.1` fixes the advanced deploy output-convention finding by hard-cutting
+  default-JSON deploy compare, root verification, authority, external
+  lifecycle, and promotion report families to `--text` for human-readable
+  output. The old `--format json|text` parser routes were not retained. The
+  same patch removes a `canic state manifest` help breadcrumb for the removed
+  `--format json` spelling.
+
 - `0.83.0` starts the audit-first technical debt line with a docs-only debt
   ledger, recommended-slice file, deferred/rejected lists, fixes the first P2
   finding by hard-cutting affected report families to `--json` for raw JSON
@@ -19,6 +26,11 @@ Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
   the next advanced deploy output-convention finding.
 
 ```bash
+canic deploy inspect compare --left <file> --right <file> --text
+canic deploy root verify <deployment> --from-check <file> --text
+canic deploy authority report <deployment> --text
+canic deploy external plan <deployment> --text
+canic deploy promote plan --request <file> --text
 canic deploy check <deployment> --json
 canic deploy check <deployment> --evidence-envelope
 canic fleet adoption report <fleet> --profile <profile> --json

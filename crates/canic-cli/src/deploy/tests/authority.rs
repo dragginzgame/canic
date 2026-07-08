@@ -18,14 +18,10 @@ fn deploy_authority_leaf_commands_default_to_json() {
 }
 
 #[test]
-fn deploy_authority_leaf_commands_parse_text_format() {
+fn deploy_authority_leaf_commands_parse_text_flag() {
     for (command, usage, name) in authority_leaf_commands() {
         let options = deploy_authority::DeployAuthorityOptions::parse(
-            [
-                OsString::from("--format"),
-                OsString::from("text"),
-                OsString::from("demo"),
-            ],
+            [OsString::from("--text"), OsString::from("demo")],
             command,
             usage,
         )
@@ -146,42 +142,6 @@ fn authority_receipt_builder_delegates_to_host_local_ids() {
     assert!(receipt.attempted_actions.is_empty());
 }
 
-#[test]
-fn authority_check_rejects_unknown_format() {
-    assert_authority_rejects_unknown_format(
-        deploy_authority::check_command,
-        deploy_authority::check_usage,
-        "csv",
-    );
-}
-
-#[test]
-fn authority_evidence_rejects_unknown_format() {
-    assert_authority_rejects_unknown_format(
-        deploy_authority::evidence_command,
-        deploy_authority::evidence_usage,
-        "xml",
-    );
-}
-
-#[test]
-fn authority_report_rejects_unknown_format() {
-    assert_authority_rejects_unknown_format(
-        deploy_authority::report_command,
-        deploy_authority::report_usage,
-        "yaml",
-    );
-}
-
-#[test]
-fn authority_receipt_rejects_unknown_format() {
-    assert_authority_rejects_unknown_format(
-        deploy_authority::receipt_command,
-        deploy_authority::receipt_usage,
-        "toml",
-    );
-}
-
 type AuthorityCommandFactory = fn() -> ClapCommand;
 type AuthorityUsageFactory = fn() -> String;
 
@@ -234,22 +194,4 @@ fn assert_authority_dispatches_leaf(command: &'static str) {
         .expect("authority leaf command");
     assert_eq!(nested.0, command);
     assert_eq!(nested.1, vec![OsString::from("demo")]);
-}
-
-fn assert_authority_rejects_unknown_format(
-    command: AuthorityCommandFactory,
-    usage: AuthorityUsageFactory,
-    format: &'static str,
-) {
-    let result = deploy_authority::DeployAuthorityOptions::parse(
-        [
-            OsString::from("--format"),
-            OsString::from(format),
-            OsString::from("demo"),
-        ],
-        command,
-        usage,
-    );
-
-    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }

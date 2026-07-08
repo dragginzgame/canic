@@ -60,7 +60,7 @@ Examples:
   canic state manifest --json
 
 Renders the derived state manifest to stdout. This command does not write
-manifest files or accept --format json.";
+manifest files.";
 
 ///
 /// StateCommandError

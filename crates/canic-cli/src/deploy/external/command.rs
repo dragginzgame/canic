@@ -1,5 +1,5 @@
-use super::super::{deploy_truth_leaf_command, output_format::ExternalOutputFormat};
-use crate::cli::clap::{passthrough_subcommand, render_usage, value_arg};
+use super::super::deploy_truth_leaf_command;
+use crate::cli::clap::{flag_arg, passthrough_subcommand, render_usage, value_arg};
 use clap::Command as ClapCommand;
 
 #[derive(Clone, Copy)]
@@ -25,6 +25,8 @@ struct ExternalRequestCommand {
     request_help: &'static str,
     help_after: &'static str,
 }
+
+pub(super) const TEXT_ARG: &str = "text";
 
 const TOP_COMMANDS: &[ExternalSubcommand] = &[
     ExternalSubcommand {
@@ -92,8 +94,8 @@ Examples:
   canic deploy external inspect verification-policy --request external-verification-policy.json
   canic deploy external inspect verification-check --request external-verification-check.json
   canic deploy external verify --request external-verification.json
-  canic deploy external plan --format text demo
-  canic deploy external verify --request external-verification.json --format text
+  canic deploy external plan --text demo
+  canic deploy external verify --request external-verification.json --text
   canic --network local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
 
 External lifecycle commands are passive reports. They do not request
@@ -101,13 +103,13 @@ consent, execute external upgrades, install code, or mutate deployment state.";
 const DEPLOY_EXTERNAL_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy external inspect consent --request external-consent.json
-  canic deploy external inspect consent --request external-consent.json --format text
+  canic deploy external inspect consent --request external-consent.json --text
   canic deploy external inspect verification-policy --request external-verification-policy.json
-  canic deploy external inspect verification-policy --request external-verification-policy.json --format text
+  canic deploy external inspect verification-policy --request external-verification-policy.json --text
   canic deploy external inspect verification-check --request external-verification-check.json
-  canic deploy external inspect verification-check --request external-verification-check.json --format text
+  canic deploy external inspect verification-check --request external-verification-check.json --text
   canic deploy external inspect completion --request external-completion.json
-  canic deploy external inspect completion --request external-completion.json --format text
+  canic deploy external inspect completion --request external-completion.json --text
 
 Advanced external lifecycle inspection commands expose archived/passive DTOs.
 They do not request consent, execute external upgrades, install code, or mutate
@@ -115,107 +117,107 @@ deployment state.";
 const DEPLOY_EXTERNAL_CONSENT_HELP_AFTER: &str = "\
 Examples:
   canic deploy external inspect consent --request external-consent.json
-  canic deploy external inspect consent --request external-consent.json --format text
+  canic deploy external inspect consent --request external-consent.json --text
 
 Reads an ExternalUpgradeConsentEvidenceRequest-shaped JSON file and prints
 ExternalUpgradeConsentEvidenceV1 JSON by default, or host-owned passive text
-with --format text. Consent evidence records reported consent/action state; it
+with --text. Consent evidence records reported consent/action state; it
 does not verify live completion.";
 const DEPLOY_EXTERNAL_VERIFICATION_POLICY_HELP_AFTER: &str = "\
 Examples:
   canic deploy external inspect verification-policy --request external-verification-policy.json
-  canic deploy external inspect verification-policy --request external-verification-policy.json --format text
+  canic deploy external inspect verification-policy --request external-verification-policy.json --text
 
 Reads an ExternalUpgradeVerificationPolicyRequest-shaped JSON file and prints
 ExternalUpgradeVerificationPolicyV1 JSON by default, or host-owned passive text
-with --format text. Verification policies describe required live-inventory
+with --text. Verification policies describe required live-inventory
 postconditions; they do not query live inventory or verify completion.";
 const DEPLOY_EXTERNAL_VERIFICATION_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy external inspect verification-check --request external-verification-check.json
-  canic deploy external inspect verification-check --request external-verification-check.json --format text
+  canic deploy external inspect verification-check --request external-verification-check.json --text
 
 Reads an ExternalUpgradeVerificationCheckRequest-shaped JSON file and prints
 ExternalUpgradeVerificationCheckV1 JSON by default, or host-owned passive text
-with --format text. Verification checks evaluate supplied observation facts or
+with --text. Verification checks evaluate supplied observation facts or
 an embedded DeploymentCheckV1 inventory artifact against a verification policy;
 they do not query live inventory or execute external lifecycle work.";
 const DEPLOY_EXTERNAL_COMPLETION_HELP_AFTER: &str = "\
 Examples:
   canic deploy external inspect completion --request external-completion.json
-  canic deploy external inspect completion --request external-completion.json --format text
+  canic deploy external inspect completion --request external-completion.json --text
 
 Reads an ExternalUpgradeCompletionReportRequest-shaped JSON file and prints
 ExternalUpgradeCompletionReportV1 JSON by default, or host-owned passive text
-with --format text. Completion reports combine proposal, consent evidence, and
+with --text. Completion reports combine proposal, consent evidence, and
 verification-check evidence; only deployment-truth inventory verification can
 mark external lifecycle work verified complete.";
 const DEPLOY_EXTERNAL_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy external plan demo
-  canic deploy external plan --format text demo
+  canic deploy external plan --text demo
   canic --network local deploy external plan --profile fast demo
 
 Prints ExternalLifecyclePlanV1 JSON by default, or host-owned passive text with
---format text. No consent delivery, external execution, install, or mutation is
+--text. No consent delivery, external execution, install, or mutation is
 attempted.";
 const DEPLOY_EXTERNAL_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy external check demo
-  canic deploy external check --format text demo
+  canic deploy external check --text demo
   canic --network local deploy external check --profile fast demo
 
 Prints ExternalLifecycleCheckV1 JSON by default, or host-owned passive text
-with --format text. External lifecycle checks summarize direct, pending,
+with --text. External lifecycle checks summarize direct, pending,
 blocked, and residual-exposure status without requesting consent, executing
 external upgrades, or mutating state.";
 const DEPLOY_EXTERNAL_HANDOFF_HELP_AFTER: &str = "\
 Examples:
   canic deploy external handoff demo
-  canic deploy external handoff --format text demo
+  canic deploy external handoff --text demo
   canic --network local deploy external handoff --profile fast demo
 
 Prints ExternalLifecycleHandoffV1 JSON by default, or host-owned passive text
-with --format text. Handoff packets package pending external proposals into
+with --text. Handoff packets package pending external proposals into
 operator coordination instructions; they do not deliver consent, execute
 external upgrades, or mutate state.";
 const DEPLOY_EXTERNAL_PROPOSALS_HELP_AFTER: &str = "\
 Examples:
   canic deploy external proposals demo
-  canic deploy external proposals --format text demo
+  canic deploy external proposals --text demo
   canic --network local deploy external proposals --profile fast demo
 
 Prints ExternalUpgradeProposalReportV1 JSON by default, or host-owned passive
-text with --format text. Proposals are derived from the local lifecycle plan
+text with --text. Proposals are derived from the local lifecycle plan
 and do not grant consent or execute upgrades.";
 const DEPLOY_EXTERNAL_PENDING_HELP_AFTER: &str = "\
 Examples:
   canic deploy external pending demo
-  canic deploy external pending --format text demo
+  canic deploy external pending --text demo
   canic --network local deploy external pending --profile fast demo
 
 Prints ExternalLifecyclePendingReportV1 JSON by default, or host-owned passive
-text with --format text. Pending reports summarize unresolved external actions,
+text with --text. Pending reports summarize unresolved external actions,
 blocked subjects, and residual exposure without requesting consent or executing
 upgrades.";
 const DEPLOY_EXTERNAL_CRITICAL_FIX_HELP_AFTER: &str = "\
 Examples:
   canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
-  canic deploy external critical-fix --fix-id fix-2026-05 --severity critical --format text demo
+  canic deploy external critical-fix --fix-id fix-2026-05 --severity critical --text demo
   canic --network local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
 
 Prints CriticalExternalFixReportV1 JSON by default, or host-owned passive text
-with --format text. Critical-fix reports summarize directly patchable roles,
+with --text. Critical-fix reports summarize directly patchable roles,
 external blockers, required external actions, protected-call implications, and
 residual exposure without claiming deployment completion or mutating state.";
 const DEPLOY_EXTERNAL_VERIFY_HELP_AFTER: &str = "\
 Examples:
   canic deploy external verify --request external-verification.json
-  canic deploy external verify --request external-verification.json --format text
+  canic deploy external verify --request external-verification.json --text
 
 Reads an ExternalUpgradeVerificationReportRequest-shaped JSON file and prints
 ExternalUpgradeVerificationReportV1 JSON by default, or host-owned passive text
-with --format text. Verification reports package proposal/receipt structural
+with --text. Verification reports package proposal/receipt structural
 evidence only; live inventory remains the source of truth for deployment
 state.";
 
@@ -380,14 +382,10 @@ pub fn completion_command() -> ClapCommand {
     external_request_command(COMPLETION_COMMAND)
 }
 
-fn format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("json|text")
-        .num_args(1)
-        .default_value("json")
-        .value_parser(clap::value_parser!(ExternalOutputFormat))
-        .help("Output format; defaults to json")
+fn text_arg() -> clap::Arg {
+    flag_arg(TEXT_ARG)
+        .long(TEXT_ARG)
+        .help("Print human-readable text output")
 }
 
 fn external_passthrough_command(spec: ExternalSubcommand) -> ClapCommand {
@@ -400,7 +398,7 @@ fn external_passthrough_command(spec: ExternalSubcommand) -> ClapCommand {
 
 fn external_truth_command(spec: ExternalTruthCommand) -> ClapCommand {
     deploy_truth_leaf_command(spec.name, spec.about)
-        .arg(format_arg())
+        .arg(text_arg())
         .bin_name(spec.bin_name)
         .after_help(spec.help_after)
 }
@@ -418,7 +416,7 @@ fn external_request_command(spec: ExternalRequestCommand) -> ClapCommand {
                 .required(true)
                 .help(spec.request_help),
         )
-        .arg(format_arg())
+        .arg(text_arg())
         .after_help(spec.help_after)
 }
 

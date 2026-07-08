@@ -1,5 +1,6 @@
 use super::super::{DeployCommandError, DeployTruthOptions, output_format::ExternalOutputFormat};
-use crate::cli::clap::{parse_matches, required_path, required_string, required_typed};
+use super::command::TEXT_ARG;
+use crate::cli::clap::{parse_matches, required_path, required_string};
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 
@@ -54,7 +55,7 @@ impl DeployExternalOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches),
-            format: required_typed(&matches, "format"),
+            format: external_output_format(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -72,7 +73,7 @@ impl DeployExternalCriticalFixOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches),
-            format: required_typed(&matches, "format"),
+            format: external_output_format(matches.get_flag(TEXT_ARG)),
             fix_id: required_string(&matches, "fix-id"),
             severity: required_string(&matches, "severity"),
         })
@@ -92,7 +93,7 @@ impl DeployExternalVerifyOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: required_typed(&matches, "format"),
+            format: external_output_format(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -110,7 +111,15 @@ impl DeployExternalInspectOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: required_typed(&matches, "format"),
+            format: external_output_format(matches.get_flag(TEXT_ARG)),
         })
+    }
+}
+
+const fn external_output_format(text: bool) -> ExternalOutputFormat {
+    if text {
+        ExternalOutputFormat::Text
+    } else {
+        ExternalOutputFormat::Json
     }
 }

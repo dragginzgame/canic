@@ -14,10 +14,21 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.82.41`. Earlier in the
+- The current package/release-surface version is `0.83.0`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
+
+- The current `0.83.1` working slice fixes `CANIC-083-DEBT-002` by
+  hard-cutting default-JSON advanced deploy report families from
+  `--format json|text` to JSON by default plus `--text` for human-readable
+  output. The affected families are deploy compare, root verification,
+  authority dry-run reports, external lifecycle reports, and promotion reports.
+  No aliases, shims, compatibility routes, or anti-resurrection tests are kept.
+  JSON payload schemas, deployment truth, evidence/report schemas, endpoint
+  surfaces, Candid, and stable-state layout are unchanged. The same slice
+  removes a `canic state manifest` help breadcrumb for the removed
+  `--format json` spelling.
 
 - The `0.83.0` slice creates the docs-only technical debt audit artifact set
   under `docs/audits/0.83-technical-debt/`, runs the baseline repo-health
@@ -29,10 +40,10 @@ before this compaction is archived at
   compatibility routes are kept for the removed `--format json` /
   `--format envelope-json` report-selection forms. JSON payload schemas,
   deployment truth, evidence envelope schema, endpoint surfaces, Candid, and
-  stable-state layout are unchanged. The follow-up finding covers remaining
-  advanced deploy report families that still use `--format json|text`: deploy
-  compare, root verification, authority reports, external lifecycle reports,
-  and promotion reports.
+  stable-state layout are unchanged. The follow-up finding covered the
+  advanced deploy report families fixed in 0.83.1: deploy compare, root
+  verification, authority reports, external lifecycle reports, and promotion
+  reports.
 
 - The `0.82.41` docs-only organization slice keeps the canonical 0.82 design
   at `docs/design/0.82-boundary-hardening/0.82-design.md` and moves

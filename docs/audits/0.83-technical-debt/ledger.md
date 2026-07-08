@@ -7,11 +7,13 @@ Status: pass_with_followups
 
 ## Scope
 
-Initial 0.83 inventory and first focused fix. The first pass created the audit
-ledger, recorded baseline repo-health commands, and classified the first
-evidence-backed debt candidate. The follow-up fix hard-cuts that finding by
-standardizing the affected report command surfaces on `--json` for raw JSON
-and `--evidence-envelope` for stable evidence-envelope output.
+Initial 0.83 inventory and focused command-surface fixes. The first pass
+created the audit ledger, recorded baseline repo-health commands, and
+classified the first evidence-backed debt candidate. The first follow-up fix
+hard-cuts that finding by standardizing the affected report command surfaces on
+`--json` for raw JSON and `--evidence-envelope` for stable evidence-envelope
+output. The second follow-up fix hard-cuts default-JSON advanced deploy report
+families to JSON by default plus `--text` for human-readable output.
 
 ## Baseline Validation
 
@@ -137,14 +139,14 @@ Fix validation:
 
 Severity: P2
 Category: config_ownership / diagnostic_ownership
-Status: accepted
+Status: fixed
 Owner: advanced deploy report command families
 Current location: deploy compare, root, authority, external, and promote
 report parsers
 Intended owner: command-surface convention owned per report family, with a
 documented repo-level convention for default-JSON report tools
 Affected surfaces: cli, docs, json
-Release decision: convert_to_hardening_slice
+Release decision: fixed_in_0.83.1
 
 Evidence:
 - file: `crates/canic-cli/src/deploy/compare.rs`
@@ -214,7 +216,84 @@ authority reports, external lifecycle reports, and promotion reports.
 
 Follow-up slice:
 
-0.83 advanced deploy output convention hardening.
+0.83 advanced deploy output convention hardening. Completed in 0.83.1.
+
+Resolution:
+
+- `canic deploy inspect compare` now defaults to JSON and uses `--text` for
+  human-readable comparison summaries.
+- `canic deploy inspect root` and `canic deploy root verify` now default to
+  JSON and use `--text` for human-readable root verification output.
+- `canic deploy authority check|evidence|report|receipt` now default to JSON
+  and use `--text` for human-readable dry-run authority summaries.
+- `canic deploy external` report builders now default to JSON and use `--text`
+  for human-readable external lifecycle summaries.
+- `canic deploy promote` report builders now default to JSON and use `--text`
+  for human-readable promotion summaries.
+- The removed `--format json|text` parser routes were not kept as aliases or
+  compatibility shims, and old-format anti-resurrection tests were removed.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the advanced deploy output-convention changes. |
+| `cargo test --locked -p canic-cli deploy` | pass | 168 filtered deploy-related CLI tests passed. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+
+## CANIC-083-DEBT-003: State Manifest Help Mentions Removed `--format json`
+
+Severity: P3
+Category: docs_drift / legacy_surface
+Status: fixed
+Owner: state CLI command help
+Current location: `canic state manifest` help text
+Intended owner: active help text only documents maintained command forms
+Affected surfaces: cli, docs
+Release decision: fixed_in_0.83.1
+
+Evidence:
+- file: `crates/canic-cli/src/state/mod.rs`
+- line or anchor: `MANIFEST_HELP_AFTER`
+- module/function: state manifest help text
+- command/search: `rg -n -- '--format json|--format text' crates/canic-cli/src docs/audits/0.83-technical-debt docs/changelog/0.83.md`
+- reachability: active CLI help text
+- exact issue: `canic state manifest` help said it does not accept
+  `--format json`, which is a removed-form breadcrumb rather than maintained
+  operator guidance.
+
+Risk:
+
+Low. The command parser already uses the maintained `--json` flag and does not
+expose the removed form, but active help should not preserve pre-1.0
+compatibility breadcrumbs.
+
+Recommendation:
+
+Remove the removed-form mention and keep the help focused on current behavior:
+the command renders the derived manifest to stdout and does not write manifest
+files.
+
+Regression test:
+
+Existing state help tests cover the maintained `canic state manifest` surface.
+Do not add anti-resurrection tests for the removed `--format json` spelling.
+
+Resolution:
+
+- Removed the `--format json` breadcrumb from `canic state manifest` help.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the help-text cleanup. |
+| `cargo test --locked -p canic-cli state` | pass | 12 filtered state-related CLI tests passed. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 
 ## Rejected / Non-Findings
 

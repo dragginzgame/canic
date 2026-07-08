@@ -88,53 +88,33 @@ fn deploy_external_leaf_commands_default_to_json() {
 }
 
 #[test]
-fn deploy_external_leaf_commands_parse_text_format() {
+fn deploy_external_leaf_commands_parse_text_flag() {
     let external_plan = deploy_external::DeployExternalOptions::parse(
-        [
-            OsString::from("--format"),
-            OsString::from("text"),
-            OsString::from("demo"),
-        ],
+        [OsString::from("--text"), OsString::from("demo")],
         deploy_external::plan_command,
         deploy_external::plan_usage,
     )
     .expect("parse deploy external plan text");
     let external_check = deploy_external::DeployExternalOptions::parse(
-        [
-            OsString::from("--format"),
-            OsString::from("text"),
-            OsString::from("demo"),
-        ],
+        [OsString::from("--text"), OsString::from("demo")],
         deploy_external::check_command,
         deploy_external::check_usage,
     )
     .expect("parse deploy external check text");
     let external_handoff = deploy_external::DeployExternalOptions::parse(
-        [
-            OsString::from("--format"),
-            OsString::from("text"),
-            OsString::from("demo"),
-        ],
+        [OsString::from("--text"), OsString::from("demo")],
         deploy_external::handoff_command,
         deploy_external::handoff_usage,
     )
     .expect("parse deploy external handoff text");
     let external_proposals = deploy_external::DeployExternalOptions::parse(
-        [
-            OsString::from("--format"),
-            OsString::from("text"),
-            OsString::from("demo"),
-        ],
+        [OsString::from("--text"), OsString::from("demo")],
         deploy_external::proposals_command,
         deploy_external::proposals_usage,
     )
     .expect("parse deploy external proposals text");
     let external_pending = deploy_external::DeployExternalOptions::parse(
-        [
-            OsString::from("--format"),
-            OsString::from("text"),
-            OsString::from("demo"),
-        ],
+        [OsString::from("--text"), OsString::from("demo")],
         deploy_external::pending_command,
         deploy_external::pending_usage,
     )
@@ -168,15 +148,14 @@ fn deploy_external_leaf_commands_parse_text_format() {
 }
 
 #[test]
-fn deploy_external_request_commands_parse_text_format() {
+fn deploy_external_request_commands_parse_text_flag() {
     let critical_fix = deploy_external::DeployExternalCriticalFixOptions::parse(
         [
             OsString::from("--fix-id"),
             OsString::from("fix-2026-05"),
             OsString::from("--severity"),
             OsString::from("critical"),
-            OsString::from("--format"),
-            OsString::from("text"),
+            OsString::from("--text"),
             OsString::from("demo"),
         ],
         deploy_external::critical_fix_command,
@@ -194,8 +173,7 @@ fn deploy_external_request_commands_parse_text_format() {
         [
             OsString::from("--request"),
             OsString::from("external-verification.json"),
-            OsString::from("--format"),
-            OsString::from("text"),
+            OsString::from("--text"),
         ],
         deploy_external::verify_command,
         deploy_external::verify_usage,
@@ -207,8 +185,7 @@ fn deploy_external_request_commands_parse_text_format() {
         [
             OsString::from("--request"),
             OsString::from("external-consent.json"),
-            OsString::from("--format"),
-            OsString::from("text"),
+            OsString::from("--text"),
         ],
         deploy_external::consent_command,
         deploy_external::consent_usage,
@@ -377,19 +354,4 @@ fn assert_external_inspect_dispatches(command: &str, request: &str) {
         inspect.1,
         vec![OsString::from("--request"), OsString::from(request)]
     );
-}
-
-#[test]
-fn external_plan_rejects_unknown_format() {
-    let result = deploy_external::DeployExternalOptions::parse(
-        [
-            OsString::from("--format"),
-            OsString::from("yaml"),
-            OsString::from("demo"),
-        ],
-        deploy_external::plan_command,
-        deploy_external::plan_usage,
-    );
-
-    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }

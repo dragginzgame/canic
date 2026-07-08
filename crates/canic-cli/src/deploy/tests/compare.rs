@@ -14,15 +14,14 @@ fn compare_required_args() -> Vec<OsString> {
 }
 
 #[test]
-fn deploy_compare_parses_artifact_paths_and_text_format() {
+fn deploy_compare_parses_artifact_paths_and_text_flag() {
     let mut args = compare_required_args();
     args.extend([
         OsString::from("--left-label"),
         OsString::from("staging"),
         OsString::from("--right-label"),
         OsString::from("prod"),
-        OsString::from("--format"),
-        OsString::from("text"),
+        OsString::from("--text"),
     ]);
     let options = deploy_compare::DeployCompareOptions::parse(args).expect("parse deploy compare");
 
@@ -47,15 +46,6 @@ fn deploy_compare_builder_uses_existing_check_artifacts() {
     assert_eq!(report.right.label, "prod");
     assert!(!report.identity_diff.is_empty());
     assert_eq!(report.report_digest.len(), 64);
-}
-
-#[test]
-fn deploy_compare_rejects_unknown_format() {
-    let mut args = compare_required_args();
-    args.extend([OsString::from("--format"), OsString::from("yaml")]);
-    let result = deploy_compare::DeployCompareOptions::parse(args);
-
-    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }
 
 #[test]

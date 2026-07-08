@@ -1,12 +1,10 @@
 use super::{
     DeployCommandError, DeployTruthOptions, current_observed_at, deploy_truth_leaf_command,
-    load_deployment_check, output_format::AuthorityOutputFormat, print_json, value_arg,
+    load_deployment_check, output_format::AuthorityOutputFormat, print_json,
 };
 use crate::{
     cli::{
-        clap::{
-            parse_matches, parse_subcommand, passthrough_subcommand, render_usage, required_typed,
-        },
+        clap::{flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage},
         help::print_help_or_version,
     },
     version_text,
@@ -50,40 +48,40 @@ not that the deployment is globally safe or that controller state was changed.";
 const DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority evidence demo
-  canic deploy authority evidence --format text demo
+  canic deploy authority evidence --text demo
   canic --network local deploy authority evidence --profile fast demo
 
 Prints AuthorityDryRunEvidenceV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.
+read-only summary with --text. No controller changes are attempted.
 Success means evidence generation succeeded, not that every deployment safety
 check is clean.";
 const DEPLOY_AUTHORITY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority check demo
-  canic deploy authority check --format text demo
+  canic deploy authority check --text demo
   canic --network local deploy authority check --profile fast demo
 
 Prints the local AuthorityReconciliationPlanV1 JSON by default, or a
-human-readable read-only summary with --format text. No controller changes are
+human-readable read-only summary with --text. No controller changes are
 attempted. Success means the local plan was produced.";
 const DEPLOY_AUTHORITY_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority report demo
-  canic deploy authority report --format text demo
+  canic deploy authority report --text demo
   canic --network local deploy authority report --profile fast demo
 
 Prints the local AuthorityReportV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.
+read-only summary with --text. No controller changes are attempted.
 Authority status is authority-scoped; it is not a whole-deployment safety
 verdict.";
 const DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority receipt demo
-  canic deploy authority receipt --format text demo
+  canic deploy authority receipt --text demo
   canic --network local deploy authority receipt --profile fast demo
 
 Prints an evidence-only AuthorityReceiptV1 JSON by default, or a human-readable
-read-only summary with --format text. No controller changes are attempted.
+read-only summary with --text. No controller changes are attempted.
 Success means the dry-run receipt was produced with zero attempted controller
 actions.";
 
@@ -111,6 +109,7 @@ const RECEIPT_COMMAND: AuthorityCommand = AuthorityCommand {
     bin_name: "canic deploy authority receipt",
     help_after: DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER,
 };
+const TEXT_ARG: &str = "text";
 
 ///
 /// DeployAuthorityOptions
@@ -249,7 +248,7 @@ impl DeployAuthorityOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches),
-            format: required_typed(&matches, "format"),
+            format: authority_output_format(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -283,14 +282,18 @@ pub(super) fn receipt_command() -> ClapCommand {
     authority_leaf_command(RECEIPT_COMMAND)
 }
 
-fn format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("json|text")
-        .num_args(1)
-        .default_value("json")
-        .value_parser(clap::value_parser!(AuthorityOutputFormat))
-        .help("Output format; defaults to json")
+fn text_arg() -> clap::Arg {
+    flag_arg(TEXT_ARG)
+        .long(TEXT_ARG)
+        .help("Print human-readable text output")
+}
+
+const fn authority_output_format(text: bool) -> AuthorityOutputFormat {
+    if text {
+        AuthorityOutputFormat::Text
+    } else {
+        AuthorityOutputFormat::Json
+    }
 }
 
 fn authority_passthrough_command(spec: AuthorityCommand) -> ClapCommand {
@@ -303,7 +306,7 @@ fn authority_passthrough_command(spec: AuthorityCommand) -> ClapCommand {
 
 fn authority_leaf_command(spec: AuthorityCommand) -> ClapCommand {
     deploy_truth_leaf_command(spec.name, spec.about)
-        .arg(format_arg())
+        .arg(text_arg())
         .bin_name(spec.bin_name)
         .after_help(spec.help_after)
 }

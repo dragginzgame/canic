@@ -57,7 +57,7 @@ const DEPLOY_COMMANDS: &[DeploySubcommand] = &[
 const DEPLOY_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
-  canic deploy check demo --format text
+  canic deploy check demo --json
   canic deploy plan demo
   canic deploy plan demo --json
   canic deploy inspect plan demo
