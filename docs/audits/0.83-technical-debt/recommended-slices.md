@@ -478,3 +478,44 @@ Explicit non-scope:
 - no deployment truth or evidence schema changes
 - no typing of diagnostic codes, subjects, details, next actions, or embedded
   `DeploymentPlanV1` data
+
+## 0.83 Deploy-Plan Diagnostic Label Typing
+
+Status:
+completed in 0.83.10 for the accepted `CANIC-083-DEBT-014` scope.
+
+Source findings:
+- CANIC-083-DEBT-014
+
+Boundary:
+Deploy-plan diagnostic category, severity, and source labels.
+
+Previous owner:
+`canic deploy plan` stored diagnostic category, severity, and source values as
+raw string constants in the report builder.
+
+Intended owner:
+The deploy-plan report model owns typed diagnostic labels, and text/JSON
+serialization formats the stable labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli deploy_plan`
+
+Explicit non-scope:
+- no command changes
+- no help text changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth or evidence schema changes
+- no typing of diagnostic codes, subjects, details, next actions, or embedded
+  `DeploymentPlanV1` data

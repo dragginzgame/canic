@@ -32,27 +32,30 @@ use std::{
 
 const REPORT_SCHEMA_VERSION: u16 = 1;
 const REPORT_COMMAND: &str = "canic deploy plan";
-const SEVERITY_INFO: &str = "info";
-const SEVERITY_WARNING: &str = "warning";
-const SEVERITY_BLOCKED: &str = "blocked";
-const SEVERITY_UNSUPPORTED: &str = "unsupported";
-const CATEGORY_ARTIFACT: &str = "artifact";
-const CATEGORY_AUTHORITY: &str = "authority";
-const CATEGORY_CONFIG: &str = "config";
-const CATEGORY_DEPLOYMENT_IDENTITY: &str = "deployment_identity";
-const CATEGORY_INVENTORY: &str = "inventory";
-const CATEGORY_OBSERVATION: &str = "observation";
-const CATEGORY_TOPOLOGY: &str = "topology";
-const CATEGORY_TRUST_DOMAIN: &str = "trust_domain";
-const CATEGORY_UNSUPPORTED_SHAPE: &str = "unsupported_shape";
-const CATEGORY_VERIFIER_READINESS: &str = "verifier_readiness";
-const SOURCE_CLI_ARG: &str = "cli_arg";
-const SOURCE_BUILD_PROFILE: &str = "build_profile";
-const SOURCE_DEPLOYMENT_CONFIG: &str = "deployment_config";
-const SOURCE_DEPLOYMENT_PLAN_BUILDER: &str = "deployment_plan_builder";
-const SOURCE_FLEET_CONFIG: &str = "fleet_config";
-const SOURCE_INSTALLED_DEPLOYMENT: &str = "installed_deployment";
-const SOURCE_LOCAL_OBSERVATION: &str = "local_observation";
+const SEVERITY_INFO: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Info;
+const SEVERITY_WARNING: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Warning;
+const SEVERITY_BLOCKED: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Blocked;
+const SEVERITY_UNSUPPORTED: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Unsupported;
+const CATEGORY_ARTIFACT: PlanDiagnosticCategory = PlanDiagnosticCategory::Artifact;
+const CATEGORY_AUTHORITY: PlanDiagnosticCategory = PlanDiagnosticCategory::Authority;
+const CATEGORY_CONFIG: PlanDiagnosticCategory = PlanDiagnosticCategory::Config;
+const CATEGORY_DEPLOYMENT_IDENTITY: PlanDiagnosticCategory =
+    PlanDiagnosticCategory::DeploymentIdentity;
+const CATEGORY_INVENTORY: PlanDiagnosticCategory = PlanDiagnosticCategory::Inventory;
+const CATEGORY_OBSERVATION: PlanDiagnosticCategory = PlanDiagnosticCategory::Observation;
+const CATEGORY_TOPOLOGY: PlanDiagnosticCategory = PlanDiagnosticCategory::Topology;
+const CATEGORY_TRUST_DOMAIN: PlanDiagnosticCategory = PlanDiagnosticCategory::TrustDomain;
+const CATEGORY_UNSUPPORTED_SHAPE: PlanDiagnosticCategory = PlanDiagnosticCategory::UnsupportedShape;
+const CATEGORY_VERIFIER_READINESS: PlanDiagnosticCategory =
+    PlanDiagnosticCategory::VerifierReadiness;
+const SOURCE_CLI_ARG: PlanDiagnosticSource = PlanDiagnosticSource::CliArg;
+const SOURCE_BUILD_PROFILE: PlanDiagnosticSource = PlanDiagnosticSource::BuildProfile;
+const SOURCE_DEPLOYMENT_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::DeploymentConfig;
+const SOURCE_DEPLOYMENT_PLAN_BUILDER: PlanDiagnosticSource =
+    PlanDiagnosticSource::DeploymentPlanBuilder;
+const SOURCE_FLEET_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::FleetConfig;
+const SOURCE_INSTALLED_DEPLOYMENT: PlanDiagnosticSource = PlanDiagnosticSource::InstalledDeployment;
+const SOURCE_LOCAL_OBSERVATION: PlanDiagnosticSource = PlanDiagnosticSource::LocalObservation;
 const FUTURE_APPLY_PREVIEW_PHASE: ProposedOperationPhase =
     ProposedOperationPhase::FutureApplyPreview;
 const PROPOSED_OPERATION_NOT_EXECUTED: ProposedOperationStatus =
@@ -154,13 +157,100 @@ enum ComparisonStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct PlanDiagnostic {
-    category: &'static str,
+    category: PlanDiagnosticCategory,
     code: String,
-    severity: &'static str,
+    severity: PlanDiagnosticSeverity,
     subject: String,
     detail: String,
     next: Option<String>,
-    source: &'static str,
+    source: PlanDiagnosticSource,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PlanDiagnosticCategory {
+    Artifact,
+    Authority,
+    Config,
+    DeploymentIdentity,
+    Inventory,
+    Observation,
+    Topology,
+    TrustDomain,
+    UnsupportedShape,
+    VerifierReadiness,
+}
+
+impl PlanDiagnosticCategory {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Artifact => "artifact",
+            Self::Authority => "authority",
+            Self::Config => "config",
+            Self::DeploymentIdentity => "deployment_identity",
+            Self::Inventory => "inventory",
+            Self::Observation => "observation",
+            Self::Topology => "topology",
+            Self::TrustDomain => "trust_domain",
+            Self::UnsupportedShape => "unsupported_shape",
+            Self::VerifierReadiness => "verifier_readiness",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PlanDiagnosticSeverity {
+    Blocked,
+    Info,
+    Unsupported,
+    Warning,
+}
+
+impl PlanDiagnosticSeverity {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Blocked => "blocked",
+            Self::Info => "info",
+            Self::Unsupported => "unsupported",
+            Self::Warning => "warning",
+        }
+    }
+
+    const fn sort_rank(self) -> u8 {
+        match self {
+            Self::Blocked => 0,
+            Self::Unsupported => 1,
+            Self::Warning => 2,
+            Self::Info => 3,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PlanDiagnosticSource {
+    BuildProfile,
+    CliArg,
+    DeploymentConfig,
+    DeploymentPlanBuilder,
+    FleetConfig,
+    InstalledDeployment,
+    LocalObservation,
+}
+
+impl PlanDiagnosticSource {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::BuildProfile => "build_profile",
+            Self::CliArg => "cli_arg",
+            Self::DeploymentConfig => "deployment_config",
+            Self::DeploymentPlanBuilder => "deployment_plan_builder",
+            Self::FleetConfig => "fleet_config",
+            Self::InstalledDeployment => "installed_deployment",
+            Self::LocalObservation => "local_observation",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -584,12 +674,12 @@ fn has_plan_assumption_prefix(plan: &DeploymentPlanV1, prefix: &str) -> bool {
 }
 
 struct DigestFact<'a> {
-    category: &'static str,
+    category: PlanDiagnosticCategory,
     code: &'static str,
     subject: &'a str,
     label: &'static str,
     digest: Option<&'a str>,
-    source: &'static str,
+    source: PlanDiagnosticSource,
 }
 
 fn push_digest_fact(facts: &mut Vec<PlanDiagnostic>, fact: DigestFact<'_>) {
@@ -862,7 +952,7 @@ fn assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDiagnostic 
     }
 }
 
-fn assumption_category(key: &str) -> &'static str {
+fn assumption_category(key: &str) -> PlanDiagnosticCategory {
     if key.contains("artifact") || key.contains("manifest") {
         CATEGORY_ARTIFACT
     } else if key.contains("state") {
@@ -1104,22 +1194,16 @@ fn sort_diagnostics(diagnostics: &mut [PlanDiagnostic]) {
     diagnostics.sort_by(|left, right| {
         diagnostic_severity_rank(left.severity)
             .cmp(&diagnostic_severity_rank(right.severity))
-            .then_with(|| left.severity.cmp(right.severity))
-            .then_with(|| left.category.cmp(right.category))
+            .then_with(|| left.severity.label().cmp(right.severity.label()))
+            .then_with(|| left.category.label().cmp(right.category.label()))
             .then_with(|| left.code.cmp(&right.code))
             .then_with(|| left.subject.cmp(&right.subject))
-            .then_with(|| left.source.cmp(right.source))
+            .then_with(|| left.source.label().cmp(right.source.label()))
     });
 }
 
-fn diagnostic_severity_rank(severity: &str) -> u8 {
-    match severity {
-        SEVERITY_BLOCKED => 0,
-        SEVERITY_UNSUPPORTED => 1,
-        SEVERITY_WARNING => 2,
-        SEVERITY_INFO => 3,
-        _ => 4,
-    }
+const fn diagnostic_severity_rank(severity: PlanDiagnosticSeverity) -> u8 {
+    severity.sort_rank()
 }
 
 fn sort_proposed_operations(operations: &mut Vec<ProposedOperationLabel>) {
@@ -1217,11 +1301,13 @@ fn append_diagnostics(lines: &mut Vec<String>, label: &str, diagnostics: &[PlanD
     for diagnostic in diagnostics {
         lines.push(format!(
             "  [{}] {} {}",
-            diagnostic.severity, diagnostic.category, diagnostic.code
+            diagnostic.severity.label(),
+            diagnostic.category.label(),
+            diagnostic.code
         ));
         lines.push(format!("    subject: {}", diagnostic.subject));
         lines.push(format!("    detail: {}", diagnostic.detail));
-        lines.push(format!("    source: {}", diagnostic.source));
+        lines.push(format!("    source: {}", diagnostic.source.label()));
         if let Some(next) = &diagnostic.next {
             lines.push(format!("    next: {next}"));
         }
@@ -1368,9 +1454,9 @@ impl PlanStatus {
     const fn as_str(self) -> &'static str {
         match self {
             Self::Planned => "planned",
-            Self::Warning => SEVERITY_WARNING,
-            Self::Blocked => SEVERITY_BLOCKED,
-            Self::Unsupported => SEVERITY_UNSUPPORTED,
+            Self::Warning => SEVERITY_WARNING.label(),
+            Self::Blocked => SEVERITY_BLOCKED.label(),
+            Self::Unsupported => SEVERITY_UNSUPPORTED.label(),
         }
     }
 }
@@ -1642,11 +1728,11 @@ mod tests {
     fn diagnostic_key(diagnostic: &PlanDiagnostic) -> String {
         format!(
             "{}|{}|{}|{}|{}",
-            diagnostic.severity,
-            diagnostic.category,
+            diagnostic.severity.label(),
+            diagnostic.category.label(),
             diagnostic.code,
             diagnostic.subject,
-            diagnostic.source
+            diagnostic.source.label()
         )
     }
 
@@ -1657,13 +1743,52 @@ mod tests {
             .try_into()
             .expect("diagnostic fixture keys contain five fields");
         PlanDiagnostic {
-            category,
+            category: diagnostic_category_fixture(category),
             code: code.to_string(),
-            severity,
+            severity: diagnostic_severity_fixture(severity),
             subject: subject.to_string(),
             detail: "diagnostic detail".to_string(),
             next: None,
-            source,
+            source: diagnostic_source_fixture(source),
+        }
+    }
+
+    fn diagnostic_category_fixture(value: &str) -> PlanDiagnosticCategory {
+        match value {
+            "artifact" => CATEGORY_ARTIFACT,
+            "authority" => CATEGORY_AUTHORITY,
+            "config" => CATEGORY_CONFIG,
+            "deployment_identity" => CATEGORY_DEPLOYMENT_IDENTITY,
+            "inventory" => CATEGORY_INVENTORY,
+            "observation" => CATEGORY_OBSERVATION,
+            "topology" => CATEGORY_TOPOLOGY,
+            "trust_domain" => CATEGORY_TRUST_DOMAIN,
+            "unsupported_shape" => CATEGORY_UNSUPPORTED_SHAPE,
+            "verifier_readiness" => CATEGORY_VERIFIER_READINESS,
+            _ => panic!("unknown diagnostic category fixture {value}"),
+        }
+    }
+
+    fn diagnostic_severity_fixture(value: &str) -> PlanDiagnosticSeverity {
+        match value {
+            "blocked" => SEVERITY_BLOCKED,
+            "info" => SEVERITY_INFO,
+            "unsupported" => SEVERITY_UNSUPPORTED,
+            "warning" => SEVERITY_WARNING,
+            _ => panic!("unknown diagnostic severity fixture {value}"),
+        }
+    }
+
+    fn diagnostic_source_fixture(value: &str) -> PlanDiagnosticSource {
+        match value {
+            "build_profile" => SOURCE_BUILD_PROFILE,
+            "cli_arg" => SOURCE_CLI_ARG,
+            "deployment_config" => SOURCE_DEPLOYMENT_CONFIG,
+            "deployment_plan_builder" => SOURCE_DEPLOYMENT_PLAN_BUILDER,
+            "fleet_config" => SOURCE_FLEET_CONFIG,
+            "installed_deployment" => SOURCE_INSTALLED_DEPLOYMENT,
+            "local_observation" => SOURCE_LOCAL_OBSERVATION,
+            _ => panic!("unknown diagnostic source fixture {value}"),
         }
     }
 

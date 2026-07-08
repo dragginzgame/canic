@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.10` tightens `canic deploy plan` diagnostic ownership by replacing
+  raw-string category, severity, and source labels with typed internal values
+  while preserving existing JSON/text labels, command behavior, endpoint
+  surfaces, Candid, and stable-state layout.
+
 - `0.83.9` tightens `canic replica status --json` and `canic deploy plan`
   report ownership by replacing raw-string replica `status_source` labels and
   deploy-plan future-apply preview labels with typed internal values while

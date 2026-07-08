@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.8
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.9
 Status: pass_with_followups
 
 ## Scope
@@ -36,7 +36,9 @@ eleventh follow-up fix tightens replica status-source ownership so the closed
 `canic replica status --json` source labels are represented by typed internal
 report values. The twelfth follow-up fix tightens deploy-plan future-apply
 preview rows so phase, operation, and status labels are represented by typed
-internal report values.
+internal report values. The thirteenth follow-up fix tightens deploy-plan
+diagnostic category, severity, and source labels into typed internal report
+values.
 
 ## Baseline Validation
 
@@ -975,6 +977,70 @@ Fix validation:
 | Command | Result | Notes |
 | --- | --- | --- |
 | `cargo fmt --all` | pass | Formatted the deploy-plan preview label typing change. |
+| `cargo test --locked -p canic-cli deploy_plan` | pass | 20 filtered deploy-plan/medic-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-014: Deploy-Plan Diagnostics Own Category, Severity, And Source As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / deploy_plan
+Status: fixed
+Owner: deploy-plan report wrapper
+Current location: `crates/canic-cli/src/deploy/plan.rs`
+Intended owner: typed deploy-plan report model, with text/JSON serialization
+formatting stable diagnostic labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.10
+
+Evidence:
+- file: `crates/canic-cli/src/deploy/plan.rs`
+- line or anchor: `PlanDiagnostic`, `DigestFact`,
+  `sort_diagnostics`, `append_diagnostics`, and diagnostic fixture helpers
+- module/function: deploy-plan diagnostic report builder and renderer
+- command/search: `rg -n "category: &'static str|severity: &'static str|source: &'static str|SEVERITY_|CATEGORY_|SOURCE_" crates/canic-cli/src/deploy/plan.rs`
+- reachability: active `canic deploy plan <deployment>` text and JSON report
+  paths
+- exact issue: deploy-plan diagnostics stored closed category, severity, and
+  source labels as raw string values even though those label sets are owned by
+  the deploy-plan report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by deploy-plan
+tests, but raw strings left diagnostic category/source/severity semantics
+without compiler ownership.
+
+Recommendation:
+
+Use private typed values for deploy-plan diagnostic category, severity, and
+source labels. Keep diagnostic codes, subjects, details, next actions, and
+embedded `DeploymentPlanV1` data in their existing report shapes.
+
+Regression test:
+
+Keep focused deploy-plan tests asserting unchanged JSON field order, text
+output, diagnostic ordering, status derivation, no-mutation contract, and
+no-apply-safety wording.
+
+Resolution:
+
+- `PlanDiagnostic.category` now stores `PlanDiagnosticCategory`.
+- `PlanDiagnostic.severity` now stores `PlanDiagnosticSeverity`.
+- `PlanDiagnostic.source` now stores `PlanDiagnosticSource`.
+- `DigestFact` uses typed category/source values.
+- Sorting and text rendering format typed labels explicitly.
+- JSON serialization still emits the existing category, severity, and source
+  labels.
+- Command behavior, JSON fields, and text output remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the deploy-plan diagnostic typing change. |
 | `cargo test --locked -p canic-cli deploy_plan` | pass | 20 filtered deploy-plan/medic-related CLI tests passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
