@@ -1,5 +1,5 @@
-use super::super::{output_format::PromotionOutputFormat, value_arg};
-use crate::cli::clap::{passthrough_subcommand, render_usage};
+use super::super::value_arg;
+use crate::cli::clap::{flag_arg, passthrough_subcommand, render_usage};
 use clap::Command as ClapCommand;
 
 #[derive(Clone, Copy)]
@@ -15,6 +15,8 @@ struct PromoteReportCommand {
     bin_name: &'static str,
     help_after: &'static str,
 }
+
+pub(super) const TEXT_ARG: &str = "text";
 
 const TOP_COMMANDS: &[PromoteSubcommand] = &[
     PromoteSubcommand {
@@ -90,7 +92,7 @@ Examples:
   canic deploy promote inspect readiness --request promotion-readiness.json
   canic deploy promote inspect artifact-identity --request promotion-artifacts.json
   canic deploy promote inspect provenance --request promotion-provenance.json
-  canic deploy promote inspect readiness --request promotion-readiness.json --format text
+  canic deploy promote inspect readiness --request promotion-readiness.json --text
 
 Promotion commands are passive report builders. They do not install,
 stage artifacts, query wasm_store, or mutate deployment/controller state.";
@@ -114,111 +116,111 @@ controller state.";
 const DEPLOY_PROMOTE_READINESS_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect readiness --request promotion-readiness.json
-  canic deploy promote inspect readiness --request promotion-readiness.json --format text
+  canic deploy promote inspect readiness --request promotion-readiness.json --text
 
 Reads a PromotionReadinessRequest-shaped JSON file and prints
-PromotionReadinessV1 JSON by default, or passive text with --format text.";
+PromotionReadinessV1 JSON by default, or passive text with --text.";
 const DEPLOY_PROMOTE_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote check --request promotion-check.json
-  canic deploy promote check --request promotion-check.json --format text
+  canic deploy promote check --request promotion-check.json --text
 
 Reads a PromotionReadinessRequest-shaped JSON file and prints a passive
 PromotionReadinessV1 check report by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_ARTIFACT_IDENTITY_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect artifact-identity --request promotion-artifacts.json
-  canic deploy promote inspect artifact-identity --request promotion-artifacts.json --format text
+  canic deploy promote inspect artifact-identity --request promotion-artifacts.json --text
 
 Reads a PromotionArtifactIdentityReportRequest-shaped JSON file and prints
 PromotionArtifactIdentityReportV1 JSON by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_TRANSFORM_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect transform --request promotion-transform.json
-  canic deploy promote inspect transform --request promotion-transform.json --format text
+  canic deploy promote inspect transform --request promotion-transform.json --text
 
 Reads a PromotionPlanTransformRequest-shaped JSON file and prints
-PromotionPlanTransformV1 JSON by default, or passive text with --format text.";
+PromotionPlanTransformV1 JSON by default, or passive text with --text.";
 const DEPLOY_PROMOTE_DIFF_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote diff --request promotion-diff.json
-  canic deploy promote diff --request promotion-diff.json --format text
+  canic deploy promote diff --request promotion-diff.json --text
 
 Reads a PromotionPlanTransformRequest-shaped JSON file and prints a passive
 PromotionPlanTransformV1 diff report by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_TRANSFORM_EVIDENCE_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect transform-evidence --request transform-evidence.json
-  canic deploy promote inspect transform-evidence --request transform-evidence.json --format text
+  canic deploy promote inspect transform-evidence --request transform-evidence.json --text
 
 Reads a PromotionPlanTransformEvidenceRequest-shaped JSON file and prints
 PromotionPlanTransformEvidenceV1 JSON by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_TARGET_LINEAGE_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect target-lineage --request target-lineage.json
-  canic deploy promote inspect target-lineage --request target-lineage.json --format text
+  canic deploy promote inspect target-lineage --request target-lineage.json --text
 
 Reads a PromotionTargetExecutionLineageRequest-shaped JSON file and prints
 PromotionTargetExecutionLineageV1 JSON by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote plan --request promotion-plan.json
-  canic deploy promote plan --request promotion-plan.json --format text
+  canic deploy promote plan --request promotion-plan.json --text
 
 Reads an ArtifactPromotionPlanRequest-shaped JSON file and prints
-ArtifactPromotionPlanV1 JSON by default, or passive text with --format text.";
+ArtifactPromotionPlanV1 JSON by default, or passive text with --text.";
 const DEPLOY_PROMOTE_PROVENANCE_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect provenance --request promotion-provenance.json
-  canic deploy promote inspect provenance --request promotion-provenance.json --format text
+  canic deploy promote inspect provenance --request promotion-provenance.json --text
 
 Reads an ArtifactPromotionProvenanceReportRequest-shaped JSON file and prints
 ArtifactPromotionProvenanceReportV1 JSON by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_WASM_STORE_IDENTITY_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect wasm-store-identity --request wasm-store-identity.json
-  canic deploy promote inspect wasm-store-identity --request wasm-store-identity.json --format text
+  canic deploy promote inspect wasm-store-identity --request wasm-store-identity.json --text
 
 Reads a PromotionWasmStoreIdentityReportRequest-shaped JSON file and prints
 PromotionWasmStoreIdentityReportV1 JSON by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_CATALOG_VERIFICATION_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect catalog-verification --request catalog-verification.json
-  canic deploy promote inspect catalog-verification --request catalog-verification.json --format text
+  canic deploy promote inspect catalog-verification --request catalog-verification.json --text
 
 Reads a PromotionWasmStoreCatalogVerificationRequest-shaped JSON file and
 prints PromotionWasmStoreCatalogVerificationV1 JSON by default, or passive
-text with --format text.";
+text with --text.";
 const DEPLOY_PROMOTE_EXECUTION_RECEIPT_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect execution-receipt --request promotion-execution-receipt.json
-  canic deploy promote inspect execution-receipt --request promotion-execution-receipt.json --format text
+  canic deploy promote inspect execution-receipt --request promotion-execution-receipt.json --text
 
 Reads an ArtifactPromotionExecutionReceiptRequest-shaped JSON file and prints
 ArtifactPromotionExecutionReceiptV1 JSON by default, or passive text with
---format text.";
+--text.";
 const DEPLOY_PROMOTE_POLICY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect policy --request promotion-policy.json
-  canic deploy promote inspect policy --request promotion-policy.json --format text
+  canic deploy promote inspect policy --request promotion-policy.json --text
 
 Reads a PromotionPolicyCheckRequest-shaped JSON file and prints
-PromotionPolicyCheckV1 JSON by default, or passive text with --format text.";
+PromotionPolicyCheckV1 JSON by default, or passive text with --text.";
 const DEPLOY_PROMOTE_MATERIALIZATION_IDENTITY_HELP_AFTER: &str = "\
 Examples:
   canic deploy promote inspect materialization-identity --request materialization.json
-  canic deploy promote inspect materialization-identity --request materialization.json --format text
+  canic deploy promote inspect materialization-identity --request materialization.json --text
 
 Reads a PromotionMaterializationIdentityReportRequest-shaped JSON file and
 prints PromotionMaterializationIdentityReportV1 JSON by default, or passive
-text with --format text.";
+text with --text.";
 
 const READINESS_REPORT_COMMAND: PromoteReportCommand = PromoteReportCommand {
     name: "readiness",
@@ -407,18 +409,14 @@ fn deploy_promote_report_command(spec: PromoteReportCommand) -> ClapCommand {
                 .required(true)
                 .help("Request JSON file for the passive promotion report"),
         )
-        .arg(promotion_format_arg())
+        .arg(text_arg())
         .after_help(spec.help_after)
 }
 
-fn promotion_format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("json|text")
-        .num_args(1)
-        .default_value("json")
-        .value_parser(clap::value_parser!(PromotionOutputFormat))
-        .help("Output format; defaults to json")
+fn text_arg() -> clap::Arg {
+    flag_arg(TEXT_ARG)
+        .long(TEXT_ARG)
+        .help("Print human-readable text output")
 }
 
 pub fn promote_usage() -> String {

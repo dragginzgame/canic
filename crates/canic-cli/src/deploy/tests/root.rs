@@ -6,12 +6,11 @@ use canic_host::deployment_truth::{
 };
 
 #[test]
-fn deploy_root_inspect_parses_request_and_text_format() {
+fn deploy_root_inspect_parses_request_and_text_flag() {
     let options = deploy_root::DeployRootInspectOptions::parse([
         OsString::from("--request"),
         OsString::from("root-verification.json"),
-        OsString::from("--format"),
-        OsString::from("text"),
+        OsString::from("--text"),
     ])
     .expect("parse deploy inspect root");
 
@@ -32,25 +31,12 @@ fn deploy_root_inspect_defaults_to_json() {
 }
 
 #[test]
-fn deploy_root_inspect_rejects_unknown_format() {
-    let result = deploy_root::DeployRootInspectOptions::parse([
-        OsString::from("--request"),
-        OsString::from("root-verification.json"),
-        OsString::from("--format"),
-        OsString::from("yaml"),
-    ]);
-
-    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
-}
-
-#[test]
-fn deploy_root_verify_parses_deployment_check_and_text_format() {
+fn deploy_root_verify_parses_deployment_check_and_text_flag() {
     let options = deploy_root::DeployRootVerifyOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--from-check"),
         OsString::from("deployment-check.json"),
-        OsString::from("--format"),
-        OsString::from("text"),
+        OsString::from("--text"),
         OsString::from("--__canic-network"),
         OsString::from("ic"),
     ])

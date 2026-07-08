@@ -12,7 +12,7 @@ fn check_deployment_arg() -> OsString {
     OsString::from("demo")
 }
 
-fn envelope_format_args() -> Vec<OsString> {
+fn evidence_envelope_args() -> Vec<OsString> {
     vec![
         check_deployment_arg(),
         OsString::from("--evidence-envelope"),
@@ -113,8 +113,8 @@ fn deploy_check_status_allows_warning_report() {
 }
 
 #[test]
-fn deploy_check_parses_envelope_json_format() {
-    let options = deploy_check::DeployCheckOptions::parse(envelope_format_args())
+fn deploy_check_parses_evidence_envelope_output() {
+    let options = deploy_check::DeployCheckOptions::parse(evidence_envelope_args())
         .expect("parse deploy check");
 
     assert_eq!(options.truth.deployment, "demo");
@@ -123,7 +123,7 @@ fn deploy_check_parses_envelope_json_format() {
 }
 
 #[test]
-fn deploy_check_parses_text_format() {
+fn deploy_check_defaults_to_text_output() {
     let options = deploy_check::DeployCheckOptions::parse([check_deployment_arg()])
         .expect("parse deploy check");
 
@@ -134,7 +134,7 @@ fn deploy_check_parses_text_format() {
 
 #[test]
 fn deploy_check_parses_build_provenance_envelope_input() {
-    let mut args = envelope_format_args();
+    let mut args = evidence_envelope_args();
     args.extend(build_provenance_args());
     let options = deploy_check::DeployCheckOptions::parse(args).expect("parse deploy check");
 

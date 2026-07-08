@@ -46,14 +46,17 @@ Explicit non-scope:
 
 ## 0.83 Advanced Deploy Output Convention Hardening
 
+Status:
+completed in 0.83.1 for the accepted `CANIC-083-DEBT-002` scope.
+
 Source findings:
 - CANIC-083-DEBT-002
 
 Boundary:
 Default-JSON advanced deploy report and request-inspection output selection.
 
-Current owner:
-Each advanced deploy subfamily owns a local `--format json|text` parser.
+Previous owner:
+Each advanced deploy subfamily owned a local `--format json|text` parser.
 
 Intended owner:
 Each advanced deploy report family keeps parser ownership, but the repo has an

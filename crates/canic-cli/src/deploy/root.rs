@@ -4,8 +4,8 @@ use super::{
 use crate::{
     cli::{
         clap::{
-            parse_matches, parse_subcommand, passthrough_subcommand, render_usage, required_path,
-            required_string, required_typed, string_option_or_else,
+            flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage,
+            required_path, required_string, string_option_or_else,
         },
         defaults::local_network,
         globals::internal_network_arg,
@@ -47,17 +47,17 @@ writing state.";
 const DEPLOY_ROOT_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect root --request root-verification.json
-  canic deploy inspect root --request root-verification.json --format text
+  canic deploy inspect root --request root-verification.json --text
 
 Reads a DeploymentRootVerificationRequestV1-shaped JSON file and prints a
 DeploymentRootVerificationReportV1 JSON artifact by default, or host-owned
-passive text with --format text. EvidenceSatisfied means the supplied
+passive text with --text. EvidenceSatisfied means the supplied
 deployment-truth evidence is sufficient for a later explicit state transition;
 this command does not persist verified root state.";
 const DEPLOY_ROOT_VERIFY_HELP_AFTER: &str = "\
 Examples:
   canic deploy root verify demo-local --from-check deployment-check.json
-  canic deploy root verify demo-local --from-check deployment-check.json --format text
+  canic deploy root verify demo-local --from-check deployment-check.json --text
 
 Verifies a registered deployment root from a deployment-truth check artifact
 and records verified root state only when deployment target identity and source
@@ -78,6 +78,7 @@ const VERIFY_COMMAND: RootCommand = RootCommand {
     usage: "canic deploy root verify <deployment> --from-check <file>",
     help_after: DEPLOY_ROOT_VERIFY_HELP_AFTER,
 };
+const TEXT_ARG: &str = "text";
 
 ///
 /// DeployRootInspectOptions
@@ -182,7 +183,7 @@ impl DeployRootInspectOptions {
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: required_typed(&matches, "format"),
+            format: root_output_format(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -198,7 +199,7 @@ impl DeployRootVerifyOptions {
             deployment: required_string(&matches, "deployment"),
             from_check: required_path(&matches, "from-check"),
             network: string_option_or_else(&matches, "network", local_network),
-            format: required_typed(&matches, "format"),
+            format: root_output_format(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -244,14 +245,18 @@ fn verify_command() -> ClapCommand {
         .arg(internal_network_arg())
 }
 
-fn format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("json|text")
-        .num_args(1)
-        .default_value("json")
-        .value_parser(clap::value_parser!(RootOutputFormat))
-        .help("Output format; defaults to json")
+fn text_arg() -> clap::Arg {
+    flag_arg(TEXT_ARG)
+        .long(TEXT_ARG)
+        .help("Print human-readable text output")
+}
+
+const fn root_output_format(text: bool) -> RootOutputFormat {
+    if text {
+        RootOutputFormat::Text
+    } else {
+        RootOutputFormat::Json
+    }
 }
 
 fn root_passthrough_command(spec: RootCommand) -> ClapCommand {
@@ -268,7 +273,7 @@ fn root_leaf_command(spec: RootCommand) -> ClapCommand {
         .about(spec.about)
         .disable_help_flag(true)
         .override_usage(spec.usage)
-        .arg(format_arg())
+        .arg(text_arg())
         .after_help(spec.help_after)
 }
 

@@ -18,14 +18,13 @@ fn deploy_promote_leaf_commands_default_to_json() {
 }
 
 #[test]
-fn deploy_promote_leaf_commands_parse_text_format() {
+fn deploy_promote_leaf_commands_parse_text_flag() {
     for (command, usage, request) in promote_leaf_commands() {
         let options = DeployPromoteReportOptions::parse(
             [
                 OsString::from("--request"),
                 OsString::from(request),
-                OsString::from("--format"),
-                OsString::from("text"),
+                OsString::from("--text"),
             ],
             command,
             usage,
@@ -218,22 +217,6 @@ fn deploy_promote_inspect_dispatches_leaf_commands() {
             vec![OsString::from("--request"), OsString::from(request)]
         );
     }
-}
-
-#[test]
-fn promote_policy_check_rejects_unknown_format() {
-    let result = DeployPromoteReportOptions::parse(
-        [
-            OsString::from("--request"),
-            OsString::from("promotion-policy.json"),
-            OsString::from("--format"),
-            OsString::from("csv"),
-        ],
-        deploy_promote_policy_check_command,
-        promote_policy_check_usage,
-    );
-
-    std::assert_matches!(result, Err(DeployCommandError::Usage(_)));
 }
 
 type PromoteCommandFactory = fn() -> ClapCommand;
