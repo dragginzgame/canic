@@ -93,7 +93,7 @@ Root/issuer delegated token authentication
 - `enabled: bool` – enable delegated token auth (default `false`).
 - `root_canister_id: string` – optional root canister trust anchor. If omitted, runtime verification uses the initialized Canic root env.
 - `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider for issuer canister-signature proof verification.
-- `root_proof_mode: "chain_key_batch"` – required active delegated root proof mode in the 0.76 line. Other values are rejected.
+- `root_proof_mode: "chain_key_batch"` – required active delegated root proof mode. Other values are rejected.
 - `network: "mainnet" | "local" | "pocketic" | "testnet"` – operator label for the configured verifier trust anchor (default `"mainnet"`).
 - `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
 

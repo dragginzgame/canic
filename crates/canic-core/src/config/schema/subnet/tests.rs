@@ -193,7 +193,7 @@ max_refill_e8s_per_call = 100000000
 max_refill_e8s_per_day = 1000000000
 "#,
     )
-    .expect_err("follow-up treasury knobs should not parse in 0.58 mvp config");
+    .expect_err("follow-up treasury knobs should not parse in the current subnet config");
 
     assert!(
         err.to_string().contains("max_refill_e8s_per_day"),

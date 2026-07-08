@@ -16,7 +16,7 @@ use crate::deployment_truth::{
     DeploymentComparisonTargetV1,
 };
 
-/// Build a passive 0.46 cross-deployment comparison report from two existing
+/// Build a passive cross-deployment comparison report from two existing
 /// deployment-truth checks. This is evidence comparison only; it does not
 /// query live inventory or mutate deployment state.
 #[must_use]

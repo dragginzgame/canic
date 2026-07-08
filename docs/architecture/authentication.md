@@ -1,7 +1,7 @@
 # Canic Authentication Design
 
 - **Status:** canonical current design
-- **Version line:** current hard-cut delegated-token contract
+- **Contract:** current hard-cut delegated-token contract
 - **Audience:** Canic maintainers and downstream application developers
 - **Primary rule:** auth is enforced at endpoints; workflow, ops, policy, DTO, and model code receive already-authenticated input.
 
@@ -635,7 +635,7 @@ Security boundaries:
   mainnet requires the known mainnet raw key, while local/PocketIC/test
   verification requires a non-mainnet root key configured as
   `ic_root_public_key_raw_hex`.
-- `auth.delegated_tokens.root_proof_mode` must be `chain_key_batch` in 0.76.
+- `auth.delegated_tokens.root_proof_mode` must be `chain_key_batch`.
 - `auth.delegated_tokens.chain_key_root_proof` is the delegated-token root
   proof trust boundary. Its public key, key id, derivation path hash, key
   version, minimum accepted epochs, and policy window are verifier authority.

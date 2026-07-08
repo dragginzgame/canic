@@ -96,7 +96,7 @@ Examples:
   canic deploy external verify --request external-verification.json --format text
   canic --network local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
 
-0.45 external lifecycle commands are passive reports. They do not request
+External lifecycle commands are passive reports. They do not request
 consent, execute external upgrades, install code, or mutate deployment state.";
 const DEPLOY_EXTERNAL_INSPECT_HELP_AFTER: &str = "\
 Examples:

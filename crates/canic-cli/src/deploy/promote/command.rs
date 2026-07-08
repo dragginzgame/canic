@@ -92,7 +92,7 @@ Examples:
   canic deploy promote inspect provenance --request promotion-provenance.json
   canic deploy promote inspect readiness --request promotion-readiness.json --format text
 
-0.44 promotion commands are passive report builders. They do not install,
+Promotion commands are passive report builders. They do not install,
 stage artifacts, query wasm_store, or mutate deployment/controller state.";
 const DEPLOY_PROMOTE_INSPECT_HELP_AFTER: &str = "\
 Examples:

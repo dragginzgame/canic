@@ -12,9 +12,8 @@ longer the current verifier contract.
 The ECDSA-era model distributed
 `SubnetState.auth.delegated_root_public_key` so endpoint guards could verify a
 root ECDSA signature over `DelegationCert` without fetching key material during
-queries. That was correct for the old root-threshold-ECDSA design, but 0.65
-hard-cut delegated root proofs to IC canister signatures and 0.76 hard-cuts
-delegated-token root proofs again to IC chain-key batch signatures.
+queries. That was correct for older root-threshold-ECDSA designs, but current
+delegated-token root proofs are hard-cut to IC chain-key batch signatures.
 
 Current delegated-token verification uses:
 

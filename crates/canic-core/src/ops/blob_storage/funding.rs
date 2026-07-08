@@ -23,7 +23,7 @@ impl BlobStorageFundingOps {
     /// Acquire the transient funding guard.
     ///
     /// The guard is intentionally not persisted. An upgrade starts with no
-    /// funding lock, matching the 0.70 backend billing design.
+    /// funding lock, matching the backend billing design.
     pub fn try_acquire() -> Result<BlobStorageFundingGuard, BlobStorageFundingInProgress> {
         FUNDING_IN_PROGRESS.with(|flag| {
             if flag.get() {

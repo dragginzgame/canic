@@ -41,7 +41,7 @@ fn deploy_catalog_rejects_unknown_format() {
         OsString::from("--format"),
         OsString::from("envelope-json"),
     ])
-    .expect_err("catalog format is narrow in 0.54.0");
+    .expect_err("catalog format should reject unsupported values");
 
     std::assert_matches!(err, DeployCommandError::Usage(_));
 }

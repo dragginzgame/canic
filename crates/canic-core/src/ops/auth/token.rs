@@ -386,7 +386,7 @@ impl AuthOps {
         }
 
         if verifier_cfg.root_proof_mode != RootProofMode::ChainKeyBatch {
-            return Err("0.76 delegated auth requires chain_key_batch root proofs".to_string());
+            return Err("delegated auth requires chain_key_batch root proofs".to_string());
         }
         let Some(chain_key_root) = verifier_cfg.chain_key_root.as_ref() else {
             return Err("chain-key root verifier policy is not configured".to_string());
@@ -459,7 +459,7 @@ fn configured_root_proof_mode(cfg: &DelegatedTokenConfig) -> Result<RootProofMod
     match cfg.root_proof_mode.trim() {
         "chain_key_batch" => Ok(RootProofMode::ChainKeyBatch),
         _ => Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.root_proof_mode must be chain_key_batch in 0.76".to_string(),
+            "auth.delegated_tokens.root_proof_mode must be chain_key_batch".to_string(),
         )
         .into()),
     }
@@ -987,7 +987,7 @@ mod tests {
         cfg.root_proof_mode = "canister_signature".to_string();
 
         let err = AuthOps::auth_proof_verifier_config_from(&cfg)
-            .expect_err("0.76 must reject non-chain-key root proof mode");
+            .expect_err("must reject non-chain-key root proof mode");
 
         assert!(
             err.to_string().contains("must be chain_key_batch"),

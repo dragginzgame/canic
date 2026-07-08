@@ -391,7 +391,7 @@ pub struct AuthConfig {
 ///   this build verifies delegated tokens or role attestations
 /// - max_ttl_secs = None => use the runtime default TTL ceiling
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
-/// - root_proof_mode = "chain_key_batch" => 0.76 chain-key root proof contract
+/// - root_proof_mode = "chain_key_batch" => current chain-key root proof contract
 ///
 /// Owned by config schema and validated before delegated auth is enabled.
 ///
@@ -424,7 +424,7 @@ pub struct DelegatedTokenConfig {
 ///
 /// ChainKeyRootProofConfig
 ///
-/// Explicit verifier policy for 0.76 chain-key batch root proofs.
+/// Explicit verifier policy for chain-key batch root proofs.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

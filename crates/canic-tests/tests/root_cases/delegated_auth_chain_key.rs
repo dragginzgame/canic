@@ -1,4 +1,4 @@
-//! 0.76 delegated-auth hard-cut acceptance gates.
+//! Delegated-auth chain-key hard-cut acceptance gates.
 //!
 //! These tests keep the first production implementation driven by executable
 //! acceptance criteria, not only by the design doc.
@@ -41,7 +41,7 @@ const TEST_FLEET_CHAIN_KEY_PUBLIC_KEY_HEX: &str =
 const SECOND_NS: u64 = 1_000_000_000;
 
 #[test]
-fn auth_076_chain_key_management_public_key_matches_test_fleet_trust_anchor() {
+fn delegated_auth_chain_key_management_public_key_matches_test_fleet_trust_anchor() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let public_key: Result<Vec<u8>, Error> = setup.pic.update_call_or_panic(
         setup.root_id,
@@ -63,7 +63,7 @@ fn auth_076_chain_key_management_public_key_matches_test_fleet_trust_anchor() {
 }
 
 #[test]
-fn auth_076_chain_key_batch_renews_without_external_liveness() {
+fn delegated_auth_chain_key_batch_renews_without_external_liveness() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
     let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
@@ -85,7 +85,7 @@ fn auth_076_chain_key_batch_renews_without_external_liveness() {
 }
 
 #[test]
-fn auth_076_lazy_repair_uses_cached_batch_and_does_not_sign_per_login() {
+fn delegated_auth_lazy_repair_uses_cached_batch_and_does_not_sign_per_login() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
     let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
@@ -143,7 +143,7 @@ fn auth_076_lazy_repair_uses_cached_batch_and_does_not_sign_per_login() {
 }
 
 #[test]
-fn auth_076_concurrent_missing_proof_repairs_collapse_to_one_signature() {
+fn delegated_auth_concurrent_missing_proof_repairs_collapse_to_one_signature() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
     let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
@@ -247,7 +247,7 @@ fn auth_076_concurrent_missing_proof_repairs_collapse_to_one_signature() {
 }
 
 #[test]
-fn auth_076_timer_batches_multiple_issuers_with_one_signature() {
+fn delegated_auth_timer_batches_multiple_issuers_with_one_signature() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
     let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");

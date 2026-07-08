@@ -12,7 +12,7 @@ use super::validation::{
 };
 use std::collections::BTreeSet;
 
-/// Project the existing deployment truth control classifications into the 0.45
+/// Project the existing deployment truth control classifications into the
 /// lifecycle-authority view. This is observational and must not mutate IC or
 /// local deployment state.
 #[must_use]

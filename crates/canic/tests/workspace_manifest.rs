@@ -720,7 +720,7 @@ fn canic_package_metadata_resolves_to_declared_fleet_roles() {
     }
 }
 
-// Verifies the 0.70 blob-storage billing feature stays opt-in and layered.
+// Verifies the blob-storage billing feature stays opt-in and layered.
 #[test]
 fn blob_storage_billing_feature_is_opt_in_and_implies_blob_storage() {
     let root = workspace_root();
