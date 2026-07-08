@@ -28,26 +28,48 @@ pub enum EndpointKind {
 pub enum ReplayPolicy {
     QueryOrReadOnly,
     ResponseIdempotent {
-        command_kind: &'static str,
+        command_kind: ReplayCommandKindLabel,
     },
     ReplayProtected {
-        command_kind: &'static str,
+        command_kind: ReplayCommandKindLabel,
         requires_operation_id: bool,
     },
     MonotonicTransition {
-        command_kind: &'static str,
+        command_kind: ReplayCommandKindLabel,
     },
     SnapshotConvergent {
-        command_kind: &'static str,
+        command_kind: ReplayCommandKindLabel,
     },
     CommandDispatch {
-        command_kind: &'static str,
+        command_kind: ReplayCommandKindLabel,
         command_manifest: &'static str,
     },
     IntentionallyNonIdempotent {
-        command_kind: &'static str,
+        command_kind: ReplayCommandKindLabel,
         reason: &'static str,
     },
+}
+
+///
+/// ReplayCommandKindLabel
+///
+/// Static manifest-owned replay command kind label.
+/// Runtime replay storage still uses `model::replay::CommandKind`.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReplayCommandKindLabel(&'static str);
+
+impl ReplayCommandKindLabel {
+    #[must_use]
+    pub const fn new(label: &'static str) -> Self {
+        Self(label)
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
 }
 
 ///

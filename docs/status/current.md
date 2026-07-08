@@ -14,12 +14,21 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.10`. Earlier in the
+- The current package/release-surface version is `0.83.11`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.11` working slice fixes `CANIC-083-DEBT-015` and
+- The current `0.83.12` working slice fixes `CANIC-083-DEBT-017` by tightening
+  replay-policy manifest command-kind labels. `ReplayPolicy` variants now carry
+  a typed static `ReplayCommandKindLabel` instead of raw string command-kind
+  fields. Runtime replay storage, replay guards, operation IDs, cost guards,
+  workflow replay descriptors, and persisted receipts continue to use
+  `model::replay::CommandKind`. This is a pre-1.0 Rust manifest-model hard
+  cut. Command behavior, endpoint surfaces, Candid, JSON, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged.
+
+- The `0.83.11` slice fixes `CANIC-083-DEBT-015` and
   `CANIC-083-DEBT-016` by tightening host-owned report labels.
   `canic state audit` report scope and check category/source labels are now
   represented by typed internal report values instead of raw strings.

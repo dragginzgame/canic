@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.12` tightens replay-policy manifest ownership by replacing raw-string
+  command-kind fields in `ReplayPolicy` variants with a typed static manifest
+  label as a pre-1.0 Rust manifest-model hard cut while preserving runtime
+  replay `CommandKind` handling, endpoint surfaces, command behavior, Candid,
+  JSON, and stable-state layout.
+
 - `0.83.11` tightens host-owned report labels by replacing raw-string
   `canic state audit` scope/category/source labels and deployment-root
   verification check-row names with typed internal values while preserving

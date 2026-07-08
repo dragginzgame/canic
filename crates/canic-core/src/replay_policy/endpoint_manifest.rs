@@ -12,7 +12,8 @@ use crate::replay_policy::{
         VALUE_TRANSFER_QUOTA_V1, VALUE_TRANSFER_RESERVE_V1,
     },
     types::{
-        CostClass, EndpointKind, EndpointReplayPolicy, ReplayImplementationStatus, ReplayPolicy,
+        CostClass, EndpointKind, EndpointReplayPolicy, ReplayCommandKindLabel,
+        ReplayImplementationStatus, ReplayPolicy,
     },
 };
 
@@ -143,7 +144,9 @@ const fn update_response_idempotent(
     EndpointReplayPolicy {
         endpoint,
         endpoint_kind: EndpointKind::Update,
-        replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
+        replay_policy: ReplayPolicy::ResponseIdempotent {
+            command_kind: ReplayCommandKindLabel::new(command_kind),
+        },
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class: CostClass::None,
         quota_policy: None,
@@ -161,7 +164,9 @@ const fn update_costed_response_idempotent(
     EndpointReplayPolicy {
         endpoint,
         endpoint_kind: EndpointKind::Update,
-        replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
+        replay_policy: ReplayPolicy::ResponseIdempotent {
+            command_kind: ReplayCommandKindLabel::new(command_kind),
+        },
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class,
         quota_policy,
@@ -205,7 +210,7 @@ const fn update_replay_protected(
         endpoint,
         endpoint_kind: EndpointKind::Update,
         replay_policy: ReplayPolicy::ReplayProtected {
-            command_kind,
+            command_kind: ReplayCommandKindLabel::new(command_kind),
             requires_operation_id: true,
         },
         implementation_status,
@@ -222,7 +227,9 @@ const fn update_monotonic_publish(
     EndpointReplayPolicy {
         endpoint,
         endpoint_kind: EndpointKind::Update,
-        replay_policy: ReplayPolicy::MonotonicTransition { command_kind },
+        replay_policy: ReplayPolicy::MonotonicTransition {
+            command_kind: ReplayCommandKindLabel::new(command_kind),
+        },
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class: CostClass::DurablePublish,
         quota_policy: Some(DURABLE_PUBLISH_QUOTA_V1),
@@ -237,7 +244,9 @@ const fn update_snapshot_convergent(
     EndpointReplayPolicy {
         endpoint,
         endpoint_kind: EndpointKind::Update,
-        replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
+        replay_policy: ReplayPolicy::SnapshotConvergent {
+            command_kind: ReplayCommandKindLabel::new(command_kind),
+        },
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class: CostClass::None,
         quota_policy: None,
@@ -255,7 +264,9 @@ const fn update_costed_snapshot_convergent(
     EndpointReplayPolicy {
         endpoint,
         endpoint_kind: EndpointKind::Update,
-        replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
+        replay_policy: ReplayPolicy::SnapshotConvergent {
+            command_kind: ReplayCommandKindLabel::new(command_kind),
+        },
         implementation_status: ReplayImplementationStatus::Implemented,
         cost_class,
         quota_policy,
@@ -272,7 +283,7 @@ const fn update_intentionally_non_idempotent(
         endpoint,
         endpoint_kind: EndpointKind::Update,
         replay_policy: ReplayPolicy::IntentionallyNonIdempotent {
-            command_kind,
+            command_kind: ReplayCommandKindLabel::new(command_kind),
             reason,
         },
         implementation_status: ReplayImplementationStatus::Implemented,
@@ -295,7 +306,7 @@ const fn update_command_dispatch(
         endpoint,
         endpoint_kind: EndpointKind::Update,
         replay_policy: ReplayPolicy::CommandDispatch {
-            command_kind,
+            command_kind: ReplayCommandKindLabel::new(command_kind),
             command_manifest,
         },
         implementation_status,

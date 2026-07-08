@@ -32,7 +32,7 @@ fn root_capability_endpoint_is_manifested_as_command_dispatch() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::CommandDispatch {
-            command_kind: "root.capability_rpc.v1",
+            command_kind: replay_command_kind("root.capability_rpc.v1"),
             command_manifest: "root.capability.command_manifest.v1",
         }
     );
@@ -88,7 +88,7 @@ fn root_capability_implemented_commands_are_replay_protected() {
         assert_eq!(
             entry.replay_policy,
             ReplayPolicy::ReplayProtected {
-                command_kind,
+                command_kind: replay_command_kind(command_kind),
                 requires_operation_id: true,
             }
         );

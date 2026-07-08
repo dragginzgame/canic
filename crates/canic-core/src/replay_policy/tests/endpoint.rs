@@ -25,7 +25,7 @@ fn chain_key_lazy_repair_is_manifested_as_costed_snapshot_convergent() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::SnapshotConvergent {
-            command_kind: "auth.get_or_create_chain_key_delegation_proof.v1",
+            command_kind: replay_command_kind("auth.get_or_create_chain_key_delegation_proof.v1"),
         }
     );
 }
@@ -47,7 +47,7 @@ fn root_issuer_renewal_template_upsert_is_snapshot_convergent() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::SnapshotConvergent {
-            command_kind: "auth.upsert_root_issuer_renewal_template.v1",
+            command_kind: replay_command_kind("auth.upsert_root_issuer_renewal_template.v1"),
         }
     );
 }
@@ -69,7 +69,7 @@ fn active_delegation_proof_install_is_controller_maintenance() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::IntentionallyNonIdempotent {
-            command_kind: "auth.install_active_delegation_proof.v1",
+            command_kind: replay_command_kind("auth.install_active_delegation_proof.v1"),
             reason: "controller maintenance endpoint replaces issuer-local active proof metadata",
         }
     );
@@ -89,7 +89,7 @@ fn delegated_token_prepare_get_endpoints_are_manifested() {
     assert_eq!(
         prepare.replay_policy,
         ReplayPolicy::ReplayProtected {
-            command_kind: "auth.prepare_delegated_token.v1",
+            command_kind: replay_command_kind("auth.prepare_delegated_token.v1"),
             requires_operation_id: true,
         }
     );
@@ -127,7 +127,7 @@ fn role_attestation_prepare_get_endpoints_are_manifested() {
     assert_eq!(
         prepare.replay_policy,
         ReplayPolicy::ReplayProtected {
-            command_kind: "auth.prepare_role_attestation.v1",
+            command_kind: replay_command_kind("auth.prepare_role_attestation.v1"),
             requires_operation_id: true,
         }
     );
@@ -199,7 +199,7 @@ fn canister_upgrade_is_manifested_as_implemented_response_idempotent() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::ResponseIdempotent {
-            command_kind: "management.canister_upgrade.v1",
+            command_kind: replay_command_kind("management.canister_upgrade.v1"),
         }
     );
     assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
@@ -221,7 +221,7 @@ fn icp_refill_is_manifested_as_implemented_value_transfer() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::ReplayProtected {
-            command_kind: "icp.refill.v1",
+            command_kind: replay_command_kind("icp.refill.v1"),
             requires_operation_id: true,
         }
     );
