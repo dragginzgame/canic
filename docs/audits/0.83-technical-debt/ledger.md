@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.11
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.12
 Status: pass_with_followups
 
 ## Scope
@@ -43,7 +43,11 @@ category, and source labels into typed internal report values. The fifteenth
 follow-up fix tightens deployment-root verification check names into typed
 internal report values. The sixteenth follow-up fix tightens replay-policy
 manifest command-kind labels into a typed manifest-owned value while leaving
-runtime replay storage on `model::replay::CommandKind`.
+runtime replay storage on `model::replay::CommandKind`. The seventeenth
+follow-up fix tightens replay-policy manifest constructors so static
+command-kind, command-manifest, quota-policy, and cycle-reserve labels are
+typed at manifest call sites instead of being accepted as loose helper
+arguments.
 
 ## Baseline Validation
 
@@ -1248,6 +1252,123 @@ Fix validation:
 | Command | Result | Notes |
 | --- | --- | --- |
 | `cargo fmt --all` | pass | Formatted the replay-policy label typing change. |
+| `cargo test --locked -p canic-core replay_policy --lib` | pass | 29 focused replay-policy tests passed. |
+| `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for `canic-core` targets. |
+
+## CANIC-083-DEBT-018: Replay-Policy Manifest Constructors Accept Loose Manifest Labels
+
+Severity: P3
+Category: replay_policy / boundary_ownership
+Status: fixed
+Owner: replay-policy manifest constructors
+Current location:
+`crates/canic-core/src/replay_policy/endpoint_manifest.rs`,
+`crates/canic-core/src/replay_policy/pool_admin_manifest.rs`, and
+`crates/canic-core/src/replay_policy/root_capability_manifest.rs`
+Intended owner: typed replay-policy manifest construction, with command-kind
+and guard-policy labels typed at the manifest row call sites
+Affected surfaces: internal, rust_api
+Release decision: fixed_in_0.83.13
+
+Evidence:
+- file: `crates/canic-core/src/replay_policy/endpoint_manifest.rs`
+- line or anchor: private `update_*` manifest constructors
+- module/function: endpoint replay-policy manifest construction
+- command/search: `rg -n "command_kind: &'static str" crates/canic-core/src/replay_policy -g '*.rs'`
+- reachability: active replay-policy manifest and release-blocker tests
+- exact issue: after `ReplayPolicy` itself carried a typed
+  `ReplayCommandKindLabel`, private manifest constructors still accepted
+  command-kind labels as raw `&'static str` inputs and converted them inside
+  helper bodies.
+
+Evidence:
+- file: `crates/canic-core/src/replay_policy/types.rs`
+- line or anchor: `ReplayPolicy::CommandDispatch.command_manifest`
+- module/function: replay-policy manifest type model
+- command/search: `rg -n "command_manifest" crates/canic-core/src/replay_policy -g '*.rs'`
+- reachability: active replay-policy manifest and command-dispatch tests
+- exact issue: the dispatch command-manifest ID was still represented as a raw
+  `&'static str` field even though it is a closed replay-policy manifest
+  label, parallel to the command-kind label.
+
+Evidence:
+- file: `crates/canic-core/src/replay_policy/types.rs`
+- line or anchor: `EndpointReplayPolicy::quota_policy`,
+  `EndpointReplayPolicy::cycle_reserve_policy`,
+  `PoolAdminCommandReplayPolicy::quota_policy`, and
+  `RootCapabilityCommandReplayPolicy::quota_policy`
+- module/function: replay-policy manifest row types
+- command/search: `rg -n "quota_policy: Option<&'static str>|cycle_reserve_policy: Option<&'static str>" crates/canic-core/src/replay_policy -g '*.rs'`
+- reachability: active replay-policy manifest and cost guard metadata tests
+- exact issue: quota and cycle-reserve policy IDs were still represented as
+  loose optional string labels even though they are static replay-policy
+  manifest guard-policy labels.
+
+Evidence:
+- file: `crates/canic-core/src/replay_policy/pool_admin_manifest.rs`
+- line or anchor: private `pool_admin_*` manifest constructors
+- module/function: pool-admin replay-policy manifest construction
+- command/search: same as above
+- reachability: active pool-admin command replay-policy manifest
+- exact issue: command manifest constructors still accepted loose string
+  command-kind labels.
+
+Evidence:
+- file: `crates/canic-core/src/replay_policy/root_capability_manifest.rs`
+- line or anchor: private `root_capability_replay_protected`
+- module/function: root-capability replay-policy manifest construction
+- command/search: same as above
+- reachability: active root-capability command replay-policy manifest
+- exact issue: root-capability command manifest construction still accepted a
+  raw string command-kind argument.
+
+Risk:
+
+Low. The stored manifest type was already typed, but the constructor boundary
+still allowed accidental loose command-kind labels before the typed value was
+created, and command-dispatch rows still had one adjacent raw manifest-owned
+label. Quota and cycle-reserve policy IDs were another adjacent static
+manifest-owned label set without compiler ownership.
+
+Recommendation:
+
+Make replay-policy manifest call sites construct `ReplayCommandKindLabel`
+`ReplayCommandManifestLabel`, `ReplayQuotaPolicyLabel`, and
+`ReplayCycleReservePolicyLabel` explicitly and make private constructors
+accept the typed labels. Keep endpoint names and runtime replay command-kind
+handling unchanged.
+
+Regression test:
+
+Keep focused replay-policy tests asserting unchanged endpoint and command
+manifest classifications, cost guard metadata, and release-candidate blocker
+coverage.
+
+Resolution:
+
+- Endpoint, pool-admin, and root-capability replay-policy manifest call sites
+  now wrap command-kind string literals with a local `command_kind(...)`
+  constructor.
+- Endpoint command-dispatch rows now wrap command-manifest IDs with a local
+  `command_manifest(...)` constructor.
+- Replay quota and cycle-reserve policy constants now use
+  `ReplayQuotaPolicyLabel` and `ReplayCycleReservePolicyLabel`.
+- Private replay-policy manifest helpers now accept `ReplayCommandKindLabel`
+  `ReplayCommandManifestLabel`, `ReplayQuotaPolicyLabel`, and
+  `ReplayCycleReservePolicyLabel` rather than raw `&'static str` manifest
+  label arguments.
+- The remaining strings in replay-policy manifests are endpoint names,
+  reasons, and tests.
+- Runtime replay receipt storage, cost guards, workflow replay descriptors, and
+  persisted command-kind handling continue to use `model::replay::CommandKind`.
+- Command behavior, endpoint surfaces, Candid, JSON, deployment truth,
+  evidence/report schemas, and stable-state layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the manifest constructor typing change. |
 | `cargo test --locked -p canic-core replay_policy --lib` | pass | 29 focused replay-policy tests passed. |
 | `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for `canic-core` targets. |
 

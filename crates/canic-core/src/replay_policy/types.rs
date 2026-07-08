@@ -42,7 +42,7 @@ pub enum ReplayPolicy {
     },
     CommandDispatch {
         command_kind: ReplayCommandKindLabel,
-        command_manifest: &'static str,
+        command_manifest: ReplayCommandManifestLabel,
     },
     IntentionallyNonIdempotent {
         command_kind: ReplayCommandKindLabel,
@@ -61,6 +61,69 @@ pub enum ReplayPolicy {
 pub struct ReplayCommandKindLabel(&'static str);
 
 impl ReplayCommandKindLabel {
+    #[must_use]
+    pub const fn new(label: &'static str) -> Self {
+        Self(label)
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+///
+/// ReplayCommandManifestLabel
+///
+/// Static manifest-owned replay command manifest label.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReplayCommandManifestLabel(&'static str);
+
+impl ReplayCommandManifestLabel {
+    #[must_use]
+    pub const fn new(label: &'static str) -> Self {
+        Self(label)
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+///
+/// ReplayQuotaPolicyLabel
+///
+/// Static manifest-owned replay quota policy label.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReplayQuotaPolicyLabel(&'static str);
+
+impl ReplayQuotaPolicyLabel {
+    #[must_use]
+    pub const fn new(label: &'static str) -> Self {
+        Self(label)
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+///
+/// ReplayCycleReservePolicyLabel
+///
+/// Static manifest-owned replay cycle-reserve policy label.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReplayCycleReservePolicyLabel(&'static str);
+
+impl ReplayCycleReservePolicyLabel {
     #[must_use]
     pub const fn new(label: &'static str) -> Self {
         Self(label)
@@ -117,8 +180,8 @@ pub struct EndpointReplayPolicy {
     pub replay_policy: ReplayPolicy,
     pub implementation_status: ReplayImplementationStatus,
     pub cost_class: CostClass,
-    pub quota_policy: Option<&'static str>,
-    pub cycle_reserve_policy: Option<&'static str>,
+    pub quota_policy: Option<ReplayQuotaPolicyLabel>,
+    pub cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
 }
 
 ///
@@ -134,8 +197,8 @@ pub struct PoolAdminCommandReplayPolicy {
     pub replay_policy: ReplayPolicy,
     pub implementation_status: ReplayImplementationStatus,
     pub cost_class: CostClass,
-    pub quota_policy: Option<&'static str>,
-    pub cycle_reserve_policy: Option<&'static str>,
+    pub quota_policy: Option<ReplayQuotaPolicyLabel>,
+    pub cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
 }
 
 ///
@@ -151,6 +214,6 @@ pub struct RootCapabilityCommandReplayPolicy {
     pub replay_policy: ReplayPolicy,
     pub implementation_status: ReplayImplementationStatus,
     pub cost_class: CostClass,
-    pub quota_policy: Option<&'static str>,
-    pub cycle_reserve_policy: Option<&'static str>,
+    pub quota_policy: Option<ReplayQuotaPolicyLabel>,
+    pub cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
 }

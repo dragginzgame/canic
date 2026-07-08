@@ -23,6 +23,7 @@ pub use root_capability_manifest::{
 };
 pub use types::{
     CostClass, EndpointKind, EndpointReplayPolicy, PoolAdminCommandReplayPolicy,
-    ReplayCommandKindLabel, ReplayImplementationStatus, ReplayPolicy,
+    ReplayCommandKindLabel, ReplayCommandManifestLabel, ReplayCycleReservePolicyLabel,
+    ReplayImplementationStatus, ReplayPolicy, ReplayQuotaPolicyLabel,
     RootCapabilityCommandReplayPolicy,
 };

@@ -649,3 +649,51 @@ Explicit non-scope:
 - no stable-state layout changes
 - no changes to runtime replay `CommandKind`, receipt storage, operation IDs,
   cost guards, or workflow replay descriptors
+
+## 0.83 Replay-Policy Manifest Constructor Label Typing
+
+Status:
+completed in 0.83.13 for the accepted `CANIC-083-DEBT-018` scope.
+
+Source findings:
+- CANIC-083-DEBT-018
+
+Boundary:
+Replay-policy manifest constructor command-kind, command-manifest,
+quota-policy, and cycle-reserve inputs.
+
+Previous owner:
+Private replay-policy manifest constructors accepted raw `&'static str`
+command-kind labels and converted them to `ReplayCommandKindLabel` inside
+helper bodies. Command-dispatch rows also stored command-manifest IDs as raw
+strings. Quota and cycle-reserve policy IDs were stored as optional raw
+strings in manifest row types.
+
+Intended owner:
+Replay-policy manifest call sites own typed static command-kind and
+guard-policy label construction, and private manifest helpers accept typed
+labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None.
+
+Validation:
+- `cargo test --locked -p canic-core replay_policy --lib`
+- `cargo clippy --locked -p canic-core --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no endpoint changes
+- no command changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth or evidence schema changes
+- no stable-state layout changes
+- no changes to runtime replay `CommandKind`, receipt storage, operation IDs,
+  cost guards, workflow replay descriptors, endpoint-name labels, or
+  quota/reserve policy string values
