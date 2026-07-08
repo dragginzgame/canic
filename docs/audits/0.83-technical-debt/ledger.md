@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: working tree after 0.82.41 push; package surface 0.82.41
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.1
 Status: pass_with_followups
 
 ## Scope
@@ -13,7 +13,11 @@ classified the first evidence-backed debt candidate. The first follow-up fix
 hard-cuts that finding by standardizing the affected report command surfaces on
 `--json` for raw JSON and `--evidence-envelope` for stable evidence-envelope
 output. The second follow-up fix hard-cuts default-JSON advanced deploy report
-families to JSON by default plus `--text` for human-readable output.
+families to JSON by default plus `--text` for human-readable output. The third
+follow-up fix tightens the runtime inspect report wrapper so command,
+endpoint, health/readiness slots, source, response format, and aggregate status
+labels are typed internally while preserving the existing JSON/text output
+contract.
 
 ## Baseline Validation
 
@@ -294,6 +298,77 @@ Fix validation:
 | `cargo test --locked -p canic-cli state` | pass | 12 filtered state-related CLI tests passed. |
 | `git diff --check` | pass | Whitespace diff check passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+
+## CANIC-083-DEBT-004: Runtime Inspect Report Wrapper Owns Report Labels As Untyped Values
+
+Severity: P3
+Category: runtime_introspection / diagnostic_ownership
+Status: fixed
+Owner: runtime inspect CLI report wrapper
+Current location: `crates/canic-cli/src/inspect/mod.rs`
+Intended owner: typed inspect report model, with renderers formatting typed
+values
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.2
+
+Evidence:
+- file: `crates/canic-cli/src/inspect/mod.rs`
+- line or anchor: `InspectReport`, `TargetResolution`, and
+  `RuntimeStatusPayload`
+- module/function: inspect report wrapper
+- command/search: `rg -n "command: String|endpoint: String|health_status: Option<serde_json::Value>|readiness_status: Option<serde_json::Value>|status: String|source: String|response_format: String" crates/canic-cli/src/inspect/mod.rs`
+- reachability: active `canic inspect` JSON/text report path
+- exact issue: the report wrapper stored command and endpoint labels as raw
+  strings, dormant health/readiness status slots as loose JSON values, and
+  aggregate status, source attribution, and response format as raw strings,
+  even though the 0.81 runtime introspection contract already has typed DTOs
+  and stable command/endpoint/source/status values.
+
+Risk:
+
+Low. The emitted strings were correct and tests covered the current output, but
+raw strings leave the CLI report wrapper able to drift from the typed
+runtime-observed/source-attribution contract without compiler help.
+
+Recommendation:
+
+Use typed command and endpoint values, typed health/readiness DTO slots, typed
+local values for inspect source attribution and response format, and reuse the
+endpoint `RuntimeStatus` enum for the report aggregate status. Keep
+serialization labels identical so JSON/text output does not change.
+
+Regression test:
+
+Keep focused inspect serialization/text tests asserting `cli_arg`,
+`runtime_observed`, `candid`, and status labels in the JSON/text output.
+
+Resolution:
+
+- `InspectReport.command` and `InspectReport.endpoint` now store typed
+  `InspectCommandKind` and `InspectEndpoint` values instead of strings.
+- `InspectReport.status` now stores `RuntimeStatus` instead of `String`.
+- `InspectReport.health_status` and `InspectReport.readiness_status` now use
+  typed `CanicHealthStatus` and `CanicReadinessStatus` slots instead of loose
+  JSON values.
+- `TargetResolution.source` and `RuntimeStatusPayload.source` now store a typed
+  `InspectSource`.
+- `RuntimeStatusPayload.response_format` now stores a typed
+  `InspectResponseFormat`.
+- Serde output labels remain unchanged: `canic inspect canister`,
+  `canic inspect deployment`, `canic_runtime_status`, `ok`, `degraded`,
+  `failing`, `unknown`, `cli_arg`, `deployment_record`, `runtime_observed`,
+  and `candid`.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo test --locked -p canic-cli inspect` | pass | 35 filtered inspect-related CLI tests passed. |
+| `cargo fmt --all` | pass | Formatted the inspect report typing change. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
 
 ## Rejected / Non-Findings
 

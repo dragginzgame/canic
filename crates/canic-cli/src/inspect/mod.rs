@@ -16,8 +16,8 @@ use crate::{
 };
 use candid::{Decode, Principal, types::principal::PrincipalError};
 use canic_core::dto::runtime::{
-    CanicRuntimeStatus, FailureSeverity, RuntimeFeatureStatus, RuntimeStateDomainStatus,
-    RuntimeStatus, TimerStatus,
+    CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, FailureSeverity,
+    RuntimeFeatureStatus, RuntimeStateDomainStatus, RuntimeStatus, TimerStatus,
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
@@ -33,10 +33,6 @@ use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const INSPECT_SCHEMA_VERSION: u32 = 1;
-const RUNTIME_OBSERVED_SOURCE: &str = "runtime_observed";
-const CLI_ARG_SOURCE: &str = "cli_arg";
-const DEPLOYMENT_RECORD_SOURCE: &str = "deployment_record";
-
 const INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic inspect canister aaaaa-aa
@@ -118,27 +114,90 @@ enum InspectOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ResolvedInspectTarget {
-    command: String,
+    command: InspectCommandKind,
     deployment: Option<String>,
     role: Option<String>,
     canister_id: String,
     network: String,
     icp: String,
-    source: &'static str,
+    source: InspectSource,
     candid_path: Option<PathBuf>,
     icp_root: Option<PathBuf>,
     json: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+enum InspectCommandKind {
+    #[serde(rename = "canic inspect canister")]
+    Canister,
+    #[serde(rename = "canic inspect deployment")]
+    Deployment,
+}
+
+impl InspectCommandKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Canister => "canic inspect canister",
+            Self::Deployment => "canic inspect deployment",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+enum InspectEndpoint {
+    #[serde(rename = "canic_runtime_status")]
+    RuntimeStatus,
+}
+
+impl InspectEndpoint {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::RuntimeStatus => canic_core::protocol::CANIC_RUNTIME_STATUS,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum InspectSource {
+    CliArg,
+    DeploymentRecord,
+    RuntimeObserved,
+}
+
+impl InspectSource {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::CliArg => "cli_arg",
+            Self::DeploymentRecord => "deployment_record",
+            Self::RuntimeObserved => "runtime_observed",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum InspectResponseFormat {
+    Candid,
+}
+
+impl InspectResponseFormat {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Candid => "candid",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct InspectReport {
     schema_version: u32,
-    command: String,
+    command: InspectCommandKind,
     target_resolution: TargetResolution,
-    endpoint: String,
-    status: String,
-    health_status: Option<serde_json::Value>,
-    readiness_status: Option<serde_json::Value>,
+    endpoint: InspectEndpoint,
+    status: RuntimeStatus,
+    health_status: Option<CanicHealthStatus>,
+    readiness_status: Option<CanicReadinessStatus>,
     runtime_status: Option<RuntimeStatusPayload>,
     warnings: Vec<String>,
     next_actions: Vec<String>,
@@ -150,14 +209,14 @@ struct TargetResolution {
     role: Option<String>,
     canister_id: String,
     network: String,
-    source: String,
+    source: InspectSource,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct RuntimeStatusPayload {
-    source: String,
+    source: InspectSource,
     status: CanicRuntimeStatus,
-    response_format: String,
+    response_format: InspectResponseFormat,
 }
 
 pub fn run<I>(args: I) -> Result<(), InspectCommandError>
@@ -222,13 +281,13 @@ fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, Ins
             icp,
             json,
         } => Ok(ResolvedInspectTarget {
-            command: "canic inspect canister".to_string(),
+            command: InspectCommandKind::Canister,
             deployment: None,
             role: None,
             canister_id: canister.clone(),
             network: network.clone(),
             icp: icp.clone(),
-            source: CLI_ARG_SOURCE,
+            source: InspectSource::CliArg,
             candid_path: None,
             icp_root: resolve_current_canic_icp_root().ok(),
             json: *json,
@@ -285,13 +344,13 @@ fn resolve_deployment_target(
     validate_principal(&entry.pid)?;
 
     Ok(ResolvedInspectTarget {
-        command: "canic inspect deployment".to_string(),
+        command: InspectCommandKind::Deployment,
         deployment: Some(deployment.to_string()),
         role: Some(role.to_string()),
         canister_id: entry.pid.clone(),
         network: network.to_string(),
         icp: icp.to_string(),
-        source: DEPLOYMENT_RECORD_SOURCE,
+        source: InspectSource::DeploymentRecord,
         candid_path: registry_entry_candid_path(Some(root.as_path()), network, entry),
         icp_root: Some(root),
         json,
@@ -310,19 +369,19 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
         target.candid_path.as_deref(),
     )?;
     let runtime_status = runtime_response_payload(&output)?;
-    let status = inspect_status_label(&runtime_status).to_string();
+    let status = inspect_status(&runtime_status);
 
     Ok(InspectReport {
         schema_version: INSPECT_SCHEMA_VERSION,
-        command: target.command.clone(),
+        command: target.command,
         target_resolution: TargetResolution {
             deployment: target.deployment.clone(),
             role: target.role.clone(),
             canister_id: target.canister_id.clone(),
             network: target.network.clone(),
-            source: target.source.to_string(),
+            source: target.source,
         },
-        endpoint: canic_core::protocol::CANIC_RUNTIME_STATUS.to_string(),
+        endpoint: InspectEndpoint::RuntimeStatus,
         status,
         health_status: None,
         readiness_status: None,
@@ -347,9 +406,9 @@ fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, Inspec
     let status = decode_runtime_status_response_hex(response_bytes)?;
 
     Ok(RuntimeStatusPayload {
-        source: RUNTIME_OBSERVED_SOURCE.to_string(),
+        source: InspectSource::RuntimeObserved,
         status,
-        response_format: "candid".to_string(),
+        response_format: InspectResponseFormat::Candid,
     })
 }
 
@@ -368,26 +427,22 @@ fn decode_runtime_status_response_hex(
 }
 
 fn command_exit_result(report: &InspectReport) -> Result<(), InspectCommandError> {
-    let status = report
-        .runtime_status
-        .as_ref()
-        .map(|payload| payload.status.status);
-    match status {
-        Some(RuntimeStatus::Failing) => Err(InspectCommandError::ReportStatus(
+    match report.status {
+        RuntimeStatus::Failing => Err(InspectCommandError::ReportStatus(
             runtime_status_label(RuntimeStatus::Failing).to_string(),
         )),
-        Some(RuntimeStatus::Ok | RuntimeStatus::Degraded | RuntimeStatus::Unknown) | None => Ok(()),
+        RuntimeStatus::Ok | RuntimeStatus::Degraded | RuntimeStatus::Unknown => Ok(()),
     }
 }
 
 fn render_text_report(report: &InspectReport) -> String {
     let mut lines = vec![
-        report.command.clone(),
-        format!("status: {}", report.status),
-        format!("endpoint: {}", report.endpoint),
+        report.command.label().to_string(),
+        format!("status: {}", runtime_status_label(report.status)),
+        format!("endpoint: {}", report.endpoint.label()),
         format!("canister: {}", report.target_resolution.canister_id),
         format!("network: {}", report.target_resolution.network),
-        format!("source: {}", report.target_resolution.source),
+        format!("source: {}", report.target_resolution.source.label()),
     ];
     if let Some(deployment) = &report.target_resolution.deployment {
         lines.push(format!("deployment: {deployment}"));
@@ -399,8 +454,11 @@ fn render_text_report(report: &InspectReport) -> String {
         lines.extend([
             String::new(),
             "runtime_status".to_string(),
-            format!("source: {}", runtime_status.source),
-            format!("response_format: {}", runtime_status.response_format),
+            format!("source: {}", runtime_status.source.label()),
+            format!(
+                "response_format: {}",
+                runtime_status.response_format.label()
+            ),
         ]);
         let status = &runtime_status.status;
         lines.extend([
@@ -507,8 +565,8 @@ fn enabled_runtime_feature_rows(features: &[RuntimeFeatureStatus]) -> String {
     }
 }
 
-const fn inspect_status_label(payload: &RuntimeStatusPayload) -> &'static str {
-    runtime_status_label(payload.status.status)
+const fn inspect_status(payload: &RuntimeStatusPayload) -> RuntimeStatus {
+    payload.status.status
 }
 
 const fn runtime_status_label(status: RuntimeStatus) -> &'static str {
@@ -808,10 +866,10 @@ mod tests {
         );
         let payload = runtime_response_payload(&output).expect("decode runtime status");
 
-        assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(payload.source, InspectSource::RuntimeObserved);
         assert_eq!(payload.status, status);
-        assert_eq!(payload.response_format, "candid");
-        assert_eq!(inspect_status_label(&payload), "ok");
+        assert_eq!(payload.response_format, InspectResponseFormat::Candid);
+        assert_eq!(inspect_status(&payload), RuntimeStatus::Ok);
     }
 
     #[test]
@@ -875,13 +933,13 @@ mod tests {
 
         assert_eq!(value["schema_version"], INSPECT_SCHEMA_VERSION);
         assert_eq!(value["command"], "canic inspect canister");
-        assert_eq!(value["target_resolution"]["source"], CLI_ARG_SOURCE);
+        assert_eq!(value["target_resolution"]["source"], "cli_arg");
         assert_eq!(
             value["endpoint"],
             canic_core::protocol::CANIC_RUNTIME_STATUS
         );
         assert_eq!(value["status"], "ok");
-        assert_eq!(value["runtime_status"]["source"], RUNTIME_OBSERVED_SOURCE);
+        assert_eq!(value["runtime_status"]["source"], "runtime_observed");
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
         assert_eq!(
             value["runtime_status"]["status"]["features"][0]["name"],
@@ -923,11 +981,11 @@ mod tests {
         let mut report = sample_inspect_report();
         let payload = report.runtime_status.as_mut().expect("runtime status");
         payload.status = sample_runtime_status(RuntimeStatus::Failing);
-        report.status = inspect_status_label(payload).to_string();
+        report.status = inspect_status(payload);
 
         let err = command_exit_result(&report).expect_err("failing status exits nonzero");
 
-        assert_eq!(report.status, "failing");
+        assert_eq!(report.status, RuntimeStatus::Failing);
         assert_eq!(err.exit_code(), 1);
         assert!(err.suppress_stderr());
     }
@@ -935,22 +993,22 @@ mod tests {
     fn sample_inspect_report() -> InspectReport {
         InspectReport {
             schema_version: INSPECT_SCHEMA_VERSION,
-            command: "canic inspect canister".to_string(),
+            command: InspectCommandKind::Canister,
             target_resolution: TargetResolution {
                 deployment: None,
                 role: None,
                 canister_id: "aaaaa-aa".to_string(),
                 network: "local".to_string(),
-                source: CLI_ARG_SOURCE.to_string(),
+                source: InspectSource::CliArg,
             },
-            endpoint: canic_core::protocol::CANIC_RUNTIME_STATUS.to_string(),
-            status: "ok".to_string(),
+            endpoint: InspectEndpoint::RuntimeStatus,
+            status: RuntimeStatus::Ok,
             health_status: None,
             readiness_status: None,
             runtime_status: Some(RuntimeStatusPayload {
-                source: RUNTIME_OBSERVED_SOURCE.to_string(),
+                source: InspectSource::RuntimeObserved,
                 status: sample_runtime_status(RuntimeStatus::Ok),
-                response_format: "candid".to_string(),
+                response_format: InspectResponseFormat::Candid,
             }),
             warnings: Vec::new(),
             next_actions: Vec::new(),

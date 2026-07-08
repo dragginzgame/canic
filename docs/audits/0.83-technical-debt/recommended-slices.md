@@ -82,3 +82,43 @@ Explicit non-scope:
 - no evidence envelope changes
 - no deployment truth changes
 - no aliases or compatibility routes for removed `--format` forms
+
+## 0.83 Runtime Inspect Report Typing
+
+Status:
+completed in 0.83.2 for the accepted `CANIC-083-DEBT-004` scope.
+
+Source findings:
+- CANIC-083-DEBT-004
+
+Boundary:
+Runtime inspect CLI report wrapper, typed command/endpoint labels, typed status
+slots, and source-attribution labels.
+
+Previous owner:
+The inspect report wrapper stored command, endpoint, aggregate status, source
+attribution, and response format as raw strings, and dormant health/readiness
+slots as loose JSON values.
+
+Intended owner:
+The inspect report wrapper owns typed report values, and the renderer only
+formats or serializes those typed values.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli inspect`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no broader runtime introspection behavior changes
