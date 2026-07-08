@@ -32,7 +32,7 @@ fn pool_admin_endpoint_is_manifested_as_implemented_command_dispatch() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::CommandDispatch {
-            command_kind: "pool.admin.v1",
+            command_kind: replay_command_kind("pool.admin.v1"),
             command_manifest: "pool.admin.command_manifest.v1",
         }
     );
@@ -69,7 +69,7 @@ fn pool_create_empty_command_is_manifested_as_implemented() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::ReplayProtected {
-            command_kind: "pool.create_empty.v1",
+            command_kind: replay_command_kind("pool.create_empty.v1"),
             requires_operation_id: true,
         }
     );
@@ -90,7 +90,7 @@ fn pool_import_queued_command_is_manifested_as_implemented_convergent() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::SnapshotConvergent {
-            command_kind: "pool.import_queued.ensure_v1",
+            command_kind: replay_command_kind("pool.import_queued.ensure_v1"),
         }
     );
 }
@@ -109,7 +109,7 @@ fn pool_import_immediate_command_is_manifested_as_implemented_idempotent() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::ResponseIdempotent {
-            command_kind: "pool.import_immediate.ensure_v1",
+            command_kind: replay_command_kind("pool.import_immediate.ensure_v1"),
         }
     );
     assert_eq!(entry.cost_class, CostClass::ManagementDeployment);
@@ -131,7 +131,7 @@ fn pool_recycle_command_is_manifested_as_implemented_idempotent() {
     assert_eq!(
         entry.replay_policy,
         ReplayPolicy::ResponseIdempotent {
-            command_kind: "pool.recycle.ensure_v1",
+            command_kind: replay_command_kind("pool.recycle.ensure_v1"),
         }
     );
     assert_eq!(entry.cost_class, CostClass::ManagementDeployment);

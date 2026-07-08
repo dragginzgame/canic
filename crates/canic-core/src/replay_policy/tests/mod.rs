@@ -73,6 +73,10 @@ fn release_candidate_manifest_blockers() -> BTreeSet<String> {
         .collect()
 }
 
+const fn replay_command_kind(label: &'static str) -> ReplayCommandKindLabel {
+    ReplayCommandKindLabel::new(label)
+}
+
 fn enum_variant_names_from_source(
     source: &'static str,
     marker: &'static str,

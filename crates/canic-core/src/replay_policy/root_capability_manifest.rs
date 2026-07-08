@@ -10,7 +10,8 @@ use crate::replay_policy::{
         VALUE_TRANSFER_RESERVE_V1,
     },
     types::{
-        CostClass, ReplayImplementationStatus, ReplayPolicy, RootCapabilityCommandReplayPolicy,
+        CostClass, ReplayCommandKindLabel, ReplayImplementationStatus, ReplayPolicy,
+        RootCapabilityCommandReplayPolicy,
     },
 };
 
@@ -68,7 +69,7 @@ const fn root_capability_replay_protected(
     RootCapabilityCommandReplayPolicy {
         variant,
         replay_policy: ReplayPolicy::ReplayProtected {
-            command_kind,
+            command_kind: ReplayCommandKindLabel::new(command_kind),
             requires_operation_id: true,
         },
         implementation_status,

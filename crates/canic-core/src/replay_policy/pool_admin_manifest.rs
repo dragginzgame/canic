@@ -6,7 +6,10 @@
 
 use crate::replay_policy::{
     quota::{DEPLOYMENT_QUOTA_V1, DEPLOYMENT_RESERVE_V1},
-    types::{CostClass, PoolAdminCommandReplayPolicy, ReplayImplementationStatus, ReplayPolicy},
+    types::{
+        CostClass, PoolAdminCommandReplayPolicy, ReplayCommandKindLabel,
+        ReplayImplementationStatus, ReplayPolicy,
+    },
 };
 
 /// Canonical replay-policy rows for `PoolAdminCommand` variants.
@@ -62,7 +65,9 @@ const fn pool_admin_response_idempotent(
 ) -> PoolAdminCommandReplayPolicy {
     PoolAdminCommandReplayPolicy {
         variant,
-        replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
+        replay_policy: ReplayPolicy::ResponseIdempotent {
+            command_kind: ReplayCommandKindLabel::new(command_kind),
+        },
         implementation_status,
         cost_class,
         quota_policy,
@@ -81,7 +86,7 @@ const fn pool_admin_replay_protected(
     PoolAdminCommandReplayPolicy {
         variant,
         replay_policy: ReplayPolicy::ReplayProtected {
-            command_kind,
+            command_kind: ReplayCommandKindLabel::new(command_kind),
             requires_operation_id: true,
         },
         implementation_status,
@@ -101,7 +106,9 @@ const fn pool_admin_snapshot_convergent(
 ) -> PoolAdminCommandReplayPolicy {
     PoolAdminCommandReplayPolicy {
         variant,
-        replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
+        replay_policy: ReplayPolicy::SnapshotConvergent {
+            command_kind: ReplayCommandKindLabel::new(command_kind),
+        },
         implementation_status,
         cost_class,
         quota_policy,

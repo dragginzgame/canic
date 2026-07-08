@@ -108,7 +108,7 @@ Behavior impact label:
 no_behavior_change.
 
 Public surfaces affected:
-None.
+Rust replay-policy manifest type API only. No CLI or endpoint surface changes.
 
 Serialized surfaces affected:
 None. JSON labels remain unchanged.
@@ -605,3 +605,47 @@ Explicit non-scope:
 - no deployment truth schema changes
 - no evidence-envelope changes
 - no mutation behavior changes
+
+## 0.83 Replay-Policy Command-Kind Label Typing
+
+Status:
+completed in 0.83.12 for the accepted `CANIC-083-DEBT-017` scope.
+
+Source findings:
+- CANIC-083-DEBT-017
+
+Boundary:
+Replay-policy manifest command-kind labels.
+
+Previous owner:
+Replay-policy manifest rows stored command-kind labels as raw `&'static str`
+fields, while runtime replay storage used the validated
+`model::replay::CommandKind` type.
+
+Intended owner:
+Replay-policy manifests own static command-kind labels through a typed manifest
+value. Runtime replay storage and workflow guards continue to use
+`model::replay::CommandKind`.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None.
+
+Validation:
+- `cargo test --locked -p canic-core replay_policy --lib`
+- `cargo clippy --locked -p canic-core --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no endpoint changes
+- no command changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth or evidence schema changes
+- no stable-state layout changes
+- no changes to runtime replay `CommandKind`, receipt storage, operation IDs,
+  cost guards, or workflow replay descriptors

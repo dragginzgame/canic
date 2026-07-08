@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.10
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.11
 Status: pass_with_followups
 
 ## Scope
@@ -41,7 +41,9 @@ diagnostic category, severity, and source labels into typed internal report
 values. The fourteenth follow-up fix tightens state-audit report scope,
 category, and source labels into typed internal report values. The fifteenth
 follow-up fix tightens deployment-root verification check names into typed
-internal report values.
+internal report values. The sixteenth follow-up fix tightens replay-policy
+manifest command-kind labels into a typed manifest-owned value while leaving
+runtime replay storage on `model::replay::CommandKind`.
 
 ## Baseline Validation
 
@@ -722,7 +724,7 @@ Current location: `crates/canic-cli/src/token.rs` and
 `crates/canic-cli/src/cycles/wallet.rs`
 Intended owner: typed wallet command parsers, with token symbols and delegated
 ICP CLI command/error strings remaining caller/runtime data
-Affected surfaces: internal
+Affected surfaces: internal, rust_api
 Release decision: fixed_in_0.83.7
 
 Evidence:
@@ -1180,6 +1182,74 @@ Fix validation:
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
 | `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-017: Replay-Policy Manifests Own Command-Kind Labels As Raw Strings
+
+Severity: P3
+Category: replay_policy / boundary_ownership
+Status: fixed
+Owner: replay-policy manifest model
+Current location:
+`crates/canic-core/src/replay_policy/types.rs`,
+`crates/canic-core/src/replay_policy/endpoint_manifest.rs`,
+`crates/canic-core/src/replay_policy/pool_admin_manifest.rs`, and
+`crates/canic-core/src/replay_policy/root_capability_manifest.rs`
+Intended owner: typed replay-policy manifest value, with runtime replay storage
+remaining on `model::replay::CommandKind`
+Affected surfaces: internal
+Release decision: fixed_in_0.83.12
+
+Evidence:
+- file: `crates/canic-core/src/replay_policy/types.rs`
+- line or anchor: `ReplayPolicy::{ResponseIdempotent, ReplayProtected,
+  MonotonicTransition, SnapshotConvergent, CommandDispatch,
+  IntentionallyNonIdempotent}`
+- module/function: replay-policy manifest type model
+- command/search: `rg -n "command_kind: &'static str|ReplayPolicy::" crates/canic-core/src/replay_policy`
+- reachability: active replay-policy manifest and release-blocker tests
+- exact issue: replay-policy manifest command-kind labels were stored directly
+  as raw `&'static str` fields even though the label vocabulary is owned by
+  the replay-policy manifest, not by arbitrary callers.
+
+Risk:
+
+Low. The emitted/runtime command-kind strings were correct and covered by
+manifest tests, but raw strings left manifest label ownership less explicit
+than the runtime replay `CommandKind` storage boundary.
+
+Recommendation:
+
+Use a typed static manifest label for replay-policy command-kind metadata.
+Keep runtime replay storage and guards on `model::replay::CommandKind`, because
+that type validates command labels for operation IDs and persisted receipts.
+
+Regression test:
+
+Keep focused replay-policy tests asserting unchanged endpoint and command
+manifest classifications, cost guard metadata, and release-candidate blocker
+coverage.
+
+Resolution:
+
+- Added `ReplayCommandKindLabel` for static replay-policy manifest
+  command-kind labels.
+- `ReplayPolicy` variants now carry `ReplayCommandKindLabel` instead of raw
+  `&'static str` command-kind fields.
+- Endpoint, pool-admin, and root-capability manifest constructors convert the
+  existing string labels into typed manifest labels at construction time.
+- Runtime replay receipt storage, cost guards, workflow replay descriptors, and
+  persisted command-kind handling continue to use `model::replay::CommandKind`.
+- The Rust replay-policy manifest model changes as a pre-1.0 hard cut.
+- Command behavior, endpoint surfaces, Candid, JSON, deployment truth,
+  evidence/report schemas, and stable-state layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the replay-policy label typing change. |
+| `cargo test --locked -p canic-core replay_policy --lib` | pass | 29 focused replay-policy tests passed. |
+| `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for `canic-core` targets. |
 
 ## Rejected / Non-Findings
 
