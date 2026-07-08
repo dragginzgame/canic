@@ -208,8 +208,7 @@ fn parses_adoption_report_json_output() {
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("minimal"),
-        OsString::from("--format"),
-        OsString::from("json"),
+        OsString::from("--json"),
         OsString::from("--deployment-check"),
         OsString::from("check.json"),
         OsString::from("--artifact-manifest"),
@@ -245,8 +244,7 @@ fn parses_adoption_report_envelope_json_output() {
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("minimal"),
-        OsString::from("--format"),
-        OsString::from("envelope-json"),
+        OsString::from("--evidence-envelope"),
     ])
     .expect("parse adoption report options");
 
@@ -260,8 +258,7 @@ fn parses_adoption_report_build_provenance_envelope_input() {
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("minimal"),
-        OsString::from("--format"),
-        OsString::from("envelope-json"),
+        OsString::from("--evidence-envelope"),
         OsString::from("--build-provenance"),
         OsString::from("build-provenance.json"),
     ])
@@ -339,17 +336,17 @@ fn rejects_unknown_adoption_profile() {
     std::assert_matches!(err, FleetCommandError::Usage(_));
 }
 
-// Ensure unsupported adoption report formats fail through usage.
+// Ensure raw JSON and envelope artifact modes are mutually exclusive.
 #[test]
-fn rejects_unknown_adoption_report_format() {
+fn rejects_ambiguous_adoption_report_output_modes() {
     let err = AdoptionReportOptions::parse_test([
         OsString::from("demo"),
         OsString::from("--profile"),
         OsString::from("brownfield"),
-        OsString::from("--format"),
-        OsString::from("yaml"),
+        OsString::from("--json"),
+        OsString::from("--evidence-envelope"),
     ])
-    .expect_err("unknown format should fail");
+    .expect_err("ambiguous output mode should fail");
 
     std::assert_matches!(err, FleetCommandError::Usage(_));
 }
@@ -369,7 +366,7 @@ fn rejects_adoption_report_build_provenance_without_envelope_output() {
     std::assert_matches!(
         err,
         FleetCommandError::Usage(message)
-            if message.contains("--build-provenance requires --format envelope-json")
+            if message.contains("--build-provenance requires --evidence-envelope")
     );
 }
 
@@ -1386,7 +1383,8 @@ fn adoption_report_usage_lists_profile_and_output_options() {
     assert!(text.contains("Usage: canic fleet adoption report"));
     assert!(text.contains("--profile <profile>"));
     assert!(text.contains("<fleet>"));
-    assert!(text.contains("--format <text|json|envelope-json>"));
+    assert!(text.contains("--json"));
+    assert!(text.contains("--evidence-envelope"));
     assert!(text.contains("--deployment-check <path>"));
     assert!(text.contains("--inventory <path>"));
     assert!(text.contains("--artifact-manifest <path>"));

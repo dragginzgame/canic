@@ -4,10 +4,8 @@
 //! Does not own: command dispatch, option parsing, policy evaluation, or report rendering.
 //! Boundary: passive CLI surface construction for evidence commands.
 
-use crate::cli::clap::{passthrough_subcommand, render_usage, value_arg};
+use crate::cli::clap::{flag_arg, passthrough_subcommand, render_usage, value_arg};
 use clap::{ArgGroup, Command as ClapCommand};
-
-use super::options::{EvidenceCompareFormat, EvidenceGateFormat};
 
 pub(super) fn usage() -> String {
     render_usage(evidence_command)
@@ -20,6 +18,9 @@ pub(super) fn compare_usage() -> String {
 pub(super) fn gate_usage() -> String {
     render_usage(evidence_gate_command)
 }
+
+pub(super) const JSON_ARG: &str = "json";
+pub(super) const EVIDENCE_ENVELOPE_ARG: &str = "evidence-envelope";
 
 pub(super) fn evidence_command() -> ClapCommand {
     ClapCommand::new("evidence")
@@ -62,11 +63,15 @@ pub(super) fn evidence_gate_command() -> ClapCommand {
                 .required(false),
         )
         .arg(
-            value_arg("format")
-                .long("format")
-                .value_name("text|json|envelope-json")
-                .default_value("text")
-                .value_parser(clap::value_parser!(EvidenceGateFormat)),
+            flag_arg(JSON_ARG)
+                .long(JSON_ARG)
+                .conflicts_with(EVIDENCE_ENVELOPE_ARG)
+                .help("Print raw policy-gate report JSON output"),
+        )
+        .arg(
+            flag_arg(EVIDENCE_ENVELOPE_ARG)
+                .long(EVIDENCE_ENVELOPE_ARG)
+                .help("Print the stable CI/GitOps evidence envelope"),
         )
         .arg(value_arg("output").long("output").value_name("path"))
         .group(
@@ -76,7 +81,7 @@ pub(super) fn evidence_gate_command() -> ClapCommand {
                 .multiple(false),
         )
         .after_help(
-            "Examples:\n  canic evidence gate --policy ci/canic-policy.toml --envelope artifacts/canic/build-provenance.json\n  canic evidence gate --policy ci/canic-policy.toml --manifest ci/canic-evidence.toml --format json --output artifacts/canic/policy-gate-report.json\n\nReads exactly one policy file and either one existing EvidenceEnvelopeV1 or one project evidence manifest. The gate is passive: it does not run builds, deploy, discover live state, mutate inputs, or turn policy success into deployment truth.",
+            "Examples:\n  canic evidence gate --policy ci/canic-policy.toml --envelope artifacts/canic/build-provenance.json\n  canic evidence gate --policy ci/canic-policy.toml --manifest ci/canic-evidence.toml --json --output artifacts/canic/policy-gate-report.json\n\nReads exactly one policy file and either one existing EvidenceEnvelopeV1 or one project evidence manifest. The gate is passive: it does not run builds, deploy, discover live state, mutate inputs, or turn policy success into deployment truth.",
         )
 }
 
@@ -97,13 +102,7 @@ pub(super) fn evidence_compare_command() -> ClapCommand {
                 .value_name("file")
                 .required(true),
         )
-        .arg(
-            value_arg("format")
-                .long("format")
-                .value_name("text|json")
-                .default_value("text")
-                .value_parser(clap::value_parser!(EvidenceCompareFormat)),
-        )
+        .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
         .after_help(
             "Compares stable envelope fields and ignores generated_at, canic_version, and the nested payload body. The payload_sha256 field is compared.",
         )

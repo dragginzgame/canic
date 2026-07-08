@@ -128,14 +128,14 @@ canic build demo app \
   --provenance artifacts/canic/app-build-provenance.json
 
 canic deploy check demo-staging \
-  --format envelope-json \
+  --evidence-envelope \
   --build-provenance artifacts/canic/app-build-provenance.json \
   > artifacts/canic/deployment-check-envelope.json
 
 canic evidence gate \
   --policy ci/canic-policy.toml \
   --manifest ci/canic-evidence.toml \
-  --format json \
+  --json \
   --output artifacts/canic/policy-gate-report.json
 ```
 
@@ -156,11 +156,11 @@ Envelope output is also available:
 ```text
 canic evidence gate --policy ci/canic-policy.toml \
   --manifest ci/canic-evidence.toml \
-  --format envelope-json \
+  --evidence-envelope \
   --output artifacts/canic/policy-gate-envelope.json
 ```
 
-For single-envelope gates, `--format envelope-json` wraps
+For single-envelope gates, `--evidence-envelope` wraps
 `PolicyGateReportV1`. For manifest gates, it wraps
 `ProjectEvidenceGateReportV1`.
 

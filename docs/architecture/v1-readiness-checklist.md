@@ -99,7 +99,7 @@ directories.
 Check a deployment target and save stable evidence:
 
 ```text
-canic deploy check <deployment> --format envelope-json
+canic deploy check <deployment> --evidence-envelope
 ```
 
 Evaluate saved evidence against a project policy:
@@ -186,7 +186,7 @@ In a fresh checkout without deployment-target state:
 
 ```text
 canic deploy inspect catalog list
-canic deploy inspect catalog list --format json
+canic deploy inspect catalog list --json
 ```
 
 should succeed with zero catalog entries and warnings explaining that no

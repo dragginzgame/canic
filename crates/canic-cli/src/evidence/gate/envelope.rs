@@ -171,15 +171,11 @@ fn normalized_gate_args(options: &EvidenceGateOptions) -> Vec<String> {
             args.push(path.display().to_string());
         }
     }
-    args.extend([
-        "--format".to_string(),
-        match options.format {
-            EvidenceGateFormat::Text => "text",
-            EvidenceGateFormat::Json => "json",
-            EvidenceGateFormat::EnvelopeJson => "envelope-json",
-        }
-        .to_string(),
-    ]);
+    match options.format {
+        EvidenceGateFormat::Text => {}
+        EvidenceGateFormat::Json => args.push("--json".to_string()),
+        EvidenceGateFormat::EnvelopeJson => args.push("--evidence-envelope".to_string()),
+    }
     if let Some(output) = &options.output {
         args.push("--output".to_string());
         args.push(output.display().to_string());

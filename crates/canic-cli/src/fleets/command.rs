@@ -13,8 +13,6 @@ use crate::{
 use canic_host::adoption::AdoptionProfileV1;
 use clap::Command as ClapCommand;
 
-use super::options::AdoptionReportFormat;
-
 const FLEET_HELP_AFTER: &str = "\
 Examples:
   canic fleet list
@@ -87,31 +85,33 @@ Examples:
 const FLEET_ADOPTION_HELP_AFTER: &str = "\
 Examples:
   canic fleet adoption report demo --profile brownfield
-  canic fleet adoption report demo --profile minimal --format json
-  canic fleet adoption report demo --profile minimal --format envelope-json
+  canic fleet adoption report demo --profile minimal --json
+  canic fleet adoption report demo --profile minimal --evidence-envelope
 
 Adoption commands are read-only. They report recommendations and never update
 fleet config, package manifests, topology, deployments, or controllers.";
 const FLEET_ADOPTION_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic fleet adoption report demo --profile brownfield
-  canic fleet adoption report demo --profile minimal --format json
-  canic fleet adoption report demo --profile minimal --format envelope-json
+  canic fleet adoption report demo --profile minimal --json
+  canic fleet adoption report demo --profile minimal --evidence-envelope
   canic fleet adoption report demo --profile partial --deployment-check check.json
   canic fleet adoption report demo --profile partial --inventory inventory.json
   canic fleet adoption report demo --profile partial --cargo-metadata cargo-metadata.json
-  canic fleet adoption report demo --profile partial --format envelope-json --build-provenance build-provenance.json
+  canic fleet adoption report demo --profile partial --evidence-envelope --build-provenance build-provenance.json
   canic fleet adoption report demo --profile partial --output adoption-report.txt
 
 Profiles: brownfield, partial, standalone, leaf-only, hybrid-external-wasm,
-minimal. --format json emits the raw experimental adoption report payload;
---format envelope-json emits the stable CI/GitOps evidence envelope with the
-raw adoption payload nested inside. The report is read-only; --output writes
-only the requested report artifact. Evidence inputs are JSON files and are
+minimal. --json emits the raw experimental adoption report payload.
+--evidence-envelope emits the stable CI/GitOps evidence envelope with the raw
+adoption payload nested inside. The report is read-only; --output writes only
+the requested report artifact. Evidence inputs are JSON files and are
 read-only. Use either --inventory or --deployment-check, not both. Use either
 --package-metadata or --cargo-metadata, not both. Deployment-check evidence
 also supplies plan role artifacts when present. --build-provenance is
 fingerprinted only in envelope output.";
+pub(super) const JSON_ARG: &str = "json";
+pub(super) const EVIDENCE_ENVELOPE_ARG: &str = "evidence-envelope";
 
 pub(super) fn fleet_command() -> ClapCommand {
     ClapCommand::new("fleet")
@@ -189,12 +189,15 @@ pub(super) fn fleet_adoption_report_command() -> ClapCommand {
                 .help("Adoption profile to evaluate"),
         )
         .arg(
-            clap::Arg::new("format")
-                .long("format")
-                .value_name("text|json|envelope-json")
-                .default_value("text")
-                .value_parser(clap::value_parser!(AdoptionReportFormat))
-                .help("Report output format"),
+            flag_arg(JSON_ARG)
+                .long(JSON_ARG)
+                .conflicts_with(EVIDENCE_ENVELOPE_ARG)
+                .help("Print raw adoption report JSON output"),
+        )
+        .arg(
+            flag_arg(EVIDENCE_ENVELOPE_ARG)
+                .long(EVIDENCE_ENVELOPE_ARG)
+                .help("Print the stable CI/GitOps evidence envelope"),
         )
         .arg(
             clap::Arg::new("inventory")
@@ -233,7 +236,7 @@ pub(super) fn fleet_adoption_report_command() -> ClapCommand {
                 .long("build-provenance")
                 .value_name("path")
                 .help(
-                    "Fingerprint a BuildProvenanceV1 evidence envelope; requires --format envelope-json",
+                    "Fingerprint a BuildProvenanceV1 evidence envelope; requires --evidence-envelope",
                 ),
         )
         .arg(

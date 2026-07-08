@@ -48,8 +48,8 @@ artifact registry state.
 Saved build provenance can be supplied back to passive evidence envelopes:
 
 ```text
-canic fleet adoption report <fleet> --profile <profile> --format envelope-json --build-provenance <path>
-canic deploy check <deployment> --format envelope-json --build-provenance <path>
+canic fleet adoption report <fleet> --profile <profile> --evidence-envelope --build-provenance <path>
+canic deploy check <deployment> --evidence-envelope --build-provenance <path>
 ```
 
 Those commands only fingerprint the saved provenance envelope as input

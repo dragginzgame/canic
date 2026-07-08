@@ -31,8 +31,7 @@ fn parses_compare_options() {
         OsString::from("left.json"),
         OsString::from("--right"),
         OsString::from("right.json"),
-        OsString::from("--format"),
-        OsString::from("json"),
+        OsString::from("--json"),
     ])
     .expect("parse options");
 
@@ -42,18 +41,16 @@ fn parses_compare_options() {
 }
 
 #[test]
-fn compare_rejects_unknown_format() {
-    std::assert_matches!(
-        EvidenceCompareOptions::parse([
-            OsString::from("--left"),
-            OsString::from("left.json"),
-            OsString::from("--right"),
-            OsString::from("right.json"),
-            OsString::from("--format"),
-            OsString::from("yaml"),
-        ]),
-        Err(EvidenceCommandError::Usage(_))
-    );
+fn parses_compare_options_default_text() {
+    let options = EvidenceCompareOptions::parse([
+        OsString::from("--left"),
+        OsString::from("left.json"),
+        OsString::from("--right"),
+        OsString::from("right.json"),
+    ])
+    .expect("parse options");
+
+    assert_eq!(options.format, EvidenceCompareFormat::Text);
 }
 
 #[test]
@@ -63,8 +60,7 @@ fn parses_gate_options() {
         OsString::from("policy.toml"),
         OsString::from("--envelope"),
         OsString::from("evidence.json"),
-        OsString::from("--format"),
-        OsString::from("envelope-json"),
+        OsString::from("--evidence-envelope"),
         OsString::from("--output"),
         OsString::from("gate.json"),
     ])
@@ -97,18 +93,17 @@ fn parses_gate_manifest_options() {
 }
 
 #[test]
-fn gate_rejects_unknown_format() {
-    std::assert_matches!(
-        EvidenceGateOptions::parse([
-            OsString::from("--policy"),
-            OsString::from("policy.toml"),
-            OsString::from("--envelope"),
-            OsString::from("evidence.json"),
-            OsString::from("--format"),
-            OsString::from("yaml"),
-        ]),
-        Err(EvidenceCommandError::Usage(_))
-    );
+fn parses_gate_json_options() {
+    let options = EvidenceGateOptions::parse([
+        OsString::from("--policy"),
+        OsString::from("policy.toml"),
+        OsString::from("--envelope"),
+        OsString::from("evidence.json"),
+        OsString::from("--json"),
+    ])
+    .expect("parse options");
+
+    assert_eq!(options.format, EvidenceGateFormat::Json);
 }
 
 #[test]

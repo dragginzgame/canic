@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.83.x] - 2026-07-08 - Technical Debt Audit
+
+Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
+
+- `0.83.0` starts the audit-first technical debt line with a docs-only debt
+  ledger, recommended-slice file, deferred/rejected lists, fixes the first P2
+  finding by hard-cutting affected report families to `--json` for raw JSON
+  and `--evidence-envelope` for stable evidence-envelope output, and records
+  the next advanced deploy output-convention finding.
+
+```bash
+canic deploy check <deployment> --json
+canic deploy check <deployment> --evidence-envelope
+canic fleet adoption report <fleet> --profile <profile> --json
+canic fleet adoption report <fleet> --profile <profile> --evidence-envelope
+```
+
 ## [0.82.x] - 2026-07-05 - Boundary Hardening
 
 Detailed patch breakdown: [docs/changelog/0.82.md](docs/changelog/0.82.md)

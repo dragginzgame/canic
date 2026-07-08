@@ -52,7 +52,7 @@ canic fleet create <fleet>
 canic scaffold canister <fleet> <role>
 canic fleet role attach <fleet> <role> --subnet <subnet>
 canic build <fleet> <role> --provenance artifacts/<role>-provenance.json
-canic deploy check <deployment> --format envelope-json
+canic deploy check <deployment> --evidence-envelope
 canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
 canic deploy inspect catalog list

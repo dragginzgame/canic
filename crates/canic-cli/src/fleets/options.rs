@@ -8,17 +8,17 @@ use crate::cli::{
     defaults::local_network,
 };
 use canic_host::adoption::AdoptionProfileV1;
-use clap::ValueEnum;
 use std::{ffi::OsString, path::PathBuf};
 
 use super::{
     FleetCommandError,
     command::{
-        adoption_report_usage, check_usage, delete_usage, fleet_adoption_report_command,
-        fleet_check_command, fleet_delete_command, fleet_list_command, fleet_role_attach_command,
-        fleet_role_declare_command, fleet_role_inspect_command, fleet_role_list_command,
-        fleet_role_rename_command, list_usage, role_attach_usage, role_declare_usage,
-        role_inspect_usage, role_list_usage, role_rename_usage,
+        EVIDENCE_ENVELOPE_ARG, JSON_ARG, adoption_report_usage, check_usage, delete_usage,
+        fleet_adoption_report_command, fleet_check_command, fleet_delete_command,
+        fleet_list_command, fleet_role_attach_command, fleet_role_declare_command,
+        fleet_role_inspect_command, fleet_role_list_command, fleet_role_rename_command, list_usage,
+        role_attach_usage, role_declare_usage, role_inspect_usage, role_list_usage,
+        role_rename_usage,
     },
 };
 
@@ -128,7 +128,7 @@ pub(super) struct AdoptionReportOptions {
 /// AdoptionReportFormat
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum AdoptionReportFormat {
     Text,
     Json,
@@ -323,11 +323,14 @@ impl AdoptionReportOptions {
         let matches = parse_matches(fleet_adoption_report_command(), args)
             .map_err(|_| FleetCommandError::Usage(adoption_report_usage()))?;
 
-        let format = required_typed(&matches, "format");
+        let format = adoption_report_format(
+            matches.get_flag(JSON_ARG),
+            matches.get_flag(EVIDENCE_ENVELOPE_ARG),
+        );
         let build_provenance = path_option(&matches, "build-provenance");
         if build_provenance.is_some() && format != AdoptionReportFormat::EnvelopeJson {
             return Err(FleetCommandError::Usage(format!(
-                "--build-provenance requires --format envelope-json\n\n{}",
+                "--build-provenance requires --evidence-envelope\n\n{}",
                 adoption_report_usage()
             )));
         }
@@ -344,5 +347,13 @@ impl AdoptionReportOptions {
             build_provenance,
             output: path_option(&matches, "output"),
         })
+    }
+}
+
+const fn adoption_report_format(json: bool, evidence_envelope: bool) -> AdoptionReportFormat {
+    match (json, evidence_envelope) {
+        (true, false) => AdoptionReportFormat::Json,
+        (false, true) => AdoptionReportFormat::EnvelopeJson,
+        _ => AdoptionReportFormat::Text,
     }
 }

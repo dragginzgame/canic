@@ -25,8 +25,8 @@ payload DTO.
 The current envelope emitters are:
 
 ```text
-canic fleet adoption report <fleet> --profile <profile> --format envelope-json
-canic deploy check <deployment> --format envelope-json
+canic fleet adoption report <fleet> --profile <profile> --evidence-envelope
+canic deploy check <deployment> --evidence-envelope
 canic build <fleet> <role> --provenance <path>
 ```
 
@@ -34,7 +34,7 @@ Stable envelope comparison is available with:
 
 ```text
 canic evidence compare --left <path> --right <path>
-canic evidence compare --left <path> --right <path> --format json
+canic evidence compare --left <path> --right <path> --json
 ```
 
 Passive policy gates are available with:
@@ -47,14 +47,13 @@ canic evidence gate --policy <path> --manifest <path>
 Existing raw JSON output remains available:
 
 ```text
-canic fleet adoption report <fleet> --profile <profile> --format json
-canic deploy check <deployment>
-canic deploy check <deployment> --format json
+canic fleet adoption report <fleet> --profile <profile> --json
+canic deploy check <deployment> --json
 ```
 
 Raw adoption report JSON remains experimental. Raw deployment-check JSON is
 still the command-specific `DeploymentCheckV1` payload. Automation that wants a
-stable outer contract should use `--format envelope-json`.
+stable outer contract should use `--evidence-envelope`.
 
 ## Envelope Contract
 
@@ -172,9 +171,9 @@ Saved build provenance can be attached to passive adoption and deployment-check
 envelopes as input evidence:
 
 ```text
-canic fleet adoption report <fleet> --profile <profile> --format envelope-json \
+canic fleet adoption report <fleet> --profile <profile> --evidence-envelope \
   --build-provenance <path>
-canic deploy check <deployment> --format envelope-json \
+canic deploy check <deployment> --evidence-envelope \
   --build-provenance <path>
 ```
 
@@ -239,18 +238,18 @@ One conservative pipeline shape is:
 ```text
 canic build demo app --provenance artifacts/canic/build-provenance.json
 
-canic fleet adoption report demo --profile minimal --format envelope-json \
+canic fleet adoption report demo --profile minimal --evidence-envelope \
   --build-provenance artifacts/canic/build-provenance.json \
   --output artifacts/canic/adoption-envelope.json
 
-canic deploy check demo-staging --format envelope-json \
+canic deploy check demo-staging --evidence-envelope \
   --build-provenance artifacts/canic/build-provenance.json \
   > artifacts/canic/deployment-check-envelope.json
 
 canic evidence compare \
   --left artifacts/canic/baseline-deployment-check-envelope.json \
   --right artifacts/canic/deployment-check-envelope.json \
-  --format json \
+  --json \
   > artifacts/canic/envelope-compare.json
 ```
 
@@ -278,15 +277,15 @@ DTOs:
 Raw JSON remains command-specific:
 
 ```text
-canic fleet adoption report demo --profile brownfield --format json
-canic deploy check demo-staging --format json
+canic fleet adoption report demo --profile brownfield --json
+canic deploy check demo-staging --json
 ```
 
 Envelope JSON is the stable automation wrapper:
 
 ```text
-canic fleet adoption report demo --profile brownfield --format envelope-json
-canic deploy check demo-staging --format envelope-json
+canic fleet adoption report demo --profile brownfield --evidence-envelope
+canic deploy check demo-staging --evidence-envelope
 ```
 
 Do not write CI policy against raw payload fields unless the payload schema is
@@ -331,7 +330,7 @@ internal. `payload_sha256` is still compared, so a changed payload identity is
 visible without teaching CI to parse payload-specific fields.
 
 The command exits successfully when compared fields match and fails when they
-differ. Text output is intended for humans; `--format json` emits the compare
+differ. Text output is intended for humans; `--json` emits the compare
 report for CI.
 
 ## Deferred Work

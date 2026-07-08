@@ -22,8 +22,7 @@ fn deploy_catalog_options_parse_list_defaults_to_text() {
 fn deploy_catalog_options_parse_inspect_json_output() {
     let options = deploy_catalog::DeployCatalogOptions::parse_inspect_test([
         OsString::from("demo-local"),
-        OsString::from("--format"),
-        OsString::from("json"),
+        OsString::from("--json"),
         OsString::from("--output"),
         OsString::from("catalog.json"),
     ])
@@ -33,17 +32,6 @@ fn deploy_catalog_options_parse_inspect_json_output() {
     assert_eq!(options.network, "local");
     assert_eq!(options.format, CatalogOutputFormat::Json);
     assert_eq!(options.output, Some(PathBuf::from("catalog.json")));
-}
-
-#[test]
-fn deploy_catalog_rejects_unknown_format() {
-    let err = deploy_catalog::DeployCatalogOptions::parse_list_test([
-        OsString::from("--format"),
-        OsString::from("envelope-json"),
-    ])
-    .expect_err("catalog format should reject unsupported values");
-
-    std::assert_matches!(err, DeployCommandError::Usage(_));
 }
 
 #[test]
@@ -63,7 +51,7 @@ fn deploy_catalog_help_documents_passive_deployment_target_scope() {
     assert!(!help.contains("canic deploy catalog list"));
     assert!(help.contains("do not query"));
     assert!(help.contains("infer deployments from fleet-template names"));
-    assert!(list_help.contains("--format <text|json>"));
+    assert!(list_help.contains("--json"));
     assert!(list_help.contains("--output <path>"));
     assert!(inspect_help.contains("deployment target, not a fleet template"));
 }

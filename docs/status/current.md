@@ -11,13 +11,28 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.82.x` boundary hardening. Source of truth:
-  `docs/design/0.82-boundary-hardening/0.82-design.md`.
+- The active line is `0.83.x` technical debt audit. Source of truth:
+  `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.82.40`. Earlier in the
+- The current package/release-surface version is `0.82.41`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
+
+- The `0.83.0` slice creates the docs-only technical debt audit artifact set
+  under `docs/audits/0.83-technical-debt/`, runs the baseline repo-health
+  commands from the design, records and fixes the first accepted finding,
+  `CANIC-083-DEBT-001`, and records `CANIC-083-DEBT-002` as a follow-up. The
+  fixed finding hard-cuts deployment catalog, deployment check, fleet adoption
+  reports, evidence gate, and evidence compare to `--json` for raw JSON output
+  and `--evidence-envelope` for stable evidence-envelope output. No aliases or
+  compatibility routes are kept for the removed `--format json` /
+  `--format envelope-json` report-selection forms. JSON payload schemas,
+  deployment truth, evidence envelope schema, endpoint surfaces, Candid, and
+  stable-state layout are unchanged. The follow-up finding covers remaining
+  advanced deploy report families that still use `--format json|text`: deploy
+  compare, root verification, authority reports, external lifecycle reports,
+  and promotion reports.
 
 - The `0.82.41` docs-only organization slice keeps the canonical 0.82 design
   at `docs/design/0.82-boundary-hardening/0.82-design.md` and moves

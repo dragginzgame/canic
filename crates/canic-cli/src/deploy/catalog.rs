@@ -4,8 +4,8 @@ use super::{
 use crate::{
     cli::{
         clap::{
-            parse_matches, parse_subcommand, passthrough_subcommand, path_option, render_usage,
-            required_string, required_typed, string_option_or_else,
+            flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, path_option,
+            render_usage, required_string, string_option_or_else,
         },
         defaults::local_network,
         globals::internal_network_arg,
@@ -37,7 +37,7 @@ const DEPLOY_CATALOG_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
   canic deploy inspect catalog inspect demo-local
-  canic --network local deploy inspect catalog list --format json --output catalog.json
+  canic --network local deploy inspect catalog list --json --output catalog.json
 
 Catalog commands are read-only local-state reports. They list or inspect
 deployment targets recorded under .canic/<network>/deployments and do not query
@@ -46,19 +46,20 @@ controllers, install Wasm, or infer deployments from fleet-template names.";
 const DEPLOY_CATALOG_LIST_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
-  canic deploy inspect catalog list --format json
-  canic --network local deploy inspect catalog list --format json --output catalog.json
+  canic deploy inspect catalog list --json
+  canic --network local deploy inspect catalog list --json --output catalog.json
 
 Lists deployment targets from existing local deployment-target state only. This
 does not refresh live state or infer deployments from fleet-template names.";
 const DEPLOY_CATALOG_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog inspect demo-local
-  canic deploy inspect catalog inspect demo-local --format json
-  canic --network local deploy inspect catalog inspect demo-local --format json --output demo-local.json
+  canic deploy inspect catalog inspect demo-local --json
+  canic --network local deploy inspect catalog inspect demo-local --json --output demo-local.json
 
 Inspects one deployment target from existing local deployment-target state
 only. The deployment argument is a deployment target, not a fleet template.";
+const JSON_ARG: &str = "json";
 
 const LIST_COMMAND: CatalogCommand = CatalogCommand {
     name: "list",
@@ -196,7 +197,7 @@ impl DeployCatalogOptions {
         Ok(Self {
             deployment: None,
             network: string_option_or_else(&matches, "network", local_network),
-            format: required_typed(&matches, "format"),
+            format: catalog_output_format(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
         })
     }
@@ -210,7 +211,7 @@ impl DeployCatalogOptions {
         Ok(Self {
             deployment: Some(required_string(&matches, "deployment")),
             network: string_option_or_else(&matches, "network", local_network),
-            format: required_typed(&matches, "format"),
+            format: catalog_output_format(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
         })
     }
@@ -242,14 +243,16 @@ fn inspect_command() -> ClapCommand {
     )
 }
 
-fn format_arg() -> clap::Arg {
-    value_arg("format")
-        .long("format")
-        .value_name("text|json")
-        .num_args(1)
-        .default_value("text")
-        .value_parser(clap::value_parser!(CatalogOutputFormat))
-        .help("Output format; defaults to text")
+const fn catalog_output_format(json: bool) -> CatalogOutputFormat {
+    if json {
+        CatalogOutputFormat::Json
+    } else {
+        CatalogOutputFormat::Text
+    }
+}
+
+fn json_arg() -> clap::Arg {
+    flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output")
 }
 
 fn output_arg() -> clap::Arg {
@@ -257,7 +260,7 @@ fn output_arg() -> clap::Arg {
         .long("output")
         .value_name("path")
         .num_args(1)
-        .help("Write the selected catalog output format to this path")
+        .help("Write the selected catalog report to this path")
 }
 
 fn catalog_passthrough_command(spec: CatalogCommand) -> ClapCommand {
@@ -273,7 +276,7 @@ fn catalog_leaf_command(spec: CatalogCommand) -> ClapCommand {
         .bin_name(spec.bin_name)
         .about(spec.about)
         .disable_help_flag(true)
-        .arg(format_arg())
+        .arg(json_arg())
         .arg(output_arg())
         .arg(internal_network_arg())
         .after_help(spec.help_after)
