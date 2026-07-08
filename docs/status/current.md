@@ -14,12 +14,25 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.11`. Earlier in the
+- The current package/release-surface version is `0.83.12`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.12` working slice fixes `CANIC-083-DEBT-017` by tightening
+- The current `0.83.13` working slice fixes `CANIC-083-DEBT-018` by tightening
+  replay-policy manifest constructor command labels. Endpoint, pool-admin, and
+  root-capability manifest call sites now construct typed
+  `ReplayCommandKindLabel` values explicitly, command-dispatch rows construct
+  typed `ReplayCommandManifestLabel` values explicitly, and the private
+  manifest helpers accept typed labels instead of loose command strings.
+  Replay quota/reserve policy constants now use typed manifest labels as well.
+  Runtime replay storage, replay guards, operation IDs, cost guards, workflow
+  replay descriptors, persisted receipts, endpoint names, command-manifest
+  string values, and quota/reserve policy string values are unchanged. Command
+  behavior, endpoint surfaces, Candid, JSON, deployment truth, evidence/report
+  schemas, and stable-state layout are unchanged.
+
+- The `0.83.12` slice fixes `CANIC-083-DEBT-017` by tightening
   replay-policy manifest command-kind labels. `ReplayPolicy` variants now carry
   a typed static `ReplayCommandKindLabel` instead of raw string command-kind
   fields. Runtime replay storage, replay guards, operation IDs, cost guards,

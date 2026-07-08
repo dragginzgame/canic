@@ -33,7 +33,7 @@ fn root_capability_endpoint_is_manifested_as_command_dispatch() {
         entry.replay_policy,
         ReplayPolicy::CommandDispatch {
             command_kind: replay_command_kind("root.capability_rpc.v1"),
-            command_manifest: "root.capability.command_manifest.v1",
+            command_manifest: replay_command_manifest("root.capability.command_manifest.v1"),
         }
     );
     assert_eq!(entry.cost_class, CostClass::ManagementDeployment);

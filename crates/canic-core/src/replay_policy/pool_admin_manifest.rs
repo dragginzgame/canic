@@ -8,7 +8,8 @@ use crate::replay_policy::{
     quota::{DEPLOYMENT_QUOTA_V1, DEPLOYMENT_RESERVE_V1},
     types::{
         CostClass, PoolAdminCommandReplayPolicy, ReplayCommandKindLabel,
-        ReplayImplementationStatus, ReplayPolicy,
+        ReplayCycleReservePolicyLabel, ReplayImplementationStatus, ReplayPolicy,
+        ReplayQuotaPolicyLabel,
     },
 };
 
@@ -16,7 +17,7 @@ use crate::replay_policy::{
 pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPolicy] = &[
     pool_admin_replay_protected(
         "CreateEmpty",
-        "pool.create_empty.v1",
+        command_kind("pool.create_empty.v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
@@ -24,7 +25,7 @@ pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPol
     ),
     pool_admin_response_idempotent(
         "Recycle",
-        "pool.recycle.ensure_v1",
+        command_kind("pool.recycle.ensure_v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
@@ -32,7 +33,7 @@ pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPol
     ),
     pool_admin_response_idempotent(
         "ImportImmediate",
-        "pool.import_immediate.ensure_v1",
+        command_kind("pool.import_immediate.ensure_v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
@@ -40,7 +41,7 @@ pub const POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST: &[PoolAdminCommandReplayPol
     ),
     pool_admin_snapshot_convergent(
         "ImportQueued",
-        "pool.import_queued.ensure_v1",
+        command_kind("pool.import_queued.ensure_v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::None,
         None,
@@ -55,19 +56,21 @@ pub const fn pool_admin_command_replay_policy_manifest() -> &'static [PoolAdminC
     POOL_ADMIN_COMMAND_REPLAY_POLICY_MANIFEST
 }
 
+const fn command_kind(label: &'static str) -> ReplayCommandKindLabel {
+    ReplayCommandKindLabel::new(label)
+}
+
 const fn pool_admin_response_idempotent(
     variant: &'static str,
-    command_kind: &'static str,
+    command_kind: ReplayCommandKindLabel,
     implementation_status: ReplayImplementationStatus,
     cost_class: CostClass,
-    quota_policy: Option<&'static str>,
-    cycle_reserve_policy: Option<&'static str>,
+    quota_policy: Option<ReplayQuotaPolicyLabel>,
+    cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
 ) -> PoolAdminCommandReplayPolicy {
     PoolAdminCommandReplayPolicy {
         variant,
-        replay_policy: ReplayPolicy::ResponseIdempotent {
-            command_kind: ReplayCommandKindLabel::new(command_kind),
-        },
+        replay_policy: ReplayPolicy::ResponseIdempotent { command_kind },
         implementation_status,
         cost_class,
         quota_policy,
@@ -77,16 +80,16 @@ const fn pool_admin_response_idempotent(
 
 const fn pool_admin_replay_protected(
     variant: &'static str,
-    command_kind: &'static str,
+    command_kind: ReplayCommandKindLabel,
     implementation_status: ReplayImplementationStatus,
     cost_class: CostClass,
-    quota_policy: Option<&'static str>,
-    cycle_reserve_policy: Option<&'static str>,
+    quota_policy: Option<ReplayQuotaPolicyLabel>,
+    cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
 ) -> PoolAdminCommandReplayPolicy {
     PoolAdminCommandReplayPolicy {
         variant,
         replay_policy: ReplayPolicy::ReplayProtected {
-            command_kind: ReplayCommandKindLabel::new(command_kind),
+            command_kind,
             requires_operation_id: true,
         },
         implementation_status,
@@ -98,17 +101,15 @@ const fn pool_admin_replay_protected(
 
 const fn pool_admin_snapshot_convergent(
     variant: &'static str,
-    command_kind: &'static str,
+    command_kind: ReplayCommandKindLabel,
     implementation_status: ReplayImplementationStatus,
     cost_class: CostClass,
-    quota_policy: Option<&'static str>,
-    cycle_reserve_policy: Option<&'static str>,
+    quota_policy: Option<ReplayQuotaPolicyLabel>,
+    cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
 ) -> PoolAdminCommandReplayPolicy {
     PoolAdminCommandReplayPolicy {
         variant,
-        replay_policy: ReplayPolicy::SnapshotConvergent {
-            command_kind: ReplayCommandKindLabel::new(command_kind),
-        },
+        replay_policy: ReplayPolicy::SnapshotConvergent { command_kind },
         implementation_status,
         cost_class,
         quota_policy,

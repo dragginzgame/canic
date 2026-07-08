@@ -10,7 +10,8 @@ use crate::replay_policy::{
         VALUE_TRANSFER_RESERVE_V1,
     },
     types::{
-        CostClass, ReplayCommandKindLabel, ReplayImplementationStatus, ReplayPolicy,
+        CostClass, ReplayCommandKindLabel, ReplayCycleReservePolicyLabel,
+        ReplayImplementationStatus, ReplayPolicy, ReplayQuotaPolicyLabel,
         RootCapabilityCommandReplayPolicy,
     },
 };
@@ -19,7 +20,7 @@ use crate::replay_policy::{
 pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityCommandReplayPolicy] = &[
     root_capability_replay_protected(
         "ProvisionCanister",
-        "root.provision.v1",
+        command_kind("root.provision.v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
@@ -27,7 +28,7 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
     ),
     root_capability_replay_protected(
         "UpgradeCanister",
-        "root.upgrade.v1",
+        command_kind("root.upgrade.v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
@@ -35,7 +36,7 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
     ),
     root_capability_replay_protected(
         "RecycleCanister",
-        "root.recycle_canister.v1",
+        command_kind("root.recycle_canister.v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::ManagementDeployment,
         Some(DEPLOYMENT_QUOTA_V1),
@@ -43,7 +44,7 @@ pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityComman
     ),
     root_capability_replay_protected(
         "RequestCycles",
-        "root.request_cycles.v1",
+        command_kind("root.request_cycles.v1"),
         ReplayImplementationStatus::Implemented,
         CostClass::ValueTransfer,
         Some(VALUE_TRANSFER_QUOTA_V1),
@@ -58,18 +59,22 @@ pub const fn root_capability_command_replay_policy_manifest()
     ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
 }
 
+const fn command_kind(label: &'static str) -> ReplayCommandKindLabel {
+    ReplayCommandKindLabel::new(label)
+}
+
 const fn root_capability_replay_protected(
     variant: &'static str,
-    command_kind: &'static str,
+    command_kind: ReplayCommandKindLabel,
     implementation_status: ReplayImplementationStatus,
     cost_class: CostClass,
-    quota_policy: Option<&'static str>,
-    cycle_reserve_policy: Option<&'static str>,
+    quota_policy: Option<ReplayQuotaPolicyLabel>,
+    cycle_reserve_policy: Option<ReplayCycleReservePolicyLabel>,
 ) -> RootCapabilityCommandReplayPolicy {
     RootCapabilityCommandReplayPolicy {
         variant,
         replay_policy: ReplayPolicy::ReplayProtected {
-            command_kind: ReplayCommandKindLabel::new(command_kind),
+            command_kind,
             requires_operation_id: true,
         },
         implementation_status,

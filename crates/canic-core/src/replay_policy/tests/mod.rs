@@ -77,6 +77,10 @@ const fn replay_command_kind(label: &'static str) -> ReplayCommandKindLabel {
     ReplayCommandKindLabel::new(label)
 }
 
+const fn replay_command_manifest(label: &'static str) -> ReplayCommandManifestLabel {
+    ReplayCommandManifestLabel::new(label)
+}
+
 fn enum_variant_names_from_source(
     source: &'static str,
     marker: &'static str,
