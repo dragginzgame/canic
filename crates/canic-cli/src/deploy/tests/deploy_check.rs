@@ -15,8 +15,7 @@ fn check_deployment_arg() -> OsString {
 fn envelope_format_args() -> Vec<OsString> {
     vec![
         check_deployment_arg(),
-        OsString::from("--format"),
-        OsString::from("envelope-json"),
+        OsString::from("--evidence-envelope"),
     ]
 }
 
@@ -125,12 +124,8 @@ fn deploy_check_parses_envelope_json_format() {
 
 #[test]
 fn deploy_check_parses_text_format() {
-    let options = deploy_check::DeployCheckOptions::parse([
-        check_deployment_arg(),
-        OsString::from("--format"),
-        OsString::from("text"),
-    ])
-    .expect("parse deploy check");
+    let options = deploy_check::DeployCheckOptions::parse([check_deployment_arg()])
+        .expect("parse deploy check");
 
     assert_eq!(options.truth.deployment, "demo");
     assert_eq!(options.format, CheckOutputFormat::Text);
@@ -159,7 +154,7 @@ fn deploy_check_rejects_build_provenance_without_envelope_output() {
     std::assert_matches!(
         err,
         DeployCommandError::Usage(message)
-            if message.contains("--build-provenance requires --format envelope-json")
+            if message.contains("--build-provenance requires --evidence-envelope")
     );
 }
 
@@ -167,7 +162,8 @@ fn deploy_check_rejects_build_provenance_without_envelope_output() {
 fn deploy_check_usage_lists_build_provenance_input() {
     let text = deploy_check::usage();
 
-    assert!(text.contains("--format <json|envelope-json|text>"));
+    assert!(text.contains("--json"));
+    assert!(text.contains("--evidence-envelope"));
     assert!(text.contains("--build-provenance <path>"));
 }
 

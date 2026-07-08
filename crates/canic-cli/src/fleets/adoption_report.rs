@@ -331,8 +331,7 @@ fn adoption_report_command_provenance(
         options.fleet.clone(),
         "--profile".to_string(),
         adoption_profile_label(options.profile).to_string(),
-        "--format".to_string(),
-        "envelope-json".to_string(),
+        "--evidence-envelope".to_string(),
     ];
 
     let mut argv_redactions = Vec::new();

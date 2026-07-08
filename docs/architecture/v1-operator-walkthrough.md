@@ -118,7 +118,7 @@ stable evidence envelope:
 
 ```text
 canic deploy check demo-staging \
-  --format envelope-json \
+  --evidence-envelope \
   --build-provenance artifacts/canic/app-build-provenance.json \
   > artifacts/canic/deployment-check-envelope.json
 ```
@@ -138,7 +138,7 @@ Evaluate saved evidence against a strict project policy:
 canic evidence gate \
   --policy ci/canic-policy.toml \
   --manifest ci/canic-evidence.toml \
-  --format json \
+  --json \
   --output artifacts/canic/policy-gate-report.json
 ```
 
@@ -181,14 +181,14 @@ List deployment targets recorded in local deployment-target state:
 
 ```text
 canic deploy inspect catalog list
-canic deploy inspect catalog list --format json
+canic deploy inspect catalog list --json
 ```
 
 Inspect one known deployment target:
 
 ```text
 canic deploy inspect catalog inspect demo-staging
-canic deploy inspect catalog inspect demo-staging --format json
+canic deploy inspect catalog inspect demo-staging --json
 ```
 
 The catalog reads only:
@@ -213,8 +213,8 @@ live deployment or mutate project state:
 
 ```text
 canic deploy inspect catalog list
-canic deploy inspect catalog list --format json
-canic deploy inspect catalog list --format json --output /tmp/canic-catalog-smoke.json
+canic deploy inspect catalog list --json
+canic deploy inspect catalog list --json --output /tmp/canic-catalog-smoke.json
 ```
 
 Expected behavior in a fresh checkout without deployment-target state:

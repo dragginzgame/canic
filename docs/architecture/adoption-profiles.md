@@ -82,7 +82,7 @@ JSON output is available for inspection, but the 0.50 JSON shape is
 experimental:
 
 ```bash
-canic fleet adoption report demo --profile minimal --format json
+canic fleet adoption report demo --profile minimal --json
 ```
 
 Evidence can be supplied from existing JSON artifacts:

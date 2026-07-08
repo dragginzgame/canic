@@ -26,11 +26,11 @@ passes that saved evidence into passive report envelopes:
 ```text
 canic build demo app --provenance artifacts/canic/build-provenance.json
 
-canic fleet adoption report demo --profile minimal --format envelope-json \
+canic fleet adoption report demo --profile minimal --evidence-envelope \
   --build-provenance artifacts/canic/build-provenance.json \
   --output artifacts/canic/adoption-envelope.json
 
-canic deploy check demo-staging --format envelope-json \
+canic deploy check demo-staging --evidence-envelope \
   --build-provenance artifacts/canic/build-provenance.json \
   > artifacts/canic/deployment-check-envelope.json
 ```

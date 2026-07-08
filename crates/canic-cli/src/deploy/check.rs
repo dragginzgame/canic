@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     cli::{
-        clap::{parse_matches, path_option, render_usage, required_typed},
+        clap::{flag_arg, parse_matches, path_option, render_usage},
         defaults::local_network,
         help::print_help_or_version,
     },
@@ -31,19 +31,21 @@ const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
   canic --network local deploy check --profile fast demo
-  canic deploy check demo --format text
-  canic deploy check demo --format envelope-json
-  canic deploy check demo --format envelope-json --build-provenance build-provenance.json
+  canic deploy check demo --json
+  canic deploy check demo --evidence-envelope
+  canic deploy check demo --evidence-envelope --build-provenance build-provenance.json
 
-Prints the local DeploymentCheckV1 without installing or mutating state.
-Use --format text for a compact operator-facing summary.
-Use --format envelope-json for the stable CI/GitOps evidence envelope.
+Prints a compact operator-facing deployment check without installing or
+mutating state. Use --json for the local DeploymentCheckV1 payload. Use
+--evidence-envelope for the stable CI/GitOps evidence envelope.
 --build-provenance is fingerprinted only in envelope output.";
 
 const CHECK_COMMAND_NAME: &str = "check";
-const FORMAT_ARG: &str = "format";
+const JSON_ARG: &str = "json";
+const EVIDENCE_ENVELOPE_ARG: &str = "evidence-envelope";
 const BUILD_PROVENANCE_ARG: &str = "build-provenance";
 const BUILD_PROVENANCE_FLAG: &str = "--build-provenance";
+const EVIDENCE_ENVELOPE_FLAG: &str = "--evidence-envelope";
 
 ///
 /// DeployCheckOptions
@@ -212,8 +214,7 @@ fn deployment_check_command_provenance(
         "deploy".to_string(),
         "check".to_string(),
         options.truth.deployment.clone(),
-        "--format".to_string(),
-        "envelope-json".to_string(),
+        EVIDENCE_ENVELOPE_FLAG.to_string(),
     ];
     if let Some(profile) = options.truth.profile {
         argv_normalized.push("--profile".to_string());
@@ -426,11 +427,14 @@ impl DeployCheckOptions {
     {
         let matches =
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
-        let format = required_typed(&matches, FORMAT_ARG);
+        let format = check_output_format(
+            matches.get_flag(JSON_ARG),
+            matches.get_flag(EVIDENCE_ENVELOPE_ARG),
+        );
         let build_provenance = path_option(&matches, BUILD_PROVENANCE_ARG);
         if build_provenance.is_some() && format != CheckOutputFormat::EnvelopeJson {
             return Err(DeployCommandError::Usage(format!(
-                "{BUILD_PROVENANCE_FLAG} requires --format envelope-json\n\n{}",
+                "{BUILD_PROVENANCE_FLAG} requires {EVIDENCE_ENVELOPE_FLAG}\n\n{}",
                 usage()
             )));
         }
@@ -445,19 +449,31 @@ impl DeployCheckOptions {
 
 pub(super) fn command() -> ClapCommand {
     deploy_truth_leaf_command(CHECK_COMMAND_NAME, "Print the local deployment truth check")
-        .arg(check_format_arg())
+        .arg(json_arg())
+        .arg(evidence_envelope_arg())
         .arg(build_provenance_input_arg())
         .after_help(DEPLOY_CHECK_HELP_AFTER)
 }
 
-fn check_format_arg() -> clap::Arg {
-    value_arg(FORMAT_ARG)
-        .long(FORMAT_ARG)
-        .value_name("json|envelope-json|text")
-        .num_args(1)
-        .default_value("json")
-        .value_parser(clap::value_parser!(CheckOutputFormat))
-        .help("Output format; defaults to json")
+const fn check_output_format(json: bool, evidence_envelope: bool) -> CheckOutputFormat {
+    match (json, evidence_envelope) {
+        (true, false) => CheckOutputFormat::Json,
+        (false, true) => CheckOutputFormat::EnvelopeJson,
+        _ => CheckOutputFormat::Text,
+    }
+}
+
+fn json_arg() -> clap::Arg {
+    flag_arg(JSON_ARG)
+        .long(JSON_ARG)
+        .conflicts_with(EVIDENCE_ENVELOPE_ARG)
+        .help("Print DeploymentCheckV1 JSON output")
+}
+
+fn evidence_envelope_arg() -> clap::Arg {
+    flag_arg(EVIDENCE_ENVELOPE_ARG)
+        .long(EVIDENCE_ENVELOPE_ARG)
+        .help("Print the stable CI/GitOps evidence envelope")
 }
 
 fn build_provenance_input_arg() -> clap::Arg {
@@ -465,7 +481,7 @@ fn build_provenance_input_arg() -> clap::Arg {
         .long(BUILD_PROVENANCE_ARG)
         .value_name("path")
         .num_args(1)
-        .help("Fingerprint a BuildProvenanceV1 evidence envelope; requires --format envelope-json")
+        .help("Fingerprint a BuildProvenanceV1 evidence envelope; requires --evidence-envelope")
 }
 
 pub(super) fn usage() -> String {
