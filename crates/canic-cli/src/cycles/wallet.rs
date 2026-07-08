@@ -21,28 +21,60 @@ use std::{ffi::OsString, path::Path};
 
 #[derive(Clone, Copy)]
 struct WalletCommand {
-    name: &'static str,
+    kind: WalletCommandKind,
 }
 
-const BALANCE_COMMAND: &str = "balance";
-const CONVERT_COMMAND: &str = "convert";
-const MINT_COMMAND: &str = "mint";
-const TRANSFER_COMMAND: &str = "transfer";
-const TOPUP_COMMAND: &str = "topup";
+///
+/// WalletCommandKind
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WalletCommandKind {
+    Balance,
+    Convert,
+    Mint,
+    Transfer,
+    Topup,
+}
+
+impl WalletCommandKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Balance => "balance",
+            Self::Convert => "convert",
+            Self::Mint => "mint",
+            Self::Transfer => "transfer",
+            Self::Topup => "topup",
+        }
+    }
+
+    const fn parse(command: &str) -> Option<Self> {
+        match command.as_bytes() {
+            b"balance" => Some(Self::Balance),
+            b"convert" => Some(Self::Convert),
+            b"mint" => Some(Self::Mint),
+            b"transfer" => Some(Self::Transfer),
+            b"topup" => Some(Self::Topup),
+            _ => None,
+        }
+    }
+}
 
 const WALLET_COMMANDS: &[WalletCommand] = &[
     WalletCommand {
-        name: BALANCE_COMMAND,
+        kind: WalletCommandKind::Balance,
     },
     WalletCommand {
-        name: CONVERT_COMMAND,
-    },
-    WalletCommand { name: MINT_COMMAND },
-    WalletCommand {
-        name: TRANSFER_COMMAND,
+        kind: WalletCommandKind::Convert,
     },
     WalletCommand {
-        name: TOPUP_COMMAND,
+        kind: WalletCommandKind::Mint,
+    },
+    WalletCommand {
+        kind: WalletCommandKind::Transfer,
+    },
+    WalletCommand {
+        kind: WalletCommandKind::Topup,
     },
 ];
 
@@ -163,42 +195,44 @@ pub(super) fn run_cycles_command(
     command: &str,
     args: Vec<OsString>,
 ) -> Result<(), CyclesCommandError> {
+    let Some(command) = WalletCommandKind::parse(command) else {
+        return Err(CyclesCommandError::Usage(cycles_usage()));
+    };
     match command {
-        BALANCE_COMMAND => {
+        WalletCommandKind::Balance => {
             if print_help_or_version(&args, balance_usage, version_text()) {
                 return Ok(());
             }
             let options = BalanceOptions::parse(args)?;
             run_balance(&options)
         }
-        CONVERT_COMMAND => {
+        WalletCommandKind::Convert => {
             if print_help_or_version(&args, convert::usage, version_text()) {
                 return Ok(());
             }
             convert::run(args)
         }
-        MINT_COMMAND => {
+        WalletCommandKind::Mint => {
             if print_help_or_version(&args, mint_usage, version_text()) {
                 return Ok(());
             }
             let options = MintOptions::parse(args)?;
             run_mint(&options)
         }
-        TRANSFER_COMMAND => {
+        WalletCommandKind::Transfer => {
             if print_help_or_version(&args, transfer_usage, version_text()) {
                 return Ok(());
             }
             let options = TransferOptions::parse(args)?;
             run_transfer(&options)
         }
-        TOPUP_COMMAND => {
+        WalletCommandKind::Topup => {
             if print_help_or_version(&args, topup_usage, version_text()) {
                 return Ok(());
             }
             let options = TopupOptions::parse(args)?;
             run_topup(&options)
         }
-        _ => Err(CyclesCommandError::Usage(cycles_usage())),
     }
 }
 
@@ -214,7 +248,7 @@ pub(super) fn cycles_usage() -> String {
 }
 
 fn wallet_passthrough_command(spec: WalletCommand) -> ClapCommand {
-    passthrough_subcommand(ClapCommand::new(spec.name).disable_help_flag(true))
+    passthrough_subcommand(ClapCommand::new(spec.kind.label()).disable_help_flag(true))
 }
 
 impl IcpTargetOptions {
@@ -304,7 +338,7 @@ fn run_balance(options: &BalanceOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root()
         .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
     let mut command = icp_command(&options.target, &root);
-    command.args(["cycles", BALANCE_COMMAND]);
+    command.args(["cycles", WalletCommandKind::Balance.label()]);
     append_optional_long_arg(&mut command, SUBACCOUNT_ARG, options.subaccount.as_deref());
     append_optional_long_arg(
         &mut command,
@@ -321,7 +355,7 @@ fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root()
         .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
     let mut command = icp_command(&options.target, &root);
-    command.args(["cycles", MINT_COMMAND]);
+    command.args(["cycles", WalletCommandKind::Mint.label()]);
     append_optional_long_arg(&mut command, "icp", options.icp_amount.as_deref());
     append_optional_long_arg(&mut command, "cycles", options.cycles_amount.as_deref());
     append_optional_long_arg(
@@ -344,7 +378,7 @@ fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
         .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
     let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
     let mut command = icp_command(&options.target, &root);
-    command.args(["cycles", TRANSFER_COMMAND]);
+    command.args(["cycles", WalletCommandKind::Transfer.label()]);
     command.arg(&options.amount);
     command.arg(receiver);
     append_optional_long_arg(
@@ -605,7 +639,7 @@ pub(super) fn target_label(role: Option<&str>, canister_id: &str) -> String {
 }
 
 fn balance_command() -> ClapCommand {
-    ClapCommand::new(BALANCE_COMMAND)
+    ClapCommand::new(WalletCommandKind::Balance.label())
         .bin_name("canic cycles balance")
         .about("Display the selected identity cycles balance")
         .disable_help_flag(true)
@@ -626,7 +660,7 @@ fn balance_command() -> ClapCommand {
 }
 
 fn mint_command() -> ClapCommand {
-    ClapCommand::new(MINT_COMMAND)
+    ClapCommand::new(WalletCommandKind::Mint.label())
         .bin_name("canic cycles mint")
         .about("Convert ICP to cycles")
         .disable_help_flag(true)
@@ -652,7 +686,7 @@ fn mint_command() -> ClapCommand {
 }
 
 fn transfer_command() -> ClapCommand {
-    ClapCommand::new(TRANSFER_COMMAND)
+    ClapCommand::new(WalletCommandKind::Transfer.label())
         .bin_name("canic cycles transfer")
         .about("Transfer cycles to a principal or Canic deployment target")
         .disable_help_flag(true)
@@ -686,7 +720,7 @@ fn transfer_command() -> ClapCommand {
 }
 
 fn topup_command() -> ClapCommand {
-    ClapCommand::new(TOPUP_COMMAND)
+    ClapCommand::new(WalletCommandKind::Topup.label())
         .bin_name("canic cycles topup")
         .about("Top up cycles for one installed deployment canister")
         .disable_help_flag(true)

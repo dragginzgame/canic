@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.5
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.6
 Status: pass_with_followups
 
 ## Scope
@@ -27,7 +27,8 @@ rule to cycles report canister status and coverage status labels. The seventh
 follow-up fix tightens blob-storage report kind, Candid source, action,
 funding-status, and readiness-state labels. The eighth follow-up fix tightens
 backup create, list, prune, status, and inspect report layout/status/action
-labels.
+labels. The ninth follow-up fix tightens token and cycles wallet command
+parsing so maintained subcommand sets are represented by typed parser values.
 
 ## Baseline Validation
 
@@ -693,6 +694,86 @@ Fix validation:
 | --- | --- | --- |
 | `cargo fmt --all` | pass | Formatted the backup report typing change. |
 | `cargo test --locked -p canic-cli backup` | pass | 65 filtered backup-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-010: Wallet Command Parsers Own Command Kinds As Raw Strings
+
+Severity: P3
+Category: command_parser / wallet
+Status: fixed
+Owner: token and cycles CLI parsers
+Current location: `crates/canic-cli/src/token.rs` and
+`crates/canic-cli/src/cycles/wallet.rs`
+Intended owner: typed wallet command parsers, with token symbols and delegated
+ICP CLI command/error strings remaining caller/runtime data
+Affected surfaces: internal
+Release decision: fixed_in_0.83.7
+
+Evidence:
+- file: `crates/canic-cli/src/token.rs`
+- line or anchor: `TokenCommandRequest.command`, `run`, and
+  `split_token_command`
+- module/function: token command parser and dispatcher
+- command/search: `rg -n "TokenCommandRequest|request.command|command: String" crates/canic-cli/src/token.rs`
+- reachability: active `canic token balance|transfer` command path
+- exact issue: `TokenCommandRequest` stored the closed `balance`/`transfer`
+  command set as a raw string and the dispatcher matched the same string
+  labels again.
+
+Evidence:
+- file: `crates/canic-cli/src/cycles/wallet.rs`
+- line or anchor: `run_cycles_command`, `WalletCommand`, and command-name
+  constants
+- module/function: cycles wallet command parser and dispatcher
+- command/search: `rg -n "BALANCE_COMMAND|CONVERT_COMMAND|MINT_COMMAND|TRANSFER_COMMAND|TOPUP_COMMAND|match command" crates/canic-cli/src/cycles/wallet.rs`
+- reachability: active `canic cycles balance|convert|mint|transfer|topup`
+  command path
+- exact issue: cycles wallet dispatch used raw command strings and separate
+  command-name constants even though the maintained wallet command set is
+  closed inside the parser.
+
+Risk:
+
+Low. Parser behavior was correct and covered by focused tests, but wallet
+dispatchers could drift from their maintained command sets because command kind
+ownership was encoded in string matching and separate constants.
+
+Recommendation:
+
+Use small internal command-kind enums for maintained wallet command sets. Keep
+token symbols, receivers, pending-operation command strings, and delegated ICP
+CLI command/error strings as strings.
+
+Regression test:
+
+Keep focused token and cycles parser tests covering default command shapes,
+explicit token-prefix shape, missing transfer receivers, compact
+deployment-target receiver parsing, and cycles wallet subcommand options.
+
+Resolution:
+
+- `TokenCommandRequest.command` now stores `TokenCommandKind`.
+- `split_token_command` parses only the maintained `balance` and `transfer`
+  command kinds, preserving the optional token-prefix behavior.
+- `run` dispatches on `TokenCommandKind` variants instead of matching strings.
+- `cycles::wallet` now owns `WalletCommandKind` for the maintained
+  `balance`, `convert`, `mint`, `transfer`, and `topup` command set.
+- `run_cycles_command`, `cycles_command`, command construction, and help
+  command builders use the typed cycles wallet command labels.
+- Token symbols, pending-operation command strings, and ICP CLI command/error
+  strings remain strings.
+- CLI command forms and help text remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the wallet parser typing change. |
+| `cargo test --locked -p canic-cli token` | pass | 4 filtered token-related CLI tests passed. |
+| `cargo test --locked -p canic-cli cycles` | pass | 43 filtered cycles-related CLI tests passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
