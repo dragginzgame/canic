@@ -122,3 +122,43 @@ Explicit non-scope:
 - no JSON field changes
 - no command changes
 - no broader runtime introspection behavior changes
+
+## 0.83 Auth Renewal Report Typing
+
+Status:
+completed in 0.83.3 for the accepted `CANIC-083-DEBT-005` scope.
+
+Source findings:
+- CANIC-083-DEBT-005
+
+Boundary:
+Auth renewal CLI report wrapper, typed report kind/source/status labels, and
+decoded canister response status strings.
+
+Previous owner:
+The auth renewal report wrapper stored report kind, local Candid source, and
+aggregate renewal status as raw strings alongside decoded canister response
+strings.
+
+Intended owner:
+The auth renewal report wrapper owns typed CLI labels; decoded canister
+response fields remain response data.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli auth`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no auth behavior changes

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.3` tightens `canic auth renewal status` report ownership by replacing
+  raw-string report-kind, local Candid-source, and aggregate-status labels with
+  typed internal values while preserving decoded canister response statuses,
+  existing JSON labels, text output meaning, command behavior, endpoint
+  surfaces, Candid, and stable-state layout.
+
 - `0.83.2` tightens `canic inspect` report ownership by replacing raw-string
   command/endpoint labels, loose health/readiness JSON slots, and raw-string
   source, response-format, and aggregate-status fields with typed internal
