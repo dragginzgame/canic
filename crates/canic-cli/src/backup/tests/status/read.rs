@@ -57,7 +57,7 @@ fn backup_status_reads_dry_run_execution_summary() {
     let BackupStatusReport::DryRun(report) = report else {
         panic!("expected dry-run status");
     };
-    assert_eq!(report.layout_status, "dry-run");
+    assert_eq!(report.layout_status, BackupExecutionLayoutStatus::DryRun);
     assert_eq!(report.plan_id, plan.plan_id);
     assert_eq!(report.targets, 1);
     assert_eq!(report.execution.plan_id, plan.plan_id);

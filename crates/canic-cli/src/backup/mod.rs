@@ -26,8 +26,10 @@ pub use error::BackupCommandError;
 use inspect::backup_inspect;
 use manifest::run as run_manifest;
 pub use model::{
-    BackupCreateReport, BackupDryRunStatusReport, BackupInspectOperation, BackupInspectReport,
-    BackupInspectTarget, BackupListEntry, BackupPruneEntry, BackupPruneReport, BackupStatusReport,
+    BackupCreateLayout, BackupCreateMode, BackupCreateReport, BackupDryRunStatusReport,
+    BackupExecutionLayoutStatus, BackupInspectOperation, BackupInspectReport, BackupInspectTarget,
+    BackupListEntry, BackupListStatus, BackupPruneAction, BackupPruneEntry, BackupPruneReport,
+    BackupRunStatus, BackupStatusReport,
 };
 use options::{
     BackupCreateOptions, BackupInspectOptions, BackupListOptions, BackupPruneOptions,

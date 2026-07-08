@@ -1,6 +1,6 @@
 use super::{
-    BackupCommandError, BackupListOptions, BackupPruneEntry, BackupPruneOptions, BackupPruneReport,
-    reference::backup_list,
+    BackupCommandError, BackupListOptions, BackupListStatus, BackupPruneAction, BackupPruneEntry,
+    BackupPruneOptions, BackupPruneReport, reference::backup_list,
 };
 use std::fs;
 
@@ -15,18 +15,18 @@ pub(super) fn backup_prune(
         .iter()
         .enumerate()
         .filter(|(index, entry)| {
-            (options.failed && entry.status == "failed")
+            (options.failed && entry.status == BackupListStatus::Failed)
                 || options.keep.is_some_and(|keep| *index >= keep)
         })
         .map(|(index, entry)| BackupPruneEntry {
             index: index + 1,
             dir: entry.dir.clone(),
             backup_id: entry.backup_id.clone(),
-            status: entry.status.clone(),
+            status: entry.status,
             action: if options.dry_run {
-                "would-remove".to_string()
+                BackupPruneAction::WouldRemove
             } else {
-                "removed".to_string()
+                BackupPruneAction::Removed
             },
         })
         .collect::<Vec<_>>();

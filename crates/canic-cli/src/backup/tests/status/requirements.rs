@@ -87,7 +87,7 @@ fn require_complete_rejects_dry_run_status() {
     };
     let plan = valid_backup_plan();
     let report = BackupStatusReport::DryRun(BackupDryRunStatusReport {
-        layout_status: "dry-run".to_string(),
+        layout_status: BackupExecutionLayoutStatus::DryRun,
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
         deployment: plan.fleet.clone(),

@@ -40,7 +40,7 @@ fn backup_prune_removes_failed_layouts() {
     assert_eq!(dry_run.scanned, 2);
     assert_eq!(dry_run.selected, 1);
     assert_eq!(dry_run.pruned, 0);
-    assert_eq!(dry_run.entries[0].action, "would-remove");
+    assert_eq!(dry_run.entries[0].action, BackupPruneAction::WouldRemove);
     assert!(failed.is_dir());
 
     let report = backup_prune(&BackupPruneOptions {

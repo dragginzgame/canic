@@ -5,7 +5,9 @@
 //! Boundary: manifest, dry-run plan, and execution-backed list row fields.
 
 use super::timestamp::{execution_journal_created_at, run_id_created_at};
-use crate::backup::{BackupListEntry, labels::execution_layout_status};
+use crate::backup::{
+    BackupExecutionLayoutStatus, BackupListEntry, BackupListStatus, labels::execution_layout_status,
+};
 use canic_backup::persistence::BackupLayout;
 use std::path::PathBuf;
 
@@ -28,13 +30,13 @@ fn manifest_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupList
             backup_id: "-".to_string(),
             created_at: "-".to_string(),
             members: 0,
-            status: "invalid-manifest".to_string(),
+            status: BackupListStatus::InvalidManifest,
         };
     };
     let status = if layout.backup_plan_path().is_file() {
         execution_backed_layout_status(layout)
     } else {
-        "ok".to_string()
+        BackupListStatus::Ok
     };
 
     BackupListEntry {
@@ -53,7 +55,7 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
             backup_id: "-".to_string(),
             created_at: "-".to_string(),
             members: 0,
-            status: "invalid-plan".to_string(),
+            status: BackupListStatus::InvalidPlan,
         };
     };
     let status = execution_backed_layout_status(layout);
@@ -73,19 +75,31 @@ fn planned_backup_list_entry(dir: PathBuf, layout: &BackupLayout) -> BackupListE
     }
 }
 
-fn execution_backed_layout_status(layout: &BackupLayout) -> String {
+fn execution_backed_layout_status(layout: &BackupLayout) -> BackupListStatus {
     if layout.read_backup_plan().is_err() {
-        return "invalid-plan".to_string();
+        return BackupListStatus::InvalidPlan;
     }
     if layout.execution_journal_path().is_file() && layout.verify_execution_integrity().is_err() {
-        return "invalid-plan-journal".to_string();
+        return BackupListStatus::InvalidPlanJournal;
     }
     if !layout.execution_journal_path().is_file() && layout.manifest_path().is_file() {
-        return "invalid-plan-journal".to_string();
+        return BackupListStatus::InvalidPlanJournal;
     }
     if let Ok(journal) = layout.read_execution_journal() {
-        execution_layout_status(&journal, layout.manifest_path().is_file())
+        list_status_from_layout_status(execution_layout_status(
+            &journal,
+            layout.manifest_path().is_file(),
+        ))
     } else {
-        "dry-run".to_string()
+        BackupListStatus::DryRun
+    }
+}
+
+const fn list_status_from_layout_status(status: BackupExecutionLayoutStatus) -> BackupListStatus {
+    match status {
+        BackupExecutionLayoutStatus::Complete => BackupListStatus::Complete,
+        BackupExecutionLayoutStatus::DryRun => BackupListStatus::DryRun,
+        BackupExecutionLayoutStatus::Failed => BackupListStatus::Failed,
+        BackupExecutionLayoutStatus::Running => BackupListStatus::Running,
     }
 }

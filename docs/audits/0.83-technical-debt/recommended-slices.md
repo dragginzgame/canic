@@ -276,3 +276,42 @@ Explicit non-scope:
 - no command changes
 - no blob-storage behavior changes
 - no typing of free-form command strings or error messages
+
+## 0.83 Backup Report Status Typing
+
+Status:
+completed in 0.83.6 for the accepted `CANIC-083-DEBT-009` scope.
+
+Source findings:
+- CANIC-083-DEBT-009
+
+Boundary:
+Backup CLI report wrapper mode, layout, status, and action labels.
+
+Previous owner:
+Backup report builders stored closed create/list/prune/status/inspect labels
+as raw strings.
+
+Intended owner:
+The backup report model owns typed labels, and renderers/JSON boundaries
+format or serialize those typed values.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli backup`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no backup behavior changes
+- no typing of dynamic backup scope, paths, operation kind/state, or error text

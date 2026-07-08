@@ -19,7 +19,7 @@ pub(super) fn render_backup_list(entries: &[BackupListEntry]) -> String {
                 entry.backup_id.clone(),
                 display_created_at(&entry.created_at),
                 entry.members.to_string(),
-                entry.status.clone(),
+                entry.status.label().to_string(),
             ]
         })
         .collect::<Vec<_>>();
@@ -57,7 +57,7 @@ mod tests {
             backup_id: "backup".to_string(),
             created_at: "unix:1715090400".to_string(),
             members: 7,
-            status: "ok".to_string(),
+            status: crate::backup::BackupListStatus::Ok,
         }];
 
         let rendered = render_backup_list(&entries);

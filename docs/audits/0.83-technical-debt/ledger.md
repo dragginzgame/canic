@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.4
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.5
 Status: pass_with_followups
 
 ## Scope
@@ -25,7 +25,9 @@ canister-row status labels are typed internally while preserving existing JSON
 labels and text output. The sixth follow-up fix applies the same ownership
 rule to cycles report canister status and coverage status labels. The seventh
 follow-up fix tightens blob-storage report kind, Candid source, action,
-funding-status, and readiness-state labels.
+funding-status, and readiness-state labels. The eighth follow-up fix tightens
+backup create, list, prune, status, and inspect report layout/status/action
+labels.
 
 ## Baseline Validation
 
@@ -623,6 +625,74 @@ Fix validation:
 | --- | --- | --- |
 | `cargo fmt --all` | pass | Formatted the blob-storage report typing change. |
 | `cargo test --locked -p canic-cli blob_storage` | pass | 30 filtered blob-storage-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-009: Backup CLI Reports Own Layout And Status Labels As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / backup
+Status: fixed
+Owner: backup CLI report wrappers
+Current location: `crates/canic-cli/src/backup/model.rs`
+Intended owner: typed backup report model, with renderers and JSON boundaries
+formatting typed labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.6
+
+Evidence:
+- file: `crates/canic-cli/src/backup/model.rs`
+- line or anchor: `BackupCreateReport`, `BackupListEntry`,
+  `BackupPruneEntry`, `BackupDryRunStatusReport`, and `BackupInspectReport`
+- module/function: backup model, create/status/list/prune/inspect builders,
+  and renderers
+- command/search: `rg -n "layout_status: String|status: String|action: String|mode: String|layout: String" crates/canic-cli/src/backup/model.rs`
+- reachability: active `canic backup create|list|prune|status|inspect`
+  report paths
+- exact issue: backup report mode, layout, status, and prune action labels
+  were stored as strings even though these sets are closed inside the CLI
+  report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by focused tests,
+but raw strings let backup report wrappers drift from the stable label sets
+without compiler help.
+
+Recommendation:
+
+Use typed values for closed backup report labels. Keep dynamic backup scope,
+operation kind/state, paths, errors, and canister-derived data as strings.
+
+Regression test:
+
+Keep focused backup tests asserting typed status/action values and unchanged
+JSON/text labels for dry-run status, create layout/status, list status, prune
+action, and inspect layout status.
+
+Resolution:
+
+- `BackupCreateReport.mode`, `BackupCreateReport.layout`, and
+  `BackupCreateReport.status` now store typed `BackupCreateMode`,
+  `BackupCreateLayout`, and `BackupRunStatus` values.
+- `BackupListEntry.status` and `BackupPruneEntry.status` now store
+  `BackupListStatus`.
+- `BackupPruneEntry.action` now stores `BackupPruneAction`.
+- `BackupDryRunStatusReport.layout_status` and
+  `BackupInspectReport.layout_status` now store
+  `BackupExecutionLayoutStatus`.
+- Create/list/prune/status/inspect builders use enum variants internally;
+  renderers and JSON serialization format labels at the output boundary.
+- JSON labels and text output remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the backup report typing change. |
+| `cargo test --locked -p canic-cli backup` | pass | 65 filtered backup-related CLI tests passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |

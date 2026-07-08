@@ -53,7 +53,7 @@ fn backup_list_reads_backup_directories() {
         .iter()
         .find(|entry| entry.backup_id == "plan-demo-20260511-001234")
         .expect("dry-run entry");
-    assert_eq!(dry_run.status, "dry-run");
+    assert_eq!(dry_run.status, BackupListStatus::DryRun);
     assert_eq!(dry_run.members, 1);
     assert_eq!(dry_run.created_at, unix_marker_for_stamp("20260511-001234"));
 }

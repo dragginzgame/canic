@@ -3,19 +3,21 @@ use canic_backup::{
     plan::{BackupPlan, BackupScopeKind},
 };
 
+use crate::backup::BackupExecutionLayoutStatus;
+
 pub(super) fn execution_layout_status(
     journal: &BackupExecutionJournal,
     has_manifest: bool,
-) -> String {
+) -> BackupExecutionLayoutStatus {
     let summary = journal.resume_summary();
     if has_manifest && execution_is_complete(&summary) {
-        "complete".to_string()
+        BackupExecutionLayoutStatus::Complete
     } else if summary.failed_operations > 0 {
-        "failed".to_string()
+        BackupExecutionLayoutStatus::Failed
     } else if journal.preflight_accepted || summary.completed_operations > 0 {
-        "running".to_string()
+        BackupExecutionLayoutStatus::Running
     } else {
-        "dry-run".to_string()
+        BackupExecutionLayoutStatus::DryRun
     }
 }
 

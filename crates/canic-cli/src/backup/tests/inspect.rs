@@ -25,7 +25,7 @@ fn backup_inspect_reads_dry_run_details() {
     let report = backup_inspect(&options).expect("inspect dry-run");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert_eq!(report.layout_status, "dry-run");
+    assert_eq!(report.layout_status, BackupExecutionLayoutStatus::DryRun);
     assert_eq!(report.plan_id, plan.plan_id);
     assert_eq!(report.targets.len(), 1);
     assert_eq!(report.targets[0].expected_module_hash, HASH);

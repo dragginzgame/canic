@@ -9,7 +9,7 @@ use canic_host::table::{ColumnAlign, render_table};
 
 pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
     let summary_rows = [[
-        report.layout_status.clone(),
+        report.layout_status.label().to_string(),
         report.deployment.clone(),
         report.network.clone(),
         report.scope.clone(),
@@ -125,13 +125,14 @@ mod tests {
     fn backup_inspect_report_json_uses_deployment_identity_field() {
         let value = serde_json::to_value(inspect_report()).expect("serialize inspect report");
 
+        assert_eq!(value["layout_status"], "dry-run");
         assert_eq!(value["deployment"], "demo");
         assert!(value.get("fleet").is_none());
     }
 
     fn inspect_report() -> BackupInspectReport {
         BackupInspectReport {
-            layout_status: "dry-run".to_string(),
+            layout_status: crate::backup::BackupExecutionLayoutStatus::DryRun,
             plan_id: "plan-test".to_string(),
             run_id: "run-test".to_string(),
             deployment: "demo".to_string(),
