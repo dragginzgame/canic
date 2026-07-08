@@ -4,7 +4,7 @@
 //! Does not own: canister DTOs, Cashier protocol shapes, or readiness policy.
 //! Boundary: serializes stable CLI output for operator automation.
 
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 
 pub(super) const BLOB_STORAGE_JSON_SCHEMA_VERSION: u16 = 1;
 pub(super) const BLOB_STORAGE_STATUS_KIND: &str = "blob_storage_status";
@@ -50,7 +50,7 @@ pub(super) struct BlobStorageTarget {
     pub(super) input: String,
     pub(super) role: Option<String>,
     pub(super) canister_id: String,
-    pub(super) candid_source: Option<String>,
+    pub(super) candid_source: Option<BlobStorageCandidSource>,
 }
 
 impl BlobStorageTarget {
@@ -63,8 +63,34 @@ impl BlobStorageTarget {
             input: input.to_string(),
             role,
             canister_id: canister_id.to_string(),
-            candid_source: Some(BLOB_STORAGE_CANDID_SOURCE_INSTALLED_DEPLOYMENT.to_string()),
+            candid_source: Some(BlobStorageCandidSource::InstalledDeployment),
         }
+    }
+}
+
+///
+/// BlobStorageCandidSource
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum BlobStorageCandidSource {
+    InstalledDeployment,
+}
+
+impl BlobStorageCandidSource {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::InstalledDeployment => BLOB_STORAGE_CANDID_SOURCE_INSTALLED_DEPLOYMENT,
+        }
+    }
+}
+
+impl Serialize for BlobStorageCandidSource {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.label())
     }
 }
 
@@ -77,7 +103,7 @@ pub(super) struct BlobStorageErrorTarget {
     pub(super) input: String,
     pub(super) role: Option<String>,
     pub(super) canister_id: Option<String>,
-    pub(super) candid_source: Option<String>,
+    pub(super) candid_source: Option<BlobStorageCandidSource>,
 }
 
 impl BlobStorageErrorTarget {
@@ -98,7 +124,7 @@ impl BlobStorageErrorTarget {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct BlobStorageErrorResult {
     pub(super) schema_version: u16,
-    pub(super) kind: String,
+    pub(super) kind: BlobStorageReportKind,
     pub(super) deployment: String,
     pub(super) target: BlobStorageErrorTarget,
     pub(super) error: BlobStorageErrorBody,
@@ -114,7 +140,7 @@ impl BlobStorageErrorResult {
     ) -> Self {
         Self {
             schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
-            kind: BLOB_STORAGE_ERROR_KIND.to_string(),
+            kind: BlobStorageReportKind::Error,
             deployment: deployment.to_string(),
             target: BlobStorageErrorTarget::unresolved(target),
             error: BlobStorageErrorBody {
@@ -123,6 +149,34 @@ impl BlobStorageErrorResult {
                 exit_code,
             },
         }
+    }
+}
+
+///
+/// BlobStorageReportKind
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum BlobStorageReportKind {
+    Error,
+    Status,
+}
+
+impl BlobStorageReportKind {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Error => BLOB_STORAGE_ERROR_KIND,
+            Self::Status => BLOB_STORAGE_STATUS_KIND,
+        }
+    }
+}
+
+impl Serialize for BlobStorageReportKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.label())
     }
 }
 
@@ -141,7 +195,8 @@ pub(super) struct BlobStorageErrorBody {
 /// BlobStorageActionName
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub(super) enum BlobStorageActionName {
     SyncGateways,
     Fund,
@@ -155,11 +210,39 @@ impl BlobStorageActionName {
         }
     }
 
-    pub(super) const fn kind(self) -> &'static str {
+    pub(super) const fn result_kind(self) -> BlobStorageActionResultKind {
         match self {
-            Self::SyncGateways => "blob_storage_sync_gateways_result",
-            Self::Fund => "blob_storage_fund_result",
+            Self::SyncGateways => BlobStorageActionResultKind::SyncGateways,
+            Self::Fund => BlobStorageActionResultKind::Fund,
         }
+    }
+}
+
+///
+/// BlobStorageActionResultKind
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum BlobStorageActionResultKind {
+    Fund,
+    SyncGateways,
+}
+
+impl BlobStorageActionResultKind {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Fund => "blob_storage_fund_result",
+            Self::SyncGateways => "blob_storage_sync_gateways_result",
+        }
+    }
+}
+
+impl Serialize for BlobStorageActionResultKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.label())
     }
 }
 
@@ -169,7 +252,7 @@ impl BlobStorageActionName {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct BlobStorageAction {
-    pub(super) name: String,
+    pub(super) name: BlobStorageActionName,
     pub(super) method: String,
     pub(super) mode: String,
     pub(super) dry_run: bool,
@@ -186,7 +269,7 @@ pub(super) struct BlobStorageAction {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct BlobStorageActionResult {
     pub(super) schema_version: u16,
-    pub(super) kind: String,
+    pub(super) kind: BlobStorageActionResultKind,
     pub(super) deployment: String,
     pub(super) target: BlobStorageTarget,
     pub(super) action: BlobStorageAction,
@@ -248,11 +331,11 @@ impl BlobStorageActionResult {
         let (method, mode) = method_mode;
         Self {
             schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
-            kind: action_name.kind().to_string(),
+            kind: action_name.result_kind(),
             deployment: deployment.to_string(),
             target,
             action: BlobStorageAction {
-                name: action_name.label().to_string(),
+                name: action_name,
                 method: method.to_string(),
                 mode: mode.to_string(),
                 dry_run,
@@ -304,7 +387,7 @@ pub(super) struct BlobStorageFundingReport {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct BlobStorageStatusResult {
     pub(super) schema_version: u16,
-    pub(super) kind: String,
+    pub(super) kind: BlobStorageReportKind,
     pub(super) deployment: String,
     pub(super) target: BlobStorageTarget,
     pub(super) configured: bool,
@@ -357,9 +440,41 @@ pub(super) struct BlobStorageGatewayStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct BlobStorageFundingStatus {
-    pub(super) status: String,
+    pub(super) status: BlobStorageFundingStatusCode,
     pub(super) requested_cycles: Option<String>,
     pub(super) transferable_cycles: Option<String>,
+}
+
+///
+/// BlobStorageFundingStatusCode
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum BlobStorageFundingStatusCode {
+    CashierBalanceUnavailable,
+    CashierResponseMalformed,
+    FundingNeeded,
+    NotConfigured,
+    NotNeeded,
+    ProjectCyclesReserveBlocksFunding,
+    Unknown,
+}
+
+impl BlobStorageFundingStatusCode {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::CashierBalanceUnavailable => BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE,
+            Self::CashierResponseMalformed => BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED,
+            Self::FundingNeeded => BLOB_STORAGE_CODE_FUNDING_NEEDED,
+            Self::NotConfigured => BLOB_STORAGE_CODE_NOT_CONFIGURED,
+            Self::NotNeeded => BLOB_STORAGE_CODE_NOT_NEEDED,
+            Self::ProjectCyclesReserveBlocksFunding => {
+                BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING
+            }
+            Self::Unknown => BLOB_STORAGE_CODE_UNKNOWN,
+        }
+    }
 }
 
 ///
@@ -368,10 +483,32 @@ pub(super) struct BlobStorageFundingStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct BlobStorageReadinessStatus {
-    pub(super) state: String,
+    pub(super) state: BlobStorageReadinessState,
     pub(super) ready_for_upload: bool,
     pub(super) blockers: Vec<String>,
     pub(super) warnings: Vec<String>,
+}
+
+///
+/// BlobStorageReadinessState
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum BlobStorageReadinessState {
+    Blocked,
+    Ready,
+    Warning,
+}
+
+impl BlobStorageReadinessState {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Blocked => BLOB_STORAGE_READINESS_BLOCKED,
+            Self::Ready => BLOB_STORAGE_READINESS_READY,
+            Self::Warning => BLOB_STORAGE_READINESS_WARNING,
+        }
+    }
 }
 
 ///

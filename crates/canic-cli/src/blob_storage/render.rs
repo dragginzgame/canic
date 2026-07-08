@@ -10,7 +10,7 @@ pub(super) fn render_action_result(result: &BlobStorageActionResult) -> String {
     let mut lines = vec![
         format!(
             "Blob storage {} {}",
-            result.action.name,
+            result.action.name.label(),
             action_status_label(result.action.dry_run)
         ),
         format!("Deployment: {}", result.deployment),
@@ -96,7 +96,7 @@ pub(super) fn render_status_result(result: &BlobStorageStatusResult) -> String {
                 .as_deref()
                 .unwrap_or("never")
         ),
-        format!("Readiness: {}", result.readiness.state),
+        format!("Readiness: {}", result.readiness.state.label()),
     ];
 
     append_list(&mut lines, "Blockers", &result.readiness.blockers);

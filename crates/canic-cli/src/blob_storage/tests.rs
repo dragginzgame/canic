@@ -201,7 +201,9 @@ fn renders_sync_gateways_dry_run_json_shape() {
     assert_eq!(value["schema_version"], 1);
     assert_eq!(
         value["kind"],
-        model::BlobStorageActionName::SyncGateways.kind()
+        model::BlobStorageActionName::SyncGateways
+            .result_kind()
+            .label()
     );
     assert_eq!(value["deployment"], "local");
     assert_eq!(value["target"]["input"], "backend");
@@ -244,7 +246,9 @@ fn renders_sync_gateways_completed_json_shape() {
 
     assert_eq!(
         value["kind"],
-        model::BlobStorageActionName::SyncGateways.kind()
+        model::BlobStorageActionName::SyncGateways
+            .result_kind()
+            .label()
     );
     assert_eq!(
         value["action"]["name"],
@@ -366,7 +370,10 @@ fn renders_fund_completed_report_json_and_plain_text() {
     });
     let value = serde_json::to_value(&result).expect("serialize result");
 
-    assert_eq!(value["kind"], model::BlobStorageActionName::Fund.kind());
+    assert_eq!(
+        value["kind"],
+        model::BlobStorageActionName::Fund.result_kind().label()
+    );
     assert_eq!(value["action"]["dry_run"], false);
     assert_eq!(value["funding_report"]["requested_cycles"], "100");
     assert_eq!(value["funding_report"]["attached_cycles"], "100");
@@ -417,10 +424,18 @@ fn parses_status_json_into_stable_cli_shape() {
         value["funding"]["status"],
         model::BLOB_STORAGE_CODE_FUNDING_NEEDED
     );
+    assert_eq!(
+        status.funding.status,
+        model::BlobStorageFundingStatusCode::FundingNeeded
+    );
     assert_eq!(value["funding"]["requested_cycles"], "900");
     assert_eq!(
         value["readiness"]["state"],
         model::BLOB_STORAGE_READINESS_BLOCKED
+    );
+    assert_eq!(
+        status.readiness.state,
+        model::BlobStorageReadinessState::Blocked
     );
     assert_eq!(value["readiness"]["ready_for_upload"], false);
     assert_eq!(
@@ -464,7 +479,7 @@ fn parses_ready_status_with_warnings_as_warning_state() {
 
     assert_eq!(
         status.readiness.state,
-        model::BLOB_STORAGE_READINESS_WARNING
+        model::BlobStorageReadinessState::Warning
     );
     assert!(status.readiness.ready_for_upload);
     assert_eq!(
@@ -567,7 +582,7 @@ fn scripted_operator_loop_proves_status_sync_fund_and_recheck_sequence() {
     assert_eq!(initial.gateways.principal_count, 0);
     assert_eq!(
         initial.readiness.state,
-        model::BLOB_STORAGE_READINESS_BLOCKED
+        model::BlobStorageReadinessState::Blocked
     );
     assert_eq!(
         sync.post_status

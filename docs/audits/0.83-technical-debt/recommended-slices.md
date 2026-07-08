@@ -237,3 +237,42 @@ Explicit non-scope:
 - no JSON field changes
 - no command changes
 - no cycles behavior changes
+
+## 0.83 Blob-Storage Report Label Typing
+
+Status:
+completed in 0.83.5 for the accepted `CANIC-083-DEBT-008` scope.
+
+Source findings:
+- CANIC-083-DEBT-008
+
+Boundary:
+Blob-storage CLI report wrapper kind, source, action, funding, and readiness
+labels.
+
+Previous owner:
+Blob-storage report builders stored closed report labels as raw strings.
+
+Intended owner:
+The blob-storage report model owns typed labels, and renderers/error
+boundaries format or serialize those typed values.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli blob_storage`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no blob-storage behavior changes
+- no typing of free-form command strings or error messages

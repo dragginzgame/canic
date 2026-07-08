@@ -14,12 +14,25 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.3`. Earlier in the
+- The current package/release-surface version is `0.83.4`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.4` working slice fixes `CANIC-083-DEBT-006` and
+- The current `0.83.5` working slice fixes `CANIC-083-DEBT-008` by tightening
+  the `canic blob-storage` report wrapper so report kind, Candid source,
+  action, funding status, and readiness state labels are typed internally
+  instead of owned as raw strings. Free-form command strings, error messages,
+  blocker/warning code arrays, and canister-derived text values remain strings.
+  The emitted JSON labels and text output remain unchanged, including
+  `blob_storage_status`, `blob_storage_error`,
+  `blob_storage_sync_gateways_result`, `blob_storage_fund_result`,
+  `installed_deployment`, `sync_gateways`, `fund`, `ready`, `warning`,
+  `blocked`, `funding_needed`, `not_configured`, `not_needed`, and `unknown`.
+  Command behavior, endpoint surfaces, Candid, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged.
+
+- The `0.83.4` slice fixes `CANIC-083-DEBT-006` and
   `CANIC-083-DEBT-007` by tightening the `canic info metrics` and
   `canic info cycles` report wrappers so canister-row status and coverage
   labels are typed internally instead of owned as raw strings. The emitted JSON
