@@ -162,3 +162,78 @@ Explicit non-scope:
 - no JSON field changes
 - no command changes
 - no auth behavior changes
+
+## 0.83 Metrics Report Status Typing
+
+Status:
+completed in 0.83.4 for the accepted `CANIC-083-DEBT-006` scope.
+
+Source findings:
+- CANIC-083-DEBT-006
+
+Boundary:
+Metrics CLI report wrapper canister-row status labels.
+
+Previous owner:
+Metrics transport builders stored row status labels as raw strings.
+
+Intended owner:
+The metrics report model owns typed canister-row statuses, and the renderer
+formats or serializes those typed values.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli metrics`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no metrics behavior changes
+
+## 0.83 Cycles Report Status Typing
+
+Status:
+completed in 0.83.4 for the accepted `CANIC-083-DEBT-007` scope.
+
+Source findings:
+- CANIC-083-DEBT-007
+
+Boundary:
+Cycles CLI report wrapper canister-row status and coverage labels.
+
+Previous owner:
+Cycles transport builders and summarizers stored row status and coverage
+labels as raw strings.
+
+Intended owner:
+The cycles report model owns typed canister-row and coverage statuses, and the
+renderer formats or serializes those typed values.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli cycles`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no cycles behavior changes

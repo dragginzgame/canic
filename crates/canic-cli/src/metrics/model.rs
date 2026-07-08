@@ -36,9 +36,33 @@ pub(super) struct MetricsReport {
 pub(super) struct MetricsCanisterReport {
     pub(super) role: String,
     pub(super) canister_id: String,
-    pub(super) status: String,
+    pub(super) status: MetricsCanisterStatus,
     pub(super) entries: Vec<MetricEntry>,
     pub(super) error: Option<String>,
+}
+
+///
+/// MetricsCanisterStatus
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MetricsCanisterStatus {
+    Empty,
+    Error,
+    Ok,
+    Unavailable,
+}
+
+impl MetricsCanisterStatus {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Empty => "empty",
+            Self::Error => "error",
+            Self::Ok => "ok",
+            Self::Unavailable => "unavailable",
+        }
+    }
 }
 
 ///

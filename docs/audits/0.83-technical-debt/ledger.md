@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.1
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.3
 Status: pass_with_followups
 
 ## Scope
@@ -20,7 +20,10 @@ labels are typed internally while preserving the existing JSON/text output
 contract. The fourth follow-up fix tightens the auth renewal status report
 wrapper so CLI-owned report kind, local Candid source, and aggregate status
 labels are typed internally while preserving decoded canister response strings
-as data.
+as data. The fifth follow-up fix tightens the metrics report wrapper so
+canister-row status labels are typed internally while preserving existing JSON
+labels and text output. The sixth follow-up fix applies the same ownership
+rule to cycles report canister status and coverage status labels.
 
 ## Baseline Validation
 
@@ -435,6 +438,123 @@ Fix validation:
 | `git diff --check` | pass | Whitespace diff check passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+
+## CANIC-083-DEBT-006: Metrics Canister Report Owns Row Status As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / metrics
+Status: fixed
+Owner: metrics CLI report wrapper
+Current location: `crates/canic-cli/src/metrics/model.rs`
+Intended owner: typed metrics report model, with renderers formatting typed
+status labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.4
+
+Evidence:
+- file: `crates/canic-cli/src/metrics/model.rs`
+- line or anchor: `MetricsCanisterReport.status`
+- module/function: metrics model and transport builders
+- command/search: `rg -n "status: \"|status\\.to_string|status: String" crates/canic-cli/src/metrics -g '*.rs'`
+- reachability: active `canic info metrics` JSON/text report path
+- exact issue: metrics row status labels (`ok`, `empty`, `unavailable`,
+  `error`) were built and stored as strings even though the set is closed
+  inside the CLI report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by focused tests,
+but raw strings let metrics report rows drift from the stable status set
+without compiler help.
+
+Recommendation:
+
+Use a typed metrics canister status value and keep serde/text labels identical
+so JSON and text output do not change.
+
+Regression test:
+
+Keep focused metrics tests asserting typed statuses and JSON labels:
+`empty` and `unavailable`.
+
+Resolution:
+
+- `MetricsCanisterReport.status` now stores `MetricsCanisterStatus`.
+- Metrics transport builders use enum variants for `ok`, `empty`,
+  `unavailable`, and `error`.
+- Text renderers call the typed status label method.
+- JSON labels remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the metrics report typing change. |
+| `cargo test --locked -p canic-cli metrics` | pass | 14 filtered metrics-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-007: Cycles Canister Report Owns Status Labels As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / cycles
+Status: fixed
+Owner: cycles CLI report wrapper
+Current location: `crates/canic-cli/src/cycles/model.rs`
+Intended owner: typed cycles report model, with renderers formatting typed
+status labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.4
+
+Evidence:
+- file: `crates/canic-cli/src/cycles/model.rs`
+- line or anchor: `CyclesCanisterReport.status` and
+  `CyclesCanisterReport.coverage_status`
+- module/function: cycles model and transport summarizer
+- command/search: `rg -n "status: \"|coverage_status: \"|status\\.to_string|coverage_status\\(" crates/canic-cli/src/cycles -g '*.rs'`
+- reachability: active `canic info cycles` JSON/text report path
+- exact issue: cycles row status labels (`ok`, `empty`, `error`) and coverage
+  status labels (`covered`, `partial`, `none`) were built and stored as
+  strings even though both sets are closed inside the CLI report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by focused tests,
+but raw strings let cycles report rows drift from their stable status sets
+without compiler help.
+
+Recommendation:
+
+Use typed cycles canister status and coverage status values. Keep serde/text
+labels identical so JSON and text output do not change.
+
+Regression test:
+
+Keep focused cycles tests asserting typed statuses and JSON labels: `ok` and
+`partial`.
+
+Resolution:
+
+- `CyclesCanisterReport.status` now stores `CyclesCanisterStatus`.
+- `CyclesCanisterReport.coverage_status` now stores `CyclesCoverageStatus`.
+- Cycles transport builders and summarizers use enum variants for `ok`,
+  `empty`, `error`, `covered`, `partial`, and `none`.
+- Text renderers call typed label methods.
+- JSON labels remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the cycles report typing change. |
+| `cargo test --locked -p canic-cli cycles` | pass | 43 filtered cycles-related CLI tests passed. |
+| `cargo test --locked -p canic-cli metrics` | pass | 14 filtered metrics-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
 
 ## Rejected / Non-Findings
 

@@ -14,14 +14,23 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.2`. Earlier in the
+- The current package/release-surface version is `0.83.3`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.3` working slice fixes `CANIC-083-DEBT-005` by tightening
-  the `canic auth renewal status` report wrapper so CLI-owned report kind,
-  local Candid-source, and aggregate renewal status labels are typed internally
+- The current `0.83.4` working slice fixes `CANIC-083-DEBT-006` and
+  `CANIC-083-DEBT-007` by tightening the `canic info metrics` and
+  `canic info cycles` report wrappers so canister-row status and coverage
+  labels are typed internally instead of owned as raw strings. The emitted JSON
+  labels and text output remain unchanged, including `ok`, `empty`,
+  `unavailable`, `error`, `covered`, `partial`, and `none`. Command behavior,
+  endpoint surfaces, Candid, deployment truth, evidence/report schemas, and
+  stable-state layout are unchanged.
+
+- The `0.83.3` slice fixes `CANIC-083-DEBT-005` by tightening the
+  `canic auth renewal status` report wrapper so CLI-owned report kind, local
+  Candid-source, and aggregate renewal status labels are typed internally
   instead of owned as raw strings. Decoded canister response statuses remain
   response data. The emitted JSON labels and text output remain unchanged,
   including `auth_renewal_status`, `installed_deployment`, `active_attempt`,

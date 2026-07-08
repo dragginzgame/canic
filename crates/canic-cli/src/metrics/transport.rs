@@ -1,6 +1,9 @@
 use crate::metrics::{
     CANIC_METRICS_METHOD, MetricsCommandError,
-    model::{MetricEntry, MetricValue, MetricsCanisterReport, MetricsKind, MetricsReport},
+    model::{
+        MetricEntry, MetricValue, MetricsCanisterReport, MetricsCanisterStatus, MetricsKind,
+        MetricsReport,
+    },
     options::MetricsOptions,
     parse::parse_metrics_page,
 };
@@ -92,7 +95,7 @@ fn metrics_canister_report(
             MetricsCanisterReport {
                 role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
                 canister_id: entry.pid.clone(),
-                status: "ok".to_string(),
+                status: MetricsCanisterStatus::Ok,
                 entries,
                 error: None,
             }
@@ -105,7 +108,7 @@ fn metrics_empty_report(entry: &RegistryEntry, nonzero: bool) -> MetricsCanister
     MetricsCanisterReport {
         role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
         canister_id: entry.pid.clone(),
-        status: "empty".to_string(),
+        status: MetricsCanisterStatus::Empty,
         entries: Vec::new(),
         error: Some(
             if nonzero {
@@ -120,15 +123,18 @@ fn metrics_empty_report(entry: &RegistryEntry, nonzero: bool) -> MetricsCanister
 
 fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
     let (status, error) = if error.contains("has no query method 'canic_metrics'") {
-        ("unavailable", METRICS_UNAVAILABLE_HINT)
+        (MetricsCanisterStatus::Unavailable, METRICS_UNAVAILABLE_HINT)
     } else {
-        ("error", error.lines().next().unwrap_or(error))
+        (
+            MetricsCanisterStatus::Error,
+            error.lines().next().unwrap_or(error),
+        )
     };
 
     MetricsCanisterReport {
         role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
         canister_id: entry.pid.clone(),
-        status: status.to_string(),
+        status,
         entries: Vec::new(),
         error: Some(error.to_string()),
     }
@@ -247,7 +253,11 @@ mod tests {
             "icp command failed\nCanister has no query method 'canic_metrics'.",
         );
 
-        assert_eq!(report.status, "unavailable");
+        assert_eq!(report.status, MetricsCanisterStatus::Unavailable);
+        assert_eq!(
+            serde_json::to_value(&report).expect("serialize metrics report")["status"],
+            "unavailable"
+        );
         assert_eq!(report.error.as_deref(), Some(METRICS_UNAVAILABLE_HINT));
     }
 
@@ -256,11 +266,15 @@ mod tests {
     fn empty_metrics_reports_carry_profile_hint() {
         let report = metrics_empty_report(&registry_entry(), false);
 
-        assert_eq!(report.status, "empty");
+        assert_eq!(report.status, MetricsCanisterStatus::Empty);
+        assert_eq!(
+            serde_json::to_value(&report).expect("serialize metrics report")["status"],
+            "empty"
+        );
         assert_eq!(report.error.as_deref(), Some(METRICS_EMPTY_HINT));
 
         let filtered = metrics_empty_report(&registry_entry(), true);
-        assert_eq!(filtered.status, "empty");
+        assert_eq!(filtered.status, MetricsCanisterStatus::Empty);
         assert_eq!(filtered.error.as_deref(), Some(METRICS_NONZERO_EMPTY_HINT));
     }
 

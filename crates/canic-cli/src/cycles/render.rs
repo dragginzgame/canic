@@ -1,7 +1,7 @@
 use crate::{
     cycles::{
         CyclesCommandError,
-        model::{CyclesCanisterReport, CyclesReport, CyclesTopupSummary},
+        model::{CyclesCanisterReport, CyclesCoverageStatus, CyclesReport, CyclesTopupSummary},
         options::CyclesOptions,
     },
     output,
@@ -76,7 +76,7 @@ fn default_cycle_report_row(row: &CyclesCanisterReport) -> [String; 7] {
     [
         role_label(row),
         row.canister_id.clone(),
-        row.status.clone(),
+        row.status.label().to_string(),
         row.latest_cycles.map_or_else(|| "-".to_string(), cycles_tc),
         row.burn_cycles_per_hour
             .map_or_else(|| "-".to_string(), format_unsigned_rate),
@@ -126,7 +126,7 @@ fn verbose_cycle_report_row(row: &CyclesCanisterReport) -> [String; 10] {
     [
         role_label(row),
         row.canister_id.clone(),
-        row.status.clone(),
+        row.status.label().to_string(),
         row.latest_cycles.map_or_else(|| "-".to_string(), cycles_tc),
         row.burn_cycles_per_hour
             .map_or_else(|| "-".to_string(), format_unsigned_rate),
@@ -155,10 +155,14 @@ fn format_history(row: &CyclesCanisterReport) -> String {
     let coverage = row
         .coverage_seconds
         .map_or_else(|| "-".to_string(), compact_duration);
-    if row.coverage_status == "covered" {
+    if row.coverage_status == CyclesCoverageStatus::Covered {
         format!("{} / {coverage}", row.sample_count)
     } else {
-        format!("{} / {coverage} {}", row.sample_count, row.coverage_status)
+        format!(
+            "{} / {coverage} {}",
+            row.sample_count,
+            row.coverage_status.label()
+        )
     }
 }
 

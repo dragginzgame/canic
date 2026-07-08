@@ -48,7 +48,7 @@ fn render_default_metrics_table(report: &MetricsReport) -> String {
         if canister.entries.is_empty() {
             rows.push([
                 canister.role.clone(),
-                canister.status.clone(),
+                canister.status.label().to_string(),
                 "-".to_string(),
                 canister.error.clone().unwrap_or_else(|| "-".to_string()),
                 "-".to_string(),
@@ -62,7 +62,7 @@ fn render_default_metrics_table(report: &MetricsReport) -> String {
             let value = metric_value_columns(&entry.value);
             rows.push([
                 canister.role.clone(),
-                canister.status.clone(),
+                canister.status.label().to_string(),
                 metric_family_label(entry),
                 metric_detail_label(entry, Some(DEFAULT_LABEL_MAX_CHARS)),
                 value.count,
@@ -97,7 +97,7 @@ fn render_verbose_metrics_table(report: &MetricsReport) -> String {
                 canister.role.clone(),
                 canister.canister_id.clone(),
                 metrics_kind_label(report.kind).to_string(),
-                canister.status.clone(),
+                canister.status.label().to_string(),
                 "-".to_string(),
                 canister.error.clone().unwrap_or_else(|| "-".to_string()),
                 "-".to_string(),
@@ -115,7 +115,7 @@ fn render_verbose_metrics_table(report: &MetricsReport) -> String {
                 canister.role.clone(),
                 canister.canister_id.clone(),
                 metrics_kind_label(report.kind).to_string(),
-                canister.status.clone(),
+                canister.status.label().to_string(),
                 metric_family_label(entry),
                 metric_detail_label(entry, None),
                 entry.principal.clone().unwrap_or_else(|| "-".to_string()),
@@ -257,7 +257,7 @@ const fn metrics_kind_label(kind: MetricsKind) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metrics::model::MetricsCanisterReport;
+    use crate::metrics::model::{MetricsCanisterReport, MetricsCanisterStatus};
 
     const CANISTER_ID: &str = "renrk-eyaaa-aaaaa-aaada-cai";
     const PRINCIPAL: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
@@ -272,7 +272,7 @@ mod tests {
             canisters: vec![MetricsCanisterReport {
                 role: "app".to_string(),
                 canister_id: CANISTER_ID.to_string(),
-                status: "ok".to_string(),
+                status: MetricsCanisterStatus::Ok,
                 entries: vec![
                     MetricEntry {
                         labels: ["perf", LONG_LABEL]
