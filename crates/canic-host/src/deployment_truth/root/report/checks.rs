@@ -4,6 +4,43 @@ use crate::deployment_truth::report::UNVERIFIED_DEPLOYMENT_ROOT_CODE;
 pub(in crate::deployment_truth) const ROOT_VERIFICATION_CHECK_FAILED_CODE: &str =
     "root_verification_check_failed";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RootVerificationCheckName {
+    DeploymentName,
+    Network,
+    FleetTemplate,
+    RootPrincipal,
+    PlanDeploymentName,
+    PlanNetwork,
+    PlanFleetTemplate,
+    ExplicitObservedRoot,
+    RootObservationSource,
+    ObservedRootCanisterId,
+    SourceCheckId,
+    SourceDeploymentPlanId,
+    SourceInventoryId,
+}
+
+impl RootVerificationCheckName {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::DeploymentName => "deployment_name",
+            Self::Network => "network",
+            Self::FleetTemplate => "fleet_template",
+            Self::RootPrincipal => "root_principal",
+            Self::PlanDeploymentName => "plan_deployment_name",
+            Self::PlanNetwork => "plan_network",
+            Self::PlanFleetTemplate => "plan_fleet_template",
+            Self::ExplicitObservedRoot => "explicit_observed_root",
+            Self::RootObservationSource => "root_observation_source",
+            Self::ObservedRootCanisterId => "observed_root_canister_id",
+            Self::SourceCheckId => "source_check_id",
+            Self::SourceDeploymentPlanId => "source_deployment_plan_id",
+            Self::SourceInventoryId => "source_inventory_id",
+        }
+    }
+}
+
 pub(super) fn root_verification_identity_checks(
     request: &DeploymentRootVerificationRequestV1,
     check: &DeploymentCheckV1,
@@ -12,43 +49,43 @@ pub(super) fn root_verification_identity_checks(
     let mut checks = Vec::new();
     push_check(
         &mut checks,
-        "deployment_name",
+        RootVerificationCheckName::DeploymentName,
         Some(request.deployment_name.as_str()),
         observed_root.map(|root| root.deployment_name.as_str()),
     );
     push_check(
         &mut checks,
-        "network",
+        RootVerificationCheckName::Network,
         Some(request.network.as_str()),
         observed_root.map(|root| root.network.as_str()),
     );
     push_check(
         &mut checks,
-        "fleet_template",
+        RootVerificationCheckName::FleetTemplate,
         Some(request.expected_fleet_template.as_str()),
         observed_root.map(|root| root.fleet_template.as_str()),
     );
     push_check(
         &mut checks,
-        "root_principal",
+        RootVerificationCheckName::RootPrincipal,
         Some(request.expected_root_principal.as_str()),
         observed_root.map(|root| root.root_principal.as_str()),
     );
     push_check(
         &mut checks,
-        "plan_deployment_name",
+        RootVerificationCheckName::PlanDeploymentName,
         Some(request.deployment_name.as_str()),
         Some(check.plan.deployment_identity.deployment_name.as_str()),
     );
     push_check(
         &mut checks,
-        "plan_network",
+        RootVerificationCheckName::PlanNetwork,
         Some(request.network.as_str()),
         Some(check.plan.deployment_identity.network.as_str()),
     );
     push_check(
         &mut checks,
-        "plan_fleet_template",
+        RootVerificationCheckName::PlanFleetTemplate,
         Some(request.expected_fleet_template.as_str()),
         Some(check.plan.fleet_template.as_str()),
     );
@@ -63,37 +100,37 @@ pub(super) fn root_verification_evidence_checks(
     let mut checks = Vec::new();
     push_check(
         &mut checks,
-        "explicit_observed_root",
+        RootVerificationCheckName::ExplicitObservedRoot,
         Some("present"),
         observed_root.map(|_| "present"),
     );
     push_check(
         &mut checks,
-        "root_observation_source",
+        RootVerificationCheckName::RootObservationSource,
         Some("IcpCanisterStatus"),
         observed_root.map(root_observation_source_label),
     );
     push_check(
         &mut checks,
-        "observed_root_canister_id",
+        RootVerificationCheckName::ObservedRootCanisterId,
         Some(request.expected_root_principal.as_str()),
         observed_root.map(|root| root.observed_canister_id.as_str()),
     );
     push_check(
         &mut checks,
-        "source_check_id",
+        RootVerificationCheckName::SourceCheckId,
         Some("present"),
         present_value(check.check_id.as_str()),
     );
     push_check(
         &mut checks,
-        "source_deployment_plan_id",
+        RootVerificationCheckName::SourceDeploymentPlanId,
         Some("present"),
         present_value(check.plan.plan_id.as_str()),
     );
     push_check(
         &mut checks,
-        "source_inventory_id",
+        RootVerificationCheckName::SourceInventoryId,
         Some("present"),
         present_value(check.inventory.inventory_id.as_str()),
     );
@@ -114,12 +151,12 @@ pub(super) fn root_verification_blockers(
 
 fn push_check(
     checks: &mut Vec<DeploymentRootVerificationCheckV1>,
-    name: impl Into<String>,
+    name: RootVerificationCheckName,
     expected: Option<&str>,
     observed: Option<&str>,
 ) {
     checks.push(DeploymentRootVerificationCheckV1 {
-        name: name.into(),
+        name: name.label().to_string(),
         expected: expected.map(str::to_string),
         observed: observed.map(str::to_string),
         satisfied: expected == observed,

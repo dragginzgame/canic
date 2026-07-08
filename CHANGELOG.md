@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.11` tightens host-owned report labels by replacing raw-string
+  `canic state audit` scope/category/source labels and deployment-root
+  verification check-row names with typed internal values while preserving
+  existing JSON/text labels, command behavior, endpoint surfaces, Candid, and
+  stable-state layout.
+
 - `0.83.10` tightens `canic deploy plan` diagnostic ownership by replacing
   raw-string category, severity, and source labels with typed internal values
   while preserving existing JSON/text labels, command behavior, endpoint

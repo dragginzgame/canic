@@ -519,3 +519,89 @@ Explicit non-scope:
 - no deployment truth or evidence schema changes
 - no typing of diagnostic codes, subjects, details, next actions, or embedded
   `DeploymentPlanV1` data
+
+## 0.83 State-Audit Report Label Typing
+
+Status:
+completed in 0.83.11 for the accepted `CANIC-083-DEBT-015` scope.
+
+Source findings:
+- CANIC-083-DEBT-015
+
+Boundary:
+State-audit report scope, category, and source labels.
+
+Previous owner:
+`canic state audit` stored report scope and check category/source labels as
+raw string constants in the state-manifest audit builder.
+
+Intended owner:
+The state-audit report model owns typed scope, category, and source labels,
+and text/JSON serialization formats the stable labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-host state_manifest --lib`
+- `cargo test --locked -p canic-cli state`
+
+Explicit non-scope:
+- no command changes
+- no help text changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth or evidence schema changes
+- no typing of audit codes, subjects, details, next actions, command strings,
+  or embedded manifest data
+
+## 0.83 Deployment-Root Verification Check Name Typing
+
+Status:
+completed in 0.83.11 for the accepted `CANIC-083-DEBT-016` scope.
+
+Source findings:
+- CANIC-083-DEBT-016
+
+Boundary:
+Deployment-root verification report check-row names.
+
+Previous owner:
+`canic deploy inspect root` and `canic deploy root verify` report paths
+repeated the closed identity/evidence check-row names as raw strings in the
+host report builder and validator.
+
+Intended owner:
+The deployment-root verification report builder owns typed check-name labels,
+and serialization writes the stable string names at the
+`DeploymentRootVerificationCheckV1` boundary.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels and report digest semantics remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-host root_verification --lib`
+- `cargo test --locked -p canic-cli deploy_root`
+
+Explicit non-scope:
+- no command changes
+- no help text changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence-envelope changes
+- no mutation behavior changes

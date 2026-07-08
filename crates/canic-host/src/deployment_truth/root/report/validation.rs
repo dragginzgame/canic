@@ -4,7 +4,7 @@ use super::{
         digest::deployment_root_verification_report_digest,
         error::DeploymentRootVerificationReportError,
     },
-    checks::{present_value, root_observation_source_label_from_source},
+    checks::{RootVerificationCheckName, present_value, root_observation_source_label_from_source},
     shared::root_verification_transition,
 };
 
@@ -89,24 +89,24 @@ fn ensure_root_verification_report_checks_consistent(
     ensure_report_check_names(
         &report.identity_checks,
         &[
-            "deployment_name",
-            "network",
-            "fleet_template",
-            "root_principal",
-            "plan_deployment_name",
-            "plan_network",
-            "plan_fleet_template",
+            RootVerificationCheckName::DeploymentName,
+            RootVerificationCheckName::Network,
+            RootVerificationCheckName::FleetTemplate,
+            RootVerificationCheckName::RootPrincipal,
+            RootVerificationCheckName::PlanDeploymentName,
+            RootVerificationCheckName::PlanNetwork,
+            RootVerificationCheckName::PlanFleetTemplate,
         ],
     )?;
     ensure_report_check_names(
         &report.evidence_checks,
         &[
-            "explicit_observed_root",
-            "root_observation_source",
-            "observed_root_canister_id",
-            "source_check_id",
-            "source_deployment_plan_id",
-            "source_inventory_id",
+            RootVerificationCheckName::ExplicitObservedRoot,
+            RootVerificationCheckName::RootObservationSource,
+            RootVerificationCheckName::ObservedRootCanisterId,
+            RootVerificationCheckName::SourceCheckId,
+            RootVerificationCheckName::SourceDeploymentPlanId,
+            RootVerificationCheckName::SourceInventoryId,
         ],
     )?;
     for check in report.identity_checks.iter().chain(&report.evidence_checks) {
@@ -119,25 +119,25 @@ fn ensure_root_verification_report_checks_consistent(
 
     ensure_report_check_value(
         &report.identity_checks,
-        "deployment_name",
+        RootVerificationCheckName::DeploymentName,
         Some(report.deployment_name.as_str()),
         report.observed_deployment_name.as_deref(),
     )?;
     ensure_report_check_value(
         &report.identity_checks,
-        "network",
+        RootVerificationCheckName::Network,
         Some(report.network.as_str()),
         report.observed_network.as_deref(),
     )?;
     ensure_report_check_value(
         &report.identity_checks,
-        "fleet_template",
+        RootVerificationCheckName::FleetTemplate,
         Some(report.expected_fleet_template.as_str()),
         report.observed_fleet_template.as_deref(),
     )?;
     ensure_report_check_value(
         &report.identity_checks,
-        "root_principal",
+        RootVerificationCheckName::RootPrincipal,
         Some(report.expected_root_principal.as_str()),
         report.observed_root_principal.as_deref(),
     )?;
@@ -149,13 +149,13 @@ fn ensure_root_verification_report_checks_consistent(
         && report.observed_root_observation_source.is_some();
     ensure_report_check_value(
         &report.evidence_checks,
-        "explicit_observed_root",
+        RootVerificationCheckName::ExplicitObservedRoot,
         Some("present"),
         observed_root_present.then_some("present"),
     )?;
     ensure_report_check_value(
         &report.evidence_checks,
-        "root_observation_source",
+        RootVerificationCheckName::RootObservationSource,
         Some("IcpCanisterStatus"),
         report
             .observed_root_observation_source
@@ -164,25 +164,25 @@ fn ensure_root_verification_report_checks_consistent(
     )?;
     ensure_report_check_value(
         &report.evidence_checks,
-        "observed_root_canister_id",
+        RootVerificationCheckName::ObservedRootCanisterId,
         Some(report.expected_root_principal.as_str()),
         report.observed_root_canister_id.as_deref(),
     )?;
     ensure_report_check_value(
         &report.evidence_checks,
-        "source_check_id",
+        RootVerificationCheckName::SourceCheckId,
         Some("present"),
         present_value(report.source_check_id.as_str()),
     )?;
     ensure_report_check_value(
         &report.evidence_checks,
-        "source_deployment_plan_id",
+        RootVerificationCheckName::SourceDeploymentPlanId,
         Some("present"),
         present_value(report.source_deployment_plan_id.as_str()),
     )?;
     ensure_report_check_value(
         &report.evidence_checks,
-        "source_inventory_id",
+        RootVerificationCheckName::SourceInventoryId,
         Some("present"),
         present_value(report.source_inventory_id.as_str()),
     )?;
@@ -191,24 +191,28 @@ fn ensure_root_verification_report_checks_consistent(
 
 fn ensure_report_check_names(
     checks: &[DeploymentRootVerificationCheckV1],
-    expected: &[&'static str],
+    expected: &[RootVerificationCheckName],
 ) -> Result<(), DeploymentRootVerificationReportError> {
     for check in checks {
-        if !expected.contains(&check.name.as_str()) {
+        if !expected
+            .iter()
+            .any(|expected_name| check.name == expected_name.label())
+        {
             return Err(DeploymentRootVerificationReportError::CheckMismatch {
                 check: check.name.clone(),
             });
         }
     }
     for expected_name in expected {
+        let expected_name = expected_name.label();
         if checks
             .iter()
-            .filter(|check| check.name == *expected_name)
+            .filter(|check| check.name == expected_name)
             .count()
             != 1
         {
             return Err(DeploymentRootVerificationReportError::CheckMismatch {
-                check: (*expected_name).to_string(),
+                check: expected_name.to_string(),
             });
         }
     }
@@ -217,10 +221,11 @@ fn ensure_report_check_names(
 
 fn ensure_report_check_value(
     checks: &[DeploymentRootVerificationCheckV1],
-    name: &'static str,
+    name: RootVerificationCheckName,
     expected: Option<&str>,
     observed: Option<&str>,
 ) -> Result<(), DeploymentRootVerificationReportError> {
+    let name = name.label();
     let Some(check) = checks.iter().find(|check| check.name == name) else {
         return Err(DeploymentRootVerificationReportError::CheckMismatch {
             check: name.to_string(),

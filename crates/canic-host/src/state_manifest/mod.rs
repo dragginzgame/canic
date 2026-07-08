@@ -20,19 +20,19 @@ pub const STATE_AUDIT_COMMAND: &str = "canic state audit";
 pub const STATE_MANIFEST_COMMAND: &str = "canic state manifest";
 pub const STATE_AUDIT_SCHEMA_VERSION: u16 = 1;
 
-const SCOPE_PROJECT: &str = "project";
-const SCOPE_ROLE: &str = "role";
-const SOURCE_STATE_MANIFEST: &str = "state_manifest";
-const CATEGORY_MANIFEST: &str = "manifest";
-const CATEGORY_SCHEMA_VERSION: &str = "schema_version";
-const CATEGORY_MEMORY_ID: &str = "memory_id";
-const CATEGORY_MIGRATION: &str = "migration";
-const CATEGORY_REMOVED_STATE: &str = "removed_state";
-const CATEGORY_SNAPSHOT: &str = "snapshot";
-const CATEGORY_NAMING: &str = "naming";
-const CATEGORY_LIFECYCLE: &str = "lifecycle";
-const CATEGORY_INVARIANT: &str = "invariant";
-const CATEGORY_TEST_COVERAGE: &str = "test_coverage";
+const SCOPE_PROJECT: StateAuditScope = StateAuditScope::Project;
+const SCOPE_ROLE: StateAuditScope = StateAuditScope::Role;
+const SOURCE_STATE_MANIFEST: StateAuditSource = StateAuditSource::StateManifest;
+const CATEGORY_MANIFEST: StateAuditCategory = StateAuditCategory::Manifest;
+const CATEGORY_SCHEMA_VERSION: StateAuditCategory = StateAuditCategory::SchemaVersion;
+const CATEGORY_MEMORY_ID: StateAuditCategory = StateAuditCategory::MemoryId;
+const CATEGORY_MIGRATION: StateAuditCategory = StateAuditCategory::Migration;
+const CATEGORY_REMOVED_STATE: StateAuditCategory = StateAuditCategory::RemovedState;
+const CATEGORY_SNAPSHOT: StateAuditCategory = StateAuditCategory::Snapshot;
+const CATEGORY_NAMING: StateAuditCategory = StateAuditCategory::Naming;
+const CATEGORY_LIFECYCLE: StateAuditCategory = StateAuditCategory::Lifecycle;
+const CATEGORY_INVARIANT: StateAuditCategory = StateAuditCategory::Invariant;
+const CATEGORY_TEST_COVERAGE: StateAuditCategory = StateAuditCategory::TestCoverage;
 
 ///
 /// StateAuditReport
@@ -44,7 +44,7 @@ const CATEGORY_TEST_COVERAGE: &str = "test_coverage";
 pub struct StateAuditReport {
     pub schema_version: u16,
     pub command: &'static str,
-    pub scope: &'static str,
+    pub scope: StateAuditScope,
     pub role: Option<String>,
     pub status: StateAuditStatus,
     pub manifest: StateManifest,
@@ -60,14 +60,97 @@ pub struct StateAuditReport {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct StateAuditCheck {
-    pub category: &'static str,
+    pub category: StateAuditCategory,
     pub code: &'static str,
     pub status: StateAuditStatus,
     pub severity: StateAuditSeverity,
     pub subject: String,
     pub detail: String,
     pub next: Option<String>,
-    pub source: &'static str,
+    pub source: StateAuditSource,
+}
+
+///
+/// StateAuditScope
+///
+/// Stable audit scope emitted by `canic state audit`.
+///
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateAuditScope {
+    Project,
+    Role,
+}
+
+impl StateAuditScope {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Role => "role",
+        }
+    }
+}
+
+///
+/// StateAuditCategory
+///
+/// Stable category label emitted by state-audit checks.
+///
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateAuditCategory {
+    Invariant,
+    Lifecycle,
+    Manifest,
+    MemoryId,
+    Migration,
+    Naming,
+    RemovedState,
+    SchemaVersion,
+    Snapshot,
+    TestCoverage,
+}
+
+impl StateAuditCategory {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Invariant => "invariant",
+            Self::Lifecycle => "lifecycle",
+            Self::Manifest => "manifest",
+            Self::MemoryId => "memory_id",
+            Self::Migration => "migration",
+            Self::Naming => "naming",
+            Self::RemovedState => "removed_state",
+            Self::SchemaVersion => "schema_version",
+            Self::Snapshot => "snapshot",
+            Self::TestCoverage => "test_coverage",
+        }
+    }
+}
+
+///
+/// StateAuditSource
+///
+/// Stable source-attribution label emitted by state-audit checks.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateAuditSource {
+    StateManifest,
+}
+
+impl StateAuditSource {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::StateManifest => "state_manifest",
+        }
+    }
 }
 
 ///
@@ -908,7 +991,7 @@ fn migration_label(migration: &StateMigrationManifest) -> String {
 }
 
 fn pass(
-    category: &'static str,
+    category: StateAuditCategory,
     code: &'static str,
     subject: &str,
     detail: String,
@@ -926,7 +1009,7 @@ fn pass(
 }
 
 fn warn(
-    category: &'static str,
+    category: StateAuditCategory,
     code: &'static str,
     subject: &str,
     detail: String,
@@ -945,7 +1028,7 @@ fn warn(
 }
 
 fn fail(
-    category: &'static str,
+    category: StateAuditCategory,
     code: &'static str,
     subject: &str,
     detail: String,
