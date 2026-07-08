@@ -191,7 +191,7 @@ fn renders_sync_gateways_dry_run_json_shape() {
         model::BlobStorageActionName::SyncGateways,
         target,
         canic_core::protocol::BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
-        "update",
+        model::BlobStorageMethodMode::Update,
         "icp canister call backend _immutableObjectStorageUpdateGatewayPrincipals () --json"
             .to_string(),
         None,
@@ -236,7 +236,7 @@ fn renders_sync_gateways_completed_json_shape() {
         model::BlobStorageActionName::SyncGateways,
         target,
         canic_core::protocol::BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
-        "update",
+        model::BlobStorageMethodMode::Update,
         "icp canister call backend _immutableObjectStorageUpdateGatewayPrincipals ()".to_string(),
         None,
     )
@@ -292,7 +292,7 @@ fn renders_fund_dry_run_plain_text() {
         model::BlobStorageActionName::Fund,
         target,
         canic_core::protocol::BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
-        "update",
+        model::BlobStorageMethodMode::Update,
         "icp canister call backend _immutableObjectStorageFundFromProjectCycles (100 : nat)"
             .to_string(),
         Some(100),
@@ -354,7 +354,7 @@ fn renders_fund_completed_report_json_and_plain_text() {
         model::BlobStorageActionName::Fund,
         target,
         canic_core::protocol::BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
-        "update",
+        model::BlobStorageMethodMode::Update,
         "icp canister call backend _immutableObjectStorageFundFromProjectCycles (100 : nat) --json"
             .to_string(),
         Some(100),
@@ -790,9 +790,9 @@ impl BlobStorageRuntime for ScriptedBlobStorageRuntime {
                 "rrkah-fqaaa-aaaaa-aaaaq-cai",
             ),
             method_mode: if method == BLOB_STORAGE_STATUS {
-                target::BlobStorageMethodMode::Query
+                model::BlobStorageMethodMode::Query
             } else {
-                target::BlobStorageMethodMode::Update
+                model::BlobStorageMethodMode::Update
             },
             candid_path: PathBuf::from(".icp/local/canisters/backend/backend.did"),
             icp_root: PathBuf::from("."),

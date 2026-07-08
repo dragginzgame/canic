@@ -14,12 +14,21 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.6`. Earlier in the
+- The current package/release-surface version is `0.83.7`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.7` working slice fixes `CANIC-083-DEBT-010` by tightening
+- The current `0.83.8` working slice fixes `CANIC-083-DEBT-011` by tightening
+  `canic blob-storage` action reports so the closed `query`/`update`
+  method-mode labels are represented by typed internal report-model values
+  instead of raw strings. Response-derived gateway `sync_action`, next-action
+  guidance labels, delegated command strings, error text, and canister-derived
+  data remain strings. Command behavior, JSON fields, JSON labels, text output
+  meaning, endpoint surfaces, Candid, deployment truth, evidence/report
+  schemas, and stable-state layout are unchanged.
+
+- The `0.83.7` slice fixes `CANIC-083-DEBT-010` by tightening
   `canic token` and `canic cycles` wallet parsers so maintained subcommand
   sets are represented by typed internal command kinds instead of raw strings.
   Caller-provided token symbols, receivers, cycles pending-operation command
