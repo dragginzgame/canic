@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.12
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.13
 Status: pass_with_followups
 
 ## Scope
@@ -47,7 +47,9 @@ runtime replay storage on `model::replay::CommandKind`. The seventeenth
 follow-up fix tightens replay-policy manifest constructors so static
 command-kind, command-manifest, quota-policy, and cycle-reserve labels are
 typed at manifest call sites instead of being accepted as loose helper
-arguments.
+arguments. The eighteenth follow-up fix tightens runtime bootstrap diagnostic
+phase labels so process-local bootstrap status stores `BootstrapPhaseLabel`
+while public bootstrap status responses keep the same phase strings.
 
 ## Baseline Validation
 
@@ -1370,6 +1372,72 @@ Fix validation:
 | --- | --- | --- |
 | `cargo fmt --all` | pass | Formatted the manifest constructor typing change. |
 | `cargo test --locked -p canic-core replay_policy --lib` | pass | 29 focused replay-policy tests passed. |
+| `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for `canic-core` targets. |
+
+## CANIC-083-DEBT-019: Runtime Bootstrap Status Owns Phase Labels As Raw Strings
+
+Severity: P3
+Category: runtime_status / boundary_ownership
+Status: fixed
+Owner: runtime bootstrap status ops
+Current location: `crates/canic-core/src/ops/runtime/bootstrap.rs`,
+`crates/canic-core/src/lifecycle/init/nonroot.rs`, and
+`crates/canic-core/src/lifecycle/upgrade/nonroot.rs`
+Intended owner: typed runtime bootstrap phase label, with
+`BootstrapStatusResponse.phase` remaining the string DTO boundary
+Affected surfaces: internal, rust_api
+Release decision: fixed_in_0.83.14
+
+Evidence:
+- file: `crates/canic-core/src/ops/runtime/bootstrap.rs`
+- line or anchor: `BootstrapStatusRecord.phase`,
+  `BootstrapStatusOps::set_phase`, `mark_failed`, and `mark_ready`
+- module/function: runtime bootstrap diagnostic status storage
+- command/search: `rg -n "BootstrapStatusOps::set_phase\\(\"|phase: &'static str" crates/canic-core/src -g '*.rs'`
+- reachability: active `canic_bootstrap_status` query projection and runtime
+  introspection recent-failure metadata
+- exact issue: process-local bootstrap status stored and accepted phase labels
+  as raw `&'static str` values even though the label namespace is owned by
+  runtime bootstrap diagnostics.
+
+Risk:
+
+Low. The public DTO already emitted string phase labels, but raw internal
+phase values let lifecycle call sites pass arbitrary strings directly below
+the bootstrap status boundary.
+
+Recommendation:
+
+Use a typed bootstrap phase label in runtime bootstrap ops and lifecycle call
+sites. Keep `BootstrapStatusResponse.phase` as a string so
+Candid/JSON/status output is unchanged.
+
+Regression test:
+
+Keep focused bootstrap/runtime status tests asserting idle, failed, ready, and
+recent-failure correlation metadata.
+
+Resolution:
+
+- Added `BootstrapPhaseLabel`.
+- Added associated constants for the maintained idle, failed, ready, root-init,
+  and nonroot lifecycle phase labels.
+- `BootstrapStatusRecord.phase` now stores `BootstrapPhaseLabel`.
+- `BootstrapStatusOps::set_phase` accepts `BootstrapPhaseLabel`.
+- Lifecycle bootstrap scheduling passes typed phase constants instead of
+  constructing labels from raw strings.
+- `snapshot()` still serializes the same phase strings.
+- `mark_failed` preserves the same redacted recent-failure correlation ID
+  behavior.
+- Command behavior, endpoint surfaces, Candid, JSON, deployment truth,
+  evidence/report schemas, and stable-state layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the bootstrap phase label typing change. |
+| `cargo test --locked -p canic-core bootstrap --lib` | pass | 14 focused bootstrap/runtime tests passed. |
 | `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for `canic-core` targets. |
 
 ## Rejected / Non-Findings

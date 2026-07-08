@@ -449,7 +449,7 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::runtime::bootstrap::BootstrapStatusOps;
+    use crate::ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps};
     use crate::ops::runtime::recent_failure::RecentFailureOps;
     use crate::{domain::runtime::TimerMode, ops::runtime::metrics::timer::TimerMetrics};
     use std::time::Duration;
@@ -734,7 +734,7 @@ mod tests {
     #[test]
     fn runtime_status_includes_bootstrap_failure_metadata() {
         RecentFailureOps::reset();
-        BootstrapStatusOps::set_phase("root:init");
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT);
         BootstrapStatusOps::mark_failed("raw bootstrap failure detail");
 
         let status = RuntimeIntrospectionApi::runtime_status_for(
