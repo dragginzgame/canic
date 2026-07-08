@@ -101,8 +101,28 @@ struct IcpTargetOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct TokenCommandRequest {
     token: String,
-    command: String,
+    command: TokenCommandKind,
     args: Vec<OsString>,
+}
+
+///
+/// TokenCommandKind
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TokenCommandKind {
+    Balance,
+    Transfer,
+}
+
+impl TokenCommandKind {
+    const fn parse(command: &str) -> Option<Self> {
+        match command.as_bytes() {
+            b"balance" => Some(Self::Balance),
+            b"transfer" => Some(Self::Transfer),
+            _ => None,
+        }
+    }
 }
 
 /// Parsed `canic token balance` options.
@@ -142,22 +162,21 @@ where
     }
 
     let request = split_token_command(args)?;
-    match request.command.as_str() {
-        "balance" => {
+    match request.command {
+        TokenCommandKind::Balance => {
             if print_help_or_version(&request.args, balance_usage, version_text()) {
                 return Ok(());
             }
             let options = TokenBalanceOptions::parse(request.token, request.args)?;
             run_balance(&options)
         }
-        "transfer" => {
+        TokenCommandKind::Transfer => {
             if print_help_or_version(&request.args, transfer_usage, version_text()) {
                 return Ok(());
             }
             let options = TokenTransferOptions::parse(request.token, request.args)?;
             run_transfer(&options)
         }
-        _ => Err(TokenCommandError::Usage(usage())),
     }
 }
 
@@ -168,10 +187,10 @@ fn split_token_command(args: Vec<OsString>) -> Result<TokenCommandRequest, Token
     let first = first
         .to_str()
         .ok_or_else(|| TokenCommandError::Usage(usage()))?;
-    if matches!(first, "balance" | "transfer") {
+    if let Some(command) = TokenCommandKind::parse(first) {
         return Ok(TokenCommandRequest {
             token: "icp".to_string(),
-            command: first.to_string(),
+            command,
             args: tail.to_vec(),
         });
     }
@@ -182,9 +201,11 @@ fn split_token_command(args: Vec<OsString>) -> Result<TokenCommandRequest, Token
     let command = command
         .to_str()
         .ok_or_else(|| TokenCommandError::Usage(usage()))?;
+    let command =
+        TokenCommandKind::parse(command).ok_or_else(|| TokenCommandError::Usage(usage()))?;
     Ok(TokenCommandRequest {
         token: first.to_string(),
-        command: command.to_string(),
+        command,
         args: tail.to_vec(),
     })
 }
@@ -507,7 +528,7 @@ mod tests {
     fn splits_optional_token_prefix() {
         let default = split_token_command(vec![OsString::from("balance")]).expect("split default");
         assert_eq!(default.token, "icp");
-        assert_eq!(default.command, "balance");
+        assert_eq!(default.command, TokenCommandKind::Balance);
 
         let explicit = split_token_command(vec![
             OsString::from("ckbtc"),
@@ -516,7 +537,7 @@ mod tests {
         ])
         .expect("split explicit");
         assert_eq!(explicit.token, "ckbtc");
-        assert_eq!(explicit.command, "transfer");
+        assert_eq!(explicit.command, TokenCommandKind::Transfer);
         assert_eq!(explicit.args, vec![OsString::from("1")]);
     }
 

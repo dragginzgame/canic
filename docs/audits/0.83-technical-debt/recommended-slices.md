@@ -315,3 +315,45 @@ Explicit non-scope:
 - no command changes
 - no backup behavior changes
 - no typing of dynamic backup scope, paths, operation kind/state, or error text
+
+## 0.83 Wallet Command Parser Typing
+
+Status:
+completed in 0.83.7 for the accepted `CANIC-083-DEBT-010` scope.
+
+Source findings:
+- CANIC-083-DEBT-010
+
+Boundary:
+Token and cycles wallet CLI command parsers and dispatchers.
+
+Previous owner:
+The token parser stored the closed `balance`/`transfer` command kind as a raw
+string, and the cycles wallet dispatcher routed maintained subcommands through
+raw command strings and separate command-name constants.
+
+Intended owner:
+Wallet parsers own typed command kinds for maintained command variants;
+caller-provided token symbols, pending-operation command strings, and
+delegated ICP CLI command/error text remain strings.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None.
+
+Validation:
+- `cargo test --locked -p canic-cli token`
+- `cargo test --locked -p canic-cli cycles`
+
+Explicit non-scope:
+- no command changes
+- no help text changes
+- no ICP CLI execution changes
+- no token symbol typing
+- no receiver or deployment-target behavior changes
+- no pending-operation log schema changes

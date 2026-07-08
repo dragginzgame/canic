@@ -14,13 +14,21 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.5`. Earlier in the
+- The current package/release-surface version is `0.83.6`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.6` working slice fixes `CANIC-083-DEBT-009` by tightening
-  the `canic backup` report wrapper so create mode/layout/status, list status,
+- The current `0.83.7` working slice fixes `CANIC-083-DEBT-010` by tightening
+  `canic token` and `canic cycles` wallet parsers so maintained subcommand
+  sets are represented by typed internal command kinds instead of raw strings.
+  Caller-provided token symbols, receivers, cycles pending-operation command
+  strings, and delegated ICP CLI command/error strings remain strings. Command
+  behavior, help text, endpoint surfaces, Candid, JSON, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged.
+
+- The `0.83.6` slice fixes `CANIC-083-DEBT-009` by tightening the
+  `canic backup` report wrapper so create mode/layout/status, list status,
   prune status/action, and status/inspect layout-status labels are typed
   internally instead of owned as raw strings. Dynamic backup scope labels,
   paths, operation kind/state labels, errors, and canister-derived data remain

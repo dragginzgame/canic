@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.7` tightens `canic token` and `canic cycles` wallet command parsing by
+  replacing raw-string maintained subcommand kinds with typed internal parser
+  values while preserving token symbols, receivers, cycles pending-operation
+  command strings, delegated ICP CLI command/error text, help text, and command
+  behavior.
+
 - `0.83.6` tightens `canic backup` report ownership by replacing raw-string
   create mode/layout/status, list status, prune status/action, and
   status/inspect layout-status labels with typed internal values while
@@ -74,6 +80,14 @@ canic backup status <backup-ref>
 canic backup inspect <backup-ref> --json
 canic backup list
 canic backup prune --failed --dry-run
+canic token balance
+canic token icp balance
+canic token transfer 1.25 <principal-or-account>
+canic token icp transfer 1.25 <deployment>/<role-or-canister>
+canic cycles balance
+canic cycles transfer 4T <principal>
+canic cycles transfer 4T <deployment>/<role-or-canister>
+canic cycles topup <deployment> <role-or-canister> 4T
 ```
 
 ## [0.82.x] - 2026-07-05 - Boundary Hardening
