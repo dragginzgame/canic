@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.3
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.4
 Status: pass_with_followups
 
 ## Scope
@@ -23,7 +23,9 @@ labels are typed internally while preserving decoded canister response strings
 as data. The fifth follow-up fix tightens the metrics report wrapper so
 canister-row status labels are typed internally while preserving existing JSON
 labels and text output. The sixth follow-up fix applies the same ownership
-rule to cycles report canister status and coverage status labels.
+rule to cycles report canister status and coverage status labels. The seventh
+follow-up fix tightens blob-storage report kind, Candid source, action,
+funding-status, and readiness-state labels.
 
 ## Baseline Validation
 
@@ -551,6 +553,76 @@ Fix validation:
 | `cargo fmt --all` | pass | Formatted the cycles report typing change. |
 | `cargo test --locked -p canic-cli cycles` | pass | 43 filtered cycles-related CLI tests passed. |
 | `cargo test --locked -p canic-cli metrics` | pass | 14 filtered metrics-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-008: Blob-Storage Reports Own Closed Labels As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / blob_storage
+Status: fixed
+Owner: blob-storage CLI report wrapper
+Current location: `crates/canic-cli/src/blob_storage/model.rs`
+Intended owner: typed blob-storage report model, with renderers and error
+boundaries formatting typed labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.5
+
+Evidence:
+- file: `crates/canic-cli/src/blob_storage/model.rs`
+- line or anchor: `BlobStorageTarget.candid_source`,
+  `BlobStorageErrorResult.kind`, `BlobStorageAction.name`,
+  `BlobStorageActionResult.kind`, `BlobStorageStatusResult.kind`,
+  `BlobStorageFundingStatus.status`, and `BlobStorageReadinessStatus.state`
+- module/function: blob-storage model, parser, renderer, and medic summary
+- command/search: `rg -n "kind: String|candid_source: Option<String>|state: String|status: String|name: String" crates/canic-cli/src/blob_storage/model.rs`
+- reachability: active `canic blob-storage` JSON/text report paths and
+  medic blob-storage summary path
+- exact issue: blob-storage report kind labels, local Candid source labels,
+  action labels, funding status labels, and readiness state labels were stored
+  as strings even though these sets are closed inside the CLI report model.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by focused tests,
+but raw strings let blob-storage report wrappers drift from the stable labels
+without compiler help.
+
+Recommendation:
+
+Use typed values for closed report labels. Keep free-form command strings,
+error messages, blocker/warning code arrays, and canister-derived text values
+as strings.
+
+Regression test:
+
+Keep focused blob-storage tests asserting typed readiness/funding values and
+unchanged JSON labels for report kind, Candid source, action, funding status,
+and readiness state.
+
+Resolution:
+
+- `BlobStorageTarget.candid_source` and `BlobStorageErrorTarget.candid_source`
+  now store `BlobStorageCandidSource`.
+- `BlobStorageErrorResult.kind` and `BlobStorageStatusResult.kind` now store
+  `BlobStorageReportKind`.
+- `BlobStorageActionResult.kind` now stores `BlobStorageActionResultKind`.
+- `BlobStorageAction.name` now stores `BlobStorageActionName`.
+- `BlobStorageFundingStatus.status` now stores
+  `BlobStorageFundingStatusCode`.
+- `BlobStorageReadinessStatus.state` now stores `BlobStorageReadinessState`.
+- Renderers, medic summary, and readiness-check errors format typed labels at
+  the output/error boundary.
+- JSON labels remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the blob-storage report typing change. |
+| `cargo test --locked -p canic-cli blob_storage` | pass | 30 filtered blob-storage-related CLI tests passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |

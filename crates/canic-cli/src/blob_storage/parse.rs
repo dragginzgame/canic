@@ -8,16 +8,15 @@ use crate::blob_storage::model::{
     BLOB_STORAGE_CODE_CASHIER_BALANCE_BELOW_MIN, BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE,
     BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED, BLOB_STORAGE_CODE_FUNDING_NEEDED,
     BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY, BLOB_STORAGE_CODE_NOT_CONFIGURED,
-    BLOB_STORAGE_CODE_NOT_NEEDED, BLOB_STORAGE_CODE_NOT_REQUESTED,
-    BLOB_STORAGE_CODE_PROJECT_AS_PAYMENT_ACCOUNT,
+    BLOB_STORAGE_CODE_NOT_REQUESTED, BLOB_STORAGE_CODE_PROJECT_AS_PAYMENT_ACCOUNT,
     BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING,
     BLOB_STORAGE_CODE_SKIPPED_CONFIG_MISSING, BLOB_STORAGE_CODE_SKIPPED_READ_ONLY_STATUS,
     BLOB_STORAGE_CODE_STATUS_SYNC_REQUEST_IGNORED, BLOB_STORAGE_CODE_UNKNOWN,
-    BLOB_STORAGE_JSON_SCHEMA_VERSION, BLOB_STORAGE_READINESS_BLOCKED, BLOB_STORAGE_READINESS_READY,
-    BLOB_STORAGE_READINESS_WARNING, BLOB_STORAGE_STATUS_KIND, BlobStorageActionName,
-    BlobStorageCashierStatus, BlobStorageFundingReport, BlobStorageFundingStatus,
+    BLOB_STORAGE_JSON_SCHEMA_VERSION, BlobStorageActionName, BlobStorageCashierStatus,
+    BlobStorageFundingReport, BlobStorageFundingStatus, BlobStorageFundingStatusCode,
     BlobStorageGatewayStatus, BlobStorageNextAction, BlobStoragePolicyStatus,
-    BlobStorageReadinessStatus, BlobStorageStatusResult, BlobStorageTarget,
+    BlobStorageReadinessState, BlobStorageReadinessStatus, BlobStorageReportKind,
+    BlobStorageStatusResult, BlobStorageTarget,
 };
 use canic_host::response_parse::{find_field, parse_json_u64, parse_json_u128};
 
@@ -38,7 +37,7 @@ pub(super) fn parse_status_result(
 
     Some(BlobStorageStatusResult {
         schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
-        kind: BLOB_STORAGE_STATUS_KIND.to_string(),
+        kind: BlobStorageReportKind::Status,
         deployment: deployment.to_string(),
         next: next_actions(deployment, &target, &readiness, &funding),
         target,
@@ -90,20 +89,20 @@ pub(super) fn parse_funding_report(output: &str) -> Option<BlobStorageFundingRep
     })
 }
 
-fn readiness_status(
+const fn readiness_status(
     ready: bool,
     blockers: Vec<String>,
     warnings: Vec<String>,
 ) -> BlobStorageReadinessStatus {
     let state = if !ready || !blockers.is_empty() {
-        BLOB_STORAGE_READINESS_BLOCKED
+        BlobStorageReadinessState::Blocked
     } else if warnings.is_empty() {
-        BLOB_STORAGE_READINESS_READY
+        BlobStorageReadinessState::Ready
     } else {
-        BLOB_STORAGE_READINESS_WARNING
+        BlobStorageReadinessState::Warning
     };
     BlobStorageReadinessStatus {
-        state: state.to_string(),
+        state,
         ready_for_upload: ready,
         blockers,
         warnings,
@@ -115,7 +114,7 @@ fn parse_funding_status(value: &serde_json::Value) -> Option<BlobStorageFundingS
     let status = funding_status_code(&variant);
     let payload = variant_payload(value, &variant);
     Some(BlobStorageFundingStatus {
-        status: status.to_string(),
+        status,
         requested_cycles: payload
             .and_then(|payload| find_field(payload, "requested_cycles"))
             .and_then(parse_u128_deep)
@@ -148,7 +147,7 @@ fn next_actions(
             )),
         });
     }
-    if funding.status == BLOB_STORAGE_CODE_FUNDING_NEEDED
+    if funding.status == BlobStorageFundingStatusCode::FundingNeeded
         && let Some(requested_cycles) = &funding.requested_cycles
     {
         next.push(BlobStorageNextAction {
@@ -255,15 +254,15 @@ fn common_variant_code(variant: &str) -> &'static str {
     }
 }
 
-fn funding_status_code(variant: &str) -> &'static str {
+fn funding_status_code(variant: &str) -> BlobStorageFundingStatusCode {
     match variant {
-        "NotConfigured" => BLOB_STORAGE_CODE_NOT_CONFIGURED,
-        "NotNeeded" => BLOB_STORAGE_CODE_NOT_NEEDED,
-        "FundingRequired" => BLOB_STORAGE_CODE_FUNDING_NEEDED,
-        "BalanceUnavailable" => BLOB_STORAGE_CODE_CASHIER_BALANCE_UNAVAILABLE,
-        "BalanceMalformed" => BLOB_STORAGE_CODE_CASHIER_RESPONSE_MALFORMED,
-        "ReserveWouldBeViolated" => BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING,
-        _ => BLOB_STORAGE_CODE_UNKNOWN,
+        "NotConfigured" => BlobStorageFundingStatusCode::NotConfigured,
+        "NotNeeded" => BlobStorageFundingStatusCode::NotNeeded,
+        "FundingRequired" => BlobStorageFundingStatusCode::FundingNeeded,
+        "BalanceUnavailable" => BlobStorageFundingStatusCode::CashierBalanceUnavailable,
+        "BalanceMalformed" => BlobStorageFundingStatusCode::CashierResponseMalformed,
+        "ReserveWouldBeViolated" => BlobStorageFundingStatusCode::ProjectCyclesReserveBlocksFunding,
+        _ => BlobStorageFundingStatusCode::Unknown,
     }
 }
 

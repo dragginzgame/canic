@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.5` tightens `canic blob-storage` report ownership by replacing
+  raw-string report kind, Candid source, action, funding status, and readiness
+  state labels with typed internal values while preserving JSON/text labels,
+  command behavior, endpoint surfaces, Candid, and stable-state layout.
+
 - `0.83.4` tightens `canic info metrics` and `canic info cycles` report
   ownership by replacing raw-string canister row status and coverage labels
   with typed internal values while preserving existing `ok`, `empty`,
@@ -55,6 +60,9 @@ canic fleet adoption report <fleet> --profile <profile> --json
 canic fleet adoption report <fleet> --profile <profile> --evidence-envelope
 canic info metrics <deployment> --json
 canic info cycles <deployment> --json
+canic blob-storage status <deployment> <canister-or-role> --json
+canic blob-storage sync-gateways <deployment> <canister-or-role> --json
+canic blob-storage fund <deployment> <canister-or-role> --cycles <cycles> --json
 ```
 
 ## [0.82.x] - 2026-07-05 - Boundary Hardening

@@ -22,9 +22,9 @@ use crate::{
             BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED,
             BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
             BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,
-            BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED, BLOB_STORAGE_READINESS_READY,
-            BLOB_STORAGE_READINESS_WARNING, BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE,
+            BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED, BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE,
             BlobStorageActionName, BlobStorageActionResult, BlobStorageErrorResult,
+            BlobStorageReadinessState,
         },
         options::{BlobStorageCommand, BlobStorageOptions},
         parse::{parse_funding_report, parse_status_result},
@@ -220,16 +220,16 @@ pub struct BlobStorageMedicSummary {
 
 impl BlobStorageMedicSummary {
     fn from_status(result: &model::BlobStorageStatusResult) -> Self {
-        let status = match result.readiness.state.as_str() {
-            BLOB_STORAGE_READINESS_READY => BlobStorageMedicStatus::Ready,
-            BLOB_STORAGE_READINESS_WARNING => BlobStorageMedicStatus::Warning,
-            _ => BlobStorageMedicStatus::Blocked,
+        let status = match result.readiness.state {
+            BlobStorageReadinessState::Ready => BlobStorageMedicStatus::Ready,
+            BlobStorageReadinessState::Warning => BlobStorageMedicStatus::Warning,
+            BlobStorageReadinessState::Blocked => BlobStorageMedicStatus::Blocked,
         };
         let mut detail = vec![
-            format!("readiness={}", result.readiness.state),
+            format!("readiness={}", result.readiness.state.label()),
             format!("configured={}", result.configured),
             format!("gateways={}", result.gateways.principal_count),
-            format!("funding={}", result.funding.status),
+            format!("funding={}", result.funding.status.label()),
         ];
         if let Some(balance) = &result.cashier.balance_cycles {
             detail.push(format!("cashier_balance={balance}"));
@@ -406,7 +406,7 @@ fn check_status_ready_for_upload(
     }
     Err(BlobStorageCommandError::ReadinessCheckFailed {
         message: readiness_check_failure_message(result),
-        state: result.readiness.state.clone(),
+        state: result.readiness.state.label().to_string(),
         blockers: result.readiness.blockers.clone(),
         warnings: result.readiness.warnings.clone(),
     })
@@ -415,7 +415,7 @@ fn check_status_ready_for_upload(
 fn readiness_check_failure_message(result: &model::BlobStorageStatusResult) -> String {
     let mut parts = vec![format!(
         "readiness check failed: state={}",
-        result.readiness.state
+        result.readiness.state.label()
     )];
     if !result.readiness.blockers.is_empty() {
         parts.push(format!("blockers={}", result.readiness.blockers.join(",")));
