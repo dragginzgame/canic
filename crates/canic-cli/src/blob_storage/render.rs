@@ -16,7 +16,7 @@ pub(super) fn render_action_result(result: &BlobStorageActionResult) -> String {
         format!("Deployment: {}", result.deployment),
         format!("Target: {}", result.target.input),
         format!("Method: {}", result.action.method),
-        format!("Mode: {}", result.action.mode),
+        format!("Mode: {}", result.action.mode.label()),
         result.action.requested_cycles.as_ref().map_or_else(
             || "Requested cycles: -".to_string(),
             |cycles| format!("Requested cycles: {cycles}"),

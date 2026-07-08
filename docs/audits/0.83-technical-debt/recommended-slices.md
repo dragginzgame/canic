@@ -277,6 +277,48 @@ Explicit non-scope:
 - no blob-storage behavior changes
 - no typing of free-form command strings or error messages
 
+## 0.83 Blob-Storage Method Mode Typing
+
+Status:
+completed in 0.83.8 for the accepted `CANIC-083-DEBT-011` scope.
+
+Source findings:
+- CANIC-083-DEBT-011
+
+Boundary:
+Blob-storage CLI action report method-mode labels.
+
+Previous owner:
+Target resolution derived the typed call mode to a raw `query`/`update` string
+before action report construction, and `BlobStorageAction.mode` stored that
+label as a string.
+
+Intended owner:
+The blob-storage report model owns the typed action method mode, target
+resolution supplies the typed value, and renderers/JSON serialization format
+the label at the output boundary.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+None.
+
+Serialized surfaces affected:
+None. JSON labels remain unchanged.
+
+Validation:
+- `cargo test --locked -p canic-cli blob_storage`
+
+Explicit non-scope:
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no command changes
+- no blob-storage behavior changes
+- no typing of decoded canister response labels, next-action guidance strings,
+  delegated command strings, or error text
+
 ## 0.83 Backup Report Status Typing
 
 Status:

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.8` tightens `canic blob-storage` action report ownership by replacing
+  raw-string `query`/`update` method-mode labels with a typed internal value
+  while preserving response-derived gateway sync actions, next-action guidance
+  labels, delegated command strings, JSON/text labels, command behavior,
+  endpoint surfaces, Candid, and stable-state layout.
+
 - `0.83.7` tightens `canic token` and `canic cycles` wallet command parsing by
   replacing raw-string maintained subcommand kinds with typed internal parser
   values while preserving token symbols, receivers, cycles pending-operation
@@ -74,7 +80,9 @@ canic info metrics <deployment> --json
 canic info cycles <deployment> --json
 canic blob-storage status <deployment> <canister-or-role> --json
 canic blob-storage sync-gateways <deployment> <canister-or-role> --json
+canic blob-storage sync-gateways <deployment> <canister-or-role> --dry-run --json
 canic blob-storage fund <deployment> <canister-or-role> --cycles <cycles> --json
+canic blob-storage fund <deployment> <canister-or-role> --cycles <cycles> --dry-run --json
 canic backup create <deployment> --dry-run
 canic backup status <backup-ref>
 canic backup inspect <backup-ref> --json

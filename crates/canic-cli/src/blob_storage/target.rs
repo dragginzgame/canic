@@ -6,7 +6,8 @@
 
 use crate::{
     blob_storage::{
-        BlobStorageCommandError, blob_storage_installed_deployment_error, model::BlobStorageTarget,
+        BlobStorageCommandError, blob_storage_installed_deployment_error,
+        model::{BlobStorageMethodMode, BlobStorageTarget},
         options::CommonOptions,
     },
     support::candid::role_candid_path,
@@ -32,25 +33,6 @@ pub(super) struct BlobStorageCallTarget {
     pub(super) method_mode: BlobStorageMethodMode,
     pub(super) candid_path: PathBuf,
     pub(super) icp_root: PathBuf,
-}
-
-///
-/// BlobStorageMethodMode
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum BlobStorageMethodMode {
-    Query,
-    Update,
-}
-
-impl BlobStorageMethodMode {
-    pub(super) const fn label(self) -> &'static str {
-        match self {
-            Self::Query => "query",
-            Self::Update => "update",
-        }
-    }
 }
 
 ///

@@ -69,6 +69,26 @@ impl BlobStorageTarget {
 }
 
 ///
+/// BlobStorageMethodMode
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum BlobStorageMethodMode {
+    Query,
+    Update,
+}
+
+impl BlobStorageMethodMode {
+    pub(super) const fn label(self) -> &'static str {
+        match self {
+            Self::Query => "query",
+            Self::Update => "update",
+        }
+    }
+}
+
+///
 /// BlobStorageCandidSource
 ///
 
@@ -254,7 +274,7 @@ impl Serialize for BlobStorageActionResultKind {
 pub(super) struct BlobStorageAction {
     pub(super) name: BlobStorageActionName,
     pub(super) method: String,
-    pub(super) mode: String,
+    pub(super) mode: BlobStorageMethodMode,
     pub(super) dry_run: bool,
     pub(super) success: bool,
     pub(super) command: String,
@@ -284,7 +304,7 @@ impl BlobStorageActionResult {
         action_name: BlobStorageActionName,
         target: BlobStorageTarget,
         method: &str,
-        mode: &str,
+        mode: BlobStorageMethodMode,
         command: String,
         requested_cycles: Option<u128>,
     ) -> Self {
@@ -304,7 +324,7 @@ impl BlobStorageActionResult {
         action_name: BlobStorageActionName,
         target: BlobStorageTarget,
         method: &str,
-        mode: &str,
+        mode: BlobStorageMethodMode,
         command: String,
         requested_cycles: Option<u128>,
     ) -> Self {
@@ -323,7 +343,7 @@ impl BlobStorageActionResult {
         deployment: &str,
         action_name: BlobStorageActionName,
         target: BlobStorageTarget,
-        method_mode: (&str, &str),
+        method_mode: (&str, BlobStorageMethodMode),
         dry_run: bool,
         command: String,
         requested_cycles: Option<u128>,
@@ -337,7 +357,7 @@ impl BlobStorageActionResult {
             action: BlobStorageAction {
                 name: action_name,
                 method: method.to_string(),
-                mode: mode.to_string(),
+                mode,
                 dry_run,
                 success: true,
                 command,

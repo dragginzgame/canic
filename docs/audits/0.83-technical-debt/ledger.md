@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.6
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.7
 Status: pass_with_followups
 
 ## Scope
@@ -29,6 +29,9 @@ funding-status, and readiness-state labels. The eighth follow-up fix tightens
 backup create, list, prune, status, and inspect report layout/status/action
 labels. The ninth follow-up fix tightens token and cycles wallet command
 parsing so maintained subcommand sets are represented by typed parser values.
+The tenth follow-up fix tightens blob-storage action method-mode ownership so
+the closed `query`/`update` action-report labels are stored as typed model
+values instead of being derived to strings before report construction.
 
 ## Baseline Validation
 
@@ -774,6 +777,76 @@ Fix validation:
 | `cargo fmt --all` | pass | Formatted the wallet parser typing change. |
 | `cargo test --locked -p canic-cli token` | pass | 4 filtered token-related CLI tests passed. |
 | `cargo test --locked -p canic-cli cycles` | pass | 43 filtered cycles-related CLI tests passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-011: Blob-Storage Action Reports Own Method Mode As Raw Strings
+
+Severity: P3
+Category: diagnostic_ownership / blob_storage
+Status: fixed
+Owner: blob-storage CLI action report wrapper
+Current location: `crates/canic-cli/src/blob_storage/model.rs` and
+`crates/canic-cli/src/blob_storage/target.rs`
+Intended owner: typed blob-storage action report model, with target resolution
+supplying typed method-mode values and renderers/JSON boundaries formatting
+labels
+Affected surfaces: internal, json
+Release decision: fixed_in_0.83.8
+
+Evidence:
+- file: `crates/canic-cli/src/blob_storage/model.rs`
+- line or anchor: `BlobStorageAction.mode`,
+  `BlobStorageActionResult::dry_run`, `BlobStorageActionResult::completed`,
+  and `BlobStorageActionResult::new`
+- module/function: blob-storage action report model and builders
+- command/search: `rg -n "mode: String|target\\.method_mode\\.label\\(\\)" crates/canic-cli/src/blob_storage -g '*.rs'`
+- reachability: active `canic blob-storage sync-gateways|fund` dry-run and
+  completed report paths
+- exact issue: `BlobStorageAction.mode` stored the closed action method-mode
+  label as a raw string, and call sites converted the resolved method mode to
+  `query`/`update` labels before constructing the action report.
+
+Risk:
+
+Low. The emitted JSON/text labels were correct and covered by focused tests,
+but raw strings split ownership between target resolution and report
+construction even though the `query`/`update` set is closed inside the
+blob-storage command model.
+
+Recommendation:
+
+Move method-mode ownership into the blob-storage report model and store the
+typed value in `BlobStorageAction`. Keep canister response data, guidance
+action labels, delegated command strings, and error text as strings.
+
+Regression test:
+
+Keep focused blob-storage tests asserting unchanged JSON `action.mode` labels
+and text `Mode: update` output for dry-run and completed action reports.
+
+Resolution:
+
+- `BlobStorageMethodMode` now lives in `blob_storage::model`.
+- `BlobStorageAction.mode` now stores `BlobStorageMethodMode`.
+- `BlobStorageActionResult::dry_run`, `completed`, and `new` accept typed
+  method-mode values.
+- Target resolution supplies the typed method mode directly to action-report
+  construction.
+- Renderers and JSON serialization format `query`/`update` labels at the
+  output boundary.
+- Response-derived `sync_action`, next-action guidance strings, command
+  strings, and error text remain strings.
+- JSON labels and text output remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the blob-storage method-mode typing change. |
+| `cargo test --locked -p canic-cli blob_storage` | pass | Focused blob-storage-related CLI tests passed. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo clippy --locked -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for `canic-cli` targets. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
