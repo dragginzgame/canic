@@ -905,3 +905,54 @@ Explicit non-scope:
 - no safety-finding code string changes
 - no fallback subject string changes
 - no operator text output label changes
+
+## 0.83 Comparison Report Validation And Text Label Typing
+
+Status:
+completed in 0.83.18 for the accepted `CANIC-083-DEBT-024` scope.
+
+Source findings:
+- CANIC-083-DEBT-024
+
+Boundary:
+Deployment-truth comparison report validation field labels and text renderer
+labels.
+
+Previous owner:
+Comparison validation helpers accepted raw field-name strings, target-side
+strings, and target-field strings, including a fallback string path for target
+field labels. The comparison text renderer owned title, field, section, count,
+target, and fallback labels as raw strings.
+
+Intended owner:
+Deployment-truth comparison validation owns field labels through
+`DeploymentComparisonFieldLabel` plus typed target-side/field enums. The
+comparison text renderer owns rendered text labels through
+`DeploymentComparisonTextLabel`.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust deployment-truth internals only. No CLI or endpoint surface changes.
+
+Serialized surfaces affected:
+None. Validation error field strings and operator text output labels remain
+unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host comparison`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no comparison behavior changes
+- no validation error field string changes
+- no operator text output label changes
