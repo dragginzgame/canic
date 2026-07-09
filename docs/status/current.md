@@ -14,12 +14,22 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.14`. Earlier in the
+- The current package/release-surface version is `0.83.15`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.15` working slice fixes `CANIC-083-DEBT-020` by tightening
+- The current `0.83.16` working slice fixes `CANIC-083-DEBT-022` by tightening
+  host install-root execution-preflight receipt labels. The execution-preflight
+  receipt phase, operation ID, failure command-result code, and evidence keys
+  now use typed labels internally. Deployment-truth execution-preflight
+  planned-phase rows also use typed labels internally. Receipt JSON phase
+  strings, operation IDs, command-result codes, evidence strings,
+  planned-phase strings, command behavior, endpoint surfaces, Candid, JSON
+  schemas, deployment truth schema, evidence/report schemas, and stable-state
+  layout are unchanged.
+
+- The `0.83.15` slice fixes `CANIC-083-DEBT-020` by tightening
   host install-root deployment-truth phase labels. Install-root operation
   phases, completed-phase receipts, artifact-promotion install receipts, and
   deployment-truth gate operation IDs now use `InstallPhaseLabel` internally.

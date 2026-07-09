@@ -794,3 +794,57 @@ Explicit non-scope:
 - no receipt phase string changes
 - no receipt operation ID changes
 - no timing table label changes
+
+## 0.83 Host Install-Root Execution Preflight Receipt Label Typing
+
+Status:
+completed in 0.83.16 for the accepted `CANIC-083-DEBT-022` scope.
+
+Source findings:
+- CANIC-083-DEBT-022
+
+Boundary:
+Host install-root execution-preflight receipt phase, failure-code, and evidence
+labels, plus deployment-truth execution-preflight planned-phase labels.
+
+Previous owner:
+The execution-preflight receipt builder constructed operation IDs, phase
+receipts, failure command-result codes, and evidence keys from raw strings.
+The deployment-truth execution-preflight builder also owned current-install
+planned phases as raw strings.
+
+Intended owner:
+Host install-root owns the execution-preflight phase through
+`InstallPhaseLabel`; the execution-preflight receipt builder owns failure-code
+and evidence-key labels through `ExecutionPreflightReceiptLabel`.
+Deployment-truth owns the current-install execution-preflight planned phases
+through `CurrentInstallExecutionPhaseLabel`.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust install-root internals only. No CLI or endpoint surface changes.
+
+Serialized surfaces affected:
+None. Deployment-truth receipt phase strings, operation IDs, command-result
+codes, evidence strings, and execution-preflight planned-phase strings remain
+unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host execution_preflight`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no install-root behavior changes
+- no receipt phase string changes
+- no receipt operation ID changes
+- no receipt evidence string changes

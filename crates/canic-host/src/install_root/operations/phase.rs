@@ -4,6 +4,7 @@ pub(in crate::install_root) struct InstallPhaseLabel(&'static str);
 impl InstallPhaseLabel {
     pub(in crate::install_root) const BUILD_ARTIFACTS: Self = Self("build_artifacts");
     pub(in crate::install_root) const EMIT_MANIFEST: Self = Self("emit_manifest");
+    pub(in crate::install_root) const EXECUTION_PREFLIGHT: Self = Self("execution_preflight");
     pub(in crate::install_root) const FUND_ROOT_POST_READY: Self = Self("fund_root_post_ready");
     pub(in crate::install_root) const FUND_ROOT_PRE_BOOTSTRAP: Self =
         Self("fund_root_pre_bootstrap");
