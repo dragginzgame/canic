@@ -21,8 +21,7 @@ use canic::{
     dto::auth::{
         ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, ChainKeyAlgorithm,
         ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
-        ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1,
-        DelegatedAuthIssuerPolicySnapshotV1, DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant,
+        ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant,
         DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
         IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchInstallRequest,
         RootDelegationProofBatchProof, RootDelegationProofBatchProofRef, RootIssuerPolicyResponse,
@@ -30,7 +29,7 @@ use canic::{
         RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
-        RootIssuerRenewalTemplateView, RootKeyPolicyV1, RootProof, RootProofMode,
+        RootIssuerRenewalTemplateView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
@@ -38,7 +37,7 @@ use canic::{
         CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
         RuntimeFieldVisibility,
     },
-    ids::{BuildNetwork, CanisterRole},
+    ids::CanisterRole,
 };
 
 // Returns the repository root so wire-surface fixtures can be read from disk.
@@ -865,43 +864,6 @@ fn assert_root_delegation_batch_dtos_roundtrip() {
     let proof = root_delegation_proof(root_pid, issuer_pid, audience, grant);
     let chain_key_proof =
         RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(root_pid, issuer_pid));
-    let root_key_policy = RootKeyPolicyV1 {
-        root_canister_id: root_pid,
-        proof_mode: RootProofMode::ChainKeyBatch,
-        algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
-        key_id: ChainKeyKeyId {
-            name: "test_key_1".to_string(),
-        },
-        derivation_path_hash: [41; 32],
-        public_key: vec![42; 33],
-        key_version: 4,
-        min_accepted_key_version: 4,
-        min_accepted_proof_epoch: 2,
-        min_accepted_registry_epoch: 3,
-        max_revocation_latency_ns: 600,
-        valid_from_ns: 1,
-        accept_until_ns: 1_000,
-        build_network: BuildNetwork::Local,
-    };
-    let registry_snapshot = DelegatedAuthRegistrySnapshotV1 {
-        schema_version: 1,
-        root_canister_id: root_pid,
-        registry_epoch: 3,
-        proof_mode: RootProofMode::ChainKeyBatch,
-        root_key_policy_hash: [43; 32],
-        issuer_policies: vec![DelegatedAuthIssuerPolicySnapshotV1 {
-            issuer_canister_id: issuer_pid,
-            enabled: true,
-            preferred_proof_mode: RootProofMode::ChainKeyBatch,
-            allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
-            allowed_grants: vec![test_delegated_role_grant()],
-            max_root_proof_ttl_ns: 600,
-            max_token_ttl_ns: 60,
-            issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
-            issuer_proof_binding_hash: [44; 32],
-            renewal_template_hash: [45; 32],
-        }],
-    };
     let batch_proof = RootDelegationProofBatchProof {
         issuer_pid,
         cert_hash,
@@ -913,8 +875,6 @@ fn assert_root_delegation_batch_dtos_roundtrip() {
     };
 
     assert_candid_roundtrip(chain_key_proof);
-    assert_candid_roundtrip(root_key_policy);
-    assert_candid_roundtrip(registry_snapshot);
     assert_candid_roundtrip(install_request);
 }
 

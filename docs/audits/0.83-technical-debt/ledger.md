@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.18
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.19
 Status: pass_with_followups
 
 ## Scope
@@ -69,7 +69,10 @@ strings and operator text output keep the same labels. The twenty-fourth
 follow-up fix tightens deployment-truth authority report text-output labels so
 report field/section/count/fallback labels and report-owned shared action
 summary labels are typed internally while operator text output keeps the same
-labels.
+labels. The twenty-fifth follow-up fix hard-cuts delegated-auth verifier policy
+and registry snapshot metadata out of the Candid trait surface while leaving
+active delegated token, root proof, issuer proof, proof install, and proof
+status Candid payloads unchanged.
 
 ## Baseline Validation
 
@@ -1912,6 +1915,90 @@ Fix validation:
 | `cargo test --locked -p canic-host authority` | pass | 72 focused authority tests passed. |
 | `cargo check --locked -p canic-host` | pass | Checked the host authority report text label changes. |
 | `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
+
+## CANIC-083-DEBT-026: Delegated Auth Policy Snapshot Metadata Derives CandidType
+
+Severity: P3
+Category: core / auth / candid_surface
+Status: fixed
+Owner: delegated-auth verifier policy and canonical registry metadata
+Current location: `crates/canic-core/src/dto/auth/proof.rs`
+Intended owner: local verifier policy/canonical-hash metadata, not Candid
+endpoint payloads
+Affected surfaces: Rust trait surface
+Release decision: fixed_in_0.83.20
+
+Evidence:
+- file: `crates/canic-core/src/dto/auth/proof.rs`
+- line or anchor: `RootProofMode`, `RootKeyPolicyV1`,
+  `DelegatedAuthRegistrySnapshotV1`, and
+  `DelegatedAuthIssuerPolicySnapshotV1`
+- module/function: delegated-auth verifier policy and registry snapshot DTO
+  metadata
+- command/search: `rg -n "RootKeyPolicyV1|DelegatedAuthRegistrySnapshotV1|DelegatedAuthIssuerPolicySnapshotV1|RootProofMode" crates canisters docs --glob '!target'`
+- reachability: active canonical root-key policy hash and delegated-auth
+  registry snapshot hash paths
+- exact issue: local verifier policy and registry snapshot metadata carried
+  `CandidType` derives even though these shapes are used for configured policy,
+  canonical hashing, verifier config, and registry snapshots rather than active
+  Candid endpoint payloads.
+
+Evidence:
+- file: `crates/canic/tests/protocol_surface.rs`
+- line or anchor: `assert_root_delegation_batch_dtos_roundtrip`
+- module/function: delegated-auth protocol-surface test
+- command/search: `rg -n "RootKeyPolicyV1|DelegatedAuthRegistrySnapshotV1|RootProofMode" crates/canic/tests/protocol_surface.rs`
+- reachability: protocol-surface test only
+- exact issue: the protocol-surface test pinned the local verifier policy and
+  registry snapshot metadata as Candid round-trip payloads, which made their
+  Candid derives look intentional despite no active endpoint boundary relying
+  on them.
+
+Risk:
+
+Low. The extra derives bloated the Rust/Candid trait surface and blurred the
+DTO boundary, but active delegated token, root proof, issuer proof, proof
+install, and proof status payloads already have separate Candid-bearing types
+and tests.
+
+Recommendation:
+
+Remove `CandidType` from delegated-auth verifier policy and registry snapshot
+metadata that are not active Candid endpoint payloads. Keep active token, proof,
+install, and status payload derives unchanged. Remove stale protocol-surface
+round-trip assertions that treat the metadata as Candid protocol payloads.
+
+Regression test:
+
+Keep protocol-surface round trips for `RootProof`,
+`RootDelegationProofBatchInstallRequest`, active delegation proof status, issuer
+renewal DTOs, and the delegated-auth Candid endpoint surfaces. Keep auth unit
+tests covering canonical registry/policy hashes and delegated-token
+verification.
+
+Resolution:
+
+- Removed `CandidType` from `RootProofMode`.
+- Removed `CandidType` from `RootKeyPolicyV1`.
+- Removed `CandidType` from `DelegatedAuthRegistrySnapshotV1`.
+- Removed `CandidType` from `DelegatedAuthIssuerPolicySnapshotV1`.
+- Removed stale protocol-surface Candid round-trip assertions for those local
+  metadata shapes.
+- Kept active delegated token, root proof, issuer proof, proof install, proof
+  status, endpoint, JSON, deployment truth, evidence/report, and stable-state
+  surfaces unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the Candid surface hard cut. |
+| `cargo check --locked -p canic-core -p canic` | pass | Checked `canic-core` and the public `canic` facade after removing the derives. |
+| `cargo test --locked -p canic --test protocol_surface` | pass | 19 protocol-surface tests passed, including the remaining delegated-auth Candid payload round trips. |
+| `cargo test --locked -p canic-core auth --lib` | pass | 253 focused auth tests passed. |
+| `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for the affected core targets. |
+| `cargo fmt --all -- --check` | pass | Formatting check passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 
 ## Rejected / Non-Findings
 

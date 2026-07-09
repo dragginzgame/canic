@@ -14,12 +14,21 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.18`. Earlier in the
+- The current package/release-surface version is `0.83.19`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.19` working slice fixes `CANIC-083-DEBT-025` by tightening
+- The current `0.83.20` working slice fixes `CANIC-083-DEBT-026` by
+  hard-cutting delegated-auth verifier policy and registry snapshot metadata
+  out of the Candid trait surface. `RootProofMode`, `RootKeyPolicyV1`,
+  `DelegatedAuthRegistrySnapshotV1`, and
+  `DelegatedAuthIssuerPolicySnapshotV1` no longer derive `CandidType`, and the
+  protocol-surface test no longer pins those internal canonical-hash metadata
+  shapes as Candid payloads. Active delegated token, root proof, issuer proof,
+  proof install, and proof status Candid payloads are unchanged.
+
+- The `0.83.19` slice fixes `CANIC-083-DEBT-025` by tightening
   deployment-truth authority report text-output labels. Authority report title,
   field, section, count, fallback, hard-failure, observation-gap, blocker,
   next-action, automatic-action, and external-action labels now use typed

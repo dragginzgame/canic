@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.20` hard-cuts delegated-auth verifier policy and registry snapshot
+  metadata out of the Candid trait surface by removing `CandidType` from
+  `RootProofMode`, `RootKeyPolicyV1`, `DelegatedAuthRegistrySnapshotV1`, and
+  `DelegatedAuthIssuerPolicySnapshotV1`, while preserving active delegated
+  token, proof, proof install, proof status, endpoint, JSON, and stable-state
+  surfaces.
+
 - `0.83.19` tightens deployment-truth authority report text label ownership by
   replacing raw internal report title, field, section, count, fallback,
   hard-failure, observation-gap, blocker, next-action, automatic-action, and
