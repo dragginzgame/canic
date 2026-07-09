@@ -234,15 +234,33 @@ mod tests {
 
     #[test]
     fn runtime_enums_serialize_canonical_snake_case_labels() {
-        assert_enum_serde_contract(HealthStatus::Unknown, "unknown");
-        assert_enum_serde_contract(ReadinessStatus::NotEvaluated, "not_evaluated");
-        assert_enum_serde_contract(RuntimeStatus::Failing, "failing");
-        assert_enum_serde_contract(TimerStatus::NotRegistered, "not_registered");
-        assert_enum_serde_contract(FailureSeverity::Critical, "critical");
-        assert_enum_serde_contract(RuntimeCheckStatus::NotEvaluated, "not_evaluated");
-        assert_enum_serde_contract(RuntimeDiagnosticSeverity::Unsupported, "unsupported");
-        assert_enum_serde_contract(RuntimeFieldVisibility::OperatorOnly, "operator_only");
-        assert_enum_serde_contract(RuntimeStateDomainStatus::NotEvaluated, "not_evaluated");
+        assert_enum_serde_contract(HealthStatus::Unknown, HealthStatus::Unknown.label());
+        assert_enum_serde_contract(
+            ReadinessStatus::NotEvaluated,
+            ReadinessStatus::NotEvaluated.label(),
+        );
+        assert_enum_serde_contract(RuntimeStatus::Failing, RuntimeStatus::Failing.label());
+        assert_enum_serde_contract(
+            TimerStatus::NotRegistered,
+            TimerStatus::NotRegistered.label(),
+        );
+        assert_enum_serde_contract(FailureSeverity::Critical, FailureSeverity::Critical.label());
+        assert_enum_serde_contract(
+            RuntimeCheckStatus::NotEvaluated,
+            RuntimeCheckStatus::NotEvaluated.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeDiagnosticSeverity::Unsupported,
+            RuntimeDiagnosticSeverity::Unsupported.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeFieldVisibility::OperatorOnly,
+            RuntimeFieldVisibility::OperatorOnly.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeStateDomainStatus::NotEvaluated,
+            RuntimeStateDomainStatus::NotEvaluated.label(),
+        );
     }
 
     fn assert_enum_candid_contract<T>(value: T)

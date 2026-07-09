@@ -14,12 +14,22 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.21`. Earlier in the
+- The current package/release-surface version is `0.83.22`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.22` working slice fixes `CANIC-083-DEBT-028` by
+- The current `0.83.23` working slice fixes `CANIC-083-DEBT-029` by
+  tightening runtime introspection enum label ownership. Runtime domain enums
+  now own their canonical labels through `label()` methods, the runtime DTO
+  serde-label tests compare against those owner-defined labels, and
+  `canic inspect` text rendering consumes the domain-owned labels for runtime
+  status, timer status, state-domain status, and recent-failure severity. CLI
+  output labels, runtime JSON/Candid labels, command behavior, endpoint
+  surfaces, deployment truth, evidence/report schemas, and stable-state layout
+  are unchanged.
+
+- The `0.83.22` slice fixes `CANIC-083-DEBT-028` by
   tightening state manifest and state-audit label ownership. `StateStorage` and
   `MigrationPolicy` now own their stable schema labels via `as_str()` methods,
   `StateAuditStatus` owns its stable report labels, and the state CLI text

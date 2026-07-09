@@ -2186,6 +2186,86 @@ Fix validation:
 | `cargo clippy --locked -p canic-core -p canic-cli -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for the affected packages. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 
+## CANIC-083-DEBT-029: Runtime Introspection Labels Owned By Inspect Renderer Instead Of Domain Enums
+
+Severity: P3
+Category: core / runtime / dto / cli_renderer
+Status: fixed
+Owner: runtime introspection enum labels
+Current location: `crates/canic-cli/src/inspect/mod.rs` and
+`crates/canic-core/src/dto/runtime.rs`
+Intended owner: `crates/canic-core/src/domain/runtime.rs`
+Affected surfaces: Rust internals only
+Release decision: fixed_in_0.83.23
+
+Evidence:
+- file: `crates/canic-cli/src/inspect/mod.rs`
+- line or anchor: `runtime_status_label`, `timer_status_label`,
+  `state_domain_status_label`, and `failure_severity_label`
+- module/function: `render_text_report`, `append_runtime_metadata_lines`, and
+  `command_exit_result`
+- command/search: `rg -n "runtime_status_label|timer_status_label|state_domain_status_label|failure_severity_label" crates/canic-core/src crates/canic-cli/src crates/canic-host/src crates/canic-control-plane/src -g '*.rs'`
+- reachability: active `canic inspect` text rendering and failing-runtime-status
+  exit diagnostics
+- exact issue: the inspect renderer locally matched runtime DTO enum variants
+  into their stable labels even though those labels are runtime-domain
+  semantics and are already part of the runtime JSON/Candid contract.
+
+Evidence:
+- file: `crates/canic-core/src/dto/runtime.rs`
+- line or anchor: `runtime_enums_serialize_canonical_snake_case_labels`
+- module/function: runtime DTO serialization tests
+- command/search: `rg -n "runtime_enums_serialize_canonical_snake_case_labels" crates/canic-core/src/dto/runtime.rs`
+- reachability: active runtime DTO serde/Candid contract tests
+- exact issue: DTO tests carried a second literal copy of representative runtime
+  enum labels rather than comparing serde output to labels owned by the domain
+  enum.
+
+Risk:
+
+Low. Duplicated enum-label matches can drift from the explicit serde labels
+used by runtime introspection Candid/JSON payloads, especially when text output
+and DTO tests each carry separate copies.
+
+Recommendation:
+
+Move stable runtime enum labels to `domain::runtime` via `label()` methods.
+Have inspect rendering and DTO serde-label tests consume those owner-defined
+labels.
+
+Regression test:
+
+Pin every runtime enum variant label in domain tests, keep DTO serde/Candid
+round-trip tests, run inspect CLI tests, and run the protocol-surface test that
+guards active Candid payloads.
+
+Resolution:
+
+- Added `label()` methods to `FailureSeverity`, `RuntimeFieldVisibility`,
+  `RuntimeCheckStatus`, `RuntimeDiagnosticSeverity`,
+  `RuntimeStateDomainStatus`, `HealthStatus`, `ReadinessStatus`,
+  `RuntimeStatus`, and `TimerStatus`.
+- Added a domain-runtime test that pins every owner-defined enum label.
+- Replaced inspect renderer helpers for runtime status, timer status,
+  state-domain status, and failure severity with calls to those enum labels.
+- Updated runtime DTO serde-label tests to compare serialized labels against
+  the domain-owned labels.
+- Kept inspect text output, runtime JSON labels, runtime Candid labels, command
+  behavior, endpoint surfaces, deployment truth, evidence/report schemas, and
+  stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted runtime enum label ownership cleanup. |
+| `cargo check --locked -p canic-core -p canic-cli` | pass | Checked affected core and CLI packages. |
+| `cargo test --locked -p canic-core runtime --lib` | pass | Runtime tests passed, including runtime enum label and DTO serde/Candid checks. |
+| `cargo test --locked -p canic-cli inspect` | pass | Inspect CLI tests passed after renderer helpers moved to domain labels. |
+| `cargo test --locked -p canic --test protocol_surface` | pass | Protocol-surface Candid tests passed after enum label owner methods were added. |
+| `cargo clippy --locked -p canic-core -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for affected packages. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+
 ## Rejected / Non-Findings
 
 See `rejected.md`.

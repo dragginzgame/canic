@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.23` tightens runtime introspection enum label ownership by moving
+  runtime status, timer status, state-domain status, failure severity, and
+  related runtime enum labels onto the domain enum owners while preserving
+  inspect text output, runtime JSON/Candid labels, command behavior, and
+  endpoint surfaces.
+
 - `0.83.22` tightens state manifest and state-audit label ownership by moving
   storage, migration-policy, and audit-status labels onto their model/report
   enums and reusing them from CLI/runtime renderers and medic state-audit
