@@ -161,7 +161,7 @@ kind = "root"
 
     let receipt = install_deployment_truth_phase_receipt(
         &check,
-        "emit_manifest",
+        InstallPhaseLabel::EMIT_MANIFEST,
         "unix:1770000002".to_string(),
         Some("unix:1770000003".to_string()),
         "emit root release-set manifest",
@@ -203,7 +203,7 @@ fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
     let path = write_completed_install_phase_receipt(
         scope,
         CompletedInstallPhase {
-            phase: "build_artifacts",
+            phase: InstallPhaseLabel::BUILD_ARTIFACTS,
             attempted_action: "build configured install targets",
             started_at: "unix:1770000004".to_string(),
             finished_at: Some("unix:1770000005".to_string()),
@@ -266,7 +266,7 @@ fn install_truth_receipted_phase_records_success_and_failure() {
 
     scope
         .run_phase(
-            "install_root",
+            InstallPhaseLabel::INSTALL_ROOT,
             "install root wasm",
             vec!["root_canister:aaaaa-aa".to_string()],
             || Ok(()),
@@ -274,7 +274,7 @@ fn install_truth_receipted_phase_records_success_and_failure() {
         .expect("successful phase should record");
     let err = scope
         .run_phase(
-            "stage_release_set",
+            InstallPhaseLabel::STAGE_RELEASE_SET,
             "stage root release set",
             vec!["manifest_path:/tmp/release-set.json".to_string()],
             || Err::<(), Box<dyn std::error::Error>>("stage failed".into()),
@@ -282,7 +282,7 @@ fn install_truth_receipted_phase_records_success_and_failure() {
         .expect_err("failed phase should return original error");
     scope
         .run_phase(
-            "wait_ready",
+            InstallPhaseLabel::WAIT_READY,
             "wait for root bootstrap readiness",
             vec!["timeout_seconds:30".to_string()],
             || Ok(()),

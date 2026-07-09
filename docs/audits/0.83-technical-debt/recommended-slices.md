@@ -741,3 +741,56 @@ Explicit non-scope:
 - no lifecycle scheduling behavior changes
 - no deployment truth or evidence schema changes
 - no stable-state layout changes
+
+## 0.83 Host Install-Root Phase Label Typing
+
+Status:
+completed in 0.83.15 for the accepted `CANIC-083-DEBT-020` and
+`CANIC-083-DEBT-021` scopes.
+
+Source findings:
+- CANIC-083-DEBT-020
+- CANIC-083-DEBT-021
+
+Boundary:
+Host install-root operation, deployment-truth receipt phase, and timing output
+labels.
+
+Previous owner:
+Install-root operations, completed-phase receipts, artifact-promotion receipts,
+deployment-truth gate operation IDs, and timing summary rows passed maintained
+labels as raw strings.
+
+Intended owner:
+Host install-root owns typed `InstallPhaseLabel` and `InstallTimingLabel`
+values. Deployment-truth DTO projection and timing-table rendering format the
+same stable strings.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust install-root internals only. No CLI or endpoint surface changes.
+
+Serialized surfaces affected:
+None. Deployment-truth receipt phase strings, operation IDs, and timing table
+labels remain unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host install_truth`
+- `cargo test --locked -p canic-host install_timing_summary`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no install-root behavior changes
+- no receipt phase string changes
+- no receipt operation ID changes
+- no timing table label changes

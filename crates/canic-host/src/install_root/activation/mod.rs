@@ -1,6 +1,6 @@
 use super::operations::{
-    EnsureRootCyclesOperation, InstallRootWasmOperation, ResumeBootstrapOperation,
-    WaitRootReadyOperation,
+    EnsureRootCyclesOperation, InstallPhaseLabel, InstallRootWasmOperation,
+    ResumeBootstrapOperation, WaitRootReadyOperation,
 };
 use super::options::InstallRootOptions;
 use super::output::print_install_timing_summary;
@@ -36,7 +36,7 @@ pub(super) fn run_root_activation_phases(
         receipt_scope.icp_root,
         receipt_scope.network,
         root_canister_id,
-        "fund_root_pre_bootstrap",
+        InstallPhaseLabel::FUND_ROOT_PRE_BOOTSTRAP,
         "ensure local root minimum cycles before bootstrap",
         "pre-bootstrap",
     );
@@ -69,7 +69,7 @@ pub(super) fn run_root_activation_phases(
         receipt_scope.icp_root,
         receipt_scope.network,
         root_canister_id,
-        "fund_root_post_ready",
+        InstallPhaseLabel::FUND_ROOT_POST_READY,
         "ensure local root minimum cycles after ready",
         "post-ready",
     );

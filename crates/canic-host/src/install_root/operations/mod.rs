@@ -8,5 +8,5 @@ pub(super) use activation::{
     WaitRootReadyOperation,
 };
 pub(super) use manifest::EmitRootManifestOperation;
-pub(super) use phase::InstallPhaseOperation;
+pub(super) use phase::{InstallPhaseLabel, InstallPhaseOperation};
 pub(super) use preparation::{BuildInstallTargetsOperation, ResolveRootCanisterOperation};

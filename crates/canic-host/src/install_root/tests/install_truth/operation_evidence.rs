@@ -137,7 +137,7 @@ fn ensure_root_cycles_operation_owns_current_install_evidence() {
         Path::new("/workspace/.icp"),
         "local",
         "aaaaa-aa",
-        "fund_root_pre_bootstrap",
+        InstallPhaseLabel::FUND_ROOT_PRE_BOOTSTRAP,
         "ensure local root minimum cycles before bootstrap",
         "pre-bootstrap",
     );

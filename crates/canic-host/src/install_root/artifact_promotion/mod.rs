@@ -1,3 +1,4 @@
+use super::operations::InstallPhaseLabel;
 use super::phase_receipts::{completed_phase_role_receipt, receipt_with_execution_context};
 use super::receipt_io::write_artifact_promotion_execution_receipt;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
@@ -52,8 +53,9 @@ fn promotion_install_deployment_receipt(
 ) -> Result<DeploymentReceiptV1, Box<dyn std::error::Error>> {
     let started_at = current_unix_timestamp_label()?;
     let finished_at = current_unix_timestamp_label()?;
+    let phase_label = InstallPhaseLabel::PROMOTED_PLAN_INSTALL;
     let phase = phase_receipt(
-        "promoted_plan_install",
+        phase_label.as_str(),
         started_at.clone(),
         Some(finished_at.clone()),
         "execute promoted deployment plan through current install runner",
@@ -77,7 +79,7 @@ fn promotion_install_deployment_receipt(
         .map(|role| {
             completed_phase_role_receipt(
                 check,
-                "promoted_plan_install",
+                phase_label,
                 &role.role,
                 RolePhaseResultV1::Applied,
                 None,
@@ -93,7 +95,7 @@ fn promotion_install_deployment_receipt(
     Ok(receipt_with_execution_context(
         deployment_receipt_from_check_with_status(
             check,
-            format!("{}:promoted_plan_install", check.check_id),
+            format!("{}:{}", check.check_id, phase_label.as_str()),
             DeploymentExecutionStatusV1::Complete,
             started_at,
             Some(finished_at),
