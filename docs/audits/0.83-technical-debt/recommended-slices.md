@@ -1004,3 +1004,54 @@ Explicit non-scope:
 - no stable-state layout changes
 - no authority behavior changes
 - no operator text output label changes
+
+## 0.83 Delegated Auth Candid Surface Hard Cut
+
+Status:
+completed in 0.83.20 for the accepted `CANIC-083-DEBT-026` scope.
+
+Source findings:
+- CANIC-083-DEBT-026
+
+Boundary:
+Delegated-auth verifier policy and registry snapshot metadata versus active
+Candid endpoint/token/proof payloads.
+
+Previous owner:
+`RootProofMode`, `RootKeyPolicyV1`, `DelegatedAuthRegistrySnapshotV1`, and
+`DelegatedAuthIssuerPolicySnapshotV1` derived `CandidType` and were pinned by a
+protocol-surface Candid round-trip test, even though they are local verifier
+policy/canonical-hash metadata rather than active Candid endpoint payloads.
+
+Intended owner:
+Delegated-auth active token, root proof, issuer proof, proof install, and proof
+status types own the Candid boundary. Verifier policy and registry snapshot
+metadata own canonical hash/config semantics without deriving `CandidType`.
+
+Behavior impact label:
+behavior_change_declared for the Rust trait surface only.
+
+Public surfaces affected:
+Rust trait surface for the four metadata types. No CLI, endpoint, token, proof,
+or canister method surface changes.
+
+Serialized surfaces affected:
+None for active Candid endpoint payloads, JSON schemas, deployment truth,
+evidence/report schemas, or stable-state layout.
+
+Validation:
+- `cargo check --locked -p canic-core -p canic`
+- `cargo test --locked -p canic --test protocol_surface`
+- `cargo test --locked -p canic-core auth --lib`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no active delegated token Candid payload changes
+- no active root proof Candid payload changes
+- no active issuer proof Candid payload changes
+- no proof install/status Candid payload changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes

@@ -20,7 +20,7 @@ pub enum RootProof {
 // RootProofMode
 //
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RootProofMode {
     ChainKeyBatch,
 }
@@ -66,7 +66,7 @@ pub struct ChainKeyKeyId {
 // RootKeyPolicyV1
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootKeyPolicyV1 {
     pub root_canister_id: Principal,
     pub proof_mode: RootProofMode,
@@ -88,7 +88,7 @@ pub struct RootKeyPolicyV1 {
 // DelegatedAuthRegistrySnapshotV1
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedAuthRegistrySnapshotV1 {
     pub schema_version: u16,
     pub root_canister_id: Principal,
@@ -102,7 +102,7 @@ pub struct DelegatedAuthRegistrySnapshotV1 {
 // DelegatedAuthIssuerPolicySnapshotV1
 //
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedAuthIssuerPolicySnapshotV1 {
     pub issuer_canister_id: Principal,
     pub enabled: bool,
