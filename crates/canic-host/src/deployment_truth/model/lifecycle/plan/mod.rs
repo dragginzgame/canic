@@ -51,6 +51,17 @@ pub enum ExternalLifecyclePlanStatusV1 {
     Blocked,
 }
 
+impl ExternalLifecyclePlanStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::PendingExternalAction => "pending_external_action",
+            Self::Blocked => "blocked",
+        }
+    }
+}
+
 ///
 /// ExternalUpgradeProposalReportV1
 ///
@@ -116,4 +127,19 @@ pub struct ExternalLifecycleCheckV1 {
     pub residual_exposure_count: usize,
     pub summary: String,
     pub next_actions: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_lifecycle_plan_status_owns_text_labels() {
+        assert_eq!(ExternalLifecyclePlanStatusV1::Ready.label(), "ready");
+        assert_eq!(
+            ExternalLifecyclePlanStatusV1::PendingExternalAction.label(),
+            "pending_external_action"
+        );
+        assert_eq!(ExternalLifecyclePlanStatusV1::Blocked.label(), "blocked");
+    }
 }

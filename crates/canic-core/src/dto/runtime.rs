@@ -234,28 +234,96 @@ mod tests {
 
     #[test]
     fn runtime_enums_serialize_canonical_snake_case_labels() {
+        assert_enum_serde_contract(HealthStatus::Healthy, HealthStatus::Healthy.label());
+        assert_enum_serde_contract(HealthStatus::Degraded, HealthStatus::Degraded.label());
+        assert_enum_serde_contract(HealthStatus::Unhealthy, HealthStatus::Unhealthy.label());
         assert_enum_serde_contract(HealthStatus::Unknown, HealthStatus::Unknown.label());
+
+        assert_enum_serde_contract(ReadinessStatus::Ready, ReadinessStatus::Ready.label());
+        assert_enum_serde_contract(ReadinessStatus::Degraded, ReadinessStatus::Degraded.label());
+        assert_enum_serde_contract(ReadinessStatus::NotReady, ReadinessStatus::NotReady.label());
         assert_enum_serde_contract(
             ReadinessStatus::NotEvaluated,
             ReadinessStatus::NotEvaluated.label(),
         );
+
+        assert_enum_serde_contract(RuntimeStatus::Ok, RuntimeStatus::Ok.label());
+        assert_enum_serde_contract(RuntimeStatus::Degraded, RuntimeStatus::Degraded.label());
         assert_enum_serde_contract(RuntimeStatus::Failing, RuntimeStatus::Failing.label());
+        assert_enum_serde_contract(RuntimeStatus::Unknown, RuntimeStatus::Unknown.label());
+
+        assert_enum_serde_contract(TimerStatus::Healthy, TimerStatus::Healthy.label());
+        assert_enum_serde_contract(TimerStatus::Delayed, TimerStatus::Delayed.label());
+        assert_enum_serde_contract(TimerStatus::Failing, TimerStatus::Failing.label());
+        assert_enum_serde_contract(TimerStatus::Disabled, TimerStatus::Disabled.label());
         assert_enum_serde_contract(
             TimerStatus::NotRegistered,
             TimerStatus::NotRegistered.label(),
         );
+        assert_enum_serde_contract(TimerStatus::Unknown, TimerStatus::Unknown.label());
+
+        assert_enum_serde_contract(FailureSeverity::Info, FailureSeverity::Info.label());
+        assert_enum_serde_contract(FailureSeverity::Warning, FailureSeverity::Warning.label());
+        assert_enum_serde_contract(FailureSeverity::Error, FailureSeverity::Error.label());
         assert_enum_serde_contract(FailureSeverity::Critical, FailureSeverity::Critical.label());
+
+        assert_enum_serde_contract(RuntimeCheckStatus::Pass, RuntimeCheckStatus::Pass.label());
+        assert_enum_serde_contract(RuntimeCheckStatus::Warn, RuntimeCheckStatus::Warn.label());
+        assert_enum_serde_contract(RuntimeCheckStatus::Fail, RuntimeCheckStatus::Fail.label());
         assert_enum_serde_contract(
             RuntimeCheckStatus::NotEvaluated,
             RuntimeCheckStatus::NotEvaluated.label(),
+        );
+
+        assert_enum_serde_contract(
+            RuntimeDiagnosticSeverity::Info,
+            RuntimeDiagnosticSeverity::Info.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeDiagnosticSeverity::Warning,
+            RuntimeDiagnosticSeverity::Warning.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeDiagnosticSeverity::Blocked,
+            RuntimeDiagnosticSeverity::Blocked.label(),
         );
         assert_enum_serde_contract(
             RuntimeDiagnosticSeverity::Unsupported,
             RuntimeDiagnosticSeverity::Unsupported.label(),
         );
+
+        assert_enum_serde_contract(
+            RuntimeFieldVisibility::PublicSafe,
+            RuntimeFieldVisibility::PublicSafe.label(),
+        );
         assert_enum_serde_contract(
             RuntimeFieldVisibility::OperatorOnly,
             RuntimeFieldVisibility::OperatorOnly.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeFieldVisibility::ControllerOnly,
+            RuntimeFieldVisibility::ControllerOnly.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeFieldVisibility::FeatureGated,
+            RuntimeFieldVisibility::FeatureGated.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeFieldVisibility::Disabled,
+            RuntimeFieldVisibility::Disabled.label(),
+        );
+
+        assert_enum_serde_contract(
+            RuntimeStateDomainStatus::Ok,
+            RuntimeStateDomainStatus::Ok.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeStateDomainStatus::Warning,
+            RuntimeStateDomainStatus::Warning.label(),
+        );
+        assert_enum_serde_contract(
+            RuntimeStateDomainStatus::Failing,
+            RuntimeStateDomainStatus::Failing.label(),
         );
         assert_enum_serde_contract(
             RuntimeStateDomainStatus::NotEvaluated,

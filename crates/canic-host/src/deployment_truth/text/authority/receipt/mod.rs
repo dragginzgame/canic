@@ -3,7 +3,7 @@ use super::super::append_hard_failure_items;
 use super::shared::{
     append_controller_observation_items, append_external_action_items,
     append_observation_gap_items, authority_receipt_mutation_label,
-    deployment_command_result_label, deployment_execution_status_label,
+    deployment_command_result_label,
 };
 
 /// Render an authority dry-run receipt as read-only operator text.
@@ -13,10 +13,7 @@ pub fn authority_receipt_text(receipt: &AuthorityReceiptV1) -> String {
         "Authority dry-run receipt".to_string(),
         "mode: dry_run".to_string(),
         format!("operation_id: {}", receipt.operation_id),
-        format!(
-            "status: {}",
-            deployment_execution_status_label(receipt.operation_status)
-        ),
+        format!("status: {}", receipt.operation_status.label()),
         format!(
             "command_result: {}",
             deployment_command_result_label(&receipt.command_result)

@@ -46,6 +46,20 @@ pub enum ExternalUpgradeCompletionStatusV1 {
     VerificationFailed,
 }
 
+impl ExternalUpgradeCompletionStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::AwaitingConsent => "awaiting_consent",
+            Self::ConsentRefused => "consent_refused",
+            Self::SuppliedEvidenceConsistent => "supplied_evidence_consistent",
+            Self::AwaitingVerification => "awaiting_verification",
+            Self::VerifiedComplete => "verified_complete",
+            Self::VerificationFailed => "verification_failed",
+        }
+    }
+}
+
 ///
 /// ExternalUpgradeCompletionReportRequest
 ///
@@ -55,4 +69,37 @@ pub struct ExternalUpgradeCompletionReportRequest {
     pub proposal: ExternalUpgradeProposalV1,
     pub consent_evidence: ExternalUpgradeConsentEvidenceV1,
     pub verification_check: ExternalUpgradeVerificationCheckV1,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_upgrade_completion_status_owns_text_labels() {
+        assert_eq!(
+            ExternalUpgradeCompletionStatusV1::AwaitingConsent.label(),
+            "awaiting_consent"
+        );
+        assert_eq!(
+            ExternalUpgradeCompletionStatusV1::ConsentRefused.label(),
+            "consent_refused"
+        );
+        assert_eq!(
+            ExternalUpgradeCompletionStatusV1::SuppliedEvidenceConsistent.label(),
+            "supplied_evidence_consistent"
+        );
+        assert_eq!(
+            ExternalUpgradeCompletionStatusV1::AwaitingVerification.label(),
+            "awaiting_verification"
+        );
+        assert_eq!(
+            ExternalUpgradeCompletionStatusV1::VerifiedComplete.label(),
+            "verified_complete"
+        );
+        assert_eq!(
+            ExternalUpgradeCompletionStatusV1::VerificationFailed.label(),
+            "verification_failed"
+        );
+    }
 }

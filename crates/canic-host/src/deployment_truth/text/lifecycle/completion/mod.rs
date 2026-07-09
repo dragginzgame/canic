@@ -1,8 +1,8 @@
 use super::super::super::*;
 use super::super::{append_string_items, optional_text};
 use super::shared::{
-    external_upgrade_completion_status_label, external_upgrade_consent_state_label,
-    external_upgrade_verification_result_label, external_verification_observation_source_label,
+    external_upgrade_consent_state_label, external_upgrade_verification_result_label,
+    external_verification_observation_source_label,
 };
 
 /// Render an external-upgrade completion report as passive operator text.
@@ -39,10 +39,7 @@ pub fn external_upgrade_completion_report_text(
             "verification_observation_source: {}",
             external_verification_observation_source_label(report.verification_observation_source)
         ),
-        format!(
-            "completion_status: {}",
-            external_upgrade_completion_status_label(report.completion_status)
-        ),
+        format!("completion_status: {}", report.completion_status.label()),
         format!("summary: {}", report.status_summary),
     ];
     append_string_items(&mut lines, "blockers", &report.blockers);

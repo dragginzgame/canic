@@ -55,15 +55,6 @@ fn append_string_items(lines: &mut Vec<String>, label: &str, values: &[String]) 
     }
 }
 
-const fn safety_status_label(status: SafetyStatusV1) -> &'static str {
-    match status {
-        SafetyStatusV1::NotEvaluated => "not_evaluated",
-        SafetyStatusV1::Safe => "safe",
-        SafetyStatusV1::Warning => "warning",
-        SafetyStatusV1::Blocked => "blocked",
-    }
-}
-
 fn optional_text(value: Option<&str>) -> &str {
     value.unwrap_or("none")
 }

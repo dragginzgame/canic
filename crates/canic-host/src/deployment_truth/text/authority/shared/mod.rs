@@ -269,19 +269,6 @@ const fn authority_apply_blocker_label(blocker: AuthorityApplyBlockerV1) -> &'st
     }
 }
 
-pub(super) const fn deployment_execution_status_label(
-    status: DeploymentExecutionStatusV1,
-) -> &'static str {
-    match status {
-        DeploymentExecutionStatusV1::NotStarted => "not_started",
-        DeploymentExecutionStatusV1::InProgress => "in_progress",
-        DeploymentExecutionStatusV1::FailedBeforeMutation => "failed_before_mutation",
-        DeploymentExecutionStatusV1::PartiallyApplied => "partially_applied",
-        DeploymentExecutionStatusV1::FailedAfterMutation => "failed_after_mutation",
-        DeploymentExecutionStatusV1::Complete => "complete",
-    }
-}
-
 pub(super) fn deployment_command_result_label(result: &DeploymentCommandResultV1) -> String {
     match result {
         DeploymentCommandResultV1::NotFinished => "not_finished".to_string(),

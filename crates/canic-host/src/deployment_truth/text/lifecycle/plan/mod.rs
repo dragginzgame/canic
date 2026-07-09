@@ -1,6 +1,6 @@
 use super::super::super::*;
 use super::super::append_string_items;
-use super::shared::{append_external_lifecycle_role_items, external_lifecycle_plan_status_label};
+use super::shared::append_external_lifecycle_role_items;
 
 /// Render an external lifecycle plan as passive operator text.
 #[must_use]
@@ -9,10 +9,7 @@ pub fn external_lifecycle_plan_text(plan: &ExternalLifecyclePlanV1) -> String {
         "External lifecycle plan".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            external_lifecycle_plan_status_label(plan.status)
-        ),
+        format!("status: {}", plan.status.label()),
         format!("lifecycle_plan_id: {}", plan.lifecycle_plan_id),
         format!("lifecycle_plan_digest: {}", plan.lifecycle_plan_digest),
         format!("deployment_plan_id: {}", plan.deployment_plan_id),

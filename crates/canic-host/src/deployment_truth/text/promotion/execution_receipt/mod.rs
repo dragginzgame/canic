@@ -1,5 +1,4 @@
 use super::super::super::*;
-use super::shared::promotion_readiness_status_label;
 
 /// Render artifact promotion execution receipt linkage as operator text.
 #[must_use]
@@ -33,10 +32,7 @@ pub fn artifact_promotion_execution_receipt_text(
             receipt.promotion_plan_lineage_digest
         ),
         format!("operation_id: {}", receipt.operation_id),
-        format!(
-            "provenance_status: {}",
-            promotion_readiness_status_label(receipt.provenance_status)
-        ),
+        format!("provenance_status: {}", receipt.provenance_status.label()),
         format!("operation_status: {:?}", receipt.operation_status),
         format!("command_result: {:?}", receipt.command_result),
         format!("started_at: {}", receipt.started_at),

@@ -1,7 +1,5 @@
 use super::super::*;
-use super::{
-    append_hard_failure_items, append_string_items, append_warning_items, safety_status_label,
-};
+use super::{append_hard_failure_items, append_string_items, append_warning_items};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct DeploymentComparisonTextLabel(&'static str);
@@ -69,7 +67,7 @@ fn comparison_header_lines(report: &DeploymentComparisonReportV1) -> Vec<String>
         format!(
             "{}: {}",
             DeploymentComparisonTextLabel::STATUS.as_str(),
-            safety_status_label(report.status)
+            report.status.label()
         ),
         format!(
             "{}: {}",

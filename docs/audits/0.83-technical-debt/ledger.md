@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.20
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.23
 Status: pass_with_followups
 
 ## Scope
@@ -76,7 +76,13 @@ status Candid payloads unchanged. The twenty-sixth follow-up fix hard-cuts
 `ids::BuildNetwork`, `ValidationReport`, and `ValidationIssue` out of the
 Candid trait surface after audit showed they are local
 runtime/config/policy/bootstrap validation metadata rather than active Candid
-DTO payloads.
+DTO payloads. The twenty-seventh follow-up fix tightens state manifest and
+state-audit label ownership so state storage, migration policy, and audit
+status labels are owned by their model/report enums. The twenty-eighth
+follow-up fix tightens runtime introspection enum label ownership so runtime
+domain enums own their canonical labels. The twenty-ninth follow-up fix
+tightens deployment-truth status label ownership so deployment-truth model
+status enums own stable status labels consumed by text renderers and medic.
 
 ## Baseline Validation
 
@@ -2248,8 +2254,8 @@ Resolution:
 - Added a domain-runtime test that pins every owner-defined enum label.
 - Replaced inspect renderer helpers for runtime status, timer status,
   state-domain status, and failure severity with calls to those enum labels.
-- Updated runtime DTO serde-label tests to compare serialized labels against
-  the domain-owned labels.
+- Updated runtime DTO serde-label tests to compare every runtime enum variant's
+  serialized label against the domain-owned label.
 - Kept inspect text output, runtime JSON labels, runtime Candid labels, command
   behavior, endpoint surfaces, deployment truth, evidence/report schemas, and
   stable-state layout unchanged.
@@ -2265,6 +2271,123 @@ Fix validation:
 | `cargo test --locked -p canic --test protocol_surface` | pass | Protocol-surface Candid tests passed after enum label owner methods were added. |
 | `cargo clippy --locked -p canic-core -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for affected packages. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+
+## CANIC-083-DEBT-030: Deployment-Truth Status Labels Owned By Text Renderers Instead Of Model Enums
+
+Severity: P3
+Category: host / deployment_truth / cli_renderer / text_renderer
+Status: fixed
+Owner: deployment-truth status labels
+Current location: deployment-truth text-renderer helper functions and medic
+receipt summaries
+Intended owner: deployment-truth model status enums
+Affected surfaces: Rust internals only
+Release decision: fixed_in_0.83.24
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/execution_preflight.rs`
+- line or anchor: `deployment_execution_preflight_status_label`
+- module/function: deployment execution preflight text renderer
+- command/search: `rg -n "status_label|deployment_execution_preflight_status_label" crates/canic-host/src/deployment_truth/text crates/canic-cli/src/medic/mod.rs -g '*.rs'`
+- reachability: active deployment execution preflight text rendering
+- exact issue: the execution preflight text renderer locally matched
+  `DeploymentExecutionPreflightStatusV1` variants into stable labels instead of
+  consuming a model-owned status label.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/mod.rs`
+- line or anchor: `safety_status_label`
+- module/function: deployment-truth text shared renderer helpers
+- command/search: `rg -n "safety_status_label|deployment_execution_status_label|promotion_readiness_status_label|external_lifecycle_plan_status_label|external_upgrade_completion_status_label|verification_requirement_status_label" crates/canic-host/src crates/canic-cli/src -g '*.rs'`
+- reachability: active deployment-truth comparison, authority, external
+  lifecycle, and promotion text rendering
+- exact issue: the shared text renderer locally matched `SafetyStatusV1`
+  variants into stable labels instead of consuming a model-owned status label.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/authority/shared/mod.rs`
+- line or anchor: `deployment_execution_status_label`
+- module/function: authority receipt text helpers
+- command/search: same as above
+- reachability: active authority receipt/evidence text rendering and medic
+  authority receipt summaries
+- exact issue: authority text helpers locally matched
+  `DeploymentExecutionStatusV1` variants into stable labels, and medic consumed
+  the renderer-owned helper for receipt summaries.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/promotion/shared/mod.rs`
+- line or anchor: `promotion_readiness_status_label`
+- module/function: promotion text shared helpers
+- command/search: same as above
+- reachability: active promotion provenance, policy, readiness, identity,
+  materialization, execution-receipt, and wasm-store text rendering
+- exact issue: promotion text helpers locally matched
+  `PromotionReadinessStatusV1` variants into stable labels even though the
+  status meaning belongs to the promotion report model.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/lifecycle/shared/mod.rs`
+- line or anchor:
+  `external_lifecycle_plan_status_label`,
+  `external_upgrade_completion_status_label`, and
+  `verification_requirement_status_label`
+- module/function: external lifecycle text shared helpers
+- command/search: same as above
+- reachability: active external lifecycle plan, completion, check, handoff,
+  and verification-policy text rendering
+- exact issue: lifecycle text helpers locally matched external lifecycle plan,
+  completion, and verification-requirement status enum variants into stable
+  labels instead of consuming model-owned labels.
+
+Risk:
+
+Low. These helper functions emitted the same labels as the corresponding serde
+`snake_case` deployment-truth status values, but their duplication creates
+drift risk between deployment-truth model status semantics, text rendering, and
+medic summaries.
+
+Recommendation:
+
+Move stable text labels to the deployment-truth status enums with `label()`
+methods. Have text renderers and medic summaries consume those owner-defined
+labels instead of maintaining local match blocks.
+
+Regression test:
+
+Pin every affected status enum label in the deployment-truth model modules,
+then run deployment-truth host tests and medic tests to confirm text-renderer
+and medic consumers still compile and behave from the same model-owned labels.
+
+Resolution:
+
+- Added `label()` methods to `SafetyStatusV1`,
+  `DeploymentExecutionPreflightStatusV1`, `DeploymentExecutionStatusV1`,
+  `PromotionReadinessStatusV1`, `ExternalLifecyclePlanStatusV1`,
+  `ExternalUpgradeCompletionStatusV1`, and
+  `ExternalUpgradeVerificationRequirementStatusV1`.
+- Added focused model tests that pin the owner-defined labels for each affected
+  status enum.
+- Removed duplicate status-label helper functions from deployment-truth text
+  renderer modules.
+- Replaced deployment-truth text renderer and medic summary call sites with
+  calls to the model-owned labels.
+- Kept operator text output labels, medic text, command behavior, endpoint
+  surfaces, Candid, JSON schemas, deployment truth schema, evidence/report
+  schemas, and stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted deployment-truth status label ownership cleanup. |
+| `cargo check --locked -p canic-host -p canic-cli` | pass | Checked affected host and CLI packages. |
+| `cargo test --locked -p canic-host deployment_truth --lib` | pass | Deployment-truth tests passed, including status-label owner tests. |
+| `cargo test --locked -p canic-cli medic` | pass | Medic tests passed after receipt summary labels moved to deployment-truth model owners. |
+| `cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for affected packages. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
 
 ## Rejected / Non-Findings
 

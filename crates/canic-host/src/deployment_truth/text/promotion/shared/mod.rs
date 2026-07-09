@@ -198,12 +198,3 @@ pub(super) fn append_promotion_transform_role_items(
         }
     }
 }
-
-pub(super) const fn promotion_readiness_status_label(
-    status: PromotionReadinessStatusV1,
-) -> &'static str {
-    match status {
-        PromotionReadinessStatusV1::Ready => "ready",
-        PromotionReadinessStatusV1::Blocked => "blocked",
-    }
-}

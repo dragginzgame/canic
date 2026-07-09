@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.24` tightens deployment-truth status label ownership by moving safety,
+  execution-preflight, execution, promotion readiness, external-lifecycle plan,
+  external-upgrade completion, and verification-requirement status labels onto
+  the deployment-truth model enums while preserving operator text output
+  labels, medic summaries, command behavior, JSON schemas, and deployment truth
+  schema.
+
 - `0.83.23` tightens runtime introspection enum label ownership by moving
   runtime status, timer status, state-domain status, failure severity, and
   related runtime enum labels onto the domain enum owners while preserving

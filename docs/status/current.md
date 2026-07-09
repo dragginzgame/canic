@@ -14,12 +14,23 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.22`. Earlier in the
+- The current package/release-surface version is `0.83.23`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.23` working slice fixes `CANIC-083-DEBT-029` by
+- The current `0.83.24` working slice fixes `CANIC-083-DEBT-030` by
+  tightening deployment-truth status label ownership. Deployment-truth safety,
+  execution-preflight, execution, promotion-readiness, external-lifecycle
+  plan, external-upgrade completion, and external-upgrade
+  verification-requirement enums now own their stable text labels through
+  `label()` methods, and deployment-truth text renderers plus medic receipt
+  summaries consume those owner-defined labels.
+  Operator text output labels, medic text, command behavior, endpoint surfaces,
+  Candid, JSON schemas, deployment truth schema, evidence/report schemas, and
+  stable-state layout are unchanged.
+
+- The `0.83.23` slice fixes `CANIC-083-DEBT-029` by
   tightening runtime introspection enum label ownership. Runtime domain enums
   now own their canonical labels through `label()` methods, the runtime DTO
   serde-label tests compare against those owner-defined labels, and

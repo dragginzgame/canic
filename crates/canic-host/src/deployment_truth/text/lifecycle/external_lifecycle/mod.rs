@@ -2,7 +2,6 @@ use super::super::super::*;
 use super::super::append_string_items;
 use super::shared::{
     append_external_lifecycle_handoff_action_items, append_external_lifecycle_pending_action_items,
-    external_lifecycle_plan_status_label,
 };
 
 /// Render an external lifecycle pending report as passive operator text.
@@ -12,10 +11,7 @@ pub fn external_lifecycle_pending_report_text(report: &ExternalLifecyclePendingR
         "External lifecycle pending report".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            external_lifecycle_plan_status_label(report.status)
-        ),
+        format!("status: {}", report.status.label()),
         format!("report_id: {}", report.report_id),
         format!("report_digest: {}", report.report_digest),
         format!("lifecycle_plan_id: {}", report.lifecycle_plan_id),
@@ -46,10 +42,7 @@ pub fn external_lifecycle_check_text(check: &ExternalLifecycleCheckV1) -> String
         "External lifecycle check".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            external_lifecycle_plan_status_label(check.status)
-        ),
+        format!("status: {}", check.status.label()),
         format!("check_id: {}", check.check_id),
         format!("check_digest: {}", check.check_digest),
         format!("summary: {}", check.summary),
@@ -80,10 +73,7 @@ pub fn external_lifecycle_handoff_text(handoff: &ExternalLifecycleHandoffV1) -> 
         "External lifecycle handoff".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            external_lifecycle_plan_status_label(handoff.status)
-        ),
+        format!("status: {}", handoff.status.label()),
         format!("handoff_id: {}", handoff.handoff_id),
         format!("handoff_digest: {}", handoff.handoff_digest),
         format!("summary: {}", handoff.operator_summary),

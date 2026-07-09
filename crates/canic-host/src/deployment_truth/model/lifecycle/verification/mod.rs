@@ -76,6 +76,16 @@ pub enum ExternalUpgradeVerificationRequirementStatusV1 {
     NotRequired,
 }
 
+impl ExternalUpgradeVerificationRequirementStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Required => "required",
+            Self::NotRequired => "not_required",
+        }
+    }
+}
+
 ///
 /// ExternalUpgradeVerificationPolicyRequest
 ///
@@ -154,4 +164,21 @@ pub struct ExternalUpgradeVerificationCheckRequest {
     pub policy: ExternalUpgradeVerificationPolicyV1,
     pub observation: Option<ExternalUpgradeVerificationObservationV1>,
     pub deployment_check: Option<DeploymentCheckV1>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_upgrade_verification_requirement_status_owns_text_labels() {
+        assert_eq!(
+            ExternalUpgradeVerificationRequirementStatusV1::Required.label(),
+            "required"
+        );
+        assert_eq!(
+            ExternalUpgradeVerificationRequirementStatusV1::NotRequired.label(),
+            "not_required"
+        );
+    }
 }
