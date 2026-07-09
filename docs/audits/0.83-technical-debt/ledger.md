@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.23
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.24
 Status: pass_with_followups
 
 ## Scope
@@ -83,6 +83,9 @@ follow-up fix tightens runtime introspection enum label ownership so runtime
 domain enums own their canonical labels. The twenty-ninth follow-up fix
 tightens deployment-truth status label ownership so deployment-truth model
 status enums own stable status labels consumed by text renderers and medic.
+The thirtieth follow-up fix tightens deployment-root verification text label
+ownership so root verification and root observation enums own the exact labels
+used by report and receipt text.
 
 ## Baseline Validation
 
@@ -2385,6 +2388,115 @@ Fix validation:
 | `cargo test --locked -p canic-host deployment_truth --lib` | pass | Deployment-truth tests passed, including status-label owner tests. |
 | `cargo test --locked -p canic-cli medic` | pass | Medic tests passed after receipt summary labels moved to deployment-truth model owners. |
 | `cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings` | pass | Clippy passed for affected packages. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-031: Deployment-Root Verification Text Uses Debug Formatting For Model Labels
+
+Severity: P3
+Category: host / deployment_truth / root_verification / text_renderer
+Status: fixed
+Owner: deployment-root verification text labels
+Current location: deployment-root verification report and receipt text
+renderers
+Intended owner: deployment-truth root-verification and inventory model enums
+Affected surfaces: Rust internals only
+Release decision: fixed_in_0.83.25
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/root/report/checks.rs`
+- line or anchor: `root_observation_source_label_from_source`
+- module/function: `root_verification_evidence_checks` and
+  `ensure_root_verification_report_checks_consistent`
+- command/search: `rg -n "root_observation_source_label|IcpCanisterStatus|LocalDeploymentState" crates/canic-host/src/deployment_truth/root/report/checks.rs crates/canic-host/src/deployment_truth/text/root_verification crates/canic-host/src/deployment_truth/model/inventory/mod.rs -g '*.rs'`
+- reachability: active deployment-root verification evidence-check builder and
+  report validation
+- exact issue: root verification evidence checks locally matched
+  `DeploymentRootObservationSourceV1` variants into labels and carried a
+  duplicate expected `IcpCanisterStatus` string in construction and validation
+  instead of consuming the inventory model-owned label.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/root_verification/report/mod.rs`
+- line or anchor: `format!("evidence_status: {:?}", report.evidence_status)`
+  and `format!("state_transition: {:?}", report.state_transition)`
+- module/function: `deployment_root_verification_report_text`
+- command/search: `rg -n "evidence_status: \\{:\\?\\}|state_transition: \\{:\\?\\}|source_report_.*\\{:\\?\\}|source_root_observation_source: \\{:\\?\\}" crates/canic-host/src/deployment_truth/text/root_verification -g '*.rs'`
+- reachability: active deployment-root verification report text rendering
+- exact issue: report text depended on enum `Debug` output for root
+  verification evidence status and state-transition labels instead of consuming
+  model-owned labels.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/root_verification/report/mod.rs`
+- line or anchor: `format!("{source:?}")`
+- module/function: `deployment_root_verification_report_text`
+- command/search: same as above
+- reachability: active deployment-root verification report text rendering
+- exact issue: observed root observation source text depended on enum `Debug`
+  output instead of consuming the inventory model-owned label.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/root_verification/receipt/mod.rs`
+- line or anchor: `state_transition`, `previous_root_verification`,
+  `new_root_verification`, `source_report_source`,
+  `source_report_evidence_status`, `source_report_current_root_verification`,
+  `source_report_state_transition`, and `source_root_observation_source`
+- module/function: `deployment_root_verification_receipt_text`
+- command/search: same as above
+- reachability: active deployment-root verification receipt text rendering
+- exact issue: receipt text depended on enum `Debug` output for root
+  verification source, evidence status, state transition, root verification
+  state, and root observation source labels.
+
+Risk:
+
+Low. The current labels are already operator text output, but using `Debug`
+ties that output to Rust variant names and makes the text contract implicit.
+That creates drift risk if variants are renamed or if future model/report
+changes need different text labels.
+
+Recommendation:
+
+Move the exact current labels onto the model enums with `label()` methods, then
+have root-verification report and receipt text renderers consume those
+owner-defined labels. Preserve the current CamelCase labels to avoid an
+operator text output change inside this no-behavior-change slice.
+
+Regression test:
+
+Pin every affected model-owned label in deployment-truth model tests, then run
+root-verification and deployment-truth host tests to confirm report/receipt
+text behavior remains covered.
+
+Resolution:
+
+- Added `label()` to `DeploymentRootVerificationSourceV1`,
+  `DeploymentRootVerificationEvidenceStatusV1`,
+  `DeploymentRootVerificationStateTransitionV1`,
+  `DeploymentRootVerificationStateV1`, and
+  `DeploymentRootObservationSourceV1`.
+- Added focused model tests that pin the exact labels previously emitted by
+  `Debug` formatting.
+- Replaced deployment-root verification report and receipt text `Debug`
+  formatting for those model labels with calls to model-owned labels.
+- Replaced the duplicate root-observation-source label match and expected
+  source string in root verification evidence-check construction and validation
+  with the inventory model-owned label.
+- Kept operator text output labels, command behavior, endpoint surfaces,
+  Candid, JSON schemas, deployment truth schema, evidence/report schemas, and
+  stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted deployment-root verification label ownership cleanup. |
+| `cargo check --locked -p canic-host` | pass | Checked the affected host package. |
+| `cargo test --locked -p canic-host root_verification --lib` | pass | 60 focused root-verification tests passed, including the new label-owner tests. |
+| `cargo test --locked -p canic-host deployment_truth --lib` | pass | Deployment-truth tests passed after replacing root-verification `Debug` labels. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for the affected host package. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
 | `git diff --check` | pass | Whitespace diff check passed. |

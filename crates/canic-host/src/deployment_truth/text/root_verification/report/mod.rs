@@ -12,8 +12,8 @@ pub fn deployment_root_verification_report_text(
         "mode: passive".to_string(),
         "execution: none".to_string(),
         "local_state_write: none".to_string(),
-        format!("evidence_status: {:?}", report.evidence_status),
-        format!("state_transition: {:?}", report.state_transition),
+        format!("evidence_status: {}", report.evidence_status.label()),
+        format!("state_transition: {}", report.state_transition.label()),
         format!("report_id: {}", report.report_id),
         format!("report_digest: {}", report.report_digest),
         format!("requested_at: {}", report.requested_at),
@@ -32,7 +32,7 @@ pub fn deployment_root_verification_report_text(
             "observed_root_observation_source: {}",
             report
                 .observed_root_observation_source
-                .map_or_else(|| "missing".to_string(), |source| format!("{source:?}"))
+                .map_or("missing", DeploymentRootObservationSourceV1::label)
         ),
         format!("source_check_id: {}", report.source_check_id),
         format!("source_check_digest: {}", report.source_check_digest),

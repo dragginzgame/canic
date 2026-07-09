@@ -109,6 +109,15 @@ pub enum DeploymentRootVerificationSourceV1 {
     DeploymentTruthCheck,
 }
 
+impl DeploymentRootVerificationSourceV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::DeploymentTruthCheck => "DeploymentTruthCheck",
+        }
+    }
+}
+
 ///
 /// DeploymentRootVerificationEvidenceStatusV1
 ///
@@ -117,6 +126,17 @@ pub enum DeploymentRootVerificationEvidenceStatusV1 {
     EvidenceSatisfied,
     VerificationFailed,
     NotApplicable,
+}
+
+impl DeploymentRootVerificationEvidenceStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::EvidenceSatisfied => "EvidenceSatisfied",
+            Self::VerificationFailed => "VerificationFailed",
+            Self::NotApplicable => "NotApplicable",
+        }
+    }
 }
 
 ///
@@ -131,6 +151,19 @@ pub enum DeploymentRootVerificationStateTransitionV1 {
     Blocked,
 }
 
+impl DeploymentRootVerificationStateTransitionV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::NotAttempted => "NotAttempted",
+            Self::WouldPromoteNotVerifiedToVerified => "WouldPromoteNotVerifiedToVerified",
+            Self::PromotedNotVerifiedToVerified => "PromotedNotVerifiedToVerified",
+            Self::NoStateChange => "NoStateChange",
+            Self::Blocked => "Blocked",
+        }
+    }
+}
+
 ///
 /// DeploymentRootVerificationStateV1
 ///
@@ -138,4 +171,79 @@ pub enum DeploymentRootVerificationStateTransitionV1 {
 pub enum DeploymentRootVerificationStateV1 {
     NotVerified,
     Verified,
+}
+
+impl DeploymentRootVerificationStateV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::NotVerified => "NotVerified",
+            Self::Verified => "Verified",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deployment_root_verification_source_owns_text_labels() {
+        assert_eq!(
+            DeploymentRootVerificationSourceV1::DeploymentTruthCheck.label(),
+            "DeploymentTruthCheck"
+        );
+    }
+
+    #[test]
+    fn deployment_root_verification_evidence_status_owns_text_labels() {
+        assert_eq!(
+            DeploymentRootVerificationEvidenceStatusV1::EvidenceSatisfied.label(),
+            "EvidenceSatisfied"
+        );
+        assert_eq!(
+            DeploymentRootVerificationEvidenceStatusV1::VerificationFailed.label(),
+            "VerificationFailed"
+        );
+        assert_eq!(
+            DeploymentRootVerificationEvidenceStatusV1::NotApplicable.label(),
+            "NotApplicable"
+        );
+    }
+
+    #[test]
+    fn deployment_root_verification_state_transition_owns_text_labels() {
+        assert_eq!(
+            DeploymentRootVerificationStateTransitionV1::NotAttempted.label(),
+            "NotAttempted"
+        );
+        assert_eq!(
+            DeploymentRootVerificationStateTransitionV1::WouldPromoteNotVerifiedToVerified.label(),
+            "WouldPromoteNotVerifiedToVerified"
+        );
+        assert_eq!(
+            DeploymentRootVerificationStateTransitionV1::PromotedNotVerifiedToVerified.label(),
+            "PromotedNotVerifiedToVerified"
+        );
+        assert_eq!(
+            DeploymentRootVerificationStateTransitionV1::NoStateChange.label(),
+            "NoStateChange"
+        );
+        assert_eq!(
+            DeploymentRootVerificationStateTransitionV1::Blocked.label(),
+            "Blocked"
+        );
+    }
+
+    #[test]
+    fn deployment_root_verification_state_owns_text_labels() {
+        assert_eq!(
+            DeploymentRootVerificationStateV1::NotVerified.label(),
+            "NotVerified"
+        );
+        assert_eq!(
+            DeploymentRootVerificationStateV1::Verified.label(),
+            "Verified"
+        );
+    }
 }
