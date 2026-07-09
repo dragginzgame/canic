@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.19
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.20
 Status: pass_with_followups
 
 ## Scope
@@ -72,7 +72,11 @@ summary labels are typed internally while operator text output keeps the same
 labels. The twenty-fifth follow-up fix hard-cuts delegated-auth verifier policy
 and registry snapshot metadata out of the Candid trait surface while leaving
 active delegated token, root proof, issuer proof, proof install, and proof
-status Candid payloads unchanged.
+status Candid payloads unchanged. The twenty-sixth follow-up fix hard-cuts
+`ids::BuildNetwork`, `ValidationReport`, and `ValidationIssue` out of the
+Candid trait surface after audit showed they are local
+runtime/config/policy/bootstrap validation metadata rather than active Candid
+DTO payloads.
 
 ## Baseline Validation
 
@@ -1998,6 +2002,93 @@ Fix validation:
 | `cargo test --locked -p canic-core auth --lib` | pass | 253 focused auth tests passed. |
 | `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for the affected core targets. |
 | `cargo fmt --all -- --check` | pass | Formatting check passed. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+
+## CANIC-083-DEBT-027: Local Metadata Derives CandidType Without Candid Boundary
+
+Severity: P3
+Category: core / ids / bootstrap / candid_surface
+Status: fixed
+Owner: build-network runtime/config/policy label and root bootstrap validation
+metadata
+Current location: `crates/canic-core/src/ids/network.rs` and
+`crates/canic-core/src/dto/validation.rs`
+Intended owner: local runtime/config/policy enum plus bootstrap validation
+metadata with serde support, not Candid DTO payloads
+Affected surfaces: Rust trait surface
+Release decision: fixed_in_0.83.21
+
+Evidence:
+- file: `crates/canic-core/src/ids/network.rs`
+- line or anchor: `BuildNetwork`
+- module/function: build-network identifier enum
+- command/search: `rg -n "BuildNetwork" crates canisters docs --glob '!target'`
+- reachability: active runtime network detection, auth policy, chain-key
+  signer/verifier policy, and bootstrap workflow paths
+- exact issue: `BuildNetwork` still derived `CandidType` after the only
+  Candid-bearing consumer found in this slice, `RootKeyPolicyV1`, was hard-cut
+  out of the Candid trait surface.
+
+Evidence:
+- file: `crates/canic-core/src/dto/validation.rs`
+- line or anchor: `ValidationReport` and `ValidationIssue`
+- module/function: root bootstrap validation metadata
+- command/search: `rg -n "root_validate_state|ValidationReport|ValidationIssue" crates/canic-core/src crates/canic-control-plane/src crates/canic/src crates/canic/tests canisters docs --glob '!target'`
+- reachability: active root bootstrap validation path in
+  `canic-control-plane`
+- exact issue: bootstrap validation metadata still derived `CandidType` even
+  though it is used to summarize root bootstrap validation failures and is not
+  exposed as an active endpoint DTO.
+
+Evidence:
+- file: checked-in `.did` files
+- line or anchor: not present
+- module/function: public Candid surface
+- command/search: `rg -n "BuildNetwork|ValidationReport|ValidationIssue" -g '*.did'`
+- reachability: active and fixture Candid declarations
+- exact issue: no checked-in Candid declaration references `BuildNetwork`,
+  `ValidationReport`, or `ValidationIssue`, so the derives were not justified
+  by the maintained `.did` surface.
+
+Risk:
+
+Low. The derives bloated the Rust/Candid trait surface for local metadata and
+blurred the boundary between runtime/bootstrap data and Candid DTOs.
+`BuildNetwork` serde support and stable `as_str()` labels remain intact, and
+bootstrap validation metadata still supports serde deserialization.
+
+Recommendation:
+
+Remove `CandidType` from `BuildNetwork`, `ValidationReport`, and
+`ValidationIssue`. Keep active endpoint payloads and delegated-auth Candid DTOs
+unchanged.
+
+Regression test:
+
+Compile the affected core/facade/control-plane packages, run focused auth tests
+that exercise build-network enforcement in signer, verifier, config, and
+workflow paths, and compile the control-plane bootstrap validation path.
+
+Resolution:
+
+- Removed the `CandidType` derive from `BuildNetwork`.
+- Removed the now-unused Candid import from `ids::network`.
+- Removed the `CandidType` derives from `ValidationReport` and
+  `ValidationIssue`.
+- Replaced the validation DTO prelude import with direct `serde::Deserialize`.
+- Kept endpoint surfaces, Candid payloads, JSON schemas, deployment truth,
+  evidence/report schemas, and stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the local metadata Candid hard cut. |
+| `cargo check --locked -p canic-core -p canic -p canic-control-plane` | pass | Checked the core, facade, and control-plane packages after removing the derive. |
+| `cargo test --locked -p canic-core auth --lib` | pass | 253 focused auth tests passed, including build-network policy paths. |
+| `cargo test --locked -p canic-control-plane --lib` | pass | 51 control-plane lib tests passed after the bootstrap validation metadata derive removal. |
+| `cargo test --locked -p canic --test protocol_surface` | pass | 19 protocol-surface tests passed after the Candid trait-surface hard cut. |
+| `cargo clippy --locked -p canic-core -p canic-control-plane --all-targets -- -D warnings` | pass | Clippy passed for the affected core and control-plane targets. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 
 ## Rejected / Non-Findings

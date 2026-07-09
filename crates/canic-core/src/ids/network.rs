@@ -4,7 +4,6 @@
 //! Does not own: environment detection or deployment selection.
 //! Boundary: exposes the network label a canister believes it runs under.
 
-use crate::cdk::candid::CandidType;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display};
 
@@ -15,7 +14,7 @@ use std::fmt::{self, Display};
 /// Owned by ids and consumed by build-network config and access checks.
 ///
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BuildNetwork {
     Ic,
     Local,
