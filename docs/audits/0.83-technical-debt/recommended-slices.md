@@ -1055,3 +1055,54 @@ Explicit non-scope:
 - no deployment truth schema changes
 - no evidence/report schema changes
 - no stable-state layout changes
+
+## 0.83 Local Metadata Candid Surface Hard Cut
+
+Status:
+completed in 0.83.21 for the accepted `CANIC-083-DEBT-027` scope.
+
+Source findings:
+- CANIC-083-DEBT-027
+
+Boundary:
+Local runtime/config/policy and bootstrap validation metadata versus active
+Candid DTO payloads.
+
+Previous owner:
+`ids::BuildNetwork` derived `CandidType` even after the delegated-auth policy
+metadata hard cut removed the only Candid-bearing consumer found in this slice.
+`ValidationReport` and `ValidationIssue` also derived `CandidType` even though
+they are root bootstrap validation metadata, not active endpoint DTOs.
+
+Intended owner:
+`BuildNetwork` remains local runtime/config/policy data with `serde` support and
+stable `as_str()` labels. `ValidationReport` and `ValidationIssue` remain root
+bootstrap validation metadata with serde support. Active Candid DTOs own any
+Candid boundary explicitly.
+
+Behavior impact label:
+behavior_change_declared for the Rust trait surface only.
+
+Public surfaces affected:
+Rust trait surface for `BuildNetwork`, `ValidationReport`, and
+`ValidationIssue`. No CLI, endpoint, token, proof, or canister method surface
+changes.
+
+Serialized surfaces affected:
+None for active Candid endpoint payloads, JSON schemas, deployment truth,
+evidence/report schemas, or stable-state layout.
+
+Validation:
+- `cargo check --locked -p canic-core -p canic -p canic-control-plane`
+- `cargo test --locked -p canic-core auth --lib`
+- `cargo test --locked -p canic-control-plane --lib`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no active Candid payload changes
+- no bootstrap behavior changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes

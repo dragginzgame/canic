@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.21` hard-cuts local runtime/config/policy and root bootstrap validation
+  metadata out of the Candid trait surface by removing `CandidType` from
+  `ids::BuildNetwork`, `ValidationReport`, and `ValidationIssue`, while
+  preserving endpoint surfaces, Candid payloads, JSON schemas, deployment truth
+  schema, and stable-state layout.
+
 - `0.83.20` hard-cuts delegated-auth verifier policy and registry snapshot
   metadata out of the Candid trait surface by removing `CandidType` from
   `RootProofMode`, `RootKeyPolicyV1`, `DelegatedAuthRegistrySnapshotV1`, and
