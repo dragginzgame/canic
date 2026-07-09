@@ -1,16 +1,6 @@
 use super::super::super::*;
 use super::super::{optional_bool_label, optional_text};
 
-pub(super) const fn external_lifecycle_plan_status_label(
-    status: ExternalLifecyclePlanStatusV1,
-) -> &'static str {
-    match status {
-        ExternalLifecyclePlanStatusV1::Ready => "ready",
-        ExternalLifecyclePlanStatusV1::PendingExternalAction => "pending_external_action",
-        ExternalLifecyclePlanStatusV1::Blocked => "blocked",
-    }
-}
-
 const fn lifecycle_mode_label(mode: LifecycleModeV1) -> &'static str {
     match mode {
         LifecycleModeV1::DirectDeploymentAuthority => "direct_deployment_authority",
@@ -42,21 +32,6 @@ pub(super) const fn external_upgrade_verification_result_label(
         ExternalUpgradeVerificationResultV1::Refused => "refused",
         ExternalUpgradeVerificationResultV1::Verified => "verified",
         ExternalUpgradeVerificationResultV1::Mismatch => "mismatch",
-    }
-}
-
-pub(super) const fn external_upgrade_completion_status_label(
-    status: ExternalUpgradeCompletionStatusV1,
-) -> &'static str {
-    match status {
-        ExternalUpgradeCompletionStatusV1::AwaitingConsent => "awaiting_consent",
-        ExternalUpgradeCompletionStatusV1::ConsentRefused => "consent_refused",
-        ExternalUpgradeCompletionStatusV1::SuppliedEvidenceConsistent => {
-            "supplied_evidence_consistent"
-        }
-        ExternalUpgradeCompletionStatusV1::AwaitingVerification => "awaiting_verification",
-        ExternalUpgradeCompletionStatusV1::VerifiedComplete => "verified_complete",
-        ExternalUpgradeCompletionStatusV1::VerificationFailed => "verification_failed",
     }
 }
 
@@ -226,7 +201,7 @@ pub(super) fn append_verification_policy_requirement_items(
         lines.push(format!(
             "  - requirement={} status={} expected_value={}",
             verification_requirement_label(requirement.requirement),
-            verification_requirement_status_label(requirement.status),
+            requirement.status.label(),
             optional_text(requirement.expected_value.as_deref())
         ));
     }
@@ -245,20 +220,11 @@ pub(super) fn append_verification_check_requirement_items(
         lines.push(format!(
             "  - requirement={} status={} expected_value={} observed_value={} satisfied={}",
             verification_requirement_label(requirement.requirement),
-            verification_requirement_status_label(requirement.status),
+            requirement.status.label(),
             optional_text(requirement.expected_value.as_deref()),
             optional_text(requirement.observed_value.as_deref()),
             optional_bool_label(requirement.satisfied)
         ));
-    }
-}
-
-const fn verification_requirement_status_label(
-    status: ExternalUpgradeVerificationRequirementStatusV1,
-) -> &'static str {
-    match status {
-        ExternalUpgradeVerificationRequirementStatusV1::Required => "required",
-        ExternalUpgradeVerificationRequirementStatusV1::NotRequired => "not_required",
     }
 }
 

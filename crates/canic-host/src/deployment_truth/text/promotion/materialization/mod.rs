@@ -1,6 +1,5 @@
 use super::super::super::*;
 use super::super::append_hard_failure_items;
-use super::shared::promotion_readiness_status_label;
 
 /// Render source/build materialization evidence as passive operator text.
 #[must_use]
@@ -52,10 +51,7 @@ pub fn promotion_materialization_identity_report_text(
         "Promotion materialization identity report".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            promotion_readiness_status_label(report.status)
-        ),
+        format!("status: {}", report.status.label()),
         format!("report_id: {}", report.report_id),
         format!(
             "materialization_identity_report_digest: {}",

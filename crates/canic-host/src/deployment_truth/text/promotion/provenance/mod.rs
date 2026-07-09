@@ -1,6 +1,5 @@
 use super::super::super::*;
 use super::super::append_hard_failure_items;
-use super::shared::promotion_readiness_status_label;
 
 /// Render artifact promotion provenance as passive operator text.
 #[must_use]
@@ -11,10 +10,7 @@ pub fn artifact_promotion_provenance_report_text(
         "Artifact promotion provenance report".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            promotion_readiness_status_label(report.status)
-        ),
+        format!("status: {}", report.status.label()),
         format!("report_id: {}", report.report_id),
         format!(
             "artifact_promotion_plan_id: {}",

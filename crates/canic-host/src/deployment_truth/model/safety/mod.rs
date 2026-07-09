@@ -93,6 +93,18 @@ pub enum SafetyStatusV1 {
     Blocked,
 }
 
+impl SafetyStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::NotEvaluated => "not_evaluated",
+            Self::Safe => "safe",
+            Self::Warning => "warning",
+            Self::Blocked => "blocked",
+        }
+    }
+}
+
 ///
 /// SafetySeverityV1
 ///
@@ -101,4 +113,17 @@ pub enum SafetySeverityV1 {
     Info,
     Warning,
     HardFailure,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safety_status_owns_text_labels() {
+        assert_eq!(SafetyStatusV1::NotEvaluated.label(), "not_evaluated");
+        assert_eq!(SafetyStatusV1::Safe.label(), "safe");
+        assert_eq!(SafetyStatusV1::Warning.label(), "warning");
+        assert_eq!(SafetyStatusV1::Blocked.label(), "blocked");
+    }
 }

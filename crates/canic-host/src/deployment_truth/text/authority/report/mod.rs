@@ -1,5 +1,5 @@
 use super::super::super::*;
-use super::super::{append_hard_failure_items, safety_status_label};
+use super::super::append_hard_failure_items;
 use super::shared::{
     append_authority_action_summary, append_blockers, append_next_actions,
     append_observation_gap_items,
@@ -67,7 +67,7 @@ fn authority_report_header_lines(report: &AuthorityReportV1) -> Vec<String> {
         format!(
             "{}: {}",
             AuthorityReportTextLabel::STATUS.as_str(),
-            safety_status_label(report.status)
+            report.status.label()
         ),
         format!(
             "{}: {}",

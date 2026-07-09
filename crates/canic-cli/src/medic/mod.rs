@@ -1270,7 +1270,7 @@ fn deployment_truth_receipt_check(
     let detail = format!(
         "{}; status={}; result={}; final_inventory={}",
         display_medic_path(root, receipt_path),
-        deployment_execution_status_label(receipt.operation_status),
+        receipt.operation_status.label(),
         deployment_command_result_label(&receipt.command_result),
         receipt.final_inventory_id.as_deref().unwrap_or("<missing>")
     );
@@ -1318,17 +1318,6 @@ fn deployment_truth_receipt_check(
             next,
             MedicSource::DeploymentTruth,
         ),
-    }
-}
-
-const fn deployment_execution_status_label(status: DeploymentExecutionStatusV1) -> &'static str {
-    match status {
-        DeploymentExecutionStatusV1::NotStarted => "not_started",
-        DeploymentExecutionStatusV1::InProgress => "in_progress",
-        DeploymentExecutionStatusV1::FailedBeforeMutation => "failed_before_mutation",
-        DeploymentExecutionStatusV1::PartiallyApplied => "partially_applied",
-        DeploymentExecutionStatusV1::FailedAfterMutation => "failed_after_mutation",
-        DeploymentExecutionStatusV1::Complete => "complete",
     }
 }
 

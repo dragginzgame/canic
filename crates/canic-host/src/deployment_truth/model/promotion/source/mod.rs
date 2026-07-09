@@ -73,6 +73,16 @@ pub enum PromotionReadinessStatusV1 {
     Blocked,
 }
 
+impl PromotionReadinessStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Blocked => "blocked",
+        }
+    }
+}
+
 ///
 /// RoleArtifactSourceKindV1
 ///
@@ -93,4 +103,15 @@ pub enum RoleArtifactSourceKindV1 {
 pub enum PreviousArtifactReceiptKindV1 {
     DeploymentReceipt,
     StagingReceipt,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn promotion_readiness_status_owns_text_labels() {
+        assert_eq!(PromotionReadinessStatusV1::Ready.label(), "ready");
+        assert_eq!(PromotionReadinessStatusV1::Blocked.label(), "blocked");
+    }
 }

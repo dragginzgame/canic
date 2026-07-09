@@ -1214,3 +1214,54 @@ Explicit non-scope:
 - no deployment truth schema changes
 - no evidence/report schema changes
 - no stable-state layout changes
+
+## 0.83 Deployment Truth Status Label Ownership
+
+Status:
+completed in 0.83.24 for the accepted `CANIC-083-DEBT-030` scope.
+
+Source findings:
+- CANIC-083-DEBT-030
+
+Boundary:
+Deployment-truth model status enums versus deployment-truth text rendering and
+medic receipt summaries.
+
+Previous owner:
+Deployment-truth text renderer modules owned local matches from safety,
+execution-preflight, execution, promotion readiness, external lifecycle plan,
+external upgrade completion, and verification-requirement status variants to
+stable text labels. Medic consumed one of those renderer-owned helper functions
+for authority receipt summaries.
+
+Intended owner:
+Deployment-truth model status enums own their stable labels through `label()`
+methods. Text renderers and medic summaries consume those model-owned labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust internals only. No CLI command, endpoint, or canister method surface
+changes.
+
+Serialized surfaces affected:
+None. Operator text output labels, medic text, JSON schemas, deployment truth
+schema, evidence/report schemas, Candid, and stable-state layout remain
+unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host -p canic-cli`
+- `cargo test --locked -p canic-host deployment_truth --lib`
+- `cargo test --locked -p canic-cli medic`
+- `cargo clippy --locked -p canic-host -p canic-cli --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON schema or label changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no operator text output label changes

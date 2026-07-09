@@ -7,14 +7,12 @@ struct ExecutionPreflightTextLabel(&'static str);
 impl ExecutionPreflightTextLabel {
     const AUTHORITY_PLAN_ID: Self = Self("authority_plan_id");
     const BACKEND: Self = Self("backend");
-    const BLOCKED: Self = Self("blocked");
     const BLOCKERS: Self = Self("blockers");
     const COUNTS: Self = Self("counts");
     const MISSING_CAPABILITIES: Self = Self("missing_capabilities");
     const MODE_PASSIVE: Self = Self("mode: passive");
     const PLAN_ID: Self = Self("plan_id");
     const PLANNED_PHASES: Self = Self("planned_phases");
-    const READY: Self = Self("ready");
     const REQUIRED_CAPABILITIES: Self = Self("required_capabilities");
     const SAFETY_REPORT_ID: Self = Self("safety_report_id");
     const STATUS: Self = Self("status");
@@ -37,7 +35,7 @@ pub fn deployment_execution_preflight_text(preflight: &DeploymentExecutionPrefli
         format!(
             "{}: {}",
             ExecutionPreflightTextLabel::STATUS.as_str(),
-            deployment_execution_preflight_status_label(preflight.status)
+            preflight.status.label()
         ),
         format!(
             "{}: {}",
@@ -118,16 +116,5 @@ fn append_capability_items(
     lines.push(format!("{}:", label.as_str()));
     for capability in capabilities {
         lines.push(format!("  - {capability:?}"));
-    }
-}
-
-const fn deployment_execution_preflight_status_label(
-    status: DeploymentExecutionPreflightStatusV1,
-) -> &'static str {
-    match status {
-        DeploymentExecutionPreflightStatusV1::Ready => ExecutionPreflightTextLabel::READY.as_str(),
-        DeploymentExecutionPreflightStatusV1::Blocked => {
-            ExecutionPreflightTextLabel::BLOCKED.as_str()
-        }
     }
 }

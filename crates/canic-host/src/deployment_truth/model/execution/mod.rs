@@ -61,6 +61,16 @@ pub enum DeploymentExecutionPreflightStatusV1 {
     Blocked,
 }
 
+impl DeploymentExecutionPreflightStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Blocked => "blocked",
+        }
+    }
+}
+
 ///
 /// DeploymentExecutorBackendV1
 ///
@@ -120,6 +130,20 @@ pub enum DeploymentExecutionStatusV1 {
     Complete,
 }
 
+impl DeploymentExecutionStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::NotStarted => "not_started",
+            Self::InProgress => "in_progress",
+            Self::FailedBeforeMutation => "failed_before_mutation",
+            Self::PartiallyApplied => "partially_applied",
+            Self::FailedAfterMutation => "failed_after_mutation",
+            Self::Complete => "complete",
+        }
+    }
+}
+
 ///
 /// DeploymentCommandResultV1
 ///
@@ -156,4 +180,43 @@ pub enum RolePhaseResultV1 {
     Skipped,
     NotAttempted,
     VerifiedAlreadyApplied,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deployment_execution_preflight_status_owns_text_labels() {
+        assert_eq!(DeploymentExecutionPreflightStatusV1::Ready.label(), "ready");
+        assert_eq!(
+            DeploymentExecutionPreflightStatusV1::Blocked.label(),
+            "blocked"
+        );
+    }
+
+    #[test]
+    fn deployment_execution_status_owns_text_labels() {
+        assert_eq!(
+            DeploymentExecutionStatusV1::NotStarted.label(),
+            "not_started"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::InProgress.label(),
+            "in_progress"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::FailedBeforeMutation.label(),
+            "failed_before_mutation"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::PartiallyApplied.label(),
+            "partially_applied"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::FailedAfterMutation.label(),
+            "failed_after_mutation"
+        );
+        assert_eq!(DeploymentExecutionStatusV1::Complete.label(), "complete");
+    }
 }

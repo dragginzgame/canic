@@ -1,6 +1,5 @@
 use super::super::super::*;
 use super::super::append_hard_failure_items;
-use super::shared::promotion_readiness_status_label;
 
 /// Render a wasm-store identity report as passive operator text.
 #[must_use]
@@ -11,10 +10,7 @@ pub fn promotion_wasm_store_identity_report_text(
         "Promotion wasm-store identity report".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            promotion_readiness_status_label(report.status)
-        ),
+        format!("status: {}", report.status.label()),
         format!("report_id: {}", report.report_id),
         format!(
             "wasm_store_identity_report_digest: {}",
@@ -64,10 +60,7 @@ pub fn promotion_wasm_store_catalog_verification_text(
         "Promotion wasm-store catalog verification".to_string(),
         "mode: passive".to_string(),
         "execution: none".to_string(),
-        format!(
-            "status: {}",
-            promotion_readiness_status_label(verification.status)
-        ),
+        format!("status: {}", verification.status.label()),
         format!("verification_id: {}", verification.verification_id),
         format!(
             "wasm_store_catalog_verification_digest: {}",

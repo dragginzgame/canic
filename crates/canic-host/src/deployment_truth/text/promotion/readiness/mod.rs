@@ -1,6 +1,6 @@
 use super::super::super::*;
 use super::super::{append_hard_failure_items, append_warning_items};
-use super::shared::{append_promotion_role_items, promotion_readiness_status_label};
+use super::shared::append_promotion_role_items;
 
 /// Render promotion readiness as passive operator text.
 #[must_use]
@@ -13,10 +13,7 @@ pub fn promotion_readiness_text(readiness: &PromotionReadinessV1) -> String {
     let mut lines = vec![
         "Promotion readiness report".to_string(),
         "mode: passive".to_string(),
-        format!(
-            "status: {}",
-            promotion_readiness_status_label(readiness.status)
-        ),
+        format!("status: {}", readiness.status.label()),
         format!("readiness_id: {}", readiness.readiness_id),
         format!(
             "promotion_readiness_digest: {}",

@@ -2,7 +2,6 @@ use super::super::super::*;
 use super::super::append_hard_failure_items;
 use super::shared::{
     append_promotion_artifact_identity_group_items, append_promotion_artifact_identity_role_items,
-    promotion_readiness_status_label,
 };
 
 /// Render a promotion artifact identity report as passive operator text.
@@ -13,10 +12,7 @@ pub fn promotion_artifact_identity_report_text(
     let mut lines = vec![
         "Promotion artifact identity report".to_string(),
         "mode: passive".to_string(),
-        format!(
-            "status: {}",
-            promotion_readiness_status_label(report.status)
-        ),
+        format!("status: {}", report.status.label()),
         format!("report_id: {}", report.report_id),
         format!(
             "artifact_identity_report_digest: {}",

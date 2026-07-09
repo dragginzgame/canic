@@ -1,9 +1,9 @@
 use super::super::super::*;
-use super::super::{append_hard_failure_items, safety_status_label};
+use super::super::append_hard_failure_items;
 use super::shared::{
     append_controller_observation_items, append_external_action_items, append_next_actions,
     append_observation_gap_items, authority_receipt_mutation_label,
-    deployment_command_result_label, deployment_execution_status_label,
+    deployment_command_result_label,
 };
 
 /// Render a complete authority evidence bundle as read-only operator text.
@@ -32,10 +32,7 @@ pub fn authority_evidence_text(evidence: &AuthorityDryRunEvidenceV1) -> String {
         ),
         String::new(),
         "report:".to_string(),
-        format!(
-            "  status: {}",
-            safety_status_label(evidence.authority_report.status)
-        ),
+        format!("  status: {}", evidence.authority_report.status.label()),
         format!("  summary: {}", evidence.authority_report.summary),
         format!(
             "  hard_failures: {}",
@@ -53,7 +50,7 @@ pub fn authority_evidence_text(evidence: &AuthorityDryRunEvidenceV1) -> String {
         "receipt:".to_string(),
         format!(
             "  status: {}",
-            deployment_execution_status_label(evidence.authority_receipt.operation_status)
+            evidence.authority_receipt.operation_status.label()
         ),
         format!(
             "  command_result: {}",
