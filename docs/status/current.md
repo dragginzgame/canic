@@ -14,12 +14,20 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.17`. Earlier in the
+- The current package/release-surface version is `0.83.18`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.18` working slice fixes `CANIC-083-DEBT-024` by tightening
+- The current `0.83.19` working slice fixes `CANIC-083-DEBT-025` by tightening
+  deployment-truth authority report text-output labels. Authority report title,
+  field, section, count, fallback, hard-failure, observation-gap, blocker,
+  next-action, automatic-action, and external-action labels now use typed
+  internal labels. Operator text output labels, command behavior, endpoint
+  surfaces, Candid, JSON schemas, deployment truth schema, evidence/report
+  schemas, and stable-state layout are unchanged.
+
+- The `0.83.18` slice fixes `CANIC-083-DEBT-024` by tightening
   deployment-truth comparison report validation and text-output labels.
   Comparison report validation field names and text renderer field, section,
   count, target, and fallback labels now use typed internal labels. Validation
