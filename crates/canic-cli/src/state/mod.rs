@@ -17,7 +17,7 @@ use crate::{
     },
     version_text,
 };
-use canic_core::state_contract::{MigrationPolicy, StateManifest, StateStorage};
+use canic_core::state_contract::StateManifest;
 use canic_host::state_manifest::{
     STATE_AUDIT_COMMAND, STATE_MANIFEST_COMMAND, StateAuditReport, StateAuditStatus,
     build_state_audit_report, declared_state_manifest,
@@ -251,7 +251,7 @@ fn manifest_usage() -> String {
 fn render_audit_text(report: &StateAuditReport) -> String {
     let mut lines = vec![
         report.command.to_string(),
-        format!("status: {}", status_label(report.status)),
+        format!("status: {}", report.status.label()),
         format!("schema_version: {}", report.schema_version),
         format!("scope: {}", report.scope.label()),
     ];
@@ -264,7 +264,7 @@ fn render_audit_text(report: &StateAuditReport) -> String {
         lines.push(format!(
             "{} [{}] {}",
             check.category.label(),
-            status_label(check.status),
+            check.status.label(),
             check.code
         ));
         lines.push(format!("  subject: {}", check.subject));
@@ -294,11 +294,7 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
         lines.push(format!("role: {}", role.canister_role));
         lines.push("state".to_string());
         for domain in &role.state {
-            lines.push(format!(
-                "  {} [{}]",
-                domain.domain,
-                storage_label(domain.storage)
-            ));
+            lines.push(format!("  {} [{}]", domain.domain, domain.storage.as_str()));
             lines.push(format!("    version: {}", domain.version));
             lines.push(format!(
                 "    memory_id: {}",
@@ -315,7 +311,7 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
             ));
             lines.push(format!(
                 "    migration_policy: {}",
-                migration_policy_label(domain.migration_policy)
+                domain.migration_policy.as_str()
             ));
         }
         if !role.removed_state.is_empty() {
@@ -337,31 +333,4 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
         }
     }
     lines.join("\n")
-}
-
-const fn status_label(status: StateAuditStatus) -> &'static str {
-    match status {
-        StateAuditStatus::Pass => "pass",
-        StateAuditStatus::Warn => "warn",
-        StateAuditStatus::Fail => "fail",
-        StateAuditStatus::NotEvaluated => "not_evaluated",
-    }
-}
-
-const fn storage_label(storage: StateStorage) -> &'static str {
-    match storage {
-        StateStorage::StableMemory => "stable_memory",
-        StateStorage::HeapOnly => "heap_only",
-        StateStorage::NotApplicable => "not_applicable",
-    }
-}
-
-const fn migration_policy_label(policy: MigrationPolicy) -> &'static str {
-    match policy {
-        MigrationPolicy::NewDomain => "new_domain",
-        MigrationPolicy::Migrate => "migrate",
-        MigrationPolicy::ManualMigrationRequired => "manual_migration_required",
-        MigrationPolicy::DiscardDeclared => "discard_declared",
-        MigrationPolicy::NotApplicable => "not_applicable",
-    }
 }

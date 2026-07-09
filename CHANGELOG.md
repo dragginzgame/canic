@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.22` tightens state manifest and state-audit label ownership by moving
+  storage, migration-policy, and audit-status labels onto their model/report
+  enums and reusing them from CLI/runtime renderers and medic state-audit
+  summaries while preserving state manifest JSON labels, text output, runtime
+  state summary strings, command behavior, and stable-state layout.
+
 - `0.83.21` hard-cuts local runtime/config/policy and root bootstrap validation
   metadata out of the Candid trait surface by removing `CandidType` from
   `ids::BuildNetwork`, `ValidationReport`, and `ValidationIssue`, while

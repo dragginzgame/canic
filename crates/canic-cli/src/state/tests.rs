@@ -106,7 +106,6 @@ fn text_renderers_include_stable_fields() {
     assert!(manifest.contains("removed_state"));
     assert!(manifest.contains("reserved_memory"));
     assert!(manifest.contains("log_index"));
-    assert_eq!(storage_label(StateStorage::NotApplicable), "not_applicable");
 }
 
 #[test]

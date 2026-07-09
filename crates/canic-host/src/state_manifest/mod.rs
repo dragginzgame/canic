@@ -168,6 +168,18 @@ pub enum StateAuditStatus {
     NotEvaluated,
 }
 
+impl StateAuditStatus {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Warn => "warn",
+            Self::Fail => "fail",
+            Self::NotEvaluated => "not_evaluated",
+        }
+    }
+}
+
 ///
 /// StateAuditSeverity
 ///
@@ -1113,6 +1125,14 @@ const fn status_rank(status: StateAuditStatus) -> u8 {
 mod tests {
     use super::*;
     use canic_core::state_contract::{MigrationPolicy, StateRoleManifest};
+
+    #[test]
+    fn state_audit_status_owns_serialized_labels() {
+        assert_eq!(StateAuditStatus::Pass.label(), "pass");
+        assert_eq!(StateAuditStatus::Warn.label(), "warn");
+        assert_eq!(StateAuditStatus::Fail.label(), "fail");
+        assert_eq!(StateAuditStatus::NotEvaluated.label(), "not_evaluated");
+    }
 
     #[test]
     fn builtin_report_is_warning_only_for_reserved_memory() {

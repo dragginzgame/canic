@@ -1106,3 +1106,60 @@ Explicit non-scope:
 - no deployment truth schema changes
 - no evidence/report schema changes
 - no stable-state layout changes
+
+## 0.83 State Manifest And Audit Label Ownership
+
+Status:
+completed in 0.83.22 for the accepted `CANIC-083-DEBT-028` scope.
+
+Source findings:
+- CANIC-083-DEBT-028
+
+Boundary:
+State manifest storage and migration-policy schema labels used by state CLI
+rendering and runtime state summaries, plus state-audit status labels used by
+CLI audit text rendering and medic state-audit summaries.
+
+Previous owner:
+The state CLI text renderer and runtime state-summary builder each owned local
+matches from `StateStorage`, `MigrationPolicy`, or `StateAuditStatus` variants
+to stable schema/report labels. Medic also owned a local `StateAuditStatus`
+label match for its state-audit project check.
+
+Intended owner:
+The state contract model owns the stable labels through `StateStorage::as_str()`
+and `MigrationPolicy::as_str()`. The state-audit report model owns status
+labels through `StateAuditStatus::label()`. Renderers and runtime summaries
+consume those owner-defined labels, and medic consumes the same report-owned
+status labels for its state-audit summary.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust internals only. No CLI command, endpoint, or canister method surface
+changes.
+
+Serialized surfaces affected:
+None. State manifest JSON labels, state-audit JSON labels, text output labels,
+runtime state summary strings, deployment truth schema, evidence/report schemas,
+and stable-state layout remain unchanged.
+
+Validation:
+- `cargo check --locked -p canic-core -p canic-cli -p canic-host`
+- `cargo test --locked -p canic-core state_contract --lib`
+- `cargo test --locked -p canic-core runtime --lib`
+- `cargo test --locked -p canic-cli state`
+- `cargo test --locked -p canic-cli medic`
+- `cargo test --locked -p canic-host state_manifest --lib`
+- `cargo clippy --locked -p canic-core -p canic-cli -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no audit status/check behavior changes

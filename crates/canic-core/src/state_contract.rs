@@ -90,6 +90,17 @@ pub enum StateStorage {
     NotApplicable,
 }
 
+impl StateStorage {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::StableMemory => "stable_memory",
+            Self::HeapOnly => "heap_only",
+            Self::NotApplicable => "not_applicable",
+        }
+    }
+}
+
 ///
 /// MigrationPolicy
 ///
@@ -104,6 +115,19 @@ pub enum MigrationPolicy {
     ManualMigrationRequired,
     DiscardDeclared,
     NotApplicable,
+}
+
+impl MigrationPolicy {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NewDomain => "new_domain",
+            Self::Migrate => "migrate",
+            Self::ManualMigrationRequired => "manual_migration_required",
+            Self::DiscardDeclared => "discard_declared",
+            Self::NotApplicable => "not_applicable",
+        }
+    }
 }
 
 ///
@@ -481,6 +505,24 @@ mod tests {
         ids.dedup();
 
         assert_eq!(ids.len(), role.state.len());
+    }
+
+    #[test]
+    fn state_contract_enums_own_serialized_labels() {
+        assert_eq!(StateStorage::StableMemory.as_str(), "stable_memory");
+        assert_eq!(StateStorage::HeapOnly.as_str(), "heap_only");
+        assert_eq!(StateStorage::NotApplicable.as_str(), "not_applicable");
+        assert_eq!(MigrationPolicy::NewDomain.as_str(), "new_domain");
+        assert_eq!(MigrationPolicy::Migrate.as_str(), "migrate");
+        assert_eq!(
+            MigrationPolicy::ManualMigrationRequired.as_str(),
+            "manual_migration_required"
+        );
+        assert_eq!(
+            MigrationPolicy::DiscardDeclared.as_str(),
+            "discard_declared"
+        );
+        assert_eq!(MigrationPolicy::NotApplicable.as_str(), "not_applicable");
     }
 
     #[test]
