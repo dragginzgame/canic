@@ -145,3 +145,45 @@ pub enum PromotionArtifactIdentityKindV1 {
     SourceBuild,
     Deferred,
 }
+
+impl PromotionArtifactIdentityKindV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SealedWasm => "SealedWasm",
+            Self::SealedCompressedWasm => "SealedCompressedWasm",
+            Self::SealedWasmAndCompressedWasm => "SealedWasmAndCompressedWasm",
+            Self::SourceBuild => "SourceBuild",
+            Self::Deferred => "Deferred",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn promotion_artifact_identity_kind_owns_text_labels() {
+        assert_eq!(
+            PromotionArtifactIdentityKindV1::SealedWasm.label(),
+            "SealedWasm"
+        );
+        assert_eq!(
+            PromotionArtifactIdentityKindV1::SealedCompressedWasm.label(),
+            "SealedCompressedWasm"
+        );
+        assert_eq!(
+            PromotionArtifactIdentityKindV1::SealedWasmAndCompressedWasm.label(),
+            "SealedWasmAndCompressedWasm"
+        );
+        assert_eq!(
+            PromotionArtifactIdentityKindV1::SourceBuild.label(),
+            "SourceBuild"
+        );
+        assert_eq!(
+            PromotionArtifactIdentityKindV1::Deferred.label(),
+            "Deferred"
+        );
+    }
+}

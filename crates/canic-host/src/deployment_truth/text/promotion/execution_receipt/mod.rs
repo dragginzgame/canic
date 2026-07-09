@@ -58,11 +58,11 @@ pub fn artifact_promotion_execution_receipt_text(
         lines.push("roles:".to_string());
         for role in &receipt.roles {
             lines.push(format!(
-                "  {} {:?}: result={} artifact={} observed_module={} materialization_digest={} catalog_digest={}",
+                "  {} {}: result={} artifact={} observed_module={} materialization_digest={} catalog_digest={}",
                 role.role,
-                role.promotion_level,
+                role.promotion_level.label(),
                 role.role_phase_result
-                    .map_or_else(|| "none".to_string(), |result| format!("{result:?}")),
+                    .map_or_else(|| "none".to_string(), |result| result.label().to_string()),
                 role.artifact_digest.as_deref().unwrap_or("none"),
                 role.observed_module_hash_after.as_deref().unwrap_or("none"),
                 role.materialization_evidence_digest

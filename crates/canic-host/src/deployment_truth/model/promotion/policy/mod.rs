@@ -24,6 +24,19 @@ pub enum PromotionPolicyRequirementV1 {
     SealedBytes,
 }
 
+impl PromotionPolicyRequirementV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SameSourceRevision => "SameSourceRevision",
+            Self::SameCargoFeatures => "SameCargoFeatures",
+            Self::TargetConfigDigest => "TargetConfigDigest",
+            Self::ByteIdenticalWasm => "ByteIdenticalWasm",
+            Self::SealedBytes => "SealedBytes",
+        }
+    }
+}
+
 ///
 /// PromotionPolicyClaimV1
 ///
@@ -31,6 +44,16 @@ pub enum PromotionPolicyRequirementV1 {
 pub enum PromotionPolicyClaimV1 {
     ByteIdenticalWasm,
     TargetConfigDigest,
+}
+
+impl PromotionPolicyClaimV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::ByteIdenticalWasm => "ByteIdenticalWasm",
+            Self::TargetConfigDigest => "TargetConfigDigest",
+        }
+    }
 }
 
 ///
@@ -58,4 +81,45 @@ pub struct RolePromotionPolicyDecisionV1 {
     pub claims: Vec<PromotionPolicyClaimV1>,
     pub level_allowed: bool,
     pub policy_satisfied: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn promotion_policy_requirement_owns_text_labels() {
+        assert_eq!(
+            PromotionPolicyRequirementV1::SameSourceRevision.label(),
+            "SameSourceRevision"
+        );
+        assert_eq!(
+            PromotionPolicyRequirementV1::SameCargoFeatures.label(),
+            "SameCargoFeatures"
+        );
+        assert_eq!(
+            PromotionPolicyRequirementV1::TargetConfigDigest.label(),
+            "TargetConfigDigest"
+        );
+        assert_eq!(
+            PromotionPolicyRequirementV1::ByteIdenticalWasm.label(),
+            "ByteIdenticalWasm"
+        );
+        assert_eq!(
+            PromotionPolicyRequirementV1::SealedBytes.label(),
+            "SealedBytes"
+        );
+    }
+
+    #[test]
+    fn promotion_policy_claim_owns_text_labels() {
+        assert_eq!(
+            PromotionPolicyClaimV1::ByteIdenticalWasm.label(),
+            "ByteIdenticalWasm"
+        );
+        assert_eq!(
+            PromotionPolicyClaimV1::TargetConfigDigest.label(),
+            "TargetConfigDigest"
+        );
+    }
 }

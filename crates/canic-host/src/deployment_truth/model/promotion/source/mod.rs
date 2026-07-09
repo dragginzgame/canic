@@ -11,6 +11,17 @@ pub enum ArtifactTransportV1 {
     DirectAgent,
 }
 
+impl ArtifactTransportV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::LocalCli => "LocalCli",
+            Self::WasmStore => "WasmStore",
+            Self::DirectAgent => "DirectAgent",
+        }
+    }
+}
+
 ///
 /// StagingReceiptV1
 ///
@@ -64,6 +75,16 @@ pub enum PromotionArtifactLevelV1 {
     SourceBuild,
 }
 
+impl PromotionArtifactLevelV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SealedWasm => "SealedWasm",
+            Self::SourceBuild => "SourceBuild",
+        }
+    }
+}
+
 ///
 /// PromotionReadinessStatusV1
 ///
@@ -96,6 +117,20 @@ pub enum RoleArtifactSourceKindV1 {
     CanonicalWasmStoreDefault,
 }
 
+impl RoleArtifactSourceKindV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::WorkspacePackage => "WorkspacePackage",
+            Self::PublishedPackage => "PublishedPackage",
+            Self::LocalWasm => "LocalWasm",
+            Self::LocalWasmGz => "LocalWasmGz",
+            Self::PreviousReceiptArtifact => "PreviousReceiptArtifact",
+            Self::CanonicalWasmStoreDefault => "CanonicalWasmStoreDefault",
+        }
+    }
+}
+
 ///
 /// PreviousArtifactReceiptKindV1
 ///
@@ -105,13 +140,70 @@ pub enum PreviousArtifactReceiptKindV1 {
     StagingReceipt,
 }
 
+impl PreviousArtifactReceiptKindV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::DeploymentReceipt => "DeploymentReceipt",
+            Self::StagingReceipt => "StagingReceipt",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
+    fn artifact_transport_owns_text_labels() {
+        assert_eq!(ArtifactTransportV1::LocalCli.label(), "LocalCli");
+        assert_eq!(ArtifactTransportV1::WasmStore.label(), "WasmStore");
+        assert_eq!(ArtifactTransportV1::DirectAgent.label(), "DirectAgent");
+    }
+
+    #[test]
+    fn promotion_artifact_level_owns_text_labels() {
+        assert_eq!(PromotionArtifactLevelV1::SealedWasm.label(), "SealedWasm");
+        assert_eq!(PromotionArtifactLevelV1::SourceBuild.label(), "SourceBuild");
+    }
+
+    #[test]
     fn promotion_readiness_status_owns_text_labels() {
         assert_eq!(PromotionReadinessStatusV1::Ready.label(), "ready");
         assert_eq!(PromotionReadinessStatusV1::Blocked.label(), "blocked");
+    }
+
+    #[test]
+    fn role_artifact_source_kind_owns_text_labels() {
+        assert_eq!(
+            RoleArtifactSourceKindV1::WorkspacePackage.label(),
+            "WorkspacePackage"
+        );
+        assert_eq!(
+            RoleArtifactSourceKindV1::PublishedPackage.label(),
+            "PublishedPackage"
+        );
+        assert_eq!(RoleArtifactSourceKindV1::LocalWasm.label(), "LocalWasm");
+        assert_eq!(RoleArtifactSourceKindV1::LocalWasmGz.label(), "LocalWasmGz");
+        assert_eq!(
+            RoleArtifactSourceKindV1::PreviousReceiptArtifact.label(),
+            "PreviousReceiptArtifact"
+        );
+        assert_eq!(
+            RoleArtifactSourceKindV1::CanonicalWasmStoreDefault.label(),
+            "CanonicalWasmStoreDefault"
+        );
+    }
+
+    #[test]
+    fn previous_artifact_receipt_kind_owns_text_labels() {
+        assert_eq!(
+            PreviousArtifactReceiptKindV1::DeploymentReceipt.label(),
+            "DeploymentReceipt"
+        );
+        assert_eq!(
+            PreviousArtifactReceiptKindV1::StagingReceipt.label(),
+            "StagingReceipt"
+        );
     }
 }

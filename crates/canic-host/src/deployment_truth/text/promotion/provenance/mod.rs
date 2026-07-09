@@ -44,10 +44,10 @@ pub fn artifact_promotion_provenance_report_text(
         lines.push("roles:".to_string());
         for role in &report.roles {
             lines.push(format!(
-                "  {} {:?}/{:?}: materialization={} materialization_digest={} wasm_store={} catalog_digest={}",
+                "  {} {}/{}: materialization={} materialization_digest={} wasm_store={} catalog_digest={}",
                 role.role,
-                role.promotion_level,
-                role.source_kind,
+                role.promotion_level.label(),
+                role.source_kind.label(),
                 role.materialization_evidence_id
                     .as_deref()
                     .unwrap_or("none"),

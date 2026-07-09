@@ -2721,6 +2721,126 @@ Fix validation:
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
 | `git diff --check` | pass | Whitespace diff check passed. |
 
+## CANIC-083-DEBT-034: Promotion Text And Identity Keys Use Debug Formatting For Model Labels
+
+Severity: P3
+Category: host / deployment_truth / promotion / model_labels / text_renderer
+Status: fixed
+Owner: deployment-truth promotion artifact and policy labels
+Current location: deployment-truth promotion text renderers and identity-key
+helpers
+Intended owner: deployment-truth promotion, artifact, inventory, and execution
+model enums
+Affected surfaces: Rust internals only
+Release decision: fixed_in_0.83.27
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/promotion/shared/mod.rs`
+- line or anchor:
+  `append_promotion_role_items`,
+  `append_promotion_artifact_identity_role_items`,
+  `append_promotion_artifact_identity_group_items`,
+  `append_promotion_policy_decision_items`, and
+  `append_promotion_transform_role_items`
+- module/function: promotion shared text rendering
+- command/search:
+  `rg -n "\\{:\\?\\}|\\{[A-Za-z0-9_]+:\\?\\}" crates/canic-host/src/deployment_truth/text/promotion -g '*.rs'`
+- reachability: active promotion readiness, identity, policy, and transform
+  text rendering
+- exact issue: promotion text renderers formatted promotion artifact level,
+  role artifact source kind, promotion artifact identity kind, promotion policy
+  requirement, promotion policy claim, and artifact source labels with enum
+  `Debug` instead of consuming model-owned labels.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/promotion/provenance/mod.rs`
+- line or anchor: role row formatter
+- module/function: `artifact_promotion_provenance_report_text`
+- command/search: same as above
+- reachability: active artifact promotion provenance text rendering
+- exact issue: provenance role rows formatted promotion artifact level and
+  source kind with enum `Debug`.
+
+Evidence:
+- file:
+  `crates/canic-host/src/deployment_truth/text/promotion/execution_receipt/mod.rs`
+- line or anchor: role row formatter
+- module/function: `artifact_promotion_execution_receipt_text`
+- command/search: same as above
+- reachability: active artifact promotion execution receipt text rendering
+- exact issue: receipt role rows formatted promotion artifact level and role
+  phase result labels with enum `Debug`.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/promotion/wasm_store/mod.rs`
+- line or anchor: `postcondition={:?}`
+- module/function: `promotion_wasm_store_identity_report_text`
+- command/search: same as above
+- reachability: active promotion wasm-store identity text rendering
+- exact issue: wasm-store identity rows formatted observation status labels
+  with enum `Debug`.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/promotion/identity/group.rs`
+- line or anchor:
+  `artifact_identity_key_for_role` and `source_kind_identity_part`
+- module/function: promotion artifact identity key construction
+- command/search:
+  `rg -n "source_kind=\\{:\\?\\}|format!\\(\\\"\\{kind:\\?\\}\\\"" crates/canic-host/src/deployment_truth/promotion -g '*.rs'`
+- reachability: active promotion artifact identity group/key construction
+- exact issue: promotion identity keys formatted role artifact source kind with
+  enum `Debug` instead of consuming the source-kind model-owned label.
+
+Risk:
+
+Low. The current labels are operator text and report identity-key strings, but
+using `Debug` ties them to Rust variant names and duplicates label semantics
+outside the model owners. This creates drift risk if variants are renamed or
+if text/report identity construction changes independently.
+
+Recommendation:
+
+Move the exact current labels onto the model enums with `label()` methods.
+Have promotion text renderers and identity-key helpers consume those
+owner-defined labels. Leave execution/status labels with existing mixed
+snake-case and `Debug` conventions for a separate slice.
+
+Regression test:
+
+Pin every affected model-owned label in model tests, then run promotion and
+deployment-truth host tests to confirm text rendering and identity key
+construction preserve existing strings.
+
+Resolution:
+
+- Added exact text labels to `PromotionArtifactLevelV1`,
+  `RoleArtifactSourceKindV1`, `PreviousArtifactReceiptKindV1`,
+  `ArtifactTransportV1`, `PromotionArtifactIdentityKindV1`,
+  `PromotionPolicyRequirementV1`, `PromotionPolicyClaimV1`,
+  `ArtifactSourceV1`, `ObservationStatusV1`, and `RolePhaseResultV1`.
+- Added focused model tests that pin every moved label.
+- Replaced promotion readiness, identity, policy, transform, provenance,
+  execution-receipt, and wasm-store text-renderer `Debug` formatting for those
+  enums with calls to owner-defined labels.
+- Replaced promotion identity-key source-kind `Debug` formatting with the
+  source-kind model-owned label.
+- Kept operator text output labels, identity-key strings, command behavior,
+  endpoint surfaces, Candid, JSON schemas, deployment truth schema,
+  evidence/report schemas, and stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted promotion label ownership cleanup. |
+| `cargo check --locked -p canic-host` | pass | Checked the affected host package. |
+| `cargo test --locked -p canic-host promotion --lib` | pass | 173 focused promotion tests passed, including new promotion label-owner tests. |
+| `cargo test --locked -p canic-host deployment_truth --lib` | pass | 458 deployment-truth tests passed, including model label-owner tests. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for the affected host package. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
 ## Rejected / Non-Findings
 
 See `rejected.md`.

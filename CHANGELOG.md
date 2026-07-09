@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.27` tightens promotion artifact/policy label ownership by moving
+  artifact level, source kind, identity kind, policy requirement, policy claim,
+  previous receipt kind, artifact transport/source, observation status, and
+  role phase result labels onto their model enum owners while preserving
+  promotion text labels, identity-key strings, command behavior, JSON schemas,
+  and deployment truth schema.
+
 - `0.83.26` tightens deployment-truth control-class and external lifecycle
   label ownership by moving control-class, lifecycle-mode, consent,
   verification, observation-source, consent subject/channel, and verification

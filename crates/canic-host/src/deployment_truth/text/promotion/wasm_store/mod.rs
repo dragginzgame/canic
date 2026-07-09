@@ -28,13 +28,13 @@ pub fn promotion_wasm_store_identity_report_text(
         lines.push("roles:".to_string());
         for role in &report.roles {
             lines.push(format!(
-                "  {} artifact={} locator={} chunks={}/{} postcondition={:?}",
+                "  {} artifact={} locator={} chunks={}/{} postcondition={}",
                 role.role,
                 role.artifact_identity,
                 role.wasm_store_locator.as_deref().unwrap_or("none"),
                 role.published_chunk_count,
                 role.prepared_chunk_hashes.len(),
-                role.verified_postcondition.status
+                role.verified_postcondition.status.label()
             ));
         }
     }

@@ -63,6 +63,19 @@ pub enum ArtifactSourceV1 {
     Unknown,
 }
 
+impl ArtifactSourceV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::LocalBuild => "LocalBuild",
+            Self::ReleaseSet => "ReleaseSet",
+            Self::WasmStore => "WasmStore",
+            Self::External => "External",
+            Self::Unknown => "Unknown",
+        }
+    }
+}
+
 ///
 /// ObservedArtifactV1
 ///
@@ -75,4 +88,18 @@ pub struct ObservedArtifactV1 {
     pub payload_sha256: Option<String>,
     pub payload_size_bytes: Option<u64>,
     pub source: ArtifactSourceV1,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn artifact_source_owns_text_labels() {
+        assert_eq!(ArtifactSourceV1::LocalBuild.label(), "LocalBuild");
+        assert_eq!(ArtifactSourceV1::ReleaseSet.label(), "ReleaseSet");
+        assert_eq!(ArtifactSourceV1::WasmStore.label(), "WasmStore");
+        assert_eq!(ArtifactSourceV1::External.label(), "External");
+        assert_eq!(ArtifactSourceV1::Unknown.label(), "Unknown");
+    }
 }

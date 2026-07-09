@@ -12,10 +12,10 @@ pub(super) fn append_promotion_role_items(
     lines.push("roles:".to_string());
     for role in roles {
         lines.push(format!(
-            "  - {} {:?}/{:?}: byte_identical_wasm={} embedded_config_identical={} restage_required={}",
+            "  - {} {}/{}: byte_identical_wasm={} embedded_config_identical={} restage_required={}",
             role.role,
-            role.promotion_level,
-            role.source_kind,
+            role.promotion_level.label(),
+            role.source_kind.label(),
             optional_bool_label(role.byte_identical_wasm),
             optional_bool_label(role.embedded_config_identical),
             role.restage_required
@@ -58,11 +58,11 @@ pub(super) fn append_promotion_artifact_identity_role_items(
     lines.push("roles:".to_string());
     for role in roles {
         lines.push(format!(
-            "  - {} {:?}/{:?}: identity_kind={:?} digest_pinned={}",
+            "  - {} {}/{}: identity_kind={} digest_pinned={}",
             role.role,
-            role.promotion_level,
-            role.source_kind,
-            role.identity_kind,
+            role.promotion_level.label(),
+            role.source_kind.label(),
+            role.identity_kind.label(),
             role.digest_pinned
         ));
         lines.push(format!(
@@ -93,13 +93,13 @@ pub(super) fn append_promotion_artifact_identity_group_items(
     lines.push("identity groups:".to_string());
     for group in groups {
         lines.push(format!(
-            "  - {}: kind={:?} source_kinds={} roles={}",
+            "  - {}: kind={} source_kinds={} roles={}",
             group.identity_key,
-            group.identity_kind,
+            group.identity_kind.label(),
             group
                 .source_kinds
                 .iter()
-                .map(|kind| format!("{kind:?}"))
+                .map(|kind| kind.label())
                 .collect::<Vec<_>>()
                 .join(","),
             group.roles.join(",")
@@ -118,19 +118,19 @@ pub(super) fn append_promotion_policy_decision_items(
     lines.push("roles:".to_string());
     for role in roles {
         lines.push(format!(
-            "  - {} {:?}: policy_satisfied={} level_allowed={} requirements={} claims={}",
+            "  - {} {}: policy_satisfied={} level_allowed={} requirements={} claims={}",
             role.role,
-            role.requested_promotion_level,
+            role.requested_promotion_level.label(),
             role.policy_satisfied,
             role.level_allowed,
             role.requirements
                 .iter()
-                .map(|requirement| format!("{requirement:?}"))
+                .map(|requirement| requirement.label())
                 .collect::<Vec<_>>()
                 .join(","),
             role.claims
                 .iter()
-                .map(|claim| format!("{claim:?}"))
+                .map(|claim| claim.label())
                 .collect::<Vec<_>>()
                 .join(",")
         ));
@@ -148,17 +148,18 @@ pub(super) fn append_promotion_transform_role_items(
     lines.push("roles:".to_string());
     for role in roles {
         lines.push(format!(
-            "  - {} {:?}/{:?}: artifact_identity_changed={} embedded_config_changed={} target_materialization_preserved={}",
+            "  - {} {}/{}: artifact_identity_changed={} embedded_config_changed={} target_materialization_preserved={}",
             role.role,
-            role.promotion_level,
-            role.source_kind,
+            role.promotion_level.label(),
+            role.source_kind.label(),
             role.artifact_identity_changed,
             role.embedded_config_changed,
             role.target_materialization_preserved
         ));
         lines.push(format!(
-            "    artifact_source: {:?} -> {:?}",
-            role.artifact_source_before, role.artifact_source_after
+            "    artifact_source: {} -> {}",
+            role.artifact_source_before.label(),
+            role.artifact_source_after.label()
         ));
         lines.push(format!(
             "    wasm_gz_sha256: {} -> {}",
