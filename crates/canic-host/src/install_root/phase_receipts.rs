@@ -1,5 +1,5 @@
 use super::clock::current_unix_timestamp_label;
-use super::operations::InstallPhaseOperation;
+use super::operations::{InstallPhaseLabel, InstallPhaseOperation};
 use super::receipt_io::write_install_deployment_truth_receipt;
 use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionContextV1,
@@ -21,7 +21,7 @@ pub(super) struct InstallReceiptScope<'a> {
 }
 
 pub(super) struct CompletedInstallPhase {
-    pub(super) phase: &'static str,
+    pub(super) phase: InstallPhaseLabel,
     pub(super) attempted_action: &'static str,
     pub(super) started_at: String,
     pub(super) finished_at: Option<String>,
@@ -66,7 +66,7 @@ pub(super) fn write_completed_install_phase_receipt(
 
 pub(super) fn completed_phase_role_receipt(
     check: &DeploymentCheckV1,
-    phase: &str,
+    phase: InstallPhaseLabel,
     role: &str,
     result: RolePhaseResultV1,
     error: Option<String>,
@@ -89,7 +89,7 @@ pub(super) fn completed_phase_role_receipt(
 
     Some(RolePhaseReceiptV1 {
         role: role.to_string(),
-        phase: phase.to_string(),
+        phase: phase.as_str().to_string(),
         result,
         previous_module_hash: None,
         target_module_hash: planned.installed_module_hash.clone(),
@@ -102,7 +102,7 @@ pub(super) fn completed_phase_role_receipt(
 
 pub(super) fn install_deployment_truth_phase_receipt(
     check: &DeploymentCheckV1,
-    phase: &str,
+    phase: InstallPhaseLabel,
     started_at: String,
     finished_at: Option<String>,
     attempted_action: &str,
@@ -131,12 +131,12 @@ fn install_deployment_truth_phase_receipt_with_result(
 ) -> DeploymentReceiptV1 {
     deployment_receipt_from_check_with_status(
         check,
-        format!("{}:{}", check.check_id, input.phase),
+        format!("{}:{}", check.check_id, input.phase.as_str()),
         input.operation_status,
         input.started_at.clone(),
         input.finished_at.clone(),
         vec![phase_receipt(
-            input.phase,
+            input.phase.as_str(),
             input.started_at,
             input.finished_at,
             input.attempted_action,
@@ -157,7 +157,7 @@ pub(super) fn receipt_with_execution_context(
 }
 
 struct PhaseReceiptInput<'a> {
-    phase: &'a str,
+    phase: InstallPhaseLabel,
     started_at: String,
     finished_at: Option<String>,
     attempted_action: &'a str,
@@ -183,7 +183,7 @@ impl InstallReceiptScope<'_> {
 
     pub(super) fn run_phase(
         self,
-        phase: &str,
+        phase: InstallPhaseLabel,
         attempted_action: &str,
         evidence: Vec<String>,
         run: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
@@ -244,7 +244,7 @@ impl InstallReceiptScope<'_> {
 
     fn try_write_failed_phase_receipt(
         self,
-        phase: &str,
+        phase: InstallPhaseLabel,
         started_at: String,
         attempted_action: &str,
         evidence: Vec<String>,
@@ -264,7 +264,7 @@ impl InstallReceiptScope<'_> {
                 role_phase_receipts: Vec::new(),
                 operation_status: DeploymentExecutionStatusV1::FailedAfterMutation,
                 command_result: DeploymentCommandResultV1::Failed {
-                    code: format!("{phase}_failed"),
+                    code: format!("{}_failed", phase.as_str()),
                     message: err.to_string(),
                 },
             },

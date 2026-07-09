@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.13
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.14
 Status: pass_with_followups
 
 ## Scope
@@ -49,7 +49,13 @@ command-kind, command-manifest, quota-policy, and cycle-reserve labels are
 typed at manifest call sites instead of being accepted as loose helper
 arguments. The eighteenth follow-up fix tightens runtime bootstrap diagnostic
 phase labels so process-local bootstrap status stores `BootstrapPhaseLabel`
-while public bootstrap status responses keep the same phase strings.
+while public bootstrap status responses keep the same phase strings. The
+nineteenth follow-up fix tightens host install-root deployment-truth phase
+labels so operation runners and completed-phase receipts use
+`InstallPhaseLabel` while receipt JSON keeps the same phase strings. The
+twentieth follow-up fix tightens host install-root timing summary output labels
+so the timing renderer uses `InstallTimingLabel` while the table output keeps
+the same phase labels.
 
 ## Baseline Validation
 
@@ -1442,6 +1448,145 @@ Fix validation:
 | `cargo test --locked -p canic-core bootstrap --lib` | pass | 14 focused bootstrap/runtime tests passed. |
 | `cargo check --locked -p canic-control-plane` | pass | Checked root bootstrap workflow call sites that consume the typed phase label through `control_plane_support`. |
 | `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for `canic-core` targets. |
+
+## CANIC-083-DEBT-020: Install-Root Receipts Own Phase Labels As Raw Strings
+
+Severity: P3
+Category: host / deployment_truth / boundary_ownership
+Status: fixed
+Owner: host install-root operation and receipt builders
+Current location: `crates/canic-host/src/install_root/operations/phase.rs`,
+`crates/canic-host/src/install_root/phase_receipts.rs`,
+`crates/canic-host/src/install_root/artifact_promotion/mod.rs`,
+`crates/canic-host/src/install_root/deployment_truth_gate.rs`,
+`crates/canic-host/src/install_root/preparation/mod.rs`,
+`crates/canic-host/src/install_root/plan_artifacts/mod.rs`,
+`crates/canic-host/src/install_root/install_state/mod.rs`,
+`crates/canic-host/src/install_root/activation/mod.rs`, and
+`crates/canic-host/src/install_root/staging.rs`
+Intended owner: host install-root phase label type, with deployment-truth
+receipt DTOs continuing to serialize phase labels as strings
+Affected surfaces: internal, rust_api
+Release decision: fixed_in_0.83.15
+
+Evidence:
+- file: `crates/canic-host/src/install_root/operations/phase.rs`
+- line or anchor: `InstallPhaseOperation::phase`
+- module/function: install-root operation runner
+- command/search: `rg -n "phase: &'static str|fn phase\\(&self\\) -> &'static str|phase: \\\"" crates/canic-host/src/install_root -g '*.rs'`
+- reachability: active `canic install-root` deployment-truth receipt creation
+- exact issue: install-root operation phases and completed-phase receipts used
+  raw string labels even though the maintained receipt phase namespace is
+  closed within the current install-root flow.
+
+Evidence:
+- file: `crates/canic-host/src/install_root/artifact_promotion/mod.rs`
+- line or anchor: `promotion_install_deployment_receipt`
+- module/function: artifact-promotion install deployment receipt builder
+- command/search: `rg -n "promoted_plan_install|materialize_artifacts" crates/canic-host/src/install_root -g '*.rs'`
+- reachability: active artifact-promotion deployment receipt path
+- exact issue: artifact-promotion role receipts and operation IDs duplicated
+  the promoted-install phase label instead of deriving them from the same
+  install-root phase namespace.
+
+Risk:
+
+Low. Receipt strings were already stable and tested, but raw internal labels
+made it easier for operation IDs, phase receipts, and role-phase receipts to
+drift inside the host install-root flow.
+
+Recommendation:
+
+Introduce a host-owned `InstallPhaseLabel` with constants for maintained
+install-root phases. Keep deployment-truth DTO fields as strings by converting
+through `InstallPhaseLabel::as_str()` only at the receipt construction
+boundary.
+
+Regression test:
+
+Keep install-root receipt tests asserting unchanged operation IDs, phase
+receipt strings, role-phase receipt strings, and failure receipt codes.
+
+Resolution:
+
+- Added `InstallPhaseLabel`.
+- `InstallPhaseOperation::phase` now returns `InstallPhaseLabel`.
+- `CompletedInstallPhase`, role receipt creation, deployment-truth phase
+  receipt creation, and receipt operation ID construction now use typed phase
+  labels internally.
+- Artifact-promotion install receipts derive `promoted_plan_install` phase
+  receipts, role receipts, and operation IDs from the same label constant.
+- Activation, staging, preparation, plan-artifact, install-state, and tests use
+  the maintained phase constants.
+- Receipt JSON phase strings, operation IDs, command behavior, endpoint
+  surfaces, Candid, JSON schemas, deployment truth schema, evidence/report
+  schemas, and stable-state layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the install-root phase label typing change. |
+| `cargo check --locked -p canic-host` | pass | Checked the host install-root phase label changes. |
+| `cargo test --locked -p canic-host install_truth` | pass | 36 focused install-truth tests passed. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
+
+## CANIC-083-DEBT-021: Install-Root Timing Renderer Owns Row Labels As Raw Strings
+
+Severity: P3
+Category: host / cli_output / boundary_ownership
+Status: fixed
+Owner: host install-root timing renderer
+Current location: `crates/canic-host/src/install_root/output/mod.rs` and
+`crates/canic-host/src/install_root/timing/mod.rs`
+Intended owner: host install-root timing label type, with timing table output
+continuing to render labels as strings
+Affected surfaces: internal
+Release decision: fixed_in_0.83.15
+
+Evidence:
+- file: `crates/canic-host/src/install_root/output/mod.rs`
+- line or anchor: `render_install_timing_summary`
+- module/function: install-root timing summary renderer
+- command/search: `rg -n "timing_row\\(\\\"" crates/canic-host/src/install_root -g '*.rs'`
+- reachability: active install-root CLI timing summary output
+- exact issue: install-root timing rows used raw string labels directly in the
+  renderer even though the maintained timing row namespace is closed by
+  `InstallTimingSummary`.
+
+Risk:
+
+Low. Output labels were already stable and tested, but raw renderer-owned
+labels made timing rows easier to mistype or drift from the timing summary
+fields.
+
+Recommendation:
+
+Introduce a host-owned `InstallTimingLabel` with constants for maintained
+install-root timing rows. Keep the rendered timing table unchanged by
+formatting through `InstallTimingLabel::as_str()` at the row boundary.
+
+Regression test:
+
+Keep the install timing summary table test asserting unchanged row labels and
+elapsed-time formatting.
+
+Resolution:
+
+- Added `InstallTimingLabel`.
+- `render_install_timing_summary` now builds rows from typed timing labels.
+- Timing table row strings, command behavior, endpoint surfaces, Candid, JSON
+  schemas, deployment truth schema, evidence/report schemas, and stable-state
+  layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the install-root timing label typing change. |
+| `cargo check --locked -p canic-host` | pass | Checked the host timing label changes. |
+| `cargo test --locked -p canic-host install_timing_summary` | pass | Focused timing summary renderer test passed. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
 
 ## Rejected / Non-Findings
 

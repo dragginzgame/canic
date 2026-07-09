@@ -2,6 +2,7 @@ use super::build_environment::ensure_icp_environment_ready;
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
 };
+use super::operations::InstallPhaseLabel;
 use super::operations::{BuildInstallTargetsOperation, ResolveRootCanisterOperation};
 use super::phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
@@ -82,7 +83,7 @@ fn resolve_root_canister_with_phase(
     let root_canister_id = operation.execute()?;
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
-        phase: "resolve_root_canister",
+        phase: InstallPhaseLabel::RESOLVE_ROOT_CANISTER,
         attempted_action: "resolve or create root canister id",
         started_at,
         finished_at: Some(current_unix_timestamp_label()?),
@@ -114,7 +115,7 @@ fn build_install_targets_with_phase(
     operation.execute()?;
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
-        phase: "build_artifacts",
+        phase: InstallPhaseLabel::BUILD_ARTIFACTS,
         attempted_action: "build configured install targets",
         started_at,
         finished_at: Some(current_unix_timestamp_label()?),

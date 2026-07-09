@@ -1,3 +1,4 @@
+use super::operations::InstallPhaseLabel;
 use super::phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
 };
@@ -18,7 +19,7 @@ pub(super) fn write_install_state_with_deployment_truth_receipt(
     let started_at = current_unix_timestamp_label()?;
     let state_path = write_install_state(receipt_scope.icp_root, network, state)?;
     let completed = CompletedInstallPhase {
-        phase: "write_install_state",
+        phase: InstallPhaseLabel::WRITE_INSTALL_STATE,
         attempted_action: "write local install state",
         started_at,
         finished_at: Some(current_unix_timestamp_label()?),

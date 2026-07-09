@@ -3,7 +3,7 @@ use super::super::commands::{
 };
 use super::super::readiness::wait_for_root_ready;
 use super::super::root_cycles::ensure_local_root_min_cycles;
-use super::phase::InstallPhaseOperation;
+use super::phase::{InstallPhaseLabel, InstallPhaseOperation};
 use crate::release_set::{LOCAL_ROOT_MIN_READY_CYCLES, resume_root_bootstrap};
 use std::path::{Path, PathBuf};
 
@@ -31,8 +31,8 @@ impl<'a> InstallRootWasmOperation<'a> {
 }
 
 impl InstallPhaseOperation for InstallRootWasmOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "install_root"
+    fn phase(&self) -> InstallPhaseLabel {
+        InstallPhaseLabel::INSTALL_ROOT
     }
 
     fn attempted_action(&self) -> &'static str {
@@ -60,7 +60,7 @@ pub(in crate::install_root) struct EnsureRootCyclesOperation<'a> {
     icp_root: &'a Path,
     network: &'a str,
     root_canister_id: &'a str,
-    phase: &'static str,
+    phase: InstallPhaseLabel,
     attempted_action: &'static str,
     phase_label: &'a str,
 }
@@ -70,7 +70,7 @@ impl<'a> EnsureRootCyclesOperation<'a> {
         icp_root: &'a Path,
         network: &'a str,
         root_canister_id: &'a str,
-        phase: &'static str,
+        phase: InstallPhaseLabel,
         attempted_action: &'static str,
         phase_label: &'a str,
     ) -> Self {
@@ -86,7 +86,7 @@ impl<'a> EnsureRootCyclesOperation<'a> {
 }
 
 impl InstallPhaseOperation for EnsureRootCyclesOperation<'_> {
-    fn phase(&self) -> &'static str {
+    fn phase(&self) -> InstallPhaseLabel {
         self.phase
     }
 
@@ -127,8 +127,8 @@ impl<'a> ResumeBootstrapOperation<'a> {
 }
 
 impl InstallPhaseOperation for ResumeBootstrapOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "resume_bootstrap"
+    fn phase(&self) -> InstallPhaseLabel {
+        InstallPhaseLabel::RESUME_BOOTSTRAP
     }
 
     fn attempted_action(&self) -> &'static str {
@@ -165,8 +165,8 @@ impl<'a> WaitRootReadyOperation<'a> {
 }
 
 impl InstallPhaseOperation for WaitRootReadyOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "wait_ready"
+    fn phase(&self) -> InstallPhaseLabel {
+        InstallPhaseLabel::WAIT_READY
     }
 
     fn attempted_action(&self) -> &'static str {

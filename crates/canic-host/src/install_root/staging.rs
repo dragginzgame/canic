@@ -1,4 +1,4 @@
-use super::operations::InstallPhaseOperation;
+use super::operations::{InstallPhaseLabel, InstallPhaseOperation};
 use crate::deployment_truth::{
     ArtifactTransportV1, ObservationStatusV1, StagingReceiptV1, VerifiedPostconditionV1,
     staging_receipt_evidence,
@@ -33,8 +33,8 @@ impl<'a> StageReleaseSetOperation<'a> {
 }
 
 impl InstallPhaseOperation for StageReleaseSetOperation<'_> {
-    fn phase(&self) -> &'static str {
-        "stage_release_set"
+    fn phase(&self) -> InstallPhaseLabel {
+        InstallPhaseLabel::STAGE_RELEASE_SET
     }
 
     fn attempted_action(&self) -> &'static str {

@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.15` tightens host install-root deployment-truth receipt phase
+  ownership by replacing raw internal phase labels with `InstallPhaseLabel`
+  and timing summary row labels with `InstallTimingLabel` while preserving
+  receipt phase strings, operation IDs, timing table labels, command behavior,
+  JSON schemas, deployment truth schema, and stable-state layout.
+
 - `0.83.14` tightens runtime bootstrap status phase ownership by replacing
   raw internal root/nonroot bootstrap phase labels with `BootstrapPhaseLabel`
   while preserving `canic_bootstrap_status` phase strings, runtime

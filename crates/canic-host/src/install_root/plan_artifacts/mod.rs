@@ -1,4 +1,4 @@
-use super::operations::EmitRootManifestOperation;
+use super::operations::{EmitRootManifestOperation, InstallPhaseLabel};
 use super::phase_receipts::{
     CompletedInstallPhase, install_deployment_truth_phase_receipt, receipt_with_execution_context,
 };
@@ -31,7 +31,7 @@ pub(super) fn validate_plan_artifacts_with_phase(
         .map(|artifact| artifact.role.clone())
         .collect::<Vec<_>>();
     let phase = CompletedInstallPhase {
-        phase: "materialize_artifacts",
+        phase: InstallPhaseLabel::MATERIALIZE_ARTIFACTS,
         attempted_action: "validate supplied deployment plan artifacts",
         started_at,
         finished_at: Some(current_unix_timestamp_label()?),
@@ -63,7 +63,7 @@ pub(super) fn emit_manifest_with_deployment_truth_receipt(
     let emit_manifest_receipt = receipt_with_execution_context(
         install_deployment_truth_phase_receipt(
             deployment_truth_check,
-            "emit_manifest",
+            InstallPhaseLabel::EMIT_MANIFEST,
             emit_manifest_started_at_label,
             Some(current_unix_timestamp_label()?),
             "emit root release-set manifest",

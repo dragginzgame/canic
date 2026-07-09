@@ -1,4 +1,4 @@
-use super::timing::InstallTimingSummary;
+use super::timing::{InstallTimingLabel, InstallTimingSummary};
 use crate::table::{ColumnAlign, render_table};
 use std::{path::Path, time::Duration};
 
@@ -12,16 +12,28 @@ pub(super) fn render_install_timing_summary(
     total: Duration,
 ) -> String {
     let rows = [
-        timing_row("create_canisters", timings.create_canisters),
-        timing_row("build_all", timings.build_all),
-        timing_row("emit_manifest", timings.emit_manifest),
-        timing_row("install_root", timings.install_root),
-        timing_row("fund_root", timings.fund_root),
-        timing_row("stage_release_set", timings.stage_release_set),
-        timing_row("resume_bootstrap", timings.resume_bootstrap),
-        timing_row("wait_ready", timings.wait_ready),
-        timing_row("finalize_root_funding", timings.finalize_root_funding),
-        timing_row("total", total),
+        timing_row(
+            InstallTimingLabel::CREATE_CANISTERS,
+            timings.create_canisters,
+        ),
+        timing_row(InstallTimingLabel::BUILD_ALL, timings.build_all),
+        timing_row(InstallTimingLabel::EMIT_MANIFEST, timings.emit_manifest),
+        timing_row(InstallTimingLabel::INSTALL_ROOT, timings.install_root),
+        timing_row(InstallTimingLabel::FUND_ROOT, timings.fund_root),
+        timing_row(
+            InstallTimingLabel::STAGE_RELEASE_SET,
+            timings.stage_release_set,
+        ),
+        timing_row(
+            InstallTimingLabel::RESUME_BOOTSTRAP,
+            timings.resume_bootstrap,
+        ),
+        timing_row(InstallTimingLabel::WAIT_READY, timings.wait_ready),
+        timing_row(
+            InstallTimingLabel::FINALIZE_ROOT_FUNDING,
+            timings.finalize_root_funding,
+        ),
+        timing_row(InstallTimingLabel::TOTAL, total),
     ];
     render_table(
         &["PHASE", "ELAPSED"],
@@ -30,8 +42,11 @@ pub(super) fn render_install_timing_summary(
     )
 }
 
-fn timing_row(label: &str, duration: Duration) -> [String; 2] {
-    [label.to_string(), format!("{:.2}s", duration.as_secs_f64())]
+fn timing_row(label: InstallTimingLabel, duration: Duration) -> [String; 2] {
+    [
+        label.as_str().to_string(),
+        format!("{:.2}s", duration.as_secs_f64()),
+    ]
 }
 
 pub(super) fn print_install_result_summary(

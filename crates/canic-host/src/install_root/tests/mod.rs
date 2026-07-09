@@ -17,8 +17,8 @@ use super::deployment_truth_gate::{
 use super::execution_preflight::write_current_install_execution_preflight_receipt;
 use super::operations::{
     BuildInstallTargetsOperation, EmitRootManifestOperation, EnsureRootCyclesOperation,
-    InstallPhaseOperation, InstallRootWasmOperation, ResolveRootCanisterOperation,
-    ResumeBootstrapOperation, WaitRootReadyOperation,
+    InstallPhaseLabel, InstallPhaseOperation, InstallRootWasmOperation,
+    ResolveRootCanisterOperation, ResumeBootstrapOperation, WaitRootReadyOperation,
 };
 use super::output::render_install_timing_summary;
 use super::phase_receipts::{
