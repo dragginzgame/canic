@@ -54,7 +54,7 @@ pub mod ops {
 
     pub mod runtime {
         pub mod bootstrap {
-            pub use crate::ops::runtime::bootstrap::BootstrapStatusOps;
+            pub use crate::ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps};
         }
 
         pub mod env {

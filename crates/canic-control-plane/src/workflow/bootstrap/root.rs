@@ -23,7 +23,11 @@ use canic_core::control_plane_support::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, network::NetworkOps},
-        runtime::{bootstrap::BootstrapStatusOps, env::EnvOps, ready::ReadyOps},
+        runtime::{
+            bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
+            env::EnvOps,
+            ready::ReadyOps,
+        },
         storage::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             pool::PoolOps,
@@ -191,7 +195,7 @@ pub async fn bootstrap_init_root_canister() {
 
     if !missing_roles.is_empty() {
         record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Waiting);
-        BootstrapStatusOps::set_phase("root:init:waiting_staged_releases");
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_WAITING_STAGED_RELEASES);
         log!(
             Topic::Init,
             Info,
@@ -208,7 +212,7 @@ pub async fn bootstrap_init_root_canister() {
                 LifecycleMetricPhase::Init,
                 LifecycleMetricOutcome::Skipped,
             );
-            BootstrapStatusOps::set_phase("root:init:skipped");
+            BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_SKIPPED);
             log!(Topic::Init, Info, "bootstrap (root:init) skipped: {err}");
             return;
         }
@@ -216,7 +220,7 @@ pub async fn bootstrap_init_root_canister() {
 
     log!(Topic::Init, Info, "bootstrap (root:init) start");
 
-    BootstrapStatusOps::set_phase("root:init:set_subnet_id");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_SET_SUBNET_ID);
     if let Err(err) = root_set_subnet_id().await {
         let message = format!("subnet identity phase failed: {err}");
         log!(Topic::Init, Error, "{message}");
@@ -226,11 +230,11 @@ pub async fn bootstrap_init_root_canister() {
 
     // On fresh init, only wait for the configured initial import slice before
     // auto-create. Remaining static imports are queued for the pool worker.
-    BootstrapStatusOps::set_phase("root:init:import_pool");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_IMPORT_POOL);
     root_import_pool_from_config(false).await;
     canic_core::perf!("bootstrap_import_pool");
 
-    BootstrapStatusOps::set_phase("root:init:create_canisters");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_CREATE_CANISTERS);
     if let Err(err) = root_create_canisters().await {
         let message = format!("registry phase failed: {err}");
         log!(Topic::Init, Error, "{message}");
@@ -239,7 +243,7 @@ pub async fn bootstrap_init_root_canister() {
     }
     canic_core::perf!("bootstrap_create_canisters");
 
-    BootstrapStatusOps::set_phase("root:init:rebuild_indexes");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_REBUILD_INDEXES);
     if let Err(err) = root_rebuild_indexes_from_registry() {
         let message = format!("index materialization failed: {err}");
         log!(Topic::Init, Error, "{message}");
@@ -248,7 +252,7 @@ pub async fn bootstrap_init_root_canister() {
     }
     canic_core::perf!("bootstrap_rebuild_indexes");
 
-    BootstrapStatusOps::set_phase("root:init:validate");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_VALIDATE);
     let report = root_validate_state();
     canic_core::perf!("bootstrap_validate_state");
     if !report.ok {
@@ -313,7 +317,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
             LifecycleMetricPhase::PostUpgrade,
             LifecycleMetricOutcome::Waiting,
         );
-        BootstrapStatusOps::set_phase("root:upgrade:waiting_staged_releases");
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_UPGRADE_WAITING_STAGED_RELEASES);
         log!(
             Topic::Init,
             Info,
@@ -325,7 +329,7 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 
     // Environment already exists; only enrich + reconcile
     log!(Topic::Init, Info, "bootstrap (root:upgrade) start");
-    BootstrapStatusOps::set_phase("root:upgrade:set_subnet_id");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_UPGRADE_SET_SUBNET_ID);
     if let Err(err) = root_set_subnet_id().await {
         let message = format!("subnet identity phase failed: {err}");
         log!(Topic::Init, Error, "{message}");
@@ -333,9 +337,9 @@ pub async fn bootstrap_post_upgrade_root_canister() {
         return;
     }
     // Keep post-upgrade non-blocking; queued imports continue in background.
-    BootstrapStatusOps::set_phase("root:upgrade:import_pool");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_UPGRADE_IMPORT_POOL);
     root_import_pool_from_config(false).await;
-    BootstrapStatusOps::set_phase("root:upgrade:reconcile_wasm_store");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_UPGRADE_RECONCILE_WASM_STORE);
     if let Err(err) = root_reconcile_wasm_store().await {
         let message = format!("wasm store reconcile failed: {err}");
         log!(Topic::Init, Error, "{message}");

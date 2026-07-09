@@ -1421,11 +1421,13 @@ Resolution:
 
 - Added `BootstrapPhaseLabel`.
 - Added associated constants for the maintained idle, failed, ready, root-init,
-  and nonroot lifecycle phase labels.
+  root-upgrade, and nonroot lifecycle phase labels.
 - `BootstrapStatusRecord.phase` now stores `BootstrapPhaseLabel`.
 - `BootstrapStatusOps::set_phase` accepts `BootstrapPhaseLabel`.
-- Lifecycle bootstrap scheduling passes typed phase constants instead of
-  constructing labels from raw strings.
+- Root and nonroot lifecycle bootstrap scheduling pass typed phase constants
+  instead of constructing labels from raw strings.
+- `control_plane_support` re-exports `BootstrapPhaseLabel` alongside
+  `BootstrapStatusOps` for root bootstrap workflow call sites.
 - `snapshot()` still serializes the same phase strings.
 - `mark_failed` preserves the same redacted recent-failure correlation ID
   behavior.
@@ -1438,6 +1440,7 @@ Fix validation:
 | --- | --- | --- |
 | `cargo fmt --all` | pass | Formatted the bootstrap phase label typing change. |
 | `cargo test --locked -p canic-core bootstrap --lib` | pass | 14 focused bootstrap/runtime tests passed. |
+| `cargo check --locked -p canic-control-plane` | pass | Checked root bootstrap workflow call sites that consume the typed phase label through `control_plane_support`. |
 | `cargo clippy --locked -p canic-core --all-targets -- -D warnings` | pass | Clippy passed for `canic-core` targets. |
 
 ## Rejected / Non-Findings

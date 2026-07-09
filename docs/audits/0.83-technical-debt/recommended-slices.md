@@ -710,8 +710,8 @@ Boundary:
 Runtime bootstrap status phase labels.
 
 Previous owner:
-Bootstrap status storage and lifecycle scheduling call sites used raw
-`&'static str` phase labels.
+Bootstrap status storage and root/nonroot lifecycle scheduling call sites used
+raw `&'static str` phase labels.
 
 Intended owner:
 Runtime bootstrap ops own typed `BootstrapPhaseLabel` values. DTO projection
@@ -728,6 +728,7 @@ None.
 
 Validation:
 - `cargo test --locked -p canic-core bootstrap --lib`
+- `cargo check --locked -p canic-control-plane`
 - `cargo clippy --locked -p canic-core --all-targets -- -D warnings`
 
 Explicit non-scope:
