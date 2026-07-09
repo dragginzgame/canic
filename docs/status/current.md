@@ -14,12 +14,21 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.15`. Earlier in the
+- The current package/release-surface version is `0.83.16`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.16` working slice fixes `CANIC-083-DEBT-022` by tightening
+- The current `0.83.17` working slice fixes `CANIC-083-DEBT-023` by tightening
+  deployment-truth execution-preflight validation and text-output labels.
+  Validation field names and text renderer field/section/status labels now use
+  typed internal labels. Execution-preflight blocker codes and the static
+  authority fallback subject now use typed internal labels as well. Error field
+  strings, operator text output, blocker code strings, fallback subject string,
+  command behavior, endpoint surfaces, Candid, JSON schemas, deployment truth
+  schema, evidence/report schemas, and stable-state layout are unchanged.
+
+- The `0.83.16` slice fixes `CANIC-083-DEBT-022` by tightening
   host install-root execution-preflight receipt labels. The execution-preflight
   receipt phase, operation ID, failure command-result code, and evidence keys
   now use typed labels internally. Deployment-truth execution-preflight

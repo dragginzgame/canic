@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.15
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.16
 Status: pass_with_followups
 
 ## Scope
@@ -58,7 +58,10 @@ so the timing renderer uses `InstallTimingLabel` while the table output keeps
 the same phase labels. The twenty-first follow-up fix tightens host
 install-root execution-preflight receipt labels so the receipt phase,
 failure-code, and evidence-key labels are typed internally while receipt JSON
-keeps the same strings.
+keeps the same strings. The twenty-second follow-up fix tightens
+deployment-truth execution-preflight validation and text-output labels so
+validation field names and text renderer field/section/status labels are typed
+internally while error strings and operator text output keep the same labels.
 
 ## Baseline Validation
 
@@ -1665,6 +1668,95 @@ Fix validation:
 | `cargo fmt --all` | pass | Formatted the execution-preflight label typing change. |
 | `cargo check --locked -p canic-host` | pass | Checked the host execution-preflight label changes. |
 | `cargo test --locked -p canic-host execution_preflight` | pass | 12 focused execution-preflight tests passed. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
+
+## CANIC-083-DEBT-023: Execution Preflight Validation, Blocker, And Text Labels Are Raw Strings
+
+Severity: P3
+Category: host / deployment_truth / boundary_ownership
+Status: fixed
+Owner: deployment-truth execution preflight validation, blocker, and text
+renderer
+Current location: `crates/canic-host/src/deployment_truth/executor.rs`
+and `crates/canic-host/src/deployment_truth/text/execution_preflight.rs`
+Intended owner: deployment-truth execution preflight field, blocker, subject,
+and text label types, with validation errors, safety findings, and operator
+text continuing to format labels as strings
+Affected surfaces: internal
+Release decision: fixed_in_0.83.17
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/executor.rs`
+- line or anchor: `validate_deployment_execution_preflight`
+- module/function: execution-preflight validation
+- command/search: `rg -n "plan_id|safety_report_id|authority_plan_id|required_capabilities|missing_capabilities" crates/canic-host/src/deployment_truth/executor.rs crates/canic-host/src/deployment_truth/text/execution_preflight.rs`
+- reachability: active deployment-truth execution-preflight validation path
+- exact issue: validation field names were passed as raw strings into missing
+  field, duplicate capability, and source-check mismatch errors.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/executor.rs`
+- line or anchor: `deployment_execution_blockers`
+- module/function: execution-preflight blocker construction
+- command/search: `rg -n "deployment_safety_blocked|executor_capability_missing|authority_controller_change_pending|authority_external_action_required|authority_observation_missing" crates/canic-host/src/deployment_truth/executor.rs`
+- reachability: active deployment-truth execution-preflight blocker path
+- exact issue: execution-preflight safety-finding codes and the static
+  authority fallback subject were owned as raw strings.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/execution_preflight.rs`
+- line or anchor: `deployment_execution_preflight_text`
+- module/function: execution-preflight operator text renderer
+- command/search: `rg -n "mode: passive|planned_phases|required_capabilities|missing_capabilities|blockers" crates/canic-host/src/deployment_truth/text/execution_preflight.rs`
+- reachability: active execution-preflight text rendering path
+- exact issue: text field, section, and status labels were owned as raw strings
+  in the renderer.
+
+Risk:
+
+Low. Error field labels, safety-finding codes, fallback subjects, and operator
+text labels were already stable and tested, but the validation, blocker, and
+text paths duplicated the same execution-preflight vocabulary as ad hoc raw
+strings.
+
+Recommendation:
+
+Introduce private execution-preflight field, blocker, subject, and text label
+types. Keep validation error field strings, safety-finding code/subject
+strings, and operator text output unchanged by converting labels to strings
+only at the error/finding/text boundary.
+
+Regression test:
+
+Keep execution-preflight tests asserting unchanged source-check mismatch field
+labels, safety-finding codes/subjects, and passive readiness text labels.
+
+Resolution:
+
+- Added `DeploymentExecutionPreflightFieldLabel`.
+- Execution-preflight validation now passes typed field labels into missing
+  field, duplicate capability, and source-check mismatch helpers.
+- Added `ExecutionPreflightTextLabel`.
+- Execution-preflight text rendering now derives title, field, section,
+  status, and list labels from typed text labels.
+- Added `DeploymentExecutionPreflightBlockerCode`.
+- Execution-preflight blocker construction now derives maintained
+  safety-finding codes from typed blocker-code labels while keeping the public
+  string constants used by tests.
+- Added `DeploymentExecutionPreflightSubjectLabel`.
+- The static authority fallback subject now derives from a typed subject label.
+- Error field strings, operator text output, blocker code strings, fallback
+  subject string, command behavior, endpoint surfaces, Candid, JSON schemas,
+  deployment truth schema, evidence/report schemas, and stable-state layout
+  remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the execution-preflight validation/text label change. |
+| `cargo test --locked -p canic-host execution_preflight` | pass | 12 focused execution-preflight tests passed after blocker-code label typing. |
+| `cargo check --locked -p canic-host` | pass | Checked the host execution-preflight validation/blocker/text label changes. |
 | `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
 
 ## Rejected / Non-Findings
