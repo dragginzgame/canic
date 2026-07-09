@@ -32,6 +32,18 @@ impl BootstrapPhaseLabel {
     pub const NONROOT_UPGRADE_SCHEDULED: Self = Self("nonroot:upgrade:scheduled");
     pub const NONROOT_UPGRADE: Self = Self("nonroot:upgrade");
     pub const ROOT_INIT: Self = Self("root:init");
+    pub const ROOT_INIT_WAITING_STAGED_RELEASES: Self = Self("root:init:waiting_staged_releases");
+    pub const ROOT_INIT_SKIPPED: Self = Self("root:init:skipped");
+    pub const ROOT_INIT_SET_SUBNET_ID: Self = Self("root:init:set_subnet_id");
+    pub const ROOT_INIT_IMPORT_POOL: Self = Self("root:init:import_pool");
+    pub const ROOT_INIT_CREATE_CANISTERS: Self = Self("root:init:create_canisters");
+    pub const ROOT_INIT_REBUILD_INDEXES: Self = Self("root:init:rebuild_indexes");
+    pub const ROOT_INIT_VALIDATE: Self = Self("root:init:validate");
+    pub const ROOT_UPGRADE_WAITING_STAGED_RELEASES: Self =
+        Self("root:upgrade:waiting_staged_releases");
+    pub const ROOT_UPGRADE_SET_SUBNET_ID: Self = Self("root:upgrade:set_subnet_id");
+    pub const ROOT_UPGRADE_IMPORT_POOL: Self = Self("root:upgrade:import_pool");
+    pub const ROOT_UPGRADE_RECONCILE_WASM_STORE: Self = Self("root:upgrade:reconcile_wasm_store");
 
     #[must_use]
     pub const fn new(label: &'static str) -> Self {

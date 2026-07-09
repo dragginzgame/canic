@@ -22,8 +22,9 @@ before this compaction is archived at
 - The current `0.83.14` working slice fixes `CANIC-083-DEBT-019` by tightening
   runtime bootstrap diagnostic phase labels. Process-local bootstrap status now
   stores `BootstrapPhaseLabel` values, and lifecycle bootstrap scheduling passes
-  typed labels into `BootstrapStatusOps::set_phase`. `snapshot()` still emits
-  the same `BootstrapStatusResponse.phase` strings, and
+  typed labels into `BootstrapStatusOps::set_phase` across root and nonroot
+  bootstrap workflows. `snapshot()` still emits the same
+  `BootstrapStatusResponse.phase` strings, and
   `canic_bootstrap_status`, runtime introspection recent-failure metadata,
   lifecycle scheduling behavior, command behavior, endpoint surfaces, Candid,
   JSON, deployment truth, evidence/report schemas, and stable-state layout are
