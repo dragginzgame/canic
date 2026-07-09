@@ -2091,6 +2091,101 @@ Fix validation:
 | `cargo clippy --locked -p canic-core -p canic-control-plane --all-targets -- -D warnings` | pass | Clippy passed for the affected core and control-plane targets. |
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 
+## CANIC-083-DEBT-028: State Manifest/Audit Labels Owned By Renderers Instead Of Model Owners
+
+Severity: P3
+Category: core / state_contract / runtime / cli_renderer / state_audit
+Status: fixed
+Owner: state manifest storage and migration-policy schema labels, plus
+state-audit status labels
+Current location: `crates/canic-cli/src/state/mod.rs`,
+`crates/canic-cli/src/medic/mod.rs`, and
+`crates/canic-core/src/api/runtime/mod.rs`
+Intended owner: `crates/canic-core/src/state_contract.rs` and
+`crates/canic-host/src/state_manifest/mod.rs`
+Affected surfaces: Rust internals only
+Release decision: fixed_in_0.83.22
+
+Evidence:
+- file: `crates/canic-cli/src/state/mod.rs`
+- line or anchor: `status_label`, `storage_label`, and
+  `migration_policy_label`
+- module/function: `render_audit_text` and `render_manifest_text`
+- command/search: `rg -n "status_label|storage_label|migration_policy_label|state_storage_name" crates/canic-core/src crates/canic-cli/src crates/canic-host/src crates/canic-control-plane/src -g '*.rs'`
+- reachability: active `canic state manifest` text rendering
+- exact issue: the CLI renderer locally matched `StateAuditStatus`,
+  `StateStorage`, and `MigrationPolicy` variants into stable report/schema
+  labels even though those labels belong to the state-audit report model or
+  state contract model.
+
+Evidence:
+- file: `crates/canic-cli/src/medic/mod.rs`
+- line or anchor: `state_audit_status_label`
+- module/function: `state_audit_project_check`
+- command/search: `rg -n "status_label|storage_label|migration_policy_label|state_storage_name" crates/canic-core/src crates/canic-cli/src crates/canic-host/src crates/canic-control-plane/src -g '*.rs'`
+- reachability: active `canic medic project` state-audit summary check
+- exact issue: medic locally matched `StateAuditStatus` variants into stable
+  report labels even though the state-audit report model owns that label
+  meaning.
+
+Evidence:
+- file: `crates/canic-core/src/api/runtime/mod.rs`
+- line or anchor: `state_storage_name`
+- module/function: `state_summary`
+- command/search: `rg -n "state_storage_name" crates/canic-core/src crates/canic-cli/src crates/canic-host/src crates/canic-control-plane/src -g '*.rs'`
+- reachability: active runtime introspection state summary builder
+- exact issue: runtime state summaries duplicated the `StateStorage` label match
+  instead of consuming a model-owned label.
+
+Risk:
+
+Low. The duplicated matches could drift from the serde `snake_case` schema and
+report labels over time, especially because the same storage label appears in
+both host/CLI state manifest output and runtime state summaries.
+
+Recommendation:
+
+Move the stable string labels to `StateStorage::as_str()`,
+`MigrationPolicy::as_str()`, and `StateAuditStatus::label()`, then have
+CLI/runtime consumers render from those owner-defined labels.
+
+Regression test:
+
+Pin the enum-owned labels in state-contract and state-manifest tests, then run
+the state CLI, runtime, and host state-manifest test suites to confirm rendered
+output and audit behavior remain unchanged.
+
+Resolution:
+
+- Added `StateStorage::as_str()`.
+- Added `MigrationPolicy::as_str()`.
+- Added `StateAuditStatus::label()`.
+- Replaced the state CLI text renderer's duplicate storage and
+  migration-policy label functions with calls to the state contract methods.
+- Replaced the state CLI audit renderer's duplicate status label function with
+  calls to the state-audit report method.
+- Replaced medic's duplicate state-audit status label function with calls to
+  the state-audit report method.
+- Replaced the runtime state-summary storage-label helper with
+  `StateStorage::as_str()`.
+- Kept state manifest JSON labels, text output, runtime state summary strings,
+  command behavior, endpoint surfaces, Candid, deployment truth,
+  evidence/report schemas, and stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the state-contract label ownership cleanup. |
+| `cargo check --locked -p canic-core -p canic-cli -p canic-host` | pass | Checked affected core, CLI, and host packages. |
+| `cargo test --locked -p canic-core state_contract --lib` | pass | State-contract tests passed, including the state storage and migration-policy label assertions. |
+| `cargo test --locked -p canic-core runtime --lib` | pass | Runtime tests passed after the state-summary label helper was removed. |
+| `cargo test --locked -p canic-cli state` | pass | State CLI tests passed after renderer label ownership moved to the model/report owners. |
+| `cargo test --locked -p canic-cli medic` | pass | Medic tests passed after state-audit summary label ownership moved to the report model. |
+| `cargo test --locked -p canic-host state_manifest --lib` | pass | Host state-manifest audit tests passed, including the audit-status label assertions. |
+| `cargo clippy --locked -p canic-core -p canic-cli -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for the affected packages. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+
 ## Rejected / Non-Findings
 
 See `rejected.md`.

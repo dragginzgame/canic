@@ -14,12 +14,22 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.20`. Earlier in the
+- The current package/release-surface version is `0.83.21`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.21` working slice fixes `CANIC-083-DEBT-027` by
+- The current `0.83.22` working slice fixes `CANIC-083-DEBT-028` by
+  tightening state manifest and state-audit label ownership. `StateStorage` and
+  `MigrationPolicy` now own their stable schema labels via `as_str()` methods,
+  `StateAuditStatus` owns its stable report labels, and the state CLI text
+  renderer, medic state-audit summary, and runtime state summary builder
+  consume those owner-defined labels instead of duplicating local match blocks.
+  State manifest JSON labels, text output, runtime state summary strings,
+  command behavior, endpoint surfaces, Candid, deployment truth,
+  evidence/report schemas, and stable-state layout are unchanged.
+
+- The `0.83.21` slice fixes `CANIC-083-DEBT-027` by
   hard-cutting local runtime/config/policy and bootstrap validation metadata
   out of the Candid trait surface. `ids::BuildNetwork` no longer derives
   `CandidType` because it has no active Candid DTO or `.did` consumer after the

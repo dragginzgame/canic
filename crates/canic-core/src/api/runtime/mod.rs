@@ -27,7 +27,7 @@ use crate::{
             recent_failure::{RecentFailureInput, RecentFailureOps},
         },
     },
-    state_contract::{StateStorage, canic_state_manifest_for_role},
+    state_contract::canic_state_manifest_for_role,
 };
 
 const MAX_TIMER_SUBSYSTEM_BYTES: usize = 64;
@@ -348,7 +348,7 @@ fn state_summary(role: Option<&str>) -> Option<RuntimeStateSummary> {
         .map(|domain| RuntimeStateDomainSummary {
             domain: domain.domain,
             version: domain.version,
-            storage: state_storage_name(domain.storage).to_string(),
+            storage: domain.storage.as_str().to_string(),
             memory_id: domain.memory_id,
             status: RuntimeStateDomainStatus::Ok,
         })
@@ -363,14 +363,6 @@ fn state_summary(role: Option<&str>) -> Option<RuntimeStateSummary> {
         domains,
         total_stable_memory_pages: None,
     })
-}
-
-const fn state_storage_name(storage: StateStorage) -> &'static str {
-    match storage {
-        StateStorage::StableMemory => "stable_memory",
-        StateStorage::HeapOnly => "heap_only",
-        StateStorage::NotApplicable => "not_applicable",
-    }
 }
 
 fn split_timer_label(label: &str) -> (String, String) {

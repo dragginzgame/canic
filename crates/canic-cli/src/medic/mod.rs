@@ -363,7 +363,7 @@ fn state_audit_project_check() -> MedicCheck {
     let report = build_state_audit_report(None);
     let detail = format!(
         "state audit status {} with {} check(s)",
-        state_audit_status_label(report.status),
+        report.status.label(),
         report.checks.len()
     );
 
@@ -400,15 +400,6 @@ fn state_audit_project_check() -> MedicCheck {
             "declare state metadata, then run canic state audit",
             MedicSource::StateManifest,
         ),
-    }
-}
-
-const fn state_audit_status_label(status: StateAuditStatus) -> &'static str {
-    match status {
-        StateAuditStatus::Pass => "pass",
-        StateAuditStatus::Warn => "warn",
-        StateAuditStatus::Fail => "fail",
-        StateAuditStatus::NotEvaluated => "not_evaluated",
     }
 }
 
