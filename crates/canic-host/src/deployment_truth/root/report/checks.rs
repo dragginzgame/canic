@@ -107,7 +107,7 @@ pub(super) fn root_verification_evidence_checks(
     push_check(
         &mut checks,
         RootVerificationCheckName::RootObservationSource,
-        Some("IcpCanisterStatus"),
+        Some(DeploymentRootObservationSourceV1::IcpCanisterStatus.label()),
         observed_root.map(root_observation_source_label),
     );
     push_check(
@@ -172,16 +172,7 @@ pub(super) const fn present_value(value: &str) -> Option<&'static str> {
 }
 
 const fn root_observation_source_label(root: &DeploymentRootObservationV1) -> &str {
-    root_observation_source_label_from_source(&root.observation_source)
-}
-
-pub(super) const fn root_observation_source_label_from_source(
-    source: &DeploymentRootObservationSourceV1,
-) -> &str {
-    match *source {
-        DeploymentRootObservationSourceV1::IcpCanisterStatus => "IcpCanisterStatus",
-        DeploymentRootObservationSourceV1::LocalDeploymentState => "LocalDeploymentState",
-    }
+    root.observation_source.label()
 }
 
 fn failed_checks(

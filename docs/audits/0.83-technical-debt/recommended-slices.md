@@ -1265,3 +1265,55 @@ Explicit non-scope:
 - no evidence/report schema changes
 - no stable-state layout changes
 - no operator text output label changes
+
+## 0.83 Deployment Root Verification Text Label Ownership
+
+Status:
+completed in 0.83.25 for the accepted `CANIC-083-DEBT-031` scope.
+
+Source findings:
+- CANIC-083-DEBT-031
+
+Boundary:
+Deployment-root verification and root-observation model labels versus
+deployment-root verification report/receipt text rendering.
+
+Previous owner:
+Deployment-root verification report and receipt text renderers used `Debug`
+formatting for root verification source, evidence status, state transition,
+root verification state, and root observation source labels. The root
+verification evidence-check builder also owned a local root-observation-source
+label match.
+
+Intended owner:
+The deployment-truth root-verification and inventory model enums own the exact
+operator text labels through `label()` methods. Report and receipt text
+renderers plus root verification evidence-check construction consume those
+owner-defined labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust internals only. No CLI command, endpoint, or canister method surface
+changes.
+
+Serialized surfaces affected:
+None. Operator text output labels, JSON schemas, deployment truth schema,
+evidence/report schemas, Candid, and stable-state layout remain unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host root_verification --lib`
+- `cargo test --locked -p canic-host deployment_truth --lib`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON schema or label changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no operator text output label changes

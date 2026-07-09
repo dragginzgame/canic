@@ -11,7 +11,7 @@ pub fn deployment_root_verification_receipt_text(
         "mode: local-state-write".to_string(),
         "canister_execution: none".to_string(),
         "local_state_write: recorded".to_string(),
-        format!("state_transition: {:?}", receipt.state_transition),
+        format!("state_transition: {}", receipt.state_transition.label()),
         format!("receipt_id: {}", receipt.receipt_id),
         format!("receipt_digest: {}", receipt.receipt_digest),
         format!("deployment: {}", receipt.deployment_name),
@@ -19,32 +19,38 @@ pub fn deployment_root_verification_receipt_text(
         format!("fleet_template: {}", receipt.fleet_template),
         format!("root_principal: {}", receipt.root_principal),
         format!(
-            "previous_root_verification: {:?}",
-            receipt.previous_root_verification
+            "previous_root_verification: {}",
+            receipt.previous_root_verification.label()
         ),
-        format!("new_root_verification: {:?}", receipt.new_root_verification),
+        format!(
+            "new_root_verification: {}",
+            receipt.new_root_verification.label()
+        ),
         format!("source_report_id: {}", receipt.source_report_id),
         format!("source_report_digest: {}", receipt.source_report_digest),
         format!(
             "source_report_requested_at: {}",
             receipt.source_report_requested_at
         ),
-        format!("source_report_source: {:?}", receipt.source_report_source),
         format!(
-            "source_report_evidence_status: {:?}",
-            receipt.source_report_evidence_status
+            "source_report_source: {}",
+            receipt.source_report_source.label()
         ),
         format!(
-            "source_report_current_root_verification: {:?}",
-            receipt.source_report_current_root_verification
+            "source_report_evidence_status: {}",
+            receipt.source_report_evidence_status.label()
         ),
         format!(
-            "source_report_state_transition: {:?}",
-            receipt.source_report_state_transition
+            "source_report_current_root_verification: {}",
+            receipt.source_report_current_root_verification.label()
         ),
         format!(
-            "source_root_observation_source: {:?}",
-            receipt.source_root_observation_source
+            "source_report_state_transition: {}",
+            receipt.source_report_state_transition.label()
+        ),
+        format!(
+            "source_root_observation_source: {}",
+            receipt.source_root_observation_source.label()
         ),
         format!(
             "source_observed_root_canister_id: {}",

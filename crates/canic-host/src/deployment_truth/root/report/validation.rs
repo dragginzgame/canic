@@ -4,7 +4,7 @@ use super::{
         digest::deployment_root_verification_report_digest,
         error::DeploymentRootVerificationReportError,
     },
-    checks::{RootVerificationCheckName, present_value, root_observation_source_label_from_source},
+    checks::{RootVerificationCheckName, present_value},
     shared::root_verification_transition,
 };
 
@@ -156,11 +156,11 @@ fn ensure_root_verification_report_checks_consistent(
     ensure_report_check_value(
         &report.evidence_checks,
         RootVerificationCheckName::RootObservationSource,
-        Some("IcpCanisterStatus"),
+        Some(DeploymentRootObservationSourceV1::IcpCanisterStatus.label()),
         report
             .observed_root_observation_source
             .as_ref()
-            .map(root_observation_source_label_from_source),
+            .map(|source| source.label()),
     )?;
     ensure_report_check_value(
         &report.evidence_checks,

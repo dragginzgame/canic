@@ -47,6 +47,16 @@ pub enum DeploymentRootObservationSourceV1 {
     LocalDeploymentState,
 }
 
+impl DeploymentRootObservationSourceV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::IcpCanisterStatus => "IcpCanisterStatus",
+            Self::LocalDeploymentState => "LocalDeploymentState",
+        }
+    }
+}
+
 ///
 /// ExpectedCanisterV1
 ///
@@ -172,4 +182,21 @@ pub enum ObservationStatusV1 {
     Observed,
     Missing,
     Inconclusive,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deployment_root_observation_source_owns_text_labels() {
+        assert_eq!(
+            DeploymentRootObservationSourceV1::IcpCanisterStatus.label(),
+            "IcpCanisterStatus"
+        );
+        assert_eq!(
+            DeploymentRootObservationSourceV1::LocalDeploymentState.label(),
+            "LocalDeploymentState"
+        );
+    }
 }
