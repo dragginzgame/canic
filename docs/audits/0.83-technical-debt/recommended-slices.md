@@ -848,3 +848,60 @@ Explicit non-scope:
 - no receipt phase string changes
 - no receipt operation ID changes
 - no receipt evidence string changes
+
+## 0.83 Execution Preflight Validation, Blocker, And Text Label Typing
+
+Status:
+completed in 0.83.17 for the accepted `CANIC-083-DEBT-023` scope.
+
+Source findings:
+- CANIC-083-DEBT-023
+
+Boundary:
+Deployment-truth execution-preflight validation field labels, blocker labels,
+and text renderer labels.
+
+Previous owner:
+Execution-preflight validation helpers accepted raw field-name strings, and
+execution-preflight blocker construction owned maintained safety-finding codes
+and the static authority fallback subject as raw strings. The
+execution-preflight text renderer owned title, field, section, and status labels
+as raw strings.
+
+Intended owner:
+Deployment-truth execution-preflight validation owns field labels through
+`DeploymentExecutionPreflightFieldLabel`. Execution-preflight blocker
+construction owns safety-finding codes through
+`DeploymentExecutionPreflightBlockerCode` and the static authority fallback
+subject through `DeploymentExecutionPreflightSubjectLabel`. The
+execution-preflight text renderer owns rendered text labels through
+`ExecutionPreflightTextLabel`.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust deployment-truth internals only. No CLI or endpoint surface changes.
+
+Serialized surfaces affected:
+None. Validation error field strings, safety-finding code strings, fallback
+subject string, and operator text output labels remain unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host execution_preflight`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no execution-preflight behavior changes
+- no validation error field string changes
+- no safety-finding code string changes
+- no fallback subject string changes
+- no operator text output label changes

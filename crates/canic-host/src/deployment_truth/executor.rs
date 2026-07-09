@@ -9,13 +9,38 @@ use super::{
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DeploymentExecutionPreflightBlockerCode(&'static str);
+
+impl DeploymentExecutionPreflightBlockerCode {
+    const AUTHORITY_CONTROLLER_CHANGE_PENDING: Self = Self("authority_controller_change_pending");
+    const AUTHORITY_EXTERNAL_ACTION_REQUIRED: Self = Self("authority_external_action_required");
+    const AUTHORITY_OBSERVATION_MISSING: Self = Self("authority_observation_missing");
+    const DEPLOYMENT_SAFETY_BLOCKED: Self = Self("deployment_safety_blocked");
+    const EXECUTOR_CAPABILITY_MISSING: Self = Self("executor_capability_missing");
+
+    #[must_use]
+    const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DeploymentExecutionPreflightSubjectLabel(&'static str);
+
+impl DeploymentExecutionPreflightSubjectLabel {
+    const AUTHORITY: Self = Self("authority");
+
+    #[must_use]
+    const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
 pub(in crate::deployment_truth) const DEPLOYMENT_SAFETY_BLOCKED_CODE: &str =
-    "deployment_safety_blocked";
-const AUTHORITY_CONTROLLER_CHANGE_PENDING_CODE: &str = "authority_controller_change_pending";
-const AUTHORITY_EXTERNAL_ACTION_REQUIRED_CODE: &str = "authority_external_action_required";
-const AUTHORITY_OBSERVATION_MISSING_CODE: &str = "authority_observation_missing";
+    DeploymentExecutionPreflightBlockerCode::DEPLOYMENT_SAFETY_BLOCKED.as_str();
 pub(in crate::deployment_truth) const EXECUTOR_CAPABILITY_MISSING_CODE: &str =
-    "executor_capability_missing";
+    DeploymentExecutionPreflightBlockerCode::EXECUTOR_CAPABILITY_MISSING.as_str();
 
 ///
 /// DeploymentExecutionPreflightError
@@ -146,6 +171,22 @@ impl CurrentInstallExecutionPhaseLabel {
     const STAGE_RELEASE_SET: Self = Self("stage_release_set");
     const WAIT_READY: Self = Self("wait_ready");
     const WRITE_INSTALL_STATE: Self = Self("write_install_state");
+
+    #[must_use]
+    const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct DeploymentExecutionPreflightFieldLabel(&'static str);
+
+impl DeploymentExecutionPreflightFieldLabel {
+    const AUTHORITY_PLAN_ID: Self = Self("authority_plan_id");
+    const MISSING_CAPABILITIES: Self = Self("missing_capabilities");
+    const PLAN_ID: Self = Self("plan_id");
+    const REQUIRED_CAPABILITIES: Self = Self("required_capabilities");
+    const SAFETY_REPORT_ID: Self = Self("safety_report_id");
 
     #[must_use]
     const fn as_str(self) -> &'static str {
@@ -302,12 +343,27 @@ pub fn validate_deployment_execution_preflight(
         });
     }
 
-    ensure_preflight_field("plan_id", &preflight.plan_id)?;
-    ensure_preflight_field("safety_report_id", &preflight.safety_report_id)?;
-    ensure_preflight_field("authority_plan_id", &preflight.authority_plan_id)?;
+    ensure_preflight_field(
+        DeploymentExecutionPreflightFieldLabel::PLAN_ID,
+        &preflight.plan_id,
+    )?;
+    ensure_preflight_field(
+        DeploymentExecutionPreflightFieldLabel::SAFETY_REPORT_ID,
+        &preflight.safety_report_id,
+    )?;
+    ensure_preflight_field(
+        DeploymentExecutionPreflightFieldLabel::AUTHORITY_PLAN_ID,
+        &preflight.authority_plan_id,
+    )?;
     ensure_preflight_status_matches_blockers(preflight)?;
-    ensure_unique_capabilities("required_capabilities", &preflight.required_capabilities)?;
-    ensure_unique_capabilities("missing_capabilities", &preflight.missing_capabilities)?;
+    ensure_unique_capabilities(
+        DeploymentExecutionPreflightFieldLabel::REQUIRED_CAPABILITIES,
+        &preflight.required_capabilities,
+    )?;
+    ensure_unique_capabilities(
+        DeploymentExecutionPreflightFieldLabel::MISSING_CAPABILITIES,
+        &preflight.missing_capabilities,
+    )?;
     ensure_missing_capabilities_are_required(preflight)?;
     ensure_missing_capabilities_have_blockers(preflight)?;
 
@@ -319,16 +375,20 @@ pub fn validate_deployment_execution_preflight_for_check(
     preflight: &DeploymentExecutionPreflightV1,
 ) -> Result<(), DeploymentExecutionPreflightError> {
     validate_deployment_execution_preflight(preflight)?;
-    ensure_preflight_check_match("plan_id", &preflight.plan_id, &check.plan.plan_id)?;
     ensure_preflight_check_match(
-        "safety_report_id",
+        DeploymentExecutionPreflightFieldLabel::PLAN_ID,
+        &preflight.plan_id,
+        &check.plan.plan_id,
+    )?;
+    ensure_preflight_check_match(
+        DeploymentExecutionPreflightFieldLabel::SAFETY_REPORT_ID,
         &preflight.safety_report_id,
         &check.report.report_id,
     )?;
 
     let authority_plan = build_authority_reconciliation_plan(check);
     ensure_preflight_check_match(
-        "authority_plan_id",
+        DeploymentExecutionPreflightFieldLabel::AUTHORITY_PLAN_ID,
         &preflight.authority_plan_id,
         &authority_plan.plan_id,
     )?;
@@ -366,7 +426,10 @@ fn deployment_execution_blockers(
             AuthorityReconciliationStateV1::AlreadyCorrect => {}
             AuthorityReconciliationStateV1::CanApplyAutomatically => {
                 blockers.push(SafetyFindingV1 {
-                    code: AUTHORITY_CONTROLLER_CHANGE_PENDING_CODE.to_string(),
+                    code:
+                        DeploymentExecutionPreflightBlockerCode::AUTHORITY_CONTROLLER_CHANGE_PENDING
+                            .as_str()
+                            .to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
                     subject: Some(authority_blocker_subject(action)),
@@ -374,7 +437,10 @@ fn deployment_execution_blockers(
             }
             AuthorityReconciliationStateV1::RequiresExternalAction => {
                 blockers.push(SafetyFindingV1 {
-                    code: AUTHORITY_EXTERNAL_ACTION_REQUIRED_CODE.to_string(),
+                    code:
+                        DeploymentExecutionPreflightBlockerCode::AUTHORITY_EXTERNAL_ACTION_REQUIRED
+                            .as_str()
+                            .to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
                     subject: Some(authority_blocker_subject(action)),
@@ -393,7 +459,9 @@ fn deployment_execution_blockers(
                     continue;
                 }
                 blockers.push(SafetyFindingV1 {
-                    code: AUTHORITY_OBSERVATION_MISSING_CODE.to_string(),
+                    code: DeploymentExecutionPreflightBlockerCode::AUTHORITY_OBSERVATION_MISSING
+                        .as_str()
+                        .to_string(),
                     message: action.reason.clone(),
                     severity: SafetySeverityV1::HardFailure,
                     subject: Some(authority_blocker_subject(action)),
@@ -404,7 +472,9 @@ fn deployment_execution_blockers(
 
     for capability in missing_capabilities {
         blockers.push(SafetyFindingV1 {
-            code: EXECUTOR_CAPABILITY_MISSING_CODE.to_string(),
+            code: DeploymentExecutionPreflightBlockerCode::EXECUTOR_CAPABILITY_MISSING
+                .as_str()
+                .to_string(),
             message: format!("executor backend is missing required capability: {capability:?}"),
             severity: SafetySeverityV1::HardFailure,
             subject: Some(format!("{capability:?}")),
@@ -419,7 +489,11 @@ fn authority_blocker_subject(action: &CanisterAuthorityActionV1) -> String {
         .canister_id
         .clone()
         .or_else(|| action.role.clone())
-        .unwrap_or_else(|| "authority".to_string())
+        .unwrap_or_else(|| {
+            DeploymentExecutionPreflightSubjectLabel::AUTHORITY
+                .as_str()
+                .to_string()
+        })
 }
 
 fn allow_initial_install_unknown_authority(check: &DeploymentCheckV1) -> bool {
@@ -432,11 +506,13 @@ fn allow_initial_install_unknown_authority(check: &DeploymentCheckV1) -> bool {
 }
 
 fn ensure_preflight_field(
-    field: &'static str,
+    field: DeploymentExecutionPreflightFieldLabel,
     value: &str,
 ) -> Result<(), DeploymentExecutionPreflightError> {
     if value.trim().is_empty() {
-        return Err(DeploymentExecutionPreflightError::MissingRequiredField { field });
+        return Err(DeploymentExecutionPreflightError::MissingRequiredField {
+            field: field.as_str(),
+        });
     }
     Ok(())
 }
@@ -459,14 +535,14 @@ const fn ensure_preflight_status_matches_blockers(
 }
 
 fn ensure_unique_capabilities(
-    field: &'static str,
+    field: DeploymentExecutionPreflightFieldLabel,
     capabilities: &[DeploymentExecutorCapabilityV1],
 ) -> Result<(), DeploymentExecutionPreflightError> {
     let mut seen = BTreeSet::new();
     for capability in capabilities {
         if !seen.insert(*capability) {
             return Err(DeploymentExecutionPreflightError::DuplicateCapability {
-                field,
+                field: field.as_str(),
                 capability: *capability,
             });
         }
@@ -514,13 +590,13 @@ fn ensure_missing_capabilities_have_blockers(
 }
 
 fn ensure_preflight_check_match(
-    field: &'static str,
+    field: DeploymentExecutionPreflightFieldLabel,
     preflight_value: &str,
     check_value: &str,
 ) -> Result<(), DeploymentExecutionPreflightError> {
     if preflight_value != check_value {
         return Err(DeploymentExecutionPreflightError::SourceCheckMismatch {
-            field,
+            field: field.as_str(),
             preflight_value: preflight_value.to_string(),
             check_value: check_value.to_string(),
         });
