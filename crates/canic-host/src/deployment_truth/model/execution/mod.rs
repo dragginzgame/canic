@@ -182,6 +182,19 @@ pub enum RolePhaseResultV1 {
     VerifiedAlreadyApplied,
 }
 
+impl RolePhaseResultV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Applied => "Applied",
+            Self::Failed => "Failed",
+            Self::Skipped => "Skipped",
+            Self::NotAttempted => "NotAttempted",
+            Self::VerifiedAlreadyApplied => "VerifiedAlreadyApplied",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,5 +231,17 @@ mod tests {
             "failed_after_mutation"
         );
         assert_eq!(DeploymentExecutionStatusV1::Complete.label(), "complete");
+    }
+
+    #[test]
+    fn role_phase_result_owns_text_labels() {
+        assert_eq!(RolePhaseResultV1::Applied.label(), "Applied");
+        assert_eq!(RolePhaseResultV1::Failed.label(), "Failed");
+        assert_eq!(RolePhaseResultV1::Skipped.label(), "Skipped");
+        assert_eq!(RolePhaseResultV1::NotAttempted.label(), "NotAttempted");
+        assert_eq!(
+            RolePhaseResultV1::VerifiedAlreadyApplied.label(),
+            "VerifiedAlreadyApplied"
+        );
     }
 }

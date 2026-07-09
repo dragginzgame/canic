@@ -198,6 +198,18 @@ pub enum ObservationStatusV1 {
     Inconclusive,
 }
 
+impl ObservationStatusV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::NotObserved => "NotObserved",
+            Self::Observed => "Observed",
+            Self::Missing => "Missing",
+            Self::Inconclusive => "Inconclusive",
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +252,13 @@ mod tests {
             CanisterControlClassV1::UnknownUnsafe.label(),
             "UnknownUnsafe"
         );
+    }
+
+    #[test]
+    fn observation_status_owns_text_labels() {
+        assert_eq!(ObservationStatusV1::NotObserved.label(), "NotObserved");
+        assert_eq!(ObservationStatusV1::Observed.label(), "Observed");
+        assert_eq!(ObservationStatusV1::Missing.label(), "Missing");
+        assert_eq!(ObservationStatusV1::Inconclusive.label(), "Inconclusive");
     }
 }

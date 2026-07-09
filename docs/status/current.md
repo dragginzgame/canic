@@ -14,12 +14,22 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.25`. Earlier in the
+- The current package/release-surface version is `0.83.26`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.26` working slice fixes `CANIC-083-DEBT-032` by
+- The current `0.83.27` working slice fixes `CANIC-083-DEBT-034` by
+  tightening promotion artifact/policy label ownership. Promotion artifact
+  level, artifact source kind, artifact identity kind, policy requirement,
+  policy claim, previous receipt kind, artifact transport, artifact source,
+  observation status, and role phase result enums now own the exact labels
+  used by promotion text renderers and promotion identity keys. Operator text
+  output labels, identity-key strings, command behavior, endpoint surfaces,
+  Candid, JSON schemas, deployment truth schema, evidence/report schemas, and
+  stable-state layout are unchanged.
+
+- The `0.83.26` slice fixes `CANIC-083-DEBT-032` by
   tightening deployment-truth control-class label ownership and
   `CANIC-083-DEBT-033` by tightening external lifecycle label ownership.
   `CanisterControlClassV1` now owns the exact control-class labels used by

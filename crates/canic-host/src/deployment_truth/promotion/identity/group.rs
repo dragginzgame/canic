@@ -91,15 +91,15 @@ pub(super) fn artifact_identity_key_for_role(role: &RolePromotionArtifactIdentit
             role.canonical_embedded_config_sha256.as_deref(),
         ),
         PromotionArtifactIdentityKindV1::SourceBuild => format!(
-            "source_build:source_kind={:?}:locator={}:candid={}:config={}",
-            role.source_kind,
+            "source_build:source_kind={}:locator={}:candid={}:config={}",
+            role.source_kind.label(),
             optional_identity_part(role.source_locator.as_deref()),
             optional_identity_part(role.candid_sha256.as_deref()),
             optional_identity_part(role.canonical_embedded_config_sha256.as_deref())
         ),
         PromotionArtifactIdentityKindV1::Deferred => format!(
-            "deferred:source_kind={:?}:locator={}",
-            role.source_kind,
+            "deferred:source_kind={}:locator={}",
+            role.source_kind.label(),
             optional_identity_part(role.source_locator.as_deref())
         ),
     }
@@ -164,7 +164,10 @@ fn materialization_output_key(
 }
 
 fn source_kind_identity_part(kind: Option<RoleArtifactSourceKindV1>) -> String {
-    kind.map_or_else(|| "not-recorded".to_string(), |kind| format!("{kind:?}"))
+    kind.map_or_else(
+        || "not-recorded".to_string(),
+        |kind| kind.label().to_string(),
+    )
 }
 
 fn single_group_source_kind(

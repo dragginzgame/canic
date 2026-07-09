@@ -1376,3 +1376,57 @@ Explicit non-scope:
 - no stable-state layout changes
 - no operator text output label changes
 - no diff value changes
+
+## 0.83 Promotion Artifact And Policy Label Ownership
+
+Status:
+completed in 0.83.27 for the accepted `CANIC-083-DEBT-034` scope.
+
+Source findings:
+- CANIC-083-DEBT-034
+
+Boundary:
+Deployment-truth promotion artifact/policy model enum labels versus promotion
+text rendering and promotion artifact identity-key helpers.
+
+Previous owner:
+Promotion text renderers used enum `Debug` formatting for promotion artifact
+level, role artifact source kind, artifact identity kind, policy requirement,
+policy claim, artifact source, observation status, and role phase result
+labels. Promotion artifact identity-key helpers also used `Debug` formatting
+for role artifact source kind labels.
+
+Intended owner:
+Promotion, artifact, inventory, and execution model enums own their exact text
+labels through `label()` methods. Promotion text renderers and promotion
+identity-key helpers consume those owner-defined labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust internals only. No CLI command, endpoint, or canister method surface
+changes.
+
+Serialized surfaces affected:
+None. Operator text output labels, identity-key strings, JSON schemas,
+deployment truth schema, evidence/report schemas, Candid, and stable-state
+layout remain unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host promotion --lib`
+- `cargo test --locked -p canic-host deployment_truth --lib`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON schema or label changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no operator text output label changes
+- no identity-key string changes
+- no execution/status mixed-label cleanup
