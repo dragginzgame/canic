@@ -956,3 +956,51 @@ Explicit non-scope:
 - no comparison behavior changes
 - no validation error field string changes
 - no operator text output label changes
+
+## 0.83 Authority Report Text Label Typing
+
+Status:
+completed in 0.83.19 for the accepted `CANIC-083-DEBT-025` scope.
+
+Source findings:
+- CANIC-083-DEBT-025
+
+Boundary:
+Deployment-truth authority report text renderer labels and report-owned shared
+authority text helper labels.
+
+Previous owner:
+The authority report text renderer owned title, field, section, count,
+fallback, and list labels as raw strings. Shared report helpers also owned
+blocker, next-action, automatic-action, external-action, and apply-blocker
+labels as raw strings.
+
+Intended owner:
+The authority report renderer owns rendered text labels through
+`AuthorityReportTextLabel`. Report-owned shared helper labels are owned through
+`AuthoritySharedTextLabel`.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust deployment-truth internals only. No CLI or endpoint surface changes.
+
+Serialized surfaces affected:
+None. Operator text output labels remain unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host authority`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON field changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no authority behavior changes
+- no operator text output label changes

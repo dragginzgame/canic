@@ -1,6 +1,26 @@
 use super::super::super::*;
 use super::super::append_hard_failure_items;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct AuthoritySharedTextLabel(&'static str);
+
+impl AuthoritySharedTextLabel {
+    const AUTOMATIC_ACTIONS: Self = Self("automatic_actions");
+    const BLOCKERS: Self = Self("blockers");
+    const BLOCKERS_NONE_LINE: Self = Self("  blockers: none");
+    const EXTERNAL_ACTIONS: Self = Self("external_actions");
+    const EXTERNAL_ACTIONS_REQUIRED: Self = Self("external_actions_required");
+    const HARD_FAILURES: Self = Self("hard_failures");
+    const NEXT_ACTIONS: Self = Self("next_actions");
+    const OBSERVATION_GAPS: Self = Self("observation_gaps");
+    const UNSAFE_BLOCKED: Self = Self("unsafe_blocked");
+
+    #[must_use]
+    const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
 pub(super) fn authority_plan_state_counts(
     plan: &AuthorityReconciliationPlanV1,
 ) -> AuthorityPlanStateCounts {
@@ -94,10 +114,17 @@ pub(super) struct AuthorityPlanStateCounts {
 
 pub(super) fn append_blockers(lines: &mut Vec<String>, report: &AuthorityReportV1) {
     if report.apply_readiness.blockers.is_empty() {
-        lines.push("  blockers: none".to_string());
+        lines.push(
+            AuthoritySharedTextLabel::BLOCKERS_NONE_LINE
+                .as_str()
+                .to_string(),
+        );
         return;
     }
-    lines.push("  blockers:".to_string());
+    lines.push(format!(
+        "  {}:",
+        AuthoritySharedTextLabel::BLOCKERS.as_str()
+    ));
     for blocker in &report.apply_readiness.blockers {
         lines.push(format!("    - {}", authority_apply_blocker_label(*blocker)));
     }
@@ -108,7 +135,10 @@ pub(super) fn append_next_actions(lines: &mut Vec<String>, report: &AuthorityRep
         return;
     }
     lines.push(String::new());
-    lines.push("next_actions:".to_string());
+    lines.push(format!(
+        "{}:",
+        AuthoritySharedTextLabel::NEXT_ACTIONS.as_str()
+    ));
     for action in &report.next_actions {
         lines.push(format!("  - {action}"));
     }
@@ -175,7 +205,10 @@ pub(super) fn append_controller_observation_items(
 pub(super) fn append_authority_action_summary(lines: &mut Vec<String>, report: &AuthorityReportV1) {
     if !report.automatic_actions.is_empty() {
         lines.push(String::new());
-        lines.push("automatic_actions:".to_string());
+        lines.push(format!(
+            "{}:",
+            AuthoritySharedTextLabel::AUTOMATIC_ACTIONS.as_str()
+        ));
         for action in &report.automatic_actions {
             lines.push(authority_action_line_with_delta(
                 &action.subject,
@@ -187,7 +220,7 @@ pub(super) fn append_authority_action_summary(lines: &mut Vec<String>, report: &
     }
     append_external_action_items(
         lines,
-        "external_actions_required",
+        AuthoritySharedTextLabel::EXTERNAL_ACTIONS_REQUIRED.as_str(),
         &report.external_actions_required,
     );
 }
@@ -225,10 +258,14 @@ fn authority_delta_list(values: &[String]) -> String {
 
 const fn authority_apply_blocker_label(blocker: AuthorityApplyBlockerV1) -> &'static str {
     match blocker {
-        AuthorityApplyBlockerV1::UnsafeBlocked => "unsafe_blocked",
-        AuthorityApplyBlockerV1::HardFailures => "hard_failures",
-        AuthorityApplyBlockerV1::ObservationGaps => "observation_gaps",
-        AuthorityApplyBlockerV1::ExternalActions => "external_actions",
+        AuthorityApplyBlockerV1::UnsafeBlocked => AuthoritySharedTextLabel::UNSAFE_BLOCKED.as_str(),
+        AuthorityApplyBlockerV1::HardFailures => AuthoritySharedTextLabel::HARD_FAILURES.as_str(),
+        AuthorityApplyBlockerV1::ObservationGaps => {
+            AuthoritySharedTextLabel::OBSERVATION_GAPS.as_str()
+        }
+        AuthorityApplyBlockerV1::ExternalActions => {
+            AuthoritySharedTextLabel::EXTERNAL_ACTIONS.as_str()
+        }
     }
 }
 

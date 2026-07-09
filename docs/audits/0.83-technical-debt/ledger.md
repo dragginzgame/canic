@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.17
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.18
 Status: pass_with_followups
 
 ## Scope
@@ -65,7 +65,11 @@ internally while error strings and operator text output keep the same labels.
 The twenty-third follow-up fix tightens deployment-truth comparison report
 validation and text-output labels so validation field names and text renderer
 field/section/count/target/fallback labels are typed internally while error
-strings and operator text output keep the same labels.
+strings and operator text output keep the same labels. The twenty-fourth
+follow-up fix tightens deployment-truth authority report text-output labels so
+report field/section/count/fallback labels and report-owned shared action
+summary labels are typed internally while operator text output keeps the same
+labels.
 
 ## Baseline Validation
 
@@ -1833,6 +1837,80 @@ Fix validation:
 | `cargo fmt --all` | pass | Formatted the comparison validation/text label change. |
 | `cargo test --locked -p canic-host comparison` | pass | 8 focused comparison tests passed. |
 | `cargo check --locked -p canic-host` | pass | Checked the host comparison validation/text label changes. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
+
+## CANIC-083-DEBT-025: Authority Report Text Labels Are Raw Strings
+
+Severity: P3
+Category: host / deployment_truth / boundary_ownership
+Status: fixed
+Owner: deployment-truth authority report text renderer
+Current location:
+`crates/canic-host/src/deployment_truth/text/authority/report/mod.rs` and
+`crates/canic-host/src/deployment_truth/text/authority/shared/mod.rs`
+Intended owner: deployment-truth authority report text label types, with
+operator text continuing to format labels as strings
+Affected surfaces: internal
+Release decision: fixed_in_0.83.19
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/authority/report/mod.rs`
+- line or anchor: `authority_report_text`
+- module/function: authority report operator text renderer
+- command/search: `rg -n "Authority reconciliation report|mode: dry_run|apply_readiness|hard_failures|observation_gaps|not recorded" crates/canic-host/src/deployment_truth/text/authority -S`
+- reachability: active authority dry-run report text rendering path
+- exact issue: authority report title, field, section, count, fallback, and
+  list labels were owned as raw strings in the renderer.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/authority/shared/mod.rs`
+- line or anchor: `append_blockers`, `append_next_actions`,
+  `append_authority_action_summary`, and `authority_apply_blocker_label`
+- module/function: authority report text helper labels
+- command/search: same as above
+- reachability: active authority report text helper path
+- exact issue: report-owned shared labels for blockers, next actions,
+  automatic actions, external actions, and authority apply blocker strings were
+  owned as raw strings in shared helper code.
+
+Risk:
+
+Low. Operator text labels were already stable and tested, but the authority
+report renderer and its report-owned shared helper labels duplicated maintained
+report vocabulary as ad hoc raw strings.
+
+Recommendation:
+
+Introduce private authority report and shared authority text label types. Keep
+operator text output unchanged by converting labels to strings only at the text
+boundary.
+
+Regression test:
+
+Keep authority tests asserting unchanged authority report title, dry-run mode,
+check ID, status, controller delta, and action-summary text.
+
+Resolution:
+
+- Added `AuthorityReportTextLabel`.
+- Authority report text rendering now derives report title, fields, count rows,
+  apply-readiness rows, fallback labels, and hard-failure/observation-gap
+  section labels from typed text labels.
+- Added `AuthoritySharedTextLabel`.
+- Report-owned shared helper labels for blockers, next actions, automatic
+  actions, external actions, hard failures, observation gaps, and apply blocker
+  labels now derive from typed text labels.
+- Operator text output, command behavior, endpoint surfaces, Candid, JSON
+  schemas, deployment truth schema, evidence/report schemas, and stable-state
+  layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the authority report text label change. |
+| `cargo test --locked -p canic-host authority` | pass | 72 focused authority tests passed. |
+| `cargo check --locked -p canic-host` | pass | Checked the host authority report text label changes. |
 | `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
 
 ## Rejected / Non-Findings
