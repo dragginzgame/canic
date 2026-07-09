@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.14
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.15
 Status: pass_with_followups
 
 ## Scope
@@ -55,7 +55,10 @@ labels so operation runners and completed-phase receipts use
 `InstallPhaseLabel` while receipt JSON keeps the same phase strings. The
 twentieth follow-up fix tightens host install-root timing summary output labels
 so the timing renderer uses `InstallTimingLabel` while the table output keeps
-the same phase labels.
+the same phase labels. The twenty-first follow-up fix tightens host
+install-root execution-preflight receipt labels so the receipt phase,
+failure-code, and evidence-key labels are typed internally while receipt JSON
+keeps the same strings.
 
 ## Baseline Validation
 
@@ -1586,6 +1589,82 @@ Fix validation:
 | `cargo fmt --all` | pass | Formatted the install-root timing label typing change. |
 | `cargo check --locked -p canic-host` | pass | Checked the host timing label changes. |
 | `cargo test --locked -p canic-host install_timing_summary` | pass | Focused timing summary renderer test passed. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
+
+## CANIC-083-DEBT-022: Install-Root Execution Preflight Receipt Owns Labels As Raw Strings
+
+Severity: P3
+Category: host / deployment_truth / boundary_ownership
+Status: fixed
+Owner: host install-root execution preflight receipt builder and
+deployment-truth execution preflight builder
+Current location: `crates/canic-host/src/install_root/execution_preflight.rs`
+and `crates/canic-host/src/deployment_truth/executor.rs`
+Intended owner: host install-root phase label type plus execution-preflight
+receipt label type, plus deployment-truth current-install execution phase
+label type, with deployment-truth receipt/preflight DTOs continuing to
+serialize labels as strings
+Affected surfaces: internal
+Release decision: fixed_in_0.83.16
+
+Evidence:
+- file: `crates/canic-host/src/install_root/execution_preflight.rs`
+- line or anchor: `write_current_install_execution_preflight_receipt`
+- module/function: current install execution-preflight receipt creation
+- command/search: `rg -n "execution_preflight|execution_preflight_blocked|execution_preflight_status" crates/canic-host/src/install_root crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active current install deployment-truth execution-preflight
+  receipt path
+- exact issue: execution-preflight receipt operation IDs, phase receipts,
+  failure command-result codes, and evidence keys were built from raw string
+  labels inside the receipt builder. The execution-preflight planned-phase
+  list was also owned as raw string labels in the deployment-truth preflight
+  builder.
+
+Risk:
+
+Low. Serialized receipt strings were already stable and tested, but the
+current-install execution-preflight receipt path had several adjacent raw
+labels that could drift independently. The planned-phase list had the same
+drift risk against the install execution phase vocabulary.
+
+Recommendation:
+
+Use `InstallPhaseLabel::EXECUTION_PREFLIGHT` for execution-preflight receipt
+phase and operation ID construction. Use a local typed
+`ExecutionPreflightReceiptLabel` for the receipt failure code and evidence
+keys. Keep deployment-truth DTO strings unchanged.
+Use a private deployment-truth planned-phase label type for the
+current-install execution preflight planned phase list.
+
+Regression test:
+
+Keep execution-preflight receipt tests asserting unchanged operation IDs,
+phase strings, evidence strings, and blocked receipt behavior.
+Keep execution-preflight tests asserting unchanged planned-phase strings.
+
+Resolution:
+
+- Added `InstallPhaseLabel::EXECUTION_PREFLIGHT`.
+- Execution-preflight receipt operation IDs and phase receipts now derive from
+  the typed install phase label.
+- Added `ExecutionPreflightReceiptLabel`.
+- Execution-preflight blocked command-result code and evidence keys now derive
+  from typed receipt labels.
+- Added `CurrentInstallExecutionPhaseLabel`.
+- Deployment-truth execution-preflight planned phases now derive from typed
+  current-install phase labels.
+- Receipt JSON phase strings, operation IDs, evidence strings,
+  planned-phase strings, command behavior, endpoint surfaces, Candid, JSON
+  schemas, deployment truth schema, evidence/report schemas, and stable-state
+  layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the execution-preflight label typing change. |
+| `cargo check --locked -p canic-host` | pass | Checked the host execution-preflight label changes. |
+| `cargo test --locked -p canic-host execution_preflight` | pass | 12 focused execution-preflight tests passed. |
 | `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
 
 ## Rejected / Non-Findings

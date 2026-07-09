@@ -130,19 +130,42 @@ pub const CURRENT_CLI_EXECUTOR_CAPABILITIES: &[DeploymentExecutorCapabilityV1] =
 pub const TESTKIT_PREFLIGHT_CAPABILITIES: &[DeploymentExecutorCapabilityV1] =
     CURRENT_CLI_EXECUTOR_CAPABILITIES;
 
-const CURRENT_INSTALL_EXECUTION_PHASES: &[&str] = &[
-    "resolve_root_canister",
-    "build_artifacts",
-    "materialize_artifacts",
-    "execution_preflight",
-    "emit_manifest",
-    "install_root",
-    "fund_root_pre_bootstrap",
-    "stage_release_set",
-    "resume_bootstrap",
-    "wait_ready",
-    "fund_root_post_ready",
-    "write_install_state",
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CurrentInstallExecutionPhaseLabel(&'static str);
+
+impl CurrentInstallExecutionPhaseLabel {
+    const BUILD_ARTIFACTS: Self = Self("build_artifacts");
+    const EMIT_MANIFEST: Self = Self("emit_manifest");
+    const EXECUTION_PREFLIGHT: Self = Self("execution_preflight");
+    const FUND_ROOT_POST_READY: Self = Self("fund_root_post_ready");
+    const FUND_ROOT_PRE_BOOTSTRAP: Self = Self("fund_root_pre_bootstrap");
+    const INSTALL_ROOT: Self = Self("install_root");
+    const MATERIALIZE_ARTIFACTS: Self = Self("materialize_artifacts");
+    const RESOLVE_ROOT_CANISTER: Self = Self("resolve_root_canister");
+    const RESUME_BOOTSTRAP: Self = Self("resume_bootstrap");
+    const STAGE_RELEASE_SET: Self = Self("stage_release_set");
+    const WAIT_READY: Self = Self("wait_ready");
+    const WRITE_INSTALL_STATE: Self = Self("write_install_state");
+
+    #[must_use]
+    const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
+
+const CURRENT_INSTALL_EXECUTION_PHASES: &[CurrentInstallExecutionPhaseLabel] = &[
+    CurrentInstallExecutionPhaseLabel::RESOLVE_ROOT_CANISTER,
+    CurrentInstallExecutionPhaseLabel::BUILD_ARTIFACTS,
+    CurrentInstallExecutionPhaseLabel::MATERIALIZE_ARTIFACTS,
+    CurrentInstallExecutionPhaseLabel::EXECUTION_PREFLIGHT,
+    CurrentInstallExecutionPhaseLabel::EMIT_MANIFEST,
+    CurrentInstallExecutionPhaseLabel::INSTALL_ROOT,
+    CurrentInstallExecutionPhaseLabel::FUND_ROOT_PRE_BOOTSTRAP,
+    CurrentInstallExecutionPhaseLabel::STAGE_RELEASE_SET,
+    CurrentInstallExecutionPhaseLabel::RESUME_BOOTSTRAP,
+    CurrentInstallExecutionPhaseLabel::WAIT_READY,
+    CurrentInstallExecutionPhaseLabel::FUND_ROOT_POST_READY,
+    CurrentInstallExecutionPhaseLabel::WRITE_INSTALL_STATE,
 ];
 
 #[must_use]
@@ -261,7 +284,7 @@ fn deployment_execution_preflight_with_unknown_authority_policy(
         status,
         planned_phases: CURRENT_INSTALL_EXECUTION_PHASES
             .iter()
-            .map(|phase| (*phase).to_string())
+            .map(|phase| phase.as_str().to_string())
             .collect(),
         required_capabilities: required_capabilities.to_vec(),
         missing_capabilities,

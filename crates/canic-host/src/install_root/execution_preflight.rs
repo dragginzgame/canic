@@ -1,4 +1,5 @@
 use super::deployment_truth_gate::deployment_truth_finding_label;
+use super::operations::InstallPhaseLabel;
 use super::phase_receipts::receipt_with_execution_context;
 use super::receipt_io::write_install_deployment_truth_receipt;
 use super::{
@@ -12,6 +13,26 @@ use crate::deployment_truth::{
     validate_deployment_execution_preflight_for_check,
 };
 use std::path::{Path, PathBuf};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ExecutionPreflightReceiptLabel(&'static str);
+
+impl ExecutionPreflightReceiptLabel {
+    const AUTHORITY_PLAN: Self = Self("authority_plan");
+    const BLOCKED_CODE: Self = Self("execution_preflight_blocked");
+    const BLOCKER: Self = Self("blocker");
+    const BLOCKERS: Self = Self("blockers");
+    const MISSING_CAPABILITIES: Self = Self("missing_capabilities");
+    const MISSING_CAPABILITY: Self = Self("missing_capability");
+    const PLANNED_PHASES: Self = Self("planned_phases");
+    const REQUIRED_CAPABILITIES: Self = Self("required_capabilities");
+    const STATUS: Self = Self("execution_preflight_status");
+
+    #[must_use]
+    const fn as_str(self) -> &'static str {
+        self.0
+    }
+}
 
 pub(super) fn write_current_install_execution_preflight_receipt(
     icp_root: &Path,
@@ -42,21 +63,24 @@ pub(super) fn write_current_install_execution_preflight_receipt(
         (
             DeploymentExecutionStatusV1::FailedBeforeMutation,
             DeploymentCommandResultV1::Failed {
-                code: "execution_preflight_blocked".to_string(),
+                code: ExecutionPreflightReceiptLabel::BLOCKED_CODE
+                    .as_str()
+                    .to_string(),
                 message: "deployment execution preflight blocked current install".to_string(),
             },
         )
     };
     let finished_at = current_unix_timestamp_label()?;
+    let phase_label = InstallPhaseLabel::EXECUTION_PREFLIGHT;
     let receipt = receipt_with_execution_context(
         deployment_receipt_from_check_with_status(
             check,
-            format!("{}:execution_preflight", check.check_id),
+            format!("{}:{}", check.check_id, phase_label.as_str()),
             operation_status,
             started_at.clone(),
             Some(finished_at.clone()),
             vec![phase_receipt(
-                "execution_preflight",
+                phase_label.as_str(),
                 started_at,
                 Some(finished_at),
                 "validate deployment plan, authority, and executor capability readiness",
@@ -86,30 +110,50 @@ fn current_install_execution_preflight_evidence(
     preflight: &DeploymentExecutionPreflightV1,
 ) -> Vec<String> {
     let mut evidence = vec![
-        format!("execution_preflight_status:{:?}", preflight.status),
-        format!("authority_plan:{}", preflight.authority_plan_id),
-        format!("planned_phases:{}", preflight.planned_phases.len()),
         format!(
-            "required_capabilities:{}",
+            "{}:{:?}",
+            ExecutionPreflightReceiptLabel::STATUS.as_str(),
+            preflight.status
+        ),
+        format!(
+            "{}:{}",
+            ExecutionPreflightReceiptLabel::AUTHORITY_PLAN.as_str(),
+            preflight.authority_plan_id
+        ),
+        format!(
+            "{}:{}",
+            ExecutionPreflightReceiptLabel::PLANNED_PHASES.as_str(),
+            preflight.planned_phases.len()
+        ),
+        format!(
+            "{}:{}",
+            ExecutionPreflightReceiptLabel::REQUIRED_CAPABILITIES.as_str(),
             preflight.required_capabilities.len()
         ),
         format!(
-            "missing_capabilities:{}",
+            "{}:{}",
+            ExecutionPreflightReceiptLabel::MISSING_CAPABILITIES.as_str(),
             preflight.missing_capabilities.len()
         ),
-        format!("blockers:{}", preflight.blockers.len()),
+        format!(
+            "{}:{}",
+            ExecutionPreflightReceiptLabel::BLOCKERS.as_str(),
+            preflight.blockers.len()
+        ),
     ];
-    evidence.extend(
-        preflight
-            .missing_capabilities
-            .iter()
-            .map(|capability| format!("missing_capability:{capability:?}")),
-    );
-    evidence.extend(
-        preflight
-            .blockers
-            .iter()
-            .map(|finding| format!("blocker:{}:{}", finding.code, finding.message)),
-    );
+    evidence.extend(preflight.missing_capabilities.iter().map(|capability| {
+        format!(
+            "{}:{capability:?}",
+            ExecutionPreflightReceiptLabel::MISSING_CAPABILITY.as_str()
+        )
+    }));
+    evidence.extend(preflight.blockers.iter().map(|finding| {
+        format!(
+            "{}:{}:{}",
+            ExecutionPreflightReceiptLabel::BLOCKER.as_str(),
+            finding.code,
+            finding.message
+        )
+    }));
     evidence
 }
