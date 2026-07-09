@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.18` tightens deployment-truth comparison report validation and text
+  output label ownership by replacing raw internal validation field names,
+  target-side/field labels, and text field/section/count/target/fallback labels
+  with typed labels while preserving validation error field strings, operator
+  text output labels, command behavior, JSON schemas, deployment truth schema,
+  and stable-state layout.
+
 - `0.83.17` tightens deployment-truth execution-preflight validation and text
   output label ownership by replacing raw internal validation field names and
   text field/section/status labels, safety-finding codes, and the static

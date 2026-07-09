@@ -2,7 +2,7 @@
 
 Schema version: 1
 Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.16
+Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.17
 Status: pass_with_followups
 
 ## Scope
@@ -62,6 +62,10 @@ keeps the same strings. The twenty-second follow-up fix tightens
 deployment-truth execution-preflight validation and text-output labels so
 validation field names and text renderer field/section/status labels are typed
 internally while error strings and operator text output keep the same labels.
+The twenty-third follow-up fix tightens deployment-truth comparison report
+validation and text-output labels so validation field names and text renderer
+field/section/count/target/fallback labels are typed internally while error
+strings and operator text output keep the same labels.
 
 ## Baseline Validation
 
@@ -1757,6 +1761,78 @@ Fix validation:
 | `cargo fmt --all` | pass | Formatted the execution-preflight validation/text label change. |
 | `cargo test --locked -p canic-host execution_preflight` | pass | 12 focused execution-preflight tests passed after blocker-code label typing. |
 | `cargo check --locked -p canic-host` | pass | Checked the host execution-preflight validation/blocker/text label changes. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
+
+## CANIC-083-DEBT-024: Comparison Report Validation And Text Labels Are Raw Strings
+
+Severity: P3
+Category: host / deployment_truth / boundary_ownership
+Status: fixed
+Owner: deployment-truth comparison report validation and text renderer
+Current location: `crates/canic-host/src/deployment_truth/multi/validation.rs`
+and `crates/canic-host/src/deployment_truth/text/comparison.rs`
+Intended owner: deployment-truth comparison field and text label types, with
+validation errors and operator text continuing to format labels as strings
+Affected surfaces: internal
+Release decision: fixed_in_0.83.18
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/multi/validation.rs`
+- line or anchor: `validate_deployment_comparison_report`
+- module/function: comparison report validation
+- command/search: `rg -n "report_id|report_digest|compared_at|left|right|field_name" crates/canic-host/src/deployment_truth/multi/validation.rs`
+- reachability: active deployment-truth comparison validation path
+- exact issue: comparison report validation field names, target sides, and
+  target fields were passed around as raw strings, including a string fallback
+  helper for target field names.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/comparison.rs`
+- line or anchor: `deployment_comparison_report_text`
+- module/function: comparison report operator text renderer
+- command/search: `rg -n "mode: passive|execution: none|identity_diff|next_actions|missing" crates/canic-host/src/deployment_truth/text/comparison.rs`
+- reachability: active deployment-truth comparison text rendering path
+- exact issue: comparison report title, field, section, count, target, and
+  fallback labels were owned as raw strings in the renderer.
+
+Risk:
+
+Low. Error field labels and operator text labels were already stable and
+tested, but the comparison validation and text-rendering paths duplicated the
+same report vocabulary as ad hoc raw strings.
+
+Recommendation:
+
+Introduce private comparison report field and text label types. Keep validation
+error field strings and operator text output unchanged by converting labels to
+strings only at the error/text boundary.
+
+Regression test:
+
+Keep comparison tests asserting unchanged digest mismatch fields, missing target
+field labels, passive text labels, diff sections, and next-action labels.
+
+Resolution:
+
+- Added `DeploymentComparisonFieldLabel`.
+- Added typed comparison target side and target field enums for validation.
+- Comparison validation now derives required-field and digest-mismatch field
+  strings from typed labels.
+- Removed the raw-string target field-name fallback helper.
+- Added `DeploymentComparisonTextLabel`.
+- Comparison text rendering now derives title, field, count, section, target,
+  status, and fallback labels from typed text labels.
+- Validation error field strings, operator text output, command behavior,
+  endpoint surfaces, Candid, JSON schemas, deployment truth schema,
+  evidence/report schemas, and stable-state layout remain unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted the comparison validation/text label change. |
+| `cargo test --locked -p canic-host comparison` | pass | 8 focused comparison tests passed. |
+| `cargo check --locked -p canic-host` | pass | Checked the host comparison validation/text label changes. |
 | `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for `canic-host` targets. |
 
 ## Rejected / Non-Findings
