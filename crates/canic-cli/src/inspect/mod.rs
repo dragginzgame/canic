@@ -16,8 +16,8 @@ use crate::{
 };
 use candid::{Decode, Principal, types::principal::PrincipalError};
 use canic_core::dto::runtime::{
-    CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, FailureSeverity,
-    RuntimeFeatureStatus, RuntimeStateDomainStatus, RuntimeStatus, TimerStatus,
+    CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RuntimeFeatureStatus,
+    RuntimeStatus,
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
@@ -429,7 +429,7 @@ fn decode_runtime_status_response_hex(
 fn command_exit_result(report: &InspectReport) -> Result<(), InspectCommandError> {
     match report.status {
         RuntimeStatus::Failing => Err(InspectCommandError::ReportStatus(
-            runtime_status_label(RuntimeStatus::Failing).to_string(),
+            RuntimeStatus::Failing.label().to_string(),
         )),
         RuntimeStatus::Ok | RuntimeStatus::Degraded | RuntimeStatus::Unknown => Ok(()),
     }
@@ -438,7 +438,7 @@ fn command_exit_result(report: &InspectReport) -> Result<(), InspectCommandError
 fn render_text_report(report: &InspectReport) -> String {
     let mut lines = vec![
         report.command.label().to_string(),
-        format!("status: {}", runtime_status_label(report.status)),
+        format!("status: {}", report.status.label()),
         format!("endpoint: {}", report.endpoint.label()),
         format!("canister: {}", report.target_resolution.canister_id),
         format!("network: {}", report.target_resolution.network),
@@ -462,7 +462,7 @@ fn render_text_report(report: &InspectReport) -> String {
         ]);
         let status = &runtime_status.status;
         lines.extend([
-            format!("runtime_status: {}", runtime_status_label(status.status)),
+            format!("runtime_status: {}", status.status.label()),
             format!("schema_version: {}", status.schema_version),
             format!("observed_at_ns: {}", status.observed_at_ns),
             format!("role: {}", status.role.as_deref().unwrap_or("unknown")),
@@ -515,7 +515,7 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
             "timer: {}/{} status={} enabled={} registered={}",
             timer.subsystem,
             timer.name,
-            timer_status_label(timer.status),
+            timer.status.label(),
             timer.enabled,
             timer.registered
         ));
@@ -532,7 +532,7 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
                 domain.version,
                 domain.storage,
                 memory_id,
-                state_domain_status_label(domain.status)
+                domain.status.label()
             ));
         }
     }
@@ -542,7 +542,7 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
             "recent_failure: {}/{} severity={} redacted={}",
             failure.subsystem,
             failure.code,
-            failure_severity_label(failure.severity),
+            failure.severity.label(),
             failure.redacted
         ));
     }
@@ -567,44 +567,6 @@ fn enabled_runtime_feature_rows(features: &[RuntimeFeatureStatus]) -> String {
 
 const fn inspect_status(payload: &RuntimeStatusPayload) -> RuntimeStatus {
     payload.status.status
-}
-
-const fn runtime_status_label(status: RuntimeStatus) -> &'static str {
-    match status {
-        RuntimeStatus::Ok => "ok",
-        RuntimeStatus::Degraded => "degraded",
-        RuntimeStatus::Failing => "failing",
-        RuntimeStatus::Unknown => "unknown",
-    }
-}
-
-const fn timer_status_label(status: TimerStatus) -> &'static str {
-    match status {
-        TimerStatus::Healthy => "healthy",
-        TimerStatus::Delayed => "delayed",
-        TimerStatus::Failing => "failing",
-        TimerStatus::Disabled => "disabled",
-        TimerStatus::NotRegistered => "not_registered",
-        TimerStatus::Unknown => "unknown",
-    }
-}
-
-const fn state_domain_status_label(status: RuntimeStateDomainStatus) -> &'static str {
-    match status {
-        RuntimeStateDomainStatus::Ok => "ok",
-        RuntimeStateDomainStatus::Warning => "warning",
-        RuntimeStateDomainStatus::Failing => "failing",
-        RuntimeStateDomainStatus::NotEvaluated => "not_evaluated",
-    }
-}
-
-const fn failure_severity_label(severity: FailureSeverity) -> &'static str {
-    match severity {
-        FailureSeverity::Info => "info",
-        FailureSeverity::Warning => "warning",
-        FailureSeverity::Error => "error",
-        FailureSeverity::Critical => "critical",
-    }
 }
 
 fn hex_to_bytes(text: &str) -> Option<Vec<u8>> {

@@ -1163,3 +1163,54 @@ Explicit non-scope:
 - no evidence/report schema changes
 - no stable-state layout changes
 - no audit status/check behavior changes
+
+## 0.83 Runtime Introspection Enum Label Ownership
+
+Status:
+completed in 0.83.23 for the accepted `CANIC-083-DEBT-029` scope.
+
+Source findings:
+- CANIC-083-DEBT-029
+
+Boundary:
+Runtime introspection enum labels used by runtime DTO serde/Candid contracts and
+`canic inspect` text rendering.
+
+Previous owner:
+The inspect CLI text renderer owned local matches from runtime status, timer
+status, state-domain status, and failure-severity enum variants to stable
+labels. Runtime DTO serde-label tests also carried a second copy of
+representative runtime enum labels.
+
+Intended owner:
+`domain::runtime` owns all stable runtime enum labels through `label()` methods.
+Inspect rendering and runtime DTO tests consume those owner-defined labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust internals only. No CLI command, endpoint, or canister method surface
+changes.
+
+Serialized surfaces affected:
+None. Runtime JSON labels, Candid payload labels, inspect text output labels,
+deployment truth schema, evidence/report schemas, and stable-state layout remain
+unchanged.
+
+Validation:
+- `cargo check --locked -p canic-core -p canic-cli`
+- `cargo test --locked -p canic-core runtime --lib`
+- `cargo test --locked -p canic-cli inspect`
+- `cargo test --locked -p canic --test protocol_surface`
+- `cargo clippy --locked -p canic-core -p canic-cli --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid label changes
+- no JSON label changes
+- no inspect text output label changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
