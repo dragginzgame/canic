@@ -354,7 +354,7 @@ fn control_class_counts(inventory: &DeploymentInventoryV1) -> BTreeMap<String, S
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for canister in &inventory.observed_canisters {
         *counts
-            .entry(format!("{:?}", canister.control_class))
+            .entry(canister.control_class.label().to_string())
             .or_default() += 1;
     }
     counts

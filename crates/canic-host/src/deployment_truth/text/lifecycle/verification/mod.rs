@@ -2,7 +2,6 @@ use super::super::super::*;
 use super::super::{append_string_items, optional_text};
 use super::shared::{
     append_verification_check_requirement_items, append_verification_policy_requirement_items,
-    external_upgrade_verification_result_label, external_verification_observation_source_label,
 };
 
 /// Render an external-upgrade verification report as passive operator text.
@@ -28,7 +27,7 @@ pub fn external_upgrade_verification_report_text(
         ),
         format!(
             "verification_result: {}",
-            external_upgrade_verification_result_label(report.verification_result)
+            report.verification_result.label()
         ),
         format!(
             "live_inventory_required: {}",
@@ -95,16 +94,10 @@ pub fn external_upgrade_verification_check_text(
             "canister_id: {}",
             optional_text(check.canister_id.as_deref())
         ),
-        format!(
-            "verification_result: {}",
-            external_upgrade_verification_result_label(check.verification_result)
-        ),
+        format!("verification_result: {}", check.verification_result.label()),
         format!("summary: {}", check.status_summary),
         String::new(),
-        format!(
-            "observation.source: {}",
-            external_verification_observation_source_label(check.observation.source)
-        ),
+        format!("observation.source: {}", check.observation.source.label()),
         format!(
             "observation.deployment_check_id: {}",
             optional_text(check.observation.deployment_check_id.as_deref())
@@ -126,7 +119,7 @@ pub fn external_upgrade_verification_check_text(
             check
                 .observation
                 .observed_control_class
-                .map_or_else(|| "none".to_string(), |value| format!("{value:?}"))
+                .map_or_else(|| "none".to_string(), |value| value.label().to_string())
         ),
     ];
     append_verification_check_requirement_items(&mut lines, &check.requirement_results);

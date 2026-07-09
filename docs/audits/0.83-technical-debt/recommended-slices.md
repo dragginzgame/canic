@@ -1317,3 +1317,62 @@ Explicit non-scope:
 - no evidence/report schema changes
 - no stable-state layout changes
 - no operator text output label changes
+
+## 0.83 Deployment Truth Control-Class Label Ownership
+
+Status:
+completed in 0.83.26 for the accepted `CANIC-083-DEBT-032` and
+`CANIC-083-DEBT-033` scopes.
+
+Source findings:
+- CANIC-083-DEBT-032
+- CANIC-083-DEBT-033
+
+Boundary:
+Deployment-truth inventory control-class labels versus report/diff builders,
+external lifecycle text rendering, and external-upgrade verification summaries.
+Deployment-truth external lifecycle model enum labels versus external lifecycle
+text rendering.
+
+Previous owner:
+Report builders and lifecycle helpers used enum `Debug` formatting for
+`CanisterControlClassV1` labels, and canister/pool diff builders duplicated
+expected `DeploymentControlled` and `CanicManagedPool` label literals.
+External lifecycle text helpers also owned local match blocks for lifecycle
+mode, consent state, verification result, observation source, consent
+subject/channel, and verification requirement labels.
+
+Intended owner:
+`CanisterControlClassV1` owns the exact control-class labels through `label()`.
+Report, diff, lifecycle text, and external-upgrade verification helpers consume
+those owner-defined labels.
+External lifecycle model enums own their exact text labels through `label()`
+methods, and lifecycle text renderers consume those owner-defined labels.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Rust internals only. No CLI command, endpoint, or canister method surface
+changes.
+
+Serialized surfaces affected:
+None. Operator text output labels, diff values, JSON schemas, deployment truth
+schema, evidence/report schemas, Candid, and stable-state layout remain
+unchanged.
+
+Validation:
+- `cargo check --locked -p canic-host`
+- `cargo test --locked -p canic-host deployment_truth --lib`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON schema or label changes
+- no deployment truth schema changes
+- no evidence/report schema changes
+- no stable-state layout changes
+- no operator text output label changes
+- no diff value changes

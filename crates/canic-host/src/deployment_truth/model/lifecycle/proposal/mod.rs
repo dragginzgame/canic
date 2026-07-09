@@ -108,6 +108,18 @@ pub enum ExternalUpgradeConsentStateV1 {
     ExecutedExternally,
 }
 
+impl ExternalUpgradeConsentStateV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Refused => "refused",
+            Self::Delegated => "delegated",
+            Self::ExecutedExternally => "executed_externally",
+        }
+    }
+}
+
 ///
 /// ExternalUpgradeVerificationResultV1
 ///
@@ -117,4 +129,55 @@ pub enum ExternalUpgradeVerificationResultV1 {
     Refused,
     Verified,
     Mismatch,
+}
+
+impl ExternalUpgradeVerificationResultV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Refused => "refused",
+            Self::Verified => "verified",
+            Self::Mismatch => "mismatch",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_upgrade_consent_state_owns_text_labels() {
+        assert_eq!(ExternalUpgradeConsentStateV1::Pending.label(), "pending");
+        assert_eq!(ExternalUpgradeConsentStateV1::Refused.label(), "refused");
+        assert_eq!(
+            ExternalUpgradeConsentStateV1::Delegated.label(),
+            "delegated"
+        );
+        assert_eq!(
+            ExternalUpgradeConsentStateV1::ExecutedExternally.label(),
+            "executed_externally"
+        );
+    }
+
+    #[test]
+    fn external_upgrade_verification_result_owns_text_labels() {
+        assert_eq!(
+            ExternalUpgradeVerificationResultV1::Pending.label(),
+            "pending"
+        );
+        assert_eq!(
+            ExternalUpgradeVerificationResultV1::Refused.label(),
+            "refused"
+        );
+        assert_eq!(
+            ExternalUpgradeVerificationResultV1::Verified.label(),
+            "verified"
+        );
+        assert_eq!(
+            ExternalUpgradeVerificationResultV1::Mismatch.label(),
+            "mismatch"
+        );
+    }
 }

@@ -1,6 +1,5 @@
 use super::super::super::*;
 use super::super::optional_text;
-use super::shared::external_upgrade_consent_state_label;
 
 /// Render external-upgrade consent evidence as passive operator text.
 #[must_use]
@@ -23,10 +22,7 @@ pub fn external_upgrade_consent_evidence_text(
             "canister_id: {}",
             optional_text(evidence.canister_id.as_deref())
         ),
-        format!(
-            "consent_state: {}",
-            external_upgrade_consent_state_label(evidence.consent_state)
-        ),
+        format!("consent_state: {}", evidence.consent_state.label()),
         format!(
             "reported_by: {}",
             optional_text(evidence.reported_by.as_deref())

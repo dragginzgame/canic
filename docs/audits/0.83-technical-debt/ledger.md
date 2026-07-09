@@ -2501,6 +2501,226 @@ Fix validation:
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
 | `git diff --check` | pass | Whitespace diff check passed. |
 
+## CANIC-083-DEBT-032: Deployment-Truth Control-Class Labels Are Duplicated Outside Inventory Model
+
+Severity: P3
+Category: host / deployment_truth / model_labels / text_renderer / report_builder
+Status: fixed
+Owner: deployment-truth control-class labels
+Current location: deployment-truth report, diff, lifecycle text, and
+external-upgrade verification helpers
+Intended owner: `CanisterControlClassV1`
+Affected surfaces: Rust internals only
+Release decision: fixed_in_0.83.26
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/report/canisters.rs`
+- line or anchor: `planned_canister_evidence_label` and
+  `record_unsafe_canister_control_class`
+- module/function: canister report diff construction
+- command/search:
+  `rg -n "control_class=\\{:\\?\\}|control=\\{:\\?\\}|Some\\(\"DeploymentControlled\"\\.to_string\\(\\)\\)" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active deployment-truth canister diff construction and safety
+  finding generation
+- exact issue: planned-canister evidence labels formatted
+  `CanisterControlClassV1` with `Debug`, and unsafe canister control-class
+  diffs carried a duplicate expected `DeploymentControlled` label literal
+  instead of consuming an inventory model-owned label.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/report/pools.rs`
+- line or anchor: `record_unsafe_pool_control_class`
+- module/function: pool report diff construction
+- command/search:
+  `rg -n "Some\\(\"CanicManagedPool\"\\.to_string\\(\\)|format!\\(\\\"\\{:\\?\\}\\\", observed\\.control_class\\)" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active deployment-truth pool diff construction and safety
+  finding generation
+- exact issue: unsafe pool control-class diffs carried a duplicate expected
+  `CanicManagedPool` label literal and formatted observed control classes with
+  `Debug`.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/multi/diff.rs`
+- line or anchor: `control_class_counts`
+- module/function: multi-deployment inventory summary construction
+- command/search:
+  `rg -n "format!\\(\\\"\\{:\\?\\}\\\", canister\\.control_class\\)" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active multi-deployment diff summary construction
+- exact issue: inventory summary grouping depended on enum `Debug` output for
+  control-class labels.
+
+Evidence:
+- file:
+  `crates/canic-host/src/deployment_truth/lifecycle/external_upgrade/verification/shared/mod.rs`
+- line or anchor: `control_class_value`
+- module/function: external-upgrade verification summary helper
+- command/search:
+  `rg -n "format!\\(\\\"\\{control_class:\\?\\}\\\"" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active external-upgrade verification summary construction
+- exact issue: verification summaries depended on enum `Debug` output for
+  control-class labels.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/lifecycle/shared/mod.rs`
+- line or anchor: `control_class={:?}`
+- module/function:
+  `append_external_lifecycle_role_items` and
+  `append_lifecycle_authority_items`
+- command/search:
+  `rg -n "control_class=\\{:\\?\\}" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active external lifecycle and lifecycle authority text
+  rendering
+- exact issue: lifecycle text output depended on enum `Debug` output for
+  control-class labels.
+
+Risk:
+
+Low. The current labels are operator/report text and diff values, but using
+`Debug` ties those labels to Rust variant names and duplicating expected labels
+creates drift risk between inventory model semantics, report construction, and
+text rendering.
+
+Recommendation:
+
+Move the exact current labels onto `CanisterControlClassV1` with a `label()`
+method. Have report builders, diff summaries, lifecycle text renderers, and
+external-upgrade verification helpers consume that owner-defined label instead
+of formatting variants with `Debug` or duplicating literals.
+
+Regression test:
+
+Pin every `CanisterControlClassV1` label in the inventory model tests, then run
+deployment-truth host tests to confirm report, diff, lifecycle, and
+verification consumers compile and preserve existing output labels.
+
+Resolution:
+
+- Added `CanisterControlClassV1::label()` with the exact labels previously
+  emitted by `Debug` formatting and duplicate literals.
+- Added a focused inventory model test that pins every control-class label.
+- Replaced control-class `Debug` formatting in canister evidence labels,
+  multi-deployment inventory summaries, external lifecycle text rendering, and
+  external-upgrade verification summaries with calls to the model-owned labels.
+- Replaced duplicate expected `DeploymentControlled` and `CanicManagedPool`
+  diff labels with `CanisterControlClassV1` owner-defined labels.
+- Kept operator text output labels, diff values, command behavior, endpoint
+  surfaces, Candid, JSON schemas, deployment truth schema, evidence/report
+  schemas, and stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted deployment-truth control-class label ownership cleanup. |
+| `cargo check --locked -p canic-host` | pass | Checked the affected host package. |
+| `cargo test --locked -p canic-host deployment_truth --lib` | pass | 448 deployment-truth tests passed, including the new control-class label-owner test. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for the affected host package. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-033: External Lifecycle Text Owns Model Enum Labels
+
+Severity: P3
+Category: host / deployment_truth / lifecycle / model_labels / text_renderer
+Status: fixed
+Owner: deployment-truth external lifecycle labels
+Current location: deployment-truth external lifecycle text shared helpers
+Intended owner: deployment-truth external lifecycle model enums
+Affected surfaces: Rust internals only
+Release decision: fixed_in_0.83.26
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/lifecycle/shared/mod.rs`
+- line or anchor:
+  `lifecycle_mode_label`, `consent_channel_label`,
+  `consent_subject_label`, and `verification_requirement_label`
+- module/function: external lifecycle shared text renderer helpers
+- command/search:
+  `rg -n "lifecycle_mode_label|consent_channel_label|consent_subject_label|verification_requirement_label" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active external lifecycle role, authority, proposal, pending,
+  handoff, and verification requirement text rendering
+- exact issue: lifecycle text helpers locally matched `LifecycleModeV1`,
+  `ConsentChannelKindV1`, `ConsentSubjectKindV1`, and
+  `LifecycleVerificationRequirementV1` variants into stable text labels instead
+  of consuming model-owned labels.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/lifecycle/shared/mod.rs`
+- line or anchor:
+  `external_upgrade_consent_state_label`,
+  `external_upgrade_verification_result_label`, and
+  `external_verification_observation_source_label`
+- module/function: external lifecycle shared text renderer helpers
+- command/search:
+  `rg -n "external_upgrade_consent_state_label|external_upgrade_verification_result_label|external_verification_observation_source_label" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active external lifecycle consent evidence, receipt,
+  completion, verification report, verification check, and verification policy
+  text rendering
+- exact issue: lifecycle text helpers locally matched
+  `ExternalUpgradeConsentStateV1`, `ExternalUpgradeVerificationResultV1`, and
+  `ExternalVerificationObservationSourceV1` variants into stable text labels
+  instead of consuming model-owned labels.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/lifecycle/verification/mod.rs`
+- line or anchor: `observation.observed_control_class`
+- module/function: `external_upgrade_verification_check_text`
+- command/search:
+  `rg -n "observed_control_class.*format!\\(\\\"\\{value:\\?\\}\\\"|format!\\(\\\"\\{value:\\?\\}\\\"" crates/canic-host/src/deployment_truth -g '*.rs'`
+- reachability: active external-upgrade verification check text rendering
+- exact issue: observed control-class text depended on enum `Debug` output
+  instead of consuming the inventory model-owned label.
+
+Risk:
+
+Low. These labels were already stable operator text, but text-owned label
+helpers duplicate lifecycle model semantics and can drift from JSON/report
+models if variants are renamed or new variants are added.
+
+Recommendation:
+
+Move the exact current external lifecycle labels onto the lifecycle model enums
+with `label()` methods. Have lifecycle text renderers consume those
+owner-defined labels instead of maintaining local helper matches.
+
+Regression test:
+
+Pin every affected external lifecycle enum label in the lifecycle model tests,
+then run deployment-truth host tests to confirm lifecycle text consumers
+preserve existing output labels.
+
+Resolution:
+
+- Added `label()` methods to `LifecycleModeV1`,
+  `LifecycleVerificationRequirementV1`, `ConsentSubjectKindV1`,
+  `ConsentChannelKindV1`, `ExternalUpgradeConsentStateV1`,
+  `ExternalUpgradeVerificationResultV1`, and
+  `ExternalVerificationObservationSourceV1`.
+- Added focused lifecycle model tests that pin every moved text label.
+- Removed duplicate lifecycle label helper functions from the shared lifecycle
+  text renderer.
+- Replaced external lifecycle role/proposal/handoff, consent-evidence, receipt,
+  completion, verification-policy, and verification-check text call sites with
+  calls to model-owned labels.
+- Replaced observed control-class `Debug` formatting in external-upgrade
+  verification check text with the inventory model-owned label.
+- Kept operator text output labels, command behavior, endpoint surfaces,
+  Candid, JSON schemas, deployment truth schema, evidence/report schemas, and
+  stable-state layout unchanged.
+
+Fix validation:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | Formatted deployment-truth lifecycle label ownership cleanup. |
+| `cargo check --locked -p canic-host` | pass | Checked the affected host package. |
+| `cargo test --locked -p canic-host deployment_truth --lib` | pass | Deployment-truth tests passed, including the new lifecycle label-owner tests. |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | Clippy passed for the affected host package. |
+| `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
+| `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
+| `git diff --check` | pass | Whitespace diff check passed. |
+
 ## Rejected / Non-Findings
 
 See `rejected.md`.
