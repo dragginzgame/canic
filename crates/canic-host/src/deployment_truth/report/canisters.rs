@@ -250,10 +250,10 @@ fn compare_planned_canister_conflicts(
 
 fn planned_canister_evidence_label(planned: &ExpectedCanisterV1) -> String {
     format!(
-        "role={};id={};control={:?}",
+        "role={};id={};control={}",
         planned.role,
         planned.canister_id.as_deref().unwrap_or("<none>"),
-        planned.control_class
+        planned.control_class.label()
     )
 }
 
@@ -308,8 +308,12 @@ fn record_unsafe_canister_control_class(
     controller_diff.push(diff_item(
         CONTROL_CLASS_DIFF_CATEGORY,
         &expected.role,
-        Some("DeploymentControlled".to_string()),
-        Some(format!("{:?}", observed.control_class)),
+        Some(
+            CanisterControlClassV1::DeploymentControlled
+                .label()
+                .to_string(),
+        ),
+        Some(observed.control_class.label().to_string()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(

@@ -1,9 +1,5 @@
 use super::super::super::*;
 use super::super::{append_string_items, optional_text};
-use super::shared::{
-    external_upgrade_consent_state_label, external_upgrade_verification_result_label,
-    external_verification_observation_source_label,
-};
 
 /// Render an external-upgrade completion report as passive operator text.
 #[must_use]
@@ -27,17 +23,14 @@ pub fn external_upgrade_completion_report_text(
             "canister_id: {}",
             optional_text(report.canister_id.as_deref())
         ),
-        format!(
-            "consent_state: {}",
-            external_upgrade_consent_state_label(report.consent_state)
-        ),
+        format!("consent_state: {}", report.consent_state.label()),
         format!(
             "verification_result: {}",
-            external_upgrade_verification_result_label(report.verification_result)
+            report.verification_result.label()
         ),
         format!(
             "verification_observation_source: {}",
-            external_verification_observation_source_label(report.verification_observation_source)
+            report.verification_observation_source.label()
         ),
         format!("completion_status: {}", report.completion_status.label()),
         format!("summary: {}", report.status_summary),

@@ -96,6 +96,20 @@ pub enum CanisterControlClassV1 {
     UnknownUnsafe,
 }
 
+impl CanisterControlClassV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::DeploymentControlled => "DeploymentControlled",
+            Self::CanicManagedPool => "CanicManagedPool",
+            Self::ExternallyImported => "ExternallyImported",
+            Self::JointlyControlled => "JointlyControlled",
+            Self::UserControlled => "UserControlled",
+            Self::UnknownUnsafe => "UnknownUnsafe",
+        }
+    }
+}
+
 ///
 /// ExpectedPoolCanisterV1
 ///
@@ -197,6 +211,34 @@ mod tests {
         assert_eq!(
             DeploymentRootObservationSourceV1::LocalDeploymentState.label(),
             "LocalDeploymentState"
+        );
+    }
+
+    #[test]
+    fn canister_control_class_owns_text_labels() {
+        assert_eq!(
+            CanisterControlClassV1::DeploymentControlled.label(),
+            "DeploymentControlled"
+        );
+        assert_eq!(
+            CanisterControlClassV1::CanicManagedPool.label(),
+            "CanicManagedPool"
+        );
+        assert_eq!(
+            CanisterControlClassV1::ExternallyImported.label(),
+            "ExternallyImported"
+        );
+        assert_eq!(
+            CanisterControlClassV1::JointlyControlled.label(),
+            "JointlyControlled"
+        );
+        assert_eq!(
+            CanisterControlClassV1::UserControlled.label(),
+            "UserControlled"
+        );
+        assert_eq!(
+            CanisterControlClassV1::UnknownUnsafe.label(),
+            "UnknownUnsafe"
         );
     }
 }

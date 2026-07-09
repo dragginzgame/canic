@@ -68,7 +68,7 @@ pub(super) const fn external_upgrade_verification_summary(
 }
 
 pub(super) fn control_class_value(control_class: CanisterControlClassV1) -> String {
-    format!("{control_class:?}")
+    control_class.label().to_string()
 }
 
 fn external_upgrade_observation_matches(expected: Option<&str>, observed: Option<&str>) -> bool {

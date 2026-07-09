@@ -14,12 +14,25 @@ before this compaction is archived at
 - The active line is `0.83.x` technical debt audit. Source of truth:
   `docs/design/0.83-technical-debt/0.83-design.md`.
 
-- The current package/release-surface version is `0.83.24`. Earlier in the
+- The current package/release-surface version is `0.83.25`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.25` working slice fixes `CANIC-083-DEBT-031` by
+- The current `0.83.26` working slice fixes `CANIC-083-DEBT-032` by
+  tightening deployment-truth control-class label ownership and
+  `CANIC-083-DEBT-033` by tightening external lifecycle label ownership.
+  `CanisterControlClassV1` now owns the exact control-class labels used by
+  canister/pool report diffs, multi-deployment inventory summaries, external
+  lifecycle text, and external-upgrade verification summaries. External
+  lifecycle mode, consent state, verification result, observation source,
+  consent subject/channel, and verification requirement enums now own the
+  exact labels used by lifecycle report text. Operator text output labels,
+  diff values, command behavior, endpoint surfaces, Candid, JSON schemas,
+  deployment truth schema, evidence/report schemas, and stable-state layout
+  are unchanged.
+
+- The `0.83.25` slice fixes `CANIC-083-DEBT-031` by
   tightening deployment-root verification text label ownership. Root
   verification source, evidence status, state transition, root verification
   state, and root observation source enums now own the exact labels used by

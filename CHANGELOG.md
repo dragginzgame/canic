@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.26` tightens deployment-truth control-class and external lifecycle
+  label ownership by moving control-class, lifecycle-mode, consent,
+  verification, observation-source, consent subject/channel, and verification
+  requirement labels onto their model enum owners while preserving operator
+  text output labels, diff values, command behavior, JSON schemas, and
+  deployment truth schema.
+
 - `0.83.25` tightens deployment-root verification text label ownership by
   moving source, evidence-status, state-transition, root-verification-state,
   and root-observation-source labels onto the deployment-truth model enums and

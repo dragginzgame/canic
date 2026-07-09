@@ -122,6 +122,16 @@ pub enum ExternalVerificationObservationSourceV1 {
     DeploymentTruthInventory,
 }
 
+impl ExternalVerificationObservationSourceV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::SuppliedObservation => "supplied_observation",
+            Self::DeploymentTruthInventory => "deployment_truth_inventory",
+        }
+    }
+}
+
 ///
 /// ExternalUpgradeVerificationCheckV1
 ///
@@ -179,6 +189,18 @@ mod tests {
         assert_eq!(
             ExternalUpgradeVerificationRequirementStatusV1::NotRequired.label(),
             "not_required"
+        );
+    }
+
+    #[test]
+    fn external_verification_observation_source_owns_text_labels() {
+        assert_eq!(
+            ExternalVerificationObservationSourceV1::SuppliedObservation.label(),
+            "supplied_observation"
+        );
+        assert_eq!(
+            ExternalVerificationObservationSourceV1::DeploymentTruthInventory.label(),
+            "deployment_truth_inventory"
         );
     }
 }

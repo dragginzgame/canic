@@ -1,8 +1,5 @@
 use super::super::super::*;
 use super::super::optional_text;
-use super::shared::{
-    external_upgrade_consent_state_label, external_upgrade_verification_result_label,
-};
 
 /// Render an external-upgrade receipt as passive operator text.
 #[must_use]
@@ -21,13 +18,10 @@ pub fn external_upgrade_receipt_text(receipt: &ExternalUpgradeReceiptV1) -> Stri
             "canister_id: {}",
             optional_text(receipt.canister_id.as_deref())
         ),
-        format!(
-            "consent_state: {}",
-            external_upgrade_consent_state_label(receipt.consent_state)
-        ),
+        format!("consent_state: {}", receipt.consent_state.label()),
         format!(
             "verification_result: {}",
-            external_upgrade_verification_result_label(receipt.verification_result)
+            receipt.verification_result.label()
         ),
         format!(
             "reported_by: {}",

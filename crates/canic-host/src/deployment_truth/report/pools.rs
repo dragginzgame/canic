@@ -390,8 +390,8 @@ fn record_unsafe_pool_control_class(
     pool_diff.push(diff_item(
         POOL_CONTROL_CLASS_DIFF_CATEGORY,
         &subject,
-        Some("CanicManagedPool".to_string()),
-        Some(format!("{:?}", observed.control_class)),
+        Some(CanisterControlClassV1::CanicManagedPool.label().to_string()),
+        Some(observed.control_class.label().to_string()),
         SafetySeverityV1::HardFailure,
     ));
     hard_failures.push(finding(
