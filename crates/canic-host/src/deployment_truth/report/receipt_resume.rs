@@ -1,6 +1,6 @@
 use super::super::*;
 use super::{
-    compare_plan_to_inventory, duplicate_evidence_groups, finding, resume_safety_reasons,
+    compare_plan_to_inventory, duplicate_evidence_groups_by, finding, resume_safety_reasons,
     safety_status,
 };
 use std::collections::BTreeSet;
@@ -19,6 +19,23 @@ const RECEIPT_ROOT_MISMATCH_CODE: &str = "receipt_root_mismatch";
 const RECEIPT_FAILED_COMMAND_CODE: &str = "receipt_failed_command";
 pub(in crate::deployment_truth) const RECEIPT_EXECUTION_STATUS_MISMATCH_CODE: &str =
     "receipt_execution_status_mismatch";
+
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+struct PhaseReceiptEvidenceKey {
+    status: &'static str,
+    evidence: Vec<String>,
+}
+
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+struct RolePhaseReceiptEvidenceKey {
+    result: &'static str,
+    previous_module_hash: Option<String>,
+    target_module_hash: Option<String>,
+    observed_module_hash_after: Option<String>,
+    artifact_digest: Option<String>,
+    canonical_embedded_config_sha256: Option<String>,
+    error: Option<String>,
+}
 
 /// Compare intended state, observed inventory, and a prior receipt into a
 /// resume-aware deployment diff.
@@ -90,9 +107,10 @@ fn validate_receipt_phase_duplicates(
     warnings: &mut Vec<SafetyFindingV1>,
 ) -> BTreeSet<String> {
     let mut conflicting_phases = BTreeSet::new();
-    for group in duplicate_evidence_groups(
+    for group in duplicate_evidence_groups_by(
         &receipt.phase_receipts,
         |phase_receipt| phase_receipt.phase.as_str().to_string(),
+        receipt_phase_evidence_key,
         receipt_phase_evidence_label,
         " | ",
     ) {
@@ -122,10 +140,17 @@ fn validate_receipt_phase_duplicates(
     conflicting_phases
 }
 
+fn receipt_phase_evidence_key(receipt: &PhaseReceiptV1) -> PhaseReceiptEvidenceKey {
+    PhaseReceiptEvidenceKey {
+        status: receipt.verified_postcondition.status.label(),
+        evidence: receipt.verified_postcondition.evidence.clone(),
+    }
+}
+
 fn receipt_phase_evidence_label(receipt: &PhaseReceiptV1) -> String {
     format!(
-        "status={:?};evidence={}",
-        receipt.verified_postcondition.status,
+        "status={};evidence={}",
+        receipt.verified_postcondition.status.label(),
         receipt.verified_postcondition.evidence.join(",")
     )
 }
@@ -136,9 +161,10 @@ fn validate_receipt_role_phase_duplicates(
     warnings: &mut Vec<SafetyFindingV1>,
 ) -> BTreeSet<String> {
     let mut conflicting_phases = BTreeSet::new();
-    for group in duplicate_evidence_groups(
+    for group in duplicate_evidence_groups_by(
         &receipt.role_phase_receipts,
         role_phase_subject,
+        role_phase_evidence_key,
         role_phase_evidence_label,
         " | ",
     ) {
@@ -178,10 +204,22 @@ fn role_phase_subject(receipt: &RolePhaseReceiptV1) -> String {
     format!("{}:{}", receipt.role, receipt.phase)
 }
 
+fn role_phase_evidence_key(receipt: &RolePhaseReceiptV1) -> RolePhaseReceiptEvidenceKey {
+    RolePhaseReceiptEvidenceKey {
+        result: receipt.result.label(),
+        previous_module_hash: receipt.previous_module_hash.clone(),
+        target_module_hash: receipt.target_module_hash.clone(),
+        observed_module_hash_after: receipt.observed_module_hash_after.clone(),
+        artifact_digest: receipt.artifact_digest.clone(),
+        canonical_embedded_config_sha256: receipt.canonical_embedded_config_sha256.clone(),
+        error: receipt.error.clone(),
+    }
+}
+
 fn role_phase_evidence_label(receipt: &RolePhaseReceiptV1) -> String {
     format!(
-        "result={:?};previous={};target={};observed={};artifact={};config={};error={}",
-        receipt.result,
+        "result={};previous={};target={};observed={};artifact={};config={};error={}",
+        receipt.result.label(),
         receipt.previous_module_hash.as_deref().unwrap_or("<none>"),
         receipt.target_module_hash.as_deref().unwrap_or("<none>"),
         receipt

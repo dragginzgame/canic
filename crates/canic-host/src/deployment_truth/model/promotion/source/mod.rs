@@ -102,6 +102,14 @@ impl PromotionReadinessStatusV1 {
             Self::Blocked => "blocked",
         }
     }
+
+    #[must_use]
+    pub const fn variant_label(self) -> &'static str {
+        match self {
+            Self::Ready => "Ready",
+            Self::Blocked => "Blocked",
+        }
+    }
 }
 
 ///
@@ -140,16 +148,6 @@ pub enum PreviousArtifactReceiptKindV1 {
     StagingReceipt,
 }
 
-impl PreviousArtifactReceiptKindV1 {
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::DeploymentReceipt => "DeploymentReceipt",
-            Self::StagingReceipt => "StagingReceipt",
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +169,11 @@ mod tests {
     fn promotion_readiness_status_owns_text_labels() {
         assert_eq!(PromotionReadinessStatusV1::Ready.label(), "ready");
         assert_eq!(PromotionReadinessStatusV1::Blocked.label(), "blocked");
+        assert_eq!(PromotionReadinessStatusV1::Ready.variant_label(), "Ready");
+        assert_eq!(
+            PromotionReadinessStatusV1::Blocked.variant_label(),
+            "Blocked"
+        );
     }
 
     #[test]
@@ -192,18 +195,6 @@ mod tests {
         assert_eq!(
             RoleArtifactSourceKindV1::CanonicalWasmStoreDefault.label(),
             "CanonicalWasmStoreDefault"
-        );
-    }
-
-    #[test]
-    fn previous_artifact_receipt_kind_owns_text_labels() {
-        assert_eq!(
-            PreviousArtifactReceiptKindV1::DeploymentReceipt.label(),
-            "DeploymentReceipt"
-        );
-        assert_eq!(
-            PreviousArtifactReceiptKindV1::StagingReceipt.label(),
-            "StagingReceipt"
         );
     }
 }

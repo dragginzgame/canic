@@ -304,6 +304,8 @@ fn artifact_promotion_execution_receipt_text_reports_execution_summary() {
     assert!(text.contains("promoted_plan_id: promoted-plan-1"));
     assert!(text.contains("operation_id: promoted-operation-1"));
     assert!(text.contains("provenance_status: ready"));
+    assert!(text.contains("operation_status: Complete"));
+    assert!(text.contains("command_result: Succeeded"));
     assert!(text.contains("deployment_phase_receipts: 1"));
     assert!(text.contains("root SealedWasm: result=Applied"));
     assert!(text.contains("catalog_digest="));

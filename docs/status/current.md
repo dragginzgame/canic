@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-09
+Last updated: 2026-07-10
 
 ## Purpose
 
@@ -11,23 +11,38 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.83.x` technical debt audit. Source of truth:
-  `docs/design/0.83-technical-debt/0.83-design.md`.
+- The active line is `0.83.x` technical debt audit closeout. Design:
+  `docs/design/0.83-technical-debt/0.83-design.md`. Canonical result:
+  `docs/audits/0.83-technical-debt/ledger.md`, which is `pass` with all 37
+  findings fixed and no deferred findings.
 
-- The current package/release-surface version is `0.83.26`. Earlier in the
+- The current package/release-surface version is `0.83.27`. Earlier in the
   0.82 line, an accidental next-minor workspace/version-surface bump was
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current `0.83.27` working slice fixes `CANIC-083-DEBT-034` by
+- The current Unreleased 0.83 closeout batch fixes `CANIC-083-DEBT-035` through
+  `CANIC-083-DEBT-037`. Receipt-resume duplicate detection now compares typed
+  evidence so delimiter collisions fail closed. Promotion execution/status
+  text and staging evidence consume model-owned labels, and the unused public
+  `PreviousArtifactReceiptKindV1::label()` method is hard-cut. The canonical
+  ledger, recommended slices, and handoff now agree on package surface
+  `0.83.27` and `pass` status. Receipt/report JSON schemas, ordinary operator
+  output strings, command behavior, endpoints, Candid, deployment-truth
+  schema, evidence/report schemas, and stable-state layout are unchanged.
+
+- The released `0.83.27` slice fixes `CANIC-083-DEBT-034` by
   tightening promotion artifact/policy label ownership. Promotion artifact
   level, artifact source kind, artifact identity kind, policy requirement,
-  policy claim, previous receipt kind, artifact transport, artifact source,
-  observation status, and role phase result enums now own the exact labels
-  used by promotion text renderers and promotion identity keys. Operator text
-  output labels, identity-key strings, command behavior, endpoint surfaces,
-  Candid, JSON schemas, deployment truth schema, evidence/report schemas, and
-  stable-state layout are unchanged.
+  policy claim, artifact source, observation status, and role phase result
+  enums own the exact labels used by promotion text renderers and promotion
+  identity keys. That release also introduced artifact-transport and previous-
+  receipt-kind label methods; the current Unreleased closeout batch consumes
+  the transport label and removes the previous-receipt-kind method because it
+  had no production consumer. Operator text output labels, identity-key
+  strings, command behavior, endpoint surfaces, Candid, JSON schemas,
+  deployment truth schema, evidence/report schemas, and stable-state layout
+  are unchanged.
 
 - The `0.83.26` slice fixes `CANIC-083-DEBT-032` by
   tightening deployment-truth control-class label ownership and
@@ -1243,6 +1258,11 @@ before this compaction is archived at
 
 ## Open Work
 
+- No open or deferred 0.83 audit findings remain. The current Unreleased
+  closeout batch may proceed through maintainer-owned release preparation, or
+  development may move to the next feature line. Do not assign a patch version
+  unless the maintainer explicitly requests release preparation.
+
 - Continue 0.80 by expanding Rust-authored state declarations beyond the first
   root-family slice, then add more precise `*Data` snapshot declarations and
   migration coverage metadata. Do not add migration execution, stable-memory
@@ -1255,6 +1275,16 @@ before this compaction is archived at
   release preparation.
 
 ## Useful Validation
+
+Focused 0.83 closeout validation:
+
+```text
+cargo test --locked -p canic-host deployment_truth::tests::execution_receipts::resume --lib
+cargo test --locked -p canic-host promotion --lib
+cargo test --locked -p canic-host deployment_truth --lib
+cargo clippy --locked -p canic-host --all-targets -- -D warnings
+cargo test --locked -p canic --test changelog_governance
+```
 
 Focused 0.78 medic validation:
 
