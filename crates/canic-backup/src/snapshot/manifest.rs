@@ -61,7 +61,9 @@ pub fn build_snapshot_manifest(
                 .map(|(index, target)| {
                     deployment_member(
                         &input.selected_canister,
-                        Some(input.root_canister.as_str()).filter(|_| input.include_children),
+                        input
+                            .include_children
+                            .then_some(input.root_canister.as_str()),
                         index,
                         target,
                         input.artifacts,
