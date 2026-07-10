@@ -21,15 +21,16 @@ before this compaction is archived at
   corrected before patch work continued. A local stale next-minor tag was
   observed then, but it has not been deleted.
 
-- The current Unreleased 0.83 closeout batch fixes `CANIC-083-DEBT-035` through
-  `CANIC-083-DEBT-037`. Receipt-resume duplicate detection now compares typed
-  evidence so delimiter collisions fail closed. Promotion execution/status
-  text and staging evidence consume model-owned labels, and the unused public
-  `PreviousArtifactReceiptKindV1::label()` method is hard-cut. The canonical
-  ledger, recommended slices, and handoff now agree on package surface
-  `0.83.27` and `pass` status. Receipt/report JSON schemas, ordinary operator
-  output strings, command behavior, endpoints, Candid, deployment-truth
-  schema, evidence/report schemas, and stable-state layout are unchanged.
+- The current `0.83.28` release-preparation batch fixes
+  `CANIC-083-DEBT-035` through `CANIC-083-DEBT-037`. Receipt-resume duplicate
+  detection now compares typed evidence so delimiter collisions fail closed.
+  Promotion execution/status text and staging evidence consume model-owned
+  labels, and the unused public `PreviousArtifactReceiptKindV1::label()` method
+  is hard-cut. The canonical ledger, recommended slices, and handoff now agree
+  on package surface `0.83.27` and `pass` status. Receipt/report JSON schemas,
+  ordinary operator output strings, command behavior, endpoints, Candid,
+  deployment-truth schema, evidence/report schemas, and stable-state layout are
+  unchanged.
 
 - The released `0.83.27` slice fixes `CANIC-083-DEBT-034` by
   tightening promotion artifact/policy label ownership. Promotion artifact
@@ -37,7 +38,7 @@ before this compaction is archived at
   policy claim, artifact source, observation status, and role phase result
   enums own the exact labels used by promotion text renderers and promotion
   identity keys. That release also introduced artifact-transport and previous-
-  receipt-kind label methods; the current Unreleased closeout batch consumes
+  receipt-kind label methods; the 0.83.28 closeout batch consumes
   the transport label and removes the previous-receipt-kind method because it
   had no production consumer. Operator text output labels, identity-key
   strings, command behavior, endpoint surfaces, Candid, JSON schemas,
@@ -1258,10 +1259,10 @@ before this compaction is archived at
 
 ## Open Work
 
-- No open or deferred 0.83 audit findings remain. The current Unreleased
-  closeout batch may proceed through maintainer-owned release preparation, or
-  development may move to the next feature line. Do not assign a patch version
-  unless the maintainer explicitly requests release preparation.
+- No open or deferred 0.83 audit findings remain. The 0.83.28 changelog entry
+  is prepared; the package surface remains 0.83.27 until the maintainer-owned
+  version bump and release flow runs. Development may then move to the next
+  feature line.
 
 - Continue 0.80 by expanding Rust-authored state declarations beyond the first
   root-family slice, then add more precise `*Data` snapshot declarations and
