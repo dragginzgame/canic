@@ -18,9 +18,14 @@ use crate::{
     version_text,
 };
 use canic_core::state_contract::StateManifest;
-use canic_host::state_manifest::{
-    STATE_AUDIT_COMMAND, STATE_MANIFEST_COMMAND, StateAuditReport, StateAuditStatus,
-    build_state_audit_report, declared_state_manifest,
+use canic_host::{
+    icp_config::resolve_current_canic_icp_root,
+    install_root::discover_project_canic_config_choices,
+    role_contract::finding_detail,
+    state_manifest::{
+        STATE_AUDIT_COMMAND, STATE_MANIFEST_COMMAND, StateAuditReport, StateAuditStatus,
+        StateManifestResolution, build_state_audit_report, resolve_project_state_manifest,
+    },
 };
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -76,13 +81,16 @@ pub enum StateCommandError {
 
     #[error("state audit failed")]
     AuditFailed,
+
+    #[error("state contract resolution failed: {0}")]
+    ContractRejected(String),
 }
 
 impl StateCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
             Self::Usage(_) | Self::Json(_) => 2,
-            Self::AuditFailed => 1,
+            Self::AuditFailed | Self::ContractRejected(_) => 1,
         }
     }
 
@@ -157,7 +165,8 @@ fn run_audit(args: Vec<OsString>) -> Result<(), StateCommandError> {
     }
 
     let options = StateOptions::parse_audit(args)?;
-    let report = build_state_audit_report(options.role.as_deref());
+    let resolution = project_state_resolution(options.role.as_deref())?;
+    let report = build_state_audit_report(&resolution, options.role.as_deref());
     if options.json {
         println!("{}", render_json(&report)?);
     } else {
@@ -175,13 +184,39 @@ fn run_manifest(args: Vec<OsString>) -> Result<(), StateCommandError> {
     }
 
     let options = StateOptions::parse_manifest(args)?;
-    let manifest = declared_state_manifest(options.role.as_deref());
+    let resolution = project_state_resolution(options.role.as_deref())?;
+    let manifest = match resolution {
+        StateManifestResolution::Resolved { manifest, .. } => manifest,
+        StateManifestResolution::Rejected { errors } => {
+            return Err(StateCommandError::ContractRejected(
+                errors
+                    .iter()
+                    .map(|finding| format!("{}: {}", finding.code(), finding_detail(finding)))
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            ));
+        }
+    };
     if options.json {
         println!("{}", render_json(&manifest)?);
     } else {
         println!("{}", render_manifest_text(&manifest));
     }
     Ok(())
+}
+
+fn project_state_resolution(
+    role: Option<&str>,
+) -> Result<StateManifestResolution, StateCommandError> {
+    let project_root = resolve_current_canic_icp_root()
+        .map_err(|error| StateCommandError::ContractRejected(error.to_string()))?;
+    let configs = discover_project_canic_config_choices(&project_root)
+        .map_err(|error| StateCommandError::ContractRejected(error.to_string()))?;
+    Ok(resolve_project_state_manifest(
+        &project_root,
+        &configs,
+        role,
+    ))
 }
 
 fn render_json<T: serde::Serialize>(value: &T) -> Result<String, StateCommandError> {
@@ -215,7 +250,7 @@ fn audit_command() -> ClapCommand {
             crate::cli::clap::value_arg(ROLE_ARG)
                 .long(ROLE_ARG)
                 .value_name("role")
-                .help("Limit the report to one declared canister role"),
+                .help("Limit the report to one canister role"),
         )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
         .after_help(AUDIT_HELP_AFTER)
@@ -230,7 +265,7 @@ fn manifest_command() -> ClapCommand {
             crate::cli::clap::value_arg(ROLE_ARG)
                 .long(ROLE_ARG)
                 .value_name("role")
-                .help("Limit the manifest to one declared canister role"),
+                .help("Limit the manifest to one canister role"),
         )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
         .after_help(MANIFEST_HELP_AFTER)

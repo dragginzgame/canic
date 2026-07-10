@@ -5,7 +5,7 @@ use toml::Value as TomlValue;
 use crate::{
     cargo_command,
     evidence_envelope::{file_input_fingerprint, sha256_hex},
-    release_set::canister_manifest_path,
+    role_contract::{declared_role_manifest_path, finding_detail},
 };
 
 use super::{
@@ -16,7 +16,9 @@ use super::{
 pub(super) fn cargo_provenance(
     request: &BuildProvenanceRequest,
 ) -> Result<CargoProvenanceV1, Box<dyn std::error::Error>> {
-    let package_manifest = canister_manifest_path(&request.workspace_root, &request.role)?;
+    let role = canic_core::ids::CanisterRole::owned(request.role.clone());
+    let package_manifest = declared_role_manifest_path(&request.config_path, &role)
+        .map_err(|finding| finding_detail(&finding))?;
     let manifest_source = fs::read_to_string(&package_manifest)?;
     let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
     let cargo_lock_path = request.workspace_root.join("Cargo.lock");

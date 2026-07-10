@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.84.x] - 2026-07-10 - Role-Aware State Contracts
+
+Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
+
+- `0.84.0` makes exact package-resolved role contracts authoritative across
+  build, medic, release views, and state reporting, with fail-closed package and
+  descriptor validation while preserving stable-memory IDs and encodings.
+
 ## [0.83.x] - 2026-07-08 - Technical Debt Audit
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)

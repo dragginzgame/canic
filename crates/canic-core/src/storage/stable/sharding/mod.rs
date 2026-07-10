@@ -6,13 +6,8 @@ use crate::{
         structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
         types::{BoundedString64, BoundedString128},
     },
-    storage::{
-        prelude::*,
-        stable::{
-            memory::placement::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
-            sharding::registry::ShardingRegistry,
-        },
-    },
+    role_contract::allocation::memory::placement::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
+    storage::{prelude::*, stable::sharding::registry::ShardingRegistry},
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;

@@ -10,14 +10,9 @@
 /// Gateway liveness/deletion endpoints use the protocol's own gateway-principal
 /// checks and do not run through the product frontend auth path.
 #[macro_export]
+#[cfg(feature = "blob-storage")]
 macro_rules! canic_emit_blob_storage_endpoints {
     (guard = $guard:expr $(,)?) => {
-        #[cfg(not(feature = "blob-storage"))]
-        compile_error!(
-            "canic_emit_blob_storage_endpoints! requires the canic facade feature \"blob-storage\""
-        );
-
-        #[cfg(feature = "blob-storage")]
         #[$crate::canic_query(internal, public, name = "_immutableObjectStorageBlobsAreLive")]
         fn canic_blob_storage_blobs_are_live(hash_bytes_list: Vec<Vec<u8>>) -> Vec<bool> {
             $crate::__internal::core::api::blob_storage::BlobStorageApi::blobs_are_live(
@@ -25,7 +20,6 @@ macro_rules! canic_emit_blob_storage_endpoints {
             )
         }
 
-        #[cfg(feature = "blob-storage")]
         #[$crate::canic_query(internal, public, name = "_immutableObjectStorageBlobsToDelete")]
         fn canic_blob_storage_blobs_to_delete() -> Vec<String> {
             let caller = $crate::cdk::api::msg_caller();
@@ -34,7 +28,6 @@ macro_rules! canic_emit_blob_storage_endpoints {
             )
         }
 
-        #[cfg(feature = "blob-storage")]
         #[$crate::canic_update(internal, public, name = "_immutableObjectStorageConfirmBlobDeletion")]
         fn canic_blob_storage_confirm_blob_deletion(hash_bytes_list: Vec<Vec<u8>>) {
             let caller = $crate::cdk::api::msg_caller();
@@ -44,7 +37,6 @@ macro_rules! canic_emit_blob_storage_endpoints {
             );
         }
 
-        #[cfg(feature = "blob-storage")]
         #[$crate::canic_update(requires($guard), name = "_immutableObjectStorageCreateCertificate")]
         async fn canic_blob_storage_create_certificate(
             root_hash: String,
@@ -59,6 +51,16 @@ macro_rules! canic_emit_blob_storage_endpoints {
     };
     ($($tt:tt)+) => {
         compile_error!("canic_emit_blob_storage_endpoints! syntax is guard = <access expression>");
+    };
+}
+
+#[macro_export]
+#[cfg(not(feature = "blob-storage"))]
+macro_rules! canic_emit_blob_storage_endpoints {
+    ($($tt:tt)*) => {
+        compile_error!(
+            "canic_emit_blob_storage_endpoints! requires the canic facade feature \"blob-storage\""
+        );
     };
 }
 

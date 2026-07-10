@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
+use crate::role_contract::{declared_role_manifest_path, finding_detail};
+
 use super::{
     build_release_set_entry, config_path, configured_release_roles, load_root_package_version,
-    resolve_artifact_root, root_manifest_path, root_release_set_manifest_path,
-    workspace_manifest_path,
+    resolve_artifact_root, root_release_set_manifest_path, workspace_manifest_path,
 };
 
 ///
@@ -51,7 +52,9 @@ pub fn emit_root_release_set_manifest_with_config(
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let artifact_root = resolve_artifact_root(icp_root, network)?;
     let manifest_path = root_release_set_manifest_path(&artifact_root)?;
-    let root_manifest_path = root_manifest_path(workspace_root)?;
+    let root_manifest_path =
+        declared_role_manifest_path(config_path, &canic_core::ids::CanisterRole::ROOT)
+            .map_err(|finding| finding_detail(&finding))?;
     let release_version = load_root_package_version(
         &root_manifest_path,
         &workspace_manifest_path(workspace_root),

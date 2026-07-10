@@ -20,9 +20,9 @@ pub(super) use projection::{
     configured_deployable_roles_from_source, configured_fleet_name_from_source,
     configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
     configured_release_roles_from_source, configured_role_auto_create_from_source,
-    configured_role_capabilities_from_source, configured_role_details_from_source,
-    configured_role_kinds_from_source, configured_role_lifecycle_from_source,
-    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+    configured_role_details_from_source, configured_role_kinds_from_source,
+    configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
+    configured_role_topups_from_source,
 };
 
 // Validate a package-backed role declaration without writing `canic.toml`.
@@ -219,8 +219,73 @@ pub fn configured_role_capabilities(
     config_path: &Path,
 ) -> Result<BTreeMap<String, Vec<String>>, Box<dyn std::error::Error>> {
     let config_source = fs::read_to_string(config_path)?;
-    configured_role_capabilities_from_source(&config_source)
-        .map_err(|err| format!("invalid {}: {err}", config_path.display()).into())
+    let config = canic_core::bootstrap::parse_config_model(&config_source)
+        .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
+    let mut projected = BTreeMap::new();
+
+    for role in config.attached_roles() {
+        let contract = match crate::role_contract::resolve_declared_role_contract(
+            config_path,
+            &role,
+            crate::role_contract::PackageValidationMode::Passive,
+        ) {
+            canic_core::role_contract::RoleContractResolution::Resolved { contract } => contract,
+            canic_core::role_contract::RoleContractResolution::Rejected { errors } => {
+                return Err(errors
+                    .iter()
+                    .map(|finding| {
+                        format!(
+                            "{}: {}",
+                            finding.code(),
+                            crate::role_contract::finding_detail(finding)
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ")
+                    .into());
+            }
+        };
+        let labels = project_role_capabilities(&contract.capabilities);
+        if !labels.is_empty() {
+            projected.insert(role.as_str().to_string(), labels);
+        }
+    }
+
+    Ok(projected)
+}
+
+pub(in crate::release_set) fn project_role_capabilities(
+    capabilities: &BTreeSet<canic_core::role_contract::RoleCapabilityKey>,
+) -> Vec<String> {
+    use canic_core::role_contract::RoleCapabilityKey;
+
+    let mut labels = BTreeSet::new();
+    for capability in capabilities {
+        match capability {
+            RoleCapabilityKey::DelegatedTokenIssuer
+            | RoleCapabilityKey::DelegatedTokenVerifier
+            | RoleCapabilityKey::RoleAttestationSigner
+            | RoleCapabilityKey::RoleAttestationVerifier => {
+                labels.insert("auth");
+            }
+            RoleCapabilityKey::Directory => {
+                labels.insert("directory");
+            }
+            RoleCapabilityKey::Icrc21 => {
+                labels.insert("icrc21");
+            }
+            RoleCapabilityKey::Scaling => {
+                labels.insert("scaling");
+            }
+            RoleCapabilityKey::Sharding => {
+                labels.insert("sharding");
+            }
+            RoleCapabilityKey::Root
+            | RoleCapabilityKey::RootControlPlane
+            | RoleCapabilityKey::WasmStore => {}
+        }
+    }
+    labels.into_iter().map(str::to_string).collect()
 }
 
 // Enumerate roles derived for root auto-create.

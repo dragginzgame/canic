@@ -1,6 +1,7 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-    storage::{prelude::*, stable::memory::env::SUBNET_STATE_ID},
+    role_contract::allocation::memory::env::SUBNET_STATE_ID,
+    storage::prelude::*,
 };
 use std::cell::RefCell;
 

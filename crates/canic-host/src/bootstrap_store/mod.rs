@@ -6,7 +6,12 @@ use crate::{
     cargo_metadata::{CargoMetadata, cargo_metadata},
     icp_environment_from_env,
     release_set::config_path,
-    remove_optional_file, should_export_candid_artifacts,
+    remove_optional_file,
+    role_contract::{
+        PackageValidationMode, RolePackageValidation, finding_detail,
+        resolve_built_in_wasm_store_contract, validate_built_in_wasm_store_package,
+    },
+    should_export_candid_artifacts,
 };
 use std::{
     fmt::Write as _,
@@ -78,6 +83,7 @@ pub fn build_bootstrap_wasm_store_artifact(
     profile: CanisterBuildProfile,
 ) -> Result<BootstrapWasmStoreBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_wasm_store_source(workspace_root, icp_root)?;
+    require_built_in_wasm_store_contract(&source.manifest_path)?;
     let artifact_root = icp_root.join(WASM_STORE_ARTIFACTS_RELATIVE);
     fs::create_dir_all(&artifact_root)?;
 
@@ -117,6 +123,27 @@ pub fn build_bootstrap_wasm_store_artifact(
         wasm_gz_path,
         did_path,
     })
+}
+
+fn require_built_in_wasm_store_contract(
+    manifest_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let evidence =
+        match validate_built_in_wasm_store_package(manifest_path, PackageValidationMode::Build) {
+            RolePackageValidation::Supported(evidence) => evidence,
+            RolePackageValidation::Unsupported(finding) => {
+                return Err(format!("{}: {}", finding.code(), finding_detail(&finding)).into());
+            }
+        };
+    match resolve_built_in_wasm_store_contract(&evidence) {
+        canic_core::role_contract::RoleContractResolution::Resolved { .. } => Ok(()),
+        canic_core::role_contract::RoleContractResolution::Rejected { errors } => Err(errors
+            .iter()
+            .map(|finding| format!("{}: {}", finding.code(), finding_detail(finding)))
+            .collect::<Vec<_>>()
+            .join("; ")
+            .into()),
+    }
 }
 
 // Resolve the canonical published/workspace `canic-wasm-store` source or fall
@@ -396,6 +423,10 @@ fn run_wasm_store_cargo_build(
     command
         .current_dir(workspace_root)
         .env("CANIC_CONFIG_PATH", config_path)
+        .env(
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+        )
         .args([
             "build",
             "--manifest-path",

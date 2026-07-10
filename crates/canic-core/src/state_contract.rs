@@ -9,24 +9,30 @@
 
 use serde::Serialize;
 
-use crate::storage::stable::memory::{
+use crate::role_contract::allocation::memory::{
     auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID, ROOT_REPLAY_ID},
+    blob_storage::{
+        BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
+        STORED_BLOBS_ID,
+    },
     env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
     intent::{INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID},
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
         LOG_DATA_ID, LOG_INDEX_ID,
     },
-    placement::{DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID},
+    placement::{
+        DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENT_ID,
+        SHARDING_REGISTRY_ID,
+    },
     pool::CANISTER_POOL_ID,
     topology::{
         APP_INDEX_ID, APP_REGISTRY_ID, CANISTER_CHILDREN_ID, SUBNET_INDEX_ID, SUBNET_REGISTRY_ID,
     },
 };
+use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
 pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 1;
-const ROOT_ROLE: &str = "root";
-const CANIC_CORE_OWNER: &str = "canic-core";
 
 ///
 /// StateManifest
@@ -177,41 +183,186 @@ pub struct ReservedMemoryManifest {
     pub reason: String,
 }
 
-#[must_use]
-pub fn canic_state_manifest() -> StateManifest {
-    let mut manifest = StateManifest {
-        schema_version: STATE_MANIFEST_SCHEMA_VERSION,
-        roles: vec![root_role_manifest()],
-    };
-    sort_manifest(&mut manifest);
-    manifest
+///
+/// StateAllocationDescriptor
+///
+/// Owner-provided state metadata for one active allocation key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StateAllocationDescriptor {
+    pub allocation: StateAllocationKey,
+    pub owner: AllocationOwner,
+    pub state: Vec<StateDomainManifest>,
+    pub removed_state: Vec<RemovedStateManifest>,
+    pub reserved_memory: Vec<ReservedMemoryManifest>,
 }
 
 #[must_use]
-pub fn canic_state_manifest_for_role(role: Option<&str>) -> StateManifest {
-    let mut manifest = canic_state_manifest();
-    if let Some(role) = role {
-        manifest
-            .roles
-            .retain(|entry| entry.canister_role.as_str() == role);
-    }
-    manifest
+pub fn canic_state_descriptors() -> Vec<StateAllocationDescriptor> {
+    let mut descriptors = core_root_descriptors();
+    descriptors.extend(sharding_descriptors());
+    descriptors.extend(blob_storage_descriptors());
+    descriptors
 }
 
-fn root_role_manifest() -> StateRoleManifest {
-    let mut state = Vec::new();
-    state.extend(root_topology_domains());
-    state.extend(root_env_domains());
-    state.extend(root_auth_domains());
-    state.extend(root_observability_domains());
-    state.extend(root_intent_domains());
-    state.extend(root_capacity_domains());
+fn core_root_descriptors() -> Vec<StateAllocationDescriptor> {
+    vec![
+        descriptor(
+            StateAllocationKey::CoreRootTopology,
+            root_topology_domains(),
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRootEnvironment,
+            root_env_domains(),
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRootAuth,
+            root_auth_domains(),
+            root_removed_state_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRootObservability,
+            root_observability_domains(),
+            Vec::new(),
+            root_reserved_memory_domains(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRootIntent,
+            root_intent_domains(),
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRootCapacity,
+            root_capacity_domains(),
+            Vec::new(),
+            Vec::new(),
+        ),
+    ]
+}
 
-    StateRoleManifest {
-        canister_role: ROOT_ROLE.to_string(),
+fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
+    vec![
+        descriptor(
+            StateAllocationKey::ShardingRegistry,
+            vec![state_domain(
+                "sharding_registry",
+                SHARDING_REGISTRY_ID,
+                "ShardEntryRecord",
+                "ShardingRegistryData",
+                160,
+                "sharding_registry_restores_pool_membership",
+            )],
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::ShardingAssignments,
+            vec![state_domain(
+                "sharding_assignments",
+                SHARDING_ASSIGNMENT_ID,
+                "ShardingAssignmentRecord",
+                "ShardingAssignmentsData",
+                170,
+                "sharding_assignments_restore_partition_bindings",
+            )],
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::ShardingActiveSet,
+            vec![state_domain(
+                "sharding_active_set",
+                SHARDING_ACTIVE_SET_ID,
+                "ShardingActiveSetRecord",
+                "ShardingActiveSetData",
+                180,
+                "sharding_active_set_restores_active_shards",
+            )],
+            Vec::new(),
+            Vec::new(),
+        ),
+    ]
+}
+
+fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
+    vec![
+        descriptor(
+            StateAllocationKey::StoredBlobs,
+            vec![state_domain(
+                "stored_blobs",
+                STORED_BLOBS_ID,
+                "StoredBlobRecord",
+                "BlobStorageData",
+                190,
+                "stored_blobs_restore_live_blob_roots",
+            )],
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::BlobDeletionPending,
+            vec![state_domain(
+                "blob_deletion_pending",
+                BLOB_DELETION_PENDING_ID,
+                "BlobDeletionPendingRecord",
+                "BlobStorageData",
+                200,
+                "blob_deletion_pending_restores_gateway_scrub_state",
+            )],
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::StorageGatewayPrincipals,
+            vec![state_domain(
+                "storage_gateway_principals",
+                STORAGE_GATEWAY_PRINCIPALS_ID,
+                "StorageGatewayPrincipalRecord",
+                "BlobStorageData",
+                210,
+                "storage_gateway_principals_restore_authorized_gateways",
+            )],
+            Vec::new(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::BlobStorageBilling,
+            vec![state_domain(
+                "blob_storage_billing",
+                BLOB_STORAGE_BILLING_ID,
+                "BlobStorageBillingStateRecord",
+                "BlobStorageBillingStateData",
+                220,
+                "blob_storage_billing_restores_cashier_configuration",
+            )],
+            Vec::new(),
+            Vec::new(),
+        ),
+    ]
+}
+
+fn descriptor(
+    allocation: StateAllocationKey,
+    mut state: Vec<StateDomainManifest>,
+    mut removed_state: Vec<RemovedStateManifest>,
+    mut reserved_memory: Vec<ReservedMemoryManifest>,
+) -> StateAllocationDescriptor {
+    state.sort_by(|left, right| left.domain.cmp(&right.domain));
+    removed_state.sort_by(|left, right| left.domain.cmp(&right.domain));
+    reserved_memory.sort_by_key(|reservation| reservation.memory_id);
+    StateAllocationDescriptor {
+        allocation,
+        owner: AllocationOwner::CanicCore,
         state,
-        removed_state: root_removed_state_domains(),
-        reserved_memory: root_reserved_memory_domains(),
+        removed_state,
+        reserved_memory,
     }
 }
 
@@ -450,7 +601,7 @@ fn state_domain(
         version: 1,
         storage: StateStorage::StableMemory,
         memory_id: Some(memory_id),
-        owner: CANIC_CORE_OWNER.to_string(),
+        owner: AllocationOwner::CanicCore.as_str().to_string(),
         record: record.to_string(),
         snapshot: snapshot.to_string(),
         min_supported_version: 1,
@@ -465,46 +616,38 @@ fn reserved_memory(label: &str, memory_id: u8, reason: &str) -> ReservedMemoryMa
     ReservedMemoryManifest {
         label: label.to_string(),
         memory_id,
-        owner: CANIC_CORE_OWNER.to_string(),
+        owner: AllocationOwner::CanicCore.as_str().to_string(),
         reason: reason.to_string(),
     }
 }
 
-fn sort_manifest(manifest: &mut StateManifest) {
-    manifest
-        .roles
-        .sort_by(|left, right| left.canister_role.cmp(&right.canister_role));
-    for role in &mut manifest.roles {
-        role.state
-            .sort_by(|left, right| left.domain.cmp(&right.domain));
-        role.removed_state
-            .sort_by(|left, right| left.domain.cmp(&right.domain));
-        role.reserved_memory
-            .sort_by_key(|reservation| reservation.memory_id);
-        for domain in &mut role.state {
-            domain
-                .migrations
-                .sort_by_key(|migration| (migration.from, migration.to));
-        }
-    }
-}
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn root_manifest_uses_unique_memory_ids() {
-        let manifest = canic_state_manifest_for_role(Some(ROOT_ROLE));
-        let role = manifest.roles.first().expect("root role manifest");
-        let mut ids = role
-            .state
+    fn descriptors_use_unique_memory_ids() {
+        let descriptors = canic_state_descriptors();
+        let mut ids = descriptors
             .iter()
-            .filter_map(|domain| domain.memory_id)
+            .flat_map(|descriptor| {
+                descriptor
+                    .state
+                    .iter()
+                    .filter_map(|domain| domain.memory_id)
+                    .chain(
+                        descriptor
+                            .reserved_memory
+                            .iter()
+                            .map(|reservation| reservation.memory_id),
+                    )
+            })
             .collect::<Vec<_>>();
+        let count = ids.len();
         ids.sort_unstable();
         ids.dedup();
 
-        assert_eq!(ids.len(), role.state.len());
+        assert_eq!(ids.len(), count);
     }
 
     #[test]
@@ -526,12 +669,11 @@ mod tests {
     }
 
     #[test]
-    fn root_manifest_covers_declared_core_memory_ids() {
-        let manifest = canic_state_manifest_for_role(Some(ROOT_ROLE));
-        let role = manifest.roles.first().expect("root role manifest");
-        let ids = role
-            .state
+    fn descriptors_cover_declared_core_memory_ids() {
+        let descriptors = canic_state_descriptors();
+        let ids = descriptors
             .iter()
+            .flat_map(|descriptor| descriptor.state.iter())
             .filter_map(|domain| domain.memory_id)
             .collect::<Vec<_>>();
 
@@ -556,6 +698,13 @@ mod tests {
             CANISTER_POOL_ID,
             SCALING_REGISTRY_ID,
             DIRECTORY_REGISTRY_ID,
+            SHARDING_REGISTRY_ID,
+            SHARDING_ASSIGNMENT_ID,
+            SHARDING_ACTIVE_SET_ID,
+            STORED_BLOBS_ID,
+            BLOB_DELETION_PENDING_ID,
+            STORAGE_GATEWAY_PRINCIPALS_ID,
+            BLOB_STORAGE_BILLING_ID,
         ] {
             assert!(
                 ids.contains(&expected),
@@ -565,12 +714,11 @@ mod tests {
     }
 
     #[test]
-    fn root_manifest_tracks_reserved_core_memory_ids() {
-        let manifest = canic_state_manifest_for_role(Some(ROOT_ROLE));
-        let role = manifest.roles.first().expect("root role manifest");
-        let ids = role
-            .reserved_memory
+    fn descriptors_track_reserved_core_memory_ids() {
+        let descriptors = canic_state_descriptors();
+        let ids = descriptors
             .iter()
+            .flat_map(|descriptor| descriptor.reserved_memory.iter())
             .map(|reservation| reservation.memory_id)
             .collect::<Vec<_>>();
 
@@ -580,11 +728,5 @@ mod tests {
                 "state manifest should reserve memory id {expected}"
             );
         }
-    }
-
-    #[test]
-    fn role_filter_returns_empty_manifest_for_unknown_role() {
-        let manifest = canic_state_manifest_for_role(Some("unknown"));
-        assert!(manifest.roles.is_empty());
     }
 }

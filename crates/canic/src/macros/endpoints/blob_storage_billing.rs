@@ -10,18 +10,13 @@
 /// can succeed. Guards are intentionally separate so products can use different
 /// authorization for Cashier gateway sync and project-cycle funding.
 #[macro_export]
+#[cfg(feature = "blob-storage-billing")]
 macro_rules! canic_emit_blob_storage_billing_endpoints {
     (
         sync_gateway_principals_guard = $sync_guard:expr,
         fund_from_cycles_guard = $fund_guard:expr,
         status_guard = $status_guard:expr $(,)?
     ) => {
-        #[cfg(not(feature = "blob-storage-billing"))]
-        compile_error!(
-            "canic_emit_blob_storage_billing_endpoints! requires the canic facade feature \"blob-storage-billing\""
-        );
-
-        #[cfg(feature = "blob-storage-billing")]
         #[$crate::canic_update(
             requires($sync_guard),
             name = "_immutableObjectStorageUpdateGatewayPrincipals"
@@ -32,7 +27,6 @@ macro_rules! canic_emit_blob_storage_billing_endpoints {
                 .map(|_| ())
         }
 
-        #[cfg(feature = "blob-storage-billing")]
         #[$crate::canic_update(
             requires($fund_guard),
             name = "_immutableObjectStorageFundFromProjectCycles"
@@ -46,7 +40,6 @@ macro_rules! canic_emit_blob_storage_billing_endpoints {
             .await
         }
 
-        #[cfg(feature = "blob-storage-billing")]
         #[$crate::canic_update(requires($status_guard), name = "get_blob_storage_status")]
         async fn canic_blob_storage_status(
             request: ::canic::dto::blob_storage::BlobStorageStatusRequest,
@@ -65,6 +58,16 @@ macro_rules! canic_emit_blob_storage_billing_endpoints {
     ($($tt:tt)+) => {
         compile_error!(
             "canic_emit_blob_storage_billing_endpoints! syntax is sync_gateway_principals_guard = <access expression>, fund_from_cycles_guard = <access expression>, status_guard = <access expression>"
+        );
+    };
+}
+
+#[macro_export]
+#[cfg(not(feature = "blob-storage-billing"))]
+macro_rules! canic_emit_blob_storage_billing_endpoints {
+    ($($tt:tt)*) => {
+        compile_error!(
+            "canic_emit_blob_storage_billing_endpoints! requires the canic facade feature \"blob-storage-billing\""
         );
     };
 }

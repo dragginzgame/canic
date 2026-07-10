@@ -13,7 +13,8 @@ use crate::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
         ReplayActor, ReplayReceipt, ReplayReceiptStatus,
     },
-    storage::{prelude::*, stable::memory::auth::REPLAY_RECEIPTS_ID},
+    role_contract::allocation::memory::auth::REPLAY_RECEIPTS_ID,
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};

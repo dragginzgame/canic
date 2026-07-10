@@ -6,11 +6,10 @@ use canic_core::{
         types::Principal,
     },
     impl_storable_bounded,
+    role_contract::allocation::memory::template::CONTROL_PLANE_SUBNET_STATE_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-
-pub const SUBNET_STATE_ID: u8 = 84;
 
 eager_static! {
     //
@@ -19,7 +18,7 @@ eager_static! {
     //
     static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!("canic.control_plane.subnet_state.v1", SubnetState, SUBNET_STATE_ID),
+            canic_core::ic_memory_key!("canic.control_plane.subnet_state.v1", SubnetState, CONTROL_PLANE_SUBNET_STATE_ID),
             SubnetStateRecord::default(),
         ));
 }

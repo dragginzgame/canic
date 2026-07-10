@@ -27,7 +27,7 @@ use crate::{
             recent_failure::{RecentFailureInput, RecentFailureOps},
         },
     },
-    state_contract::canic_state_manifest_for_role,
+    state_contract::{STATE_MANIFEST_SCHEMA_VERSION, canic_state_descriptors},
 };
 
 const MAX_TIMER_SUBSYSTEM_BYTES: usize = 64;
@@ -339,12 +339,24 @@ fn timer_statuses() -> Vec<CanicTimerStatus> {
 }
 
 fn state_summary(role: Option<&str>) -> Option<RuntimeStateSummary> {
-    let role = role?;
-    let manifest = canic_state_manifest_for_role(Some(role));
-    let domains = manifest
-        .roles
+    let memory_ids = MemoryRegistryOps::ledger_snapshot()
+        .ok()?
+        .memories
         .into_iter()
-        .flat_map(|role| role.state)
+        .map(|memory| memory.memory_manager_id)
+        .collect::<std::collections::BTreeSet<_>>();
+    state_summary_for_memory_ids(role, &memory_ids)
+}
+
+fn state_summary_for_memory_ids(
+    role: Option<&str>,
+    memory_ids: &std::collections::BTreeSet<u8>,
+) -> Option<RuntimeStateSummary> {
+    role?;
+    let mut domains = canic_state_descriptors()
+        .into_iter()
+        .flat_map(|descriptor| descriptor.state)
+        .filter(|domain| domain.memory_id.is_some_and(|id| memory_ids.contains(&id)))
         .map(|domain| RuntimeStateDomainSummary {
             domain: domain.domain,
             version: domain.version,
@@ -353,13 +365,14 @@ fn state_summary(role: Option<&str>) -> Option<RuntimeStateSummary> {
             status: RuntimeStateDomainStatus::Ok,
         })
         .collect::<Vec<_>>();
+    domains.sort_by(|left, right| left.domain.cmp(&right.domain));
 
     if domains.is_empty() {
         return None;
     }
 
     Some(RuntimeStateSummary {
-        manifest_schema_version: u32::from(manifest.schema_version),
+        manifest_schema_version: u32::from(STATE_MANIFEST_SCHEMA_VERSION),
         domains,
         total_stable_memory_pages: None,
     })
@@ -677,8 +690,14 @@ mod tests {
     }
 
     #[test]
-    fn state_summary_uses_declared_metadata_without_value_counts() {
-        let summary = state_summary(Some("root")).expect("root state declarations");
+    fn state_summary_joins_runtime_memory_ids_to_owner_metadata() {
+        let summary = state_summary_for_memory_ids(
+            Some("root"),
+            &std::collections::BTreeSet::from([
+                crate::role_contract::allocation::memory::env::ENV_ID,
+            ]),
+        )
+        .expect("runtime state declarations");
 
         assert_eq!(
             summary.manifest_schema_version,
@@ -690,8 +709,7 @@ mod tests {
                 && domain.storage == "stable_memory"
                 && domain.status == RuntimeStateDomainStatus::Ok
         }));
-        assert!(state_summary(Some("unknown_role")).is_none());
-        assert!(state_summary(None).is_none());
+        assert!(state_summary_for_memory_ids(None, &std::collections::BTreeSet::new()).is_none());
     }
 
     #[test]

@@ -25,6 +25,20 @@ macro_rules! build {
 #[macro_export]
 macro_rules! __canic_build_internal {
     ($file:expr, |$cfg_str:ident, $cfg_path:ident, $cfg:ident| $body:block) => {{
+        println!(
+            "cargo:rerun-if-env-changed={}",
+            $crate::__internal::core::role_contract::CANONICAL_BUILD_MARKER_ENV
+        );
+        let __canic_target = std::env::var("TARGET").expect("TARGET must be set");
+        let __canic_build_marker = std::env::var(
+                $crate::__internal::core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+            )
+            .ok();
+        $crate::__build::assert_canonical_role_contract_build(
+            &__canic_target,
+            __canic_build_marker.as_deref(),
+        );
+
         let manifest_dir =
             std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
         let __canic_package_metadata =
@@ -123,11 +137,6 @@ macro_rules! __canic_build_internal {
         }
 
         let role_name = __canic_role_name.as_str();
-        let mut role_attestation_refresh = false;
-        let mut delegated_token_issuer = false;
-        let mut has_icrc21 = false;
-        let mut has_scaling = false;
-        let mut has_sharding = false;
         let mut memory_ledger = false;
         let mut metrics_core = false;
         let mut metrics_placement = false;
@@ -165,11 +174,6 @@ macro_rules! __canic_build_internal {
 
         for subnet in $cfg.subnets.values() {
             if let Some(canister_cfg) = subnet.get_canister(&role_id) {
-                role_attestation_refresh |= canister_cfg.auth.role_attestation_cache;
-                delegated_token_issuer |= canister_cfg.auth.delegated_token_issuer;
-                has_icrc21 |= canister_cfg.standards.icrc21;
-                has_scaling |= canister_cfg.scaling.is_some();
-                has_sharding |= canister_cfg.sharding.is_some();
                 memory_ledger |= canister_cfg.diagnostics.memory_ledger;
                 let profile = canister_cfg.resolved_metrics_profile(&role_id);
                 let tier_mask = $crate::__build::metrics_profile_tier_mask(profile);
@@ -182,19 +186,33 @@ macro_rules! __canic_build_internal {
             }
         }
 
-        let __canic_required_features =
-            $crate::__internal::core::bootstrap::role_required_canic_features(
+        let __canic_capabilities = if __canic_wasm_store_special {
+            let kind = $crate::__internal::core::role_contract::BuiltInRoleKind::WasmStore;
+            $crate::__internal::core::role_contract::built_in_role_capabilities(kind)
+        } else {
+            $crate::__internal::core::role_contract::derive_role_capabilities(
                 $cfg.as_ref(),
                 &role_id,
-            );
-        $crate::__build::assert_required_canic_dependency_features(
-            std::path::Path::new(&manifest_dir),
-            fleet_name,
-            role_name,
-            &__canic_required_features,
-        );
+            )
+            .unwrap_or_else(|finding| panic!("role contract rejected: {finding:?}"))
+        };
 
-        if role_name == "root" {
+        let role_attestation_refresh = __canic_capabilities.contains(
+            &$crate::__internal::core::role_contract::RoleCapabilityKey::RoleAttestationVerifier,
+        );
+        let delegated_token_issuer = __canic_capabilities.contains(
+            &$crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenIssuer,
+        );
+        let has_icrc21 = __canic_capabilities
+            .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21);
+        let has_scaling = __canic_capabilities
+            .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Scaling);
+        let has_sharding = __canic_capabilities
+            .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Sharding);
+
+        if __canic_capabilities
+            .contains(&$crate::__internal::core::role_contract::RoleCapabilityKey::Root)
+        {
             println!("cargo:rustc-cfg=canic_is_root");
             if $crate::__build::emit_root_wasm_store_bootstrap_release_set(&$cfg_path) {
                 println!("cargo:rustc-cfg=canic_has_root_wasm_store_bootstrap_release_set");

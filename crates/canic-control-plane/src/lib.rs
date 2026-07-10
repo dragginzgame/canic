@@ -4,7 +4,10 @@
 //! top of `canic-core` and is re-exported through the `canic` facade when the
 //! control-plane feature is enabled.
 
-canic_core::ic_memory_range!(start = 80, end = 85);
+canic_core::ic_memory_range!(
+    start = canic_core::role_contract::allocation::CANIC_CONTROL_PLANE_MIN_ID,
+    end = canic_core::role_contract::allocation::CANIC_CONTROL_PLANE_MAX_ID,
+);
 
 #[cfg(test)]
 const _: () = {

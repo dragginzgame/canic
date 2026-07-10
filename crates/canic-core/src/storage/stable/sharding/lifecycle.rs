@@ -6,7 +6,8 @@
 
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
-    storage::{prelude::*, stable::memory::placement::SHARDING_ACTIVE_SET_ID},
+    role_contract::allocation::memory::placement::SHARDING_ACTIVE_SET_ID,
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;

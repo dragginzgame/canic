@@ -7,14 +7,28 @@
 //! Boundary: consumes passive declaration metadata from `canic-core` and emits
 //! diagnostic-only reports.
 
-use canic_control_plane::state_contract::canic_control_plane_state_manifest;
-use canic_core::state_contract::{
-    MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest, STATE_MANIFEST_SCHEMA_VERSION,
-    StateDomainManifest, StateManifest, StateMigrationManifest, StateRoleManifest, StateStorage,
-    canic_state_manifest_for_role,
+use crate::role_contract::{
+    PackageValidationMode, RolePackageEvidence, RolePackageValidation, finding_detail,
+    materialize_state_manifest, resolve_built_in_wasm_store_contract,
+    resolve_declared_role_package_contract, validate_built_in_wasm_store_package,
+    validate_declared_role_package,
+};
+use canic_core::{
+    bootstrap::parse_config_model,
+    ids::CanisterRole,
+    role_contract::{ResolvedRoleContract, RoleContractFinding, RoleContractResolution},
+    state_contract::{
+        MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest,
+        STATE_MANIFEST_SCHEMA_VERSION, StateDomainManifest, StateManifest, StateMigrationManifest,
+        StateRoleManifest, StateStorage,
+    },
 };
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub const STATE_AUDIT_COMMAND: &str = "canic state audit";
 pub const STATE_MANIFEST_COMMAND: &str = "canic state manifest";
@@ -195,68 +209,192 @@ pub enum StateAuditSeverity {
     Unsupported,
 }
 
-#[must_use]
-pub fn declared_state_manifest(role: Option<&str>) -> StateManifest {
-    let mut manifest = merge_manifests(vec![
-        canic_state_manifest_for_role(role),
-        canic_control_plane_state_manifest(),
-    ]);
-    if let Some(role) = role {
-        manifest
-            .roles
-            .retain(|entry| entry.canister_role.as_str() == role);
-    }
-    manifest
-}
-
-fn merge_manifests(manifests: Vec<StateManifest>) -> StateManifest {
-    let mut by_role = BTreeMap::<String, StateRoleManifest>::new();
-
-    for manifest in manifests {
-        for role in manifest.roles {
-            let entry = by_role
-                .entry(role.canister_role.clone())
-                .or_insert_with(|| StateRoleManifest {
-                    canister_role: role.canister_role.clone(),
-                    state: Vec::new(),
-                    removed_state: Vec::new(),
-                    reserved_memory: Vec::new(),
-                });
-            entry.state.extend(role.state);
-            entry.removed_state.extend(role.removed_state);
-            entry.reserved_memory.extend(role.reserved_memory);
-        }
-    }
-
-    let mut roles = by_role.into_values().collect::<Vec<_>>();
-    sort_roles(&mut roles);
-    StateManifest {
-        schema_version: STATE_MANIFEST_SCHEMA_VERSION,
-        roles,
-    }
-}
-
-fn sort_roles(roles: &mut [StateRoleManifest]) {
-    roles.sort_by(|left, right| left.canister_role.cmp(&right.canister_role));
-    for role in roles {
-        role.state
-            .sort_by(|left, right| left.domain.cmp(&right.domain));
-        role.removed_state
-            .sort_by(|left, right| left.domain.cmp(&right.domain));
-        role.reserved_memory
-            .sort_by_key(|reservation| reservation.memory_id);
-        for domain in &mut role.state {
-            domain
-                .migrations
-                .sort_by_key(|migration| (migration.from, migration.to));
-        }
-    }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StateManifestResolution {
+    Rejected {
+        errors: Vec<RoleContractFinding>,
+    },
+    Resolved {
+        manifest: StateManifest,
+        contracts: Vec<ResolvedRoleContract>,
+    },
 }
 
 #[must_use]
-pub fn build_state_audit_report(role: Option<&str>) -> StateAuditReport {
-    let manifest = declared_state_manifest(role);
-    let mut checks = audit_checks(&manifest, role);
+pub fn resolve_project_state_manifest(
+    project_root: &Path,
+    config_paths: &[PathBuf],
+    role_filter: Option<&str>,
+) -> StateManifestResolution {
+    let mut contracts = BTreeMap::<String, ResolvedRoleContract>::new();
+    let mut evidence = Vec::<RolePackageEvidence>::new();
+    let mut errors = Vec::new();
+    let mut matched_declared_role = false;
+
+    if role_filter != Some(CanisterRole::WASM_STORE.as_str()) {
+        for config_path in config_paths {
+            let source = match fs::read_to_string(config_path) {
+                Ok(source) => source,
+                Err(error) => {
+                    errors.push(RoleContractFinding::DependencyShapeUnsupported {
+                        reason: format!("failed to read {}: {error}", config_path.display()),
+                    });
+                    continue;
+                }
+            };
+            let config = match parse_config_model(&source) {
+                Ok(config) => config,
+                Err(error) => {
+                    errors.push(RoleContractFinding::DependencyShapeUnsupported {
+                        reason: format!("invalid {}: {error}", config_path.display()),
+                    });
+                    continue;
+                }
+            };
+
+            for role in config.roles.keys() {
+                if role_filter.is_some_and(|filter| filter != role.as_str()) {
+                    continue;
+                }
+                matched_declared_role = true;
+                match validate_declared_role_package(
+                    config_path,
+                    role,
+                    PackageValidationMode::Passive,
+                ) {
+                    RolePackageValidation::Supported(package_evidence) => {
+                        let resolution =
+                            resolve_declared_role_package_contract(config_path, &package_evidence);
+                        evidence.push(package_evidence);
+                        collect_contract(role, resolution, &mut contracts, &mut errors);
+                    }
+                    RolePackageValidation::Unsupported(finding) => errors.push(finding),
+                }
+            }
+        }
+    }
+
+    if let Some(role) = role_filter
+        && role != CanisterRole::WASM_STORE.as_str()
+        && !matched_declared_role
+    {
+        errors.push(RoleContractFinding::RoleUnknown {
+            role: CanisterRole::owned(role.to_string()),
+        });
+    }
+
+    if role_filter.is_none() || role_filter == Some(CanisterRole::WASM_STORE.as_str()) {
+        match existing_built_in_wasm_store_manifest(project_root, &evidence) {
+            Some(manifest_path) => match validate_built_in_wasm_store_package(
+                &manifest_path,
+                PackageValidationMode::Passive,
+            ) {
+                RolePackageValidation::Supported(package_evidence) => collect_contract(
+                    &CanisterRole::WASM_STORE,
+                    resolve_built_in_wasm_store_contract(&package_evidence),
+                    &mut contracts,
+                    &mut errors,
+                ),
+                RolePackageValidation::Unsupported(finding) => errors.push(finding),
+            },
+            None => errors.push(RoleContractFinding::BuiltInPackageUnavailable {
+                role: canic_core::role_contract::BuiltInRoleKind::WasmStore,
+            }),
+        }
+    }
+
+    if !errors.is_empty() {
+        return StateManifestResolution::Rejected { errors };
+    }
+
+    let contracts = contracts.into_values().collect::<Vec<_>>();
+    match materialize_state_manifest(&contracts) {
+        Ok(manifest) => StateManifestResolution::Resolved {
+            manifest,
+            contracts,
+        },
+        Err(errors) => StateManifestResolution::Rejected { errors },
+    }
+}
+
+fn collect_contract(
+    role: &CanisterRole,
+    resolution: RoleContractResolution,
+    contracts: &mut BTreeMap<String, ResolvedRoleContract>,
+    errors: &mut Vec<RoleContractFinding>,
+) {
+    match resolution {
+        RoleContractResolution::Rejected {
+            errors: resolution_errors,
+        } => errors.extend(resolution_errors),
+        RoleContractResolution::Resolved { contract } => {
+            let role_name = role.as_str().to_string();
+            if contracts
+                .get(&role_name)
+                .is_some_and(|existing| existing != &contract)
+            {
+                errors.push(RoleContractFinding::PackageAmbiguous { role: role.clone() });
+            } else {
+                contracts.insert(role_name, contract);
+            }
+        }
+    }
+}
+
+fn existing_built_in_wasm_store_manifest(
+    project_root: &Path,
+    evidence: &[RolePackageEvidence],
+) -> Option<PathBuf> {
+    for candidate in [
+        project_root.join("crates/canic-wasm-store/Cargo.toml"),
+        project_root.join(".icp/local/generated/canic-wasm-store/Cargo.toml"),
+    ] {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    for package in evidence {
+        let canic_root = package.canic_manifest_path.parent()?;
+        let sibling_root = canic_root.parent()?;
+        for candidate in [
+            sibling_root.join("canic-wasm-store/Cargo.toml"),
+            sibling_root
+                .join(format!("canic-wasm-store-{}", package.canic_version))
+                .join("Cargo.toml"),
+        ] {
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+#[must_use]
+pub fn build_state_audit_report(
+    resolution: &StateManifestResolution,
+    role: Option<&str>,
+) -> StateAuditReport {
+    let (manifest, contract_errors) = match resolution {
+        StateManifestResolution::Resolved { manifest, .. } => (manifest.clone(), Vec::new()),
+        StateManifestResolution::Rejected { errors } => (
+            StateManifest {
+                schema_version: STATE_MANIFEST_SCHEMA_VERSION,
+                roles: Vec::new(),
+            },
+            errors.clone(),
+        ),
+    };
+    let mut checks = audit_checks(
+        &manifest,
+        if contract_errors.is_empty() {
+            role
+        } else {
+            None
+        },
+    );
+    checks.extend(contract_errors.iter().map(role_contract_check));
     sort_checks(&mut checks);
 
     let status = aggregate_status(&checks);
@@ -278,6 +416,16 @@ pub fn build_state_audit_report(role: Option<&str>) -> StateAuditReport {
         checks,
         next_actions,
     }
+}
+
+fn role_contract_check(finding: &RoleContractFinding) -> StateAuditCheck {
+    fail(
+        CATEGORY_MANIFEST,
+        finding.code(),
+        "role_contract",
+        finding_detail(finding),
+        "repair the role package contract, then rerun canic state audit",
+    )
 }
 
 fn audit_checks(manifest: &StateManifest, role_filter: Option<&str>) -> Vec<StateAuditCheck> {
@@ -1124,7 +1272,92 @@ const fn status_rank(status: StateAuditStatus) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use canic_core::state_contract::{MigrationPolicy, StateRoleManifest};
+    use canic_core::{
+        role_contract::{
+            AllocationOwner, BuiltInRoleKind, CanicFeatureKey, ResolvedStateAllocation,
+            SelectionProvenance, StateAllocationKey, allocation::allocation_definition,
+        },
+        state_contract::{MigrationPolicy, StateRoleManifest},
+    };
+    use std::collections::BTreeSet;
+
+    fn test_state_manifest(role: Option<&str>) -> StateManifest {
+        let contracts = match role {
+            Some("root") | None => vec![test_contract(
+                "root",
+                None,
+                &[
+                    StateAllocationKey::CoreRootTopology,
+                    StateAllocationKey::CoreRootEnvironment,
+                    StateAllocationKey::CoreRootAuth,
+                    StateAllocationKey::CoreRootObservability,
+                    StateAllocationKey::CoreRootIntent,
+                    StateAllocationKey::CoreRootCapacity,
+                    StateAllocationKey::TemplateManifests,
+                    StateAllocationKey::TemplateChunkSets,
+                    StateAllocationKey::TemplateChunkRefs,
+                    StateAllocationKey::TemplateChunkPayloads,
+                    StateAllocationKey::ControlPlaneSubnetState,
+                ],
+            )],
+            Some("wasm_store") => vec![test_contract(
+                "wasm_store",
+                Some(BuiltInRoleKind::WasmStore),
+                &[
+                    StateAllocationKey::TemplateManifests,
+                    StateAllocationKey::TemplateChunkSets,
+                    StateAllocationKey::TemplateChunkRefs,
+                    StateAllocationKey::TemplateChunkPayloads,
+                    StateAllocationKey::WasmStoreGcState,
+                ],
+            )],
+            Some(_) => Vec::new(),
+        };
+        materialize_state_manifest(&contracts).expect("test manifest")
+    }
+
+    fn test_contract(
+        role: &str,
+        built_in: Option<BuiltInRoleKind>,
+        keys: &[StateAllocationKey],
+    ) -> ResolvedRoleContract {
+        let allocations = keys
+            .iter()
+            .map(|key| {
+                let definition = allocation_definition(*key).expect("allocation definition");
+                ResolvedStateAllocation {
+                    key: *key,
+                    owner: definition.owner,
+                    memory_ids: definition.memory_ids.to_vec(),
+                    selected_by: BTreeSet::from([if let Some(built_in) = built_in {
+                        SelectionProvenance::BuiltInRole(built_in)
+                    } else if definition.owner == AllocationOwner::CanicControlPlane {
+                        SelectionProvenance::EffectiveFeature(CanicFeatureKey::ControlPlane)
+                    } else {
+                        SelectionProvenance::Capability(
+                            canic_core::role_contract::RoleCapabilityKey::Root,
+                        )
+                    }]),
+                }
+            })
+            .collect();
+        ResolvedRoleContract {
+            role: CanisterRole::owned(role.to_string()),
+            built_in,
+            capabilities: BTreeSet::new(),
+            required_features: BTreeSet::new(),
+            effective_features: BTreeSet::new(),
+            allocations,
+        }
+    }
+
+    fn build_state_audit_report(role: Option<&str>) -> StateAuditReport {
+        let resolution = StateManifestResolution::Resolved {
+            manifest: test_state_manifest(role),
+            contracts: Vec::new(),
+        };
+        super::build_state_audit_report(&resolution, role)
+    }
 
     #[test]
     fn state_audit_status_owns_serialized_labels() {
@@ -1171,7 +1404,7 @@ mod tests {
 
     #[test]
     fn builtin_manifest_merges_control_plane_state_by_role() {
-        let manifest = declared_state_manifest(Some("root"));
+        let manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first().expect("root role");
 
         assert!(role.state.iter().any(|domain| {
@@ -1216,8 +1449,89 @@ mod tests {
     }
 
     #[test]
+    fn complete_descriptor_registry_satisfies_state_audit_metadata_contract() {
+        let keys = canic_core::role_contract::allocation::allocation_definitions()
+            .iter()
+            .filter(|definition| {
+                definition.lifecycle == canic_core::role_contract::AllocationLifecycle::Active
+            })
+            .map(|definition| definition.key)
+            .collect::<Vec<_>>();
+        let manifest = materialize_state_manifest(&[test_contract("catalog", None, &keys)])
+            .expect("complete descriptor manifest");
+        let checks = audit_checks(&manifest, Some("catalog"));
+
+        assert!(
+            checks
+                .iter()
+                .all(|check| check.status != StateAuditStatus::Fail),
+            "complete descriptor registry must satisfy audit metadata: {checks:#?}"
+        );
+    }
+
+    #[test]
+    fn exact_blob_role_resolution_materializes_only_blob_allocations() {
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let config = workspace.join("canisters/test/blob_storage_probe/canic.toml");
+        let resolution = resolve_project_state_manifest(&workspace, &[config], Some("test"));
+        let StateManifestResolution::Resolved {
+            manifest,
+            contracts,
+        } = resolution
+        else {
+            panic!("blob role contract should resolve")
+        };
+
+        assert_eq!(contracts.len(), 1);
+        let role = manifest.roles.first().expect("blob role manifest");
+        assert_eq!(role.canister_role, "test");
+        assert_eq!(
+            role.state
+                .iter()
+                .filter_map(|domain| domain.memory_id)
+                .collect::<Vec<_>>(),
+            vec![63, 65, 64, 62]
+        );
+        assert!(role.state.iter().all(|domain| domain.owner == "canic-core"));
+    }
+
+    #[test]
+    fn exact_built_in_resolution_materializes_template_and_gc_allocations() {
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let resolution = resolve_project_state_manifest(&workspace, &[], Some("wasm_store"));
+        let StateManifestResolution::Resolved {
+            manifest,
+            contracts,
+        } = resolution
+        else {
+            panic!("built-in wasm_store contract should resolve")
+        };
+
+        assert_eq!(contracts.len(), 1);
+        let ids = manifest.roles[0]
+            .state
+            .iter()
+            .filter_map(|domain| domain.memory_id)
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec![83, 82, 81, 80, 85]);
+    }
+
+    #[test]
+    fn unknown_role_resolution_returns_no_manifest() {
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let config = workspace.join("canisters/audit/root_probe/canic.toml");
+        let resolution = resolve_project_state_manifest(&workspace, &[config], Some("missing"));
+
+        assert!(matches!(
+            resolution,
+            StateManifestResolution::Rejected { errors }
+                if errors.iter().any(|finding| matches!(finding, RoleContractFinding::RoleUnknown { .. }))
+        ));
+    }
+
+    #[test]
     fn unsupported_manifest_schema_version_fails() {
-        let mut manifest = declared_state_manifest(Some("root"));
+        let mut manifest = test_state_manifest(Some("root"));
         manifest.schema_version = STATE_MANIFEST_SCHEMA_VERSION + 1;
 
         let checks = audit_checks(&manifest, Some("root"));
@@ -1230,7 +1544,7 @@ mod tests {
 
     #[test]
     fn duplicate_state_role_fails() {
-        let mut manifest = declared_state_manifest(Some("root"));
+        let mut manifest = test_state_manifest(Some("root"));
         let duplicate = manifest.roles[0].clone();
         manifest.roles.push(duplicate);
 
@@ -1243,7 +1557,7 @@ mod tests {
 
     #[test]
     fn duplicate_memory_id_fails_within_role() {
-        let mut manifest = declared_state_manifest(Some("root"));
+        let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
         role.state[1].memory_id = role.state[0].memory_id;
 
@@ -1258,7 +1572,7 @@ mod tests {
 
     #[test]
     fn duplicate_state_domain_fails_within_role() {
-        let mut manifest = declared_state_manifest(Some("root"));
+        let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
         let mut duplicate = role.state[0].clone();
         duplicate.memory_id = Some(250);
@@ -1276,7 +1590,7 @@ mod tests {
 
     #[test]
     fn active_domain_reclaiming_removed_memory_id_fails() {
-        let mut manifest = declared_state_manifest(Some("root"));
+        let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
         let retired_id = role
             .removed_state
@@ -1306,7 +1620,7 @@ mod tests {
 
     #[test]
     fn active_domain_reclaiming_reserved_memory_id_fails() {
-        let mut manifest = declared_state_manifest(Some("root"));
+        let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
         let reserved_id = role
             .reserved_memory

@@ -28,6 +28,30 @@ fn generated_wasm_store_wrapper_enables_wasm_store_canister_feature() {
 }
 
 #[test]
+fn generated_wasm_store_wrapper_satisfies_role_package_contract() {
+    let root = temp_dir("canic-generated-wasm-store-contract");
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let canic_manifest = workspace_root.join("crates/canic/Cargo.toml");
+    let wrapper_root = ensure_generated_wasm_store_wrapper(&root, &workspace_root, &canic_manifest)
+        .expect("generate wrapper");
+
+    let validation = validate_built_in_wasm_store_package(
+        &wrapper_root.join("Cargo.toml"),
+        PackageValidationMode::Build,
+    );
+    let RolePackageValidation::Supported(evidence) = validation else {
+        panic!("generated wrapper should satisfy the package contract: {validation:?}");
+    };
+    assert!(
+        evidence
+            .direct_features
+            .contains(&canic_core::role_contract::CanicFeatureKey::WasmStoreCanister)
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn wasm_store_fast_profile_config_defines_standalone_profile() {
     let mut command = Command::new("cargo");
     append_wasm_store_profile_config_args(&mut command, CanisterBuildProfile::Fast);

@@ -27,6 +27,7 @@ pub mod registry;
 pub mod release_set;
 pub mod replica_query;
 pub mod response_parse;
+pub mod role_contract;
 pub mod state_manifest;
 pub mod subnet_registry;
 pub mod table;

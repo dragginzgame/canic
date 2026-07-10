@@ -7,15 +7,15 @@ use canic_core::cdk::structures::{
 };
 use canic_core::eager_static;
 use canic_core::impl_storable_unbounded;
+use canic_core::role_contract::allocation::memory::template::{
+    TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
+};
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
 use std::collections::BTreeMap as StdBTreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
-pub const TEMPLATE_CHUNK_SETS_ID: u8 = 81;
-pub const TEMPLATE_CHUNK_REFS_ID: u8 = 82;
-pub const TEMPLATE_CHUNK_PAYLOADS_ID: u8 = 83;
 const TEMPLATE_CHUNK_REF_RECORD_BYTES: usize = 12;
 const TEMPLATE_CHUNK_REF_RECORD_MAX_BYTES: u32 = 12;
 const TEMPLATE_CHUNK_PAYLOAD_MAX_BYTES: u32 = 1_048_576;
