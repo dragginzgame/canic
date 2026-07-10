@@ -86,7 +86,7 @@ impl ArtifactChecksum {
             hasher.update(relative_path.to_string_lossy().as_bytes());
             hasher.update([0]);
             hasher.update(file_checksum.hash.as_bytes());
-            hasher.update([b'\n']);
+            hasher.update(*b"\n");
         }
 
         Ok(Self {
