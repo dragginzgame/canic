@@ -106,21 +106,13 @@ mod tests {
 
     #[test]
     fn build_network_mismatch_errors() {
-        let err = check(BuildNetwork::Ic, Some(BuildNetwork::Local))
-            .unwrap_err()
-            .to_string();
-        assert!(
-            err.contains("this endpoint is only available when built for 'ic' (ICP_ENVIRONMENT)"),
-            "unexpected error: {err}"
-        );
+        let err = check(BuildNetwork::Ic, Some(BuildNetwork::Local)).unwrap_err();
+        assert_eq!(err.kind(), crate::access::AccessErrorKind::Denied);
     }
 
     #[test]
     fn build_network_unknown_errors() {
-        let err = check(BuildNetwork::Ic, None).unwrap_err().to_string();
-        assert!(
-            err.contains("this endpoint requires a build-time network (ICP_ENVIRONMENT)"),
-            "unexpected error: {err}"
-        );
+        let err = check(BuildNetwork::Ic, None).unwrap_err();
+        assert_eq!(err.kind(), crate::access::AccessErrorKind::Denied);
     }
 }

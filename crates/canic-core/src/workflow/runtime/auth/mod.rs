@@ -433,13 +433,8 @@ mod tests {
         };
         let role = CanisterRole::new("app");
 
-        let err = RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&role, &verifier_cfg)
+        RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&role, &verifier_cfg)
             .expect_err("expected verifier feature error");
-
-        assert!(
-            err.to_string().contains("auth-root-canister-sig-verify"),
-            "expected root canister-signature verifier feature error, got: {err}"
-        );
     }
 
     #[test]

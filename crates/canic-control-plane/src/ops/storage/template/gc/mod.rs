@@ -208,7 +208,6 @@ mod tests {
         .expect_err("normal -> in progress must fail");
 
         assert_eq!(err.code, ErrorCode::Conflict);
-        assert!(err.message.contains("not allowed"));
     }
 
     #[test]

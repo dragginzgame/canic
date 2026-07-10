@@ -127,11 +127,10 @@ fn install_truth_gate_blocks_observed_controller_drift() {
         line.contains("Deployment truth receipt:") && line.contains("status=FailedBeforeMutation")
     }));
     let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("diff:expected_controller_missing:"),
-        "unexpected error: {err}"
-    );
+    let blocked = err
+        .downcast_ref::<InstallRootBlockedError>()
+        .expect("deployment-truth gate should retain its typed reason");
+    assert_eq!(blocked.kind(), InstallRootBlockKind::DeploymentTruth);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -204,10 +203,10 @@ kind = "root"
             .any(|finding| finding.code == "canister_missing")
     );
     let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
-    assert!(
-        err.to_string().contains("canister_missing:"),
-        "unexpected error: {err}"
-    );
+    let blocked = err
+        .downcast_ref::<InstallRootBlockedError>()
+        .expect("deployment-truth gate should retain its typed reason");
+    assert_eq!(blocked.kind(), InstallRootBlockKind::DeploymentTruth);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -248,11 +247,10 @@ kind = "root"
     });
 
     let err = enforce_install_deployment_truth_gate(&check).unwrap_err();
-
-    assert!(
-        err.to_string().contains("future_hard_failure:"),
-        "unexpected error: {err}"
-    );
+    let blocked = err
+        .downcast_ref::<InstallRootBlockedError>()
+        .expect("deployment-truth gate should retain its typed reason");
+    assert_eq!(blocked.kind(), InstallRootBlockKind::DeploymentTruth);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

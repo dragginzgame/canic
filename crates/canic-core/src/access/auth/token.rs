@@ -6,13 +6,14 @@
 
 use super::dependency_unavailable;
 use crate::{
+    InternalError,
     access::AccessError,
     cdk::{
         api::msg_arg_data,
         candid::de::{DecoderConfig, IDLDeserialize},
         types::Principal,
     },
-    dto::auth::DelegatedToken,
+    dto::{auth::DelegatedToken, error::ErrorCode},
     ids::EndpointCallKind,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
@@ -65,12 +66,20 @@ fn verify_token(
         required_scopes: &required_scopes,
         now_ns,
     })
-    .map_err(|err| AccessError::Denied(err.to_string()))?;
+    .map_err(access_error_from_verification)?;
 
     enforce_subject_binding(verified.subject, caller)?;
     enforce_required_scope(required_scope, &verified.scopes)?;
 
     Ok(verified.issuer_pid)
+}
+
+fn access_error_from_verification(err: InternalError) -> AccessError {
+    match err.public_error().map(|error| error.code) {
+        Some(ErrorCode::AuthProofExpired) => AccessError::DelegatedAuthCertExpired,
+        Some(ErrorCode::AuthTokenExpired) => AccessError::DelegatedAuthTokenExpired,
+        _ => AccessError::Denied(err.to_string()),
+    }
 }
 
 pub(super) fn enforce_subject_binding(
@@ -156,8 +165,10 @@ fn delegated_token_max_ttl_ns() -> Result<u64, AccessError> {
 
 #[cfg(test)]
 mod tests {
-    use super::delegated_token_from_ingress_bytes;
+    use super::{access_error_from_verification, delegated_token_from_ingress_bytes};
     use crate::{
+        InternalError, InternalErrorOrigin,
+        access::AccessError,
         cdk::{
             candid::{Principal, encode_args},
             types,
@@ -168,6 +179,21 @@ mod tests {
             IssuerProofAlgorithm, IssuerProofBinding,
         },
     };
+
+    #[test]
+    fn verification_expiry_codes_map_to_typed_access_denials() {
+        let token = access_error_from_verification(InternalError::auth_token_expired("expired"));
+        assert!(matches!(token, AccessError::DelegatedAuthTokenExpired));
+
+        let cert = access_error_from_verification(InternalError::auth_proof_expired("expired"));
+        assert!(matches!(cert, AccessError::DelegatedAuthCertExpired));
+
+        let other = access_error_from_verification(InternalError::ops(
+            InternalErrorOrigin::Ops,
+            "verification failed",
+        ));
+        assert!(matches!(other, AccessError::Denied(_)));
+    }
 
     // Decode auth calls with large non-token arguments after the token.
     #[test]

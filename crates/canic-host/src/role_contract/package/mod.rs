@@ -6,7 +6,7 @@
 
 use crate::cargo_metadata::{
     CargoMetadata, CargoMetadataDependency, CargoMetadataNode, CargoMetadataNodeDependency,
-    CargoMetadataPackage, cargo_metadata_for_manifest,
+    CargoMetadataPackage, cargo_metadata, cargo_metadata_for_manifest,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -137,6 +137,126 @@ pub fn validate_built_in_wasm_store_package(
         mode,
         true,
     )
+}
+
+/// Validate every Canic role package before an internal PocketIC Cargo build.
+///
+/// Packages without Canic role metadata are test stubs and are ignored. The
+/// private build marker may be granted only after this function succeeds.
+#[doc(hidden)]
+pub fn validate_internal_test_wasm_packages(
+    workspace_root: &Path,
+    package_names: &[&str],
+) -> Result<(), RoleContractFinding> {
+    let metadata = cargo_metadata(workspace_root, false).map_err(|error| {
+        unsupported_finding(format!("unable to inspect internal test packages: {error}"))
+    })?;
+
+    for package_name in package_names {
+        let matches = metadata
+            .packages
+            .iter()
+            .filter(|package| package.name == *package_name)
+            .collect::<Vec<_>>();
+        let [package] = matches.as_slice() else {
+            return Err(unsupported_finding(format!(
+                "internal test package `{package_name}` did not resolve exactly once"
+            )));
+        };
+        let Some((fleet, role)) = package_canic_identity(package)? else {
+            continue;
+        };
+        let config_path = package_role_config_path(package, &fleet, &role).ok_or_else(|| {
+            unsupported_finding(format!(
+                "internal test package `{package_name}` has no matching ancestor canic.toml"
+            ))
+        })?;
+        let evidence =
+            match validate_declared_role_package(&config_path, &role, PackageValidationMode::Build)
+            {
+                RolePackageValidation::Supported(evidence) => evidence,
+                RolePackageValidation::Unsupported(finding) => return Err(finding),
+            };
+        if evidence.role_package_name != *package_name
+            || normalized_manifest_path(&evidence.role_manifest_path)
+                != normalized_manifest_path(&package.manifest_path)
+        {
+            return Err(unsupported_finding(format!(
+                "internal test package `{package_name}` does not match the package selected by {}",
+                config_path.display()
+            )));
+        }
+        match super::resolve_declared_role_package_contract(&config_path, &evidence) {
+            canic_core::role_contract::RoleContractResolution::Resolved { .. } => {}
+            canic_core::role_contract::RoleContractResolution::Rejected { errors } => {
+                return Err(errors
+                    .into_iter()
+                    .next()
+                    .expect("rejected role contract has a blocking finding"));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn package_canic_identity(
+    package: &CargoMetadataPackage,
+) -> Result<Option<(String, CanisterRole)>, RoleContractFinding> {
+    let canic = package
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("canic"));
+    let fleet = canic
+        .and_then(|metadata| metadata.get("fleet"))
+        .and_then(serde_json::Value::as_str);
+    let role = canic
+        .and_then(|metadata| metadata.get("role"))
+        .and_then(serde_json::Value::as_str);
+    match (canic, fleet, role) {
+        (None, _, _) => Ok(None),
+        (Some(_), Some(fleet), Some(role)) => Ok(Some((
+            fleet.to_string(),
+            CanisterRole::owned(role.to_string()),
+        ))),
+        (Some(_), _, _) => Err(unsupported_finding(format!(
+            "internal test package `{}` has incomplete Canic package metadata",
+            package.name
+        ))),
+    }
+}
+
+fn package_role_config_path(
+    package: &CargoMetadataPackage,
+    expected_fleet: &str,
+    expected_role: &CanisterRole,
+) -> Option<PathBuf> {
+    let manifest_dir = package.manifest_path.parent()?;
+    for ancestor in manifest_dir.ancestors() {
+        let candidate = ancestor.join("canic.toml");
+        let Ok(source) = fs::read_to_string(&candidate) else {
+            continue;
+        };
+        let Ok(config) = parse_config_model(&source) else {
+            continue;
+        };
+        if config.fleet_name() != Some(expected_fleet) {
+            continue;
+        }
+        let Some(declaration) = config.roles.get(expected_role) else {
+            continue;
+        };
+        if normalized_manifest_path(&package_manifest_path(&candidate, &declaration.package))
+            == normalized_manifest_path(&package.manifest_path)
+        {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn normalized_manifest_path(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn validate_package_manifest(

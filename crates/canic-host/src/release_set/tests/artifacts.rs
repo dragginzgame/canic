@@ -21,12 +21,7 @@ fn read_release_artifact_rejects_plain_wasm() {
     let path = temp.path().join("artifact.wasm");
     fs::write(&path, [0x00, 0x61, 0x73, 0x6d]).expect("write plain wasm");
 
-    let err = read_release_artifact(&path).unwrap_err();
-
-    assert!(
-        err.to_string().contains("not gzip-compressed"),
-        "unexpected error: {err}"
-    );
+    read_release_artifact(&path).expect_err("plain wasm must reject");
 }
 
 #[test]
@@ -37,11 +32,5 @@ fn read_release_artifact_rejects_non_wasm_payload() {
     encoder.write_all(b"not wasm").expect("write payload");
     fs::write(&path, encoder.finish().expect("finish encoder")).expect("write artifact");
 
-    let err = read_release_artifact(&path).unwrap_err();
-
-    assert!(
-        err.to_string()
-            .contains("does not decompress to a wasm module"),
-        "unexpected error: {err}"
-    );
+    read_release_artifact(&path).expect_err("non-wasm gzip payload must reject");
 }

@@ -783,16 +783,16 @@ mod tests {
             },
             || async {
                 repair_calls.set(repair_calls.get() + 1);
-                Err(InternalError::public(Error::unavailable(
+                Err(InternalError::auth_proof_pending(
                     "chain-key root delegation proof is not available yet; retry",
-                )))
+                ))
             },
         ))
         .expect_err("pending root repair must not issue a token");
 
         assert_eq!(
             err.public_error().expect("public error").code,
-            ErrorCode::Unavailable
+            ErrorCode::AuthProofPending
         );
         assert_eq!(prepare_calls.get(), 1);
         assert_eq!(repair_calls.get(), 1);

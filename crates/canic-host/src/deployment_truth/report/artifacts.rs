@@ -26,6 +26,16 @@ const ARTIFACT_SHA256_DIFF_CATEGORY: &str = "artifact_sha256";
 const ARTIFACT_DIGEST_MISMATCH_CODE: &str = "artifact_digest_mismatch";
 const ARTIFACT_DIGEST_UNOBSERVED_CODE: &str = "artifact_digest_unobserved";
 
+pub(in crate::deployment_truth) fn is_artifact_role_failure_code(code: &str) -> bool {
+    matches!(
+        code,
+        ARTIFACT_ROLE_CONFLICT_CODE
+            | ARTIFACT_MISSING_CODE
+            | ARTIFACT_FILE_DIGEST_MISMATCH_CODE
+            | ARTIFACT_DIGEST_MISMATCH_CODE
+    )
+}
+
 pub(super) fn compare_artifacts(
     plan: &DeploymentPlanV1,
     inventory: &DeploymentInventoryV1,

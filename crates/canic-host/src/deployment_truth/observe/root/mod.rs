@@ -55,7 +55,11 @@ pub(super) fn observed_root_observation(
 }
 
 fn root_observation_source(observed: &ObservedCanisterV1) -> DeploymentRootObservationSourceV1 {
-    if observed.role_assignment_source.as_deref() == Some("icp_canister_status") {
+    if observed
+        .role_assignment_source
+        .as_deref()
+        .is_some_and(RoleAssignmentSourceV1::label_includes_live_status)
+    {
         DeploymentRootObservationSourceV1::IcpCanisterStatus
     } else {
         DeploymentRootObservationSourceV1::LocalDeploymentState
@@ -104,7 +108,11 @@ pub(in crate::deployment_truth) fn observed_root_from_status(
         status: Some(report.status.clone()),
         root_trust_anchor: Some(state.root_canister_id.clone()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::IcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     }
 }
 
@@ -120,7 +128,11 @@ fn observed_root_from_install_state(
         status: None,
         root_trust_anchor: Some(state.root_canister_id.clone()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("local_install_state".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::LocalInstallState
+                .label()
+                .to_string(),
+        ),
     }
 }
 

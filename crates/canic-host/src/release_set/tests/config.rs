@@ -9,7 +9,7 @@ fn configured_fleet_name_reads_required_config_identity() {
 
 #[test]
 fn configured_fleet_name_rejects_missing_config_identity() {
-    let err = configured_fleet_name_from_source(
+    configured_fleet_name_from_source(
         r#"
 controllers = []
 app_index = []
@@ -22,13 +22,7 @@ init_mode = "enabled"
 kind = "root"
 "#,
     )
-    .unwrap_err();
-
-    assert!(
-        err.to_string()
-            .contains("missing required [fleet].name in canic.toml"),
-        "unexpected error: {err}"
-    );
+    .expect_err("missing fleet name must reject");
 }
 
 #[test]

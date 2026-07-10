@@ -556,9 +556,9 @@ Check:
   explicitly temporary.
 * macro/build support does not keep broad runtime internals public when a
   narrower hidden helper would work.
-* generated endpoint metadata, protected internal clients, lifecycle wiring, and
-  build-time config embedding do not preserve obsolete route names or fallback
-  shapes.
+* generated endpoint metadata, authenticated endpoint wiring, lifecycle
+  wiring, and build-time config embedding do not preserve obsolete route names
+  or fallback shapes.
 
 Produce:
 

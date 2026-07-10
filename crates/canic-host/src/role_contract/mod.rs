@@ -14,6 +14,7 @@ pub use descriptor::{
 pub use package::{
     PackageValidationMode, RolePackageEvidence, RolePackageValidation, declared_role_manifest_path,
     validate_built_in_wasm_store_package, validate_declared_role_package,
+    validate_internal_test_wasm_packages,
 };
 
 use canic_core::{

@@ -70,3 +70,34 @@ pub struct DeploymentAssumptionV1 {
     pub key: String,
     pub description: String,
 }
+
+impl DeploymentAssumptionV1 {
+    #[must_use]
+    pub fn has_kind(&self, kind: DeploymentAssumptionKindV1) -> bool {
+        self.key == kind.key()
+    }
+}
+
+///
+/// DeploymentAssumptionKindV1
+///
+/// Machine-readable owner for local deployment-state assumption distinctions.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeploymentAssumptionKindV1 {
+    LocalStateMissing,
+    LocalStateNetworkMismatch,
+    LocalStateReadFailed,
+}
+
+impl DeploymentAssumptionKindV1 {
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::LocalStateMissing => "local_state.root_canister_id.missing",
+            Self::LocalStateNetworkMismatch => "local_state.root_canister_id.network_mismatch",
+            Self::LocalStateReadFailed => "local_state.root_canister_id.read_failed",
+        }
+    }
+}

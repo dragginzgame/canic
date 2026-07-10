@@ -22,6 +22,36 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum AccessError {
+    #[error("access denied: delegated auth cert expired")]
+    DelegatedAuthCertExpired,
+
+    #[error("access denied: delegated auth token expired")]
+    DelegatedAuthTokenExpired,
+
     #[error("access denied: {0}")]
     Denied(String),
+}
+
+impl AccessError {
+    #[must_use]
+    pub const fn kind(&self) -> AccessErrorKind {
+        match self {
+            Self::DelegatedAuthCertExpired => AccessErrorKind::DelegatedAuthCertExpired,
+            Self::DelegatedAuthTokenExpired => AccessErrorKind::DelegatedAuthTokenExpired,
+            Self::Denied(_) => AccessErrorKind::Denied,
+        }
+    }
+}
+
+///
+/// AccessErrorKind
+///
+/// Machine-readable access denial category for endpoint error adapters.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AccessErrorKind {
+    DelegatedAuthCertExpired,
+    DelegatedAuthTokenExpired,
+    Denied,
 }

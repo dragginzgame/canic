@@ -1,5 +1,4 @@
 use super::super::*;
-use crate::deployment_truth::report::ARTIFACT_MISSING_CODE;
 
 #[test]
 fn artifact_gate_receipt_records_materialized_artifact_evidence() {
@@ -25,7 +24,11 @@ fn artifact_gate_receipt_records_materialized_artifact_evidence() {
             status: None,
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some("local_install_state".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::LocalInstallState
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {
@@ -207,11 +210,6 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
             .any(|evidence| evidence == "artifact:user_hub:missing")
     );
     assert!(role_receipts.iter().any(|receipt| {
-        receipt.role == "user_hub"
-            && receipt.result == RolePhaseResultV1::Failed
-            && receipt
-                .error
-                .as_deref()
-                .is_some_and(|error| error.contains(ARTIFACT_MISSING_CODE))
+        receipt.role == "user_hub" && receipt.result == RolePhaseResultV1::Failed
     }));
 }

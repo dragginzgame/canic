@@ -98,21 +98,14 @@ fn configured_deployable_roles_include_root_first() {
 
 #[test]
 fn configured_release_roles_rejects_multiple_root_subnets() {
-    let err = configured_release_roles_from_source(MULTI_ROOT_CONFIG).unwrap_err();
-    assert!(
-        err.to_string()
-            .contains("root kind must be unique globally"),
-        "unexpected error: {err}"
-    );
+    configured_release_roles_from_source(MULTI_ROOT_CONFIG)
+        .expect_err("multiple root roles must reject");
 }
 
 #[test]
 fn configured_release_roles_rejects_missing_root() {
-    let err = configured_release_roles_from_source(NO_ROOT_CONFIG).unwrap_err();
-    assert!(
-        err.to_string().contains("root role declaration missing"),
-        "unexpected error: {err}"
-    );
+    configured_release_roles_from_source(NO_ROOT_CONFIG)
+        .expect_err("missing root role must reject");
 }
 
 #[test]

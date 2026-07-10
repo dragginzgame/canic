@@ -3,6 +3,7 @@ use super::operations::InstallPhaseLabel;
 use super::phase_receipts::receipt_with_execution_context;
 use super::receipt_io::write_install_deployment_truth_receipt;
 use super::{
+    InstallRootBlockKind, InstallRootBlockedError,
     capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, clock::current_unix_timestamp_label,
 };
 use crate::deployment_truth::{
@@ -101,7 +102,10 @@ pub(super) fn write_current_install_execution_preflight_receipt(
             .map(deployment_truth_finding_label)
             .collect::<Vec<_>>()
             .join("; ");
-        return Err(format!("deployment execution preflight blocked install: {details}").into());
+        return Err(Box::new(InstallRootBlockedError::new(
+            InstallRootBlockKind::DeploymentExecutionPreflight,
+            format!("deployment execution preflight blocked install: {details}"),
+        )));
     }
     Ok(path)
 }

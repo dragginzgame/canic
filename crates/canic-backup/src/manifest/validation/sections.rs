@@ -13,8 +13,8 @@ use crate::manifest::validation::{
 };
 use crate::manifest::{
     BackupUnit, ConsistencySection, DeploymentMember, DeploymentSection, ManifestValidationError,
-    MemberVerificationChecks, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
-    VerificationPlan,
+    MemberVerificationChecks, SourceMetadata, SourceSnapshot, ToolMetadata,
+    VERIFICATION_KIND_STATUS, VerificationCheck, VerificationPlan,
 };
 
 use std::collections::BTreeSet;
@@ -232,7 +232,7 @@ impl MemberVerificationChecks {
 impl VerificationCheck {
     fn validate(&self) -> Result<(), ManifestValidationError> {
         validate_nonempty("verification.check.kind", &self.kind)?;
-        if self.kind != "status" {
+        if self.kind != VERIFICATION_KIND_STATUS {
             return Err(ManifestValidationError::UnsupportedVerificationKind(
                 self.kind.clone(),
             ));

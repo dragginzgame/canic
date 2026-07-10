@@ -3,11 +3,6 @@
 Canonical layout for new recurring definitions:
 - `docs/audits/recurring/<domain>/<focus>.md`
 
-Legacy layout compatibility:
-- If flat files under `docs/audits/recurring/*.md` ever appear in history, keep
-  them append-only and do not delete or overwrite history.
-- New definitions must use the domain-scoped layout.
-
 ## Required Report Structure
 
 All recurring audit reports must preserve:

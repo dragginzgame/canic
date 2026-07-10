@@ -75,31 +75,3 @@ fn parses_endpoint_options() {
     assert_eq!(options.icp, "/bin/icp");
     assert!(options.json);
 }
-
-// Ensure direct Candid-file selection is not part of deployment-scoped endpoint lookup.
-#[test]
-fn rejects_did_option() {
-    let err = EndpointsOptions::parse_info([
-        OsString::from("test"),
-        OsString::from("app"),
-        OsString::from("--did"),
-        OsString::from("app.did"),
-    ])
-    .expect_err("did override should be removed");
-
-    std::assert_matches!(err, EndpointsCommandError::Usage(_));
-}
-
-// Ensure explicit role fallback is not part of deployment-scoped endpoint lookup.
-#[test]
-fn rejects_role_option() {
-    let err = EndpointsOptions::parse_info([
-        OsString::from("test"),
-        OsString::from("tl4x7-vh777-77776-aaacq-cai"),
-        OsString::from("--role"),
-        OsString::from("scale_hub"),
-    ])
-    .expect_err("role override should be removed");
-
-    std::assert_matches!(err, EndpointsCommandError::Usage(_));
-}

@@ -18,12 +18,10 @@ Current Canic auth surface:
   `DelegationAudience::Canister(canister_id)`,
   `DelegationAudience::CanicSubnet(subnet_id)`, or
   `DelegationAudience::Project(project_id)`
-- there are no verifier-role, verifier-principal, plural-role, or mixed
-  role/principal public audience shapes
 - signed role grants carry the local canister-role scopes authorized by the
-  token; endpoint policy may accept several protected caller roles through
-  role-attestation predicates, but that is separate from delegated-token
-  grants
+  token
+- signed role-attestation verification remains an explicit auth surface that
+  is separate from delegated-token audience and grant evaluation
 - public `canic::start!()` startup selection is metadata-driven and outside
   this auth-equivalence audit except where generated root/non-root endpoint
   bundles expose authenticated surfaces
@@ -74,8 +72,6 @@ For any authenticated endpoint implemented via abstraction, the abstraction path
 - delegated-token bearer reuse during the token TTL
 - domain replay receipt rejection for replay-sensitive commands
 - delegated-session subject resolution
-- role-attestation caller predicates such as `caller::has_role(...)` /
-  `caller::has_any_role(...)`
 
 ## Relationship to Canonical Auth Boundary
 
@@ -89,11 +85,10 @@ equivalent if endpoint-level subject binding and required-scope enforcement
 remain part of the generated/helper boundary. Replay-sensitive mutations must
 use domain operation receipts rather than verifier-local token-use state.
 
-This audit must not treat endpoint role policy as delegated-token audience
-policy. A generated endpoint may accept callers from several roles using
-role-attestation predicates, but delegated-token audience still answers only
-which Canic/project boundary may accept the token. Delegated-token role grants
-answer what the token may do after that acceptance check passes.
+This audit must keep signed role-attestation verification separate from
+delegated-token audience policy. Delegated-token audience selects the accepting
+canister, Canic subnet, or project boundary; signed role grants determine what
+the token may do after that acceptance check passes.
 
 ## Run This Audit After
 
@@ -105,8 +100,7 @@ answer what the token may do after that acceptance check passes.
 - delegated-session bootstrap or resolution changes
 - delegated-token replay, scope, or verifier-ordering changes
 - delegated-token audience DTO or Candid shape changes
-- role-attestation predicate changes (`caller::has_role`,
-  `caller::has_any_role`, internal invocation proof handling)
+- signed role-attestation verification changes
 - root proof provisioning endpoint-bundle changes
 - blob-storage endpoint or blob-storage billing endpoint-bundle guard changes
 
@@ -131,13 +125,13 @@ canic_update
 canic_query
 requires(auth::authenticated
 auth::authenticated(
-caller::has_role
-caller::has_any_role
 resolve_authenticated_identity
 delegated_token_verified
 AccessContext
 DelegationAudience
 DelegatedRoleGrant
+SignedRoleAttestation
+verify_role_attestation
 canic_emit_root_auth_attestation_endpoints
 canic_emit_nonroot_auth_attestation_endpoints
 canic_emit_blob_storage_endpoints
@@ -152,7 +146,8 @@ Confirm:
 
 - generated handlers route through canonical verification
 - no branch omits subject binding
-- no branch widens `DelegationAudience` into role/principal token semantics
+- every `DelegationAudience` branch preserves the exact current variants and
+  verifier-local target binding
 - no branch authorizes from audience without checking the local-role grant
 - no convenience path weakens failure behavior
 - the generated `AccessContext` preserves separate transport-caller and
@@ -207,16 +202,14 @@ Audience-focused checks must also prove:
 
 - `DelegationAudience` is limited to `Canister(canister_id)`,
   `CanicSubnet(subnet_id)`, and `Project(project_id)`
-- no verifier-role, verifier-principal, `Roles`, `Principals`, or
-  `RolesOrPrincipals` DTO remains
 - canister, subnet, and project audience verification uses the verifier-local
   target identity
 - token audience must be a subset of cert audience
 - token grants must be a subset of cert grants
 - local canister role must be present in token grants before required-scope
   checks pass
-- endpoint multi-role policy uses role-attestation predicates rather than
-  delegated-token audience
+- signed role-attestation verification remains separate from delegated-token
+  audience and local-role grant checks
 
 ## Structural Hotspots
 
@@ -230,9 +223,8 @@ rg -l 'access::auth|delegated_token_verified|resolve_authenticated_identity|Auth
 rg -l 'DelegationProof' crates canisters fleets -g '*.rs'
 rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates canisters fleets -g '*.rs'
 rg -l 'canic_emit_root_auth_attestation_endpoints|canic_emit_nonroot_auth_attestation_endpoints|canic_emit_blob_storage_endpoints|canic_emit_blob_storage_billing_endpoints' crates canisters fleets -g '*.rs'
-rg -n 'RolesOrPrincipals|RoleAudienceMustBeSingular|DelegatedTokenAudience|Roles\\(|Principals\\(' crates docs canisters fleets -g '*.rs' -g '*.md'
-rg -n 'caller::has_role|caller::has_any_role|DelegationAudience::Role|DelegationAudience::Principal|verifier_role_hash' crates canisters fleets docs -g '*.rs' -g '*.md'
 rg -n 'DelegationAudience::Canister|DelegationAudience::CanicSubnet|DelegationAudience::Project|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters fleets docs -g '*.rs' -g '*.md'
+rg -n 'SignedRoleAttestation|verify_role_attestation' crates canisters fleets docs -g '*.rs' -g '*.md'
 git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-core/src/dto/auth.rs
 ```
 
@@ -250,7 +242,7 @@ git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access cr
 | `crates/canic/src/macros/endpoints/nonroot.rs` | `canic_emit_nonroot_auth_attestation_endpoints!` | issuer-local delegated-token prepare/get and active-proof install generated endpoints | High |
 | `crates/canic/src/macros/endpoints/blob_storage.rs` | `canic_emit_blob_storage_endpoints!` | generated endpoint guard for certificate creation plus protocol-owned gateway checks | Medium |
 | `crates/canic/src/macros/endpoints/blob_storage_billing.rs` | `canic_emit_blob_storage_billing_endpoints!` | explicit generated access guards for billing sync, funding, and status | Medium |
-| `crates/canic/src/macros/endpoints/wasm_store.rs` | `caller::has_role("root")` protected endpoints | role-attestation endpoint policy that must not be confused with delegated-token audience | Medium |
+| `crates/canic/src/macros/endpoints/wasm_store.rs` | `caller::is_root()` internal endpoints | structural caller authorization that must remain separate from delegated-token endpoint auth | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 

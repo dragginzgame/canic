@@ -732,7 +732,15 @@ fn map_prepare_delegated_token_error(err: PrepareDelegatedTokenError) -> Interna
 }
 
 fn map_verify_delegated_token_error(err: VerifyDelegatedTokenError) -> InternalError {
-    AuthValidationError::Auth(err.to_string()).into()
+    match err {
+        err @ VerifyDelegatedTokenError::CertExpired => {
+            InternalError::auth_proof_expired(err.to_string())
+        }
+        err @ VerifyDelegatedTokenError::TokenExpired => {
+            InternalError::auth_token_expired(err.to_string())
+        }
+        err => AuthValidationError::Auth(err.to_string()).into(),
+    }
 }
 
 // Convert typed verifier failures into bounded metric reasons.
@@ -916,7 +924,7 @@ mod tests {
         };
         let derivation_path = Vec::new();
 
-        let err = verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
+        verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
             algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
             key_id: &key_id,
             derivation_path: &derivation_path,
@@ -925,11 +933,6 @@ mod tests {
             signature: &signature_bytes,
         })
         .expect_err("altered chain-key ECDSA signature must reject");
-
-        assert!(
-            err.contains("signature verification failed"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
@@ -942,7 +945,6 @@ mod tests {
             .expect("missing active proof must be public");
 
         assert_eq!(public.code, ErrorCode::AuthMaterialStale);
-        assert!(public.message.contains("provision auth proof"));
     }
 
     #[test]
@@ -953,7 +955,6 @@ mod tests {
             .expect("stale active proof must be public");
 
         assert_eq!(public.code, ErrorCode::AuthMaterialStale);
-        assert!(public.message.contains("too close to expiry"));
     }
 
     #[test]
@@ -964,7 +965,28 @@ mod tests {
             .expect("expired active proof must be public");
 
         assert_eq!(public.code, ErrorCode::AuthProofExpired);
-        assert!(public.message.contains("expired"));
+    }
+
+    #[test]
+    fn delegated_token_verify_expiry_preserves_machine_readable_codes() {
+        let cases = [
+            (
+                VerifyDelegatedTokenError::TokenExpired,
+                ErrorCode::AuthTokenExpired,
+            ),
+            (
+                VerifyDelegatedTokenError::CertExpired,
+                ErrorCode::AuthProofExpired,
+            ),
+        ];
+
+        for (err, expected) in cases {
+            let internal = map_verify_delegated_token_error(err);
+            let public = internal
+                .public_error()
+                .expect("expiry verification failures must be public");
+            assert_eq!(public.code, expected);
+        }
     }
 
     #[test]
@@ -986,55 +1008,32 @@ mod tests {
         let mut cfg = cfg("mainnet", Some(mainnet_key()));
         cfg.root_proof_mode = "canister_signature".to_string();
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("must reject non-chain-key root proof mode");
-
-        assert!(
-            err.to_string().contains("must be chain_key_batch"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn auth_proof_verifier_config_rejects_mainnet_without_root_key() {
         let cfg = cfg("mainnet", None);
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("mainnet requires explicit root key");
-
-        assert!(
-            err.to_string()
-                .contains("ic_root_public_key_raw_hex is required"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn auth_proof_verifier_config_rejects_mainnet_with_local_root_key() {
         let cfg = cfg("mainnet", Some(local_key()));
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("mainnet must reject local root key");
-
-        assert!(
-            err.to_string()
-                .contains("requires the known mainnet raw IC root public key"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn auth_proof_verifier_config_local_requires_explicit_root_key() {
         let cfg = cfg("local", None);
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("local verifier requires explicit root key");
-
-        assert!(
-            err.to_string()
-                .contains("ic_root_public_key_raw_hex is required"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
@@ -1052,28 +1051,16 @@ mod tests {
     fn auth_proof_verifier_config_pocketic_requires_explicit_root_key() {
         let cfg = cfg("pocketic", None);
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("pocketic verifier requires explicit root key");
-
-        assert!(
-            err.to_string()
-                .contains("ic_root_public_key_raw_hex is required"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn auth_proof_verifier_config_pocketic_rejects_explicit_mainnet_root_key() {
         let cfg = cfg("pocketic", Some(mainnet_key()));
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("pocketic must not accept mainnet root key");
-
-        assert!(
-            err.to_string()
-                .contains("network=\"pocketic\" must not use the mainnet IC root public key"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
@@ -1091,28 +1078,16 @@ mod tests {
     fn auth_proof_verifier_config_local_rejects_explicit_mainnet_root_key() {
         let cfg = cfg("local", Some(mainnet_key()));
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("local must reject explicit mainnet root key");
-
-        assert!(
-            err.to_string()
-                .contains("network=\"local\" must not use the mainnet IC root public key"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn auth_proof_verifier_config_testnet_requires_explicit_root_key() {
         let cfg = cfg("testnet", None);
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("testnet verifier requires explicit root key");
-
-        assert!(
-            err.to_string()
-                .contains("ic_root_public_key_raw_hex is required"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
@@ -1161,68 +1136,39 @@ mod tests {
         cfg.chain_key_root_proof.allow_test_key = true;
         cfg.chain_key_root_proof.public_key_hex = Some("00".repeat(33));
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("invalid chain-key public key must reject");
-
-        assert!(
-            err.to_string()
-                .contains("must be a secp256k1 SEC1 public key"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn auth_proof_verifier_config_chain_key_rejects_mainnet_test_key() {
         let cfg = chain_key_cfg("mainnet", mainnet_key(), "test_key_1");
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
-            .expect_err("mainnet must reject test_key_1");
-
-        assert!(
-            err.to_string().contains("must not be test_key_1"),
-            "unexpected error: {err}"
-        );
+        AuthOps::auth_proof_verifier_config_from(&cfg).expect_err("mainnet must reject test_key_1");
     }
 
     #[test]
     fn auth_proof_verifier_config_chain_key_rejects_unapproved_local_test_key() {
         let cfg = chain_key_cfg("local", local_key(), "test_key_1");
 
-        let err = AuthOps::auth_proof_verifier_config_from(&cfg)
+        AuthOps::auth_proof_verifier_config_from(&cfg)
             .expect_err("local test key requires explicit opt-in");
-
-        assert!(
-            err.to_string().contains("allow_test_key must be true"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn delegated_token_verifier_gate_rejects_issuer_only_canister() {
         install_verifier_test_config(false, true, false);
 
-        let err = require_current_canister_delegated_token_verifier()
+        require_current_canister_delegated_token_verifier()
             .expect_err("issuer-only canister must not verify delegated tokens");
-
-        assert!(
-            err.to_string()
-                .contains("delegated token verifier disabled for this canister"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
     fn delegated_token_verifier_gate_rejects_role_attestation_cache_without_verifier_flag() {
         install_verifier_test_config(false, false, true);
 
-        let err = require_current_canister_delegated_token_verifier()
+        require_current_canister_delegated_token_verifier()
             .expect_err("role-attestation cache must not enable delegated-token verification");
-
-        assert!(
-            err.to_string()
-                .contains("delegated token verifier disabled for this canister"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]

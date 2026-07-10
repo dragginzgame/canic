@@ -59,12 +59,25 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
+    canic_host::role_contract::validate_internal_test_wasm_packages(workspace_root, packages)
+        .unwrap_or_else(|finding| {
+            panic!(
+                "internal PocketIC wasm role validation failed ({}): {}",
+                finding.code(),
+                canic_host::role_contract::finding_detail(&finding)
+            )
+        });
+
     let mut cargo_args = profile.cargo_profile_args().to_vec();
     cargo_args.push("--locked");
 
     let mut build_env = vec![
         ("CARGO_INCREMENTAL", "0"),
         ("ICP_ENVIRONMENT", "local"),
+        (
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+        ),
         INTERNAL_TEST_ENDPOINTS_ENV,
     ];
     build_env.extend_from_slice(extra_env);

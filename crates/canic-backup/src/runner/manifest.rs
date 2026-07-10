@@ -3,8 +3,8 @@ use crate::{
     journal::{ArtifactState, DownloadJournal},
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
-        DeploymentSection, SourceMetadata, SourceSnapshot, ToolMetadata, VerificationCheck,
-        VerificationPlan,
+        DeploymentSection, SourceMetadata, SourceSnapshot, ToolMetadata, VERIFICATION_KIND_STATUS,
+        VerificationCheck, VerificationPlan,
     },
     plan::{BackupPlan, BackupTarget, ControlAuthoritySource},
 };
@@ -171,7 +171,7 @@ fn manifest_member(
         controller_hint: controller_hint(plan, target),
         identity_mode: target.identity_mode.clone(),
         verification_checks: vec![VerificationCheck {
-            kind: "status".to_string(),
+            kind: VERIFICATION_KIND_STATUS.to_string(),
             roles: vec![role],
         }],
         source_snapshot: SourceSnapshot {

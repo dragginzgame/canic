@@ -1,6 +1,6 @@
 use super::super::*;
 use super::deployment::phase_receipt;
-use crate::deployment_truth::report::ARTIFACT_MISSING_CODE;
+use crate::deployment_truth::report::{ARTIFACT_MISSING_CODE, is_artifact_role_failure_code};
 
 /// Build a lightweight receipt for the current-install artifact materialization
 /// gate. The receipt is evidence only; live inventory/check data remains the
@@ -73,7 +73,7 @@ pub fn artifact_gate_role_phase_receipts(check: &DeploymentCheckV1) -> Vec<RoleP
                 .hard_failures
                 .iter()
                 .filter(|finding| finding.subject.as_deref() == Some(planned.role.as_str()))
-                .filter(|finding| finding.code.starts_with("artifact_"))
+                .filter(|finding| is_artifact_role_failure_code(&finding.code))
                 .collect::<Vec<_>>();
             let error = if failures.is_empty() {
                 None

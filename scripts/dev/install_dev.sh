@@ -139,31 +139,6 @@ install_or_update_shellcheck() {
     fi
 }
 
-clean_legacy_icp_npm_cli() {
-    local cargo_bin_dir
-    local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
-    local npm_icp_bin="$npm_bin_dir/icp"
-    local link_target=""
-
-    cargo_bin_dir="$(resolved_cargo_bin_dir)"
-    if [ -L "$npm_icp_bin" ]; then
-        link_target="$(readlink "$npm_icp_bin" || true)"
-        if [[ "$link_target" == *"@icp-sdk/icp-cli"* ]]; then
-            yellow "Removing legacy npm ICP CLI wrapper:"
-            if command -v npm >/dev/null 2>&1; then
-                cyan_command "npm uninstall -g --prefix $CANIC_NPM_PREFIX @icp-sdk/icp-cli"
-                npm uninstall -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/icp-cli >/dev/null 2>&1 || true
-            fi
-            if [ -L "$npm_icp_bin" ]; then
-                cyan_command "rm -f $npm_icp_bin"
-                rm -f "$npm_icp_bin"
-            fi
-        fi
-    elif [ -e "$npm_icp_bin" ]; then
-        yellow "Leaving non-symlink ICP binary at $npm_icp_bin; remove it manually if it shadows $cargo_bin_dir/icp."
-    fi
-}
-
 clean_icp_npm_staging_dirs() {
     local npm_scope_dir="$CANIC_NPM_PREFIX/lib/node_modules/@icp-sdk"
     local staging_dirs=()
@@ -202,7 +177,6 @@ install_or_update_icp_cli() {
     hash -r 2>/dev/null || true
     cyan_command "bash scripts/ci/install-icp-cli.sh"
     bash "$ROOT_DIR/scripts/ci/install-icp-cli.sh"
-    clean_legacy_icp_npm_cli
     hash -r 2>/dev/null || true
     require_command icp
     icp_path="$(command -v icp)"

@@ -7,8 +7,7 @@ canisters. Use this as the reference before adapting a product canister layout.
 This guide tracks the current Canic scaffold shape. For new fleets, prefer
 `canic fleet create <name>` and keep all `canic` dependencies on the same
 release as the installed `canic` CLI. The current schema uses `app_index`,
-`[fleet]`, subnet canister tables, `topup`, and `canic::finish!()`; legacy
-aliases are intentionally not documented here.
+`[fleet]`, subnet canister tables, `topup`, and `canic::finish!()`.
 
 The root manages lifecycle, topology, and artifact staging. It does not proxy
 ordinary application methods. After install, callers resolve child canister IDs

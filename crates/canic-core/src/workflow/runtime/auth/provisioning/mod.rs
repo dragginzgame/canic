@@ -54,9 +54,9 @@ impl RuntimeAuthWorkflow {
         )
         .await?
         .ok_or_else(|| {
-            InternalError::public(Error::unavailable(
+            InternalError::auth_proof_pending(
                 "chain-key root delegation proof is not available yet; retry",
-            ))
+            )
         })
     }
 }

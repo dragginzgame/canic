@@ -4,6 +4,7 @@ use crate::{
 };
 use config_selection::resolve_install_config_path;
 use std::{path::PathBuf, time::Instant};
+use thiserror::Error as ThisError;
 
 mod activation;
 mod artifact_promotion;
@@ -64,6 +65,42 @@ pub use truth_check::{check_install_deployment_truth, check_install_execution_pr
 
 #[cfg(test)]
 mod tests;
+
+///
+/// InstallRootBlockKind
+///
+/// Machine-readable reason that a fresh root install stopped before mutation.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstallRootBlockKind {
+    DeploymentExecutionPreflight,
+    DeploymentTruth,
+}
+
+///
+/// InstallRootBlockedError
+///
+/// Typed install block retained through the host/CLI error boundary.
+///
+
+#[derive(Debug, ThisError)]
+#[error("{message}")]
+pub struct InstallRootBlockedError {
+    kind: InstallRootBlockKind,
+    message: String,
+}
+
+impl InstallRootBlockedError {
+    pub(super) const fn new(kind: InstallRootBlockKind, message: String) -> Self {
+        Self { kind, message }
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> InstallRootBlockKind {
+        self.kind
+    }
+}
 
 /// Discover installable Canic config choices under the current workspace.
 pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {

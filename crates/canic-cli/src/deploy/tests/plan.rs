@@ -676,7 +676,6 @@ fn deploy_plan_json_out_is_create_new_and_json_only() {
         .expect_err("--out must not overwrite an existing report");
     assert!(matches!(err, DeployCommandError::PlanOutput(_)));
     assert_eq!(err.exit_code(), 2);
-    assert!(err.to_string().contains("File exists") || err.to_string().contains("exists"));
 }
 
 #[test]

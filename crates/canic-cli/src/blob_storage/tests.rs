@@ -88,7 +88,7 @@ fn rejects_non_decimal_cycle_syntax() {
         ])
         .expect_err("invalid cycles should fail");
 
-        std::assert_matches!(err, BlobStorageCommandError::Usage(_));
+        std::assert_matches!(err, BlobStorageCommandError::InvalidCycles(_));
     }
 }
 
@@ -108,8 +108,10 @@ fn top_level_forwards_global_icp_and_network() {
     ])
     .expect_err("invalid cycles should be parsed after global options");
 
-    let message = err.to_string();
-    assert!(message.contains("--cycles must be greater than zero"));
+    std::assert_matches!(
+        err,
+        crate::CliError::BlobStorage(BlobStorageCommandError::InvalidCycles(_))
+    );
 }
 
 #[test]

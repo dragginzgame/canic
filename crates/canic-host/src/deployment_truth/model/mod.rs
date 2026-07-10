@@ -35,7 +35,7 @@ pub use inventory::{
     CanisterControlClassV1, DeploymentInventoryV1, DeploymentObservationGapV1,
     DeploymentRootObservationSourceV1, DeploymentRootObservationV1, ExpectedCanisterV1,
     ExpectedPoolCanisterV1, LocalDeploymentConfigV1, ObservationStatusV1, ObservedCanisterV1,
-    ObservedPoolCanisterV1, RoleEpochExpectationV1, RoleEpochObservationV1,
+    ObservedPoolCanisterV1, RoleAssignmentSourceV1, RoleEpochExpectationV1, RoleEpochObservationV1,
     VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
 };
 pub use lifecycle::{
@@ -57,8 +57,8 @@ pub use lifecycle::{
     LifecycleModeV1, LifecycleUpgradeModeV1, LifecycleVerificationRequirementV1,
 };
 pub use plan::{
-    AuthorityProfileV1, DeploymentAssumptionV1, DeploymentIdentityV1, DeploymentPlanV1,
-    TrustDomainV1,
+    AuthorityProfileV1, DeploymentAssumptionKindV1, DeploymentAssumptionV1, DeploymentIdentityV1,
+    DeploymentPlanV1, TrustDomainV1,
 };
 pub use promotion::{
     ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanV1,

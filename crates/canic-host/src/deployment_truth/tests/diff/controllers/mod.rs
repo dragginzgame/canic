@@ -31,7 +31,11 @@ fn deployment_diff_blocks_missing_expected_controller() {
             status: Some("Running".to_string()),
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some("icp_canister_status".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::IcpCanisterStatus
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {
@@ -94,7 +98,11 @@ fn deployment_diff_warns_for_extra_declared_emergency_controller() {
             status: Some("Running".to_string()),
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some("icp_canister_status".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::IcpCanisterStatus
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {
@@ -195,7 +203,11 @@ fn deployment_diff_warns_for_undeclared_extra_controller() {
             status: Some("Running".to_string()),
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some("icp_canister_status".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::IcpCanisterStatus
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {

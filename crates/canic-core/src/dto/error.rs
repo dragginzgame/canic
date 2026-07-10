@@ -1,4 +1,4 @@
-use crate::{InternalError, access::AccessError, dto::prelude::*};
+use crate::{access::AccessError, dto::prelude::*};
 use std::fmt::{self, Display};
 
 //
@@ -78,6 +78,16 @@ impl Error {
         Self::new(ErrorCode::Unavailable, message.into())
     }
 
+    // 401 – The delegated token itself expired and may be reminted.
+    pub fn auth_token_expired(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::AuthTokenExpired, message.into())
+    }
+
+    // 503 – Delegation proof generation is still in progress and may be retried.
+    pub fn auth_proof_pending(message: impl Into<String>) -> Self {
+        Self::new(ErrorCode::AuthProofPending, message.into())
+    }
+
     // 503 – Role-attestation proof retrieval was not run in a direct root query context.
     #[must_use]
     pub fn root_data_certificate_unavailable() -> Self {
@@ -96,7 +106,17 @@ impl Display for Error {
 
 impl From<AccessError> for Error {
     fn from(err: AccessError) -> Self {
-        Self::from(InternalError::from(err))
+        let kind = err.kind();
+        let message = err.to_string();
+        match kind {
+            crate::access::AccessErrorKind::DelegatedAuthCertExpired => {
+                Self::new(ErrorCode::AuthProofExpired, message)
+            }
+            crate::access::AccessErrorKind::DelegatedAuthTokenExpired => {
+                Self::auth_token_expired(message)
+            }
+            crate::access::AccessErrorKind::Denied => Self::unauthorized(message),
+        }
     }
 }
 
@@ -112,6 +132,8 @@ impl From<AccessError> for Error {
 pub enum ErrorCode {
     AuthMaterialStale,
     AuthProofExpired,
+    AuthProofPending,
+    AuthTokenExpired,
     Conflict,
     Forbidden,
     Internal,
@@ -129,4 +151,8 @@ pub enum ErrorCode {
     RootDataCertificateUnavailable,
     Unauthorized,
     Unavailable,
+    WasmStoreCapacityExceeded,
+    WasmStoreChunkMissing,
+    WasmStoreHashMismatch,
+    WasmStoreManifestMissing,
 }

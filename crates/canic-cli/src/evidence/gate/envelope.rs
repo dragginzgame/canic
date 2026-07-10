@@ -7,7 +7,7 @@
 use canic_host::{
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
-        EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, InputFingerprintV1,
+        EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
         PayloadSchemaRefV1, evidence_envelope_schema, json_payload_sha256,
         policy_gate_report_schema, project_evidence_gate_report_schema,
     },
@@ -95,10 +95,12 @@ fn push_gate_summary_finding(summary: &mut EvidenceSummaryV1, finding: &PolicyFi
             PolicyFindingSeverityV1::Error => EvidenceMessageSeverityV1::Error,
         },
     );
-    match finding.subject.as_deref() {
-        Some("evidence_conflict") => summary.evidence_conflicts.push(message),
-        Some("missing_required_evidence") => summary.missing_or_stale_evidence.push(message),
-        Some("success_with_warnings") => summary.warnings.push(message),
+    match finding.subject_exit_class() {
+        Some(ExitClassV1::EvidenceConflict) => summary.evidence_conflicts.push(message),
+        Some(ExitClassV1::MissingRequiredEvidence) => {
+            summary.missing_or_stale_evidence.push(message);
+        }
+        Some(ExitClassV1::SuccessWithWarnings) => summary.warnings.push(message),
         _ => summary.blocked_actions.push(message),
     }
 }

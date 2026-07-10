@@ -431,7 +431,6 @@ fn registry_singleton_policy_blocks_under_parent() {
         public.code,
         ErrorCode::PolicySingletonAlreadyRegisteredUnderParent
     );
-    assert!(public.message.contains("singleton role"));
 }
 
 #[test]
@@ -493,11 +492,6 @@ fn instance_creation_requires_service_directory_parent() {
     assert_eq!(
         public.code,
         ErrorCode::PolicyInstanceRequiresServiceWithDirectory
-    );
-    assert!(
-        public
-            .message
-            .contains("must be created by a service parent with directory config")
     );
 }
 

@@ -1,8 +1,6 @@
 pub mod registry;
 
-use crate::{
-    InternalError, domain::policy::pure::PolicyError, domain::value::Principal, ids::CanisterRole,
-};
+use crate::{InternalError, domain::value::Principal, ids::CanisterRole};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 
@@ -59,12 +57,6 @@ pub enum TopologyPolicyError {
 
     #[error(transparent)]
     RegistryPolicy(#[from] registry::RegistryPolicyError),
-}
-
-impl From<TopologyPolicyError> for InternalError {
-    fn from(err: TopologyPolicyError) -> Self {
-        PolicyError::from(err).into()
-    }
 }
 
 ///

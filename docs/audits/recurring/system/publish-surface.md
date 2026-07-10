@@ -242,17 +242,13 @@ Rules:
 * `canic-wasm-store` is special: its package posture may describe the
   canonical bootstrap/runtime role, but must not imply ordinary users should
   import Canic-managed canister crates as general rlib dependencies.
-* Removed historical crates such as `canic-cdk`, `canic-memory`, and
-  `canic-testkit` must not remain in the current published crate count. If a
-  baseline includes them, mark the comparison as partially comparable and
-  explain the hard cut.
 * Unpublished support/test crates such as `canic-testing-internal` and
   `canic-tests` are excluded unless they accidentally look publishable.
 
 Current hard-cut package posture:
 
-* The current published crate count is eight. Do not reintroduce removed
-  historical crates into the current count when comparing old reports.
+* The current published crate count is eight. Baseline reports with a different
+  package roster are partially comparable and must identify the roster delta.
 * The declared published MSRV is the workspace `rust-version` (`1.91.0` at the
   time this definition was refreshed); the internal Rust toolchain may be newer.
 * `canic`'s default feature set is intentionally small. If defaults change,

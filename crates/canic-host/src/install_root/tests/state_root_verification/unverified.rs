@@ -205,7 +205,10 @@ kind = "root"
         finding.code == "unverified_deployment_root"
             && finding.subject.as_deref() == Some("local_state.unverified_root_canister_id")
     }));
-    assert!(err.to_string().contains("unverified_deployment_root"));
+    let blocked = err
+        .downcast_ref::<InstallRootBlockedError>()
+        .expect("deployment-truth gate should retain its typed reason");
+    assert_eq!(blocked.kind(), InstallRootBlockKind::DeploymentTruth);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

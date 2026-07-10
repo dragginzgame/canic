@@ -2,7 +2,6 @@ use super::ReplicaQueryError;
 use candid::{CandidType, Decode, Principal};
 use canic_core::dto::{error::Error as CanicDtoError, state::BootstrapStatusResponse};
 use serde::Deserialize;
-use std::fmt;
 
 pub(super) fn decode_bootstrap_status_response(
     bytes: &[u8],
@@ -19,7 +18,7 @@ pub(super) fn decode_cycle_balance_response(bytes: &[u8]) -> Result<u128, Replic
 pub(super) fn decode_subnet_registry_response(
     bytes: &[u8],
 ) -> Result<SubnetRegistryResponseWire, ReplicaQueryError> {
-    let result = Decode!(&bytes, Result<SubnetRegistryResponseWire, CanicErrorWire>)
+    let result = Decode!(&bytes, Result<SubnetRegistryResponseWire, CanicDtoError>)
         .map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
     result.map_err(|err| ReplicaQueryError::Query(err.to_string()))
 }
@@ -91,45 +90,6 @@ impl CanisterInfoWire {
             "created_at": self.created_at.to_string(),
         })
     }
-}
-
-///
-/// CanicErrorWire
-///
-
-#[derive(CandidType, Deserialize)]
-pub(super) struct CanicErrorWire {
-    code: ErrorCodeWire,
-    message: String,
-}
-
-impl fmt::Display for CanicErrorWire {
-    // Render a compact public API error from a direct local replica query.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{:?}: {}", self.code, self.message)
-    }
-}
-
-///
-/// ErrorCodeWire
-///
-
-#[derive(CandidType, Debug, Deserialize)]
-enum ErrorCodeWire {
-    Conflict,
-    Forbidden,
-    Internal,
-    InvalidInput,
-    InvariantViolation,
-    NotFound,
-    PolicyInstanceRequiresServiceWithDirectory,
-    PolicyReplicaRequiresServiceWithScaling,
-    PolicyRoleAlreadyRegistered,
-    PolicyShardRequiresServiceWithSharding,
-    PolicySingletonAlreadyRegisteredUnderParent,
-    ResourceExhausted,
-    Unauthorized,
-    Unavailable,
 }
 
 #[cfg(test)]

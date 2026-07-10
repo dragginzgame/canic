@@ -278,7 +278,7 @@ fn get_issuer_canister_signature_proof(
         signatures
             .borrow()
             .get_signature_as_cbor(&inputs, None)
-            .map_err(|err| AuthSignatureError::ProofInvalid(err.to_string()))
+            .map_err(issuer_canister_signature_cbor_error)
     })?;
     let public_key_der =
         CanisterSigPublicKey::new(issuer_pid, issuer_canister_sig_seed(kind).to_vec()).to_der();
@@ -289,6 +289,20 @@ fn get_issuer_canister_signature_proof(
             public_key_der,
         },
     ))
+}
+
+#[cfg(feature = "auth-issuer-canister-sig-create")]
+fn issuer_canister_signature_cbor_error(
+    err: ic_canister_sig_creation::signature_map::CanisterSigError,
+) -> AuthSignatureError {
+    match err {
+        ic_canister_sig_creation::signature_map::CanisterSigError::NoCertificate => {
+            AuthSignatureError::RootDataCertificateUnavailable
+        }
+        err @ ic_canister_sig_creation::signature_map::CanisterSigError::NoSignature => {
+            AuthSignatureError::ProofInvalid(err.to_string())
+        }
+    }
 }
 
 #[cfg(not(feature = "auth-issuer-canister-sig-create"))]

@@ -22,9 +22,12 @@ use crate::{
         CanisterRole, TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
     },
 };
-use canic_core::control_plane_support::error::{InternalError, InternalErrorOrigin};
 #[cfg(feature = "root-control-plane")]
 use canic_core::control_plane_support::format::byte_size;
+use canic_core::{
+    control_plane_support::error::{InternalError, InternalErrorOrigin},
+    dto::error::{Error, ErrorCode},
+};
 #[cfg(feature = "root-control-plane")]
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
@@ -91,7 +94,39 @@ pub enum TemplateManifestOpsError {
 
 impl From<TemplateManifestOpsError> for InternalError {
     fn from(err: TemplateManifestOpsError) -> Self {
-        Self::ops(InternalErrorOrigin::Ops, err.to_string())
+        let code = match &err {
+            #[cfg(feature = "root-control-plane")]
+            TemplateManifestOpsError::ApprovedManifestMissing(_) => {
+                Some(ErrorCode::WasmStoreManifestMissing)
+            }
+            TemplateManifestOpsError::TemplateChunkMissing(_)
+            | TemplateManifestOpsError::TemplateChunkSetEmpty(_)
+            | TemplateManifestOpsError::TemplateChunkSetMissing(_)
+            | TemplateManifestOpsError::TemplateChunkIndexOutOfRange(_, _) => {
+                Some(ErrorCode::WasmStoreChunkMissing)
+            }
+            TemplateManifestOpsError::PayloadHashMismatch(_)
+            | TemplateManifestOpsError::TemplateChunkHashMismatch(_) => {
+                Some(ErrorCode::WasmStoreHashMismatch)
+            }
+            TemplateManifestOpsError::WasmStoreCapacityExceeded { .. }
+            | TemplateManifestOpsError::WasmStoreTemplateLimitExceeded { .. }
+            | TemplateManifestOpsError::WasmStoreVersionLimitExceeded { .. } => {
+                Some(ErrorCode::WasmStoreCapacityExceeded)
+            }
+            #[cfg(feature = "root-control-plane")]
+            TemplateManifestOpsError::ApprovedManifestConflict(_)
+            | TemplateManifestOpsError::ChunkIndexOverflow(_)
+            | TemplateManifestOpsError::PayloadSizeMismatch(_) => None,
+            #[cfg(not(feature = "root-control-plane"))]
+            TemplateManifestOpsError::ChunkIndexOverflow(_)
+            | TemplateManifestOpsError::PayloadSizeMismatch(_) => None,
+        };
+        let message = err.to_string();
+        match code {
+            Some(code) => Self::public(Error::new(code, message)),
+            None => Self::ops(InternalErrorOrigin::Ops, message),
+        }
     }
 }
 
@@ -561,7 +596,10 @@ mod tests {
         })
         .expect_err("mismatched chunk hash must fail");
 
-        assert!(err.to_string().contains("hash mismatch"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreHashMismatch)
+        );
     }
 
     #[test]
@@ -581,7 +619,10 @@ mod tests {
         )
         .expect_err("chunk set should fail once projected store bytes exceed the limit");
 
-        assert!(err.to_string().contains("capacity exceeded"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreCapacityExceeded)
+        );
     }
 
     #[test]
@@ -594,7 +635,10 @@ mod tests {
         )
         .expect_err("manifest should fail once projected store bytes exceed the limit");
 
-        assert!(err.to_string().contains("capacity exceeded"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreCapacityExceeded)
+        );
     }
 
     #[test]
@@ -621,7 +665,10 @@ mod tests {
         )
         .expect_err("second logical template should exceed the store template limit");
 
-        assert!(err.to_string().contains("template count exceeded"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreCapacityExceeded)
+        );
     }
 
     #[test]
@@ -648,7 +695,10 @@ mod tests {
         )
         .expect_err("second retained version should exceed the per-template version limit");
 
-        assert!(err.to_string().contains("version retention exceeded"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreCapacityExceeded)
+        );
     }
 
     #[test]

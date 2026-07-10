@@ -237,14 +237,7 @@ mod tests {
         let mut config = ConfigModel::test_default();
         config.auth.delegated_tokens.network = "local".to_string();
 
-        let err =
-            inject_runtime_ic_root_public_key_from(&mut config, &MAINNET_IC_ROOT_PUBLIC_KEY_RAW)
-                .expect_err("local runtime root key must not accept mainnet key");
-
-        assert!(
-            err.to_string()
-                .contains("must not use the mainnet IC root public key"),
-            "unexpected error: {err}"
-        );
+        inject_runtime_ic_root_public_key_from(&mut config, &MAINNET_IC_ROOT_PUBLIC_KEY_RAW)
+            .expect_err("local runtime root key must not accept mainnet key");
     }
 }

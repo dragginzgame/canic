@@ -21,13 +21,21 @@ pub fn discover_workspace_root_from(path: &Path) -> Option<PathBuf> {
             continue;
         }
 
-        let manifest = fs::read_to_string(&manifest_path).ok()?;
-        if manifest.contains("[workspace]") {
+        let Ok(manifest) = fs::read_to_string(&manifest_path) else {
+            continue;
+        };
+        if manifest_declares_workspace(&manifest) {
             return candidate.canonicalize().ok();
         }
     }
 
     None
+}
+
+fn manifest_declares_workspace(source: &str) -> bool {
+    toml::from_str::<toml::Value>(source)
+        .ok()
+        .is_some_and(|manifest| manifest.get("workspace").is_some())
 }
 
 // Resolve the nearest ICP CLI root from a starting file or directory path.
@@ -102,4 +110,19 @@ fn package_declares_role(package: &CargoMetadataPackage, role_name: &str) -> boo
         .and_then(|canic| canic.get("role"))
         .and_then(JsonValue::as_str)
         == Some(role_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::manifest_declares_workspace;
+
+    #[test]
+    fn workspace_detection_parses_toml_structure() {
+        assert!(manifest_declares_workspace("[workspace]\nmembers = []\n"));
+        assert!(manifest_declares_workspace("[ workspace ]\nmembers = []\n"));
+        assert!(!manifest_declares_workspace(
+            "description = \"example containing [workspace] text\"\n"
+        ));
+        assert!(!manifest_declares_workspace("[workspace\n"));
+    }
 }

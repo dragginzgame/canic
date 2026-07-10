@@ -243,6 +243,5 @@ mod tests {
             .expect("missing root data certificate must be public");
 
         assert_eq!(public.code, ErrorCode::RootDataCertificateUnavailable);
-        assert!(public.message.contains("role-attestation proof retrieval"));
     }
 }

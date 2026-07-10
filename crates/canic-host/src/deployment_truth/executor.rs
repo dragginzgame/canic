@@ -1,10 +1,11 @@
 use super::authority::AUTHORITY_UNSAFE_BLOCKED_CODE;
 use super::{
     AuthorityReconciliationPlanV1, AuthorityReconciliationStateV1, CanisterAuthorityActionV1,
-    DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentCheckV1, DeploymentExecutionContextV1,
-    DeploymentExecutionPreflightStatusV1, DeploymentExecutionPreflightV1,
-    DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1, DeploymentPlanV1, SafetyFindingV1,
-    SafetyReportV1, SafetySeverityV1, SafetyStatusV1, build_authority_reconciliation_plan,
+    DEPLOYMENT_TRUTH_SCHEMA_VERSION, DeploymentAssumptionKindV1, DeploymentCheckV1,
+    DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
+    DeploymentExecutionPreflightV1, DeploymentExecutorBackendV1, DeploymentExecutorCapabilityV1,
+    DeploymentPlanV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1, SafetyStatusV1,
+    build_authority_reconciliation_plan,
 };
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
@@ -497,12 +498,11 @@ fn authority_blocker_subject(action: &CanisterAuthorityActionV1) -> String {
 }
 
 fn allow_initial_install_unknown_authority(check: &DeploymentCheckV1) -> bool {
-    check.plan.unresolved_assumptions.iter().any(|assumption| {
-        assumption.key == "local_state.root_canister_id"
-            && assumption
-                .description
-                .contains("no local deployment state exists")
-    })
+    check
+        .plan
+        .unresolved_assumptions
+        .iter()
+        .any(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
 }
 
 fn ensure_preflight_field(

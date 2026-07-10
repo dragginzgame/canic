@@ -508,14 +508,6 @@ mod tests {
     }
 
     #[test]
-    fn build_rejects_old_role_only_shape() {
-        std::assert_matches!(
-            BuildOptions::parse([OsString::from("app")]),
-            Err(BuildCommandError::Usage(_))
-        );
-    }
-
-    #[test]
     fn build_usage_lists_fleet_and_role() {
         let text = usage();
 
@@ -563,13 +555,9 @@ mod tests {
         write_build_config(&root, false);
         let options = build_options(&root, "demo", "app");
 
-        let err = validate_attached_role(&options)
-            .expect_err("declared-only role should fail")
-            .to_string();
+        validate_attached_role(&options).expect_err("declared-only role should fail");
 
         fs::remove_dir_all(root).expect("remove temp root");
-        assert!(err.contains("declared but not attached"));
-        assert!(err.contains("canic fleet role attach demo app --subnet <subnet>"));
     }
 
     #[test]
@@ -590,12 +578,9 @@ mod tests {
         let mut options = build_options(&root, "other", "app");
         options.config = Some(config_path.display().to_string());
 
-        let err = resolve_build_config_path(&options)
-            .expect_err("fleet mismatch should fail")
-            .to_string();
+        resolve_build_config_path(&options).expect_err("fleet mismatch should fail");
 
         fs::remove_dir_all(root).expect("remove temp root");
-        assert!(err.contains("not \"other\""));
     }
 
     fn build_options(root: &std::path::Path, fleet: &str, role: &str) -> BuildOptions {

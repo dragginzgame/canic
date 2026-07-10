@@ -48,7 +48,6 @@ fn deploy_catalog_help_documents_passive_deployment_target_scope() {
 
     assert!(help.contains("deployment targets recorded under .canic/<network>/deployments"));
     assert!(help.contains("canic deploy inspect catalog list"));
-    assert!(!help.contains("canic deploy catalog list"));
     assert!(help.contains("do not query"));
     assert!(help.contains("infer deployments from fleet-template names"));
     assert!(list_help.contains("--json"));

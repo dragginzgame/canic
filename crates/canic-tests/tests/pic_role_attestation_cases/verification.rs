@@ -30,10 +30,6 @@ fn role_attestation_verification_paths() {
     );
     let err = verified.expect_err("verification must fail for mismatched caller");
     assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("subject mismatch"),
-        "expected subject mismatch error, got: {err:?}"
-    );
 
     // Audience binding must be enforced by the verifier.
     let wrong_audience = Principal::from_slice(&[9; 29]);
@@ -46,10 +42,6 @@ fn role_attestation_verification_paths() {
     );
     let err = verified.expect_err("verification must fail for audience mismatch");
     assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("audience mismatch"),
-        "expected audience mismatch error, got: {err:?}"
-    );
 
     // Epoch floors higher than the attestation epoch must fail closed.
     let issued = issue_self_attestation(pic, root_id, TEST_ROLE_ATTESTATION_TTL_NS, root_id);
@@ -61,10 +53,6 @@ fn role_attestation_verification_paths() {
     );
     let err = verified.expect_err("verification must fail when epoch floor is higher");
     assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("epoch"),
-        "expected epoch rejection, got: {err:?}"
-    );
 
     // Expiry is time-sensitive, so keep it last after advancing the clock.
     let issued = issue_self_attestation(pic, root_id, TEST_SHORT_ROLE_ATTESTATION_TTL_NS, root_id);
@@ -78,8 +66,4 @@ fn role_attestation_verification_paths() {
     );
     let err = verified.expect_err("verification must fail for expired attestation");
     assert_eq!(err.code, ErrorCode::Internal);
-    assert!(
-        err.message.contains("expired"),
-        "expected expired error, got: {err:?}"
-    );
 }

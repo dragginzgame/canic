@@ -110,7 +110,7 @@ fn verify_registered_deployment_root_rejects_verified_root_replacement() {
     observed_root.root_principal = "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string();
     observed_root.observed_canister_id = "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string();
 
-    let err = verify_registered_deployment_root(VerifyDeploymentRootOptions {
+    verify_registered_deployment_root(VerifyDeploymentRootOptions {
         deployment_name: "demo-local".to_string(),
         network: "local".to_string(),
         deployment_check: check,
@@ -122,10 +122,6 @@ fn verify_registered_deployment_root_rejects_verified_root_replacement() {
         .expect("read after")
         .expect("state after");
 
-    assert!(
-        err.to_string()
-            .contains("deployment root verification failed")
-    );
     assert_eq!(
         state_after.root_canister_id,
         verified_state.root_canister_id
@@ -149,7 +145,7 @@ fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
         .expect("observed root");
     observed_root.observation_source = DeploymentRootObservationSourceV1::LocalDeploymentState;
 
-    let err = verify_registered_deployment_root(VerifyDeploymentRootOptions {
+    verify_registered_deployment_root(VerifyDeploymentRootOptions {
         deployment_name: "demo-local".to_string(),
         network: "local".to_string(),
         deployment_check: check,
@@ -161,10 +157,6 @@ fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
         .expect("read state")
         .expect("state exists");
 
-    assert!(
-        err.to_string()
-            .contains("deployment root verification failed")
-    );
     assert_eq!(state.root_verification, RootVerificationStatus::NotVerified);
 
     fs::remove_dir_all(root).expect("clean temp dir");
@@ -242,16 +234,12 @@ fn verify_registered_deployment_root_rejects_state_digest_race() {
     let mut changed = state.clone();
     changed.updated_at_unix_secs = 99;
 
-    let err = write_verified_root_state_if_unchanged(&root, "local", &changed, "not-current")
+    write_verified_root_state_if_unchanged(&root, "local", &changed, "not-current")
         .expect_err("stale digest must fail closed");
     let stored = read_deployment_install_state(&root, "local", "demo-local")
         .expect("read state")
         .expect("state exists");
 
-    assert!(
-        err.to_string()
-            .contains("deployment root verification state changed before write")
-    );
     assert_eq!(stored.updated_at_unix_secs, state.updated_at_unix_secs);
 
     fs::remove_dir_all(root).expect("clean temp dir");

@@ -20,8 +20,6 @@ const WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 pub struct WasmStorePublicationWorkflow;
 
 impl WasmStorePublicationWorkflow {
-    const WASM_STORE_CAPACITY_EXCEEDED_MESSAGE: &str = "wasm store capacity exceeded";
-
     // Execute one typed root-owned WasmStore publication or lifecycle admin command.
     pub async fn handle_admin(
         cmd: WasmStoreAdminCommand,

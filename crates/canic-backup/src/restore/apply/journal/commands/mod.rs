@@ -5,6 +5,7 @@
 //! Boundary: produces no-execute runner command payloads from journal state.
 
 use crate::{
+    manifest::VERIFICATION_KIND_STATUS,
     persistence::resolve_backup_artifact_path,
     restore::{RestoreApplyJournal, RestoreApplyJournalOperation, RestoreApplyOperationKind},
 };
@@ -180,12 +181,12 @@ impl RestoreApplyRunnerCommand {
             RestoreApplyOperationKind::VerifyMember
             | RestoreApplyOperationKind::VerifyDeployment => {
                 match operation.verification_kind.as_deref() {
-                    Some("status") => Some(Self {
+                    Some(VERIFICATION_KIND_STATUS) => Some(Self {
                         program: config.program.clone(),
                         args: icp_canister_args(
                             config,
                             vec![
-                                "status".to_string(),
+                                VERIFICATION_KIND_STATUS.to_string(),
                                 operation.target_canister.clone(),
                                 "--json".to_string(),
                             ],

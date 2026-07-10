@@ -32,8 +32,6 @@ use canic_tests::root::{
     harness::{RootSetup, setup_cached_root, setup_root},
 };
 
-const CHAIN_KEY_PROOF_NOT_AVAILABLE: &str =
-    "chain-key root delegation proof is not available yet; retry";
 const TEST_CHAIN_KEY_ECDSA_PUBLIC_KEY: &str = "test_chain_key_ecdsa_public_key";
 const TEST_CHAIN_KEY_KEY_NAME: &str = "key_1";
 const TEST_FLEET_CHAIN_KEY_PUBLIC_KEY_HEX: &str =
@@ -563,7 +561,7 @@ fn get_prepared_delegated_token(
 }
 
 fn chain_key_proof_retryable(err: &Error) -> bool {
-    err.code == ErrorCode::Unavailable && err.message == CHAIN_KEY_PROOF_NOT_AVAILABLE
+    err.code == ErrorCode::AuthProofPending
 }
 
 fn token_request_metadata(

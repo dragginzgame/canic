@@ -263,8 +263,7 @@ Identify high-branch-density functions and compare against previous run.
 Axis families to detect:
 
 * capability family
-* capability proof mode (`Structural`; retired delegated-grant and
-  role-attestation capability-proof variants must not reappear)
+* capability proof mode (`Structural`)
 * auth proof lifecycle (`root delegation batch`, `active proof install`,
   `issuer token proof`, `signed role attestation`)
 * replay state (miss/hit/conflict/expired)

@@ -129,7 +129,11 @@ fn root_verification_report_rejects_local_state_only_root_evidence() {
     let mut inventory = sample_root_verification_inventory();
     let observed_root = inventory.observed_root.as_mut().expect("root evidence");
     observed_root.observation_source = DeploymentRootObservationSourceV1::LocalDeploymentState;
-    observed_root.role_assignment_source = Some("local_install_state".to_string());
+    observed_root.role_assignment_source = Some(
+        RoleAssignmentSourceV1::LocalInstallState
+            .label()
+            .to_string(),
+    );
     let check = sample_check(sample_root_verification_plan(), inventory);
     let report =
         deployment_root_verification_report_from_check(sample_root_verification_request(check));

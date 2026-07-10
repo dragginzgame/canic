@@ -76,6 +76,14 @@ impl InternalError {
         ))
     }
 
+    pub fn auth_token_expired(message: impl Into<String>) -> Self {
+        Self::public(PublicError::auth_token_expired(message))
+    }
+
+    pub fn auth_proof_pending(message: impl Into<String>) -> Self {
+        Self::public(PublicError::auth_proof_pending(message))
+    }
+
     #[must_use]
     pub fn operation_id_required() -> Self {
         Self::public(PublicError::operation_id_required())
@@ -136,11 +144,21 @@ impl InternalError {
 
 impl From<AccessError> for InternalError {
     fn from(err: AccessError) -> Self {
-        Self::new(
-            InternalErrorClass::Access,
-            InternalErrorOrigin::Access,
-            err.to_string(),
-        )
+        let kind = err.kind();
+        let message = err.to_string();
+        match kind {
+            crate::access::AccessErrorKind::DelegatedAuthCertExpired => {
+                Self::auth_proof_expired(message)
+            }
+            crate::access::AccessErrorKind::DelegatedAuthTokenExpired => {
+                Self::auth_token_expired(message)
+            }
+            crate::access::AccessErrorKind::Denied => Self::new(
+                InternalErrorClass::Access,
+                InternalErrorOrigin::Access,
+                message,
+            ),
+        }
     }
 }
 

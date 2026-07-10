@@ -28,14 +28,9 @@ separate policy family.
 
 - Parent, child, root, self, controller, whitelist, and subnet-registry checks
   use the raw transport caller, not delegated user identity.
-- `caller::has_role(role)` and `caller::has_any_role([...])` protected
-  internal envelope predicates are removed from the active macro grammar.
 - Canister-to-canister service authorization uses explicit
   `SignedRoleAttestation` verification or public delegated-token authenticated
   endpoints.
-- The old AppIndex-only `caller::has_app_role(role)` predicate was removed in
-  0.40 because verifier-local AppIndex state is not sufficient authorization
-  for sibling Canic RPC.
 - Subnet-registry caller predicates are internal-only endpoint rules. Public
   user ingress should use `auth::authenticated(...)`.
 
@@ -97,7 +92,8 @@ Cryptographic and structural verification is delegated to
 ## Audience Binding
 
 Audience answers which Canic boundary may accept the token:
-- `Canic` is accepted by any Canic verifier.
+- `Canister(canister_id)` is accepted only by that canister.
+- `CanicSubnet(subnet_id)` is accepted only by a verifier on that Canic subnet.
 - `Project(project_id)` is accepted only when the verifier's local project id
   matches `project_id`.
 

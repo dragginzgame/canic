@@ -43,13 +43,17 @@ fn topology_indexes_registry_entries() {
     assert_eq!(topology.root_canister_id, "root-id");
 }
 
-// Ensure local replica missing-canister errors are recognized for lost fleet guidance.
+// Ensure the structured destination-invalid reject is recognized for lost fleet guidance.
 #[test]
 fn detects_local_canister_not_found_error() {
-    assert!(is_canister_not_found_error(
-        "local replica rejected query: code=3 message=Canister uxrrr-q7777-77774-qaaaq-cai not found"
-    ));
-    assert!(!is_canister_not_found_error(
-        "local replica rejected query: code=5 message=some other failure"
+    assert!(is_missing_destination_error(&ReplicaQueryError::Rejected {
+        code: IC_REJECT_CODE_DESTINATION_INVALID,
+        message: "canister is unavailable".to_string(),
+    }));
+    assert!(!is_missing_destination_error(
+        &ReplicaQueryError::Rejected {
+            code: 5,
+            message: "some other failure".to_string(),
+        }
     ));
 }
