@@ -49,10 +49,25 @@ pub fn build_internal_test_wasm_canisters(
     packages: &[&str],
     profile: CanicWasmBuildProfile,
 ) {
+    build_internal_test_wasm_canisters_with_env(workspace_root, target_dir, packages, profile, &[]);
+}
+
+pub(super) fn build_internal_test_wasm_canisters_with_env(
+    workspace_root: &Path,
+    target_dir: &Path,
+    packages: &[&str],
+    profile: CanicWasmBuildProfile,
+    extra_env: &[(&str, &str)],
+) {
     let mut cargo_args = profile.cargo_profile_args().to_vec();
     cargo_args.push("--locked");
 
-    let build_env = [("ICP_ENVIRONMENT", "local"), INTERNAL_TEST_ENDPOINTS_ENV];
+    let mut build_env = vec![
+        ("CARGO_INCREMENTAL", "0"),
+        ("ICP_ENVIRONMENT", "local"),
+        INTERNAL_TEST_ENDPOINTS_ENV,
+    ];
+    build_env.extend_from_slice(extra_env);
     build_wasm_canisters(
         workspace_root,
         target_dir,

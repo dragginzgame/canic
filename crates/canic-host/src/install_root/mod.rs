@@ -1,4 +1,7 @@
-use crate::release_set::{icp_root, workspace_root};
+use crate::{
+    canister_build::cache::DefaultCanisterBuildCacheCleanup,
+    release_set::{icp_root, workspace_root},
+};
 use config_selection::resolve_install_config_path;
 use std::{path::PathBuf, time::Instant};
 
@@ -82,6 +85,7 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, Box<dyn s
 // Execute the local thin-root install flow against an already running replica.
 pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::error::Error>> {
     let workspace_root = workspace_root()?;
+    let _build_cache_cleanup = DefaultCanisterBuildCacheCleanup::for_install(&workspace_root);
     let icp_root = match &options.icp_root {
         Some(path) => path.canonicalize()?,
         None => icp_root()?,

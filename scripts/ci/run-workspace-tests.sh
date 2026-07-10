@@ -6,6 +6,7 @@ HARNESS_ARGS=(-- --test-threads=1 --nocapture)
 SUMMARY_LABELS=()
 SUMMARY_DURATIONS=()
 SUMMARY_KINDS=()
+HEAVY_BUILD_TARGETS_USED=0
 
 elapsed_seconds() {
     local started_at="$1"
@@ -52,22 +53,36 @@ run_test() {
 
 clear_pocketic_build_targets() {
     local label="$1"
+    local ci_only="${2:-0}"
     local cleared=0
     local target_dir
     local target_dirs=(
         "target/icp-build"
+        "target/canic-wasm"
         "target/pic-wasm"
         "target/pic-wasm-no-test-material"
-        "target/delegation_root_stub_bootstrap_wasm_store"
-        "target/delegation_root_stub_embedded_wasm"
     )
 
-    # CI clears aggressive build caches to avoid runner disk exhaustion. Local
-    # runs keep Cargo's wasm build cache.
-    case "${CI:-}" in
-        1 | true | TRUE | yes | YES) ;;
-        *) return ;;
-    esac
+    if [[ "$ci_only" -eq 1 ]]; then
+        # CI clears between heavy suites so one runner never carries multiple
+        # isolated Wasm targets at once.
+        case "${CI:-}" in
+            1 | true | TRUE | yes | YES) ;;
+            *) return ;;
+        esac
+    else
+        case "${CI:-}" in
+            1 | true | TRUE | yes | YES) ;;
+            *)
+                # Local runs clean once on exit by default. Developers can
+                # explicitly retain caches when speed matters more than disk.
+                case "${CANIC_KEEP_WASM_BUILD_CACHE:-}" in
+                    1 | true | TRUE | yes | YES) return ;;
+                    *) ;;
+                esac
+                ;;
+        esac
+    fi
 
     for target_dir in "${target_dirs[@]}"; do
         if [[ ! -e "$target_dir" ]]; then
@@ -75,19 +90,28 @@ clear_pocketic_build_targets() {
         fi
 
         if [[ "$cleared" -eq 0 ]]; then
-            echo "==> clearing PocketIC build targets before $label"
+            echo "==> clearing transient Wasm build targets: $label"
             cleared=1
         fi
-        rm -rf "$target_dir"
+        rm -rf "$target_dir" || echo "warning: failed to clear $target_dir" >&2
     done
+}
+
+cleanup_heavy_build_targets() {
+    if [[ "$HEAVY_BUILD_TARGETS_USED" -eq 1 ]]; then
+        clear_pocketic_build_targets "workspace test exit"
+    fi
 }
 
 run_pic_test() {
     local label="$1"
     shift
-    clear_pocketic_build_targets "$label"
+    HEAVY_BUILD_TARGETS_USED=1
+    clear_pocketic_build_targets "before $label" 1
     run_test "$label" "$@"
 }
+
+trap cleanup_heavy_build_targets EXIT
 
 # Compile and run all unit/lib/bin tests together first.
 run_test "workspace lib/bin tests" --workspace --lib --bins

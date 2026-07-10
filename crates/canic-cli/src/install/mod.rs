@@ -40,6 +40,10 @@ replica lost canisters. For an existing canister that only needs new Wasm,
 inspect with canic info list and canic medic deployment, then use the
 project upgrade flow.
 
+Install removes its transient target/canic-wasm Cargo cache after canonical
+.icp artifacts are written. Set CANIC_KEEP_WASM_BUILD_CACHE=1 to retain it for
+faster repeated local installs.
+
 The selected canic.toml must include:
   [fleet]
   name = \"test\"";

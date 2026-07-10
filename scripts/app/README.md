@@ -91,7 +91,7 @@ This repo's `icp.yaml` uses custom build commands which call the host artifact
 builder directly from the checkout:
 
 ```bash
-cargo run -q -p canic-host --example build_artifact -- <canister>
+CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- <canister>
 ```
 
 Downstream repos that consume Canic from crates.io should use the installed CLI

@@ -1,15 +1,27 @@
 use ic_testkit::artifacts::{read_wasm, test_target_dir as artifact_test_target_dir};
 use ic_testkit::pic::{Pic, PicBuilder, PicSerialGuard, acquire_pic_serial_guard};
 use std::{
+    env,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
+    process::Command,
     sync::{Mutex, Once},
 };
 
-use super::super::artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
+use super::super::artifacts::{
+    CanicWasmBuildProfile, INTERNAL_TEST_ENDPOINTS_ENV, build_internal_test_wasm_canisters,
+    build_internal_test_wasm_canisters_with_env,
+};
 use super::fixture::progress;
 
-const CANISTER_PACKAGES: [&str; 1] = ["delegation_root_stub"];
+const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
+const EMBEDDED_CANISTER_PACKAGES: [&str; 3] = [
+    "delegation_issuer_stub",
+    "project_hub_stub",
+    "project_instance_stub",
+];
+const REQUIRE_EMBEDDED_ARTIFACTS_ENV: (&str, &str) =
+    ("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS", "1");
 static BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
@@ -75,15 +87,64 @@ fn build_canisters_once(workspace_root: &Path) {
 
     BUILD_ONCE.call_once_force(|_| {
         let target_dir = test_target_dir(workspace_root);
-        progress("building PIC wasm artifacts");
+        progress("building embedded PIC wasm artifacts");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
-            &CANISTER_PACKAGES,
+            &EMBEDDED_CANISTER_PACKAGES,
             CanicWasmBuildProfile::Fast,
+        );
+        progress("building bootstrap wasm_store artifact");
+        build_bootstrap_wasm_store(workspace_root, &target_dir);
+        progress("building PIC root wasm artifact");
+        build_internal_test_wasm_canisters_with_env(
+            workspace_root,
+            &target_dir,
+            &[ROOT_CANISTER_PACKAGE],
+            CanicWasmBuildProfile::Fast,
+            &[REQUIRE_EMBEDDED_ARTIFACTS_ENV],
         );
         progress("finished PIC wasm build");
     });
+}
+
+// Build the root's implicit wasm_store before Cargo runs the root build script.
+fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path) {
+    let config_path = workspace_root
+        .join("canisters")
+        .join("test")
+        .join(ROOT_CANISTER_PACKAGE)
+        .join("canic.toml");
+    let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let output = Command::new(cargo)
+        .current_dir(workspace_root)
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_TARGET_DIR", target_dir)
+        .env("CANIC_CONFIG_PATH", config_path)
+        .env("CANIC_WASM_PROFILE", "fast")
+        .env("ICP_ENVIRONMENT", "local")
+        .env(INTERNAL_TEST_ENDPOINTS_ENV.0, INTERNAL_TEST_ENDPOINTS_ENV.1)
+        .args([
+            "run",
+            "-q",
+            "--profile",
+            "fast",
+            "-p",
+            "canic-host",
+            "--example",
+            "build_artifact",
+            "--locked",
+            "--",
+            "wasm_store",
+        ])
+        .output()
+        .expect("run bootstrap wasm_store artifact builder");
+
+    assert!(
+        output.status.success(),
+        "bootstrap wasm_store artifact build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 // Read one built fast-profile wasm artifact from an explicit target directory.

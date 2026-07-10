@@ -11,39 +11,25 @@ before this compaction is archived at
 
 ## Current Line
 
-- The active line is `0.83.x` technical debt audit closeout. Design:
+- The `0.83.x` technical-debt audit closed at `0.83.28`. Design:
   `docs/design/0.83-technical-debt/0.83-design.md`. Canonical result:
   `docs/audits/0.83-technical-debt/ledger.md`, which is `pass` with all 37
-  findings fixed and no deferred findings.
+  findings fixed and no deferred findings. `0.83.29` is a post-audit state,
+  build-cache, and module-hygiene hardening release rather than a reopened
+  ledger slice.
 
-- The current package/release-surface version is `0.83.27`. Earlier in the
-  0.82 line, an accidental next-minor workspace/version-surface bump was
-  corrected before patch work continued. A local stale next-minor tag was
-  observed then, but it has not been deleted.
+- The current package/release-surface version remains `0.83.28`; the root and
+  detailed `0.83.29` changelog entries are prepared, but no package version was
+  changed. No `0.84` feature line has started, and there is no `0.84` design
+  document to implement yet.
 
-- The current `0.83.28` release-preparation batch fixes
-  `CANIC-083-DEBT-035` through `CANIC-083-DEBT-037`. Receipt-resume duplicate
-  detection now compares typed evidence so delimiter collisions fail closed.
-  Promotion execution/status text and staging evidence consume model-owned
-  labels, and the unused public `PreviousArtifactReceiptKindV1::label()` method
-  is hard-cut. The canonical ledger, recommended slices, and handoff now agree
-  on package surface `0.83.27` and `pass` status. Receipt/report JSON schemas,
-  ordinary operator output strings, command behavior, endpoints, Candid,
-  deployment-truth schema, evidence/report schemas, and stable-state layout are
-  unchanged.
-
-- The released `0.83.27` slice fixes `CANIC-083-DEBT-034` by
-  tightening promotion artifact/policy label ownership. Promotion artifact
-  level, artifact source kind, artifact identity kind, policy requirement,
-  policy claim, artifact source, observation status, and role phase result
-  enums own the exact labels used by promotion text renderers and promotion
-  identity keys. That release also introduced artifact-transport and previous-
-  receipt-kind label methods; the 0.83.28 closeout batch consumes
-  the transport label and removes the previous-receipt-kind method because it
-  had no production consumer. Operator text output labels, identity-key
-  strings, command behavior, endpoint surfaces, Candid, JSON schemas,
-  deployment truth schema, evidence/report schemas, and stable-state layout
-  are unchanged.
+- The current `0.83.29` release-preparation batch makes wasm-store state audits
+  declare template memories 80-83 plus GC memory 85; represents feature-gated
+  sharding/blob allocations conservatively as reservations when those features
+  are compiled; removes nested Cargo execution from the delegation root build
+  script; bounds and cleans artifact-only Cargo targets; and splits medic
+  command, package inspection, report model, and rendering responsibilities
+  without output changes.
 
 - The `0.83.26` slice fixes `CANIC-083-DEBT-032` by
   tightening deployment-truth control-class label ownership and

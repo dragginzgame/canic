@@ -20,6 +20,7 @@ use crate::{
 
 use super::{
     CanisterBuildProfile,
+    cache::{canister_build_target_root, configure_canister_cargo_command},
     candid::{extract_candid, remove_stale_icp_candid_sidecars},
     model::{
         CanisterArtifactBuildOutput, LOCAL_ARTIFACT_ROOT_RELATIVE, ROOT_ROLE, WASM_STORE_ROLE,
@@ -181,12 +182,10 @@ fn run_canister_build(
     profile: CanisterBuildProfile,
     require_embedded_release_artifacts: bool,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let target_root = std::env::var_os("CARGO_TARGET_DIR")
-        .map_or_else(|| workspace_root.join("target"), PathBuf::from);
+    let target_root = canister_build_target_root(workspace_root);
     let mut command = cargo_command();
     command
         .current_dir(workspace_root)
-        .env("CARGO_TARGET_DIR", &target_root)
         .env("CANIC_ICP_ROOT", icp_root)
         .args([
             "build",
@@ -196,6 +195,7 @@ fn run_canister_build(
             WASM_TARGET,
         ])
         .args(profile.cargo_args());
+    configure_canister_cargo_command(&mut command, workspace_root);
 
     if require_embedded_release_artifacts {
         command.env("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS", "1");

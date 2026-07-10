@@ -1,4 +1,5 @@
 mod artifact;
+pub(crate) mod cache;
 mod candid;
 mod context;
 mod model;

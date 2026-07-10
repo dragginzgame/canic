@@ -13,15 +13,14 @@ use canic_core::state_contract::{
 };
 use canic_core::state_contract::{STATE_MANIFEST_SCHEMA_VERSION, StateManifest};
 
+#[cfg(feature = "root-control-plane")]
+use crate::storage::stable::state::subnet::SUBNET_STATE_ID;
 #[cfg(feature = "wasm-store-canister")]
 use crate::storage::stable::template::gc::WASM_STORE_GC_STATE_ID;
-#[cfg(feature = "root-control-plane")]
-use crate::storage::stable::{
-    state::subnet::SUBNET_STATE_ID,
-    template::{
-        chunked::{TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID},
-        manifest::TEMPLATE_MANIFESTS_ID,
-    },
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+use crate::storage::stable::template::{
+    chunked::{TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID},
+    manifest::TEMPLATE_MANIFESTS_ID,
 };
 
 #[cfg(feature = "root-control-plane")]
@@ -61,50 +60,19 @@ fn declared_roles() -> Vec<canic_core::state_contract::StateRoleManifest> {
 
 #[cfg(feature = "root-control-plane")]
 fn root_role_manifest() -> StateRoleManifest {
+    let mut state = template_state_domains(200);
+    state.push(state_domain(
+        "control_plane_subnet_state",
+        SUBNET_STATE_ID,
+        "SubnetStateRecord",
+        "ControlPlaneSubnetStateData",
+        240,
+        "control_plane_subnet_state_restores_publication_bindings",
+    ));
+
     StateRoleManifest {
         canister_role: ROOT_ROLE.to_string(),
-        state: vec![
-            state_domain(
-                "template_manifests",
-                TEMPLATE_MANIFESTS_ID,
-                "TemplateManifestRecord",
-                "TemplateManifestData",
-                200,
-                "template_manifests_restore_release_index",
-            ),
-            state_domain(
-                "template_chunk_sets",
-                TEMPLATE_CHUNK_SETS_ID,
-                "TemplateChunkSetRecord",
-                "TemplateChunkSetData",
-                210,
-                "template_chunk_sets_restore_release_metadata",
-            ),
-            state_domain(
-                "template_chunk_refs",
-                TEMPLATE_CHUNK_REFS_ID,
-                "TemplateChunkRefRecord",
-                "TemplateChunkRefData",
-                220,
-                "template_chunk_refs_restore_chunk_slots",
-            ),
-            state_domain(
-                "template_chunk_payloads",
-                TEMPLATE_CHUNK_PAYLOADS_ID,
-                "TemplateChunkPayloadRecord",
-                "TemplateChunkPayloadData",
-                230,
-                "template_chunk_payloads_restore_chunk_bytes",
-            ),
-            state_domain(
-                "control_plane_subnet_state",
-                SUBNET_STATE_ID,
-                "SubnetStateRecord",
-                "ControlPlaneSubnetStateData",
-                240,
-                "control_plane_subnet_state_restores_publication_bindings",
-            ),
-        ],
+        state,
         removed_state: Vec::new(),
         reserved_memory: Vec::new(),
     }
@@ -112,19 +80,60 @@ fn root_role_manifest() -> StateRoleManifest {
 
 #[cfg(feature = "wasm-store-canister")]
 fn wasm_store_role_manifest() -> StateRoleManifest {
+    let mut state = template_state_domains(20);
+    state.push(state_domain(
+        "wasm_store_gc_state",
+        WASM_STORE_GC_STATE_ID,
+        "WasmStoreGcStateRecord",
+        "WasmStoreGcStateData",
+        60,
+        "wasm_store_gc_state_restores_local_gc_mode",
+    ));
+
     StateRoleManifest {
         canister_role: WASM_STORE_ROLE.to_string(),
-        state: vec![state_domain(
-            "wasm_store_gc_state",
-            WASM_STORE_GC_STATE_ID,
-            "WasmStoreGcStateRecord",
-            "WasmStoreGcStateData",
-            10,
-            "wasm_store_gc_state_restores_local_gc_mode",
-        )],
+        state,
         removed_state: Vec::new(),
         reserved_memory: Vec::new(),
     }
+}
+
+#[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
+fn template_state_domains(first_restore_order: u32) -> Vec<StateDomainManifest> {
+    vec![
+        state_domain(
+            "template_manifests",
+            TEMPLATE_MANIFESTS_ID,
+            "TemplateManifestRecord",
+            "TemplateManifestData",
+            first_restore_order,
+            "template_manifests_restore_release_index",
+        ),
+        state_domain(
+            "template_chunk_sets",
+            TEMPLATE_CHUNK_SETS_ID,
+            "TemplateChunkSetRecord",
+            "TemplateChunkSetData",
+            first_restore_order + 10,
+            "template_chunk_sets_restore_release_metadata",
+        ),
+        state_domain(
+            "template_chunk_refs",
+            TEMPLATE_CHUNK_REFS_ID,
+            "TemplateChunkRefRecord",
+            "TemplateChunkRefData",
+            first_restore_order + 20,
+            "template_chunk_refs_restore_chunk_slots",
+        ),
+        state_domain(
+            "template_chunk_payloads",
+            TEMPLATE_CHUNK_PAYLOADS_ID,
+            "TemplateChunkPayloadRecord",
+            "TemplateChunkPayloadData",
+            first_restore_order + 30,
+            "template_chunk_payloads_restore_chunk_bytes",
+        ),
+    ]
 }
 
 #[cfg(any(feature = "root-control-plane", feature = "wasm-store-canister"))]
@@ -183,7 +192,7 @@ mod tests {
 
     #[cfg(feature = "wasm-store-canister")]
     #[test]
-    fn wasm_store_manifest_declares_gc_state() {
+    fn wasm_store_manifest_declares_template_and_gc_state() {
         let manifest = canic_control_plane_state_manifest();
         let wasm_store = manifest
             .roles
@@ -191,9 +200,24 @@ mod tests {
             .find(|role| role.canister_role == WASM_STORE_ROLE)
             .expect("wasm_store role");
 
-        assert!(wasm_store.state.iter().any(|domain| {
-            domain.domain == "wasm_store_gc_state"
-                && domain.memory_id == Some(WASM_STORE_GC_STATE_ID)
-        }));
+        let ids = wasm_store
+            .state
+            .iter()
+            .filter_map(|domain| domain.memory_id)
+            .collect::<Vec<_>>();
+
+        for expected in [
+            TEMPLATE_MANIFESTS_ID,
+            TEMPLATE_CHUNK_SETS_ID,
+            TEMPLATE_CHUNK_REFS_ID,
+            TEMPLATE_CHUNK_PAYLOADS_ID,
+            WASM_STORE_GC_STATE_ID,
+        ] {
+            assert!(
+                ids.contains(&expected),
+                "wasm_store state manifest should declare memory id {expected}"
+            );
+        }
+        assert_eq!(ids.len(), 5);
     }
 }

@@ -42,5 +42,5 @@ If you intentionally need to refresh the canonical checked-in DID from the
 built crate, run the host artifact builder from the Canic workspace with:
 
 ```bash
-CANIC_REFRESH_WASM_STORE_DID=1 cargo run -q -p canic-host --example build_artifact -- wasm_store
+CANIC_REFRESH_WASM_STORE_DID=1 CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- wasm_store
 ```
