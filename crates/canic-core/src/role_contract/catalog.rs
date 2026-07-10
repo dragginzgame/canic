@@ -7,8 +7,8 @@
 use crate::role_contract::{
     allocation::{allocation_definition, validate_canonical_allocations},
     model::{
-        AllocationLifecycle, BuiltInRoleKind, CanicFeatureEffect, CanicFeatureKey,
-        RoleCapabilityKey, RoleContractFinding, StateAllocationKey,
+        BuiltInRoleKind, CanicFeatureEffect, CanicFeatureKey, RoleCapabilityKey,
+        RoleContractFinding, StateAllocationKey,
     },
 };
 use std::collections::BTreeSet;
@@ -118,7 +118,7 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
     feature(
         CanicFeatureKey::IcpRefill,
         "icp-refill",
-        CanicFeatureEffect::NoState,
+        CanicFeatureEffect::StateBearing,
     ),
     feature(
         CanicFeatureKey::Metrics,
@@ -190,6 +190,12 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
         "role-attestation caches verify root canister-signature proofs locally",
     ),
     requirement(
+        RoleCapabilityKey::IcpRefill,
+        "topup.icp_refill",
+        CanicFeatureKey::IcpRefill,
+        "ICP refill policy persists resumable ledger and CMC operation state",
+    ),
+    requirement(
         RoleCapabilityKey::RootControlPlane,
         "roles.root.kind",
         CanicFeatureKey::ControlPlane,
@@ -211,22 +217,67 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
 
 const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     capability_allocation(
-        RoleCapabilityKey::Root,
-        StateAllocationKey::CoreRootTopology,
+        RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreRuntimeTopology,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreRuntimeEnvironment,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreReplayReceipts,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreRuntimeObservability,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Runtime,
+        StateAllocationKey::CoreRuntimeIntent,
     ),
     capability_allocation(
         RoleCapabilityKey::Root,
-        StateAllocationKey::CoreRootEnvironment,
+        StateAllocationKey::CoreRootAppRegistry,
     ),
-    capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreRootAuth),
+    capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreAuthState),
     capability_allocation(
-        RoleCapabilityKey::Root,
-        StateAllocationKey::CoreRootObservability,
+        RoleCapabilityKey::DelegatedTokenIssuer,
+        StateAllocationKey::CoreAuthState,
     ),
-    capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreRootIntent),
     capability_allocation(
-        RoleCapabilityKey::Root,
-        StateAllocationKey::CoreRootCapacity,
+        RoleCapabilityKey::DelegatedTokenVerifier,
+        StateAllocationKey::CoreAuthState,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::RoleAttestationSigner,
+        StateAllocationKey::CoreAuthState,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::RoleAttestationVerifier,
+        StateAllocationKey::CoreAuthState,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::IcpRefill,
+        StateAllocationKey::CoreIcpRefillRecords,
+    ),
+    capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CanisterPool),
+    capability_allocation(
+        RoleCapabilityKey::Directory,
+        StateAllocationKey::CanisterPool,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Directory,
+        StateAllocationKey::DirectoryRegistry,
+    ),
+    capability_allocation(RoleCapabilityKey::Scaling, StateAllocationKey::CanisterPool),
+    capability_allocation(
+        RoleCapabilityKey::Scaling,
+        StateAllocationKey::ScalingRegistry,
+    ),
+    capability_allocation(
+        RoleCapabilityKey::Sharding,
+        StateAllocationKey::CanisterPool,
     ),
     capability_allocation(
         RoleCapabilityKey::RootControlPlane,
@@ -307,6 +358,11 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
         CanicFeatureKey::ControlPlane,
         StateAllocationKey::ControlPlaneSubnetState,
     ),
+    feature_allocation(
+        CanicFeatureKey::IcpRefill,
+        StateAllocationKey::CoreIcpRefillRecords,
+    ),
+    feature_allocation(CanicFeatureKey::Sharding, StateAllocationKey::CanisterPool),
     feature_allocation(
         CanicFeatureKey::Sharding,
         StateAllocationKey::ShardingRegistry,
@@ -541,13 +597,10 @@ pub fn validate_catalog() -> Result<(), RoleContractFinding> {
         .chain(FEATURE_ALLOCATIONS.iter().map(|rule| rule.allocation))
         .chain(BUILT_IN_ALLOCATIONS.iter().map(|rule| rule.allocation))
     {
-        let Some(definition) = allocation_definition(allocation) else {
+        if allocation_definition(allocation).is_none() {
             return Err(RoleContractFinding::CatalogInvalid {
                 reason: format!("allocation rule references missing definition: {allocation:?}"),
             });
-        };
-        if definition.lifecycle != AllocationLifecycle::Active {
-            return Err(RoleContractFinding::AllocationNotActive { key: allocation });
         }
     }
 

@@ -18,9 +18,9 @@ use canic_core::{
     ids::CanisterRole,
     role_contract::{ResolvedRoleContract, RoleContractFinding, RoleContractResolution},
     state_contract::{
-        MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest,
-        STATE_MANIFEST_SCHEMA_VERSION, StateDomainManifest, StateManifest, StateMigrationManifest,
-        StateRoleManifest, StateStorage,
+        MigrationPolicy, ReservedMemoryManifest, STATE_MANIFEST_SCHEMA_VERSION,
+        StateDomainManifest, StateManifest, StateMigrationManifest, StateRoleManifest,
+        StateStorage,
     },
 };
 use serde::Serialize;
@@ -32,7 +32,7 @@ use std::{
 
 pub const STATE_AUDIT_COMMAND: &str = "canic state audit";
 pub const STATE_MANIFEST_COMMAND: &str = "canic state manifest";
-pub const STATE_AUDIT_SCHEMA_VERSION: u16 = 1;
+pub const STATE_AUDIT_SCHEMA_VERSION: u16 = 2;
 
 const SCOPE_PROJECT: StateAuditScope = StateAuditScope::Project;
 const SCOPE_ROLE: StateAuditScope = StateAuditScope::Role;
@@ -41,7 +41,6 @@ const CATEGORY_MANIFEST: StateAuditCategory = StateAuditCategory::Manifest;
 const CATEGORY_SCHEMA_VERSION: StateAuditCategory = StateAuditCategory::SchemaVersion;
 const CATEGORY_MEMORY_ID: StateAuditCategory = StateAuditCategory::MemoryId;
 const CATEGORY_MIGRATION: StateAuditCategory = StateAuditCategory::Migration;
-const CATEGORY_REMOVED_STATE: StateAuditCategory = StateAuditCategory::RemovedState;
 const CATEGORY_SNAPSHOT: StateAuditCategory = StateAuditCategory::Snapshot;
 const CATEGORY_NAMING: StateAuditCategory = StateAuditCategory::Naming;
 const CATEGORY_LIFECYCLE: StateAuditCategory = StateAuditCategory::Lifecycle;
@@ -122,7 +121,6 @@ pub enum StateAuditCategory {
     MemoryId,
     Migration,
     Naming,
-    RemovedState,
     SchemaVersion,
     Snapshot,
     TestCoverage,
@@ -138,7 +136,6 @@ impl StateAuditCategory {
             Self::MemoryId => "memory_id",
             Self::Migration => "migration",
             Self::Naming => "naming",
-            Self::RemovedState => "removed_state",
             Self::SchemaVersion => "schema_version",
             Self::Snapshot => "snapshot",
             Self::TestCoverage => "test_coverage",
@@ -452,20 +449,11 @@ fn audit_checks(manifest: &StateManifest, role_filter: Option<&str>) -> Vec<Stat
             ),
         ));
         checks.extend(domain_identity_checks(&role.canister_role, &role.state));
-        checks.extend(memory_id_checks(
-            &role.canister_role,
-            &role.state,
-            &role.removed_state,
-        ));
+        checks.extend(memory_id_checks(&role.canister_role, &role.state));
         checks.extend(role_state_checks(&role.canister_role, &role.state));
-        checks.extend(removed_state_checks(
-            &role.canister_role,
-            &role.removed_state,
-        ));
         checks.extend(reserved_memory_checks(
             &role.canister_role,
             &role.state,
-            &role.removed_state,
             &role.reserved_memory,
         ));
     }
@@ -549,11 +537,7 @@ fn domain_identity_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<St
         .collect()
 }
 
-fn memory_id_checks(
-    role: &str,
-    domains: &[StateDomainManifest],
-    removed: &[RemovedStateManifest],
-) -> Vec<StateAuditCheck> {
+fn memory_id_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAuditCheck> {
     let mut by_id = BTreeMap::<u8, Vec<&str>>::new();
     for domain in domains
         .iter()
@@ -588,45 +572,7 @@ fn memory_id_checks(
         }));
     }
 
-    checks.extend(removed_memory_id_checks(role, &by_id, removed));
     checks
-}
-
-fn removed_memory_id_checks(
-    role: &str,
-    active_by_id: &BTreeMap<u8, Vec<&str>>,
-    removed: &[RemovedStateManifest],
-) -> Vec<StateAuditCheck> {
-    removed
-        .iter()
-        .filter_map(|entry| {
-            let memory_id = entry.memory_id?;
-            let subject = format!("{role}/memory_id/{memory_id}");
-            if let Some(active_domains) = active_by_id.get(&memory_id) {
-                Some(fail(
-                    CATEGORY_REMOVED_STATE,
-                    "removed_state_memory_id_reclaimed",
-                    &subject,
-                    format!(
-                        "removed state {} reserved memory id {memory_id}, but active domain(s) {} use it",
-                        entry.domain,
-                        active_domains.join(", ")
-                    ),
-                    "keep retired memory ids reserved or add an explicit migration design",
-                ))
-            } else {
-                Some(pass(
-                    CATEGORY_REMOVED_STATE,
-                    "removed_state_memory_id_reserved",
-                    &subject,
-                    format!(
-                        "removed state {} keeps retired memory id {memory_id} reserved",
-                        entry.domain
-                    ),
-                ))
-            }
-        })
-        .collect()
 }
 
 fn role_state_checks(role: &str, domains: &[StateDomainManifest]) -> Vec<StateAuditCheck> {
@@ -976,75 +922,12 @@ fn lifecycle_checks(role: &str, domain: &StateDomainManifest) -> Vec<StateAuditC
     vec![restore_check, invariant_check]
 }
 
-fn removed_state_checks(role: &str, removed: &[RemovedStateManifest]) -> Vec<StateAuditCheck> {
-    removed
-        .iter()
-        .flat_map(|entry| {
-            let subject = format!("{role}/{}", entry.domain);
-            let mut checks = Vec::new();
-            checks.push(if entry.disposition.trim().is_empty() {
-                fail(
-                    CATEGORY_REMOVED_STATE,
-                    "removed_state_disposition_missing",
-                    &subject,
-                    "removed state does not declare a disposition".to_string(),
-                    "declare whether the state is migrated, discarded, or manually handled",
-                )
-            } else {
-                pass(
-                    CATEGORY_REMOVED_STATE,
-                    "removed_state_disposition_declared",
-                    &subject,
-                    format!("removed state disposition declared: {}", entry.disposition),
-                )
-            });
-            checks.push(if entry.reason.trim().is_empty() {
-                warn(
-                    CATEGORY_REMOVED_STATE,
-                    "removed_state_reason_missing",
-                    &subject,
-                    "removed state disposition does not declare a reason".to_string(),
-                    "document why the removed state can be migrated, discarded, or manually handled",
-                )
-            } else {
-                pass(
-                    CATEGORY_REMOVED_STATE,
-                    "removed_state_reason_declared",
-                    &subject,
-                    format!("removed state reason declared: {}", entry.reason),
-                )
-            });
-            checks.push(
-                if entry.test.as_ref().is_some_and(|test| !test.trim().is_empty()) {
-                    pass(
-                        CATEGORY_TEST_COVERAGE,
-                        "removed_state_test_declared",
-                        &subject,
-                        "removed state declares upgrade test coverage".to_string(),
-                    )
-                } else {
-                    warn(
-                        CATEGORY_TEST_COVERAGE,
-                        "removed_state_test_missing",
-                        &subject,
-                        "removed state has no declared upgrade test coverage".to_string(),
-                        "declare upgrade test coverage for the removed-state disposition",
-                    )
-                },
-            );
-            checks
-        })
-        .collect()
-}
-
 fn reserved_memory_checks(
     role: &str,
     domains: &[StateDomainManifest],
-    removed: &[RemovedStateManifest],
     reserved: &[ReservedMemoryManifest],
 ) -> Vec<StateAuditCheck> {
     let active_by_id = active_memory_ids(domains);
-    let removed_by_id = removed_memory_ids(removed);
     let mut reserved_by_id = BTreeMap::<u8, Vec<&str>>::new();
     for entry in reserved {
         reserved_by_id
@@ -1068,19 +951,6 @@ fn reserved_memory_checks(
                     active_domains.join(", ")
                 ),
                 "declare one owner for the memory id or add an explicit migration design",
-            ));
-        } else if let Some(removed_domains) = removed_by_id.get(&entry.memory_id) {
-            checks.push(fail(
-                CATEGORY_MEMORY_ID,
-                "reserved_memory_id_collision",
-                &subject,
-                format!(
-                    "reserved memory id {} for {} is already declared by removed state {}",
-                    entry.memory_id,
-                    entry.label,
-                    removed_domains.join(", ")
-                ),
-                "keep the memory id in exactly one manifest section",
             ));
         } else if reserved_by_id
             .get(&entry.memory_id)
@@ -1106,10 +976,10 @@ fn reserved_memory_checks(
                 "reserved_memory_id_declared",
                 &subject,
                 format!(
-                    "memory id {} is reserved for {} but is not yet modeled as an active or removed state domain",
+                    "memory id {} is reserved for {} but is not yet modeled as an active state domain",
                     entry.memory_id, entry.label
                 ),
-                "model this reservation as a precise state domain or removed-state disposition when the state shape is known",
+                "model this reservation as a precise state domain when the state shape is known",
             ));
         }
     }
@@ -1124,16 +994,6 @@ fn active_memory_ids(domains: &[StateDomainManifest]) -> BTreeMap<u8, Vec<&str>>
     {
         if let Some(memory_id) = domain.memory_id {
             by_id.entry(memory_id).or_default().push(&domain.domain);
-        }
-    }
-    by_id
-}
-
-fn removed_memory_ids(removed: &[RemovedStateManifest]) -> BTreeMap<u8, Vec<&str>> {
-    let mut by_id = BTreeMap::<u8, Vec<&str>>::new();
-    for entry in removed {
-        if let Some(memory_id) = entry.memory_id {
-            by_id.entry(memory_id).or_default().push(&entry.domain);
         }
     }
     by_id
@@ -1287,12 +1147,14 @@ mod tests {
                 "root",
                 None,
                 &[
-                    StateAllocationKey::CoreRootTopology,
-                    StateAllocationKey::CoreRootEnvironment,
-                    StateAllocationKey::CoreRootAuth,
-                    StateAllocationKey::CoreRootObservability,
-                    StateAllocationKey::CoreRootIntent,
-                    StateAllocationKey::CoreRootCapacity,
+                    StateAllocationKey::CoreRuntimeTopology,
+                    StateAllocationKey::CoreRootAppRegistry,
+                    StateAllocationKey::CoreRuntimeEnvironment,
+                    StateAllocationKey::CoreAuthState,
+                    StateAllocationKey::CoreReplayReceipts,
+                    StateAllocationKey::CoreRuntimeObservability,
+                    StateAllocationKey::CoreRuntimeIntent,
+                    StateAllocationKey::CanisterPool,
                     StateAllocationKey::TemplateManifests,
                     StateAllocationKey::TemplateChunkSets,
                     StateAllocationKey::TemplateChunkRefs,
@@ -1452,9 +1314,6 @@ mod tests {
     fn complete_descriptor_registry_satisfies_state_audit_metadata_contract() {
         let keys = canic_core::role_contract::allocation::allocation_definitions()
             .iter()
-            .filter(|definition| {
-                definition.lifecycle == canic_core::role_contract::AllocationLifecycle::Active
-            })
             .map(|definition| definition.key)
             .collect::<Vec<_>>();
         let manifest = materialize_state_manifest(&[test_contract("catalog", None, &keys)])
@@ -1470,7 +1329,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_blob_role_resolution_materializes_only_blob_allocations() {
+    fn exact_blob_role_resolution_materializes_blob_allocations() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let config = workspace.join("canisters/test/blob_storage_probe/canic.toml");
         let resolution = resolve_project_state_manifest(&workspace, &[config], Some("test"));
@@ -1489,6 +1348,7 @@ mod tests {
             role.state
                 .iter()
                 .filter_map(|domain| domain.memory_id)
+                .filter(|memory_id| (62..=65).contains(memory_id))
                 .collect::<Vec<_>>(),
             vec![63, 65, 64, 62]
         );
@@ -1496,7 +1356,41 @@ mod tests {
     }
 
     #[test]
-    fn exact_built_in_resolution_materializes_template_and_gc_allocations() {
+    fn placement_roles_materialize_exact_placement_state() {
+        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+        for (config_path, role, expected_ids) in [
+            ("fleets/test/canic.toml", "user_hub", vec![49, 53, 54, 56]),
+            (
+                "canisters/audit/scaling_probe/canic.toml",
+                "scale_hub",
+                vec![49, 52],
+            ),
+            (
+                "canisters/test/project_hub_stub/canic.toml",
+                "project_hub",
+                vec![49, 55],
+            ),
+        ] {
+            let config = workspace.join(config_path);
+            let resolution = resolve_project_state_manifest(&workspace, &[config], Some(role));
+            let StateManifestResolution::Resolved { manifest, .. } = resolution else {
+                panic!("{role} role contract should resolve");
+            };
+            let mut actual_ids = manifest.roles[0]
+                .state
+                .iter()
+                .filter_map(|domain| domain.memory_id)
+                .filter(|memory_id| (49..=56).contains(memory_id))
+                .collect::<Vec<_>>();
+            actual_ids.sort_unstable();
+
+            assert_eq!(actual_ids, expected_ids, "unexpected state for {role}");
+        }
+    }
+
+    #[test]
+    fn exact_built_in_resolution_materializes_runtime_template_and_gc_allocations() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let resolution = resolve_project_state_manifest(&workspace, &[], Some("wasm_store"));
         let StateManifestResolution::Resolved {
@@ -1508,12 +1402,26 @@ mod tests {
         };
 
         assert_eq!(contracts.len(), 1);
-        let ids = manifest.roles[0]
+        let mut ids = manifest.roles[0]
             .state
             .iter()
             .filter_map(|domain| domain.memory_id)
             .collect::<Vec<_>>();
-        assert_eq!(ids, vec![83, 82, 81, 80, 85]);
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            vec![
+                11, 12, 13, 15, 16, 17, 18, 20, 30, 34, 39, 40, 41, 42, 80, 81, 82, 83, 85,
+            ]
+        );
+        assert_eq!(
+            manifest.roles[0]
+                .reserved_memory
+                .iter()
+                .map(|entry| entry.memory_id)
+                .collect::<Vec<_>>(),
+            vec![29, 31, 32]
+        );
     }
 
     #[test]
@@ -1589,27 +1497,6 @@ mod tests {
     }
 
     #[test]
-    fn active_domain_reclaiming_removed_memory_id_fails() {
-        let mut manifest = test_state_manifest(Some("root"));
-        let role = manifest.roles.first_mut().expect("root role");
-        let retired_id = role
-            .removed_state
-            .first()
-            .and_then(|entry| entry.memory_id)
-            .expect("retired memory id");
-        role.state[0].memory_id = Some(retired_id);
-
-        let checks = audit_checks(&manifest, Some("root"));
-
-        assert!(
-            checks
-                .iter()
-                .any(|check| check.code == "removed_state_memory_id_reclaimed"
-                    && check.status == StateAuditStatus::Fail)
-        );
-    }
-
-    #[test]
     fn reserved_memory_ids_warn_until_modeled() {
         let report = build_state_audit_report(Some("root"));
 
@@ -1642,7 +1529,7 @@ mod tests {
     #[test]
     fn storage_not_applicable_is_explicit_metadata() {
         let manifest = StateManifest {
-            schema_version: 1,
+            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
             roles: vec![StateRoleManifest {
                 canister_role: "root".to_string(),
                 state: vec![StateDomainManifest {
@@ -1659,7 +1546,6 @@ mod tests {
                     post_upgrade_invariant: Some("external_authority_invariants".to_string()),
                     migrations: Vec::new(),
                 }],
-                removed_state: Vec::new(),
                 reserved_memory: Vec::new(),
             }],
         };
@@ -1680,7 +1566,7 @@ mod tests {
     #[test]
     fn invalid_support_window_fails() {
         let manifest = StateManifest {
-            schema_version: 1,
+            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
             roles: vec![StateRoleManifest {
                 canister_role: "root".to_string(),
                 state: vec![StateDomainManifest {
@@ -1697,7 +1583,6 @@ mod tests {
                     post_upgrade_invariant: Some("auth_sessions_invariants".to_string()),
                     migrations: Vec::new(),
                 }],
-                removed_state: Vec::new(),
                 reserved_memory: Vec::new(),
             }],
         };
@@ -1718,7 +1603,7 @@ mod tests {
     #[test]
     fn duplicate_migration_declaration_fails() {
         let manifest = StateManifest {
-            schema_version: 1,
+            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
             roles: vec![StateRoleManifest {
                 canister_role: "root".to_string(),
                 state: vec![StateDomainManifest {
@@ -1754,7 +1639,6 @@ mod tests {
                         },
                     ],
                 }],
-                removed_state: Vec::new(),
                 reserved_memory: Vec::new(),
             }],
         };
@@ -1770,7 +1654,7 @@ mod tests {
     #[test]
     fn invalid_migration_declaration_fails() {
         let manifest = StateManifest {
-            schema_version: 1,
+            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
             roles: vec![StateRoleManifest {
                 canister_role: "root".to_string(),
                 state: vec![StateDomainManifest {
@@ -1793,7 +1677,6 @@ mod tests {
                         test: Some("auth_sessions_v2_to_v4_upgrade_preserves_sessions".to_string()),
                     }],
                 }],
-                removed_state: Vec::new(),
                 reserved_memory: Vec::new(),
             }],
         };
@@ -1808,7 +1691,7 @@ mod tests {
     #[test]
     fn missing_migration_test_warns_separately_from_missing_migration() {
         let manifest = StateManifest {
-            schema_version: 1,
+            schema_version: STATE_MANIFEST_SCHEMA_VERSION,
             roles: vec![StateRoleManifest {
                 canister_role: "root".to_string(),
                 state: vec![StateDomainManifest {
@@ -1831,7 +1714,6 @@ mod tests {
                         test: None,
                     }],
                 }],
-                removed_state: Vec::new(),
                 reserved_memory: Vec::new(),
             }],
         };
@@ -1844,36 +1726,6 @@ mod tests {
                     && check.status == StateAuditStatus::Warn)
         );
         assert!(checks.iter().all(|check| check.code != "migration_missing"));
-    }
-
-    #[test]
-    fn removed_state_missing_reason_and_test_warn() {
-        let manifest = StateManifest {
-            schema_version: 1,
-            roles: vec![StateRoleManifest {
-                canister_role: "root".to_string(),
-                state: Vec::new(),
-                removed_state: vec![RemovedStateManifest {
-                    domain: "retired_cache".to_string(),
-                    last_version: 1,
-                    removed_in_version: 2,
-                    memory_id: Some(99),
-                    disposition: "discarded".to_string(),
-                    reason: String::new(),
-                    test: None,
-                }],
-                reserved_memory: Vec::new(),
-            }],
-        };
-
-        let checks = audit_checks(&manifest, None);
-
-        assert!(checks.iter().any(|check| {
-            check.code == "removed_state_reason_missing" && check.status == StateAuditStatus::Warn
-        }));
-        assert!(checks.iter().any(|check| {
-            check.code == "removed_state_test_missing" && check.status == StateAuditStatus::Warn
-        }));
     }
 
     #[test]

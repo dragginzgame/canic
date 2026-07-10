@@ -1,13 +1,16 @@
 use super::{
-    AllocationDefinition, AllocationLifecycle, AllocationOwner, BuiltInRoleKind,
-    CanicFeatureEffect, CanicFeatureKey, MemoryId, RoleCapabilityKey, RoleContractFinding,
-    RoleContractInput, RoleContractResolution, RoleContractSource, SelectionProvenance,
-    StateAllocationKey, allocation,
+    AllocationDefinition, AllocationOwner, BuiltInRoleKind, CanicFeatureEffect, CanicFeatureKey,
+    MemoryId, RoleCapabilityKey, RoleContractFinding, RoleContractInput, RoleContractResolution,
+    RoleContractSource, SelectionProvenance, StateAllocationKey, allocation,
     catalog::{self, default_features, implied_features},
     derive_role_capabilities, resolve_effective_features, resolve_role_contract,
 };
 use crate::{
-    config::schema::{CanisterAuthConfig, CanisterKind, ShardingConfig},
+    cdk::types::Cycles,
+    config::schema::{
+        CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, IcpRefillPolicy,
+        ScalingConfig, ShardingConfig, TopupPolicy,
+    },
     ids::CanisterRole,
     test::config::ConfigTestBuilder,
 };
@@ -72,7 +75,7 @@ fn catalog_is_valid_and_classifies_every_public_feature() {
 }
 
 #[test]
-fn canonical_allocations_preserve_existing_ids() {
+fn canonical_allocations_match_the_active_memory_map() {
     allocation::validate_canonical_allocations()
         .expect("canonical allocation definitions should be valid");
 
@@ -91,18 +94,22 @@ fn canonical_allocations_preserve_existing_ids() {
         .collect::<BTreeMap<_, _>>();
     let expected = BTreeMap::from([
         (
-            StateAllocationKey::CoreRootTopology,
-            vec![11, 12, 13, 14, 15],
+            StateAllocationKey::CoreRuntimeTopology,
+            vec![11, 12, 13, 15],
         ),
-        (StateAllocationKey::CoreRootEnvironment, vec![16, 17, 18]),
-        (StateAllocationKey::CoreRootAuth, vec![19, 21]),
-        (StateAllocationKey::RetiredRootReplay, vec![20]),
+        (StateAllocationKey::CoreRootAppRegistry, vec![14]),
+        (StateAllocationKey::CoreRuntimeEnvironment, vec![16, 17, 18]),
+        (StateAllocationKey::CoreAuthState, vec![19]),
+        (StateAllocationKey::CoreReplayReceipts, vec![20]),
         (
-            StateAllocationKey::CoreRootObservability,
-            vec![29, 30, 31, 32, 33, 34],
+            StateAllocationKey::CoreRuntimeObservability,
+            vec![29, 30, 31, 32, 34],
         ),
-        (StateAllocationKey::CoreRootIntent, vec![39, 40, 41, 42]),
-        (StateAllocationKey::CoreRootCapacity, vec![49, 52, 55]),
+        (StateAllocationKey::CoreIcpRefillRecords, vec![33]),
+        (StateAllocationKey::CoreRuntimeIntent, vec![39, 40, 41, 42]),
+        (StateAllocationKey::CanisterPool, vec![49]),
+        (StateAllocationKey::ScalingRegistry, vec![52]),
+        (StateAllocationKey::DirectoryRegistry, vec![55]),
         (StateAllocationKey::ShardingRegistry, vec![53]),
         (StateAllocationKey::ShardingAssignments, vec![54]),
         (StateAllocationKey::ShardingActiveSet, vec![56]),
@@ -128,13 +135,11 @@ fn distinct_allocation_keys_cannot_share_a_memory_id() {
         AllocationDefinition {
             key: StateAllocationKey::StoredBlobs,
             owner: AllocationOwner::CanicCore,
-            lifecycle: AllocationLifecycle::Active,
             memory_ids: FIRST_IDS,
         },
         AllocationDefinition {
             key: StateAllocationKey::BlobDeletionPending,
             owner: AllocationOwner::CanicCore,
-            lifecycle: AllocationLifecycle::Active,
             memory_ids: SECOND_IDS,
         },
     ];
@@ -147,6 +152,30 @@ fn distinct_allocation_keys_cannot_share_a_memory_id() {
             second: StateAllocationKey::BlobDeletionPending,
         })
     );
+}
+
+#[test]
+fn allocation_owners_cannot_claim_another_owner_range() {
+    const CONTROL_PLANE_ID: &[MemoryId] = &[MemoryId::new(allocation::CANIC_CONTROL_PLANE_MIN_ID)];
+    const CORE_ID: &[MemoryId] = &[MemoryId::new(allocation::CANIC_CORE_MAX_ID)];
+
+    for definition in [
+        AllocationDefinition {
+            key: StateAllocationKey::StoredBlobs,
+            owner: AllocationOwner::CanicCore,
+            memory_ids: CONTROL_PLANE_ID,
+        },
+        AllocationDefinition {
+            key: StateAllocationKey::TemplateManifests,
+            owner: AllocationOwner::CanicControlPlane,
+            memory_ids: CORE_ID,
+        },
+    ] {
+        assert!(matches!(
+            allocation::validate_allocation_definitions(&[definition]),
+            Err(RoleContractFinding::CatalogInvalid { .. })
+        ));
+    }
 }
 
 #[test]
@@ -171,7 +200,103 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
         BTreeSet::from([
             RoleCapabilityKey::DelegatedTokenVerifier,
             RoleCapabilityKey::RoleAttestationVerifier,
+            RoleCapabilityKey::Runtime,
             RoleCapabilityKey::Sharding,
+        ])
+    );
+}
+
+#[test]
+fn icp_refill_config_requires_its_feature_and_selects_its_state() {
+    let mut app = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    app.topup = Some(TopupPolicy {
+        icp_refill: Some(IcpRefillPolicy {
+            enabled: true,
+            min_hub_cycles_before_refill: Cycles::from(2_000_000_000_000_u128),
+            max_refill_e8s_per_call: 100_000_000,
+            min_xdr_permyriad_per_icp: Some(40_000),
+            ledger_canister_id: None,
+            cmc_canister_id: None,
+            allow_ic_system_canister_overrides: false,
+        }),
+        ..TopupPolicy::default()
+    });
+    let config = ConfigTestBuilder::new()
+        .with_prime_canister("app", app)
+        .build();
+    let role = CanisterRole::owned("app".to_string());
+
+    let RoleContractResolution::Resolved { contract } = resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::Declared {
+            config: &config,
+            role: &role,
+        },
+        declared_features: BTreeSet::from([CanicFeatureKey::IcpRefill]),
+        default_features_enabled: true,
+    }) else {
+        panic!("ICP refill contract should resolve");
+    };
+
+    assert!(
+        contract
+            .capabilities
+            .contains(&RoleCapabilityKey::IcpRefill)
+    );
+    assert!(
+        contract
+            .required_features
+            .contains(&CanicFeatureKey::IcpRefill)
+    );
+    let allocation = contract
+        .allocations
+        .iter()
+        .find(|allocation| allocation.key == StateAllocationKey::CoreIcpRefillRecords)
+        .expect("ICP refill state allocation");
+    assert_eq!(allocation.memory_ids, vec![MemoryId::new(33)]);
+    assert_eq!(
+        allocation.selected_by,
+        BTreeSet::from([
+            SelectionProvenance::Capability(RoleCapabilityKey::IcpRefill),
+            SelectionProvenance::EffectiveFeature(CanicFeatureKey::IcpRefill),
+        ])
+    );
+}
+
+#[test]
+fn placement_capabilities_select_only_their_placement_state() {
+    let mut scaling = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    scaling.scaling = Some(ScalingConfig::default());
+    assert_eq!(
+        placement_allocation_ids(&resolved_service_contract(scaling, BTreeSet::new()).allocations),
+        vec![49, 52]
+    );
+
+    let mut directory = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    directory.directory = Some(DirectoryConfig::default());
+    assert_eq!(
+        placement_allocation_ids(
+            &resolved_service_contract(directory, BTreeSet::new()).allocations
+        ),
+        vec![49, 55]
+    );
+
+    let mut sharding = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    sharding.sharding = Some(ShardingConfig::default());
+    let contract = resolved_service_contract(sharding, BTreeSet::from([CanicFeatureKey::Sharding]));
+    assert_eq!(
+        placement_allocation_ids(&contract.allocations),
+        vec![49, 53, 54, 56]
+    );
+    let pool = contract
+        .allocations
+        .iter()
+        .find(|allocation| allocation.key == StateAllocationKey::CanisterPool)
+        .expect("sharding selects the shared canister pool");
+    assert_eq!(
+        pool.selected_by,
+        BTreeSet::from([
+            SelectionProvenance::Capability(RoleCapabilityKey::Sharding),
+            SelectionProvenance::EffectiveFeature(CanicFeatureKey::Sharding),
         ])
     );
 }
@@ -255,7 +380,12 @@ fn surplus_state_feature_allocates_normally() {
         panic!("surplus state-bearing features should resolve normally");
     };
 
-    assert_eq!(allocation_ids(&contract.allocations), vec![62, 63, 64, 65]);
+    assert_eq!(
+        allocation_ids(&contract.allocations),
+        vec![
+            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 31, 32, 34, 39, 40, 41, 42, 62, 63, 64, 65,
+        ]
+    );
 }
 
 #[test]
@@ -290,8 +420,8 @@ fn repeated_selection_merges_allocation_provenance() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 29, 30, 31, 32, 33, 34, 39, 40, 41, 42, 49, 52,
-            55, 80, 81, 82, 83, 84,
+            11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 30, 31, 32, 34, 39, 40, 41, 42, 49, 80, 81,
+            82, 83, 84,
         ]
     );
 }
@@ -309,7 +439,9 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
 
     assert_eq!(
         allocation_ids(&contract.allocations),
-        vec![80, 81, 82, 83, 85]
+        vec![
+            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 31, 32, 34, 39, 40, 41, 42, 80, 81, 82, 83, 85,
+        ]
     );
     assert_eq!(
         contract.required_features,
@@ -325,6 +457,34 @@ fn allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
         .collect::<Vec<_>>();
     ids.sort_unstable();
     ids
+}
+
+fn placement_allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
+    allocation_ids(allocations)
+        .into_iter()
+        .filter(|memory_id| (49..=56).contains(memory_id))
+        .collect()
+}
+
+fn resolved_service_contract(
+    canister: CanisterConfig,
+    declared_features: BTreeSet<CanicFeatureKey>,
+) -> super::ResolvedRoleContract {
+    let role = CanisterRole::owned("service".to_string());
+    let config = ConfigTestBuilder::new()
+        .with_prime_canister(role.clone(), canister)
+        .build();
+    let RoleContractResolution::Resolved { contract } = resolve_role_contract(RoleContractInput {
+        source: RoleContractSource::Declared {
+            config: &config,
+            role: &role,
+        },
+        declared_features,
+        default_features_enabled: true,
+    }) else {
+        panic!("service role contract should resolve");
+    };
+    contract
 }
 
 fn read_manifest(relative_path: &str) -> toml::Value {

@@ -349,14 +349,6 @@ fn render_manifest_text(manifest: &StateManifest) -> String {
                 domain.migration_policy.as_str()
             ));
         }
-        if !role.removed_state.is_empty() {
-            lines.push("removed_state".to_string());
-            for entry in &role.removed_state {
-                lines.push(format!("  {}", entry.domain));
-                lines.push(format!("    disposition: {}", entry.disposition));
-                lines.push(format!("    reason: {}", entry.reason));
-            }
-        }
         if !role.reserved_memory.is_empty() {
             lines.push("reserved_memory".to_string());
             for entry in &role.reserved_memory {

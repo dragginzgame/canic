@@ -54,11 +54,13 @@ pub enum RoleCapabilityKey {
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
     Directory,
+    IcpRefill,
     Icrc21,
     RoleAttestationSigner,
     RoleAttestationVerifier,
     Root,
     RootControlPlane,
+    Runtime,
     Scaling,
     Sharding,
     WasmStore,
@@ -67,21 +69,25 @@ pub enum RoleCapabilityKey {
 ///
 /// StateAllocationKey
 ///
-/// Permanent identity of one Canic-managed stable-memory allocation group.
+/// Typed identity of one active Canic-managed stable-memory allocation group.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum StateAllocationKey {
     BlobDeletionPending,
     BlobStorageBilling,
+    CanisterPool,
     ControlPlaneSubnetState,
-    CoreRootAuth,
-    CoreRootCapacity,
-    CoreRootEnvironment,
-    CoreRootIntent,
-    CoreRootObservability,
-    CoreRootTopology,
-    RetiredRootReplay,
+    CoreAuthState,
+    CoreIcpRefillRecords,
+    CoreReplayReceipts,
+    CoreRootAppRegistry,
+    CoreRuntimeEnvironment,
+    CoreRuntimeIntent,
+    CoreRuntimeObservability,
+    CoreRuntimeTopology,
+    DirectoryRegistry,
+    ScalingRegistry,
     ShardingActiveSet,
     ShardingAssignments,
     ShardingRegistry,
@@ -97,7 +103,7 @@ pub enum StateAllocationKey {
 ///
 /// AllocationOwner
 ///
-/// Crate that owns the records and lifecycle implementation for an allocation.
+/// Crate that owns the records and storage implementation for an allocation.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -114,19 +120,6 @@ impl AllocationOwner {
             Self::CanicCore => "canic-core",
         }
     }
-}
-
-///
-/// AllocationLifecycle
-///
-/// Permanent lifecycle of an allocation definition.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AllocationLifecycle {
-    Active,
-    Reserved,
-    RetiredNeverReuse,
 }
 
 ///
@@ -153,14 +146,13 @@ impl MemoryId {
 ///
 /// AllocationDefinition
 ///
-/// Canonical permanent ownership of one or more stable-memory IDs.
+/// Canonical assignment of one or more stable-memory IDs to an active allocation.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AllocationDefinition {
     pub key: StateAllocationKey,
     pub owner: AllocationOwner,
-    pub lifecycle: AllocationLifecycle,
     pub memory_ids: &'static [MemoryId],
 }
 
@@ -277,9 +269,6 @@ pub enum RoleContractFinding {
     AllocationDescriptorMissing {
         key: StateAllocationKey,
     },
-    AllocationNotActive {
-        key: StateAllocationKey,
-    },
     CatalogInvalid {
         reason: String,
     },
@@ -339,7 +328,6 @@ impl RoleContractFinding {
             Self::AllocationDescriptorMissing { .. } => {
                 "role_contract_allocation_descriptor_missing"
             }
-            Self::AllocationNotActive { .. } => "role_contract_allocation_not_active",
             Self::BuiltInPackageUnavailable { .. } => "role_contract_builtin_package_unavailable",
             Self::CanicVersionMismatch { .. } => "role_contract_canic_version_mismatch",
             Self::CargoCatalogDrift { .. } => "role_contract_cargo_catalog_drift",

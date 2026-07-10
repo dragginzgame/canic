@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.2` corrects role-aware state ownership for shared runtime, auth,
+  ICP-refill, pool, scaling, directory, and sharding allocations, restores IDs
+  `86-99` as Canic control-plane reserve, hard-cuts allocation tombstones and
+  removed-state reporting, moves replay receipts from ID `21` to `20`, and
+  advances state manifest/audit JSON to schema version 2; old allocation
+  ledgers require destructive reinstall.
+
 - `0.84.1` replaces Canic-owned English-fragment and substring decisions with
   typed auth, policy, wasm-store, deployment-safety, protocol, install, and
   operator classifications, deletes obsolete tests and maintained-doc

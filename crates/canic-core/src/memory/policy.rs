@@ -124,7 +124,7 @@ fn validate_key_id_claim(id: u8, stable_key: &str) -> Result<(), MemoryRegistryE
             id,
             stable_key,
             canic_control_plane_range(),
-            "canic.control_plane.* keys must use Canic control-plane ids 80-85",
+            "canic.control_plane.* keys must use Canic control-plane ids 80-99",
         );
     }
 
@@ -246,11 +246,8 @@ mod tests {
             CANIC_CONTROL_PLANE_MIN_ID,
         )
         .expect("first control-plane slot");
-        validate(
-            "canic.control_plane.wasm_store_gc_state.v1",
-            CANIC_CONTROL_PLANE_MAX_ID,
-        )
-        .expect("last control-plane slot");
+        validate("canic.control_plane.future.v1", CANIC_CONTROL_PLANE_MAX_ID)
+            .expect("last control-plane slot");
     }
 
     #[test]
@@ -278,6 +275,10 @@ mod tests {
 
         let err = validate("app.users.v1", CANIC_CORE_MIN_ID)
             .expect_err("application key cannot claim Canic core range");
+        std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
+
+        let err = validate("app.users.v1", CANIC_CONTROL_PLANE_MAX_ID)
+            .expect_err("application key cannot claim Canic control-plane reserve");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
 
         let err = validate("app.users.v1", ic_memory::MEMORY_MANAGER_LEDGER_ID)

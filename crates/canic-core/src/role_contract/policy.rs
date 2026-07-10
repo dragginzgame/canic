@@ -14,10 +14,9 @@ use crate::{
             default_features, feature_allocations, implied_features, validate_catalog,
         },
         model::{
-            AllocationLifecycle, BuiltInRoleKind, CanicFeatureKey, ResolvedRoleContract,
-            ResolvedStateAllocation, RoleCapabilityKey, RoleContractFinding, RoleContractInput,
-            RoleContractResolution, RoleContractSource, RoleFeatureRequirement,
-            SelectionProvenance, StateAllocationKey,
+            BuiltInRoleKind, CanicFeatureKey, ResolvedRoleContract, ResolvedStateAllocation,
+            RoleCapabilityKey, RoleContractFinding, RoleContractInput, RoleContractResolution,
+            RoleContractSource, RoleFeatureRequirement, SelectionProvenance, StateAllocationKey,
         },
     },
 };
@@ -103,6 +102,7 @@ pub fn built_in_role_capabilities(kind: BuiltInRoleKind) -> BTreeSet<RoleCapabil
     let mut capabilities = BTreeSet::new();
     match kind {
         BuiltInRoleKind::WasmStore => {
+            capabilities.insert(RoleCapabilityKey::Runtime);
             capabilities.insert(RoleCapabilityKey::WasmStore);
         }
     }
@@ -117,7 +117,7 @@ pub fn derive_role_capabilities(
         return Err(RoleContractFinding::RoleUnknown { role: role.clone() });
     };
 
-    let mut capabilities = BTreeSet::new();
+    let mut capabilities = BTreeSet::from([RoleCapabilityKey::Runtime]);
     if declaration.kind == RoleDeclarationKind::Root {
         capabilities.insert(RoleCapabilityKey::Root);
         capabilities.insert(RoleCapabilityKey::RootControlPlane);
@@ -136,6 +136,14 @@ pub fn derive_role_capabilities(
         }
         if canister.directory.is_some() {
             capabilities.insert(RoleCapabilityKey::Directory);
+        }
+        if canister
+            .topup
+            .as_ref()
+            .and_then(|topup| topup.icp_refill.as_ref())
+            .is_some_and(|icp_refill| icp_refill.enabled)
+        {
+            capabilities.insert(RoleCapabilityKey::IcpRefill);
         }
         if canister.standards.icrc21 {
             capabilities.insert(RoleCapabilityKey::Icrc21);
@@ -252,9 +260,6 @@ fn materialize_allocations(
                 reason: format!("selected allocation has no definition: {key:?}"),
             });
         };
-        if definition.lifecycle != AllocationLifecycle::Active {
-            return Err(RoleContractFinding::AllocationNotActive { key });
-        }
         for memory_id in definition.memory_ids {
             if let Some(first) = memory_owners.insert(*memory_id, key) {
                 return Err(RoleContractFinding::MemoryIdCollision {

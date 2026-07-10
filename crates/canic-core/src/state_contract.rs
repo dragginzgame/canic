@@ -10,7 +10,7 @@
 use serde::Serialize;
 
 use crate::role_contract::allocation::memory::{
-    auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID, ROOT_REPLAY_ID},
+    auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
     blob_storage::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
@@ -32,7 +32,7 @@ use crate::role_contract::allocation::memory::{
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
-pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 1;
+pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 2;
 
 ///
 /// StateManifest
@@ -56,7 +56,6 @@ pub struct StateManifest {
 pub struct StateRoleManifest {
     pub canister_role: String,
     pub state: Vec<StateDomainManifest>,
-    pub removed_state: Vec<RemovedStateManifest>,
     pub reserved_memory: Vec<ReservedMemoryManifest>,
 }
 
@@ -152,27 +151,10 @@ pub struct StateMigrationManifest {
 }
 
 ///
-/// RemovedStateManifest
-///
-/// Explicit disposition for a retired state domain or memory ID.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct RemovedStateManifest {
-    pub domain: String,
-    pub last_version: u32,
-    pub removed_in_version: u32,
-    pub memory_id: Option<u8>,
-    pub disposition: String,
-    pub reason: String,
-    pub test: Option<String>,
-}
-
-///
 /// ReservedMemoryManifest
 ///
 /// Explicit reservation for a stable memory ID whose persisted state shape is
-/// known but not yet represented as one active or removed state domain.
+/// known but not yet represented as one active state domain.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -194,54 +176,99 @@ pub struct StateAllocationDescriptor {
     pub allocation: StateAllocationKey,
     pub owner: AllocationOwner,
     pub state: Vec<StateDomainManifest>,
-    pub removed_state: Vec<RemovedStateManifest>,
     pub reserved_memory: Vec<ReservedMemoryManifest>,
 }
 
 #[must_use]
 pub fn canic_state_descriptors() -> Vec<StateAllocationDescriptor> {
-    let mut descriptors = core_root_descriptors();
+    let mut descriptors = core_runtime_descriptors();
+    descriptors.extend(placement_capacity_descriptors());
     descriptors.extend(sharding_descriptors());
     descriptors.extend(blob_storage_descriptors());
     descriptors
 }
 
-fn core_root_descriptors() -> Vec<StateAllocationDescriptor> {
+fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
     vec![
         descriptor(
-            StateAllocationKey::CoreRootTopology,
-            root_topology_domains(),
-            Vec::new(),
-            Vec::new(),
-        ),
-        descriptor(
-            StateAllocationKey::CoreRootEnvironment,
-            root_env_domains(),
-            Vec::new(),
+            StateAllocationKey::CoreRuntimeTopology,
+            runtime_topology_domains(),
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreRootAuth,
-            root_auth_domains(),
-            root_removed_state_domains(),
+            StateAllocationKey::CoreRootAppRegistry,
+            root_app_registry_domains(),
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreRootObservability,
-            root_observability_domains(),
-            Vec::new(),
-            root_reserved_memory_domains(),
-        ),
-        descriptor(
-            StateAllocationKey::CoreRootIntent,
-            root_intent_domains(),
-            Vec::new(),
+            StateAllocationKey::CoreRuntimeEnvironment,
+            runtime_env_domains(),
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::CoreRootCapacity,
-            root_capacity_domains(),
+            StateAllocationKey::CoreAuthState,
+            auth_state_domains(),
             Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreReplayReceipts,
+            replay_receipt_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRuntimeObservability,
+            runtime_observability_domains(),
+            runtime_reserved_memory_domains(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreIcpRefillRecords,
+            icp_refill_domains(),
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::CoreRuntimeIntent,
+            runtime_intent_domains(),
+            Vec::new(),
+        ),
+    ]
+}
+
+fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
+    vec![
+        descriptor(
+            StateAllocationKey::CanisterPool,
+            vec![state_domain(
+                "canister_pool",
+                CANISTER_POOL_ID,
+                "PoolStoreRecord",
+                "CanisterPoolData",
+                130,
+                "canister_pool_entries_restore_header_state",
+            )],
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::ScalingRegistry,
+            vec![state_domain(
+                "scaling_registry",
+                SCALING_REGISTRY_ID,
+                "ScalingRegistryRecord",
+                "ScalingRegistryData",
+                140,
+                "scaling_registry_restores_worker_pool_membership",
+            )],
+            Vec::new(),
+        ),
+        descriptor(
+            StateAllocationKey::DirectoryRegistry,
+            vec![state_domain(
+                "directory_registry",
+                DIRECTORY_REGISTRY_ID,
+                "DirectoryRegistryRecord",
+                "DirectoryRegistryData",
+                150,
+                "directory_registry_entries_restore_bindings",
+            )],
             Vec::new(),
         ),
     ]
@@ -260,7 +287,6 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
                 "sharding_registry_restores_pool_membership",
             )],
             Vec::new(),
-            Vec::new(),
         ),
         descriptor(
             StateAllocationKey::ShardingAssignments,
@@ -273,7 +299,6 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
                 "sharding_assignments_restore_partition_bindings",
             )],
             Vec::new(),
-            Vec::new(),
         ),
         descriptor(
             StateAllocationKey::ShardingActiveSet,
@@ -285,7 +310,6 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
                 180,
                 "sharding_active_set_restores_active_shards",
             )],
-            Vec::new(),
             Vec::new(),
         ),
     ]
@@ -304,7 +328,6 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
                 "stored_blobs_restore_live_blob_roots",
             )],
             Vec::new(),
-            Vec::new(),
         ),
         descriptor(
             StateAllocationKey::BlobDeletionPending,
@@ -316,7 +339,6 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
                 200,
                 "blob_deletion_pending_restores_gateway_scrub_state",
             )],
-            Vec::new(),
             Vec::new(),
         ),
         descriptor(
@@ -330,7 +352,6 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
                 "storage_gateway_principals_restore_authorized_gateways",
             )],
             Vec::new(),
-            Vec::new(),
         ),
         descriptor(
             StateAllocationKey::BlobStorageBilling,
@@ -343,7 +364,6 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
                 "blob_storage_billing_restores_cashier_configuration",
             )],
             Vec::new(),
-            Vec::new(),
         ),
     ]
 }
@@ -351,22 +371,19 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
 fn descriptor(
     allocation: StateAllocationKey,
     mut state: Vec<StateDomainManifest>,
-    mut removed_state: Vec<RemovedStateManifest>,
     mut reserved_memory: Vec<ReservedMemoryManifest>,
 ) -> StateAllocationDescriptor {
     state.sort_by(|left, right| left.domain.cmp(&right.domain));
-    removed_state.sort_by(|left, right| left.domain.cmp(&right.domain));
     reserved_memory.sort_by_key(|reservation| reservation.memory_id);
     StateAllocationDescriptor {
         allocation,
         owner: AllocationOwner::CanicCore,
         state,
-        removed_state,
         reserved_memory,
     }
 }
 
-fn root_topology_domains() -> Vec<StateDomainManifest> {
+fn runtime_topology_domains() -> Vec<StateDomainManifest> {
     vec![
         state_domain(
             "app_index",
@@ -383,14 +400,6 @@ fn root_topology_domains() -> Vec<StateDomainManifest> {
             "SubnetIndexData",
             15,
             "subnet_index_import_restores_unique_roles",
-        ),
-        state_domain(
-            "app_registry",
-            APP_REGISTRY_ID,
-            "AppRegistryRecord",
-            "AppRegistryData",
-            20,
-            "app_registry_entries_have_root_principals",
         ),
         state_domain(
             "subnet_registry",
@@ -411,7 +420,18 @@ fn root_topology_domains() -> Vec<StateDomainManifest> {
     ]
 }
 
-fn root_env_domains() -> Vec<StateDomainManifest> {
+fn root_app_registry_domains() -> Vec<StateDomainManifest> {
+    vec![state_domain(
+        "app_registry",
+        APP_REGISTRY_ID,
+        "AppRegistryRecord",
+        "AppRegistryData",
+        20,
+        "app_registry_entries_have_root_principals",
+    )]
+}
+
+fn runtime_env_domains() -> Vec<StateDomainManifest> {
     vec![
         state_domain(
             "env",
@@ -440,28 +460,29 @@ fn root_env_domains() -> Vec<StateDomainManifest> {
     ]
 }
 
-fn root_auth_domains() -> Vec<StateDomainManifest> {
-    vec![
-        state_domain(
-            "auth_state",
-            AUTH_STATE_ID,
-            "AuthStateRecord",
-            "AuthStateData",
-            60,
-            "auth_state_delegated_proofs_are_chain_key_only",
-        ),
-        state_domain(
-            "replay_receipts",
-            REPLAY_RECEIPTS_ID,
-            "ReplayReceiptRecord",
-            "ReplayReceiptData",
-            70,
-            "replay_receipts_reject_unsupported_schema_versions",
-        ),
-    ]
+fn auth_state_domains() -> Vec<StateDomainManifest> {
+    vec![state_domain(
+        "auth_state",
+        AUTH_STATE_ID,
+        "AuthStateRecord",
+        "AuthStateData",
+        60,
+        "auth_state_delegated_proofs_are_chain_key_only",
+    )]
 }
 
-fn root_observability_domains() -> Vec<StateDomainManifest> {
+fn replay_receipt_domains() -> Vec<StateDomainManifest> {
+    vec![state_domain(
+        "replay_receipts",
+        REPLAY_RECEIPTS_ID,
+        "ReplayReceiptRecord",
+        "ReplayReceiptData",
+        70,
+        "replay_receipts_reject_unsupported_schema_versions",
+    )]
+}
+
+fn runtime_observability_domains() -> Vec<StateDomainManifest> {
     vec![
         state_domain(
             "cycle_topup_events",
@@ -479,18 +500,21 @@ fn root_observability_domains() -> Vec<StateDomainManifest> {
             90,
             "cycles_funding_ledger_restores_child_budget_state",
         ),
-        state_domain(
-            "icp_refill_records",
-            ICP_REFILL_RECORDS_ID,
-            "IcpRefillRecord",
-            "IcpRefillRecordsData",
-            100,
-            "icp_refill_records_decode_status_and_error_codes",
-        ),
     ]
 }
 
-fn root_intent_domains() -> Vec<StateDomainManifest> {
+fn icp_refill_domains() -> Vec<StateDomainManifest> {
+    vec![state_domain(
+        "icp_refill_records",
+        ICP_REFILL_RECORDS_ID,
+        "IcpRefillRecord",
+        "IcpRefillRecordsData",
+        100,
+        "icp_refill_records_decode_status_and_error_codes",
+    )]
+}
+
+fn runtime_intent_domains() -> Vec<StateDomainManifest> {
     vec![
         state_domain(
             "intent_meta",
@@ -527,48 +551,7 @@ fn root_intent_domains() -> Vec<StateDomainManifest> {
     ]
 }
 
-fn root_capacity_domains() -> Vec<StateDomainManifest> {
-    vec![
-        state_domain(
-            "canister_pool",
-            CANISTER_POOL_ID,
-            "PoolStoreRecord",
-            "CanisterPoolData",
-            130,
-            "canister_pool_entries_restore_header_state",
-        ),
-        state_domain(
-            "scaling_registry",
-            SCALING_REGISTRY_ID,
-            "ScalingRegistryRecord",
-            "ScalingRegistryData",
-            140,
-            "scaling_registry_restores_worker_pool_membership",
-        ),
-        state_domain(
-            "directory_registry",
-            DIRECTORY_REGISTRY_ID,
-            "DirectoryRegistryRecord",
-            "DirectoryRegistryData",
-            150,
-            "directory_registry_entries_restore_bindings",
-        ),
-    ]
-}
-
-fn root_removed_state_domains() -> Vec<RemovedStateManifest> {
-    vec![RemovedStateManifest {
-        domain: "root_replay".to_string(),
-        last_version: 1,
-        removed_in_version: 2,
-        memory_id: Some(ROOT_REPLAY_ID),
-        disposition: "moved_to_replay_receipts".to_string(),
-        reason: "root replay receipts moved into the shared replay receipt store".to_string(),
-        test: Some("replay_receipt_record_round_trips_through_cbor_storable".to_string()),
-    }]
-}
-
-fn root_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
+fn runtime_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
     vec![
         reserved_memory(
             "cycle_tracker",
