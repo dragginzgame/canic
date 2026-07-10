@@ -137,5 +137,7 @@ fn promotion_target_execution_lineage_text_reports_passive_boundary() {
     assert!(text.contains("target_execution_lineage_digest: "));
     assert!(text.contains("transform_id: promotion-transform:promoted-plan-1"));
     assert!(text.contains("preflight_plan_id: promoted-plan-1"));
+    assert!(text.contains("backend: CurrentCli"));
+    assert!(text.contains("preflight_status: Ready"));
     assert!(text.contains("  Deployment execution preflight"));
 }

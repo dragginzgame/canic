@@ -1430,3 +1430,128 @@ Explicit non-scope:
 - no operator text output label changes
 - no identity-key string changes
 - no execution/status mixed-label cleanup
+
+## 0.83 Receipt Resume Structural Evidence Comparison
+
+Status:
+completed in the post-v0.83.27 Unreleased batch for
+`CANIC-083-DEBT-035`.
+
+Source findings:
+- CANIC-083-DEBT-035
+
+Boundary:
+Typed deployment receipt evidence versus human-readable conflict diagnostics.
+
+Previous owner:
+Delimiter-joined diagnostic strings doubled as duplicate conflict identities.
+
+Intended owner:
+Typed phase and role-phase evidence keys decide conflicts. Formatted strings
+only explain the resulting finding.
+
+Behavior impact label:
+behavior_change_declared. Valid receipts are unchanged; malformed or
+conflicting receipts that previously collided now fail closed.
+
+Public surfaces affected:
+Passive resume-safety results may correctly change from warning to blocked for
+structurally conflicting receipt evidence.
+
+Serialized surfaces affected:
+None. Receipt JSON, resume-safety JSON, deployment-truth schemas, Candid, and
+stable-state layout are unchanged.
+
+Validation:
+- `cargo test --locked -p canic-host deployment_truth::tests::execution_receipts::resume --lib`
+- `cargo test --locked -p canic-host deployment_truth --lib`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no automated resume execution
+- no receipt JSON schema changes
+- no deployment-truth schema changes
+- no command changes
+
+## 0.83 Promotion Execution And Staging Label Ownership
+
+Status:
+completed in the post-v0.83.27 Unreleased batch for
+`CANIC-083-DEBT-036`.
+
+Source findings:
+- CANIC-083-DEBT-036
+
+Boundary:
+Deployment execution/promotion model variant labels versus promotion text and
+staging evidence consumers.
+
+Previous owner:
+Promotion text and staging evidence relied on enum `Debug`; an unused public
+previous-receipt-kind label method had no production consumer.
+
+Intended owner:
+Execution, promotion, observation-status, and artifact-transport enums own the
+exact labels consumed by text and evidence builders.
+
+Behavior impact label:
+behavior_change_declared for the pre-1.0 removal of the unused public Rust
+method; runtime behavior and emitted strings are unchanged.
+
+Public surfaces affected:
+The unused `PreviousArtifactReceiptKindV1::label()` Rust method is removed.
+CLI commands, endpoints, and canister methods are unchanged.
+
+Serialized surfaces affected:
+None. Operator text, receipt evidence strings, JSON schemas, deployment truth,
+evidence/report schemas, Candid, and stable-state layout are unchanged.
+
+Validation:
+- `cargo test --locked -p canic-host promotion --lib`
+- `cargo test --locked -p canic-host deployment_truth --lib`
+- `cargo clippy --locked -p canic-host --all-targets -- -D warnings`
+
+Explicit non-scope:
+- no command changes
+- no endpoint changes
+- no Candid changes
+- no JSON or stable-state changes
+- no emitted text/evidence label changes
+
+## 0.83 Audit Closeout Metadata Reconciliation
+
+Status:
+completed in the post-v0.83.27 Unreleased batch for
+`CANIC-083-DEBT-037`.
+
+Source findings:
+- CANIC-083-DEBT-037
+
+Boundary:
+Canonical 0.83 audit status versus release/tag and handoff state.
+
+Previous owner:
+Ledger header/scope, recommended slices, and the compact handoff described
+different completion points.
+
+Intended owner:
+The canonical ledger records complete finding state, and the handoff mirrors
+the current package surface and Unreleased batch.
+
+Behavior impact label:
+no_behavior_change.
+
+Public surfaces affected:
+Documentation only.
+
+Serialized surfaces affected:
+None.
+
+Validation:
+- `cargo test --locked -p canic --test changelog_governance`
+- `git diff --check`
+
+Explicit non-scope:
+- no package version change
+- no release command
+- no git staging, commit, tag, or push

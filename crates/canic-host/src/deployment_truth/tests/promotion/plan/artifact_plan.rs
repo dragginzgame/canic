@@ -199,6 +199,7 @@ fn artifact_promotion_plan_text_reports_passive_summary() {
     assert!(text.contains("execution: none"));
     assert!(text.contains("plan_id: artifact-promotion-plan-1"));
     assert!(text.contains("artifact_promotion_plan_digest:"));
+    assert!(text.contains("status: Ready"));
     assert!(text.contains("target_execution_lineage: target-execution-lineage-1"));
     assert!(text.contains("readiness_roles: 1"));
     assert!(text.contains("artifact_identity_roles: 1"));

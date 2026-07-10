@@ -32,7 +32,7 @@ pub fn staging_receipt_evidence(receipts: &[StagingReceiptV1]) -> Vec<String> {
     for receipt in receipts {
         evidence.extend([
             format!("staging_role:{}", receipt.role),
-            format!("staging_transport:{:?}", receipt.transport),
+            format!("staging_transport:{}", receipt.transport.label()),
             format!("staging_artifact:{}", receipt.artifact_identity),
             format!(
                 "staging_chunks_prepared:{}",
@@ -40,8 +40,8 @@ pub fn staging_receipt_evidence(receipts: &[StagingReceiptV1]) -> Vec<String> {
             ),
             format!("staging_chunks_published:{}", receipt.published_chunk_count),
             format!(
-                "staging_postcondition:{:?}",
-                receipt.verified_postcondition.status
+                "staging_postcondition:{}",
+                receipt.verified_postcondition.status.label()
             ),
         ]);
         if let Some(locator) = &receipt.wasm_store_locator {

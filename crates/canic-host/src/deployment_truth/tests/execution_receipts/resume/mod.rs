@@ -135,6 +135,35 @@ fn receipt_aware_diff_blocks_conflicting_duplicate_phase_receipt() {
 }
 
 #[test]
+fn receipt_aware_diff_blocks_duplicate_phase_receipts_with_colliding_display_labels() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    receipt.phase_receipts[0].verified_postcondition.evidence =
+        vec!["artifact:root,artifact:user_hub".to_string()];
+    let mut conflicting = receipt.phase_receipts[0].clone();
+    conflicting.verified_postcondition.evidence =
+        vec!["artifact:root".to_string(), "artifact:user_hub".to_string()];
+    receipt.phase_receipts.push(conflicting);
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == RECEIPT_PHASE_CONFLICT_CODE
+                && finding.subject.as_deref() == Some("materialize_artifacts"))
+    );
+}
+
+#[test]
 fn receipt_aware_diff_warns_for_duplicate_identical_phase_receipt() {
     let plan = sample_plan();
     let inventory = sample_matching_inventory();
@@ -177,6 +206,35 @@ fn receipt_aware_diff_blocks_conflicting_duplicate_role_phase_receipt() {
     let mut conflicting = receipt.role_phase_receipts[0].clone();
     conflicting.result = RolePhaseResultV1::Failed;
     conflicting.error = Some(ARTIFACT_MISSING_CODE.to_string());
+    receipt.role_phase_receipts.push(conflicting);
+
+    let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.resumable_phases.is_empty());
+    assert!(
+        diff.hard_failures
+            .iter()
+            .any(|finding| finding.code == RECEIPT_ROLE_PHASE_CONFLICT_CODE
+                && finding.subject.as_deref() == Some("root:materialize_artifacts"))
+    );
+}
+
+#[test]
+fn receipt_aware_diff_blocks_duplicate_role_receipts_with_colliding_display_labels() {
+    let plan = sample_plan();
+    let inventory = sample_matching_inventory();
+    let mut receipt = sample_receipt_with_phase(
+        "plan-local-root",
+        Some("aaaaa-aa"),
+        ObservationStatusV1::Observed,
+        RolePhaseResultV1::VerifiedAlreadyApplied,
+    );
+    receipt.role_phase_receipts[0].previous_module_hash = Some("old;target=next".to_string());
+    receipt.role_phase_receipts[0].target_module_hash = Some("final".to_string());
+    let mut conflicting = receipt.role_phase_receipts[0].clone();
+    conflicting.previous_module_hash = Some("old".to_string());
+    conflicting.target_module_hash = Some("next;target=final".to_string());
     receipt.role_phase_receipts.push(conflicting);
 
     let diff = compare_plan_inventory_and_receipt(&plan, &inventory, &receipt);

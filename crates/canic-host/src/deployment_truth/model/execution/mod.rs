@@ -69,6 +69,14 @@ impl DeploymentExecutionPreflightStatusV1 {
             Self::Blocked => "blocked",
         }
     }
+
+    #[must_use]
+    pub const fn variant_label(self) -> &'static str {
+        match self {
+            Self::Ready => "Ready",
+            Self::Blocked => "Blocked",
+        }
+    }
 }
 
 ///
@@ -80,6 +88,18 @@ pub enum DeploymentExecutorBackendV1 {
     PocketIc,
     DirectAgent,
     Other { name: String },
+}
+
+impl DeploymentExecutorBackendV1 {
+    #[must_use]
+    pub fn variant_label(&self) -> String {
+        match self {
+            Self::CurrentCli => "CurrentCli".to_string(),
+            Self::PocketIc => "PocketIc".to_string(),
+            Self::DirectAgent => "DirectAgent".to_string(),
+            Self::Other { name } => format!("Other {{ name: {name:?} }}"),
+        }
+    }
 }
 
 ///
@@ -142,6 +162,18 @@ impl DeploymentExecutionStatusV1 {
             Self::Complete => "complete",
         }
     }
+
+    #[must_use]
+    pub const fn variant_label(self) -> &'static str {
+        match self {
+            Self::NotStarted => "NotStarted",
+            Self::InProgress => "InProgress",
+            Self::FailedBeforeMutation => "FailedBeforeMutation",
+            Self::PartiallyApplied => "PartiallyApplied",
+            Self::FailedAfterMutation => "FailedAfterMutation",
+            Self::Complete => "Complete",
+        }
+    }
 }
 
 ///
@@ -152,6 +184,19 @@ pub enum DeploymentCommandResultV1 {
     NotFinished,
     Succeeded,
     Failed { code: String, message: String },
+}
+
+impl DeploymentCommandResultV1 {
+    #[must_use]
+    pub fn variant_label(&self) -> String {
+        match self {
+            Self::NotFinished => "NotFinished".to_string(),
+            Self::Succeeded => "Succeeded".to_string(),
+            Self::Failed { code, message } => {
+                format!("Failed {{ code: {code:?}, message: {message:?} }}")
+            }
+        }
+    }
 }
 
 ///
@@ -206,6 +251,37 @@ mod tests {
             DeploymentExecutionPreflightStatusV1::Blocked.label(),
             "blocked"
         );
+        assert_eq!(
+            DeploymentExecutionPreflightStatusV1::Ready.variant_label(),
+            "Ready"
+        );
+        assert_eq!(
+            DeploymentExecutionPreflightStatusV1::Blocked.variant_label(),
+            "Blocked"
+        );
+    }
+
+    #[test]
+    fn deployment_executor_backend_owns_variant_labels() {
+        assert_eq!(
+            DeploymentExecutorBackendV1::CurrentCli.variant_label(),
+            "CurrentCli"
+        );
+        assert_eq!(
+            DeploymentExecutorBackendV1::PocketIc.variant_label(),
+            "PocketIc"
+        );
+        assert_eq!(
+            DeploymentExecutorBackendV1::DirectAgent.variant_label(),
+            "DirectAgent"
+        );
+        assert_eq!(
+            DeploymentExecutorBackendV1::Other {
+                name: "fixture".to_string()
+            }
+            .variant_label(),
+            "Other { name: \"fixture\" }"
+        );
     }
 
     #[test]
@@ -231,6 +307,50 @@ mod tests {
             "failed_after_mutation"
         );
         assert_eq!(DeploymentExecutionStatusV1::Complete.label(), "complete");
+        assert_eq!(
+            DeploymentExecutionStatusV1::NotStarted.variant_label(),
+            "NotStarted"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::InProgress.variant_label(),
+            "InProgress"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::FailedBeforeMutation.variant_label(),
+            "FailedBeforeMutation"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::PartiallyApplied.variant_label(),
+            "PartiallyApplied"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::FailedAfterMutation.variant_label(),
+            "FailedAfterMutation"
+        );
+        assert_eq!(
+            DeploymentExecutionStatusV1::Complete.variant_label(),
+            "Complete"
+        );
+    }
+
+    #[test]
+    fn deployment_command_result_owns_variant_labels() {
+        assert_eq!(
+            DeploymentCommandResultV1::NotFinished.variant_label(),
+            "NotFinished"
+        );
+        assert_eq!(
+            DeploymentCommandResultV1::Succeeded.variant_label(),
+            "Succeeded"
+        );
+        assert_eq!(
+            DeploymentCommandResultV1::Failed {
+                code: "install_failed".to_string(),
+                message: "install \"root\" failed".to_string(),
+            }
+            .variant_label(),
+            "Failed { code: \"install_failed\", message: \"install \\\"root\\\" failed\" }"
+        );
     }
 
     #[test]

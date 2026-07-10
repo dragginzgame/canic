@@ -101,8 +101,14 @@ pub fn promotion_target_execution_lineage_text(
             "preflight_authority_plan_id: {}",
             lineage.execution_preflight.authority_plan_id
         ),
-        format!("backend: {:?}", lineage.execution_preflight.backend),
-        format!("preflight_status: {:?}", lineage.execution_preflight.status),
+        format!(
+            "backend: {}",
+            lineage.execution_preflight.backend.variant_label()
+        ),
+        format!(
+            "preflight_status: {}",
+            lineage.execution_preflight.status.variant_label()
+        ),
         format!("execution_attempted: {}", lineage.execution_attempted),
     ];
 
@@ -136,7 +142,7 @@ pub fn artifact_promotion_plan_text(plan: &ArtifactPromotionPlanV1) -> String {
             plan.artifact_promotion_plan_digest
         ),
         format!("generated_at: {}", plan.generated_at),
-        format!("status: {:?}", plan.status),
+        format!("status: {}", plan.status.variant_label()),
         format!("target_plan_id: {}", plan.target_plan_id),
         format!("promoted_plan_id: {}", plan.promoted_plan_id),
         format!(

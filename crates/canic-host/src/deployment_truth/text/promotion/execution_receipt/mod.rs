@@ -33,8 +33,11 @@ pub fn artifact_promotion_execution_receipt_text(
         ),
         format!("operation_id: {}", receipt.operation_id),
         format!("provenance_status: {}", receipt.provenance_status.label()),
-        format!("operation_status: {:?}", receipt.operation_status),
-        format!("command_result: {:?}", receipt.command_result),
+        format!(
+            "operation_status: {}",
+            receipt.operation_status.variant_label()
+        ),
+        format!("command_result: {}", receipt.command_result.variant_label()),
         format!("started_at: {}", receipt.started_at),
         format!(
             "finished_at: {}",

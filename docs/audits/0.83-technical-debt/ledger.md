@@ -1,9 +1,9 @@
 # Canic 0.83 Technical Debt Ledger
 
 Schema version: 1
-Audit date: 2026-07-08
-Repo ref: baseline working tree after 0.82.41 push; current package surface 0.83.24
-Status: pass_with_followups
+Audit date: 2026-07-10
+Repo ref: post-v0.83.27 working tree; current package surface 0.83.27
+Status: pass
 
 ## Scope
 
@@ -85,7 +85,17 @@ tightens deployment-truth status label ownership so deployment-truth model
 status enums own stable status labels consumed by text renderers and medic.
 The thirtieth follow-up fix tightens deployment-root verification text label
 ownership so root verification and root observation enums own the exact labels
-used by report and receipt text.
+used by report and receipt text. The next four released fixes complete status,
+root-verification, control-class, external-lifecycle, and promotion label
+ownership through `CANIC-083-DEBT-031` to `CANIC-083-DEBT-034`.
+
+The post-v0.83.27 closeout review fixes three additional findings. Receipt
+duplicate detection now compares structured evidence rather than delimiter-
+joined display strings. Promotion execution/status and staging evidence labels
+now use model-owned labels while the unused public previous-receipt-kind label
+method is hard-cut. The ledger metadata, handoff, and recommended-slice state
+now agree that every recorded 0.83 finding is fixed and no deferred work
+remains.
 
 ## Baseline Validation
 
@@ -2828,6 +2838,13 @@ Resolution:
   endpoint surfaces, Candid, JSON schemas, deployment truth schema,
   evidence/report schemas, and stable-state layout unchanged.
 
+Post-v0.83.27 correction:
+
+- `CANIC-083-DEBT-036` completed staging transport/postcondition label
+  consumption and removed the unused public
+  `PreviousArtifactReceiptKindV1::label()` method that had no production
+  consumer. Historical 0.83.27 output remains unchanged.
+
 Fix validation:
 
 | Command | Result | Notes |
@@ -2840,6 +2857,217 @@ Fix validation:
 | `cargo test --locked -p canic --test changelog_governance` | pass | Changelog governance test passed. |
 | `cargo fmt --all -- --check` | pass | Format check passed after implementation. |
 | `git diff --check` | pass | Whitespace diff check passed. |
+
+## CANIC-083-DEBT-035: Receipt Duplicate Detection Uses Lossy Display Keys
+
+Severity: P2
+Category: host / deployment_truth / receipt_resume / safety
+Status: fixed
+Owner: deployment-truth receipt-resume safety comparison
+Current location: receipt duplicate evidence grouping
+Intended owner: typed phase and role-phase receipt evidence values
+Affected surfaces: cli, json, evidence_report, internal_only
+Release decision: fixed_unreleased
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/report/receipt_resume.rs`
+- line or anchor: `receipt_phase_evidence_label` and
+  `role_phase_evidence_label`
+- module/function: receipt-resume duplicate validation
+- command/search:
+  `rg -n "status=\{:\?\}|result=\{:\?\}|evidence.join" crates/canic-host/src/deployment_truth/report/receipt_resume.rs`
+- reachability: active passive `canic deploy inspect resume-report` safety
+  reporting for persisted or explicitly supplied deployment receipts
+- exact issue: duplicate detection compared delimiter-joined display strings.
+  Distinct evidence arrays such as `["a,b"]` and `["a", "b"]`, or distinct
+  role fields containing `;target=`, could produce the same comparison key and
+  be reported as identical duplicates.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/report/mod.rs`
+- line or anchor: `duplicate_evidence_groups`
+- module/function: duplicate evidence grouping
+- command/search: inspection of the `BTreeSet<String>` conflict decision
+- reachability: active deployment-truth report producer
+- exact issue: conflict status was derived from the number of formatted string
+  values rather than structural evidence identities.
+
+Risk:
+
+Moderate. The current resume report is passive, but it is a safety report. A
+collision could downgrade structurally conflicting receipt evidence from a
+hard failure to an identical-duplicate warning and list the phase as
+resumable.
+
+Recommendation:
+
+Compare typed evidence keys for conflict decisions and retain formatted labels
+only for diagnostics. Preserve the current report schema and normal diagnostic
+strings.
+
+Regression test:
+
+Cover phase evidence arrays and role-phase fields that produce identical old
+display strings but contain different typed values.
+
+Resolution:
+
+- Added typed phase and role-phase evidence keys for duplicate conflict
+  decisions.
+- Added a keyed grouping helper that separates structural comparison from
+  diagnostic rendering.
+- Kept existing receipt/report schemas and normal diagnostic strings.
+- Added collision regression coverage for comma-joined phase evidence and
+  delimiter-bearing role-phase fields.
+
+## CANIC-083-DEBT-036: Promotion Execution And Staging Labels Remain Partially Owned
+
+Severity: P3
+Category: host / deployment_truth / promotion / receipt / model_labels
+Status: fixed
+Owner: deployment-truth execution, promotion, and staging labels
+Current location: promotion text renderers, staging evidence builder, and
+promotion source model
+Intended owner: deployment-truth execution, promotion, inventory, and artifact
+transport enums
+Affected surfaces: cli, deployment_truth, evidence_report, internal_only
+Release decision: fixed_unreleased
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/text/promotion/`
+- line or anchor: execution receipt and target-lineage/plan text renderers
+- module/function: promotion execution/status text rendering
+- command/search:
+  `rg -n "\{:\?\}|\{[A-Za-z0-9_]+:\?\}" crates/canic-host/src/deployment_truth/text/promotion -g '*.rs'`
+- reachability: active promotion execution receipt, artifact plan, and target
+  execution lineage text
+- exact issue: operation status, command result, executor backend, preflight
+  status, and plan status still used enum `Debug`, despite the 0.83.27 notes
+  reserving them for a separate label-ownership slice.
+
+Evidence:
+- file: `crates/canic-host/src/deployment_truth/receipt/deployment.rs`
+- line or anchor: `staging_receipt_evidence`
+- module/function: staging receipt evidence conversion
+- command/search: `rg -n "staging_(transport|postcondition).*\?:"`
+- reachability: active persisted deployment receipt evidence
+- exact issue: artifact transport and observation status had model labels but
+  the staging evidence consumer still used `Debug`.
+
+Evidence:
+- file:
+  `crates/canic-host/src/deployment_truth/model/promotion/source/mod.rs`
+- line or anchor: `PreviousArtifactReceiptKindV1::label`
+- module/function: promotion source model
+- command/search: production-use search for the method
+- reachability: public Rust API with test-only use
+- exact issue: 0.83.27 added a public label method without a production label
+  consumer, expanding the Rust API outside the evidence-backed requirement.
+
+Risk:
+
+Low. Output was stable, but `Debug` formatting left label ownership coupled to
+Rust variant names, while the unused method broadened the public host API
+without an active contract.
+
+Recommendation:
+
+Move the exact existing promotion execution/status strings to model-owned
+variant labels, consume existing transport/status labels in staging evidence,
+and hard-cut the unused previous-receipt-kind label method.
+
+Regression test:
+
+Pin all new variant labels, promotion text consumers, and unchanged staging
+evidence strings.
+
+Resolution:
+
+- Added model-owned variant labels for execution preflight status, execution
+  status, command result, executor backend, and promotion readiness status.
+- Replaced the remaining promotion text-renderer `Debug` formatting with those
+  labels while preserving output exactly.
+- Routed staging transport and postcondition evidence through existing
+  model-owned labels.
+- Removed the unused public `PreviousArtifactReceiptKindV1::label()` method as
+  a pre-1.0 Rust API hard cut; the enum and its serialized shape are unchanged.
+
+## CANIC-083-DEBT-037: Audit Metadata And Closeout State Are Stale
+
+Severity: P3
+Category: docs_drift / audit_governance
+Status: fixed
+Owner: 0.83 technical-debt audit artifacts and session handoff
+Current location: ledger header/scope, recommended slices, and current status
+Intended owner: canonical 0.83 ledger and compact handoff
+Affected surfaces: docs
+Release decision: fixed_unreleased
+
+Evidence:
+- file: `docs/audits/0.83-technical-debt/ledger.md`
+- line or anchor: header and scope
+- module/function: audit metadata
+- command/search: inspection against `git describe`, current package version,
+  and finding/recommended-slice statuses
+- reachability: active audit source of truth
+- exact issue: the ledger referenced package surface 0.83.24, stopped its scope
+  summary before the latest findings, and remained `pass_with_followups` after
+  every recorded recommended slice was complete.
+
+Evidence:
+- file: `docs/status/current.md`
+- line or anchor: Current Line
+- module/function: compact session handoff
+- command/search: inspection against the released `v0.83.27` tag
+- reachability: mandatory new-session handoff
+- exact issue: the handoff described 0.83.27 as a working slice and reported
+  package surface 0.83.26.
+
+Risk:
+
+Low. Runtime behavior is unaffected, but stale audit state can cause the next
+session to repeat completed work or miss a declared follow-up.
+
+Recommendation:
+
+Update the repo reference, package surface, scope summary, recommended slices,
+and handoff together. Mark the ledger `pass` only after all new findings are
+fixed and no deferred findings remain.
+
+Regression test:
+
+Review finding/recommended-slice status consistency and run whitespace plus
+changelog-governance checks.
+
+Resolution:
+
+- Updated the ledger metadata and scope through the post-v0.83.27 closeout
+  findings.
+- Added completed recommended slices for `CANIC-083-DEBT-035` through
+  `CANIC-083-DEBT-037`.
+- Updated the handoff to package surface 0.83.27 and the current Unreleased
+  closeout batch.
+- Marked the ledger `pass`; no open or deferred 0.83 findings remain.
+
+Closeout validation:
+
+| Command | Result | Finding coverage |
+| --- | --- | --- |
+| `cargo fmt --all` | pass | CANIC-083-DEBT-035 through CANIC-083-DEBT-037 |
+| `cargo test --locked -p canic-host deployment_truth::tests::execution_receipts::resume --lib` | pass; 10 tests | CANIC-083-DEBT-035 |
+| `cargo test --locked -p canic-host promotion --lib` | pass; 172 tests | CANIC-083-DEBT-036 |
+| `cargo test --locked -p canic-host deployment_truth --lib` | pass; 461 tests | CANIC-083-DEBT-035, CANIC-083-DEBT-036 |
+| `cargo clippy --locked -p canic-host --all-targets -- -D warnings` | pass | CANIC-083-DEBT-035, CANIC-083-DEBT-036 |
+| `cargo test --locked -p canic --test changelog_governance` | pass | CANIC-083-DEBT-037 |
+| `cargo fmt --all -- --check` | pass | CANIC-083-DEBT-035 through CANIC-083-DEBT-037 |
+| `git diff --check` | pass | CANIC-083-DEBT-035 through CANIC-083-DEBT-037 |
+
+## Closeout
+
+The 0.83 ledger is `pass`. All 37 findings are fixed, no findings are deferred,
+and every recommended slice is complete. The closeout recommendation is to
+release the current Unreleased fixes through the human-owned release flow or
+proceed to the next feature line without another broad 0.83 refactor.
 
 ## Rejected / Non-Findings
 

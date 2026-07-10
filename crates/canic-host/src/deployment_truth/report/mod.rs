@@ -430,6 +430,39 @@ fn duplicate_evidence_groups<T>(
     groups
 }
 
+fn duplicate_evidence_groups_by<T, K>(
+    items: &[T],
+    subject: impl Fn(&T) -> String,
+    evidence_key: impl Fn(&T) -> K,
+    evidence_label: impl Fn(&T) -> String,
+    evidence_separator: &str,
+) -> Vec<DuplicateEvidenceGroup>
+where
+    K: Ord,
+{
+    let mut groups = Vec::new();
+    for (subject, entries) in group_by_subject(items, |item| Some(subject(item))) {
+        if entries.len() <= 1 {
+            continue;
+        }
+        let evidence_values = entries
+            .iter()
+            .map(|entry| (evidence_key(entry), evidence_label(entry)))
+            .collect::<BTreeMap<_, _>>();
+        groups.push(DuplicateEvidenceGroup {
+            subject,
+            count: entries.len(),
+            evidence_label: evidence_values
+                .values()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(evidence_separator),
+            is_conflict: evidence_values.len() > 1,
+        });
+    }
+    groups
+}
+
 fn conflicting_assignment_groups<T>(
     items: &[T],
     subject: impl Fn(&T) -> Option<String>,
