@@ -22,6 +22,7 @@ use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
     ops::ic::{IcOps, mgmt::MgmtOps},
 };
+use canic_core::dto::error::{Error, ErrorCode};
 use std::collections::BTreeSet;
 
 const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
@@ -310,14 +311,12 @@ trait WasmStoreManifestSourceError {
 
 impl WasmStoreManifestSourceError for WasmStoreMetricReason {
     fn from_manifest_source_error(err: &InternalError) -> Self {
-        if err.to_string().contains("not registered") {
-            Self::MissingManifest
-        } else if err.to_string().contains("chunk") {
-            Self::MissingChunk
-        } else if err.public_error().is_some() {
-            Self::StoreCall
-        } else {
-            Self::InvalidState
+        match err.public_error().map(|public| public.code) {
+            Some(ErrorCode::WasmStoreChunkMissing) => Self::MissingChunk,
+            Some(ErrorCode::WasmStoreHashMismatch) => Self::HashMismatch,
+            Some(ErrorCode::WasmStoreManifestMissing) => Self::MissingManifest,
+            Some(_) => Self::StoreCall,
+            None => Self::InvalidState,
         }
     }
 }
@@ -325,10 +324,10 @@ impl WasmStoreManifestSourceError for WasmStoreMetricReason {
 // Resolve the currently configured store canister id for one approved binding.
 fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, InternalError> {
     SubnetStateOps::wasm_store_pid(binding).ok_or_else(|| {
-        InternalError::workflow(
-            InternalErrorOrigin::Workflow,
+        InternalError::public(Error::new(
+            ErrorCode::WasmStoreManifestMissing,
             format!("wasm store binding '{binding}' is not registered"),
-        )
+        ))
     })
 }
 

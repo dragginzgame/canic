@@ -210,6 +210,35 @@ pub enum ExitClassV1 {
 
 impl ExitClassV1 {
     #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::SuccessWithWarnings => "success_with_warnings",
+            Self::BlockedByPolicy => "blocked_by_policy",
+            Self::EvidenceConflict => "evidence_conflict",
+            Self::MissingRequiredEvidence => "missing_required_evidence",
+            Self::InvalidInput => "invalid_input",
+            Self::ExecutionFailed => "execution_failed",
+            Self::InternalError => "internal_error",
+        }
+    }
+
+    #[must_use]
+    pub fn from_label(label: &str) -> Option<Self> {
+        match label {
+            "success" => Some(Self::Success),
+            "success_with_warnings" => Some(Self::SuccessWithWarnings),
+            "blocked_by_policy" => Some(Self::BlockedByPolicy),
+            "evidence_conflict" => Some(Self::EvidenceConflict),
+            "missing_required_evidence" => Some(Self::MissingRequiredEvidence),
+            "invalid_input" => Some(Self::InvalidInput),
+            "execution_failed" => Some(Self::ExecutionFailed),
+            "internal_error" => Some(Self::InternalError),
+            _ => None,
+        }
+    }
+
+    #[must_use]
     pub const fn precedence(self) -> u8 {
         match self {
             Self::Success => 0,

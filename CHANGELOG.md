@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.1` replaces Canic-owned English-fragment and substring decisions with
+  typed auth, policy, wasm-store, deployment-safety, protocol, install, and
+  operator classifications, deletes obsolete tests and maintained-doc
+  breadcrumbs for removed surfaces, and limits text assertions to maintained
+  rendering or external diagnostic boundaries. Internal PocketIC artifact
+  builds now validate Canic role packages before receiving the canonical build
+  marker.
+
 - `0.84.0` makes exact package-resolved role contracts authoritative across
   build, medic, release views, and state reporting, with fail-closed package and
   descriptor validation while preserving stable-memory IDs and encodings.

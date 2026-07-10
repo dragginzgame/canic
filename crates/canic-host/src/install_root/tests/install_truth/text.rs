@@ -224,7 +224,9 @@ kind = "root"
     let lines = install_deployment_truth_gate_lines(&check, &receipt);
 
     assert!(lines.iter().any(|line| {
-        line.contains("Deployment truth warning: plan:plan_assumption:local_state.root_canister_id")
+        line.contains(
+            "Deployment truth warning: plan:plan_assumption:local_state.root_canister_id.missing",
+        )
     }));
 
     fs::remove_dir_all(root).expect("clean temp dir");

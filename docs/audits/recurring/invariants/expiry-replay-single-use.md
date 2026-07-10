@@ -49,8 +49,8 @@ The Token Trust Chain Invariant verifies issuer authenticity and chain validity.
 For the current root proof renewal and delegated-token tree, this audit
 must explicitly check:
 
-- delegated tokens remain TTL-bounded bearer credentials; verifier-local token
-  use state must not be reintroduced.
+- delegated tokens remain TTL-bounded bearer credentials, and verification
+  performs no verifier-local token-use state writes.
 - delegated-token certificate and claim expiry checks reject at
   `now_ns >= expires_at_ns`.
 - active root delegation proofs reject not-yet-valid and expired certificates

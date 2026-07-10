@@ -4,17 +4,13 @@ use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricsApi,
 };
 use canic_core::control_plane_support::error::InternalError;
+use canic_core::dto::error::ErrorCode;
 
 impl WasmStorePublicationWorkflow {
     // Return true when one failed store call represents store-capacity exhaustion.
     pub(super) fn is_store_capacity_exceeded(err: &InternalError) -> bool {
-        err.public_error().is_some_and(|public| {
-            public
-                .message
-                .contains(Self::WASM_STORE_CAPACITY_EXCEEDED_MESSAGE)
-        }) || err
-            .to_string()
-            .contains(Self::WASM_STORE_CAPACITY_EXCEEDED_MESSAGE)
+        err.public_error()
+            .is_some_and(|public| public.code == ErrorCode::WasmStoreCapacityExceeded)
     }
 }
 
@@ -45,14 +41,46 @@ pub(super) trait WasmStorePublicationError {
 
 impl WasmStorePublicationError for WasmStoreMetricReason {
     fn from_publication_error(err: &InternalError) -> Self {
-        if WasmStorePublicationWorkflow::is_store_capacity_exceeded(err) {
-            Self::Capacity
-        } else if err.public_error().is_some() {
-            Self::StoreCall
-        } else if err.to_string().contains("chunk") {
-            Self::MissingChunk
-        } else {
-            Self::InvalidState
+        match err.public_error().map(|public| public.code) {
+            Some(ErrorCode::WasmStoreCapacityExceeded) => Self::Capacity,
+            Some(ErrorCode::WasmStoreChunkMissing) => Self::MissingChunk,
+            Some(ErrorCode::WasmStoreHashMismatch) => Self::HashMismatch,
+            Some(ErrorCode::WasmStoreManifestMissing) => Self::MissingManifest,
+            Some(_) => Self::StoreCall,
+            None => Self::InvalidState,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use canic_core::dto::error::Error;
+
+    #[test]
+    fn publication_failure_reasons_use_public_codes() {
+        let cases = [
+            (
+                ErrorCode::WasmStoreCapacityExceeded,
+                WasmStoreMetricReason::Capacity,
+            ),
+            (
+                ErrorCode::WasmStoreChunkMissing,
+                WasmStoreMetricReason::MissingChunk,
+            ),
+            (
+                ErrorCode::WasmStoreHashMismatch,
+                WasmStoreMetricReason::HashMismatch,
+            ),
+            (
+                ErrorCode::WasmStoreManifestMissing,
+                WasmStoreMetricReason::MissingManifest,
+            ),
+        ];
+
+        for (code, expected) in cases {
+            let err = InternalError::public(Error::new(code, "detail".to_string()));
+            assert!(WasmStoreMetricReason::from_publication_error(&err) == expected);
         }
     }
 }

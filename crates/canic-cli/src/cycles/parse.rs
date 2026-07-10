@@ -75,13 +75,10 @@ fn parse_topup_status_json(value: &serde_json::Value) -> Option<CycleTopupStatus
 }
 
 fn parse_topup_status(text: &str) -> Option<CycleTopupStatus> {
-    if text.contains("RequestOk") || text.contains("request_ok") {
-        Some(CycleTopupStatus::RequestOk)
-    } else if text.contains("RequestErr") || text.contains("request_err") {
-        Some(CycleTopupStatus::RequestErr)
-    } else if text.contains("RequestScheduled") || text.contains("request_scheduled") {
-        Some(CycleTopupStatus::RequestScheduled)
-    } else {
-        None
+    match text {
+        "RequestOk" | "request_ok" => Some(CycleTopupStatus::RequestOk),
+        "RequestErr" | "request_err" => Some(CycleTopupStatus::RequestErr),
+        "RequestScheduled" | "request_scheduled" => Some(CycleTopupStatus::RequestScheduled),
+        _ => None,
     }
 }

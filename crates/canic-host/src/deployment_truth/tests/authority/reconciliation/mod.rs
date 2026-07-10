@@ -97,7 +97,11 @@ fn authority_apply_readiness_blocks_automatic_candidates_when_external_actions_r
         status: Some("running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::IcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
     let check = sample_check(plan, inventory);
 

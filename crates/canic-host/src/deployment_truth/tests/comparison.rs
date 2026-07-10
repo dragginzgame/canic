@@ -146,7 +146,9 @@ fn deployment_comparison_report_blocks_stale_input_report() {
     left_plan
         .unresolved_assumptions
         .push(DeploymentAssumptionV1 {
-            key: "local_state.root_canister_id".to_string(),
+            key: DeploymentAssumptionKindV1::LocalStateMissing
+                .key()
+                .to_string(),
             description: "root identity is unknown until install".to_string(),
         });
     let mut left = sample_check(left_plan, sample_matching_inventory());
@@ -213,7 +215,9 @@ fn deployment_comparison_report_preserves_warning_input_status() {
     left_plan
         .unresolved_assumptions
         .push(DeploymentAssumptionV1 {
-            key: "local_state.root_canister_id".to_string(),
+            key: DeploymentAssumptionKindV1::LocalStateMissing
+                .key()
+                .to_string(),
             description: "root identity is unknown until install".to_string(),
         });
     let left = sample_check(left_plan, sample_matching_inventory());

@@ -1854,7 +1854,7 @@ mod tests {
                 canister_role: "root".to_string(),
                 state: Vec::new(),
                 removed_state: vec![RemovedStateManifest {
-                    domain: "legacy_cache".to_string(),
+                    domain: "retired_cache".to_string(),
                     last_version: 1,
                     removed_in_version: 2,
                     memory_id: Some(99),

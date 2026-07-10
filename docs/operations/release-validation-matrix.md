@@ -167,13 +167,6 @@ cargo test --locked -p canic-core --test stable_memory_abi_guard -- --nocapture
 cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
 ```
 
-If the slice touches internal-call authorization or protected call boundaries,
-also run:
-
-```text
-cargo test --locked -p canic-core --test protected_internal_call_guard -- --nocapture
-```
-
 If the slice touches operator recovery wording or retry/runbook expectations,
 also run:
 

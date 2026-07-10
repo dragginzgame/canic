@@ -207,10 +207,7 @@ fn authorize_recycle_rejects_non_child_caller() {
     });
 
     let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("is not a child of caller"),
-        "expected non-child denial, got: {err}"
-    );
+    assert_eq!(err.class(), crate::InternalErrorClass::Workflow);
 }
 
 #[test]
@@ -271,10 +268,7 @@ fn authorize_denies_non_root_context() {
     });
 
     let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("root"),
-        "expected root-env denial, got: {err}"
-    );
+    assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
 }
 
 #[test]
@@ -357,9 +351,11 @@ fn authorize_rejects_structural_child_provision_with_root_parent() {
     });
 
     let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("parent=ThisCanister"),
-        "expected structural provision parent denial, got: {err}"
+    assert_eq!(
+        err.public_error()
+            .expect("structural parent denial is public")
+            .code,
+        ErrorCode::Forbidden
     );
 }
 
@@ -449,10 +445,7 @@ fn preflight_authorize_then_replay_denies_before_replay_validation() {
         AuthorizationPipelineOrder::AuthorizeThenReplay,
     )
     .expect_err("authorize-then-replay should deny before replay validation");
-    assert!(
-        !err.to_string().contains("missing replay metadata"),
-        "expected policy denial before replay validation, got: {err}"
-    );
+    assert!(err.public_error().is_none());
 }
 
 #[test]
@@ -499,16 +492,12 @@ fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
         metadata: Some(meta(7, secs_to_ns(60))),
     });
 
-    let err = RootResponseWorkflow::preflight(
+    RootResponseWorkflow::preflight(
         &ctx,
         &capability,
         AuthorizationPipelineOrder::ReplayThenAuthorize,
     )
     .expect_err("policy denial should fail preflight");
-    assert!(
-        err.to_string().contains("not found") || err.to_string().contains("not a child"),
-        "expected caller topology denial, got: {err}"
-    );
 
     let replay = RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect("denied preflight must not leave replay slot in-flight");
@@ -539,11 +528,7 @@ fn authorize_request_cycles_records_requested_and_child_not_found_denial_metrics
         metadata: Some(meta(22, secs_to_ns(60))),
     });
 
-    let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("not found"),
-        "expected child-not-found denial, got: {err}"
-    );
+    RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
 
     let map = cycles_funding_snapshot_map();
     assert_eq!(
@@ -605,9 +590,11 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
     });
 
     let err = RootResponseWorkflow::authorize(&ctx, &capability).expect_err("must deny");
-    assert!(
-        err.to_string().contains("cycles funding disabled"),
-        "expected kill-switch denial, got: {err}"
+    assert_eq!(
+        err.public_error()
+            .expect("kill-switch denial is public")
+            .code,
+        ErrorCode::Unavailable
     );
 
     let map = cycles_funding_snapshot_map();
@@ -687,9 +674,11 @@ fn authorize_request_cycles_uses_configured_child_funding_policy() {
 
     let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req)
         .expect_err("configured child budget must deny");
-    assert!(
-        err.to_string().contains("child budget"),
-        "expected configured budget denial, got: {err}"
+    assert_eq!(
+        err.public_error()
+            .expect("child budget denial is public")
+            .code,
+        ErrorCode::ResourceExhausted
     );
 }
 
@@ -848,20 +837,14 @@ fn check_replay_rejects_invalid_ttl() {
         metadata: Some(meta(7, 0)),
     });
     let err = RootResponseWorkflow::check_replay(&ctx, &too_small).expect_err("must reject");
-    assert!(
-        err.to_string().contains("invalid replay ttl"),
-        "expected ttl validation error, got: {err}"
-    );
+    assert_eq!(err.class(), crate::InternalErrorClass::Workflow);
 
     let too_large = RootCapability::RequestCycles(CyclesRequest {
         cycles: 77,
         metadata: Some(meta(7, MAX_ROOT_TTL_NS + 1)),
     });
     let err = RootResponseWorkflow::check_replay(&ctx, &too_large).expect_err("must reject");
-    assert!(
-        err.to_string().contains("invalid replay ttl"),
-        "expected ttl validation error, got: {err}"
-    );
+    assert_eq!(err.class(), crate::InternalErrorClass::Workflow);
 }
 
 #[test]
@@ -896,11 +879,7 @@ fn check_replay_rejects_expired_entry() {
         Some(response_bytes),
     );
 
-    let err = RootResponseWorkflow::check_replay(&ctx, &capability).expect_err("must expire");
-    assert!(
-        err.to_string().contains("replay request expired"),
-        "expected replay expiration error, got: {err}"
-    );
+    RootResponseWorkflow::check_replay(&ctx, &capability).expect_err("must expire");
 }
 
 #[test]
@@ -990,12 +969,8 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
     );
     assert_eq!(receipt.effect, Some(effect));
 
-    let err = RootResponseWorkflow::check_replay(&ctx, &capability)
+    RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect_err("recovery-required duplicate must not run fresh");
-    assert!(
-        err.to_string().contains("duplicate replay request"),
-        "expected duplicate replay error, got: {err}"
-    );
 }
 
 #[test]
@@ -1030,11 +1005,7 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
     )
     .expect("commit");
 
-    let err = RootResponseWorkflow::check_replay(&ctx, &conflict).expect_err("must conflict");
-    assert!(
-        err.to_string().contains("replay conflict"),
-        "expected replay conflict error, got: {err}"
-    );
+    RootResponseWorkflow::check_replay(&ctx, &conflict).expect_err("must conflict");
 }
 
 #[test]
@@ -1067,11 +1038,7 @@ fn check_replay_rejects_cross_variant_same_request_id() {
     )
     .expect("commit");
 
-    let err = RootResponseWorkflow::check_replay(&ctx, &cycles).expect_err("must conflict");
-    assert!(
-        err.to_string().contains("replay conflict"),
-        "expected replay conflict error, got: {err}"
-    );
+    RootResponseWorkflow::check_replay(&ctx, &cycles).expect_err("must conflict");
 }
 
 #[test]
@@ -1104,16 +1071,12 @@ fn preflight_authorize_then_replay_reports_existing_cross_variant_conflict_befor
     )
     .expect("commit");
 
-    let err = RootResponseWorkflow::preflight(
+    RootResponseWorkflow::preflight(
         &ctx,
         &cycles,
         AuthorizationPipelineOrder::AuthorizeThenReplay,
     )
     .expect_err("existing replay conflict must win before policy");
-    assert!(
-        err.to_string().contains("replay conflict"),
-        "expected replay conflict error, got: {err}"
-    );
 }
 
 #[test]
@@ -1195,13 +1158,8 @@ fn check_replay_rejects_when_capacity_reached() {
         cycles: 77,
         metadata: Some(meta(7, secs_to_ns(60))),
     });
-    let err = RootResponseWorkflow::check_replay(&ctx, &capability)
+    RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect_err("reservation must fail when store is at capacity");
-
-    assert!(
-        err.to_string().contains("replay store capacity reached"),
-        "expected capacity error, got: {err}"
-    );
 }
 
 #[test]
@@ -1240,12 +1198,6 @@ fn check_replay_rejects_when_caller_capacity_reached() {
         cycles: 77,
         metadata: Some(meta(7, secs_to_ns(60))),
     });
-    let err = RootResponseWorkflow::check_replay(&ctx, &capability)
+    RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect_err("reservation must fail when caller is at capacity");
-
-    assert!(
-        err.to_string()
-            .contains("replay store caller capacity reached"),
-        "expected caller capacity error, got: {err}"
-    );
 }

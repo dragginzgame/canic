@@ -158,6 +158,14 @@ fn build_only_canic_path_does_not_enter_the_runtime_graph() {
         .expect("build dependencies are not wasm runtime evidence");
 }
 
+#[test]
+fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
+    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+    validate_internal_test_wasm_packages(&workspace, &["sharding_root_stub", "canister_user_hub"])
+        .expect("internal PocketIC package validation");
+}
+
 fn package(name: &str, id: &str, manifest_path: &str) -> CargoMetadataPackage {
     CargoMetadataPackage {
         id: id.to_string(),

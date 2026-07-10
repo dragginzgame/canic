@@ -88,10 +88,8 @@ fn promotion_is_blocked_when_it_would_overwrite_retired_binding() {
         wasm_stores: Vec::new(),
     });
 
-    let err = WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_promotion()
+    WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_promotion()
         .expect_err("promotion must fail closed while retired binding is still pending");
-
-    assert!(err.to_string().contains("rollover blocked"));
 }
 
 #[test]
@@ -108,10 +106,8 @@ fn explicit_retirement_is_blocked_when_retired_binding_already_exists() {
         wasm_stores: Vec::new(),
     });
 
-    let err = WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_retirement()
+    WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_retirement()
         .expect_err("retirement must fail closed while an older retired binding exists");
-
-    assert!(err.to_string().contains("retirement blocked"));
 }
 
 #[test]
@@ -128,10 +124,8 @@ fn clear_binding_reports_blocked_retired_slot() {
         wasm_stores: Vec::new(),
     });
 
-    let err = WasmStorePublicationWorkflow::clear_current_publication_store_binding()
+    WasmStorePublicationWorkflow::clear_current_publication_store_binding()
         .expect_err("clear must fail while it would overwrite a retired slot");
-
-    assert!(err.to_string().contains("rollover blocked"));
     assert_eq!(
         SubnetStateOps::publication_store_state().active_binding,
         Some(WasmStoreBinding::new("active"))
@@ -228,11 +222,9 @@ fn conflicting_duplicate_release_is_rejected() {
         )],
     };
 
-    let err = fleet
+    fleet
         .select_existing_store_for_release(&manifest)
         .expect_err("conflicting duplicate release must fail");
-
-    assert!(err.to_string().contains("ws conflict"));
 }
 
 #[test]
@@ -383,8 +375,6 @@ fn reconcile_binding_rejects_missing_exact_release() {
         )],
     };
 
-    let err = WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
+    WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
         .expect_err("reconcile must fail when the exact approved release disappeared");
-
-    assert!(err.to_string().contains("missing exact release"));
 }

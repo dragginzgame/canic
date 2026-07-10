@@ -84,6 +84,38 @@ pub struct ObservedCanisterV1 {
 }
 
 ///
+/// RoleAssignmentSourceV1
+///
+/// Machine-readable provenance for one observed role assignment.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RoleAssignmentSourceV1 {
+    IcpCanisterStatus,
+    LocalInstallState,
+    SubnetRegistry,
+    SubnetRegistryAndIcpCanisterStatus,
+}
+
+impl RoleAssignmentSourceV1 {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::IcpCanisterStatus => "icp_canister_status",
+            Self::LocalInstallState => "local_install_state",
+            Self::SubnetRegistry => "subnet_registry",
+            Self::SubnetRegistryAndIcpCanisterStatus => "subnet_registry+icp_canister_status",
+        }
+    }
+
+    #[must_use]
+    pub fn label_includes_live_status(label: &str) -> bool {
+        label == Self::IcpCanisterStatus.label()
+            || label == Self::SubnetRegistryAndIcpCanisterStatus.label()
+    }
+}
+
+///
 /// CanisterControlClassV1
 ///
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -224,6 +256,38 @@ mod tests {
             DeploymentRootObservationSourceV1::LocalDeploymentState.label(),
             "LocalDeploymentState"
         );
+    }
+
+    #[test]
+    fn role_assignment_sources_own_wire_labels() {
+        let cases = [
+            (
+                RoleAssignmentSourceV1::IcpCanisterStatus,
+                "icp_canister_status",
+            ),
+            (
+                RoleAssignmentSourceV1::LocalInstallState,
+                "local_install_state",
+            ),
+            (RoleAssignmentSourceV1::SubnetRegistry, "subnet_registry"),
+            (
+                RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus,
+                "subnet_registry+icp_canister_status",
+            ),
+        ];
+
+        for (source, expected) in cases {
+            assert_eq!(source.label(), expected);
+        }
+        assert!(RoleAssignmentSourceV1::label_includes_live_status(
+            RoleAssignmentSourceV1::IcpCanisterStatus.label()
+        ));
+        assert!(RoleAssignmentSourceV1::label_includes_live_status(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus.label()
+        ));
+        assert!(!RoleAssignmentSourceV1::label_includes_live_status(
+            "custom_status_source"
+        ));
     }
 
     #[test]

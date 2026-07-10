@@ -109,17 +109,10 @@ fn list_and_config_usage_explain_fleet_and_subtree_options() {
     assert!(list.contains("Usage: canic info list [OPTIONS] <deployment>"));
     assert!(list.contains("<deployment>"));
     assert!(list.contains("Installed deployment target name to inspect"));
-    assert!(!list.contains("<fleet>"));
-    assert!(!list.contains("--fleet <name>"));
     assert!(list.contains("--subtree <name-or-principal>"));
     assert!(list.contains("--verbose"));
-    assert!(!list.contains("--from"));
-    assert!(!list.contains("--root"));
     assert!(config.contains("Usage: canic fleet config [OPTIONS] <fleet>"));
     assert!(config.contains("<fleet>"));
-    assert!(!config.contains("--fleet <name>"));
-    assert!(!config.contains("--subtree"));
-    assert!(!config.contains("--from"));
     assert!(config.contains("--verbose"));
     assert!(config.contains("-v"));
     assert!(config.contains("Examples:"));

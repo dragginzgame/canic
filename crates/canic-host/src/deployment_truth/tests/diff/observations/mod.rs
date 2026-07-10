@@ -27,7 +27,11 @@ fn deployment_diff_blocks_missing_artifacts_and_unsafe_control_class() {
             status: None,
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some("local_install_state".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::LocalInstallState
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: Vec::new(),
@@ -123,7 +127,9 @@ fn deployment_diff_warns_on_plan_assumptions_without_blocking() {
     plan.role_artifacts[0].wasm_gz_sha256 = None;
     plan.expected_verifier_readiness.required = false;
     plan.unresolved_assumptions.push(DeploymentAssumptionV1 {
-        key: "local_state.root_canister_id".to_string(),
+        key: DeploymentAssumptionKindV1::LocalStateMissing
+            .key()
+            .to_string(),
         description: "root identity is unknown until install".to_string(),
     });
     let inventory = DeploymentInventoryV1 {
@@ -164,7 +170,8 @@ fn deployment_diff_warns_on_plan_assumptions_without_blocking() {
         diff.warnings
             .iter()
             .any(|item| item.code == PLAN_ASSUMPTION_CODE
-                && item.subject.as_deref() == Some("local_state.root_canister_id"))
+                && item.subject.as_deref()
+                    == Some(DeploymentAssumptionKindV1::LocalStateMissing.key()))
     );
     assert_eq!(report.status, SafetyStatusV1::Warning);
 }

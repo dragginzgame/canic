@@ -355,7 +355,7 @@ impl PolicyFindingV1 {
             severity: PolicyFindingSeverityV1::Error,
             message: message.into(),
             requirement_id: Some(requirement_id.to_string()),
-            subject: Some(exit_class_subject(exit_class).to_string()),
+            subject: Some(exit_class.label().to_string()),
             expected: None,
             actual: None,
             evidence_path: None,
@@ -370,7 +370,7 @@ impl PolicyFindingV1 {
             severity: PolicyFindingSeverityV1::Warning,
             message: message.into(),
             requirement_id: Some(requirement_id.to_string()),
-            subject: Some("success_with_warnings".to_string()),
+            subject: Some(ExitClassV1::SuccessWithWarnings.label().to_string()),
             expected: None,
             actual: None,
             evidence_path: None,
@@ -390,18 +390,15 @@ impl PolicyFindingV1 {
     }
 
     pub(super) fn exit_class(&self) -> ExitClassV1 {
-        match self.subject.as_deref() {
-            Some("evidence_conflict") => ExitClassV1::EvidenceConflict,
-            Some("missing_required_evidence") => ExitClassV1::MissingRequiredEvidence,
+        match self.subject_exit_class() {
+            Some(ExitClassV1::EvidenceConflict) => ExitClassV1::EvidenceConflict,
+            Some(ExitClassV1::MissingRequiredEvidence) => ExitClassV1::MissingRequiredEvidence,
             _ => ExitClassV1::BlockedByPolicy,
         }
     }
-}
 
-const fn exit_class_subject(exit_class: ExitClassV1) -> &'static str {
-    match exit_class {
-        ExitClassV1::EvidenceConflict => "evidence_conflict",
-        ExitClassV1::MissingRequiredEvidence => "missing_required_evidence",
-        _ => "blocked_by_policy",
+    #[must_use]
+    pub fn subject_exit_class(&self) -> Option<ExitClassV1> {
+        self.subject.as_deref().and_then(ExitClassV1::from_label)
     }
 }

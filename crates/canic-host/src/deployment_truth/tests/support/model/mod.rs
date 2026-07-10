@@ -101,7 +101,11 @@ pub(in crate::deployment_truth::tests) fn sample_matching_inventory() -> Deploym
             status: Some("running".to_string()),
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: Some("canonical".to_string()),
-            role_assignment_source: Some("icp_canister_status".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::IcpCanisterStatus
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {
@@ -137,7 +141,11 @@ pub(in crate::deployment_truth::tests) fn sample_root_observation() -> Deploymen
         controllers: vec!["aaaaa-aa".to_string()],
         module_hash: Some("module".to_string()),
         status: Some("running".to_string()),
-        role_assignment_source: Some("icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::IcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     }
 }
 
@@ -167,7 +175,11 @@ pub(in crate::deployment_truth::tests) fn sample_unknown_unsafe_check() -> Deplo
         status: None,
         root_trust_anchor: None,
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::IcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     sample_check(sample_plan(), inventory)

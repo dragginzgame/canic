@@ -5,10 +5,9 @@
 Verify that access code remains a thin endpoint boundary and does not absorb
 workflow, policy, storage, transport, or business behavior.
 
-This audit covers the current hard-cut auth surface: delegated-token role
-audience is singular, while endpoint policy may still accept multiple caller
-roles through protected internal `caller::has_role(...)` /
-`caller::has_any_role(...)` predicates. Those are separate concepts.
+This audit covers the current auth surface: delegated-token audience selects an
+accepting canister, Canic subnet, or project boundary, while signed role grants
+carry the scopes authorized for the local canister role.
 
 ## Risk Model / Invariant
 
@@ -53,7 +52,6 @@ Boundary comparison scope:
 - changing delegated-token verification or delegated-session resolution;
 - changing delegated-token audience DTOs;
 - changing root proof provisioning or root issuer policy endpoints;
-- changing protected internal caller role predicates;
 - changing app/environment endpoint guards;
 - adding metrics to access paths.
 
@@ -123,8 +121,8 @@ Expected:
 - delegated-token first-argument decoding is allowed;
 - `authenticated(...)` endpoint predicates require the first endpoint argument
   to be `DelegatedToken`;
-- delegated-token audience handling must not reintroduce role/principal or
-  multi-role audience support;
+- delegated-token audience handling stays limited to `Canister`,
+  `CanicSubnet`, and `Project`;
 - broad payload parsing or conversion is a violation.
 
 ### 5. Auth State And Metrics
@@ -166,14 +164,13 @@ The endpoint macro may generate access-boundary calls, but it must not hide
 workflow, policy, or topology mutation in generated code.
 
 ```bash
-rg -n 'resolve_authenticated_identity|eval_access|protected_internal|verify_internal_invocation_proof|caller::has_role|caller::has_any_role|authenticated_arg_error|DelegatedToken' crates/canic-macros/src/endpoint crates/canic-core/src/access -g '*.rs'
+rg -n 'resolve_authenticated_identity|eval_access|authenticated_arg_error|DelegatedToken' crates/canic-macros/src/endpoint crates/canic-core/src/access -g '*.rs'
 ```
 
 Expected:
 
 - public endpoint wrappers authenticate, then evaluate access expressions, then
   delegate to the user handler;
-- protected internal role predicates remain internal-only and update-only;
 - endpoint macro validation uses current behavior wording, not stale
   version-specific compatibility language;
 - macro lowering does not perform role/deployment topology changes.

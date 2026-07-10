@@ -305,7 +305,11 @@ fn deployment_diff_blocks_cross_surface_role_conflict_for_same_canister_id() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
     inventory.observed_pool.push(ObservedPoolCanisterV1 {
         pool: "user_shards".to_string(),

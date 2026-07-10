@@ -1,5 +1,6 @@
 use super::clock::current_unix_timestamp_label;
 use super::operations::InstallPhaseLabel;
+use super::{InstallRootBlockKind, InstallRootBlockedError};
 use crate::deployment_truth::{
     DeploymentCheckV1, DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
     PhaseReceiptV1, RolePhaseReceiptV1, SafetyFindingV1, deployment_receipt_from_check_with_status,
@@ -18,7 +19,10 @@ pub(super) fn enforce_install_deployment_truth_gate(
         .map(|finding| deployment_truth_finding_label(finding))
         .collect::<Vec<_>>()
         .join("; ");
-    Err(format!("deployment truth safety gate blocked install: {details}").into())
+    Err(Box::new(InstallRootBlockedError::new(
+        InstallRootBlockKind::DeploymentTruth,
+        format!("deployment truth safety gate blocked install: {details}"),
+    )))
 }
 
 fn install_deployment_truth_gate_blockers(check: &DeploymentCheckV1) -> Vec<&SafetyFindingV1> {

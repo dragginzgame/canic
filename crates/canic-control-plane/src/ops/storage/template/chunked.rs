@@ -28,6 +28,8 @@ use canic_core::cdk::{api::canister_self, structures::storable::Storable, utils:
 use canic_core::control_plane_support::{
     error::InternalError, format::byte_size, ops::ic::mgmt::MgmtOps,
 };
+#[cfg(test)]
+use canic_core::dto::error::ErrorCode;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -849,7 +851,10 @@ mod tests {
         )
         .expect_err("second chunk should fail once its incremental bytes exceed the limit");
 
-        assert!(err.to_string().contains("capacity exceeded"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreCapacityExceeded)
+        );
     }
 
     #[test]
@@ -896,7 +901,10 @@ mod tests {
 
         let err = TemplateChunkedOps::chunk_response(&release.template_id, &release.version, 0)
             .expect_err("old chunk must not satisfy replaced chunk metadata");
-        assert!(err.to_string().contains("hash mismatch"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreHashMismatch)
+        );
         let staging = TemplateChunkedOps::staging_status_response(
             &TemplateManifestResponse {
                 template_id: release.template_id.clone(),
@@ -974,6 +982,9 @@ mod tests {
         let err = TemplateChunkedOps::chunk_response(&release.template_id, &release.version, 1)
             .expect_err("old out-of-range chunk must not be served");
 
-        assert!(err.to_string().contains("out of range"));
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::WasmStoreChunkMissing)
+        );
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
         DeploymentSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
-        VerificationCheck, VerificationPlan,
+        VERIFICATION_KIND_STATUS, VerificationCheck, VerificationPlan,
     },
 };
 use std::collections::BTreeSet;
@@ -107,7 +107,7 @@ fn deployment_member(
             IdentityMode::Relocatable
         },
         verification_checks: vec![VerificationCheck {
-            kind: "status".to_string(),
+            kind: VERIFICATION_KIND_STATUS.to_string(),
             roles: vec![role],
         }],
         source_snapshot: SourceSnapshot {

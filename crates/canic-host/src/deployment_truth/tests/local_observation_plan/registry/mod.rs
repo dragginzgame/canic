@@ -35,8 +35,12 @@ fn live_root_status_observation_maps_status_controllers_and_module_hash() {
     assert_eq!(observed.module_hash.as_deref(), Some("abcd"));
     assert_eq!(observed.status.as_deref(), Some("Running"));
     assert_eq!(
-        observed.role_assignment_source.as_deref(),
-        Some("icp_canister_status")
+        observed.role_assignment_source,
+        Some(
+            RoleAssignmentSourceV1::IcpCanisterStatus
+                .label()
+                .to_string()
+        )
     );
 }
 
@@ -116,8 +120,8 @@ fn registry_entries_map_roles_to_observed_canisters_without_controller_authority
     assert!(observed[0].controllers.is_empty());
     assert_eq!(observed[0].module_hash.as_deref(), Some("abcdef"));
     assert_eq!(
-        observed[0].role_assignment_source.as_deref(),
-        Some("subnet_registry")
+        observed[0].role_assignment_source,
+        Some(RoleAssignmentSourceV1::SubnetRegistry.label().to_string())
     );
 }
 
@@ -166,8 +170,12 @@ fn registry_observation_can_be_enriched_with_live_status() {
     assert_eq!(observed.module_hash.as_deref(), Some("cafe"));
     assert_eq!(observed.status.as_deref(), Some("Running"));
     assert_eq!(
-        observed.role_assignment_source.as_deref(),
-        Some("subnet_registry+icp_canister_status")
+        observed.role_assignment_source,
+        Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string()
+        )
     );
 }
 
@@ -188,7 +196,11 @@ fn observed_pool_control_uses_enriched_canister_status() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("root-id".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     }];
 
     apply_canister_control_to_observed_pool(&mut observed_pool, &observed_canisters);

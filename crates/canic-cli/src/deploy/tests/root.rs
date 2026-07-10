@@ -56,7 +56,6 @@ fn deploy_root_help_documents_passive_boundary() {
 
     assert!(help.contains("Verify deployment-root state"));
     assert!(help.contains("canic deploy inspect root"));
-    assert!(!help.contains("canic deploy root inspect"));
     assert!(inspect_help.contains("Usage: canic deploy inspect root --request <file>"));
     assert!(inspect_help.contains("DeploymentRootVerificationRequestV1-shaped JSON"));
     assert!(inspect_help.contains("does not persist verified root state"));

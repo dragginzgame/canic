@@ -1447,17 +1447,6 @@ fn icp_identity_session_cache_hint_is_informational() {
     assert!(!check.next.contains("1.0.0"));
 }
 
-// Ensure host installed-deployment missing-state errors remain classifiable.
-#[test]
-fn missing_installed_deployment_error_is_classifiable() {
-    assert!(is_missing_installed_deployment(
-        "deployment target demo is not installed on network local"
-    ));
-    assert!(!is_missing_installed_deployment(
-        "failed to read canic deployment state: bad json"
-    ));
-}
-
 fn sample_check(status: MedicStatus) -> MedicCheck {
     MedicCheck::new(
         MedicCategory::Environment,

@@ -133,7 +133,7 @@ impl BlobStorageOptions {
                 deployment: required_string(matches, DEPLOYMENT_ARG),
                 canister: required_string(matches, CANISTER_ARG),
                 cycles: parse_cycles(&required_string(matches, CYCLES_ARG))
-                    .map_err(BlobStorageCommandError::Usage)?,
+                    .map_err(BlobStorageCommandError::InvalidCycles)?,
                 json: matches.get_flag(JSON_ARG),
                 dry_run: matches.get_flag(DRY_RUN_ARG),
                 common: common_options(matches),
@@ -195,6 +195,7 @@ fn fund_command() -> ClapCommand {
             value_arg(CYCLES_ARG)
                 .long(CYCLES_ARG)
                 .value_name("cycles")
+                .allow_hyphen_values(true)
                 .required(true)
                 .help("Unsigned base-10 cycle amount"),
         )

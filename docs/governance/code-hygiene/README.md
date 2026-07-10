@@ -314,6 +314,19 @@ Avoid `unwrap()` and `expect()` outside tests and intentional invariant checks.
 For replay, lifecycle, authorization, stable-memory, and canister-control paths,
 keep failure modes explicit and typed.
 
+Human-readable text is presentation, not a decision contract:
+
+1. Production control flow must not classify Canic-owned errors through
+   `Display`, `to_string()`, `message`, `description`, or substring matching.
+2. Preserve owner-defined variants or stable machine codes until the final
+   public/rendering boundary.
+3. When an external tool exposes only text diagnostics, isolate matching in
+   one compatibility adapter, keep the original diagnostic, and fail closed
+   for unknown wording.
+4. Behavioral tests assert variants, codes, or observable state. Tests may
+   assert text only when rendering or external diagnostic compatibility is the
+   behavior under test.
+
 ## 10. Naming Consistency
 
 Use existing Canic vocabulary consistently.

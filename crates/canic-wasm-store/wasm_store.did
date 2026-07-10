@@ -66,6 +66,8 @@ type ErrorCode = variant {
   Unauthorized;
   PolicyReplicaRequiresServiceWithScaling;
   AuthProofExpired;
+  AuthProofPending;
+  AuthTokenExpired;
   InternalRpcMalformed;
   ResourceExhausted;
   RootDataCertificateUnavailable;
@@ -73,6 +75,10 @@ type ErrorCode = variant {
   Forbidden;
   OperationIdRequired;
   Conflict;
+  WasmStoreCapacityExceeded;
+  WasmStoreChunkMissing;
+  WasmStoreHashMismatch;
+  WasmStoreManifestMissing;
 };
 type IndexEntryInput = record { pid : principal; role : text };
 type NonrootCyclesCapabilityEnvelopeV1 = record {

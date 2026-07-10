@@ -19,9 +19,7 @@ configured root principal
 ```
 
 Root delegation proofs are IC chain-key threshold ECDSA proofs over a canonical
-delegation batch, not IC certified-data canister-signature proofs. Verifiers do
-not read `SubnetState.auth.delegated_root_public_key` when verifying a delegated
-token root proof. A verifier validates locally from the token, configured root
+delegation batch. A verifier validates locally from the token, configured root
 principal, configured chain-key root verifier policy, configured or runtime IC
 root public key for the issuer canister-signature proof, local project/role
 config, and current IC time.
@@ -254,10 +252,9 @@ with `DelegationCert` for issuer id, issuer proof algorithm and binding,
 audience, grants, time window, max token TTL, registry epoch, and registry
 hash.
 
-Delegated-token `RootProof` is chain-key-only in 0.76. Root canister-signature
-proof material remains relevant only to non-delegated-token surfaces that use
-separate proof DTOs, such as role attestation, and to issuer-local token proof
-verification through `IssuerProof`.
+Delegated-token `RootProof` uses the chain-key batch variant. Canister-signature
+proof material is used by separate proof DTOs such as role attestation and by
+issuer-local token proof verification through `IssuerProof`.
 
 ## Issuance Flow
 
@@ -307,26 +304,10 @@ proof epoch, installs issuer-specific active proof material, retries partial
 install failures, discards stale signing callbacks after registry changes, and
 prunes expired batches before install.
 
-The old bridge-backed canister-signature provisioning endpoints are not part of
-the active delegated-token root proof contract. In
-`root_proof_mode = "chain_key_batch"`, delegated-token liveness comes from root
-timer renewal and issuer lazy repair through chain-key batch proofs, not from
-external bridge or direct-query install workflows.
-
-The retired single-proof root prepare/get endpoints are not part of the active
-protocol. Root proof retrieval must not be hidden behind issuer composite-query
-wrappers, and the current root proof flow must not require root query data
-certificates.
-
-The normal auth surface does not expose a one-shot fresh-proof `mint_token`
-path. Client/test helpers may choreograph the calls above, but they must not
-hide bridge-backed or direct-query root proof renewal inside one update.
-
 ## Issuer Token Proof
 
-Issuer token proofs still use canister-signature update-then-query mechanics.
-The root delegation proof no longer uses this primitive. The issuer signs the
-canonical claims hash, not a secp256k1 payload.
+Issuer token proofs use canister-signature update-then-query mechanics. The
+issuer signs the canonical claims hash.
 
 ```text
 claims_hash = sha256(canonical_bytes(DelegatedTokenClaims))
@@ -340,13 +321,11 @@ The issuer `SignatureMap` stores the domain-separated claims hash under seed
 issuer proof public key DER embeds `cert.issuer_pid` and the expected seed, and
 uses the configured raw IC root key.
 
-The 0.65 hard cut removes management-canister ECDSA from normal delegated auth.
-The 0.76 hard cut reintroduces management-canister ECDSA only at root renewal
-and lazy-repair batch boundaries. `prepare_delegated_token` and protected
-endpoint verification must not call management-canister signing. The expected
-usage model is to reuse root proofs and delegated tokens for their TTL.
-Protected endpoint verification may use a bounded positive cache for the
-expensive root chain-key and issuer canister-signature checks, but
+Management-canister ECDSA is limited to root renewal and lazy-repair batch
+boundaries. `prepare_delegated_token` and delegated-token endpoint verification
+must not call management-canister signing. Root proofs and delegated tokens are
+reused for their TTL. Endpoint verification may use a bounded positive cache
+for the expensive root chain-key and issuer canister-signature checks, but
 endpoint-specific authorization still runs after cache hits.
 
 ## Verification Contract
@@ -430,7 +409,7 @@ mainnet requires the configured known mainnet raw key, while local/PocketIC/test
 verification requires a non-mainnet raw root key from
 `ic_root_public_key_raw_hex` and rejects the mainnet key.
 
-0.76 delegated-token auth requires `root_proof_mode = "chain_key_batch"`.
+Delegated-token auth requires `root_proof_mode = "chain_key_batch"`.
 `chain_key_root_proof` is the root delegation proof trust anchor. Its
 `public_key_hex` must be a secp256k1 SEC1 public key for the configured root
 canister id, `key_id`, and `derivation_path_hex`; `derivation_path_hash_hex`
@@ -460,23 +439,17 @@ The auth architecture must not introduce:
 - bridge, worker, CLI, cron, host daemon, external signer, direct root query,
   or client-side provisioning dependency for delegated-auth liveness
 - per-login, per-user, per-token, or per-session root threshold signing
-- legacy `root_sig` verifier branches
-- legacy canister-signature root proof acceptance for delegated-token root
-  proofs
-- `SubnetState.auth.delegated_root_public_key` as delegated-token root proof
-  authority
 - proof-supplied chain-key public key as delegated-token root proof authority
 - verifier-local proof lookup as an acceptance condition
 - proof distribution as an authentication correctness requirement
 - query-time root or management calls from endpoint guards
 - endpoint APIs that return generic raw signatures
-- single-call fresh-proof `mint_token` on the normal auth surface
 - relay envelope auth modes that skip delegated subject binding
 
-Normal delegated-token prepare/get and protected endpoint auth must not call
-management-canister threshold ECDSA. Only root renewal and lazy-repair batch
-creation may call management-canister signing, and those calls must be bounded
-by delegation epoch rather than login volume.
+Delegated-token prepare/get and endpoint verification must not call
+management-canister threshold ECDSA. Root renewal and lazy-repair batch
+creation own management-canister signing, and those calls are bounded by
+delegation epoch rather than login volume.
 
 ## Test-Only Paths
 

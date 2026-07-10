@@ -53,6 +53,9 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum BlobStorageCommandError {
     #[error("{0}")]
+    InvalidCycles(String),
+
+    #[error("{0}")]
     Usage(String),
 
     #[error("failed to render JSON output: {0}")]
@@ -131,6 +134,7 @@ impl BlobStorageCommandError {
             Self::ResponseParse => 3,
             Self::ReadinessCheckFailed { .. } => 4,
             Self::Usage(_)
+            | Self::InvalidCycles(_)
             | Self::Json(_)
             | Self::NoInstalledDeployment { .. }
             | Self::InstallState(_)
@@ -158,9 +162,7 @@ impl BlobStorageCommandError {
 
     fn command_error_code(&self) -> &'static str {
         match self {
-            Self::Usage(message) if message.contains("--cycles") => {
-                BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES
-            }
+            Self::InvalidCycles(_) => BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES,
             Self::Usage(_)
             | Self::Json(_)
             | Self::InstallState(_)

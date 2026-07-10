@@ -23,10 +23,6 @@ use std::{cell::RefCell, collections::BTreeMap};
 #[cfg(feature = "auth-root-canister-sig-create")]
 pub const ROOT_PROOF_RETRIEVAL_TTL_NS: u64 = 60_000_000_000;
 
-#[cfg(feature = "auth-root-canister-sig-create")]
-const DATA_CERTIFICATE_UNAVAILABLE_FRAGMENT: &str =
-    "Data certificates (which are required to create canister signatures)";
-
 ///
 /// RootPayloadKind
 ///
@@ -298,13 +294,17 @@ fn get_root_canister_signature_proof(
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
-fn root_canister_signature_cbor_error(err: impl std::fmt::Display) -> AuthSignatureError {
-    let message = err.to_string();
-    if message.contains(DATA_CERTIFICATE_UNAVAILABLE_FRAGMENT) {
-        return AuthSignatureError::RootDataCertificateUnavailable;
+fn root_canister_signature_cbor_error(
+    err: ic_canister_sig_creation::signature_map::CanisterSigError,
+) -> AuthSignatureError {
+    match err {
+        ic_canister_sig_creation::signature_map::CanisterSigError::NoCertificate => {
+            AuthSignatureError::RootDataCertificateUnavailable
+        }
+        err @ ic_canister_sig_creation::signature_map::CanisterSigError::NoSignature => {
+            AuthSignatureError::ProofInvalid(err.to_string())
+        }
     }
-
-    AuthSignatureError::ProofInvalid(message)
 }
 
 #[cfg(not(feature = "auth-root-canister-sig-create"))]
@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn missing_data_certificate_maps_to_typed_root_error() {
         let err = root_canister_signature_cbor_error(
-            "Data certificates (which are required to create canister signatures) are only available in query calls.",
+            ic_canister_sig_creation::signature_map::CanisterSigError::NoCertificate,
         );
 
         assert!(matches!(
@@ -426,7 +426,9 @@ mod tests {
     #[cfg(feature = "auth-root-canister-sig-create")]
     #[test]
     fn non_certificate_signature_error_remains_invalid_proof() {
-        let err = root_canister_signature_cbor_error("signature map path not found");
+        let err = root_canister_signature_cbor_error(
+            ic_canister_sig_creation::signature_map::CanisterSigError::NoSignature,
+        );
 
         assert!(matches!(err, AuthSignatureError::ProofInvalid(_)));
     }

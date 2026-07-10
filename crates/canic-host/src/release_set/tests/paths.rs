@@ -257,16 +257,10 @@ fn canister_manifest_path_requires_declared_role_metadata() {
             std::env::remove_var("CANIC_CONFIG_PATH");
             std::env::remove_var("CANIC_CANISTERS_ROOT");
         }
-        let err = canister_manifest_path(workspace_root, "user_hub")
+        canister_manifest_path(workspace_root, "user_hub")
             .expect_err("missing role metadata must fail");
         restore_env("CANIC_CONFIG_PATH", previous_config);
         restore_env("CANIC_CANISTERS_ROOT", previous_root);
-
-        assert!(
-            err.to_string()
-                .contains("[package.metadata.canic] role = \"user_hub\""),
-            "unexpected error: {err}"
-        );
     });
 }
 

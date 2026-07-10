@@ -118,15 +118,13 @@ a raw ICP upgrade, or a deployment registration fix.
 
 ## Parent To Shard Calls
 
-In `0.65`, fresh root ECDSA proof issuance for Canic-protected internal
-endpoints is disabled and the old outbound protected-internal client APIs are
-removed. Protected endpoint descriptors remain as retained
-verification/descriptor surface. Parent-to-shard application calls should use
-public delegated-token authenticated endpoints until protected internal calls
-have an explicit update/query root-certified replacement.
+Parent-to-shard application calls use public delegated-token authenticated
+endpoints. The presenting principal must match the signed token subject, and
+the token grant for the target canister role must contain the endpoint's
+required scope.
 
-The retained descriptor contract is documented in
-[ACCESS_ARCHITECTURE.md](../contracts/ACCESS_ARCHITECTURE.md#protected-internal-call-recipes).
+The current service-call contract is documented in
+[ACCESS_ARCHITECTURE.md](../contracts/ACCESS_ARCHITECTURE.md#service-call-recipes).
 
 ```rust
 #[canic::canic_update(

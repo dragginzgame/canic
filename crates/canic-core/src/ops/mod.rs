@@ -19,6 +19,7 @@ pub mod cascade;
 #[cfg(feature = "blob-storage-billing")]
 pub mod cashier;
 pub mod config;
+mod conversion;
 pub mod cost_guard;
 pub mod ic;
 pub mod perf;

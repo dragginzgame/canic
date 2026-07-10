@@ -165,6 +165,12 @@ fn topup_event_json_rejects_malformed_entries() {
         parse_topup_event_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
         None
     );
+    assert_eq!(
+        parse_topup_event_page(
+            r#"{"Ok":{"entries":[{"timestamp_secs":10,"status":{"NotRequestOk":null}}],"total":1}}"#,
+        ),
+        None
+    );
 }
 
 // Ensure summaries report partial windows when no sample exists before the cutoff.

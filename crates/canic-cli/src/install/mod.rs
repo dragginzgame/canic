@@ -22,7 +22,7 @@ use crate::{
 };
 use canic_host::canister_build::CanisterBuildProfile;
 use canic_host::icp_config::resolve_current_canic_icp_root;
-use canic_host::install_root::{InstallRootOptions, install_root};
+use canic_host::install_root::{InstallRootBlockedError, InstallRootOptions, install_root};
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -178,7 +178,7 @@ fn install_error_with_context(
     fleet: &str,
     network: &str,
 ) -> InstallCommandError {
-    if install_error_needs_existing_deployment_hint(&err.to_string()) {
+    if install_error_needs_existing_deployment_hint(err.as_ref()) {
         return InstallCommandError::InstallHint {
             source: err,
             hint: format!(
@@ -190,12 +190,21 @@ fn install_error_with_context(
     InstallCommandError::Install(err)
 }
 
-fn install_error_needs_existing_deployment_hint(message: &str) -> bool {
+fn install_error_needs_existing_deployment_hint(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut source = Some(error);
+    while let Some(error) = source {
+        if error.downcast_ref::<InstallRootBlockedError>().is_some() {
+            return true;
+        }
+        source = error.source();
+    }
+
+    external_already_installed_diagnostic(&error.to_string())
+}
+
+// External diagnostic adapter for install transports that expose only text.
+fn external_already_installed_diagnostic(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
-    lower.contains("blocked install")
-        || lower.contains("preflight blocked")
-        || (lower.contains("already")
-            && (lower.contains("install")
-                || lower.contains("installed")
-                || lower.contains("canister")))
+    lower.contains("already")
+        && (lower.contains("install") || lower.contains("installed") || lower.contains("canister"))
 }

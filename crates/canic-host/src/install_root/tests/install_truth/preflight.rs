@@ -135,9 +135,12 @@ fn install_truth_execution_preflight_receipt_records_blocked_state_before_error(
     )
     .expect_err("blocked execution preflight should stop install");
 
-    assert!(
-        err.to_string()
-            .contains("deployment execution preflight blocked install")
+    let blocked = err
+        .downcast_ref::<InstallRootBlockedError>()
+        .expect("blocked preflight should retain its typed reason");
+    assert_eq!(
+        blocked.kind(),
+        InstallRootBlockKind::DeploymentExecutionPreflight
     );
     let path = latest_deployment_truth_receipt_path_from_root(&root, "local", "demo")
         .expect("find latest receipt")

@@ -80,17 +80,16 @@ fn local_query_with_endpoint(
     )?;
     let query_response = serde_cbor::from_slice::<QueryResponse>(&response)?;
 
-    if query_response.status == "replied" {
-        return query_response
+    match query_response.status {
+        QueryResponseStatus::Replied => query_response
             .reply
             .map(|reply| reply.arg)
-            .ok_or_else(|| ReplicaQueryError::Query("missing query reply".to_string()));
+            .ok_or_else(|| ReplicaQueryError::Query("missing query reply".to_string())),
+        QueryResponseStatus::Rejected => Err(ReplicaQueryError::Rejected {
+            code: query_response.reject_code.unwrap_or_default(),
+            message: query_response.reject_message.unwrap_or_default(),
+        }),
     }
-
-    Err(ReplicaQueryError::Rejected {
-        code: query_response.reject_code.unwrap_or_default(),
-        message: query_response.reject_message.unwrap_or_default(),
-    })
 }
 
 fn local_replica_endpoint(network: Option<&str>) -> String {
@@ -157,11 +156,12 @@ fn split_http_body(response: &[u8]) -> Result<Vec<u8>, ReplicaQueryError> {
         ));
     };
     let header = String::from_utf8_lossy(&response[..index]);
-    let status_ok = header
+    let status = header
         .lines()
         .next()
-        .is_some_and(|status| status.contains(" 2"));
-    if !status_ok {
+        .and_then(|line| line.split_ascii_whitespace().nth(1))
+        .and_then(|status| status.parse::<u16>().ok());
+    if !status.is_some_and(|status| (200..300).contains(&status)) {
         return Err(ReplicaQueryError::Query(header.to_string()));
     }
     Ok(response[index + marker.len()..].to_vec())
@@ -199,10 +199,17 @@ struct QueryContent<'a> {
 
 #[derive(Deserialize)]
 struct QueryResponse {
-    status: String,
+    status: QueryResponseStatus,
     reply: Option<QueryReply>,
     reject_code: Option<u64>,
     reject_message: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum QueryResponseStatus {
+    Rejected,
+    Replied,
 }
 
 ///

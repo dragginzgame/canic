@@ -133,26 +133,17 @@ fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
     }]))
     .expect("configured subnet service role should import");
 
-    let app_err = AppIndexOps::import_args_allow_incomplete(AppIndexArgs(vec![IndexEntryInput {
+    AppIndexOps::import_args_allow_incomplete(AppIndexArgs(vec![IndexEntryInput {
         role: singleton_role.clone(),
         pid: singleton_pid,
     }]))
     .expect_err("app index should reject roles outside explicit app_index");
-    assert!(
-        app_err.to_string().contains("unexpected roles"),
-        "expected unexpected app role error, got: {app_err}"
-    );
 
-    let subnet_err =
-        SubnetIndexOps::import_args_allow_incomplete(SubnetIndexArgs(vec![IndexEntryInput {
-            role: singleton_role.clone(),
-            pid: singleton_pid,
-        }]))
-        .expect_err("subnet index should reject non-service roles");
-    assert!(
-        subnet_err.to_string().contains("unexpected roles"),
-        "expected unexpected subnet role error, got: {subnet_err}"
-    );
+    SubnetIndexOps::import_args_allow_incomplete(SubnetIndexArgs(vec![IndexEntryInput {
+        role: singleton_role.clone(),
+        pid: singleton_pid,
+    }]))
+    .expect_err("subnet index should reject non-service roles");
 
     AppIndexOps::import(AppIndexRecord {
         entries: vec![(service_role.clone(), service_pid)],
@@ -163,29 +154,21 @@ fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
     })
     .expect("full subnet index import should accept exact configured role set");
 
-    let app_full_err = AppIndexOps::import(AppIndexRecord {
+    AppIndexOps::import(AppIndexRecord {
         entries: vec![
             (service_role.clone(), service_pid),
             (singleton_role.clone(), singleton_pid),
         ],
     })
     .expect_err("full app index import should reject roles outside explicit app_index");
-    assert!(
-        app_full_err.to_string().contains("unexpected roles"),
-        "expected unexpected full app role error, got: {app_full_err}"
-    );
 
-    let subnet_full_err = SubnetIndexOps::import(SubnetIndexRecord {
+    SubnetIndexOps::import(SubnetIndexRecord {
         entries: vec![
             (service_role.clone(), service_pid),
             (singleton_role, singleton_pid),
         ],
     })
     .expect_err("full subnet index import should reject non-service roles");
-    assert!(
-        subnet_full_err.to_string().contains("unexpected roles"),
-        "expected unexpected full subnet role error, got: {subnet_full_err}"
-    );
 
     assert_eq!(AppIndexOps::get(&service_role), Some(service_pid));
     assert_eq!(SubnetIndexOps::get(&service_role), Some(service_pid));

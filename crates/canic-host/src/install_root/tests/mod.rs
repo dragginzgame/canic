@@ -40,8 +40,9 @@ use super::state::{
 use super::timing::InstallTimingSummary;
 use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_fleet_name};
 use super::{
-    InstallRootOptions, InstallState, RegisterDeploymentStateOptions, RootVerificationStatus,
-    VerifyDeploymentRootOptions, check_install_deployment_truth, check_install_execution_preflight,
+    InstallRootBlockKind, InstallRootBlockedError, InstallRootOptions, InstallState,
+    RegisterDeploymentStateOptions, RootVerificationStatus, VerifyDeploymentRootOptions,
+    check_install_deployment_truth, check_install_execution_preflight,
     latest_deployment_truth_receipt_path_from_root, register_deployment_state,
     verify_registered_deployment_root, write_artifact_promotion_execution_receipt_for_install,
     write_install_state_with_deployment_truth_receipt,

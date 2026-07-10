@@ -121,7 +121,6 @@ Exclude these from counts unless the audit explicitly says otherwise:
 - internal test-only canisters that are present under `.icp/<environment>/canisters/**`
   but not part of the current fleet/environment roster
 - comments / docstrings
-- deprecated or legacy modules explicitly marked as such
 
 If a report includes filtered exceptions, list them explicitly.
 
@@ -180,7 +179,7 @@ Examples:
 - endpoint unintentionally exposed globally because cfg-gating is missing
 - admin/controller-only endpoint exposed in the wrong bundle
 - `.did` mismatch across canisters where uniformity is expected
-- protocol constant removed or renamed without compatibility note
+- protocol constant removed or renamed without a release note
 
 ### B. Surface Drift / Growth
 
@@ -216,7 +215,7 @@ Suggested scans:
 
 ```bash
 rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
-rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_' crates/canic/src/macros/endpoints -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_wasm_store_|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^  canic_.*_admin :' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
 ```
@@ -230,7 +229,7 @@ Required checks:
 - chain-key lazy-repair proof retrieval is root-only, internal, and
   registered-subnet gated
 - issuer-local delegated-token endpoints are not present on root unless explicitly intended
-- protocol constant removals/renames are called out in compatibility notes
+- protocol constant removals/renames are called out in release notes
 
 Record as:
 
@@ -310,9 +309,9 @@ roles.
 Suggested scans:
 
 ```bash
-rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_wasm_store_|canic_sync_' .icp/local/canisters -g '*.did'
 rg -n 'cfg\\(canic_' crates/canic/src/macros/endpoints -g '*.rs'
-rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 ```
 
 For each notable endpoint family, record:
@@ -333,7 +332,6 @@ At minimum, classify these auth/provisioning families when present:
   `canic_active_delegation_proof_status`
 - role-attestation: `canic_prepare_role_attestation`,
   `canic_get_role_attestation`
-- retired compatibility guard: `canic_delegation_set_*`
 
 ### 6. Surface Utilization (Mandatory)
 
@@ -569,7 +567,7 @@ rg -n '^macro_rules!' crates/canic/src/macros/endpoints -g '*.rs'
 rg -n '^pub const ' crates/canic-core/src/protocol.rs
 rg -n '^pub const ' crates/canic/src/protocol.rs
 rg -n '^  canic_' .icp/local/canisters -g '*.did'
-rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_delegation_set_|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
+rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 

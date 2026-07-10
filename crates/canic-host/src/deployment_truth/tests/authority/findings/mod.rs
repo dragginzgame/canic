@@ -128,7 +128,11 @@ fn authority_report_distinguishes_unsafe_and_hard_authority_blockers() {
         status: None,
         root_trust_anchor: None,
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::IcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
     let check = sample_check(plan, inventory);
 
@@ -185,7 +189,11 @@ fn blocked_authority_report_keeps_external_and_gap_next_actions() {
         status: Some("running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::IcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
     inventory.observed_pool.push(ObservedPoolCanisterV1 {
         pool: "user-shards".to_string(),

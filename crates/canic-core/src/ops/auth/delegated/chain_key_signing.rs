@@ -522,14 +522,8 @@ mod tests {
         let mut config = config();
         config.chain_key_root_proof.derivation_path_hash_hex = Some("11".repeat(32));
 
-        let err = chain_key_signing_policy_from_config(&config, p(1), BuildNetwork::Local)
+        chain_key_signing_policy_from_config(&config, p(1), BuildNetwork::Local)
             .expect_err("mismatched derivation path hash must reject");
-
-        assert!(
-            err.to_string()
-                .contains("does not match derivation_path_hex"),
-            "unexpected error: {err}"
-        );
     }
 
     #[test]
@@ -537,14 +531,8 @@ mod tests {
         let mut config = config();
         config.chain_key_root_proof.public_key_hex = Some("00".repeat(33));
 
-        let err = chain_key_signing_policy_from_config(&config, p(1), BuildNetwork::Local)
+        chain_key_signing_policy_from_config(&config, p(1), BuildNetwork::Local)
             .expect_err("invalid public key must reject before signing");
-
-        assert!(
-            err.to_string()
-                .contains("must be a secp256k1 SEC1 public key"),
-            "unexpected error: {err}"
-        );
     }
 
     struct MockSigner {

@@ -60,10 +60,6 @@ For root RPC capabilities, replay reservation may happen before authorization
 only when every authorization or execution failure aborts the reservation.
 Replay commit must happen only after authorized execution succeeds.
 
-Retired internal-invocation proof wrappers, role-attestation/delegated-grant
-capability proof success paths, and old shard/root-key delegation shortcuts
-must not reappear.
-
 ## Scope
 
 Primary scope:
@@ -90,7 +86,8 @@ Expected:
 - no domain replay receipt lookup or reservation before token verification;
 - no domain replay receipt lookup or reservation before subject binding and
   scope checks;
-- no plural delegated-token audience DTOs or compatibility shims;
+- delegated-token audience handling is limited to `Canister`, `CanicSubnet`,
+  and `Project`;
 - no verifier-local token-use store or consume path;
 - handler dispatch occurs only after access evaluation succeeds.
 
@@ -106,19 +103,6 @@ Expected:
 - evaluate default/app or explicit access;
 - return on denial;
 - dispatch only after successful access evaluation.
-
-### 2a. Retired Protected Internal Endpoint Proofs
-
-```bash
-rg -n 'protected_internal|verify_internal_invocation_proof|InternalInvocationProof|request_internal_invocation_proof|caller::has_role|caller::has_any_role' crates/canic-macros/src/endpoint crates/canic/src/macros/endpoints crates/canic-core/src -g '*.rs'
-```
-
-Expected:
-
-- no active protected internal endpoint proof wrappers remain;
-- no active caller-role endpoint predicates remain in macro emission;
-- historical mentions, if any, are compatibility-failure tests or changelog
-  text, not active generated endpoint authorization.
 
 ### 3. Delegated Token Material Verification
 
@@ -204,7 +188,6 @@ Expected:
 - retained root-issued attestation caches, if any, are reuse-only and check
   root, audience, subject, role, epoch, and expiry before reuse;
 - cached attestations do not skip target capability hash construction.
-- retired `CapabilityProof` variants do not regain success paths.
 
 ## Output Requirements
 

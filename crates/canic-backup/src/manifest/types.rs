@@ -208,3 +208,6 @@ pub struct VerificationCheck {
     pub kind: String,
     pub roles: Vec<String>,
 }
+
+/// Stable manifest label for the supported canister-status verification.
+pub const VERIFICATION_KIND_STATUS: &str = "status";

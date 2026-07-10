@@ -5,12 +5,15 @@ use crate::{
         read_named_deployment_install_state_from_root,
     },
     registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
+    replica_query::ReplicaQueryError,
     subnet_registry::{
         SubnetRegistryQueryError, SubnetRegistryQuerySource, query_subnet_registry_json,
     },
 };
 use std::{collections::BTreeMap, path::Path};
 use thiserror::Error as ThisError;
+
+const IC_REJECT_CODE_DESTINATION_INVALID: u64 = 3;
 
 ///
 /// InstalledDeploymentRequest
@@ -237,9 +240,7 @@ fn installed_deployment_registry_error(
     error: SubnetRegistryQueryError,
 ) -> InstalledDeploymentError {
     match error {
-        SubnetRegistryQueryError::Replica(err) => {
-            local_registry_error(request, root, err.to_string())
-        }
+        SubnetRegistryQueryError::Replica(err) => local_registry_error(request, root, err),
         SubnetRegistryQueryError::Icp(err) => installed_deployment_icp_error(err),
     }
 }
@@ -247,20 +248,26 @@ fn installed_deployment_registry_error(
 fn local_registry_error(
     request: &InstalledDeploymentRequest,
     root: &str,
-    error: String,
+    error: ReplicaQueryError,
 ) -> InstalledDeploymentError {
-    if request.detect_lost_local_root && is_canister_not_found_error(&error) {
+    if request.detect_lost_local_root && is_missing_destination_error(&error) {
         return InstalledDeploymentError::LostLocalDeployment {
             deployment: request.deployment.clone(),
             network: request.network.clone(),
             root: root.to_string(),
         };
     }
-    InstalledDeploymentError::ReplicaQuery(error)
+    InstalledDeploymentError::ReplicaQuery(error.to_string())
 }
 
-fn is_canister_not_found_error(error: &str) -> bool {
-    error.contains("Canister ") && error.contains(" not found")
+const fn is_missing_destination_error(error: &ReplicaQueryError) -> bool {
+    matches!(
+        error,
+        ReplicaQueryError::Rejected {
+            code: IC_REJECT_CODE_DESTINATION_INVALID,
+            ..
+        }
+    )
 }
 
 fn installed_deployment_icp_error(error: IcpCommandError) -> InstalledDeploymentError {

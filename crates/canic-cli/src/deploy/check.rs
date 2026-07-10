@@ -12,7 +12,10 @@ use crate::{
 };
 use canic_host::{
     build_provenance::build_provenance_schema,
-    deployment_truth::{DeploymentCheckV1, SafetyFindingV1, SafetyReportV1, SafetyStatusV1},
+    deployment_truth::{
+        DeploymentCheckV1, SafetyFindingV1, SafetyReportV1, SafetyStatusV1,
+        is_evidence_conflict_finding_code,
+    },
     evidence_envelope::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
@@ -376,7 +379,7 @@ fn deployment_check_evidence_conflicts(check: &DeploymentCheckV1) -> Vec<Evidenc
         .hard_failures
         .iter()
         .chain(check.report.warnings.iter())
-        .filter(|finding| finding.code.contains("conflict"))
+        .filter(|finding| is_evidence_conflict_finding_code(&finding.code))
         .map(|finding| {
             EvidenceMessageV1::new(
                 &format!("deploy.evidence_conflict.{}", finding.code),

@@ -159,16 +159,7 @@ const fn policy_finding_severity_label(severity: PolicyFindingSeverityV1) -> &'s
 }
 
 const fn exit_class_label(exit_class: ExitClassV1) -> &'static str {
-    match exit_class {
-        ExitClassV1::Success => "success",
-        ExitClassV1::SuccessWithWarnings => "success_with_warnings",
-        ExitClassV1::BlockedByPolicy => "blocked_by_policy",
-        ExitClassV1::EvidenceConflict => "evidence_conflict",
-        ExitClassV1::MissingRequiredEvidence => "missing_required_evidence",
-        ExitClassV1::InvalidInput => "invalid_input",
-        ExitClassV1::ExecutionFailed => "execution_failed",
-        ExitClassV1::InternalError => "internal_error",
-    }
+    exit_class.label()
 }
 
 fn render_target(target: &EvidenceTargetV1) -> String {

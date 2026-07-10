@@ -95,7 +95,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     let root_assumption = plan
         .unresolved_assumptions
         .iter()
-        .find(|assumption| assumption.key == "local_state.root_canister_id")
+        .find(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
         .expect("missing root identity should be recorded");
     assert!(root_assumption.description.contains("--allow-unverified"));
 }
@@ -168,7 +168,7 @@ kind = "root"
     let root_assumption = plan
         .unresolved_assumptions
         .iter()
-        .find(|assumption| assumption.key == "local_state.root_canister_id")
+        .find(|assumption| assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing))
         .expect("missing root identity should be recorded");
     assert!(root_assumption.description.contains("--allow-unverified"));
 }

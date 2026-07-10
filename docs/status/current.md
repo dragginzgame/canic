@@ -18,12 +18,12 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.83.29`, published and
-  tagged as `v0.83.29`; no package version has been changed for development.
-  The `0.84` role-aware state-contract line has a review-revised and
-  scope-trimmed design at
+- The current package/release-surface version is `0.84.0`, published and tagged
+  as `v0.84.0`; no package version has been changed for `0.84.1` development.
+  The `0.84` role-aware state-contract line shipped all three accepted slices
+  in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
-  implemented in the current worktree: `canic-core::role_contract` now owns
+  released: `canic-core::role_contract` now owns
   typed feature, capability, allocation, lifecycle, provenance, result, and
   finding values; one config-to-capability derivation; the feature and
   allocation catalog; permanent ID definitions; and the pure fail-closed
@@ -44,7 +44,37 @@ before this compaction is archived at
   warning; and the host validator returns only supported evidence or one
   unsupported finding rather than exposing a dependency graph to core policy.
 
-- Slice B is implemented in the current worktree. `canic-host::role_contract`
+- The `0.84.1` typed-failure-classification interruption is implemented in the
+  current worktree under
+  `docs/design/0.84-typed-failure-classification/0.84.1-design.md`. Canic-owned
+  auth expiry, registry policy, wasm-store publication, deployment-state
+  assumption, install-block, blob-storage input, medic deployment-state,
+  direct replica destination, and canister-signature certificate decisions now
+  consume typed variants or stable codes instead of English fragments.
+  `ErrorCode` adds delegated-token expiry, chain-key proof-pending, and four
+  wasm-store failure codes; deployment-state assumption keys are split into
+  exact missing, network-mismatch, and read-failed keys with no compatibility
+  alias. A repository-wide follow-up scan also hardens exact deployment
+  finding codes, observation-source labels, assumption namespaces, cycle
+  statuses, replica/HTTP status parsing, Cargo workspace TOML detection,
+  policy exit-class labels, backup verification kinds, and bootstrap artifact
+  kinds. Raw ICP CLI stderr matching remains an isolated external diagnostic
+  boundary. A final test audit deletes obsolete coverage for removed command,
+  endpoint-option, config-field, and install-state shapes; current
+  behavioral tests now assert typed errors, public codes, or observable state.
+  Remaining text assertions cover maintained rendering/compiler diagnostics or
+  isolated external-tool behavior. The developer installer also drops its
+  retired npm ICP-wrapper cleanup path rather than carrying migration behavior.
+  Active contracts, getting-started guides, release validation, and recurring
+  audit definitions now describe only maintained auth and caller-authorization
+  surfaces.
+  Internal PocketIC artifact builds now validate every Canic-declared role
+  package through the existing host validator before setting the private
+  canonical build marker; generic non-Canic fixture stubs remain unchanged.
+  Stable-memory IDs, records, encodings, migrations, and the released 0.84 role
+  contract are unchanged.
+
+- Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
   unconditional, non-optional normal Canic dependency against a
   `wasm32-unknown-unknown`-filtered runtime graph. It rejects package-feature
@@ -54,14 +84,14 @@ before this compaction is archived at
   before Cargo. Canonical builds set one private marker, while direct
   authoritative wasm Cargo builds fail with `canic build` guidance. Canonical
   and generated wasm_store packages use the same validator. The former
-  build-support and medic feature parsers plus blob-probe feature forwarding
-  are deleted. Exported opt-in endpoint macros now gate on the Canic facade
-  feature at definition time instead of requiring a mirrored caller feature.
+  build-support and medic feature parsers plus blob-probe feature forwarding are
+  deleted. Exported opt-in endpoint macros now gate on the Canic facade feature
+  at definition time instead of requiring a mirrored caller feature.
   Medic may now emit the documented `role_contract_*` failure codes for
   unsupported package shapes; command forms and existing successful output,
   persisted state, and memory IDs are unchanged.
 
-- Slice C is implemented in the current worktree. `canic-core` and
+- Slice C shipped in `0.84.0`. `canic-core` and
   `canic-control-plane` expose allocation-keyed owner descriptors for every
   active allocation, including optional sharding and blob-storage state. The
   host validates the complete registry for missing/duplicate descriptors,
@@ -1333,6 +1363,28 @@ them in the handoff until each is completed or explicitly declined:
   responses and then present the remaining report as complete.
 
 ## Useful Validation
+
+Focused 0.84.1 typed-failure-classification validation (passing for the patch
+isolated against released 0.84.0):
+
+```text
+cargo test --locked -p canic-core -p canic-control-plane -p canic-host -p canic-cli -p canic-backup --lib
+cargo test --locked -p canic --lib
+cargo test --locked -p canic --test protocol_surface
+cargo check --locked -p canic-wasm-store
+cargo check --locked -p canic-tests --test root_suite
+cargo check --locked -p canic-control-plane --no-default-features
+cargo check --locked -p canic-control-plane --no-default-features --features wasm-store-canister
+cargo test --locked -p canic-host internal_pocketic_packages_are_validated_before_the_marker_is_granted --lib
+cargo test --locked -p canic-tests --test pic_sharding_bootstrap -- --test-threads=1 --nocapture
+cargo clippy --locked -p canic-core -p canic-control-plane -p canic-host -p canic-cli -p canic-backup -p canic -p canic-wasm-store --all-targets --all-features -- -D warnings
+cargo clippy --locked -p canic-host -p canic-testing-internal -p canic-tests --all-targets --all-features -- -D warnings
+cargo test --locked -p canic --test changelog_governance -- --nocapture
+bash scripts/ci/check-diagnostic-consistency-audit.sh
+bash scripts/ci/check-recovery-runbooks.sh
+cargo fmt --all -- --check
+git diff --check
+```
 
 Focused 0.84 Slice A validation:
 

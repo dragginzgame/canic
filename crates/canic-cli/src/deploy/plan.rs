@@ -14,7 +14,8 @@ use crate::{
 use canic_host::{
     canister_build::CanisterBuildProfile,
     deployment_truth::{
-        DeploymentAssumptionV1, DeploymentPlanV1, LocalDeploymentPlanRequest, RoleArtifactV1,
+        DeploymentAssumptionKindV1, DeploymentAssumptionV1, DeploymentPlanV1,
+        LocalDeploymentPlanRequest, RoleArtifactV1,
     },
     release_set::{
         configured_fleet_name, icp_root as resolve_icp_root,
@@ -77,7 +78,6 @@ const ASSUMPTION_PREFIX_UNSUPPORTED: &str = "unsupported.";
 const ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS: &str = "local_config.controllers";
 const ASSUMPTION_KEY_LOCAL_CONFIG_POOLS: &str = "local_config.pools";
 const ASSUMPTION_KEY_LOCAL_CONFIG_ROLES: &str = "local_config.roles";
-const ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID: &str = "local_state.root_canister_id";
 const ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID: &str =
     "local_state.unverified_root_canister_id";
 const DEPLOYMENT_ARG: &str = "deployment";
@@ -933,7 +933,9 @@ fn plan_warnings(plan: &DeploymentPlanV1) -> Vec<PlanDiagnostic> {
 fn local_state_warning_code(assumption: &DeploymentAssumptionV1) -> String {
     if is_observed_state_drift_assumption(assumption) {
         "observed_inventory_drift".to_string()
-    } else if assumption.key == ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID {
+    } else if assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing)
+        || assumption.has_kind(DeploymentAssumptionKindV1::LocalStateReadFailed)
+    {
         "observed_inventory_unavailable".to_string()
     } else {
         diagnostic_code(&assumption.key)
@@ -953,13 +955,13 @@ fn assumption_diagnostic(assumption: &DeploymentAssumptionV1) -> PlanDiagnostic 
 }
 
 fn assumption_category(key: &str) -> PlanDiagnosticCategory {
-    if key.contains("artifact") || key.contains("manifest") {
+    if key.starts_with(ASSUMPTION_PREFIX_LOCAL_ARTIFACTS) {
         CATEGORY_ARTIFACT
-    } else if key.contains("state") {
+    } else if key.starts_with(ASSUMPTION_PREFIX_LOCAL_STATE) {
         CATEGORY_OBSERVATION
-    } else if key.contains("controller") {
+    } else if key == ASSUMPTION_KEY_LOCAL_CONFIG_CONTROLLERS {
         CATEGORY_AUTHORITY
-    } else if key.contains("pool") {
+    } else if key == ASSUMPTION_KEY_LOCAL_CONFIG_POOLS {
         CATEGORY_TOPOLOGY
     } else {
         CATEGORY_CONFIG
@@ -967,9 +969,9 @@ fn assumption_category(key: &str) -> PlanDiagnosticCategory {
 }
 
 fn assumption_next(key: &str) -> Option<String> {
-    if key.contains("artifact") || key.contains("manifest") {
+    if key.starts_with(ASSUMPTION_PREFIX_LOCAL_ARTIFACTS) {
         Some("run canic build or provide a build profile with resolved artifacts".to_string())
-    } else if key.contains("local_state") {
+    } else if key.starts_with(ASSUMPTION_PREFIX_LOCAL_STATE) {
         Some("compare after first deployment or provide deployment-check evidence".to_string())
     } else {
         None
@@ -1180,14 +1182,13 @@ fn has_observed_state_drift(plan: &DeploymentPlanV1) -> bool {
 
 fn has_missing_observed_state(plan: &DeploymentPlanV1) -> bool {
     plan.unresolved_assumptions.iter().any(|assumption| {
-        assumption.key == ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID
-            && !is_observed_state_drift_assumption(assumption)
+        assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing)
+            || assumption.has_kind(DeploymentAssumptionKindV1::LocalStateReadFailed)
     })
 }
 
 fn is_observed_state_drift_assumption(assumption: &DeploymentAssumptionV1) -> bool {
-    assumption.key == ASSUMPTION_KEY_LOCAL_STATE_ROOT_CANISTER_ID
-        && assumption.description.contains(" has network ")
+    assumption.has_kind(DeploymentAssumptionKindV1::LocalStateNetworkMismatch)
 }
 
 fn sort_diagnostics(diagnostics: &mut [PlanDiagnostic]) {

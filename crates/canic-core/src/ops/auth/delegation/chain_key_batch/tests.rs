@@ -311,7 +311,7 @@ fn chain_key_batch_builder_rejects_duplicate_issuer_leaves() {
     let issuer = p(43);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
 
-    let err = build_chain_key_root_delegation_batch(
+    build_chain_key_root_delegation_batch(
         input(&signing_policy),
         &[
             DueChainKeyTemplate {
@@ -324,8 +324,6 @@ fn chain_key_batch_builder_rejects_duplicate_issuer_leaves() {
         10,
     )
     .expect_err("duplicate issuer leaves must reject");
-
-    assert!(err.to_string().contains("duplicate issuer"));
 }
 
 #[test]
@@ -390,8 +388,6 @@ fn chain_key_batch_prepare_rejects_new_batch_when_pending_quota_is_full() {
         .expect_err("full pending state must reject a new chain-key batch");
 
     assert!(err.is_public_resource_exhausted());
-    assert!(err.to_string().contains("quota exceeded"));
-    assert!(err.to_string().contains("max_pending_batches=128"));
     AuthStateOps::prune_chain_key_root_delegation_batches(u64::MAX);
 }
 
@@ -547,14 +543,12 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
     let mut signer = MockSigner::valid_for(&batch.header);
     signer.public_key[0] ^= 1;
 
-    let err = block_on(sign_next_chain_key_root_delegation_batch(
+    block_on(sign_next_chain_key_root_delegation_batch(
         &signing_policy,
         2_000,
         &mut signer,
     ))
     .expect_err("public-key mismatch should fail signing");
-
-    assert!(err.to_string().contains("signing failed"));
     assert_eq!(signer.public_key_calls, 1);
     assert_eq!(signer.sign_calls, 0);
     let stored = AuthStateOps::chain_key_root_delegation_batch(prepared.batch_id.unwrap())

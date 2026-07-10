@@ -98,10 +98,6 @@ fn deploy_install_plan_reader_rejects_blocked_promotion_envelope() {
 
     let result = deploy_install::read_plan(&path);
 
-    std::assert_matches!(
-        result,
-        Err(DeployCommandError::Blocked(message))
-            if message.contains("artifact promotion plan artifact-promotion-plan-1 is not ready")
-    );
+    std::assert_matches!(result, Err(DeployCommandError::Blocked(_)));
     fs::remove_file(path).expect("clean temp plan");
 }

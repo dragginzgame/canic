@@ -135,7 +135,7 @@ fn observed_source_includes_live_status(observed: &ObservedCanisterV1) -> bool {
     observed
         .role_assignment_source
         .as_deref()
-        .is_some_and(|source| source.contains("icp_canister_status"))
+        .is_some_and(RoleAssignmentSourceV1::label_includes_live_status)
 }
 
 fn is_declared_controller(plan: &DeploymentPlanV1, controller: &str) -> bool {

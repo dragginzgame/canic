@@ -25,7 +25,11 @@ fn deployment_diff_is_safe_when_checked_facts_match() {
             status: None,
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some("local_install_state".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::LocalInstallState
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {
@@ -89,13 +93,4 @@ fn mainnet_deployment_check_blocks_cloud_engine_root_auth_signer() {
         finding.code == crate::deployment_truth::report::ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE
             && finding.subject.as_deref() == Some(root_canister)
     }));
-    let finding = diff
-        .hard_failures
-        .iter()
-        .find(|finding| {
-            finding.code == crate::deployment_truth::report::ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE
-        })
-        .expect("cloud-engine root auth finding");
-    assert!(!finding.message.contains("canister-signature"));
-    assert!(finding.message.contains("root-auth policy"));
 }

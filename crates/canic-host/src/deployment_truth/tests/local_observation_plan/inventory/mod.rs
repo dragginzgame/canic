@@ -154,8 +154,12 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
         CanisterControlClassV1::UnknownUnsafe
     );
     assert_eq!(
-        observed_root.role_assignment_source.as_deref(),
-        Some("local_install_state")
+        observed_root.role_assignment_source,
+        Some(
+            RoleAssignmentSourceV1::LocalInstallState
+                .label()
+                .to_string()
+        )
     );
 }
 

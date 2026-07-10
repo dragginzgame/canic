@@ -194,7 +194,7 @@ fn local_root_canister_id(
         }
         Ok(Some(state)) => {
             assumptions.push(assumption(
-                "local_state.root_canister_id",
+                DeploymentAssumptionKindV1::LocalStateNetworkMismatch.key(),
                 format!(
                     "deployment state for {} has network {}, expected {}",
                     request.deployment_name, state.network, request.network
@@ -204,7 +204,7 @@ fn local_root_canister_id(
         }
         Ok(None) => {
             assumptions.push(assumption(
-                "local_state.root_canister_id",
+                DeploymentAssumptionKindV1::LocalStateMissing.key(),
                 format!(
                     "no local deployment state exists for {}; root identity is unknown until install or explicit deploy register with --allow-unverified",
                     request.deployment_name
@@ -214,7 +214,7 @@ fn local_root_canister_id(
         }
         Err(err) => {
             assumptions.push(assumption(
-                "local_state.root_canister_id",
+                DeploymentAssumptionKindV1::LocalStateReadFailed.key(),
                 format!(
                     "could not read deployment state for {}: {err}",
                     request.deployment_name

@@ -87,10 +87,10 @@ pub use model::{
     AuthorityReportV1, BuildMaterializationEvidenceV1, BuildMaterializationInputV1,
     BuildMaterializationResultV1, BuildRecipeIdentityV1, CanisterAuthorityActionV1,
     CanisterControlClassV1, ConsentChannelKindV1, ConsentRequirementV1, ConsentSubjectKindV1,
-    CriticalExternalFixReportV1, DeploymentAssumptionV1, DeploymentCheckV1,
-    DeploymentCommandResultV1, DeploymentComparisonCategoryV1, DeploymentComparisonDiffV1,
-    DeploymentComparisonReportV1, DeploymentComparisonTargetV1, DeploymentDiffV1,
-    DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
+    CriticalExternalFixReportV1, DeploymentAssumptionKindV1, DeploymentAssumptionV1,
+    DeploymentCheckV1, DeploymentCommandResultV1, DeploymentComparisonCategoryV1,
+    DeploymentComparisonDiffV1, DeploymentComparisonReportV1, DeploymentComparisonTargetV1,
+    DeploymentDiffV1, DeploymentExecutionContextV1, DeploymentExecutionPreflightStatusV1,
     DeploymentExecutionPreflightV1, DeploymentExecutionStatusV1, DeploymentExecutorBackendV1,
     DeploymentExecutorCapabilityV1, DeploymentIdentityV1, DeploymentInventoryV1,
     DeploymentObservationGapV1, DeploymentPlanV1, DeploymentReceiptV1,
@@ -125,14 +125,15 @@ pub use model::{
     PromotionReadinessV1, PromotionTargetExecutionLineageV1, PromotionWasmStoreCatalogEntryV1,
     PromotionWasmStoreCatalogVerificationV1, PromotionWasmStoreIdentityReportV1, ResumeSafetyV1,
     RoleArtifactManifestV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1, RoleArtifactV1,
-    RoleEpochExpectationV1, RoleEpochObservationV1, RolePhaseReceiptV1, RolePhaseResultV1,
-    RolePromotionArtifactIdentityV1, RolePromotionExecutionReceiptV1, RolePromotionInputV1,
-    RolePromotionMaterializationIdentityV1, RolePromotionMaterializationLinkV1,
-    RolePromotionPlanTransformV1, RolePromotionPolicyDecisionV1, RolePromotionPolicyV1,
-    RolePromotionProvenanceV1, RolePromotionReadinessV1,
-    RolePromotionWasmStoreCatalogVerificationV1, RolePromotionWasmStoreIdentityV1, SafetyFindingV1,
-    SafetyReportV1, SafetySeverityV1, SafetyStatusV1, StagingReceiptV1, TrustDomainV1,
-    VerifiedPostconditionV1, VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
+    RoleAssignmentSourceV1, RoleEpochExpectationV1, RoleEpochObservationV1, RolePhaseReceiptV1,
+    RolePhaseResultV1, RolePromotionArtifactIdentityV1, RolePromotionExecutionReceiptV1,
+    RolePromotionInputV1, RolePromotionMaterializationIdentityV1,
+    RolePromotionMaterializationLinkV1, RolePromotionPlanTransformV1,
+    RolePromotionPolicyDecisionV1, RolePromotionPolicyV1, RolePromotionProvenanceV1,
+    RolePromotionReadinessV1, RolePromotionWasmStoreCatalogVerificationV1,
+    RolePromotionWasmStoreIdentityV1, SafetyFindingV1, SafetyReportV1, SafetySeverityV1,
+    SafetyStatusV1, StagingReceiptV1, TrustDomainV1, VerifiedPostconditionV1,
+    VerifierReadinessExpectationV1, VerifierReadinessObservationV1,
 };
 pub use multi::{
     DeploymentComparisonReportError, deployment_comparison_report_from_checks,
@@ -201,7 +202,7 @@ pub use receipt::{
 };
 pub use report::{
     LocalDeploymentCheckRequest, check_local_deployment, compare_plan_inventory_and_receipt,
-    compare_plan_to_inventory, safety_report_from_diff,
+    compare_plan_to_inventory, is_evidence_conflict_finding_code, safety_report_from_diff,
 };
 pub use root::{
     DeploymentRootVerificationReceiptError, DeploymentRootVerificationReportError,

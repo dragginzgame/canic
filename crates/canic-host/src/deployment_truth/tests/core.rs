@@ -59,7 +59,11 @@ fn inventory_round_trips_through_json() {
             controllers: vec!["aaaaa-aa".to_string()],
             module_hash: Some("module".to_string()),
             status: Some("running".to_string()),
-            role_assignment_source: Some("icp_canister_status".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::IcpCanisterStatus
+                    .label()
+                    .to_string(),
+            ),
         }),
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),
@@ -75,7 +79,9 @@ fn inventory_round_trips_through_json() {
             status: Some("running".to_string()),
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: Some("canonical".to_string()),
-            role_assignment_source: Some("registry".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::SubnetRegistry.label().to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {

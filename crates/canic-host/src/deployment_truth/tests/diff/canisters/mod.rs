@@ -151,7 +151,11 @@ fn deployment_diff_warns_for_extra_observed_canister_roles() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     let diff = compare_plan_to_inventory(&plan, &inventory);
@@ -184,7 +188,11 @@ fn deployment_diff_warns_for_duplicate_observed_planned_role() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     let diff = compare_plan_to_inventory(&plan, &inventory);
@@ -225,7 +233,11 @@ fn deployment_diff_blocks_ambiguous_expected_role_without_canister_id() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
     inventory.observed_canisters.push(ObservedCanisterV1 {
         canister_id: "user-hub-b".to_string(),
@@ -236,7 +248,11 @@ fn deployment_diff_blocks_ambiguous_expected_role_without_canister_id() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     let diff = compare_plan_to_inventory(&plan, &inventory);
@@ -300,7 +316,11 @@ fn deployment_diff_blocks_conflicting_roles_for_same_canister_id() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     let diff = compare_plan_to_inventory(&plan, &inventory);
@@ -369,7 +389,11 @@ fn enriched_registry_status_participates_in_controller_checks() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     let diff = compare_plan_to_inventory(&plan, &inventory);

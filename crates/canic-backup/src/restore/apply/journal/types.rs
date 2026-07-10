@@ -4,7 +4,10 @@
 //! Does not own: command previews, operation receipts, or reporting.
 //! Boundary: provides journal row validation and shared journal helper functions.
 
-use crate::restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation};
+use crate::{
+    manifest::VERIFICATION_KIND_STATUS,
+    restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation},
+};
 
 use std::collections::BTreeSet;
 
@@ -112,7 +115,7 @@ impl RestoreApplyJournalOperation {
                     "operations[].verification_kind",
                     self.verification_kind.as_ref(),
                 )?;
-                if kind != "status" {
+                if kind != VERIFICATION_KIND_STATUS {
                     return Err(RestoreApplyJournalError::UnsupportedVerificationKind {
                         sequence: self.sequence,
                         kind: kind.to_string(),

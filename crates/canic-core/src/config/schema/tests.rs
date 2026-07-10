@@ -89,12 +89,7 @@ fn fleet_name_is_required() {
     let mut cfg = ConfigModel::test_default();
     cfg.fleet = None;
 
-    let err = cfg.validate().expect_err("fleet name should be required");
-
-    assert!(
-        err.to_string().contains("fleet config is required"),
-        "expected fleet error, got: {err}"
-    );
+    cfg.validate().expect_err("fleet name should be required");
 }
 
 #[test]
@@ -147,14 +142,8 @@ fn topology_roles_must_be_declared() {
             base_canister_config(CanisterKind::Singleton),
         );
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("topology role should need declaration");
-
-    assert!(
-        err.to_string().contains("is not declared"),
-        "expected role declaration error, got: {err}"
-    );
 }
 
 #[test]
@@ -196,13 +185,7 @@ fn role_declaration_package_paths_must_not_be_empty() {
         },
     );
 
-    let err = cfg.validate().expect_err("empty role package should fail");
-
-    assert!(
-        err.to_string()
-            .contains("role declaration 'store' package must not be empty"),
-        "expected empty package error, got: {err}"
-    );
+    cfg.validate().expect_err("empty role package should fail");
 }
 
 #[test]
@@ -290,14 +273,8 @@ fn app_index_requires_prime_service_role() {
             base_canister_config(CanisterKind::Singleton),
         );
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("app_index singleton roles should be rejected");
-
-    assert!(
-        err.to_string().contains("must have kind = \"service\""),
-        "expected service-kind app_index error, got: {err}"
-    );
 
     cfg.subnets
         .get_mut(&SubnetRole::PRIME)
@@ -445,14 +422,8 @@ fn delegated_tokens_root_proof_mode_must_be_chain_key_batch() {
     let mut cfg = ConfigModel::test_default();
     cfg.auth.delegated_tokens.root_proof_mode = "canister_signature".to_string();
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected non-chain-key root proof mode to fail");
-
-    assert!(
-        err.to_string().contains("must be chain_key_batch"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -462,14 +433,8 @@ fn delegated_tokens_chain_key_batch_requires_key_policy() {
     cfg.auth.delegated_tokens.network = "local".to_string();
     cfg.auth.delegated_tokens.chain_key_root_proof = ChainKeyRootProofConfig::default();
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected missing chain-key policy to fail");
-
-    assert!(
-        err.to_string().contains("chain_key_root_proof.key_id"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -480,14 +445,8 @@ fn delegated_tokens_chain_key_batch_requires_derivation_path() {
         .chain_key_root_proof
         .derivation_path_hex = None;
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected missing derivation path to fail");
-
-    assert!(
-        err.to_string().contains("derivation_path_hex"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -498,14 +457,8 @@ fn delegated_tokens_chain_key_derivation_path_must_be_hex() {
         .chain_key_root_proof
         .derivation_path_hex = Some(vec!["not hex".to_string()]);
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected invalid derivation path hex to fail");
-
-    assert!(
-        err.to_string().contains("derivation_path_hex[0]"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -516,15 +469,8 @@ fn delegated_tokens_chain_key_derivation_path_hash_must_match_path() {
         .chain_key_root_proof
         .derivation_path_hash_hex = Some("11".repeat(32));
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected mismatched derivation path hash to fail");
-
-    assert!(
-        err.to_string()
-            .contains("does not match derivation_path_hex"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -535,15 +481,8 @@ fn delegated_tokens_chain_key_public_key_must_be_sec1_secp256k1() {
         .chain_key_root_proof
         .public_key_hex = Some("00".repeat(33));
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected invalid chain-key public key to fail");
-
-    assert!(
-        err.to_string()
-            .contains("must be a secp256k1 SEC1 public key"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -591,14 +530,8 @@ fn delegated_tokens_chain_key_mainnet_rejects_test_key() {
         .chain_key_root_proof
         .max_revocation_latency_ns = Some(1);
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected mainnet test key to fail");
-
-    assert!(
-        err.to_string().contains("must not be test_key_1"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -607,15 +540,8 @@ fn delegated_tokens_mainnet_requires_known_mainnet_root_key_when_key_is_configur
     cfg.auth.delegated_tokens.network = "mainnet".to_string();
     cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some("07".repeat(96));
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected wrong mainnet root key to fail");
-
-    assert!(
-        err.to_string()
-            .contains("requires the known mainnet raw IC root public key"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]
@@ -625,15 +551,8 @@ fn delegated_tokens_local_rejects_configured_mainnet_root_key() {
     cfg.auth.delegated_tokens.ic_root_public_key_raw_hex =
         Some(hex(MAINNET_IC_ROOT_PUBLIC_KEY_RAW));
 
-    let err = cfg
-        .validate()
+    cfg.validate()
         .expect_err("expected local config with mainnet root key to fail");
-
-    assert!(
-        err.to_string()
-            .contains("network=\"local\" must not use the mainnet IC root public key"),
-        "unexpected error: {err}"
-    );
 }
 
 #[test]

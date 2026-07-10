@@ -84,7 +84,7 @@ fn registry_entry_to_observed_canister(entry: &RegistryEntry) -> Option<Observed
         status: None,
         root_trust_anchor: entry.parent_pid.clone(),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry".to_string()),
+        role_assignment_source: Some(RoleAssignmentSourceV1::SubnetRegistry.label().to_string()),
     })
 }
 
@@ -146,7 +146,11 @@ pub(in crate::deployment_truth) fn apply_live_status_to_registry_observation(
     observed.controllers = controllers;
     observed.module_hash = report.module_hash.as_deref().map(normalize_module_hash);
     observed.status = Some(report.status.clone());
-    observed.role_assignment_source = Some("subnet_registry+icp_canister_status".to_string());
+    observed.role_assignment_source = Some(
+        RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+            .label()
+            .to_string(),
+    );
 }
 
 fn live_status_gap_key(observed: &ObservedCanisterV1) -> String {

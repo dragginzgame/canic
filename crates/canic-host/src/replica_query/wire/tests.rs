@@ -1,5 +1,5 @@
 use super::{
-    CanicErrorWire, CanisterInfoWire, SubnetRegistryEntryWire, SubnetRegistryResponseWire,
+    CanisterInfoWire, SubnetRegistryEntryWire, SubnetRegistryResponseWire,
     decode_bootstrap_status_response, decode_cycle_balance_response,
     decode_subnet_registry_response,
 };
@@ -35,7 +35,7 @@ fn decodes_cycle_balance_response_bytes() {
 fn decodes_subnet_registry_response_roles_and_cli_json() {
     let root = Principal::from_text("aaaaa-aa").expect("root principal");
     let child = Principal::anonymous();
-    let response: Result<SubnetRegistryResponseWire, CanicErrorWire> =
+    let response: Result<SubnetRegistryResponseWire, canic_core::dto::error::Error> =
         Ok(SubnetRegistryResponseWire(vec![
             SubnetRegistryEntryWire {
                 pid: root,

@@ -277,7 +277,7 @@ fn install_truth_receipted_phase_records_success_and_failure() {
             InstallPhaseLabel::STAGE_RELEASE_SET,
             "stage root release set",
             vec!["manifest_path:/tmp/release-set.json".to_string()],
-            || Err::<(), Box<dyn std::error::Error>>("stage failed".into()),
+            || Err::<(), Box<dyn std::error::Error>>(std::io::Error::other("stage failed").into()),
         )
         .expect_err("failed phase should return original error");
     scope
@@ -289,7 +289,12 @@ fn install_truth_receipted_phase_records_success_and_failure() {
         )
         .expect("wait-ready phase should record");
 
-    assert_eq!(err.to_string(), "stage failed");
+    assert_eq!(
+        err.downcast_ref::<std::io::Error>()
+            .expect("phase failure should preserve its error type")
+            .kind(),
+        std::io::ErrorKind::Other
+    );
 
     let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
     let receipts = fs::read_dir(&receipt_dir)

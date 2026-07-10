@@ -211,9 +211,8 @@ cargo test --locked -p canic-core --lib issuer_canister_sig -- --nocapture
 cargo test --locked -p canic-core --lib cert_rules -- --nocapture
 cargo test --locked -p canic-core --lib install_active_delegation_proof -- --nocapture
 cargo test --locked -p canic-core --lib delegated_auth_guard_preserves_verify_bind_scope_order -- --nocapture
-cargo test --locked -p canic-tests --test root_suite root_batch_provisioning_installs_active_proof_on_user_shard -- --nocapture
+cargo test --locked -p canic-tests --test root_suite delegated_auth_chain_key_batch_renews_without_external_liveness -- --nocapture
 cargo test --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
-rg -n 'trace_token_trust_chain|token_chain|proof_state|current_proof|verify_delegation_signature|verify_token_sig|authenticated_guard_checks_current_proof|root_sig|shard_sig|shard_key|resolve_root_key' crates canisters fleets -g '*.rs'
 ```
 
 ## Structural Hotspots

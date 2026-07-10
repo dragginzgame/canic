@@ -1,27 +1,4 @@
-use crate::{
-    InternalError, InternalErrorClass, InternalErrorOrigin,
-    dto::error::{Error, ErrorCode},
-};
-
-fn registry_policy_error_code(message: &str) -> Option<ErrorCode> {
-    if message.contains("already registered to") {
-        return Some(ErrorCode::PolicyRoleAlreadyRegistered);
-    }
-    if message.contains("already registered under parent") {
-        return Some(ErrorCode::PolicySingletonAlreadyRegisteredUnderParent);
-    }
-    if message.contains("must be created by a service parent with scaling config") {
-        return Some(ErrorCode::PolicyReplicaRequiresServiceWithScaling);
-    }
-    if message.contains("must be created by a service parent with sharding config") {
-        return Some(ErrorCode::PolicyShardRequiresServiceWithSharding);
-    }
-    if message.contains("must be created by a service parent with directory config") {
-        return Some(ErrorCode::PolicyInstanceRequiresServiceWithDirectory);
-    }
-
-    None
-}
+use crate::{InternalError, InternalErrorClass, InternalErrorOrigin, dto::error::Error};
 
 fn internal_error_to_public(err: &InternalError) -> Error {
     if let Some(public) = err.public_error() {
@@ -35,13 +12,7 @@ fn internal_error_to_public(err: &InternalError) -> Error {
 
         InternalErrorClass::Domain => match err.origin() {
             InternalErrorOrigin::Config => Error::invalid(message),
-            _ => {
-                if let Some(code) = registry_policy_error_code(&message) {
-                    Error::policy(code, message)
-                } else {
-                    Error::conflict(message)
-                }
-            }
+            _ => Error::conflict(message),
         },
 
         InternalErrorClass::Invariant => Error::invariant(message),
@@ -75,6 +46,7 @@ mod tests {
         access::AccessError,
         cdk::types::Principal,
         domain::policy::pure::topology::{TopologyPolicyError, registry::RegistryPolicyError},
+        dto::error::ErrorCode,
         ids::CanisterRole,
     };
 
@@ -108,6 +80,12 @@ mod tests {
         let workflow: Error =
             InternalError::workflow(InternalErrorOrigin::Workflow, "workflow fail").into();
         assert_eq!(workflow.code, ErrorCode::Internal);
+
+        let token_expired: Error = AccessError::DelegatedAuthTokenExpired.into();
+        assert_eq!(token_expired.code, ErrorCode::AuthTokenExpired);
+
+        let cert_expired: Error = AccessError::DelegatedAuthCertExpired.into();
+        assert_eq!(cert_expired.code, ErrorCode::AuthProofExpired);
     }
 
     #[test]

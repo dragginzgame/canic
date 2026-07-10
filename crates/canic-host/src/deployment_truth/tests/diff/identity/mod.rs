@@ -133,7 +133,11 @@ fn deployment_diff_blocks_installed_module_hash_mismatch() {
             status: Some("Running".to_string()),
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some("icp_canister_status".to_string()),
+            role_assignment_source: Some(
+                RoleAssignmentSourceV1::IcpCanisterStatus
+                    .label()
+                    .to_string(),
+            ),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {
@@ -181,7 +185,11 @@ fn deployment_diff_uses_concrete_expected_id_for_installed_module_hash() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     let diff = compare_plan_to_inventory(&plan, &inventory);
@@ -214,7 +222,11 @@ fn deployment_diff_blocks_ambiguous_installed_module_hash_target() {
         status: Some("Running".to_string()),
         root_trust_anchor: Some("aaaaa-aa".to_string()),
         canonical_embedded_config_digest: None,
-        role_assignment_source: Some("subnet_registry+icp_canister_status".to_string()),
+        role_assignment_source: Some(
+            RoleAssignmentSourceV1::SubnetRegistryAndIcpCanisterStatus
+                .label()
+                .to_string(),
+        ),
     });
 
     let diff = compare_plan_to_inventory(&plan, &inventory);

@@ -83,6 +83,7 @@ use report::{MedicCategory, MedicCheck, MedicReport, MedicScope, MedicSource, Me
 const ICP_SESSION_DETAIL: &str = "password-protected PEM identities can cache sessions";
 const ICP_SESSION_NEXT: &str =
     "icp settings session-length 1h; icp identity reauth <name> --duration 1h";
+const DEPLOYMENT_NOT_SELECTED_CHECK_CODE: &str = "deployment_not_selected";
 
 fn build_medic_report(options: &MedicOptions) -> MedicReport {
     match options.scope {
@@ -144,7 +145,7 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
 
     checks.push(MedicCheck::not_evaluated(
         MedicCategory::DeploymentState,
-        "deployment_not_selected",
+        DEPLOYMENT_NOT_SELECTED_CHECK_CODE,
         "deployment",
         "no deployment target was selected",
         "run canic medic deployment <deployment>",
@@ -686,20 +687,21 @@ fn run_deployment_checks(
 ) -> Vec<MedicCheck> {
     let mut checks = run_project_checks(options)
         .into_iter()
-        .filter(|check| check.code != "deployment_not_selected")
+        .filter(|check| check.code != DEPLOYMENT_NOT_SELECTED_CHECK_CODE)
         .collect::<Vec<_>>();
     let network = &context.network;
     let icp_root = context.icp_root.as_deref();
 
     checks.push(context.network_check.clone());
 
-    let state = match icp_root.map_or_else(
-        || Err("could not resolve ICP project root".to_string()),
-        |root| {
+    let state_result = match icp_root {
+        Some(root) => {
             read_installed_deployment_state_from_root(network, options.deployment_name(), root)
-                .map_err(|err| err.to_string())
-        },
-    ) {
+                .map_err(Some)
+        }
+        None => Err(None),
+    };
+    let state = match state_result {
         Ok(state) => {
             checks.push(MedicCheck::pass(
                 MedicCategory::DeploymentState,
@@ -711,7 +713,7 @@ fn run_deployment_checks(
             ));
             Some(state)
         }
-        Err(err) if is_missing_installed_deployment(&err) => {
+        Err(Some(InstalledDeploymentError::NoInstalledDeployment { .. })) => {
             checks.push(MedicCheck::fail(
                 MedicCategory::DeploymentState,
                 "deployment_target_missing",
@@ -732,11 +734,15 @@ fn run_deployment_checks(
             None
         }
         Err(err) => {
+            let detail = err.map_or_else(
+                || "could not resolve ICP project root".to_string(),
+                |err| err.to_string(),
+            );
             checks.push(MedicCheck::fail(
                 MedicCategory::DeploymentState,
                 "deployment_target_missing",
                 "deployment",
-                err,
+                detail,
                 deploy_plan_then(
                     options.deployment_name(),
                     "then reinstall from the owning fleet template or re-register the deployment target with --allow-unverified",
@@ -858,10 +864,6 @@ fn installed_deployment_state_checks(
         ),
         root_readiness,
     ]
-}
-
-fn is_missing_installed_deployment(error: &str) -> bool {
-    error.starts_with("deployment target ") && error.contains(" is not installed on network ")
 }
 
 fn check_icp_cli(options: &MedicOptions) -> MedicCheck {

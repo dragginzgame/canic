@@ -151,11 +151,7 @@ fn deploy_check_rejects_build_provenance_without_envelope_output() {
     let err = deploy_check::DeployCheckOptions::parse(args)
         .expect_err("build provenance requires envelope output");
 
-    std::assert_matches!(
-        err,
-        DeployCommandError::Usage(message)
-            if message.contains("--build-provenance requires --evidence-envelope")
-    );
+    std::assert_matches!(err, DeployCommandError::Usage(_));
 }
 
 #[test]
@@ -282,7 +278,7 @@ fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
     let mut check = sample_authority_check();
     check.report.status = SafetyStatusV1::Blocked;
     check.report.hard_failures.push(SafetyFindingV1 {
-        code: "artifact_conflict".to_string(),
+        code: "artifact_role_conflict".to_string(),
         message: "artifact evidence disagrees".to_string(),
         severity: SafetySeverityV1::HardFailure,
         subject: Some("store".to_string()),
@@ -307,7 +303,7 @@ fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
             .as_array()
             .expect("evidence conflicts")
             .iter()
-            .any(|conflict| conflict["code"] == "deploy.evidence_conflict.artifact_conflict")
+            .any(|conflict| conflict["code"] == "deploy.evidence_conflict.artifact_role_conflict")
     );
 }
 

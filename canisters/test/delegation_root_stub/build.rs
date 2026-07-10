@@ -150,7 +150,7 @@ fn discover_workspace_root(manifest_dir: &std::path::Path) -> PathBuf {
         let cargo_toml_text = fs::read_to_string(&cargo_toml)
             .unwrap_or_else(|err| panic!("read {} failed: {err}", cargo_toml.display()));
 
-        if cargo_toml_text.contains("[workspace]") {
+        if canic::__build::manifest_declares_workspace(&cargo_toml_text) {
             return candidate.to_path_buf();
         }
     }

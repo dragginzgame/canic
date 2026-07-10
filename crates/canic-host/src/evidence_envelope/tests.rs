@@ -6,6 +6,15 @@ fn exit_class_serializes_to_snake_case() {
     let encoded = serde_json::to_string(&ExitClassV1::SuccessWithWarnings).expect("serialize");
 
     assert_eq!(encoded, "\"success_with_warnings\"");
+    assert_eq!(
+        ExitClassV1::SuccessWithWarnings.label(),
+        "success_with_warnings"
+    );
+    assert_eq!(
+        ExitClassV1::from_label("success_with_warnings"),
+        Some(ExitClassV1::SuccessWithWarnings)
+    );
+    assert_eq!(ExitClassV1::from_label("success-ish"), None);
 }
 
 #[test]

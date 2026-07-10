@@ -12,6 +12,7 @@ const ROOT_WASM_STORE_BOOTSTRAP_ROLE: &str = "wasm_store";
 const ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_FILE: &str =
     "canic.root-wasm-store-bootstrap-release-set.rs";
 const ROOT_WASM_STORE_BOOTSTRAP_ASSET_FILE: &str = "canic.root-wasm-store-bootstrap.wasm.gz";
+const GZIP_ARTIFACT_KIND: &str = "gzip";
 
 struct EmbeddedArtifactMetadata {
     artifact_kind: &'static str,
@@ -119,7 +120,7 @@ fn discover_workspace_root(manifest_dir: &Path) -> PathBuf {
         let cargo_toml_text = fs::read_to_string(&cargo_toml)
             .unwrap_or_else(|err| panic!("read {} failed: {err}", cargo_toml.display()));
 
-        if cargo_toml_text.contains("[workspace]") {
+        if manifest_declares_workspace(&cargo_toml_text) {
             return candidate.to_path_buf();
         }
     }
@@ -128,6 +129,14 @@ fn discover_workspace_root(manifest_dir: &Path) -> PathBuf {
         "unable to discover workspace root from {}; expected an ancestor Cargo.toml with [workspace]",
         manifest_dir.display()
     );
+}
+
+#[doc(hidden)]
+#[must_use]
+pub fn manifest_declares_workspace(source: &str) -> bool {
+    toml::from_str::<toml::Value>(source)
+        .ok()
+        .is_some_and(|manifest| manifest.get("workspace").is_some())
 }
 
 fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
@@ -233,14 +242,14 @@ fn inspect_embedded_artifact(
     });
 
     let artifact_kind = if is_gzip_payload(&bytes) {
-        "gzip"
+        GZIP_ARTIFACT_KIND
     } else if is_raw_wasm(&bytes) {
         "raw-wasm"
     } else {
         "opaque"
     };
 
-    let decompressed = if artifact_kind == "gzip" {
+    let decompressed = if artifact_kind == GZIP_ARTIFACT_KIND {
         Some(decompress_gzip(&bytes, embedded_artifact_path))
     } else {
         None
@@ -271,7 +280,7 @@ fn validate_embedded_bootstrap_artifact(
     decompressed_bytes: Option<&[u8]>,
 ) {
     assert!(
-        artifact_kind == "gzip",
+        artifact_kind == GZIP_ARTIFACT_KIND,
         "root bootstrap requires the build-produced gzip artifact at {} (embedded copy {}), but found {} bytes with head {} and sha256={}",
         source_artifact_path.display(),
         embedded_artifact_path.display(),

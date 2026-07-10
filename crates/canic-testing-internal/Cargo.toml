@@ -16,6 +16,7 @@ canic-control-plane = { workspace = true, features = [
     "wasm-store-canister",
 ] }
 canic-core = { workspace = true }
+canic-host = { workspace = true }
 ic-testkit = { workspace = true }
 
 [lints]
