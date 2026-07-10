@@ -24,12 +24,11 @@ before this compaction is archived at
   document to implement yet.
 
 - The current `0.83.29` release-preparation batch makes wasm-store state audits
-  declare template memories 80-83 plus GC memory 85; represents feature-gated
-  sharding/blob allocations conservatively as reservations when those features
-  are compiled; removes nested Cargo execution from the delegation root build
-  script; bounds and cleans artifact-only Cargo targets; and splits medic
-  command, package inspection, report model, and rendering responsibilities
-  without output changes.
+  declare template memories 80-83 plus GC memory 85 while preserving blocking
+  failures for unknown roles; removes nested Cargo execution from the
+  delegation root build script; bounds and cleans artifact-only Cargo targets;
+  and splits medic command, package inspection, report model, and rendering
+  responsibilities without output changes.
 
 - The `0.83.26` slice fixes `CANIC-083-DEBT-032` by
   tightening deployment-truth control-class label ownership and
