@@ -1434,8 +1434,7 @@ Explicit non-scope:
 ## 0.83 Receipt Resume Structural Evidence Comparison
 
 Status:
-completed in the post-v0.83.27 Unreleased batch for
-`CANIC-083-DEBT-035`.
+completed for 0.83.28 for `CANIC-083-DEBT-035`.
 
 Source findings:
 - CANIC-083-DEBT-035
@@ -1476,8 +1475,7 @@ Explicit non-scope:
 ## 0.83 Promotion Execution And Staging Label Ownership
 
 Status:
-completed in the post-v0.83.27 Unreleased batch for
-`CANIC-083-DEBT-036`.
+completed for 0.83.28 for `CANIC-083-DEBT-036`.
 
 Source findings:
 - CANIC-083-DEBT-036
@@ -1521,8 +1519,7 @@ Explicit non-scope:
 ## 0.83 Audit Closeout Metadata Reconciliation
 
 Status:
-completed in the post-v0.83.27 Unreleased batch for
-`CANIC-083-DEBT-037`.
+completed for 0.83.28 for `CANIC-083-DEBT-037`.
 
 Source findings:
 - CANIC-083-DEBT-037
@@ -1536,7 +1533,7 @@ different completion points.
 
 Intended owner:
 The canonical ledger records complete finding state, and the handoff mirrors
-the current package surface and Unreleased batch.
+the current package surface and 0.83.28 release-preparation batch.
 
 Behavior impact label:
 no_behavior_change.

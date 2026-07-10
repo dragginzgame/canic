@@ -2867,7 +2867,7 @@ Owner: deployment-truth receipt-resume safety comparison
 Current location: receipt duplicate evidence grouping
 Intended owner: typed phase and role-phase receipt evidence values
 Affected surfaces: cli, json, evidence_report, internal_only
-Release decision: fixed_unreleased
+Release decision: fixed_in_0.83.28
 
 Evidence:
 - file: `crates/canic-host/src/deployment_truth/report/receipt_resume.rs`
@@ -2931,7 +2931,7 @@ promotion source model
 Intended owner: deployment-truth execution, promotion, inventory, and artifact
 transport enums
 Affected surfaces: cli, deployment_truth, evidence_report, internal_only
-Release decision: fixed_unreleased
+Release decision: fixed_in_0.83.28
 
 Evidence:
 - file: `crates/canic-host/src/deployment_truth/text/promotion/`
@@ -3001,7 +3001,7 @@ Owner: 0.83 technical-debt audit artifacts and session handoff
 Current location: ledger header/scope, recommended slices, and current status
 Intended owner: canonical 0.83 ledger and compact handoff
 Affected surfaces: docs
-Release decision: fixed_unreleased
+Release decision: fixed_in_0.83.28
 
 Evidence:
 - file: `docs/audits/0.83-technical-debt/ledger.md`
@@ -3045,8 +3045,8 @@ Resolution:
   findings.
 - Added completed recommended slices for `CANIC-083-DEBT-035` through
   `CANIC-083-DEBT-037`.
-- Updated the handoff to package surface 0.83.27 and the current Unreleased
-  closeout batch.
+- Updated the handoff to package surface 0.83.27 and the 0.83.28
+  release-preparation batch.
 - Marked the ledger `pass`; no open or deferred 0.83 findings remain.
 
 Closeout validation:
@@ -3066,8 +3066,8 @@ Closeout validation:
 
 The 0.83 ledger is `pass`. All 37 findings are fixed, no findings are deferred,
 and every recommended slice is complete. The closeout recommendation is to
-release the current Unreleased fixes through the human-owned release flow or
-proceed to the next feature line without another broad 0.83 refactor.
+release 0.83.28 through the human-owned release flow or proceed to the next
+feature line without another broad 0.83 refactor.
 
 ## Rejected / Non-Findings
 
