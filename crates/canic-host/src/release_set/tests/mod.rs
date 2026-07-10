@@ -3,10 +3,10 @@ use super::config::{
     configured_controllers_from_source, configured_deployable_roles_from_source,
     configured_fleet_name_from_source, configured_local_root_create_cycles_from_source,
     configured_pool_expectations_from_source, configured_release_roles_from_source,
-    configured_role_auto_create_from_source, configured_role_capabilities_from_source,
-    configured_role_details_from_source, configured_role_kinds_from_source,
-    configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
-    configured_role_topups_from_source, declare_fleet_role_source, rename_fleet_role_source,
+    configured_role_auto_create_from_source, configured_role_details_from_source,
+    configured_role_kinds_from_source, configured_role_lifecycle_from_source,
+    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+    declare_fleet_role_source, rename_fleet_role_source,
 };
 use super::stage::read_release_artifact;
 use super::{

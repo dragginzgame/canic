@@ -20,7 +20,8 @@ use crate::{
     },
     eager_static,
     ids::CanisterRole,
-    storage::{canister::CanisterRecord, stable::memory::topology::SUBNET_REGISTRY_ID},
+    role_contract::allocation::memory::topology::SUBNET_REGISTRY_ID,
+    storage::canister::CanisterRecord,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;

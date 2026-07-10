@@ -12,9 +12,8 @@
 
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    storage::{
-        canister::CanisterRecord, prelude::*, stable::memory::topology::CANISTER_CHILDREN_ID,
-    },
+    role_contract::allocation::memory::topology::CANISTER_CHILDREN_ID,
+    storage::{canister::CanisterRecord, prelude::*},
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;

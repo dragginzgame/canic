@@ -7,13 +7,8 @@ use crate::{
     },
     eager_static,
     log::{Level, Topic},
-    storage::{
-        prelude::*,
-        stable::{
-            StableMemoryError,
-            memory::observability::{LOG_DATA_ID, LOG_INDEX_ID},
-        },
-    },
+    role_contract::allocation::memory::observability::{LOG_DATA_ID, LOG_INDEX_ID},
+    storage::{prelude::*, stable::StableMemoryError},
 };
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::VecDeque};

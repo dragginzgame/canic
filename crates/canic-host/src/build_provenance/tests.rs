@@ -155,9 +155,16 @@ resolver = "3"
             r#"[fleet]
 name = "{fleet}"
 
+[roles.root]
+kind = "root"
+package = "root"
+
 [roles.{role}]
 kind = "canister"
 package = "{role}"
+
+[subnets.prime.canisters.root]
+kind = "root"
 
 [subnets.prime.canisters.{role}]
 kind = "service"

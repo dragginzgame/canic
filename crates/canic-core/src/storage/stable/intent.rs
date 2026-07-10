@@ -9,12 +9,10 @@ use crate::{
         DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
     },
     ids::{IntentId, IntentResourceKey},
-    storage::{
-        prelude::*,
-        stable::memory::intent::{
-            INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-        },
+    role_contract::allocation::memory::intent::{
+        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
     },
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};

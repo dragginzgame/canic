@@ -1,7 +1,8 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static,
-    storage::{prelude::*, stable::memory::env::ENV_ID},
+    role_contract::allocation::memory::env::ENV_ID,
+    storage::prelude::*,
 };
 use std::cell::RefCell;
 

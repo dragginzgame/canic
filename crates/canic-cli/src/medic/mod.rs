@@ -22,11 +22,15 @@ use crate::{
     support::candid::role_candid_path,
 };
 use canic_core::{
-    bootstrap::{CanicFeatureRequirement, parse_config_model, role_required_canic_features},
+    bootstrap::parse_config_model,
     ids::CanisterRole,
     protocol::{
         BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
         BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
+    },
+    role_contract::{
+        ResolvedRoleContract, RoleContractFinding, RoleContractResolution, RoleFeatureRequirement,
+        required_features_for_role,
     },
 };
 use canic_host::{
@@ -47,7 +51,15 @@ use canic_host::{
         resolve_installed_deployment_from_root,
     },
     release_set::{ConfiguredRoleLifecycle, configured_fleet_name, configured_role_lifecycle},
-    state_manifest::{StateAuditStatus, build_state_audit_report},
+    role_contract::{
+        PackageValidationMode, RolePackageEvidence, RolePackageValidation, finding_detail,
+        materialize_state_manifest, resolve_declared_role_package_contract,
+        validate_declared_role_package,
+    },
+    state_manifest::{
+        StateAuditStatus, StateManifestResolution, build_state_audit_report,
+        resolve_project_state_manifest,
+    },
 };
 use std::{
     collections::BTreeMap,
@@ -87,7 +99,6 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     let mut checks = vec![
         check_icp_cli(options),
         check_icp_identity_session_cache_hint(),
-        state_audit_project_check(),
     ];
 
     match resolve_current_canic_icp_root() {
@@ -100,6 +111,15 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
                 "none",
                 MedicSource::Command,
             ));
+            let state_resolution = match discover_project_canic_config_choices(&root) {
+                Ok(configs) => resolve_project_state_manifest(&root, &configs, None),
+                Err(error) => StateManifestResolution::Rejected {
+                    errors: vec![RoleContractFinding::DependencyShapeUnsupported {
+                        reason: error.to_string(),
+                    }],
+                },
+            };
+            checks.push(state_audit_project_check(&state_resolution));
             checks.extend(project_config_checks(&root, options));
         }
         Err(err) => {
@@ -110,6 +130,14 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
                 err.to_string(),
                 "run from a Canic project root or set CANIC_ICP_ROOT",
                 MedicSource::Command,
+            ));
+            checks.push(MedicCheck::not_evaluated(
+                MedicCategory::Runtime,
+                "state_audit_not_evaluated",
+                "state_manifest",
+                "state audit requires a resolved Canic project root",
+                "run from a Canic project root, then run canic state audit",
+                MedicSource::StateManifest,
             ));
         }
     }
@@ -125,8 +153,8 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
     checks
 }
 
-fn state_audit_project_check() -> MedicCheck {
-    let report = build_state_audit_report(None);
+fn state_audit_project_check(resolution: &StateManifestResolution) -> MedicCheck {
+    let report = build_state_audit_report(resolution, None);
     let detail = format!(
         "state audit status {} with {} check(s)",
         report.status.label(),
@@ -297,20 +325,30 @@ fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
         }
     };
     let required_features_by_role = required_canic_features_by_role(config, &roles);
-
     roles
         .iter()
         .flat_map(|role| {
             let mut checks = vec![check_role_package_metadata(root, config, role, &fleet)];
-            checks.extend(check_role_required_canic_features(
-                root,
-                config,
-                role,
-                required_features_by_role
-                    .get(&role.role)
-                    .map(Vec::as_slice)
-                    .unwrap_or_default(),
-            ));
+            let role_id = CanisterRole::owned(role.role.clone());
+            match validate_declared_role_package(config, &role_id, PackageValidationMode::Passive) {
+                RolePackageValidation::Supported(evidence) => {
+                    checks.extend(check_role_contract_resolution(
+                        root,
+                        config,
+                        role,
+                        &evidence,
+                        required_features_by_role
+                            .get(&role.role)
+                            .map(Vec::as_slice)
+                            .unwrap_or_default(),
+                    ));
+                }
+                RolePackageValidation::Unsupported(finding) => {
+                    if let Some(check) = check_role_package_contract(role, &finding) {
+                        checks.push(check);
+                    }
+                }
+            }
             if !role.attached {
                 checks.push(check_declared_role_not_deployable(root, config, role));
             }
@@ -322,7 +360,7 @@ fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
 fn required_canic_features_by_role(
     config: &Path,
     roles: &[ConfiguredRoleLifecycle],
-) -> BTreeMap<String, Vec<CanicFeatureRequirement>> {
+) -> BTreeMap<String, Vec<RoleFeatureRequirement>> {
     let Ok(config_source) = fs::read_to_string(config) else {
         return BTreeMap::new();
     };
@@ -336,7 +374,9 @@ fn required_canic_features_by_role(
             let role_id = CanisterRole::owned(role.role.clone());
             (
                 role.role.clone(),
-                role_required_canic_features(&config_model, &role_id),
+                required_features_for_role(&config_model, &role_id).unwrap_or_else(|finding| {
+                    panic!("configured role contract rejected: {finding:?}")
+                }),
             )
         })
         .filter(|(_, requirements)| !requirements.is_empty())
@@ -390,56 +430,126 @@ fn check_role_package_metadata(
     }
 }
 
-fn check_role_required_canic_features(
+fn check_role_contract_resolution(
     root: &Path,
     config: &Path,
     role: &ConfiguredRoleLifecycle,
-    requirements: &[CanicFeatureRequirement],
+    evidence: &RolePackageEvidence,
+    requirements: &[RoleFeatureRequirement],
 ) -> Vec<MedicCheck> {
-    if requirements.is_empty() {
-        return Vec::new();
+    match resolve_declared_role_package_contract(config, evidence) {
+        RoleContractResolution::Resolved { contract } => {
+            check_resolved_role_contract(root, role, evidence, requirements, &contract)
+        }
+        RoleContractResolution::Rejected { errors } => errors
+            .iter()
+            .filter_map(|finding| {
+                check_role_resolution_finding(root, role, evidence, requirements, finding)
+            })
+            .collect(),
+    }
+}
+
+fn check_resolved_role_contract(
+    root: &Path,
+    role: &ConfiguredRoleLifecycle,
+    evidence: &RolePackageEvidence,
+    requirements: &[RoleFeatureRequirement],
+    contract: &ResolvedRoleContract,
+) -> Vec<MedicCheck> {
+    let mut checks = requirements
+        .iter()
+        .filter(|requirement| contract.required_features.contains(&requirement.feature))
+        .map(|requirement| {
+            MedicCheck::pass(
+                MedicCategory::ProjectConfig,
+                "role_required_canic_feature_present",
+                role.display.clone(),
+                format!(
+                    "{} resolves required canic feature `{}` for {}",
+                    display_medic_path(root, &evidence.role_manifest_path),
+                    requirement.feature.cargo_name(),
+                    requirement.config_key
+                ),
+                "none",
+                MedicSource::FleetConfig,
+            )
+        })
+        .collect::<Vec<_>>();
+    if let Err(errors) = materialize_state_manifest(std::slice::from_ref(contract)) {
+        checks.extend(
+            errors
+                .iter()
+                .filter_map(|finding| check_role_package_contract(role, finding)),
+        );
+    }
+    checks
+}
+
+fn check_role_resolution_finding(
+    root: &Path,
+    role: &ConfiguredRoleLifecycle,
+    evidence: &RolePackageEvidence,
+    requirements: &[RoleFeatureRequirement],
+    finding: &RoleContractFinding,
+) -> Option<MedicCheck> {
+    if let RoleContractFinding::RequiredFeatureMissing { feature, .. } = finding {
+        let requirement = requirements
+            .iter()
+            .find(|requirement| requirement.feature == *feature)?;
+        return Some(MedicCheck::fail(
+            MedicCategory::ProjectConfig,
+            finding.code(),
+            role.display.clone(),
+            format!(
+                "{} requires canic feature `{}` because {} is enabled ({})",
+                role.display,
+                requirement.feature.cargo_name(),
+                requirement.config_key,
+                requirement.reason
+            ),
+            missing_canic_feature_next_action(
+                root,
+                &evidence.role_manifest_path,
+                requirement.feature.cargo_name(),
+            ),
+            MedicSource::FleetConfig,
+        ));
+    }
+    check_role_package_contract(role, finding)
+}
+
+fn check_role_package_contract(
+    role: &ConfiguredRoleLifecycle,
+    finding: &RoleContractFinding,
+) -> Option<MedicCheck> {
+    if matches!(
+        finding,
+        RoleContractFinding::PackageMissing { .. }
+            | RoleContractFinding::PackageMetadataMismatch { .. }
+            | RoleContractFinding::PackageAmbiguous { .. }
+    ) {
+        return None;
     }
 
-    let manifest = role_package_manifest_path(config, &role.package);
-    let Ok(metadata) = canic_package_metadata(&manifest) else {
-        return Vec::new();
+    let next = match finding {
+        RoleContractFinding::AllocationDescriptorDuplicate { .. }
+        | RoleContractFinding::AllocationDescriptorIdMismatch { .. }
+        | RoleContractFinding::AllocationDescriptorMissing { .. } => {
+            "repair the Canic state descriptor registry and rerun canic medic project"
+        }
+        _ => {
+            "use one direct, unconditional, non-optional normal Canic dependency with no package feature forwarding"
+        }
     };
-
-    requirements
-        .iter()
-        .map(|requirement| {
-            if metadata.canic_features.contains(requirement.feature) {
-                MedicCheck::pass(
-                    MedicCategory::ProjectConfig,
-                    "role_required_canic_feature_present",
-                    role.display.clone(),
-                    format!(
-                        "{} resolves required canic feature `{}` for {}",
-                        display_medic_path(root, &manifest),
-                        requirement.feature,
-                        requirement.config_key
-                    ),
-                    "none",
-                    MedicSource::FleetConfig,
-                )
-            } else {
-                MedicCheck::fail(
-                    MedicCategory::ProjectConfig,
-                    "role_required_canic_feature_missing",
-                    role.display.clone(),
-                    format!(
-                        "{} requires canic feature `{}` because {} is enabled ({})",
-                        role.display,
-                        requirement.feature,
-                        requirement.config_key,
-                        requirement.reason
-                    ),
-                    missing_canic_feature_next_action(root, &manifest, requirement.feature),
-                    MedicSource::FleetConfig,
-                )
-            }
-        })
-        .collect()
+    Some(MedicCheck::fail(
+        MedicCategory::ProjectConfig,
+        finding.code(),
+        role.display.clone(),
+        finding_detail(finding),
+        next,
+        MedicSource::FleetConfig,
+    ))
 }
 
 fn missing_canic_feature_next_action(root: &Path, manifest: &Path, feature: &str) -> String {

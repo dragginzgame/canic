@@ -1,6 +1,7 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    storage::{prelude::*, stable::memory::topology::SUBNET_INDEX_ID},
+    role_contract::allocation::memory::topology::SUBNET_INDEX_ID,
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;

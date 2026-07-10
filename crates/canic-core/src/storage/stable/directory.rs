@@ -4,7 +4,8 @@ use crate::{
         types::{BoundedString64, BoundedString128},
     },
     eager_static,
-    storage::{prelude::*, stable::memory::placement::DIRECTORY_REGISTRY_ID},
+    role_contract::allocation::memory::placement::DIRECTORY_REGISTRY_ID,
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;

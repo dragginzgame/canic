@@ -7,7 +7,7 @@ use crate::{
     },
     eager_static,
     ids::CanisterRole,
-    storage::stable::memory::placement::SCALING_REGISTRY_ID,
+    role_contract::allocation::memory::placement::SCALING_REGISTRY_ID,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};

@@ -1,11 +1,11 @@
 use crate::ids::WasmStoreGcMode;
 use canic_core::cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory};
 use canic_core::eager_static;
-use canic_core::impl_storable_bounded;
+use canic_core::{
+    impl_storable_bounded, role_contract::allocation::memory::template::WASM_STORE_GC_STATE_ID,
+};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-
-pub const WASM_STORE_GC_STATE_ID: u8 = 85;
 
 eager_static! {
     static WASM_STORE_GC_STATE: RefCell<

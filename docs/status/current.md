@@ -18,12 +18,67 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version remains `0.83.28`; the root and
-  detailed `0.83.29` changelog entries are prepared, but no package version was
-  changed. No `0.84` feature line has started, and there is no `0.84` design
-  document to implement yet.
+- The current package/release-surface version is `0.83.29`, published and
+  tagged as `v0.83.29`; no package version has been changed for development.
+  The `0.84` role-aware state-contract line has a review-revised and
+  scope-trimmed design at
+  `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
+  implemented in the current worktree: `canic-core::role_contract` now owns
+  typed feature, capability, allocation, lifecycle, provenance, result, and
+  finding values; one config-to-capability derivation; the feature and
+  allocation catalog; permanent ID definitions; and the pure fail-closed
+  resolver. Cargo feature/default/implication parity is tested against the
+  real `canic` and `canic-core` manifests. Canonical memory IDs 11-85 moved to
+  the allocation authority without value or encoding changes, and storage
+  owners now import them. The old `role_required_canic_features` helper is
+  hard-cut; medic consumes the new typed requirements, and build-time
+  capability cfgs use the same derivation, including the explicit built-in
+  wasm_store path. The design supports one direct, unconditional,
+  non-optional normal Canic dependency shape and rejects package-feature
+  forwarding, optional/target-specific/transitive paths, multiple paths, and
+  multiple Canic packages. It intentionally omits a general graph resolver,
+  fingerprints, catalog digests, and schema negotiation. Replaced helpers and
+  bypass paths are hard-cut without aliases or fallbacks. Feature effects are
+  only `NoState` or `StateBearing`; lifecycle exists only on global allocation
+  definitions; surplus state-bearing features allocate normally without a
+  warning; and the host validator returns only supported evidence or one
+  unsupported finding rather than exposing a dependency graph to core policy.
 
-- The current `0.83.29` release-preparation batch makes wasm-store state audits
+- Slice B is implemented in the current worktree. `canic-host::role_contract`
+  resolves the exact config-declared package and validates one direct,
+  unconditional, non-optional normal Canic dependency against a
+  `wasm32-unknown-unknown`-filtered runtime graph. It rejects package-feature
+  forwarding, optional/target-specific/transitive Canic paths, multiple paths
+  or package IDs, version skew, metadata mismatch, and Cargo/catalog drift.
+  Passive medic inspection uses locked offline metadata; build validation runs
+  before Cargo. Canonical builds set one private marker, while direct
+  authoritative wasm Cargo builds fail with `canic build` guidance. Canonical
+  and generated wasm_store packages use the same validator. The former
+  build-support and medic feature parsers plus blob-probe feature forwarding
+  are deleted. Exported opt-in endpoint macros now gate on the Canic facade
+  feature at definition time instead of requiring a mirrored caller feature.
+  Medic may now emit the documented `role_contract_*` failure codes for
+  unsupported package shapes; command forms and existing successful output,
+  persisted state, and memory IDs are unchanged.
+
+- Slice C is implemented in the current worktree. `canic-core` and
+  `canic-control-plane` expose allocation-keyed owner descriptors for every
+  active allocation, including optional sharding and blob-storage state. The
+  host validates the complete registry for missing/duplicate descriptors,
+  canonical IDs, owner agreement, and retired-state bindings before strictly
+  joining resolved allocations into role manifests. State manifest/audit,
+  medic, and release capability views now consume the same resolved contracts;
+  the old state role selectors and raw release capability mapper are hard-cut.
+  Runtime state summaries join observed registered memory IDs to the same owner
+  descriptors instead of selecting state from a role name. Manifest and audit
+  schemas remain version 1 with unchanged successful field shapes. Rejected
+  contracts return no partial manifest and may emit blocking
+  `role_contract_*` audit checks; medic intentionally replaces
+  `role_required_canic_feature_missing` with
+  `role_contract_required_feature_missing`. Memory IDs, records, encodings,
+  migration behavior, and command forms are unchanged.
+
+- The released `0.83.29` batch makes wasm-store state audits
   declare template memories 80-83 plus GC memory 85 while preserving blocking
   failures for unknown roles; removes nested Cargo execution from the
   delegation root build script; bounds and cleans artifact-only Cargo targets;
@@ -1244,23 +1299,76 @@ before this compaction is archived at
 
 ## Open Work
 
-- No open or deferred 0.83 audit findings remain. The 0.83.28 changelog entry
-  is prepared; the package surface remains 0.83.27 until the maintainer-owned
-  version bump and release flow runs. Development may then move to the next
-  feature line.
+- No open or deferred 0.83 audit findings remain. `0.83.29` is published and
+  tagged. The accepted 0.84 design and all three implementation slices are
+  complete in the current worktree. The remaining work before any release
+  preparation is validation and maintainer review; do not invent a fourth
+  architecture slice.
 
-- Continue 0.80 by expanding Rust-authored state declarations beyond the first
-  root-family slice, then add more precise `*Data` snapshot declarations and
-  migration coverage metadata. Do not add migration execution, stable-memory
-  inspection, state dump/explore commands, generated manifest writes, runtime
-  introspection endpoints, or mutation semantics.
+- Continue the passive 0.80 state-contract direction through the 0.84 design:
+  expand owner-provided Rust state descriptors and add more precise `*Data`
+  snapshot declarations and migration coverage metadata. Do not add migration
+  execution, stable-memory inspection, state dump/explore commands, generated
+  manifest writes, runtime introspection endpoints, or mutation semantics.
 
 - Before release preparation, run the focused gates for touched surfaces and
   broaden to the release matrix as needed. Do not assign a new patch version or
   change Cargo package versions unless the maintainer explicitly asks for
   release preparation.
 
+## Queued After 0.84
+
+These are intentionally not prerequisites or scope additions for 0.84. Retain
+them in the handoff until each is completed or explicitly declined:
+
+- Make host-owned deployment state, receipts, release-set manifests, and
+  multi-file role/config mutations crash-safe. Consolidate on one durable
+  temp-write, file-sync, atomic-rename, and directory-sync primitive; prevent a
+  failed second write from leaving `canic.toml` and a package manifest out of
+  sync.
+
+- Make metrics, cycles, blob-storage, and auth observation lossless. Typed parse
+  errors and worker/query failures must produce explicit per-canister findings;
+  fan-out code must not drop panicked workers, top-up query errors, or malformed
+  responses and then present the remaining report as complete.
+
 ## Useful Validation
+
+Focused 0.84 Slice A validation:
+
+```text
+cargo check --locked -p canic-wasm-store
+cargo check --locked -p root_probe
+cargo test --locked -p canic-core role_contract --lib
+cargo test --locked -p canic-core -p canic-control-plane -p canic -p canic-cli --lib
+cargo clippy --locked -p canic-core -p canic-control-plane -p canic -p canic-cli -p canic-wasm-store --all-targets --all-features -- -D warnings
+```
+
+Focused 0.84 Slice B validation:
+
+```text
+cargo test --locked -p canic-host role_contract --lib
+cargo test --locked -p canic-host generated_wasm_store_wrapper --lib
+cargo test --locked -p canic-cli medic --lib
+cargo test --locked -p canic --lib
+cargo clippy --locked -p canic-core -p canic-host -p canic -p canic-cli --all-targets --all-features -- -D warnings
+cargo run --locked -p canic-cli -- build --profile fast --workspace <workspace> --icp-root <icp-root> --config <canic.toml> <fleet> <role>
+```
+
+The corresponding direct `cargo build --target wasm32-unknown-unknown` is an
+expected rejection, not a passing validation command.
+
+Focused 0.84 Slice C validation:
+
+```text
+cargo test --locked -p canic-core state_contract --lib
+cargo test --locked -p canic-host role_contract::descriptor --lib
+cargo test --locked -p canic-host state_manifest --lib
+cargo test --locked -p canic-host configured_role_capabilities --lib
+cargo test --locked -p canic-cli state --lib
+cargo test --locked -p canic-cli medic --lib
+cargo clippy --locked -p canic-core -p canic-control-plane -p canic-host -p canic-cli --all-targets --all-features -- -D warnings
+```
 
 Focused 0.83 closeout validation:
 

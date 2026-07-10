@@ -7,12 +7,10 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
     eager_static,
-    storage::{
-        prelude::*,
-        stable::memory::observability::{
-            CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID,
-        },
+    role_contract::allocation::memory::observability::{
+        CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID,
     },
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};

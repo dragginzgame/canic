@@ -1,5 +1,74 @@
 use super::*;
 use crate::{CliError, cli_error_exit_code};
+use canic_core::{
+    ids::CanisterRole,
+    role_contract::{
+        AllocationOwner, CanicFeatureKey, ResolvedRoleContract, ResolvedStateAllocation,
+        RoleCapabilityKey, SelectionProvenance, StateAllocationKey,
+        allocation::allocation_definition,
+    },
+};
+use canic_host::role_contract::materialize_state_manifest;
+use std::collections::BTreeSet;
+
+fn test_state_manifest(role: Option<&str>) -> StateManifest {
+    let contracts = if matches!(role, None | Some("root")) {
+        vec![root_contract()]
+    } else {
+        Vec::new()
+    };
+    materialize_state_manifest(&contracts).expect("test state manifest")
+}
+
+fn build_state_audit_report(role: Option<&str>) -> StateAuditReport {
+    let resolution = StateManifestResolution::Resolved {
+        manifest: test_state_manifest(role),
+        contracts: Vec::new(),
+    };
+    canic_host::state_manifest::build_state_audit_report(&resolution, role)
+}
+
+fn root_contract() -> ResolvedRoleContract {
+    let keys = [
+        StateAllocationKey::CoreRootTopology,
+        StateAllocationKey::CoreRootEnvironment,
+        StateAllocationKey::CoreRootAuth,
+        StateAllocationKey::CoreRootObservability,
+        StateAllocationKey::CoreRootIntent,
+        StateAllocationKey::CoreRootCapacity,
+        StateAllocationKey::TemplateManifests,
+        StateAllocationKey::TemplateChunkSets,
+        StateAllocationKey::TemplateChunkRefs,
+        StateAllocationKey::TemplateChunkPayloads,
+        StateAllocationKey::ControlPlaneSubnetState,
+    ];
+    let allocations = keys
+        .into_iter()
+        .map(|key| {
+            let definition = allocation_definition(key).expect("allocation definition");
+            ResolvedStateAllocation {
+                key,
+                owner: definition.owner,
+                memory_ids: definition.memory_ids.to_vec(),
+                selected_by: BTreeSet::from([
+                    if definition.owner == AllocationOwner::CanicControlPlane {
+                        SelectionProvenance::EffectiveFeature(CanicFeatureKey::ControlPlane)
+                    } else {
+                        SelectionProvenance::Capability(RoleCapabilityKey::Root)
+                    },
+                ]),
+            }
+        })
+        .collect();
+    ResolvedRoleContract {
+        role: CanisterRole::ROOT,
+        built_in: None,
+        capabilities: BTreeSet::new(),
+        required_features: BTreeSet::new(),
+        effective_features: BTreeSet::new(),
+        allocations,
+    }
+}
 
 #[test]
 fn state_command_exposes_audit_and_manifest_subcommands() {
@@ -75,7 +144,7 @@ fn audit_json_uses_schema_version_one() {
 
 #[test]
 fn manifest_json_is_manifest_directly() {
-    let manifest = declared_state_manifest(Some("root"));
+    let manifest = test_state_manifest(Some("root"));
     let json = serde_json::to_value(&manifest).expect("state manifest serializes");
 
     assert_eq!(json["schema_version"], 1);
@@ -94,7 +163,7 @@ fn manifest_json_is_manifest_directly() {
 fn text_renderers_include_stable_fields() {
     let report = build_state_audit_report(Some("root"));
     let audit = render_audit_text(&report);
-    let manifest = render_manifest_text(&declared_state_manifest(Some("root")));
+    let manifest = render_manifest_text(&test_state_manifest(Some("root")));
 
     assert!(audit.contains("schema_version: 1"));
     assert!(audit.contains("scope: role"));

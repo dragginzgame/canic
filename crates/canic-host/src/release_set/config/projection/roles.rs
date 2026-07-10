@@ -98,49 +98,6 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_source(
         .collect())
 }
 
-// Enumerate enabled config capabilities from raw config source.
-pub(in crate::release_set) fn configured_role_capabilities_from_source(
-    config_source: &str,
-) -> Result<BTreeMap<String, Vec<String>>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
-    let mut capabilities = BTreeMap::<String, BTreeSet<String>>::new();
-
-    for subnet in config.subnets.values() {
-        for (role, canister) in &subnet.canisters {
-            let mut role_capabilities = BTreeSet::new();
-            if canister.auth.delegated_token_issuer
-                || canister.auth.delegated_token_verifier
-                || canister.auth.role_attestation_cache
-            {
-                role_capabilities.insert("auth".to_string());
-            }
-            if canister.sharding.is_some() {
-                role_capabilities.insert("sharding".to_string());
-            }
-            if canister.scaling.is_some() {
-                role_capabilities.insert("scaling".to_string());
-            }
-            if canister.directory.is_some() {
-                role_capabilities.insert("directory".to_string());
-            }
-            if canister.standards.icrc21 {
-                role_capabilities.insert("icrc21".to_string());
-            }
-            if !role_capabilities.is_empty() {
-                capabilities
-                    .entry(role.as_str().to_string())
-                    .or_default()
-                    .extend(role_capabilities);
-            }
-        }
-    }
-
-    Ok(capabilities
-        .into_iter()
-        .map(|(role, capabilities)| (role, capabilities.into_iter().collect()))
-        .collect())
-}
-
 // Enumerate derived auto-created service roles from raw config source.
 pub(in crate::release_set) fn configured_role_auto_create_from_source(
     config_source: &str,

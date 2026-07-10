@@ -4,16 +4,17 @@
 //! Does not own: memory-manager storage, stable schemas, or diagnostics rendering.
 //! Boundary: memory bootstrap passes this policy into `ic-memory` validation.
 
-use super::registry::MemoryRegistryError;
+use crate::{
+    memory::registry::MemoryRegistryError,
+    role_contract::allocation::{
+        CANIC_CONTROL_PLANE_MAX_ID, CANIC_CONTROL_PLANE_MIN_ID, CANIC_CORE_MAX_ID,
+        CANIC_CORE_MIN_ID,
+    },
+};
 use ic_memory::{
     AllocationPolicy, AllocationSlotDescriptor, MemoryManagerAuthorityRecord, MemoryManagerIdRange,
     MemoryManagerRangeMode, MemoryManagerSlotError, StableKey,
 };
-
-pub const CANIC_CORE_MIN_ID: u8 = 11;
-pub const CANIC_CORE_MAX_ID: u8 = 79;
-pub const CANIC_CONTROL_PLANE_MIN_ID: u8 = 80;
-pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 85;
 
 pub const CANIC_CORE_AUTHORITY_OWNER: &str = "canic-core";
 pub const CANIC_CORE_AUTHORITY_PURPOSE: &str = "Canic core allocation authority";

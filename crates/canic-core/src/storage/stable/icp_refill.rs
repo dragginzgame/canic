@@ -8,7 +8,8 @@ use crate::{
     cdk::candid::Nat,
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     eager_static, impl_storable_bounded,
-    storage::{prelude::*, stable::memory::observability::ICP_REFILL_RECORDS_ID},
+    role_contract::allocation::memory::observability::ICP_REFILL_RECORDS_ID,
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;

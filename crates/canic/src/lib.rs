@@ -39,7 +39,7 @@ pub mod __internal {
 pub mod __build {
     pub use crate::build_support::{
         METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM, METRICS_TIER_RUNTIME,
-        METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, assert_required_canic_dependency_features,
+        METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, assert_canonical_role_contract_build,
         config_attaches_role, config_contains_role, config_declares_role, config_fleet_name,
         declared_package_metadata, declared_package_role,
         emit_root_wasm_store_bootstrap_release_set, metrics_feature_enabled,

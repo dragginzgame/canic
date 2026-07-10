@@ -2,7 +2,8 @@ use crate::impl_storable_unbounded;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
     eager_static,
-    storage::{prelude::*, stable::memory::auth::AUTH_STATE_ID},
+    role_contract::allocation::memory::auth::AUTH_STATE_ID,
+    storage::prelude::*,
 };
 use std::cell::RefCell;
 

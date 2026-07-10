@@ -4,12 +4,12 @@ use crate::ids::{
 };
 use canic_core::cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory, storable::Storable};
 use canic_core::eager_static;
-use canic_core::impl_storable_bounded;
+use canic_core::{
+    impl_storable_bounded, role_contract::allocation::memory::template::TEMPLATE_MANIFESTS_ID,
+};
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-
-pub const TEMPLATE_MANIFESTS_ID: u8 = 80;
 
 eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<

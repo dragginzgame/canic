@@ -1,9 +1,6 @@
-use std::{collections::BTreeSet, fmt::Write as _, fs, path::Path};
+use std::{fmt::Write as _, fs, path::Path};
 
-use canic_core::{
-    bootstrap::{CanicFeatureRequirement, compiled::ConfigModel},
-    ids::CanisterRole,
-};
+use canic_core::{bootstrap::compiled::ConfigModel, ids::CanisterRole};
 use toml::Value as TomlValue;
 
 ///
@@ -13,6 +10,20 @@ use toml::Value as TomlValue;
 pub struct PackageCanicMetadata {
     pub fleet: String,
     pub role: String,
+}
+
+/// Reject authoritative wasm builds that bypass host role-contract validation.
+///
+/// # Panics
+///
+/// Panics for the canonical canister wasm target when the private host marker
+/// is absent.
+pub fn assert_canonical_role_contract_build(target: &str, marker: Option<&str>) {
+    assert!(
+        target != "wasm32-unknown-unknown"
+            || marker == Some(canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE),
+        "authoritative Canic wasm builds must use `canic build <fleet> <role>`; direct `cargo build --target wasm32-unknown-unknown` is unsupported"
+    );
 }
 
 /// Read a Canic config source, or generate a minimal standalone config when allowed.
@@ -89,138 +100,6 @@ pub fn required_package_metadata(manifest_dir: &Path) -> PackageCanicMetadata {
 #[must_use]
 pub fn required_package_role(manifest_dir: &Path) -> String {
     required_package_metadata(manifest_dir).role
-}
-
-/// Fail when the package's runtime `canic` dependency lacks required features.
-///
-/// # Panics
-///
-/// Panics when `Cargo.toml` cannot be read or parsed, or when a required
-/// feature is missing from `[dependencies].canic`.
-pub fn assert_required_canic_dependency_features(
-    manifest_dir: &Path,
-    fleet: &str,
-    role: &str,
-    requirements: &[CanicFeatureRequirement],
-) {
-    if requirements.is_empty() {
-        return;
-    }
-
-    let manifest_path = manifest_dir.join("Cargo.toml");
-    let features = declared_canic_dependency_features(manifest_dir);
-    let missing = requirements
-        .iter()
-        .filter(|requirement| !features.contains(requirement.feature))
-        .collect::<Vec<_>>();
-
-    if missing.is_empty() {
-        return;
-    }
-
-    let missing_features = missing
-        .iter()
-        .map(|requirement| format!("`{}`", requirement.feature))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let reasons = missing
-        .iter()
-        .map(|requirement| {
-            format!(
-                "{} requires {} ({})",
-                requirement.config_key, requirement.feature, requirement.reason
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("; ");
-    let snippet =
-        canic_dependency_feature_snippet(missing.iter().map(|requirement| requirement.feature));
-
-    panic!(
-        "canister role '{fleet}.{role}' requires missing canic feature(s) {missing_features}; {reasons}; edit the runtime [dependencies].canic entry, not only [build-dependencies], in {}; for example:\n{snippet}",
-        manifest_path.display()
-    );
-}
-
-fn canic_dependency_feature_snippet<'a>(features: impl IntoIterator<Item = &'a str>) -> String {
-    let features = features
-        .into_iter()
-        .map(|feature| format!(r#""{feature}""#))
-        .collect::<Vec<_>>()
-        .join(", ");
-
-    format!("[dependencies]\ncanic = {{ workspace = true, features = [{features}] }}")
-}
-
-/// Read features enabled on this package's runtime `canic` dependency.
-#[must_use]
-pub fn declared_canic_dependency_features(manifest_dir: &Path) -> BTreeSet<String> {
-    let manifest_path = manifest_dir.join("Cargo.toml");
-    let manifest_source = fs::read_to_string(&manifest_path)
-        .unwrap_or_else(|err| panic!("failed to read {}: {err}", manifest_path.display()));
-    let manifest = toml::from_str::<TomlValue>(&manifest_source)
-        .unwrap_or_else(|err| panic!("invalid {}: {err}", manifest_path.display()));
-
-    let mut features = canic_dependency_features(&manifest);
-    if canic_dependency_inherits_workspace(&manifest) {
-        features.extend(workspace_canic_dependency_features(manifest_dir));
-    }
-    features
-}
-
-fn canic_dependency_features(manifest: &TomlValue) -> BTreeSet<String> {
-    manifest
-        .get("dependencies")
-        .and_then(|dependencies| dependencies.get("canic"))
-        .map(toml_dependency_features)
-        .unwrap_or_default()
-}
-
-fn canic_dependency_inherits_workspace(manifest: &TomlValue) -> bool {
-    manifest
-        .get("dependencies")
-        .and_then(|dependencies| dependencies.get("canic"))
-        .and_then(|canic| canic.get("workspace"))
-        .and_then(TomlValue::as_bool)
-        .unwrap_or(false)
-}
-
-fn workspace_canic_dependency_features(manifest_dir: &Path) -> BTreeSet<String> {
-    for dir in manifest_dir.ancestors() {
-        let manifest_path = dir.join("Cargo.toml");
-        let Ok(manifest_source) = fs::read_to_string(&manifest_path) else {
-            continue;
-        };
-        let Ok(manifest) = toml::from_str::<TomlValue>(&manifest_source) else {
-            continue;
-        };
-        if let Some(features) = workspace_canic_dependency_features_from_manifest(&manifest) {
-            return features;
-        }
-    }
-
-    BTreeSet::new()
-}
-
-fn workspace_canic_dependency_features_from_manifest(
-    manifest: &TomlValue,
-) -> Option<BTreeSet<String>> {
-    manifest
-        .get("workspace")
-        .and_then(|workspace| workspace.get("dependencies"))
-        .and_then(|dependencies| dependencies.get("canic"))
-        .map(toml_dependency_features)
-}
-
-fn toml_dependency_features(dependency: &TomlValue) -> BTreeSet<String> {
-    dependency
-        .get("features")
-        .and_then(TomlValue::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(TomlValue::as_str)
-        .map(ToString::to_string)
-        .collect()
 }
 
 /// Return whether a validated config declares the requested fleet role.
@@ -323,6 +202,22 @@ mod tests {
     use canic_core::bootstrap::parse_config_model;
 
     #[test]
+    fn canonical_role_contract_marker_is_required_only_for_wasm_builds() {
+        assert_canonical_role_contract_build("x86_64-unknown-linux-gnu", None);
+        assert_canonical_role_contract_build(
+            "wasm32-unknown-unknown",
+            Some(canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE),
+        );
+
+        assert!(
+            std::panic::catch_unwind(|| {
+                assert_canonical_role_contract_build("wasm32-unknown-unknown", None);
+            })
+            .is_err()
+        );
+    }
+
+    #[test]
     fn standalone_config_source_parses_for_plain_role() {
         let source = standalone_config_source("sandbox_blank");
         let cfg = parse_config_model(&source).expect("generated standalone config parses");
@@ -414,112 +309,6 @@ edition = "2024"
             .expect("panic should include a message");
 
         assert!(message.contains("missing Canic package metadata"));
-        fs::remove_dir_all(&dir).expect("remove temp manifest dir");
-    }
-
-    #[test]
-    fn declared_canic_dependency_features_reads_runtime_dependency_features() {
-        let dir =
-            std::env::temp_dir().join(format!("canic-runtime-features-{}", std::process::id()));
-        fs::create_dir_all(&dir).expect("create temp manifest dir");
-        fs::write(
-            dir.join("Cargo.toml"),
-            r#"[package]
-name = "canister_app"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-canic = { workspace = true, features = ["auth-root-canister-sig-verify"] }
-"#,
-        )
-        .expect("write manifest");
-
-        let features = declared_canic_dependency_features(&dir);
-
-        assert!(features.contains("auth-root-canister-sig-verify"));
-        fs::remove_dir_all(&dir).expect("remove temp manifest dir");
-    }
-
-    #[test]
-    fn declared_canic_dependency_features_reads_workspace_dependency_features() {
-        let dir = std::env::temp_dir().join(format!(
-            "canic-runtime-workspace-features-{}",
-            std::process::id()
-        ));
-        let app = dir.join("app");
-        fs::create_dir_all(&app).expect("create temp app dir");
-        fs::write(
-            dir.join("Cargo.toml"),
-            r#"[workspace]
-members = ["app"]
-
-[workspace.dependencies]
-canic = { path = "../canic", features = ["auth-root-canister-sig-verify"] }
-"#,
-        )
-        .expect("write workspace manifest");
-        fs::write(
-            app.join("Cargo.toml"),
-            r#"[package]
-name = "canister_app"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-canic = { workspace = true }
-"#,
-        )
-        .expect("write app manifest");
-
-        let features = declared_canic_dependency_features(&app);
-
-        assert!(features.contains("auth-root-canister-sig-verify"));
-        fs::remove_dir_all(&dir).expect("remove temp manifest dir");
-    }
-
-    #[test]
-    fn required_canic_dependency_features_rejects_missing_runtime_feature() {
-        let dir = std::env::temp_dir().join(format!(
-            "canic-missing-runtime-feature-{}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&dir).expect("create temp manifest dir");
-        fs::write(
-            dir.join("Cargo.toml"),
-            r#"[package]
-name = "canister_app"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-canic = { workspace = true, features = ["auth-delegated-token-verify"] }
-"#,
-        )
-        .expect("write manifest");
-
-        let requirement = CanicFeatureRequirement {
-            config_key: "auth.role_attestation_cache",
-            feature: "auth-root-canister-sig-verify",
-            reason: "role-attestation cache verifies root canister-signature proofs locally",
-        };
-        let panic = std::panic::catch_unwind(|| {
-            assert_required_canic_dependency_features(&dir, "demo", "app", &[requirement]);
-        })
-        .expect_err("missing feature should panic");
-        let message = panic
-            .downcast_ref::<String>()
-            .map(String::as_str)
-            .or_else(|| panic.downcast_ref::<&str>().copied())
-            .expect("panic should include a message");
-
-        assert!(message.contains("demo.app"));
-        assert!(message.contains("auth-root-canister-sig-verify"));
-        assert!(message.contains("runtime [dependencies].canic"));
-        assert!(message.contains("not only [build-dependencies]"));
-        assert!(message.contains(
-            r#"canic = { workspace = true, features = ["auth-root-canister-sig-verify"] }"#
-        ));
         fs::remove_dir_all(&dir).expect("remove temp manifest dir");
     }
 

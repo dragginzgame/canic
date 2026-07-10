@@ -11,12 +11,10 @@ use crate::{
     },
     eager_static,
     model::blob_storage::BlobRootHash,
-    storage::{
-        prelude::*,
-        stable::memory::blob_storage::{
-            BLOB_DELETION_PENDING_ID, STORAGE_GATEWAY_PRINCIPALS_ID, STORED_BLOBS_ID,
-        },
+    role_contract::allocation::memory::blob_storage::{
+        BLOB_DELETION_PENDING_ID, STORAGE_GATEWAY_PRINCIPALS_ID, STORED_BLOBS_ID,
     },
+    storage::prelude::*,
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
@@ -25,7 +23,7 @@ use std::cell::RefCell;
 use crate::cdk::structures::cell::Cell;
 
 #[cfg(feature = "blob-storage-billing")]
-use crate::storage::stable::memory::blob_storage::BLOB_STORAGE_BILLING_ID;
+use crate::role_contract::allocation::memory::blob_storage::BLOB_STORAGE_BILLING_ID;
 
 pub const BLOB_STORAGE_SCHEMA_VERSION: u32 = 1;
 

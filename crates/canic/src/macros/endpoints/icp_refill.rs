@@ -9,14 +9,9 @@
 /// The host canister must supply an access expression. Omitting the guard is a
 /// compile-time error.
 #[macro_export]
+#[cfg(feature = "icp-refill")]
 macro_rules! canic_emit_icp_refill_endpoints {
     (guard = $guard:expr $(,)?) => {
-        #[cfg(not(feature = "icp-refill"))]
-        compile_error!(
-            "canic_emit_icp_refill_endpoints! requires the canic facade feature \"icp-refill\""
-        );
-
-        #[cfg(feature = "icp-refill")]
         #[$crate::canic_update(requires($guard))]
         async fn canic_icp_refill(
             request: ::canic::dto::icp_refill::IcpRefillRequest,
@@ -29,6 +24,16 @@ macro_rules! canic_emit_icp_refill_endpoints {
     };
     ($($tt:tt)+) => {
         compile_error!("canic_emit_icp_refill_endpoints! syntax is guard = <access expression>");
+    };
+}
+
+#[macro_export]
+#[cfg(not(feature = "icp-refill"))]
+macro_rules! canic_emit_icp_refill_endpoints {
+    ($($tt:tt)*) => {
+        compile_error!(
+            "canic_emit_icp_refill_endpoints! requires the canic facade feature \"icp-refill\""
+        );
     };
 }
 

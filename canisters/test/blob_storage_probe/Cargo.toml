@@ -15,11 +15,6 @@ role = "test"
 [lib]
 crate-type = ["cdylib"]
 
-[features]
-default = ["blob-storage-billing"]
-blob-storage = ["canic/blob-storage"]
-blob-storage-billing = ["blob-storage", "canic/blob-storage-billing"]
-
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = ["blob-storage-billing"] }

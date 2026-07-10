@@ -3,8 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use toml::Value as TomlValue;
-
 use crate::{
     artifact_io::{
         embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
@@ -12,10 +10,15 @@ use crate::{
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command, icp_environment_from_env,
     release_set::{
-        canister_manifest_path, config_path, configured_role_lifecycle,
-        emit_root_release_set_manifest_if_ready, icp_root, workspace_root,
+        config_path, configured_role_lifecycle, emit_root_release_set_manifest_if_ready, icp_root,
+        workspace_root,
     },
-    remove_optional_file, should_export_candid_artifacts,
+    remove_optional_file,
+    role_contract::{
+        PackageValidationMode, RolePackageEvidence, RolePackageValidation, finding_detail,
+        resolve_declared_role_package_contract, validate_declared_role_package,
+    },
+    should_export_candid_artifacts,
 };
 
 use super::{
@@ -78,8 +81,9 @@ fn build_canister_artifact(
     }
 
     validate_artifact_role_attached(workspace_root, canister_name)?;
-    let canister_manifest_path = canister_manifest_path(workspace_root, canister_name)?;
-    let canister_package_name = load_canister_package_name(&canister_manifest_path)?;
+    let role_package = require_declared_role_contract(workspace_root, canister_name)?;
+    let canister_manifest_path = role_package.role_manifest_path;
+    let canister_package_name = role_package.role_package_name;
     let artifact_root = icp_root
         .join(LOCAL_ARTIFACT_ROOT_RELATIVE)
         .join(canister_name);
@@ -135,6 +139,30 @@ fn build_canister_artifact(
     })
 }
 
+fn require_declared_role_contract(
+    workspace_root: &Path,
+    canister_name: &str,
+) -> Result<RolePackageEvidence, Box<dyn std::error::Error>> {
+    let config_path = config_path(workspace_root);
+    let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
+    let evidence =
+        match validate_declared_role_package(&config_path, &role, PackageValidationMode::Build) {
+            RolePackageValidation::Supported(evidence) => evidence,
+            RolePackageValidation::Unsupported(finding) => {
+                return Err(format!("{}: {}", finding.code(), finding_detail(&finding)).into());
+            }
+        };
+    match resolve_declared_role_package_contract(&config_path, &evidence) {
+        canic_core::role_contract::RoleContractResolution::Resolved { .. } => Ok(evidence),
+        canic_core::role_contract::RoleContractResolution::Rejected { errors } => Err(errors
+            .iter()
+            .map(|finding| format!("{}: {}", finding.code(), finding_detail(finding)))
+            .collect::<Vec<_>>()
+            .join("; ")
+            .into()),
+    }
+}
+
 fn validate_artifact_role_attached(
     workspace_root: &Path,
     canister_name: &str,
@@ -158,21 +186,6 @@ fn validate_artifact_role_attached(
     Ok(())
 }
 
-// Read the real package name from one canister manifest so downstreams are not
-// forced to mirror the reference `canister_<role>` naming scheme.
-fn load_canister_package_name(manifest_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let manifest_source = fs::read_to_string(manifest_path)?;
-    let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
-    let package_name = manifest
-        .get("package")
-        .and_then(TomlValue::as_table)
-        .and_then(|package| package.get("name"))
-        .and_then(TomlValue::as_str)
-        .ok_or_else(|| format!("missing package.name in {}", manifest_path.display()))?;
-
-    Ok(package_name.to_string())
-}
-
 // Run one wasm-target cargo build for the requested canister manifest/profile.
 fn run_canister_build(
     workspace_root: &Path,
@@ -187,6 +200,10 @@ fn run_canister_build(
     command
         .current_dir(workspace_root)
         .env("CANIC_ICP_ROOT", icp_root)
+        .env(
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_ENV,
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+        )
         .args([
             "build",
             "--manifest-path",

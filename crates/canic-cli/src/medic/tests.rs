@@ -284,8 +284,13 @@ fn renders_medic_json_report() {
 // Ensure project medic summarizes state-audit metadata without owning or running migrations.
 #[test]
 fn project_medic_summarizes_state_audit_status() {
-    let state_report = build_state_audit_report(None);
-    let check = state_audit_project_check();
+    let resolution = StateManifestResolution::Rejected {
+        errors: vec![RoleContractFinding::RoleUnknown {
+            role: CanisterRole::owned("missing".to_string()),
+        }],
+    };
+    let state_report = build_state_audit_report(&resolution, None);
+    let check = state_audit_project_check(&resolution);
     let (expected_status, expected_code) = match state_report.status {
         StateAuditStatus::Pass => (MedicStatus::Pass, "state_audit_pass"),
         StateAuditStatus::Warn => (MedicStatus::Warn, "state_audit_warn"),
@@ -328,7 +333,7 @@ fn renders_medic_ci_report_with_fail_only_rows() {
             ),
             MedicCheck::fail(
                 MedicCategory::ProjectConfig,
-                "role_required_canic_feature_missing",
+                "role_contract_required_feature_missing",
                 "demo.app",
                 "demo.app requires canic feature `auth-root-canister-sig-verify`",
                 "edit runtime [dependencies].canic",
@@ -339,7 +344,9 @@ fn renders_medic_ci_report_with_fail_only_rows() {
     let rendered = render_medic_ci_text(&report);
 
     assert!(rendered.starts_with("canic medic project\nstatus: fail\nfailures: 1"));
-    assert!(rendered.contains("fail project_config role_required_canic_feature_missing demo.app"));
+    assert!(
+        rendered.contains("fail project_config role_contract_required_feature_missing demo.app")
+    );
     assert!(rendered.contains("  next: edit runtime [dependencies].canic"));
     assert!(!rendered.contains("icp_cli_ok"));
     assert!(!rendered.contains("local_network_implicit"));
@@ -966,7 +973,7 @@ role_attestation_cache = true
     let app = checks
         .iter()
         .find(|check| {
-            check.subject == "demo.app" && check.code == "role_required_canic_feature_missing"
+            check.subject == "demo.app" && check.code == "role_contract_required_feature_missing"
         })
         .expect("missing feature check");
     assert_eq!(app.status, MedicStatus::Fail);
@@ -1038,7 +1045,7 @@ role_attestation_cache = true
             && check.status == MedicStatus::Pass
     }));
     assert!(!checks.iter().any(|check| {
-        check.subject == "demo.app" && check.code == "role_required_canic_feature_missing"
+        check.subject == "demo.app" && check.code == "role_contract_required_feature_missing"
     }));
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -1093,8 +1100,62 @@ role_attestation_cache = true
             && check.status == MedicStatus::Pass
     }));
     assert!(!checks.iter().any(|check| {
-        check.subject == "demo.app" && check.code == "role_required_canic_feature_missing"
+        check.subject == "demo.app" && check.code == "role_contract_required_feature_missing"
     }));
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn project_config_quality_checks_reject_package_feature_forwarding() {
+    let root = temp_dir("canic-cli-medic-project-feature-forwarding");
+    let config = write_medic_config(
+        &root,
+        r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"
+"#,
+    );
+    write_medic_package_with_canic_features(&root, "root", "demo", "root", &["control-plane"]);
+    write_medic_package(&root, "app", "demo", "app");
+    let manifest = root.join("fleets/demo/app/Cargo.toml");
+    let mut source = fs::read_to_string(&manifest).expect("read app manifest");
+    source.push_str(
+        r#"
+[features]
+default = ["storage"]
+storage = ["canic/blob-storage"]
+"#,
+    );
+    fs::write(&manifest, source).expect("write forwarded package feature");
+
+    let checks = project_config_quality_checks(&root, &[config]);
+    let check = checks
+        .iter()
+        .find(|check| {
+            check.subject == "demo.app"
+                && check.code == "role_contract_dependency_shape_unsupported"
+        })
+        .unwrap_or_else(|| panic!("package shape finding: {checks:#?}"));
+    assert_eq!(check.status, MedicStatus::Fail);
+    assert!(check.detail.contains("must not forward"));
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -1471,6 +1532,7 @@ fn write_candid(root: &std::path::Path, network: &str, role: &str, candid: &str)
 }
 
 fn write_medic_config(root: &std::path::Path, source: &str) -> std::path::PathBuf {
+    write_medic_role_contract_workspace(root, &[]);
     let path = root.join("fleets").join("demo").join("canic.toml");
     fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
     fs::write(&path, source).expect("write config");
@@ -1482,6 +1544,11 @@ fn write_medic_package(root: &std::path::Path, package: &str, fleet: &str, role:
 }
 
 fn write_medic_workspace_canic_features(root: &std::path::Path, features: &[&str]) {
+    write_medic_role_contract_workspace(root, features);
+}
+
+fn write_medic_role_contract_workspace(root: &std::path::Path, features: &[&str]) {
+    fs::create_dir_all(root).expect("create medic fixture root");
     let features = features
         .iter()
         .map(|feature| format!(r#""{feature}""#))
@@ -1491,7 +1558,8 @@ fn write_medic_workspace_canic_features(root: &std::path::Path, features: &[&str
         root.join("Cargo.toml"),
         format!(
             r#"[workspace]
-members = ["fleets/demo/root", "fleets/demo/app"]
+members = ["crates/canic", "crates/canic-core", "fleets/demo/*"]
+resolver = "3"
 
 [workspace.dependencies]
 canic = {{ path = "crates/canic", features = [{features}] }}
@@ -1499,6 +1567,69 @@ canic = {{ path = "crates/canic", features = [{features}] }}
         ),
     )
     .expect("write workspace manifest");
+    let canic_root = root.join("crates/canic");
+    let core_root = root.join("crates/canic-core");
+    fs::create_dir_all(canic_root.join("src")).expect("create fake Canic source dir");
+    fs::create_dir_all(core_root.join("src")).expect("create fake Canic core source dir");
+    fs::write(canic_root.join("src/lib.rs"), "").expect("write fake Canic lib");
+    fs::write(core_root.join("src/lib.rs"), "").expect("write fake Canic core lib");
+    fs::write(
+        canic_root.join("Cargo.toml"),
+        format!(
+            r#"[package]
+name = "canic"
+version = "{}"
+edition = "2024"
+
+[features]
+default = ["metrics"]
+metrics = []
+control-plane = []
+wasm-store-canister = []
+icp-refill = []
+blob-storage = ["canic-core/blob-storage"]
+blob-storage-billing = ["blob-storage", "canic-core/blob-storage-billing"]
+sharding = ["canic-core/sharding"]
+auth-chain-key-ecdsa = ["canic-core/auth-chain-key-ecdsa"]
+auth-chain-key-root-sign = ["canic-core/auth-chain-key-root-sign"]
+auth-root-canister-sig-create = ["canic-core/auth-root-canister-sig-create"]
+auth-root-canister-sig-verify = ["canic-core/auth-root-canister-sig-verify"]
+auth-issuer-canister-sig-create = ["canic-core/auth-issuer-canister-sig-create"]
+auth-issuer-canister-sig-verify = ["canic-core/auth-issuer-canister-sig-verify"]
+auth-delegated-token-verify = ["canic-core/auth-delegated-token-verify"]
+
+[dependencies]
+canic-core = {{ path = "../canic-core" }}
+"#,
+            env!("CARGO_PKG_VERSION")
+        ),
+    )
+    .expect("write fake Canic manifest");
+    fs::write(
+        core_root.join("Cargo.toml"),
+        format!(
+            r#"[package]
+name = "canic-core"
+version = "{}"
+edition = "2024"
+
+[features]
+default = []
+sharding = []
+auth-chain-key-ecdsa = []
+auth-chain-key-root-sign = ["auth-chain-key-ecdsa"]
+auth-root-canister-sig-create = []
+auth-root-canister-sig-verify = []
+auth-issuer-canister-sig-create = []
+auth-issuer-canister-sig-verify = []
+auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
+blob-storage = []
+blob-storage-billing = ["blob-storage"]
+"#,
+            env!("CARGO_PKG_VERSION")
+        ),
+    )
+    .expect("write fake Canic core manifest");
 }
 
 fn write_medic_package_with_canic_features(
@@ -1514,6 +1645,13 @@ fn write_medic_package_with_canic_features(
         .join(package)
         .join("Cargo.toml");
     fs::create_dir_all(path.parent().expect("package parent")).expect("create package parent");
+    fs::create_dir_all(path.parent().expect("package parent").join("src"))
+        .expect("create package source dir");
+    fs::write(
+        path.parent().expect("package parent").join("src/lib.rs"),
+        "",
+    )
+    .expect("write package lib");
     let features = features
         .iter()
         .map(|feature| format!(r#""{feature}""#))
@@ -1537,6 +1675,25 @@ role = "{role}"
         ),
     )
     .expect("write package manifest");
+    generate_medic_fixture_lockfile(root);
+}
+
+fn generate_medic_fixture_lockfile(root: &std::path::Path) {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let output = std::process::Command::new(cargo)
+        .args([
+            "generate-lockfile",
+            "--offline",
+            "--manifest-path",
+            &root.join("Cargo.toml").display().to_string(),
+        ])
+        .output()
+        .expect("run Cargo for medic fixture lockfile");
+    assert!(
+        output.status.success(),
+        "failed to generate medic fixture lockfile: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 fn write_medic_deployment_receipt(
