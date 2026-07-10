@@ -24,6 +24,17 @@ use crate::storage::stable::memory::{
     },
 };
 
+#[cfg(feature = "blob-storage-billing")]
+use crate::storage::stable::memory::blob_storage::BLOB_STORAGE_BILLING_ID;
+#[cfg(feature = "blob-storage")]
+use crate::storage::stable::memory::blob_storage::{
+    BLOB_DELETION_PENDING_ID, STORAGE_GATEWAY_PRINCIPALS_ID, STORED_BLOBS_ID,
+};
+#[cfg(feature = "sharding")]
+use crate::storage::stable::memory::placement::{
+    SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
+};
+
 pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 1;
 const ROOT_ROLE: &str = "root";
 const CANIC_CORE_OWNER: &str = "canic-core";
@@ -189,13 +200,100 @@ pub fn canic_state_manifest() -> StateManifest {
 
 #[must_use]
 pub fn canic_state_manifest_for_role(role: Option<&str>) -> StateManifest {
-    let mut manifest = canic_state_manifest();
-    if let Some(role) = role {
-        manifest
-            .roles
-            .retain(|entry| entry.canister_role.as_str() == role);
+    let Some(role) = role else {
+        return canic_state_manifest();
+    };
+    if role == ROOT_ROLE {
+        return canic_state_manifest();
     }
+
+    let mut manifest = StateManifest {
+        schema_version: STATE_MANIFEST_SCHEMA_VERSION,
+        roles: feature_role_manifest(role).into_iter().collect(),
+    };
+    sort_manifest(&mut manifest);
     manifest
+}
+
+fn feature_role_manifest(role: &str) -> Option<StateRoleManifest> {
+    let reserved_memory = feature_reserved_memory_domains();
+    if reserved_memory.is_empty() {
+        return None;
+    }
+
+    Some(StateRoleManifest {
+        canister_role: role.to_string(),
+        state: Vec::new(),
+        removed_state: Vec::new(),
+        reserved_memory,
+    })
+}
+
+fn feature_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
+    let mut reserved = sharding_reserved_memory_domains();
+    reserved.extend(blob_storage_reserved_memory_domains());
+    reserved
+}
+
+#[cfg(feature = "sharding")]
+fn sharding_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
+    vec![
+        reserved_memory(
+            "sharding_registry",
+            SHARDING_REGISTRY_ID,
+            "feature-gated sharding registry needs a precise role-specific Data snapshot declaration",
+        ),
+        reserved_memory(
+            "sharding_assignments",
+            SHARDING_ASSIGNMENT_ID,
+            "feature-gated sharding assignments need a precise role-specific record and Data snapshot declaration",
+        ),
+        reserved_memory(
+            "sharding_active_set",
+            SHARDING_ACTIVE_SET_ID,
+            "feature-gated sharding lifecycle state needs a precise role-specific Data snapshot declaration",
+        ),
+    ]
+}
+
+#[cfg(not(feature = "sharding"))]
+const fn sharding_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
+    Vec::new()
+}
+
+#[cfg(feature = "blob-storage")]
+fn blob_storage_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
+    let mut reserved = vec![
+        reserved_memory(
+            "stored_blobs",
+            STORED_BLOBS_ID,
+            "feature-gated blob storage needs a precise role-specific domain declaration",
+        ),
+        reserved_memory(
+            "blob_deletion_pending",
+            BLOB_DELETION_PENDING_ID,
+            "feature-gated blob deletion state needs a precise role-specific domain declaration",
+        ),
+        reserved_memory(
+            "storage_gateway_principals",
+            STORAGE_GATEWAY_PRINCIPALS_ID,
+            "feature-gated gateway state needs a precise role-specific domain declaration",
+        ),
+    ];
+
+    #[cfg(feature = "blob-storage-billing")]
+    reserved.push(reserved_memory(
+        "blob_storage_billing",
+        BLOB_STORAGE_BILLING_ID,
+        "feature-gated blob billing state needs a precise role-specific Data snapshot declaration",
+    ));
+
+    reserved
+}
+
+#[cfg(not(feature = "blob-storage"))]
+const fn blob_storage_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
+    Vec::new()
 }
 
 fn root_role_manifest() -> StateRoleManifest {
@@ -585,6 +683,47 @@ mod tests {
     #[test]
     fn role_filter_returns_empty_manifest_for_unknown_role() {
         let manifest = canic_state_manifest_for_role(Some("unknown"));
-        assert!(manifest.roles.is_empty());
+
+        if cfg!(any(feature = "sharding", feature = "blob-storage")) {
+            assert_eq!(manifest.roles.len(), 1);
+            assert_eq!(manifest.roles[0].canister_role, "unknown");
+            assert!(manifest.roles[0].state.is_empty());
+            assert!(!manifest.roles[0].reserved_memory.is_empty());
+        } else {
+            assert!(manifest.roles.is_empty());
+        }
+    }
+
+    #[cfg(any(feature = "sharding", feature = "blob-storage"))]
+    #[test]
+    fn feature_role_manifest_reserves_every_feature_gated_memory_id() {
+        let manifest = canic_state_manifest_for_role(Some("feature_role"));
+        let role = manifest.roles.first().expect("feature role manifest");
+        let ids = role
+            .reserved_memory
+            .iter()
+            .map(|reservation| reservation.memory_id)
+            .collect::<Vec<_>>();
+
+        #[cfg(feature = "sharding")]
+        for expected in [
+            SHARDING_REGISTRY_ID,
+            SHARDING_ASSIGNMENT_ID,
+            SHARDING_ACTIVE_SET_ID,
+        ] {
+            assert!(ids.contains(&expected));
+        }
+
+        #[cfg(feature = "blob-storage")]
+        for expected in [
+            STORED_BLOBS_ID,
+            BLOB_DELETION_PENDING_ID,
+            STORAGE_GATEWAY_PRINCIPALS_ID,
+        ] {
+            assert!(ids.contains(&expected));
+        }
+
+        #[cfg(feature = "blob-storage-billing")]
+        assert!(ids.contains(&BLOB_STORAGE_BILLING_ID));
     }
 }

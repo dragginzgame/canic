@@ -11,7 +11,7 @@ use canic_control_plane::state_contract::canic_control_plane_state_manifest;
 use canic_core::state_contract::{
     MigrationPolicy, RemovedStateManifest, ReservedMemoryManifest, STATE_MANIFEST_SCHEMA_VERSION,
     StateDomainManifest, StateManifest, StateMigrationManifest, StateRoleManifest, StateStorage,
-    canic_state_manifest,
+    canic_state_manifest_for_role,
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -198,7 +198,7 @@ pub enum StateAuditSeverity {
 #[must_use]
 pub fn declared_state_manifest(role: Option<&str>) -> StateManifest {
     let mut manifest = merge_manifests(vec![
-        canic_state_manifest(),
+        canic_state_manifest_for_role(role),
         canic_control_plane_state_manifest(),
     ]);
     if let Some(role) = role {
@@ -1187,17 +1187,32 @@ mod tests {
     }
 
     #[test]
-    fn wasm_store_role_audits_cleanly() {
+    fn wasm_store_role_audits_every_owned_memory_domain_cleanly() {
         let report = build_state_audit_report(Some("wasm_store"));
 
         assert_eq!(report.status, StateAuditStatus::Pass);
-        assert!(report.manifest.roles.iter().any(|role| {
-            role.canister_role == "wasm_store"
-                && role
-                    .state
-                    .iter()
-                    .any(|domain| domain.domain == "wasm_store_gc_state")
-        }));
+        let role = report
+            .manifest
+            .roles
+            .iter()
+            .find(|role| role.canister_role == "wasm_store")
+            .expect("wasm_store role");
+        let domains = role
+            .state
+            .iter()
+            .map(|domain| domain.domain.as_str())
+            .collect::<Vec<_>>();
+
+        for expected in [
+            "template_manifests",
+            "template_chunk_sets",
+            "template_chunk_refs",
+            "template_chunk_payloads",
+            "wasm_store_gc_state",
+        ] {
+            assert!(domains.contains(&expected));
+        }
+        assert_eq!(domains.len(), 5);
     }
 
     #[test]

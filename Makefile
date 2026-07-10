@@ -3,7 +3,7 @@
         release-stage release-commit release-push package publish \
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
-        test test-wasm test-bump build check clippy fmt fmt-check clean \
+        test test-wasm test-bump build check clippy fmt fmt-check clean clean-wasm \
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
@@ -72,6 +72,7 @@ help:
 	@echo "  fmt              Format code"
 	@echo "  fmt-check        Check formatting"
 	@echo "  clean            Clean build artifacts"
+	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  cloc             Show runtime vs test Rust LOC across canic crates"
@@ -196,7 +197,7 @@ test-installed-canic-cli:
 
 test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) cargo run -q -p canic-cli --bin canic -- install --profile "$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" test
+	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo run -q --profile fast -p canic-cli --bin canic -- install --profile "$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" test
 
 test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
 
@@ -281,6 +282,12 @@ fmt-check-core:
 
 clean:
 	cargo clean
+
+clean-wasm:
+	cargo clean --target-dir target/canic-wasm
+	cargo clean --target-dir target/icp-build
+	cargo clean --target-dir target/pic-wasm
+	cargo clean --target-dir target/pic-wasm-no-test-material
 
 cloc:
 	bash scripts/dev/cloc.sh

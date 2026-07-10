@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.83.md](docs/changelog/0.83.md)
 
+- `0.83.29` hardens state-audit truth and Wasm build hygiene by replacing
+  nested fixture builds with bounded disposable caches and decomposing medic
+  internals without changing command forms or persisted schemas.
+
 - `0.83.28` makes receipt-resume conflict checks collision-safe and completes
   the 0.83 audit closeout, including a pre-1.0 hard cut of the unused
   `PreviousArtifactReceiptKindV1::label()` Rust method.

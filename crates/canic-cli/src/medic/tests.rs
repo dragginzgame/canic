@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::temp_dir;
 use crate::{CliError, cli_error_exit_code, render_cli_error};
 use serde_json::Value as JsonValue;
-use std::fs;
+use std::{ffi::OsString, fs};
 
 // Ensure bare top-level medic selects the project scope without inventing a deployment.
 #[test]

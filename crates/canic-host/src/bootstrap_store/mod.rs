@@ -1,6 +1,7 @@
 use crate::{
     artifact_io::{embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact},
     build_profile::CanisterBuildProfile,
+    canister_build::cache::{canister_build_target_root, configure_canister_cargo_command},
     cargo_command,
     cargo_metadata::{CargoMetadata, cargo_metadata},
     icp_environment_from_env,
@@ -48,7 +49,7 @@ const WASM_STORE_FAST_PROFILE_CONFIG_ARGS: &[&str] = &[
     "--config",
     "profile.fast.codegen-units=16",
     "--config",
-    "profile.fast.incremental=true",
+    "profile.fast.incremental=false",
 ];
 
 ///
@@ -87,8 +88,7 @@ pub fn build_bootstrap_wasm_store_artifact(
         profile,
     )?;
 
-    let target_root = std::env::var_os("CARGO_TARGET_DIR")
-        .map_or_else(|| workspace_root.join("target"), PathBuf::from);
+    let target_root = canister_build_target_root(workspace_root);
     let built_wasm_path = target_root
         .join("wasm32-unknown-unknown")
         .join(profile.target_dir_name())
@@ -396,11 +396,6 @@ fn run_wasm_store_cargo_build(
     command
         .current_dir(workspace_root)
         .env("CANIC_CONFIG_PATH", config_path)
-        .env(
-            "CARGO_TARGET_DIR",
-            std::env::var_os("CARGO_TARGET_DIR")
-                .map_or_else(|| workspace_root.join("target"), PathBuf::from),
-        )
         .args([
             "build",
             "--manifest-path",
@@ -408,6 +403,7 @@ fn run_wasm_store_cargo_build(
             "--target",
             "wasm32-unknown-unknown",
         ]);
+    configure_canister_cargo_command(&mut command, workspace_root);
     append_wasm_store_profile_config_args(&mut command, profile);
     command.args(profile.cargo_args());
 
@@ -461,8 +457,7 @@ fn ensure_wasm_store_did(
         CanisterBuildProfile::Debug,
     )?;
 
-    let target_root = std::env::var_os("CARGO_TARGET_DIR")
-        .map_or_else(|| workspace_root.join("target"), PathBuf::from);
+    let target_root = canister_build_target_root(workspace_root);
     let debug_wasm_path = target_root
         .join("wasm32-unknown-unknown")
         .join(CanisterBuildProfile::Debug.target_dir_name())

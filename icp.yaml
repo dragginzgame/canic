@@ -4,42 +4,42 @@ canisters:
       steps:
         - type: script
           commands:
-            - cargo run -q -p canic-host --example build_artifact -- root
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- root
 
   - name: app
     build:
       steps:
         - type: script
           commands:
-            - cargo run -q -p canic-host --example build_artifact -- app
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- app
 
   - name: scale_hub
     build:
       steps:
         - type: script
           commands:
-            - cargo run -q -p canic-host --example build_artifact -- scale_hub
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- scale_hub
 
   - name: scale_replica
     build:
       steps:
         - type: script
           commands:
-            - cargo run -q -p canic-host --example build_artifact -- scale_replica
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- scale_replica
 
   - name: user_hub
     build:
       steps:
         - type: script
           commands:
-            - cargo run -q -p canic-host --example build_artifact -- user_hub
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_hub
 
   - name: user_shard
     build:
       steps:
         - type: script
           commands:
-            - cargo run -q -p canic-host --example build_artifact -- user_shard
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_shard
 
 networks:
   - name: local
