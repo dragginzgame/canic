@@ -5,15 +5,14 @@
 //! Boundary: runtime storage imports IDs; pure role policy selects allocation keys.
 
 use crate::role_contract::model::{
-    AllocationDefinition, AllocationLifecycle, AllocationOwner, MemoryId, RoleContractFinding,
-    StateAllocationKey,
+    AllocationDefinition, AllocationOwner, MemoryId, RoleContractFinding, StateAllocationKey,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const CANIC_CORE_MIN_ID: u8 = 11;
 pub const CANIC_CORE_MAX_ID: u8 = 79;
 pub const CANIC_CONTROL_PLANE_MIN_ID: u8 = 80;
-pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 85;
+pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 99;
 
 /// Canonical stable-memory IDs grouped by record owner.
 pub mod memory {
@@ -33,8 +32,7 @@ pub mod memory {
 
     pub mod auth {
         pub const AUTH_STATE_ID: u8 = 19;
-        pub const ROOT_REPLAY_ID: u8 = 20;
-        pub const REPLAY_RECEIPTS_ID: u8 = 21;
+        pub const REPLAY_RECEIPTS_ID: u8 = 20;
     }
 
     pub mod observability {
@@ -83,7 +81,7 @@ pub mod memory {
 }
 
 use memory::{
-    auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID, ROOT_REPLAY_ID},
+    auth::{AUTH_STATE_ID, REPLAY_RECEIPTS_ID},
     blob_storage::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
@@ -108,42 +106,37 @@ use memory::{
     },
 };
 
-const CORE_ROOT_TOPOLOGY_IDS: &[MemoryId] = &[
+const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
     MemoryId::new(CANISTER_CHILDREN_ID),
     MemoryId::new(APP_INDEX_ID),
     MemoryId::new(SUBNET_INDEX_ID),
-    MemoryId::new(APP_REGISTRY_ID),
     MemoryId::new(SUBNET_REGISTRY_ID),
 ];
-const CORE_ROOT_ENVIRONMENT_IDS: &[MemoryId] = &[
+const CORE_ROOT_APP_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(APP_REGISTRY_ID)];
+const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] = &[
     MemoryId::new(ENV_ID),
     MemoryId::new(SUBNET_STATE_ID),
     MemoryId::new(APP_STATE_ID),
 ];
-const CORE_ROOT_AUTH_IDS: &[MemoryId] = &[
-    MemoryId::new(AUTH_STATE_ID),
-    MemoryId::new(REPLAY_RECEIPTS_ID),
-];
-const RETIRED_ROOT_REPLAY_IDS: &[MemoryId] = &[MemoryId::new(ROOT_REPLAY_ID)];
-const CORE_ROOT_OBSERVABILITY_IDS: &[MemoryId] = &[
+const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
+const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
+const CORE_RUNTIME_OBSERVABILITY_IDS: &[MemoryId] = &[
     MemoryId::new(CYCLE_TRACKER_ID),
     MemoryId::new(CYCLE_TOPUP_EVENTS_ID),
     MemoryId::new(LOG_INDEX_ID),
     MemoryId::new(LOG_DATA_ID),
-    MemoryId::new(ICP_REFILL_RECORDS_ID),
     MemoryId::new(CYCLES_FUNDING_LEDGER_ID),
 ];
-const CORE_ROOT_INTENT_IDS: &[MemoryId] = &[
+const CORE_ICP_REFILL_RECORDS_IDS: &[MemoryId] = &[MemoryId::new(ICP_REFILL_RECORDS_ID)];
+const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[
     MemoryId::new(INTENT_META_ID),
     MemoryId::new(INTENT_RECORDS_ID),
     MemoryId::new(INTENT_TOTALS_ID),
     MemoryId::new(INTENT_PENDING_ID),
 ];
-const CORE_ROOT_CAPACITY_IDS: &[MemoryId] = &[
-    MemoryId::new(CANISTER_POOL_ID),
-    MemoryId::new(SCALING_REGISTRY_ID),
-    MemoryId::new(DIRECTORY_REGISTRY_ID),
-];
+const CANISTER_POOL_IDS: &[MemoryId] = &[MemoryId::new(CANISTER_POOL_ID)];
+const SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SCALING_REGISTRY_ID)];
+const DIRECTORY_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(DIRECTORY_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
 const SHARDING_ASSIGNMENT_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ASSIGNMENT_ID)];
 const SHARDING_ACTIVE_SET_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ACTIVE_SET_ID)];
@@ -160,123 +153,123 @@ const WASM_STORE_GC_STATE_IDS: &[MemoryId] = &[MemoryId::new(WASM_STORE_GC_STATE
 
 const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
     definition(
-        StateAllocationKey::CoreRootTopology,
+        StateAllocationKey::CoreRuntimeTopology,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
-        CORE_ROOT_TOPOLOGY_IDS,
+        CORE_RUNTIME_TOPOLOGY_IDS,
     ),
     definition(
-        StateAllocationKey::CoreRootEnvironment,
+        StateAllocationKey::CoreRootAppRegistry,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
-        CORE_ROOT_ENVIRONMENT_IDS,
+        CORE_ROOT_APP_REGISTRY_IDS,
     ),
     definition(
-        StateAllocationKey::CoreRootAuth,
+        StateAllocationKey::CoreRuntimeEnvironment,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
-        CORE_ROOT_AUTH_IDS,
+        CORE_RUNTIME_ENVIRONMENT_IDS,
     ),
     definition(
-        StateAllocationKey::RetiredRootReplay,
+        StateAllocationKey::CoreAuthState,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::RetiredNeverReuse,
-        RETIRED_ROOT_REPLAY_IDS,
+        CORE_AUTH_STATE_IDS,
     ),
     definition(
-        StateAllocationKey::CoreRootObservability,
+        StateAllocationKey::CoreReplayReceipts,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
-        CORE_ROOT_OBSERVABILITY_IDS,
+        CORE_REPLAY_RECEIPTS_IDS,
     ),
     definition(
-        StateAllocationKey::CoreRootIntent,
+        StateAllocationKey::CoreRuntimeObservability,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
-        CORE_ROOT_INTENT_IDS,
+        CORE_RUNTIME_OBSERVABILITY_IDS,
     ),
     definition(
-        StateAllocationKey::CoreRootCapacity,
+        StateAllocationKey::CoreIcpRefillRecords,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
-        CORE_ROOT_CAPACITY_IDS,
+        CORE_ICP_REFILL_RECORDS_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreRuntimeIntent,
+        AllocationOwner::CanicCore,
+        CORE_RUNTIME_INTENT_IDS,
+    ),
+    definition(
+        StateAllocationKey::CanisterPool,
+        AllocationOwner::CanicCore,
+        CANISTER_POOL_IDS,
+    ),
+    definition(
+        StateAllocationKey::ScalingRegistry,
+        AllocationOwner::CanicCore,
+        SCALING_REGISTRY_IDS,
+    ),
+    definition(
+        StateAllocationKey::DirectoryRegistry,
+        AllocationOwner::CanicCore,
+        DIRECTORY_REGISTRY_IDS,
     ),
     definition(
         StateAllocationKey::ShardingRegistry,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
         SHARDING_REGISTRY_IDS,
     ),
     definition(
         StateAllocationKey::ShardingAssignments,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
         SHARDING_ASSIGNMENT_IDS,
     ),
     definition(
         StateAllocationKey::ShardingActiveSet,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
         SHARDING_ACTIVE_SET_IDS,
     ),
     definition(
         StateAllocationKey::StoredBlobs,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
         STORED_BLOBS_IDS,
     ),
     definition(
         StateAllocationKey::BlobDeletionPending,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
         BLOB_DELETION_PENDING_IDS,
     ),
     definition(
         StateAllocationKey::StorageGatewayPrincipals,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
         STORAGE_GATEWAY_PRINCIPALS_IDS,
     ),
     definition(
         StateAllocationKey::BlobStorageBilling,
         AllocationOwner::CanicCore,
-        AllocationLifecycle::Active,
         BLOB_STORAGE_BILLING_IDS,
     ),
     definition(
         StateAllocationKey::TemplateManifests,
         AllocationOwner::CanicControlPlane,
-        AllocationLifecycle::Active,
         TEMPLATE_MANIFESTS_IDS,
     ),
     definition(
         StateAllocationKey::TemplateChunkSets,
         AllocationOwner::CanicControlPlane,
-        AllocationLifecycle::Active,
         TEMPLATE_CHUNK_SETS_IDS,
     ),
     definition(
         StateAllocationKey::TemplateChunkRefs,
         AllocationOwner::CanicControlPlane,
-        AllocationLifecycle::Active,
         TEMPLATE_CHUNK_REFS_IDS,
     ),
     definition(
         StateAllocationKey::TemplateChunkPayloads,
         AllocationOwner::CanicControlPlane,
-        AllocationLifecycle::Active,
         TEMPLATE_CHUNK_PAYLOADS_IDS,
     ),
     definition(
         StateAllocationKey::ControlPlaneSubnetState,
         AllocationOwner::CanicControlPlane,
-        AllocationLifecycle::Active,
         CONTROL_PLANE_SUBNET_STATE_IDS,
     ),
     definition(
         StateAllocationKey::WasmStoreGcState,
         AllocationOwner::CanicControlPlane,
-        AllocationLifecycle::Active,
         WASM_STORE_GC_STATE_IDS,
     ),
 ];
@@ -284,13 +277,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
 const fn definition(
     key: StateAllocationKey,
     owner: AllocationOwner,
-    lifecycle: AllocationLifecycle,
     memory_ids: &'static [MemoryId],
 ) -> AllocationDefinition {
     AllocationDefinition {
         key,
         owner,
-        lifecycle,
         memory_ids,
     }
 }
@@ -326,6 +317,22 @@ pub fn validate_allocation_definitions(
         }
 
         for memory_id in definition.memory_ids {
+            let (owner_min_id, owner_max_id) = match definition.owner {
+                AllocationOwner::CanicCore => (CANIC_CORE_MIN_ID, CANIC_CORE_MAX_ID),
+                AllocationOwner::CanicControlPlane => {
+                    (CANIC_CONTROL_PLANE_MIN_ID, CANIC_CONTROL_PLANE_MAX_ID)
+                }
+            };
+            if !(owner_min_id..=owner_max_id).contains(&memory_id.get()) {
+                return Err(RoleContractFinding::CatalogInvalid {
+                    reason: format!(
+                        "allocation {:?} assigns memory ID {} outside owner {} range {owner_min_id}-{owner_max_id}",
+                        definition.key,
+                        memory_id.get(),
+                        definition.owner.as_str(),
+                    ),
+                });
+            }
             if let Some(first) = memory_owners.insert(*memory_id, definition.key) {
                 return Err(RoleContractFinding::MemoryIdCollision {
                     memory_id: *memory_id,

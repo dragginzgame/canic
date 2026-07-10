@@ -105,7 +105,6 @@ fn descriptor(
             post_upgrade_invariant: Some(invariant.to_string()),
             migrations: Vec::new(),
         }],
-        removed_state: Vec::new(),
         reserved_memory: Vec::new(),
     }
 }

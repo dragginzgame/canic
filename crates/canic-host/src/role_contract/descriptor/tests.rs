@@ -4,13 +4,12 @@ use canic_core::role_contract::{
 };
 
 #[test]
-fn complete_registry_has_exactly_one_descriptor_for_every_active_allocation() {
+fn complete_registry_has_exactly_one_descriptor_for_every_allocation() {
     let registry = validate_state_descriptor_registry().expect("valid descriptor registry");
-    let active = allocation_definitions()
-        .iter()
-        .filter(|definition| definition.lifecycle == AllocationLifecycle::Active)
-        .count();
-    assert_eq!(registry.descriptors().count(), active);
+    assert_eq!(
+        registry.descriptors().count(),
+        allocation_definitions().len()
+    );
 }
 
 #[test]

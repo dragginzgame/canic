@@ -18,15 +18,15 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.0`, published and tagged
-  as `v0.84.0`; no package version has been changed for `0.84.1` development.
+- The current package/release-surface version is `0.84.1`, published and tagged
+  as `v0.84.1`; no package version has been changed for `0.84.2` development.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
   released: `canic-core::role_contract` now owns
-  typed feature, capability, allocation, lifecycle, provenance, result, and
+  typed feature, capability, allocation, provenance, result, and
   finding values; one config-to-capability derivation; the feature and
-  allocation catalog; permanent ID definitions; and the pure fail-closed
+  allocation catalog; canonical active ID definitions; and the pure fail-closed
   resolver. Cargo feature/default/implication parity is tested against the
   real `canic` and `canic-core` manifests. Canonical memory IDs 11-85 moved to
   the allocation authority without value or encoding changes, and storage
@@ -39,13 +39,12 @@ before this compaction is archived at
   multiple Canic packages. It intentionally omits a general graph resolver,
   fingerprints, catalog digests, and schema negotiation. Replaced helpers and
   bypass paths are hard-cut without aliases or fallbacks. Feature effects are
-  only `NoState` or `StateBearing`; lifecycle exists only on global allocation
-  definitions; surplus state-bearing features allocate normally without a
-  warning; and the host validator returns only supported evidence or one
-  unsupported finding rather than exposing a dependency graph to core policy.
+  only `NoState` or `StateBearing`; allocation definitions contain active state
+  only; surplus state-bearing features allocate normally without a warning;
+  and the host validator returns only supported evidence or one unsupported
+  finding rather than exposing a dependency graph to core policy.
 
-- The `0.84.1` typed-failure-classification interruption is implemented in the
-  current worktree under
+- The `0.84.1` typed-failure-classification interruption shipped under
   `docs/design/0.84-typed-failure-classification/0.84.1-design.md`. Canic-owned
   auth expiry, registry policy, wasm-store publication, deployment-state
   assumption, install-block, blob-storage input, medic deployment-state,
@@ -71,8 +70,23 @@ before this compaction is archived at
   Internal PocketIC artifact builds now validate every Canic-declared role
   package through the existing host validator before setting the private
   canonical build marker; generic non-Canic fixture stubs remain unchanged.
-  Stable-memory IDs, records, encodings, migrations, and the released 0.84 role
-  contract are unchanged.
+  Stable-memory IDs, records, encodings, migrations, and the released 0.84.0
+  role contract were unchanged by 0.84.1.
+
+- The `0.84.2` memory-map correction is implemented in the current worktree.
+  Root-named core groups are hard-cut into exact shared-runtime, auth,
+  ICP-refill, pool, scaling, directory, and sharding allocations. Every
+  declared role and the built-in wasm store resolves shared IDs 11-13, 15-18,
+  20, 29-32, 34, and 39-42; app-registry ID 14 remains root-only; auth ID 19
+  and ICP-refill ID 33 are conditional; placement IDs resolve exactly. Replay
+  receipts move from ID 21 to ID 20 and ID 21 becomes unassigned. The
+  lifecycle/tombstone and removed-state report surfaces are hard-cut, and state
+  manifest/audit advance to schema version 2. Existing canisters with the old
+  ID-20/21 ledger require destructive reinstall; there is no migration or
+  fallback. The audit also restores IDs 86-99 as control-plane reserve, starts
+  downstream application allocations at ID 100, and rejects definitions
+  outside their owner's range. All other active IDs, records, encodings, and
+  restore behavior are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
@@ -95,7 +109,7 @@ before this compaction is archived at
   `canic-control-plane` expose allocation-keyed owner descriptors for every
   active allocation, including optional sharding and blob-storage state. The
   host validates the complete registry for missing/duplicate descriptors,
-  canonical IDs, owner agreement, and retired-state bindings before strictly
+  canonical IDs and owner agreement before strictly
   joining resolved allocations into role manifests. State manifest/audit,
   medic, and release capability views now consume the same resolved contracts;
   the old state role selectors and raw release capability mapper are hard-cut.
@@ -1363,6 +1377,23 @@ them in the handoff until each is completed or explicitly declined:
   responses and then present the remaining report as complete.
 
 ## Useful Validation
+
+Focused 0.84.2 memory-map validation (passing):
+
+```text
+cargo test --locked -p canic-core --lib
+cargo test --locked -p canic-core placement_capabilities_select_only_their_placement_state --lib
+cargo test --locked -p canic-core icp_refill_config_requires_its_feature_and_selects_its_state --lib
+cargo test --locked -p canic-core --test stable_memory_abi_guard -- --nocapture
+cargo test --locked -p canic-control-plane --lib
+cargo test --locked -p canic-host --lib
+cargo test --locked -p canic-host placement_roles_materialize_exact_placement_state --lib
+cargo test --locked -p canic-cli --lib
+cargo clippy --locked -p canic-core -p canic-control-plane -p canic-host -p canic-cli --all-targets --all-features -- -D warnings
+cargo test --locked -p canic --test changelog_governance -- --nocapture
+make fmt-check
+git diff --check
+```
 
 Focused 0.84.1 typed-failure-classification validation (passing for the patch
 isolated against released 0.84.0):

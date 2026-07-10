@@ -271,6 +271,9 @@ pub(in crate::release_set) fn project_role_capabilities(
             RoleCapabilityKey::Directory => {
                 labels.insert("directory");
             }
+            RoleCapabilityKey::IcpRefill => {
+                labels.insert("icp_refill");
+            }
             RoleCapabilityKey::Icrc21 => {
                 labels.insert("icrc21");
             }
@@ -282,6 +285,7 @@ pub(in crate::release_set) fn project_role_capabilities(
             }
             RoleCapabilityKey::Root
             | RoleCapabilityKey::RootControlPlane
+            | RoleCapabilityKey::Runtime
             | RoleCapabilityKey::WasmStore => {}
         }
     }

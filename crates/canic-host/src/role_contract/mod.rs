@@ -107,9 +107,6 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
         RoleContractFinding::AllocationDescriptorMissing { key } => {
             format!("allocation {key:?} has no state descriptor")
         }
-        RoleContractFinding::AllocationNotActive { key } => {
-            format!("allocation {key:?} is not active")
-        }
         RoleContractFinding::BuiltInPackageUnavailable { role } => {
             format!("built-in package evidence is unavailable for {role:?}")
         }
