@@ -41,6 +41,7 @@ pub struct TemplateManifestRecord {
 }
 
 impl TemplateManifestRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateManifestRecord";
     pub const STORABLE_MAX_SIZE: u32 = 512;
 }
 
@@ -51,12 +52,28 @@ impl_storable_bounded!(
 );
 
 ///
-/// TemplateManifestStoreRecord
+/// TemplateManifestEntryRecord
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TemplateManifestEntryRecord {
+    pub release: TemplateReleaseKey,
+    pub record: TemplateManifestRecord,
+}
+
+///
+/// TemplateManifestsData
+///
+/// Canonical template-manifest allocation snapshot.
 ///
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct TemplateManifestStoreRecord {
-    pub entries: Vec<(TemplateReleaseKey, TemplateManifestRecord)>,
+pub struct TemplateManifestsData {
+    pub entries: Vec<TemplateManifestEntryRecord>,
+}
+
+impl TemplateManifestsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateManifestsData";
 }
 
 ///
@@ -86,13 +103,24 @@ impl TemplateManifestStateStore {
 
     // Export the full manifest snapshot for ops-owned filtering and shaping.
     #[must_use]
-    pub fn export() -> TemplateManifestStoreRecord {
-        TEMPLATE_MANIFESTS.with_borrow(|map| TemplateManifestStoreRecord {
+    pub fn export() -> TemplateManifestsData {
+        TEMPLATE_MANIFESTS.with_borrow(|map| TemplateManifestsData {
             entries: map
                 .iter()
-                .map(|entry| (entry.key().clone(), entry.value()))
+                .map(|entry| TemplateManifestEntryRecord {
+                    release: entry.key().clone(),
+                    record: entry.value(),
+                })
                 .collect(),
         })
+    }
+
+    #[cfg(test)]
+    pub fn import(data: TemplateManifestsData) {
+        Self::clear();
+        for entry in data.entries {
+            Self::upsert(entry.release, entry.record);
+        }
     }
 
     // Return current manifest-store occupied bytes without cloning the full snapshot.
@@ -167,7 +195,13 @@ mod tests {
         TemplateManifestStateStore::upsert(release(), record.clone());
 
         let exported = TemplateManifestStateStore::export();
-        assert_eq!(exported.entries, vec![(release(), record)]);
+        assert_eq!(
+            exported.entries,
+            vec![TemplateManifestEntryRecord {
+                release: release(),
+                record,
+            }]
+        );
     }
 
     #[test]
@@ -186,8 +220,21 @@ mod tests {
         let exported = TemplateManifestStateStore::export();
         assert_eq!(exported.entries.len(), 2);
         assert_eq!(
-            exported.entries[0].0.template_id,
+            exported.entries[0].release.template_id,
             TemplateId::new("embedded:app")
         );
+    }
+
+    #[test]
+    fn manifest_store_round_trips_through_canonical_data_snapshot() {
+        TemplateManifestStateStore::clear_for_test();
+        TemplateManifestStateStore::upsert(release(), manifest());
+
+        let data = TemplateManifestStateStore::export();
+        TemplateManifestStateStore::clear_for_test();
+        TemplateManifestStateStore::import(data.clone());
+
+        assert_eq!(TemplateManifestStateStore::export(), data);
+        TemplateManifestStateStore::clear_for_test();
     }
 }

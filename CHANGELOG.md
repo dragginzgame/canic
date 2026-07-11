@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.12` completes canonical state snapshots for control-plane template,
+  subnet, and GC allocations and hard-cuts aspirational template snapshot
+  labels while preserving memory IDs and persisted encodings.
+
 - `0.84.11` adds exact canonical snapshots for intent metadata, records,
   resource totals, and pending indexes while preserving stable-memory IDs and
   persisted encodings.

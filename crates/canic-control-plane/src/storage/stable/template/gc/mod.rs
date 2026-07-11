@@ -30,7 +30,26 @@ pub struct WasmStoreGcStateRecord {
     pub runs_completed: u32,
 }
 
+impl WasmStoreGcStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "WasmStoreGcStateRecord";
+}
+
 impl_storable_bounded!(WasmStoreGcStateRecord, 64, true);
+
+///
+/// WasmStoreGcStateData
+///
+/// Canonical local wasm-store GC-state allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct WasmStoreGcStateData {
+    pub record: WasmStoreGcStateRecord,
+}
+
+impl WasmStoreGcStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "WasmStoreGcStateData";
+}
 
 ///
 /// WasmStoreGcStateStore
@@ -53,7 +72,44 @@ impl WasmStoreGcStateStore {
     }
 
     #[cfg(test)]
+    pub fn export() -> WasmStoreGcStateData {
+        WasmStoreGcStateData {
+            record: Self::get(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn import(data: WasmStoreGcStateData) {
+        Self::set(data.record);
+    }
+
+    #[cfg(test)]
     pub fn clear_for_test() {
         Self::set(WasmStoreGcStateRecord::default());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gc_state_round_trips_through_canonical_data_snapshot() {
+        WasmStoreGcStateStore::clear_for_test();
+        WasmStoreGcStateStore::set(WasmStoreGcStateRecord {
+            mode: WasmStoreGcMode::Complete,
+            changed_at: 11,
+            prepared_at: Some(12),
+            started_at: Some(13),
+            completed_at: Some(14),
+            runs_completed: 15,
+        });
+
+        let data = WasmStoreGcStateStore::export();
+        WasmStoreGcStateStore::clear_for_test();
+        WasmStoreGcStateStore::import(data.clone());
+
+        assert_eq!(WasmStoreGcStateStore::export(), data);
+        WasmStoreGcStateStore::clear_for_test();
     }
 }

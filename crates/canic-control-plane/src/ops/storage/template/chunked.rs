@@ -13,8 +13,9 @@ use crate::{
         WasmStoreGcStatus,
     },
     storage::stable::template::{
-        TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore,
-        TemplateChunkStore, TemplateManifestRecord, TemplateManifestStateStore,
+        TemplateChunkRecord, TemplateChunkSetEntryRecord, TemplateChunkSetRecord,
+        TemplateChunkSetStateStore, TemplateChunkStore, TemplateManifestEntryRecord,
+        TemplateManifestStateStore,
     },
 };
 #[cfg(feature = "root-control-plane")]
@@ -81,7 +82,7 @@ impl TemplateChunkedOps {
         gc: WasmStoreGcStatus,
     ) -> WasmStoreStatusResponse {
         let manifests = TemplateManifestStateStore::export().entries;
-        let chunk_sets = TemplateChunkSetStateStore::export();
+        let chunk_sets = TemplateChunkSetStateStore::export().entries;
         let occupied_store_bytes = TemplateManifestStateStore::occupied_bytes()
             + TemplateChunkSetStateStore::occupied_bytes()
             + TemplateChunkStore::occupied_bytes();
@@ -188,7 +189,7 @@ impl TemplateChunkedOps {
         limits: WasmStoreLimits,
     ) -> Result<(), InternalError> {
         let projected_manifests = projected_manifests_after_replace(&input);
-        let projected_chunk_sets = TemplateChunkSetStateStore::export();
+        let projected_chunk_sets = TemplateChunkSetStateStore::export().entries;
         let projected_bytes = manifest_store_bytes(&projected_manifests)
             + chunk_set_store_bytes(&projected_chunk_sets)
             + TemplateChunkStore::occupied_bytes();
@@ -570,8 +571,7 @@ impl TemplateChunkedOps {
     // Clear all local template metadata and chunk bytes for store-local GC execution.
     pub async fn execute_local_store_gc() -> Result<WasmStoreGcExecutionStats, InternalError> {
         let manifests = TemplateManifestStateStore::export().entries;
-        let chunk_sets = TemplateChunkSetStateStore::export();
-        let chunks = TemplateChunkStore::export();
+        let chunk_sets = TemplateChunkSetStateStore::export().entries;
         let stored_chunk_hashes = MgmtOps::stored_chunks(canister_self()).await?;
         let template_count =
             u32::try_from(projected_template_versions(&manifests, &chunk_sets).len())
@@ -583,7 +583,7 @@ impl TemplateChunkedOps {
                 .sum::<usize>(),
         )
         .unwrap_or(u32::MAX);
-        let chunk_count = u32::try_from(chunks.len()).unwrap_or(u32::MAX);
+        let chunk_count = u32::try_from(TemplateChunkStore::count()).unwrap_or(u32::MAX);
         let chunk_store_hash_count = u32::try_from(stored_chunk_hashes.len()).unwrap_or(u32::MAX);
         let reclaimed_store_bytes = TemplateManifestStateStore::occupied_bytes()
             + TemplateChunkSetStateStore::occupied_bytes()
@@ -611,19 +611,17 @@ fn chunk_set_record_to_response(record: TemplateChunkSetRecord) -> TemplateChunk
     }
 }
 
-fn manifest_store_bytes(manifests: &[(TemplateReleaseKey, TemplateManifestRecord)]) -> u64 {
+fn manifest_store_bytes(manifests: &[TemplateManifestEntryRecord]) -> u64 {
     manifests
         .iter()
-        .map(|(template_id, record)| {
-            (template_id.to_bytes().len() + record.to_bytes().len()) as u64
-        })
+        .map(|entry| (entry.release.to_bytes().len() + entry.record.to_bytes().len()) as u64)
         .sum::<u64>()
 }
 
-fn chunk_set_store_bytes(chunk_sets: &[(TemplateReleaseKey, TemplateChunkSetRecord)]) -> u64 {
+fn chunk_set_store_bytes(chunk_sets: &[TemplateChunkSetEntryRecord]) -> u64 {
     chunk_sets
         .iter()
-        .map(|(release, record)| (release.to_bytes().len() + record.to_bytes().len()) as u64)
+        .map(|entry| (entry.release.to_bytes().len() + entry.record.to_bytes().len()) as u64)
         .sum::<u64>()
 }
 
@@ -669,56 +667,53 @@ fn ensure_store_limits_from_versions(
 }
 
 fn projected_template_versions(
-    manifests: &[(TemplateReleaseKey, TemplateManifestRecord)],
-    chunk_sets: &[(TemplateReleaseKey, TemplateChunkSetRecord)],
+    manifests: &[TemplateManifestEntryRecord],
+    chunk_sets: &[TemplateChunkSetEntryRecord],
 ) -> BTreeMap<TemplateId, BTreeSet<TemplateVersion>> {
     let mut template_versions = BTreeMap::<TemplateId, BTreeSet<TemplateVersion>>::new();
 
-    for (release, _) in manifests {
+    for entry in manifests {
         template_versions
-            .entry(release.template_id.clone())
+            .entry(entry.release.template_id.clone())
             .or_default()
-            .insert(release.version.clone());
+            .insert(entry.release.version.clone());
     }
 
-    for (release, _) in chunk_sets {
+    for entry in chunk_sets {
         template_versions
-            .entry(release.template_id.clone())
+            .entry(entry.release.template_id.clone())
             .or_default()
-            .insert(release.version.clone());
+            .insert(entry.release.version.clone());
     }
 
     template_versions
 }
 fn projected_manifests_after_replace(
     input: &TemplateManifestInput,
-) -> Vec<(TemplateReleaseKey, TemplateManifestRecord)> {
+) -> Vec<TemplateManifestEntryRecord> {
     let role = input.role.clone();
     let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
     let mut manifests = TemplateManifestStateStore::export().entries;
 
-    for (existing_release, existing) in &mut manifests {
-        if existing.role != role {
+    for entry in &mut manifests {
+        if entry.record.role != role {
             continue;
         }
-        if *existing_release == release {
+        if entry.release == release {
             continue;
         }
-        if existing.manifest_state != TemplateManifestState::Approved {
+        if entry.record.manifest_state != TemplateManifestState::Approved {
             continue;
         }
 
-        existing.manifest_state = TemplateManifestState::Deprecated;
+        entry.record.manifest_state = TemplateManifestState::Deprecated;
     }
 
     let record = input_to_record(input.clone());
-    if let Some(existing) = manifests
-        .iter_mut()
-        .find(|(existing_release, _)| *existing_release == release)
-    {
-        existing.1 = record;
+    if let Some(existing) = manifests.iter_mut().find(|entry| entry.release == release) {
+        existing.record = record;
     } else {
-        manifests.push((release, record));
+        manifests.push(TemplateManifestEntryRecord { release, record });
     }
 
     manifests
@@ -727,16 +722,13 @@ fn projected_manifests_after_replace(
 fn replace_chunk_set_entry(
     release: TemplateReleaseKey,
     record: TemplateChunkSetRecord,
-) -> Vec<(TemplateReleaseKey, TemplateChunkSetRecord)> {
-    let mut entries = TemplateChunkSetStateStore::export();
+) -> Vec<TemplateChunkSetEntryRecord> {
+    let mut entries = TemplateChunkSetStateStore::export().entries;
 
-    if let Some(existing) = entries
-        .iter_mut()
-        .find(|(existing_release, _)| *existing_release == release)
-    {
-        existing.1 = record;
+    if let Some(existing) = entries.iter_mut().find(|entry| entry.release == release) {
+        existing.record = record;
     } else {
-        entries.push((release, record));
+        entries.push(TemplateChunkSetEntryRecord { release, record });
     }
 
     entries

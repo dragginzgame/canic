@@ -10,7 +10,9 @@ use crate::{
         TemplateManifestInput, TemplateManifestResponse, WasmStoreCatalogEntryResponse,
     },
     ids::{TemplateId, TemplateManifestState, TemplateReleaseKey},
-    storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
+    storage::stable::template::{
+        TemplateManifestEntryRecord, TemplateManifestRecord, TemplateManifestStateStore,
+    },
 };
 #[cfg(feature = "root-control-plane")]
 use crate::{
@@ -167,9 +169,9 @@ impl TemplateManifestOps {
         let mut manifests = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .filter_map(|(release, record)| {
-                (record.manifest_state == TemplateManifestState::Approved)
-                    .then(|| record_to_response(release, record))
+            .filter_map(|entry| {
+                (entry.record.manifest_state == TemplateManifestState::Approved)
+                    .then(|| record_to_response(entry.release, entry.record))
             })
             .collect::<Vec<_>>();
 
@@ -219,15 +221,15 @@ impl TemplateManifestOps {
         let manifests = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .filter(|(_, record)| {
-                record.manifest_state == TemplateManifestState::Approved
-                    && &record.store_binding == store_binding
+            .filter(|entry| {
+                entry.record.manifest_state == TemplateManifestState::Approved
+                    && &entry.record.store_binding == store_binding
             })
             .collect::<Vec<_>>();
 
         let approved_payload_bytes = manifests
             .iter()
-            .map(|(_, record)| record.payload_size_bytes)
+            .map(|entry| entry.record.payload_size_bytes)
             .sum::<u64>();
         let remaining_approved_payload_bytes = limits
             .max_store_bytes
@@ -290,14 +292,18 @@ impl TemplateManifestOps {
         let approved = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .filter(|(_, record)| {
-                record.role == *role && record.manifest_state == TemplateManifestState::Approved
+            .filter(|entry| {
+                entry.record.role == *role
+                    && entry.record.manifest_state == TemplateManifestState::Approved
             })
             .collect::<Vec<_>>();
 
         match approved.as_slice() {
             [] => Err(TemplateManifestOpsError::ApprovedManifestMissing(role.clone()).into()),
-            [(release, record)] => Ok(record_to_response(release.clone(), record.clone())),
+            [entry] => Ok(record_to_response(
+                entry.release.clone(),
+                entry.record.clone(),
+            )),
             _ => Err(TemplateManifestOpsError::ApprovedManifestConflict(role.clone()).into()),
         }
     }
@@ -308,8 +314,9 @@ impl TemplateManifestOps {
         let approved_count = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .filter(|(_, record)| {
-                record.role == *role && record.manifest_state == TemplateManifestState::Approved
+            .filter(|entry| {
+                entry.record.role == *role
+                    && entry.record.manifest_state == TemplateManifestState::Approved
             })
             .count();
 
@@ -325,11 +332,12 @@ impl TemplateManifestOps {
         let role = input.role.clone();
         let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
 
-        for (existing_release, mut existing) in TemplateManifestStateStore::export().entries {
+        for entry in TemplateManifestStateStore::export().entries {
+            let mut existing = entry.record;
             if existing.role != role {
                 continue;
             }
-            if existing_release == release {
+            if entry.release == release {
                 continue;
             }
             if existing.manifest_state != TemplateManifestState::Approved {
@@ -337,7 +345,7 @@ impl TemplateManifestOps {
             }
 
             existing.manifest_state = TemplateManifestState::Deprecated;
-            TemplateManifestStateStore::upsert(existing_release, existing);
+            TemplateManifestStateStore::upsert(entry.release, existing);
         }
 
         TemplateManifestStateStore::upsert(release, input_to_record(input));
@@ -349,7 +357,8 @@ impl TemplateManifestOps {
     pub fn deprecate_approved_roles_not_in(roles: &BTreeSet<CanisterRole>) -> usize {
         let mut deprecated = 0;
 
-        for (existing_release, mut existing) in TemplateManifestStateStore::export().entries {
+        for entry in TemplateManifestStateStore::export().entries {
+            let mut existing = entry.record;
             if existing.manifest_state != TemplateManifestState::Approved {
                 continue;
             }
@@ -364,7 +373,7 @@ impl TemplateManifestOps {
             }
 
             existing.manifest_state = TemplateManifestState::Deprecated;
-            TemplateManifestStateStore::upsert(existing_release, existing);
+            TemplateManifestStateStore::upsert(entry.release, existing);
             deprecated += 1;
         }
 
@@ -408,15 +417,15 @@ fn record_to_response(
 
 #[cfg(feature = "root-control-plane")]
 fn projected_template_versions_for_manifests(
-    manifests: &[(TemplateReleaseKey, TemplateManifestRecord)],
+    manifests: &[TemplateManifestEntryRecord],
 ) -> BTreeMap<TemplateId, BTreeSet<TemplateVersion>> {
     let mut template_versions = BTreeMap::<TemplateId, BTreeSet<TemplateVersion>>::new();
 
-    for (release, _) in manifests {
+    for entry in manifests {
         template_versions
-            .entry(release.template_id.clone())
+            .entry(entry.release.template_id.clone())
             .or_default()
-            .insert(release.version.clone());
+            .insert(entry.release.version.clone());
     }
 
     template_versions
@@ -503,7 +512,7 @@ mod tests {
         let manifests = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .map(|(template_id, record)| record_to_response(template_id, record))
+            .map(|entry| record_to_response(entry.release, entry.record))
             .collect::<Vec<_>>();
         let approved = manifests
             .iter()

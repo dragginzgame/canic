@@ -6,6 +6,17 @@
 //! stable-memory access.
 //! Boundary: descriptors are static metadata supplied to host-side materialization.
 
+use crate::storage::stable::{
+    state::subnet::{ControlPlaneSubnetStateData, SubnetStateRecord},
+    template::{
+        TemplateChunkSetRecord, TemplateChunkSetsData, TemplateManifestRecord,
+        TemplateManifestsData, WasmStoreGcStateData, WasmStoreGcStateRecord,
+        chunked::{
+            TemplateChunkPayloadRecord, TemplateChunkPayloadsData, TemplateChunkRefRecord,
+            TemplateChunkRefsData,
+        },
+    },
+};
 use canic_core::{
     role_contract::{
         AllocationOwner, StateAllocationKey,
@@ -26,8 +37,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             StateAllocationKey::TemplateManifests,
             "template_manifests",
             TEMPLATE_MANIFESTS_ID,
-            "TemplateManifestRecord",
-            "TemplateManifestData",
+            TemplateManifestRecord::STATE_CONTRACT_NAME,
+            TemplateManifestsData::STATE_CONTRACT_NAME,
             200,
             "template_manifests_restore_release_index",
         ),
@@ -35,8 +46,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             StateAllocationKey::TemplateChunkSets,
             "template_chunk_sets",
             TEMPLATE_CHUNK_SETS_ID,
-            "TemplateChunkSetRecord",
-            "TemplateChunkSetData",
+            TemplateChunkSetRecord::STATE_CONTRACT_NAME,
+            TemplateChunkSetsData::STATE_CONTRACT_NAME,
             210,
             "template_chunk_sets_restore_release_metadata",
         ),
@@ -44,8 +55,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             StateAllocationKey::TemplateChunkRefs,
             "template_chunk_refs",
             TEMPLATE_CHUNK_REFS_ID,
-            "TemplateChunkRefRecord",
-            "TemplateChunkRefData",
+            TemplateChunkRefRecord::STATE_CONTRACT_NAME,
+            TemplateChunkRefsData::STATE_CONTRACT_NAME,
             220,
             "template_chunk_refs_restore_chunk_slots",
         ),
@@ -53,8 +64,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             StateAllocationKey::TemplateChunkPayloads,
             "template_chunk_payloads",
             TEMPLATE_CHUNK_PAYLOADS_ID,
-            "TemplateChunkPayloadRecord",
-            "TemplateChunkPayloadData",
+            TemplateChunkPayloadRecord::STATE_CONTRACT_NAME,
+            TemplateChunkPayloadsData::STATE_CONTRACT_NAME,
             230,
             "template_chunk_payloads_restore_chunk_bytes",
         ),
@@ -62,8 +73,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             StateAllocationKey::ControlPlaneSubnetState,
             "control_plane_subnet_state",
             CONTROL_PLANE_SUBNET_STATE_ID,
-            "SubnetStateRecord",
-            "ControlPlaneSubnetStateData",
+            SubnetStateRecord::STATE_CONTRACT_NAME,
+            ControlPlaneSubnetStateData::STATE_CONTRACT_NAME,
             240,
             "control_plane_subnet_state_restores_publication_bindings",
         ),
@@ -71,8 +82,8 @@ pub fn canic_control_plane_state_descriptors() -> Vec<StateAllocationDescriptor>
             StateAllocationKey::WasmStoreGcState,
             "wasm_store_gc_state",
             WASM_STORE_GC_STATE_ID,
-            "WasmStoreGcStateRecord",
-            "WasmStoreGcStateData",
+            WasmStoreGcStateRecord::STATE_CONTRACT_NAME,
+            WasmStoreGcStateData::STATE_CONTRACT_NAME,
             240,
             "wasm_store_gc_state_restores_local_gc_mode",
         ),
@@ -130,6 +141,53 @@ mod tests {
             StateAllocationKey::WasmStoreGcState,
         ] {
             assert!(keys.contains(&expected));
+        }
+    }
+
+    #[test]
+    fn descriptors_reference_canonical_control_plane_data_types() {
+        let descriptors = canic_control_plane_state_descriptors();
+
+        for (allocation, record, snapshot) in [
+            (
+                StateAllocationKey::TemplateManifests,
+                TemplateManifestRecord::STATE_CONTRACT_NAME,
+                TemplateManifestsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::TemplateChunkSets,
+                TemplateChunkSetRecord::STATE_CONTRACT_NAME,
+                TemplateChunkSetsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::TemplateChunkRefs,
+                TemplateChunkRefRecord::STATE_CONTRACT_NAME,
+                TemplateChunkRefsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::TemplateChunkPayloads,
+                TemplateChunkPayloadRecord::STATE_CONTRACT_NAME,
+                TemplateChunkPayloadsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::ControlPlaneSubnetState,
+                SubnetStateRecord::STATE_CONTRACT_NAME,
+                ControlPlaneSubnetStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::WasmStoreGcState,
+                WasmStoreGcStateRecord::STATE_CONTRACT_NAME,
+                WasmStoreGcStateData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("control-plane state descriptor");
+            let declaration = descriptor.state.first().expect("state declaration");
+
+            assert_eq!(declaration.record, record);
+            assert_eq!(declaration.snapshot, snapshot);
         }
     }
 }

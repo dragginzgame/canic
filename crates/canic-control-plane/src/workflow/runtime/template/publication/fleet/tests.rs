@@ -7,7 +7,9 @@ use crate::{
     ids::WasmStoreBinding,
     ids::{CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion},
     ops::storage::state::subnet::SubnetStateOps,
-    storage::stable::state::subnet::{PublicationStoreStateRecord, SubnetStateRecord},
+    storage::stable::state::subnet::{
+        ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord,
+    },
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
 };
 use candid::Principal;
@@ -76,16 +78,18 @@ fn store(
 
 #[test]
 fn promotion_is_blocked_when_it_would_overwrite_retired_binding() {
-    SubnetStateOps::import(SubnetStateRecord {
-        publication_store: PublicationStoreStateRecord {
-            active_binding: Some(WasmStoreBinding::new("active")),
-            detached_binding: Some(WasmStoreBinding::new("detached")),
-            retired_binding: Some(WasmStoreBinding::new("retired")),
-            generation: 3,
-            changed_at: 30,
-            retired_at: 20,
+    SubnetStateOps::import(ControlPlaneSubnetStateData {
+        record: SubnetStateRecord {
+            publication_store: PublicationStoreStateRecord {
+                active_binding: Some(WasmStoreBinding::new("active")),
+                detached_binding: Some(WasmStoreBinding::new("detached")),
+                retired_binding: Some(WasmStoreBinding::new("retired")),
+                generation: 3,
+                changed_at: 30,
+                retired_at: 20,
+            },
+            wasm_stores: Vec::new(),
         },
-        wasm_stores: Vec::new(),
     });
 
     WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_promotion()
@@ -94,16 +98,18 @@ fn promotion_is_blocked_when_it_would_overwrite_retired_binding() {
 
 #[test]
 fn explicit_retirement_is_blocked_when_retired_binding_already_exists() {
-    SubnetStateOps::import(SubnetStateRecord {
-        publication_store: PublicationStoreStateRecord {
-            active_binding: Some(WasmStoreBinding::new("active")),
-            detached_binding: Some(WasmStoreBinding::new("detached")),
-            retired_binding: Some(WasmStoreBinding::new("retired")),
-            generation: 3,
-            changed_at: 30,
-            retired_at: 20,
+    SubnetStateOps::import(ControlPlaneSubnetStateData {
+        record: SubnetStateRecord {
+            publication_store: PublicationStoreStateRecord {
+                active_binding: Some(WasmStoreBinding::new("active")),
+                detached_binding: Some(WasmStoreBinding::new("detached")),
+                retired_binding: Some(WasmStoreBinding::new("retired")),
+                generation: 3,
+                changed_at: 30,
+                retired_at: 20,
+            },
+            wasm_stores: Vec::new(),
         },
-        wasm_stores: Vec::new(),
     });
 
     WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_retirement()
@@ -112,16 +118,18 @@ fn explicit_retirement_is_blocked_when_retired_binding_already_exists() {
 
 #[test]
 fn clear_binding_reports_blocked_retired_slot() {
-    SubnetStateOps::import(SubnetStateRecord {
-        publication_store: PublicationStoreStateRecord {
-            active_binding: Some(WasmStoreBinding::new("active")),
-            detached_binding: Some(WasmStoreBinding::new("detached")),
-            retired_binding: Some(WasmStoreBinding::new("retired")),
-            generation: 3,
-            changed_at: 30,
-            retired_at: 20,
+    SubnetStateOps::import(ControlPlaneSubnetStateData {
+        record: SubnetStateRecord {
+            publication_store: PublicationStoreStateRecord {
+                active_binding: Some(WasmStoreBinding::new("active")),
+                detached_binding: Some(WasmStoreBinding::new("detached")),
+                retired_binding: Some(WasmStoreBinding::new("retired")),
+                generation: 3,
+                changed_at: 30,
+                retired_at: 20,
+            },
+            wasm_stores: Vec::new(),
         },
-        wasm_stores: Vec::new(),
     });
 
     WasmStorePublicationWorkflow::clear_current_publication_store_binding()

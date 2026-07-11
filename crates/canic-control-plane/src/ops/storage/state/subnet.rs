@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::storage::stable::state::subnet::SubnetStateRecord;
+use crate::storage::stable::state::subnet::ControlPlaneSubnetStateData;
 use crate::{
     dto::{state::SubnetStateResponse, template::WasmStorePublicationStateResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
@@ -28,7 +28,7 @@ impl SubnetStateOps {
     /// Export the current subnet state as a response snapshot.
     #[must_use]
     pub fn snapshot_response() -> SubnetStateResponse {
-        SubnetStateMapper::record_to_response(SubnetState::export())
+        SubnetStateMapper::data_to_response(SubnetState::export())
     }
 
     /// Return the current root-owned publication binding, if one is pinned.
@@ -137,7 +137,7 @@ impl SubnetStateOps {
     }
 
     #[cfg(test)]
-    pub fn import(data: SubnetStateRecord) {
+    pub fn import(data: ControlPlaneSubnetStateData) {
         SubnetState::import(data);
     }
 }
