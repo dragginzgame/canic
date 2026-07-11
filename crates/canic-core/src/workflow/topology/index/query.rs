@@ -12,7 +12,7 @@ use crate::{
     },
     ids::CanisterRole,
     ops::storage::index::{app::AppIndexOps, mapper::IndexEntryMapper, subnet::SubnetIndexOps},
-    storage::stable::index::IndexEntryRecord,
+    view::topology::IndexEntryView,
     workflow::view::paginate::paginate_vec,
 };
 
@@ -30,7 +30,7 @@ impl AppIndexQuery {
 
     #[must_use]
     pub fn page(page: PageRequest) -> Page<IndexEntryResponse> {
-        index_page(AppIndexOps::data().entries, page)
+        index_page(AppIndexOps::entry_projections(), page)
     }
 }
 
@@ -48,11 +48,11 @@ impl SubnetIndexQuery {
 
     #[must_use]
     pub fn page(page: PageRequest) -> Page<IndexEntryResponse> {
-        index_page(SubnetIndexOps::data().entries, page)
+        index_page(SubnetIndexOps::entry_projections(), page)
     }
 }
 
-// Paginate index records and let ops own record -> DTO mapping.
-fn index_page(entries: Vec<IndexEntryRecord>, page: PageRequest) -> Page<IndexEntryResponse> {
-    IndexEntryMapper::record_page_to_response(paginate_vec(entries, page))
+// Paginate read-only index projections and let ops own response mapping.
+fn index_page(entries: Vec<IndexEntryView>, page: PageRequest) -> Page<IndexEntryResponse> {
+    IndexEntryMapper::projection_page_to_response(paginate_vec(entries, page))
 }

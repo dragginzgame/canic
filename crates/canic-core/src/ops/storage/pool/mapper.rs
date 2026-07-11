@@ -52,7 +52,7 @@ pub struct CanisterPoolResponseMapper;
 
 impl CanisterPoolResponseMapper {
     #[must_use]
-    pub fn data_to_view(data: CanisterPoolData) -> CanisterPoolResponse {
+    pub fn data_to_response(data: CanisterPoolData) -> CanisterPoolResponse {
         CanisterPoolResponse {
             entries: data
                 .entries

@@ -6,16 +6,18 @@
 
 use crate::{
     InternalError,
+    domain::policy::pure::topology::IndexPolicyInput,
     dto::topology::AppIndexArgs,
     ops::{
         config::ConfigOps,
         prelude::*,
         storage::index::{
             ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
-            mapper::AppIndexDataMapper,
+            mapper::{AppIndexDataMapper, IndexEntryMapper},
         },
     },
     storage::stable::index::app::{AppIndex, AppIndexData},
+    view::topology::IndexEntryView,
 };
 
 ///
@@ -44,8 +46,18 @@ impl AppIndexOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> AppIndexData {
+    pub(crate) fn data() -> AppIndexData {
         AppIndex::export()
+    }
+
+    #[must_use]
+    pub fn entry_projections() -> Vec<IndexEntryView> {
+        IndexEntryMapper::records_to_projections(AppIndex::export().entries)
+    }
+
+    #[must_use]
+    pub(crate) fn policy_input() -> Vec<IndexPolicyInput> {
+        IndexEntryMapper::records_to_policy_input(&AppIndex::export().entries)
     }
 
     #[must_use]

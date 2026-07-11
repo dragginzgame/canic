@@ -10,6 +10,7 @@ use crate::{
     storage::stable::state::subnet::{
         ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord,
     },
+    view::state::PublicationStoreStateView,
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
 };
 use candid::Principal;
@@ -142,7 +143,7 @@ fn clear_binding_reports_blocked_retired_slot() {
 
 #[test]
 fn detached_and_retired_bindings_are_not_publication_candidates() {
-    let state = PublicationStoreStateRecord {
+    let state = PublicationStoreStateView {
         active_binding: Some(WasmStoreBinding::new("active")),
         detached_binding: Some(WasmStoreBinding::new("detached")),
         retired_binding: Some(WasmStoreBinding::new("retired")),
@@ -176,7 +177,7 @@ fn exact_release_is_reused_before_new_store_is_created() {
     let manifest = manifest("app", "embedded:app", "0.20.9", 7, 512);
     let fleet = PublicationStoreFleet {
         preferred_binding: Some(WasmStoreBinding::new("primary")),
-        reserved_state: PublicationStoreStateRecord::default(),
+        reserved_state: PublicationStoreStateView::default(),
         stores: vec![store(
             "primary",
             1,
@@ -210,7 +211,7 @@ fn conflicting_duplicate_release_is_rejected() {
     let manifest = manifest("app", "embedded:app", "0.20.9", 7, 512);
     let fleet = PublicationStoreFleet {
         preferred_binding: Some(WasmStoreBinding::new("primary")),
-        reserved_state: PublicationStoreStateRecord::default(),
+        reserved_state: PublicationStoreStateView::default(),
         stores: vec![store(
             "primary",
             1,
@@ -240,7 +241,7 @@ fn placement_uses_another_store_before_requesting_new_capacity() {
     let manifest = manifest("app", "embedded:app", "0.20.9", 7, 8_000_000);
     let fleet = PublicationStoreFleet {
         preferred_binding: Some(WasmStoreBinding::new("primary")),
-        reserved_state: PublicationStoreStateRecord::default(),
+        reserved_state: PublicationStoreStateView::default(),
         stores: vec![
             store("primary", 1, 10, 2_000_000, Vec::new(), Vec::new()),
             store("secondary", 2, 20, 16_000_000, Vec::new(), Vec::new()),
@@ -261,7 +262,7 @@ fn reconcile_binding_ignores_older_role_versions_on_other_stores() {
     let manifest = manifest("app", "embedded:app", "0.20.10", 7, 512);
     let fleet = PublicationStoreFleet {
         preferred_binding: Some(WasmStoreBinding::new("primary")),
-        reserved_state: PublicationStoreStateRecord::default(),
+        reserved_state: PublicationStoreStateView::default(),
         stores: vec![
             store(
                 "primary",
@@ -313,7 +314,7 @@ fn reconcile_binding_uses_preferred_exact_duplicate_when_current_binding_is_gone
 
     let fleet = PublicationStoreFleet {
         preferred_binding: Some(WasmStoreBinding::new("secondary")),
-        reserved_state: PublicationStoreStateRecord::default(),
+        reserved_state: PublicationStoreStateView::default(),
         stores: vec![
             store(
                 "primary",
@@ -363,7 +364,7 @@ fn reconcile_binding_rejects_missing_exact_release() {
     let manifest = manifest("app", "embedded:app", "0.20.10", 7, 512);
     let fleet = PublicationStoreFleet {
         preferred_binding: Some(WasmStoreBinding::new("primary")),
-        reserved_state: PublicationStoreStateRecord::default(),
+        reserved_state: PublicationStoreStateView::default(),
         stores: vec![store(
             "primary",
             1,

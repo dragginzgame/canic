@@ -5,8 +5,8 @@
 //! Boundary: memory macros and ledger helpers use this after bootstrap validation.
 
 #[cfg(any(test, target_arch = "wasm32"))]
-use ic_memory::stable_structures::Memory;
-use ic_memory::stable_structures::{DefaultMemoryImpl, memory_manager::MemoryManager};
+use crate::cdk::structures::Memory;
+use crate::cdk::structures::{DefaultMemoryImpl, memory::MemoryManager};
 use std::cell::RefCell;
 
 #[cfg(any(test, target_arch = "wasm32"))]

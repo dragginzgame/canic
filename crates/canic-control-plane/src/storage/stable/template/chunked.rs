@@ -1,5 +1,6 @@
 use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
 use canic_core::CANIC_WASM_CHUNK_BYTES;
+use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use canic_core::cdk::structures::{
     DefaultMemoryImpl, Vec as StableVec,
     memory::VirtualMemory,
@@ -10,7 +11,6 @@ use canic_core::impl_storable_unbounded;
 use canic_core::role_contract::allocation::memory::template::{
     TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "root-control-plane")]
 use std::collections::BTreeMap as StdBTreeMap;
@@ -28,7 +28,7 @@ eager_static! {
     static TEMPLATE_CHUNK_SETS: RefCell<
         StableBtreeMap<TemplateReleaseKey, TemplateChunkSetRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_sets.v1", TemplateChunkSetStateStore, TEMPLATE_CHUNK_SETS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_chunk_sets.v1", ty = TemplateChunkSetStateStore, id = TEMPLATE_CHUNK_SETS_ID)),
     );
 }
 
@@ -40,13 +40,13 @@ eager_static! {
     static TEMPLATE_CHUNK_REFS: RefCell<
         StableBtreeMap<TemplateChunkKey, TemplateChunkRefRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_chunk_refs.v1", TemplateChunkRefStore, TEMPLATE_CHUNK_REFS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_chunk_refs.v1", ty = TemplateChunkRefStore, id = TEMPLATE_CHUNK_REFS_ID)),
     );
 }
 
 eager_static! {
     static TEMPLATE_CHUNK_PAYLOADS_MEMORY: VirtualMemory<DefaultMemoryImpl> =
-        canic_core::ic_memory_key!("canic.control_plane.template_chunk_payloads.v1", TemplateChunkPayloadStore, TEMPLATE_CHUNK_PAYLOADS_ID);
+        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_chunk_payloads.v1", ty = TemplateChunkPayloadStore, id = TEMPLATE_CHUNK_PAYLOADS_ID);
 }
 
 eager_static! {

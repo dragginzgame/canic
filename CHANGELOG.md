@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.14` hard-cuts dependency adapters for `ic-memory 0.8.1` and
+  `k256 0.14`, and restores ops-owned workflow projections while preserving
+  stable keys, IDs, encodings, cryptographic wire formats, and runtime behavior.
+
 - `0.84.13` fixes minimal and wasm-store packaged control-plane descriptor
   builds and makes version bumps contingent on the configured feature and test
   gates passing.

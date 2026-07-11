@@ -886,7 +886,7 @@ mod tests {
     fn chain_key_ecdsa_signature_verifier_accepts_valid_prehash_signature() {
         let signing_key =
             K256SigningKey::from_slice(&[7; 32]).expect("test signing key should parse");
-        let public_key = signing_key.verifying_key().to_encoded_point(true);
+        let public_key = signing_key.verifying_key().to_sec1_point(true);
         let message_hash = [42; 32];
         let signature: K256TestSignature = signing_key
             .sign_prehash(&message_hash)
@@ -912,7 +912,7 @@ mod tests {
     fn chain_key_ecdsa_signature_verifier_rejects_altered_signature() {
         let signing_key =
             K256SigningKey::from_slice(&[7; 32]).expect("test signing key should parse");
-        let public_key = signing_key.verifying_key().to_encoded_point(true);
+        let public_key = signing_key.verifying_key().to_sec1_point(true);
         let message_hash = [42; 32];
         let signature: K256TestSignature = signing_key
             .sign_prehash(&message_hash)

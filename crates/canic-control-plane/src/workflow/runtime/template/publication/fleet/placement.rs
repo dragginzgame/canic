@@ -3,7 +3,7 @@ use crate::{
     dto::template::{TemplateManifestResponse, WasmStoreStatusResponse},
     ids::WasmStoreBinding,
     schema::WasmStoreConfig,
-    storage::stable::state::subnet::{PublicationStoreStateRecord, WasmStoreRecord},
+    view::state::{PublicationStoreStateView, WasmStoreView},
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
 };
 use canic_core::cdk::types::Principal;
@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 #[derive(Clone, Debug)]
 pub(in crate::workflow::runtime::template::publication) struct PublicationStoreFleet {
     pub preferred_binding: Option<WasmStoreBinding>,
-    pub reserved_state: PublicationStoreStateRecord,
+    pub reserved_state: PublicationStoreStateView,
     pub stores: Vec<PublicationStoreSnapshot>,
 }
 
@@ -156,7 +156,7 @@ impl PublicationStoreFleet {
     // Append one newly-created empty store to the writable fleet snapshot.
     pub(in crate::workflow::runtime::template::publication) fn push_store(
         &mut self,
-        record: WasmStoreRecord,
+        record: WasmStoreView,
         config: WasmStoreConfig,
     ) {
         self.stores.push(PublicationStoreSnapshot {

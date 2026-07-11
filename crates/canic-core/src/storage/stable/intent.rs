@@ -4,6 +4,7 @@
 //! enforces mechanical invariants (uniqueness, monotonic state transitions,
 //! aggregate consistency). Policy and capacity decisions live above this layer.
 
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{
         DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
@@ -14,7 +15,6 @@ use crate::{
     },
     storage::prelude::*,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
 //
@@ -26,7 +26,7 @@ pub const INTENT_STORE_SCHEMA_VERSION: u32 = 1;
 eager_static! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!("canic.core.intent_meta.v1", IntentStoreMetaRecord, INTENT_META_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_meta.v1", ty = IntentStoreMetaRecord, id = INTENT_META_ID),
             IntentStoreMetaRecord::default(),
         ));
 }
@@ -35,7 +35,7 @@ eager_static! {
     static INTENT_RECORDS: RefCell<
         StableBtreeMap<IntentId, IntentRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.intent_records.v1", IntentRecord, INTENT_RECORDS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_records.v1", ty = IntentRecord, id = INTENT_RECORDS_ID)),
     );
 }
 
@@ -43,7 +43,7 @@ eager_static! {
     static INTENT_TOTALS: RefCell<
         StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.intent_totals.v1", IntentResourceTotalsRecord, INTENT_TOTALS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_totals.v1", ty = IntentResourceTotalsRecord, id = INTENT_TOTALS_ID)),
     );
 }
 
@@ -51,7 +51,7 @@ eager_static! {
     static INTENT_PENDING: RefCell<
         StableBtreeMap<IntentId, IntentPendingEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.intent_pending.v1", IntentPendingEntryRecord, INTENT_PENDING_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_pending.v1", ty = IntentPendingEntryRecord, id = INTENT_PENDING_ID)),
     );
 }
 

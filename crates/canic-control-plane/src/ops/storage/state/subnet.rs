@@ -5,9 +5,9 @@ use crate::{
     ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::mapper::SubnetStateMapper,
     storage::stable::state::subnet::{
-        PublicationStoreStateRecord, SubnetState, WasmStoreInventoryConflict, WasmStoreRecord,
-        WasmStoreUpsertOutcome,
+        SubnetState, WasmStoreInventoryConflict, WasmStoreUpsertOutcome,
     },
+    view::state::{PublicationStoreStateView, WasmStoreView},
 };
 use canic_core::{
     cdk::types::Principal,
@@ -39,14 +39,17 @@ impl SubnetStateOps {
 
     /// Return the current root-owned publication binding lifecycle state.
     #[must_use]
-    pub fn publication_store_state() -> PublicationStoreStateRecord {
-        SubnetState::publication_store_state()
+    pub fn publication_store_state() -> PublicationStoreStateView {
+        SubnetStateMapper::publication_store_record_to_view(SubnetState::publication_store_state())
     }
 
     /// Return all known runtime-managed wasm stores for the current subnet.
     #[must_use]
-    pub fn wasm_stores() -> Vec<WasmStoreRecord> {
+    pub fn wasm_stores() -> Vec<WasmStoreView> {
         SubnetState::wasm_stores()
+            .into_iter()
+            .map(SubnetStateMapper::wasm_store_record_to_view)
+            .collect()
     }
 
     /// Resolve one runtime-managed wasm store principal by logical binding.
@@ -90,8 +93,8 @@ impl SubnetStateOps {
 
     /// Remove one runtime-managed wasm store record by binding.
     #[must_use]
-    pub fn remove_wasm_store(binding: &WasmStoreBinding) -> Option<WasmStoreRecord> {
-        SubnetState::remove_wasm_store(binding)
+    pub fn remove_wasm_store(binding: &WasmStoreBinding) -> bool {
+        SubnetState::remove_wasm_store(binding).is_some()
     }
 
     /// Persist one GC lifecycle transition for a runtime-managed wasm store.

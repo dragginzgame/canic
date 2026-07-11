@@ -1,3 +1,4 @@
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::{
         structures::{DefaultMemoryImpl, memory::VirtualMemory},
@@ -7,14 +8,13 @@ use crate::{
     role_contract::allocation::memory::placement::DIRECTORY_REGISTRY_ID,
     storage::prelude::*,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
     static DIRECTORY_REGISTRY: RefCell<
         StableBtreeMap<DirectoryKey, DirectoryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.directory_registry.v1", DirectoryRegistry, DIRECTORY_REGISTRY_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.directory_registry.v1", ty = DirectoryRegistry, id = DIRECTORY_REGISTRY_ID)),
     );
 }
 

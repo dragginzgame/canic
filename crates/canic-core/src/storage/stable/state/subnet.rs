@@ -12,7 +12,7 @@ use std::cell::RefCell;
 eager_static! {
     static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!("canic.core.subnet_state.v1", SubnetState, SUBNET_STATE_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.subnet_state.v1", ty = SubnetState, id = SUBNET_STATE_ID),
             SubnetStateRecord::default(),
         ));
 }

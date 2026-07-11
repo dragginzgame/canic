@@ -48,8 +48,18 @@ struct LogMemory {
 impl LogMemory {
     fn new() -> Self {
         Self {
-            index: crate::ic_memory_key!("canic.core.log_index.v1", LogIndexMemory, LOG_INDEX_ID),
-            data: crate::ic_memory_key!("canic.core.log_data.v1", LogDataMemory, LOG_DATA_ID),
+            index: crate::ic_memory_key!(
+                authority = CANIC_CORE_MEMORY_AUTHORITY,
+                key = "canic.core.log_index.v1",
+                ty = LogIndexMemory,
+                id = LOG_INDEX_ID
+            ),
+            data: crate::ic_memory_key!(
+                authority = CANIC_CORE_MEMORY_AUTHORITY,
+                key = "canic.core.log_data.v1",
+                ty = LogDataMemory,
+                id = LOG_DATA_ID
+            ),
         }
     }
 }

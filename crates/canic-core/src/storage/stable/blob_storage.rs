@@ -13,6 +13,8 @@
 )]
 
 #[cfg(feature = "blob-storage")]
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
+#[cfg(feature = "blob-storage")]
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     eager_static,
@@ -22,8 +24,6 @@ use crate::{
     },
 };
 use crate::{cdk::types::BoundedString128, storage::prelude::*};
-#[cfg(feature = "blob-storage")]
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 #[cfg(feature = "blob-storage")]
 use std::cell::RefCell;
 
@@ -49,7 +49,7 @@ eager_static! {
     static STORED_BLOBS: RefCell<
         StableBtreeMap<BlobRootHashKey, StoredBlobRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.blob_storage.stored_blobs.v1", StoredBlobStore, STORED_BLOBS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.stored_blobs.v1", ty = StoredBlobStore, id = STORED_BLOBS_ID)),
     );
 }
 
@@ -58,7 +58,7 @@ eager_static! {
     static BLOB_DELETION_PENDING: RefCell<
         StableBtreeMap<BlobRootHashKey, BlobDeletionPendingRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.blob_storage.deletion_pending.v1", BlobDeletionPendingStore, BLOB_DELETION_PENDING_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.deletion_pending.v1", ty = BlobDeletionPendingStore, id = BLOB_DELETION_PENDING_ID)),
     );
 }
 
@@ -67,7 +67,7 @@ eager_static! {
     static STORAGE_GATEWAY_PRINCIPALS: RefCell<
         StableBtreeMap<Principal, StorageGatewayPrincipalRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.blob_storage.gateway_principals.v1", StorageGatewayPrincipalStore, STORAGE_GATEWAY_PRINCIPALS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.gateway_principals.v1", ty = StorageGatewayPrincipalStore, id = STORAGE_GATEWAY_PRINCIPALS_ID)),
     );
 }
 
@@ -76,7 +76,7 @@ eager_static! {
     static BLOB_STORAGE_BILLING: RefCell<
         Cell<BlobStorageBillingStateRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
-        crate::ic_memory_key!("canic.core.blob_storage.billing.v1", BlobStorageBillingStore, BLOB_STORAGE_BILLING_ID),
+        crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.blob_storage.billing.v1", ty = BlobStorageBillingStore, id = BLOB_STORAGE_BILLING_ID),
         BlobStorageBillingStateRecord::default(),
     ));
 }

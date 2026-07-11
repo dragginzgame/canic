@@ -1,3 +1,4 @@
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::impl_storable_unbounded;
 use crate::{
     cdk::{
@@ -8,7 +9,6 @@ use crate::{
     ids::CanisterRole,
     role_contract::allocation::memory::pool::CANISTER_POOL_ID,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -16,7 +16,7 @@ eager_static! {
     static POOL_STORE: RefCell<
         StableBtreeMap<Principal, PoolRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.canister_pool.v1", PoolStore, CANISTER_POOL_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.canister_pool.v1", ty = PoolStore, id = CANISTER_POOL_ID)),
     );
 }
 

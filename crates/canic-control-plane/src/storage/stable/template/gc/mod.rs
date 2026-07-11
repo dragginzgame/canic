@@ -11,7 +11,7 @@ eager_static! {
     static WASM_STORE_GC_STATE: RefCell<
         Cell<WasmStoreGcStateRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(
-        canic_core::ic_memory_key!("canic.control_plane.wasm_store_gc_state.v1", WasmStoreGcStateRecord, WASM_STORE_GC_STATE_ID),
+        canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.wasm_store_gc_state.v1", ty = WasmStoreGcStateRecord, id = WASM_STORE_GC_STATE_ID),
         WasmStoreGcStateRecord::default(),
     ));
 }

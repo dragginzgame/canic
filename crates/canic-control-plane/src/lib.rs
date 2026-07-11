@@ -5,6 +5,7 @@
 //! control-plane feature is enabled.
 
 canic_core::ic_memory_range!(
+    authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
     start = canic_core::role_contract::allocation::CANIC_CONTROL_PLANE_MIN_ID,
     end = canic_core::role_contract::allocation::CANIC_CONTROL_PLANE_MAX_ID,
 );
@@ -36,5 +37,7 @@ pub mod runtime;
 pub mod schema;
 pub mod state_contract;
 pub(crate) mod storage;
+#[cfg(feature = "root-control-plane")]
+pub(crate) mod view;
 #[cfg(feature = "root-control-plane")]
 pub(crate) mod workflow;
