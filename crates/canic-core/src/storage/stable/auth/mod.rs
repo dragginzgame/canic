@@ -11,7 +11,7 @@ mod records;
 mod sessions;
 
 pub use records::{
-    ActiveDelegationProofRecord, AuthStateRecord, ChainKeyAlgorithmRecord,
+    ActiveDelegationProofRecord, AuthStateData, AuthStateRecord, ChainKeyAlgorithmRecord,
     ChainKeyBatchHeaderRecord, ChainKeyBatchWitnessRecord, ChainKeyBatchWitnessStepRecord,
     ChainKeyDelegationCertRecord, ChainKeyKeyIdRecord, ChainKeyRootDelegationBatchIssuerRecord,
     ChainKeyRootDelegationBatchRecord, ChainKeyRootDelegationBatchStatusRecord,
@@ -46,6 +46,19 @@ impl_storable_unbounded!(AuthStateRecord);
 pub struct AuthState;
 
 impl AuthState {
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn export() -> AuthStateData {
+        AuthStateData {
+            record: AUTH_STATE.with_borrow(|cell| cell.get().clone()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn import(data: AuthStateData) {
+        AUTH_STATE.with_borrow_mut(|cell| cell.set(data.record));
+    }
+
     // Resolve an active delegated session for the wallet caller.
     #[must_use]
     pub(crate) fn get_active_delegated_session(
@@ -423,5 +436,43 @@ impl AuthState {
             }
             removed
         })
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::seams;
+
+    struct AuthStateRestore(AuthStateData);
+
+    impl Drop for AuthStateRestore {
+        fn drop(&mut self) {
+            AuthState::import(self.0.clone());
+        }
+    }
+
+    #[test]
+    fn auth_state_round_trips_through_canonical_data_snapshot() {
+        let _guard = seams::lock();
+        let original = AuthState::export();
+        let original_epoch = original.record.delegated_auth_registry_epoch;
+        let _restore = AuthStateRestore(original.clone());
+        let next_epoch = AuthState::advance_delegated_auth_registry_epoch();
+
+        assert_eq!(
+            AuthState::export().record.delegated_auth_registry_epoch,
+            next_epoch
+        );
+
+        AuthState::import(original);
+        assert_eq!(
+            AuthState::export().record.delegated_auth_registry_epoch,
+            original_epoch
+        );
     }
 }

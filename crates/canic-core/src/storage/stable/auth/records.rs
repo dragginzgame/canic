@@ -419,6 +419,32 @@ pub struct AuthStateRecord {
     pub chain_key_root_delegation_batches: Vec<ChainKeyRootDelegationBatchRecord>,
 }
 
+impl AuthStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "AuthStateRecord";
+}
+
+///
+/// AuthStateData
+///
+/// Canonical full auth-state snapshot used for schema and round-trip validation.
+///
+
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "auth snapshots are materialized only by focused round-trip validation"
+    )
+)]
+#[derive(Clone, Debug, Default)]
+pub struct AuthStateData {
+    pub record: AuthStateRecord,
+}
+
+impl AuthStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "AuthStateData";
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

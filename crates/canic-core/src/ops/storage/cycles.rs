@@ -13,8 +13,8 @@ use crate::{
     },
     ops::prelude::*,
     storage::stable::cycles::{
-        CycleTopupEventKey, CycleTopupEventRecord, CycleTopupEventStatusRecord, CycleTopupEvents,
-        CycleTracker, CyclesFundingLedger, CyclesFundingLedgerRecord,
+        CycleTopupEventEntryRecord, CycleTopupEventStatusRecord, CycleTopupEvents, CycleTracker,
+        CyclesFundingLedger, CyclesFundingLedgerRecord,
     },
 };
 
@@ -180,25 +180,23 @@ impl CycleTopupEventOps {
     }
 
     #[must_use]
-    pub fn entries() -> Vec<(CycleTopupEventKey, CycleTopupEventRecord)> {
-        CycleTopupEvents::entries(0, usize::MAX)
+    pub fn entries() -> Vec<CycleTopupEventEntryRecord> {
+        CycleTopupEvents::data(0, usize::MAX).entries
     }
 
     #[must_use]
-    pub fn page_to_response(
-        page: Page<(CycleTopupEventKey, CycleTopupEventRecord)>,
-    ) -> Page<CycleTopupEvent> {
+    pub fn page_to_response(page: Page<CycleTopupEventEntryRecord>) -> Page<CycleTopupEvent> {
         Page {
             entries: page
                 .entries
                 .into_iter()
-                .map(|(key, record)| CycleTopupEvent {
-                    timestamp_secs: key.timestamp_secs,
-                    sequence: key.sequence,
-                    requested_cycles: record.requested_cycles,
-                    transferred_cycles: record.transferred_cycles,
-                    status: record.status.into(),
-                    error: record.error,
+                .map(|entry| CycleTopupEvent {
+                    timestamp_secs: entry.key.timestamp_secs,
+                    sequence: entry.key.sequence,
+                    requested_cycles: entry.record.requested_cycles,
+                    transferred_cycles: entry.record.transferred_cycles,
+                    status: entry.record.status.into(),
+                    error: entry.record.error,
                 })
                 .collect(),
             total: page.total,

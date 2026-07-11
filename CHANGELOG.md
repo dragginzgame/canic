@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.10` adds canonical snapshots for auth, replay, cycle history, funding
+  ledgers, and ICP-refill history with owner-defined descriptor names while
+  preserving stable-memory IDs and record encodings.
+
 - `0.84.9` separates persisted environment, application-state, and
   subnet-state records from canonical `*Data` snapshots while preserving
   memory IDs and record encodings.

@@ -117,10 +117,38 @@ pub struct IcpRefillRecord {
 }
 
 impl IcpRefillRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "IcpRefillRecord";
     pub const STORABLE_MAX_SIZE: u32 = 4096;
 }
 
 impl_storable_bounded!(IcpRefillRecord, IcpRefillRecord::STORABLE_MAX_SIZE, false);
+
+///
+/// IcpRefillEntryRecord
+///
+/// One logical ICP-refill snapshot row preserving its stable record key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IcpRefillEntryRecord {
+    pub key: IcpRefillRecordKey,
+    pub record: IcpRefillRecord,
+}
+
+///
+/// IcpRefillRecordsData
+///
+/// Canonical ICP-refill-record allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct IcpRefillRecordsData {
+    pub entries: Vec<IcpRefillEntryRecord>,
+}
+
+impl IcpRefillRecordsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "IcpRefillRecordsData";
+}
 
 ///
 /// IcpRefillRecords
@@ -151,18 +179,83 @@ impl IcpRefillRecords {
     }
 
     #[must_use]
-    pub(crate) fn entries(
-        offset: usize,
-        limit: usize,
-    ) -> Vec<(IcpRefillRecordKey, IcpRefillRecord)> {
-        ICP_REFILL_RECORDS.with_borrow(|records| {
-            records
-                .map
-                .iter()
-                .skip(offset)
-                .take(limit)
-                .map(|entry| (*entry.key(), entry.value()))
-                .collect()
-        })
+    pub(crate) fn data(offset: usize, limit: usize) -> IcpRefillRecordsData {
+        IcpRefillRecordsData {
+            entries: ICP_REFILL_RECORDS.with_borrow(|records| {
+                records
+                    .map
+                    .iter()
+                    .skip(offset)
+                    .take(limit)
+                    .map(|entry| IcpRefillEntryRecord {
+                        key: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn import(data: IcpRefillRecordsData) {
+        ICP_REFILL_RECORDS.with_borrow_mut(|records| {
+            records.map.clear_new();
+            for entry in data.entries {
+                records.map.insert(entry.key, entry.record);
+            }
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_for_tests() {
+        ICP_REFILL_RECORDS.with_borrow_mut(|records| records.map.clear_new());
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::seams;
+
+    #[test]
+    fn icp_refill_records_round_trip_through_canonical_data_snapshot() {
+        let _guard = seams::lock();
+        IcpRefillRecords::clear_for_tests();
+        let record = IcpRefillRecord {
+            id: 1,
+            operation_id: [2; 32],
+            source_canister: seams::p(3),
+            source_subaccount: Some([4; 32]),
+            target_canister: seams::p(5),
+            ledger_canister_id: seams::p(6),
+            cmc_canister_id: seams::p(7),
+            cmc_to_account_owner: seams::p(8),
+            cmc_to_account_subaccount: Some([9; 32]),
+            amount_e8s: 10,
+            fee_e8s: 11,
+            memo: vec![12],
+            created_at_time_ns: 13,
+            ledger_block_index: Some(14),
+            notify_attempts: 15,
+            cycles_sent: Some(Nat::from(16_u64)),
+            status: IcpRefillRecordStatus::Completed,
+            error_code: None,
+            error_message: None,
+            refund_block_index: None,
+            transaction_too_old_min_block_index: None,
+            created_at_ns: 17,
+            updated_at_ns: 18,
+        };
+        IcpRefillRecords::insert(record);
+
+        let data = IcpRefillRecords::data(0, usize::MAX);
+        IcpRefillRecords::clear_for_tests();
+        IcpRefillRecords::import(data.clone());
+        assert_eq!(IcpRefillRecords::data(0, usize::MAX), data);
+        IcpRefillRecords::clear_for_tests();
     }
 }
