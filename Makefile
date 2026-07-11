@@ -5,6 +5,7 @@
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm test-bump build check clippy fmt fmt-check clean clean-wasm \
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
+        control-plane-feature-gate \
         install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
@@ -136,22 +137,23 @@ tags:
 	@git tag --sort=-version:refname | head -10
 
 patch: ensure-clean fmt test-bump
-	@scripts/ci/bump-version.sh patch
+	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh patch
 
 minor:
 	@scripts/ci/confirm-version-bump.sh minor
 	@$(MAKE) ensure-clean
 	@$(MAKE) fmt
 	@$(MAKE) test-bump
-	@scripts/ci/bump-version.sh minor
+	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh minor
 
 major:
 	@scripts/ci/confirm-version-bump.sh major
 	@$(MAKE) ensure-clean
 	@$(MAKE) fmt
+	@$(MAKE) control-plane-feature-gate
 	@$(MAKE) clippy
 	@$(MAKE) test
-	@scripts/ci/bump-version.sh major
+	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh major
 
 release-patch: patch release-stage release-commit release-push
 
@@ -207,9 +209,13 @@ test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
 test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit-fast
 
 # Version-bump gate.
-# Keeps clippy plus the fast unit/lib/bin workspace run, while leaving the
-# local ICP CLI fast path as an explicit manual target.
-test-bump: blob-storage-inventory-gate blob-storage-cashier-inventory-gate clippy test-unit-fast
+# Keeps the control-plane feature matrix, clippy, and fast unit/lib/bin
+# workspace run, while leaving the local ICP CLI fast path explicit.
+test-bump: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
+        control-plane-feature-gate clippy test-unit-fast
+
+control-plane-feature-gate:
+	bash scripts/ci/check-control-plane-feature-matrix.sh
 
 blob-storage-inventory-gate:
 	bash scripts/ci/check-blob-storage-inventory-gate.sh

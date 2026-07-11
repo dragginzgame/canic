@@ -84,6 +84,10 @@ Release bumps are human-owned. The normal human release path is `make patch`,
 `make minor`, or `make major`, followed by review of generated changes. Once
 reviewed, humans finish the release with `make release-stage`,
 `make release-commit`, and `make release-push`.
+The Make version targets complete their required test and feature gates before
+changing package versions; any failed gate leaves the version unchanged. The
+underlying bump script rejects direct invocation without the private gate
+marker supplied by those targets.
 For one-shot releases, humans may run `make release-patch`,
 `make release-minor`, or `make release-major`, which perform those steps in
 order.
