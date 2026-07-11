@@ -4,15 +4,21 @@ use super::{
     candid::{idl_blob, idl_text},
     progress::StageProgress,
 };
+use crate::icp::LocalReplicaTarget;
 use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::decode_hex, protocol};
 use std::{path::Path, time::Instant};
 
 use super::super::ReleaseSetEntry;
 
 // Stage one manifest, prepare its chunk set, and publish all chunk bytes into root.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "release identity, target, and progress remain explicit during staging"
+)]
 pub(super) fn stage_release_entry(
     icp_root: &Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -48,7 +54,9 @@ pub(super) fn stage_release_entry(
     let payload_hash = decode_hex(&entry.payload_sha256_hex)?;
 
     stage_release_manifest(
+        icp_root,
         network,
+        local_replica,
         root_canister,
         release_version,
         entry,
@@ -58,7 +66,9 @@ pub(super) fn stage_release_entry(
     )?;
 
     prepare_release_chunks(
+        icp_root,
         network,
+        local_replica,
         root_canister,
         release_version,
         entry,
@@ -68,7 +78,9 @@ pub(super) fn stage_release_entry(
 
     progress.start_entry(entry, chunk_count)?;
     publish_release_chunks(
+        icp_root,
         network,
+        local_replica,
         root_canister,
         release_version,
         entry,
@@ -81,8 +93,14 @@ pub(super) fn stage_release_entry(
 }
 
 // Stage one approved manifest into root before any chunk preparation/upload begins.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "manifest identity and exact ICP target remain explicit at publication"
+)]
 fn stage_release_manifest(
+    icp_root: &Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -104,7 +122,9 @@ fn stage_release_manifest(
         now_secs,
     );
     let _ = icp_call_on_network(
+        icp_root,
         network,
+        local_replica,
         root_canister,
         protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
         Some(&manifest),
@@ -114,8 +134,14 @@ fn stage_release_manifest(
 }
 
 // Prepare the root-local chunk set metadata before sending any chunk bytes.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "chunk identity and exact ICP target remain explicit at preparation"
+)]
 fn prepare_release_chunks(
+    icp_root: &Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -143,7 +169,9 @@ fn prepare_release_chunks(
         chunk_hash_literals,
     );
     let _ = icp_call_on_network(
+        icp_root,
         network,
+        local_replica,
         root_canister,
         protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
         Some(&prepare),
@@ -153,8 +181,14 @@ fn prepare_release_chunks(
 }
 
 // Upload every prepared chunk and print live progress before and after each call.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "chunk identity, exact ICP target, and progress remain explicit during upload"
+)]
 fn publish_release_chunks(
+    icp_root: &Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     release_version: &str,
     entry: &ReleaseSetEntry,
@@ -171,7 +205,9 @@ fn publish_release_chunks(
             idl_blob(chunk),
         );
         let _ = icp_call_on_network(
+            icp_root,
             network,
+            local_replica,
             root_canister,
             protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
             Some(&request),

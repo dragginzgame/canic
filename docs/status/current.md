@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.13`, published and tagged
-  as `v0.84.13`.
+- The current package/release-surface version is `0.84.14`, published and tagged
+  as `v0.84.14`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -228,8 +228,8 @@ before this compaction is archived at
   run the minimal, wasm-store-only, and host-consumer compile matrix, and the
   bump script refuses direct execution without a completed release gate.
 
-- The `0.84.14` layering-correction changelog is prepared; package metadata
-  remains at `0.84.13` pending the maintainer-owned release bump. Topology index
+- The `0.84.14` layering-correction patch is published and tagged as
+  `v0.84.14`. Topology index
   storage ops now project persisted `IndexEntryRecord` values into internal
   `IndexEntryView` values before workflow use. Core index queries and
   control-plane root validation paginate or validate those projections, and
@@ -239,7 +239,7 @@ before this compaction is archived at
   records. The stale pool `data_to_view` response-mapper name is hard-cut to
   `data_to_response`. The layering guard scans both workflow trees and reports
   all detected violations in one run instead of stopping after the first. It
-  passes with no suppression. The same patch adopts `ic-memory 0.8.1` through
+  passes with no suppression. The same patch adopts `ic-memory 0.9.0` through
   a hard-cut named macro form. All 36 key declarations and both owned ranges
   name centralized Canic core or control-plane authority constants; the
   adapter passes those constants through explicit upstream registration
@@ -247,7 +247,7 @@ before this compaction is archived at
   `ic-stable-structures 0.7.2` dependency behind its existing CDK facade, and
   the bootstrap adapter discards the committed-allocation capability after
   successful persistence. The eight workspace Canic dependency constraints
-  are corrected to `0.84.13`. Stable keys, memory IDs, persisted records and
+  are corrected to `0.84.14`. Stable keys, memory IDs, persisted records and
   encodings, collection types, DTOs, Candid, JSON, and runtime behavior are
   unchanged. The patch also completes the `k256 0.14` hard cut: chain-key
   ECDSA consumes the always-returning low-S normalization API and uses the
@@ -256,6 +256,45 @@ before this compaction is archived at
   complete control-plane/host feature matrix, publication bootstrap tests,
   focused chain-key normalization and verification tests, targeted Clippy, and
   repository guards pass.
+
+- The post-0.84 codebase health audit is recorded at
+  `docs/audits/reports/2026-07/2026-07-11/codebase-health.md`. It identifies
+  three ordered follow-ups for the next designed line: durable replacement of
+  mutating restore journals, command-local build environment propagation that
+  removes both unsafe global guards, and one explicit hard cut away from the
+  unmaintained CBOR implementation with stable/wire fixtures. The bounded 0.85
+  design now lives at
+  `docs/design/0.85-operational-safety/0.85-design.md`, with permanent progress
+  tracking at `docs/design/0.85-operational-safety/status.md`. Slice A is
+  complete: backup layouts, typed restore plan/journal persistence, and every
+  mutating runner journal transition share one unique sibling durable replace;
+  the fixed `.tmp` and truncating recovery writers are removed. Slice B is also
+  complete: one explicit host-owned build context now supplies role, paths,
+  profile, selected environment, resolved build network, and optional
+  direct-local replica targeting to Cargo and ICP child commands. Both
+  process-global environment guards, their unsafe mutation/restoration, the
+  internal build override, and the local-target environment fallback are
+  hard-cut. Display and provenance consume the same resolved context, and
+  sequential builds cannot inherit prior config or network authority. Slice
+  C is now complete: exact local replica query/status wire fixtures pass
+  unchanged under a private `ciborium` adapter, and a temporary dual-codec
+  differential gate proved exact stable bytes across default core,
+  all-feature core, and control-plane owner suites. The core stable adapter and
+  replay receipts now use `ciborium`; rich serde-shape and replay byte goldens
+  remain permanent. All Canic manifests and codec call sites hard-cut
+  `serde_cbor` without a fallback or migration. Current published IC signature,
+  agent, transport, and PocketIC crates still select it transitively, so the
+  workspace RustSec warning remains upstream. Runtime layering, memory
+  allocation,
+  publication boundaries,
+  manifest guards, and the local vulnerability scan otherwise pass.
+
+- The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
+  the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and
+  `Invalid` slots plus its combined recovery result. Retirement generation is
+  derived from `AllocationState::Retired`, and memory diagnostic Candid now
+  reports `InvalidCommitSlots` explicitly instead of `Unknown`. Default,
+  all-feature, and Wasm core checks plus focused projection tests pass.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,

@@ -81,8 +81,25 @@ pub fn emit_root_release_set_manifest_if_ready(
     icp_root: &Path,
     network: &str,
 ) -> Result<Option<std::path::PathBuf>, Box<dyn std::error::Error>> {
+    let config_path = config_path(workspace_root);
+    emit_root_release_set_manifest_if_ready_with_config(
+        workspace_root,
+        icp_root,
+        network,
+        &config_path,
+    )
+}
+
+// Emit the root release-set manifest using an explicit config path once every
+// required ordinary artifact exists.
+pub fn emit_root_release_set_manifest_if_ready_with_config(
+    workspace_root: &Path,
+    icp_root: &Path,
+    network: &str,
+    config_path: &Path,
+) -> Result<Option<std::path::PathBuf>, Box<dyn std::error::Error>> {
     let artifact_root = resolve_artifact_root(icp_root, network)?;
-    let roles = configured_release_roles(&config_path(workspace_root))?;
+    let roles = configured_release_roles(config_path)?;
 
     for role_name in roles {
         let artifact_path = artifact_root
@@ -93,7 +110,8 @@ pub fn emit_root_release_set_manifest_if_ready(
         }
     }
 
-    emit_root_release_set_manifest(workspace_root, icp_root, network).map(Some)
+    emit_root_release_set_manifest_with_config(workspace_root, icp_root, network, config_path)
+        .map(Some)
 }
 
 // Load one previously emitted root release-set manifest from disk.

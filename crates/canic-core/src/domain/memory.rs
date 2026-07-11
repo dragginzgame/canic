@@ -17,6 +17,7 @@ use serde::Deserialize;
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub enum MemoryCommitRecoveryErrorResponse {
     NoValidGeneration,
+    InvalidCommitSlots,
     AmbiguousGeneration,
     GenerationOverflow,
     UnexpectedGeneration,

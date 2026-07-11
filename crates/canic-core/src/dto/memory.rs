@@ -127,6 +127,7 @@ mod tests {
 
     #[test]
     fn memory_enums_roundtrip_candid_with_existing_variant_labels() {
+        assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::InvalidCommitSlots);
         assert_enum_candid_contract(MemoryCommitRecoveryErrorResponse::UnexpectedGeneration);
         assert_enum_candid_contract(MemoryRangeAuthorityMode::Allowed);
         assert_enum_candid_contract(MemoryAllocationState::Retired);

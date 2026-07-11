@@ -143,11 +143,12 @@ impl Storable for ReplayReceiptRecord {
     }
 
     fn into_bytes(self) -> Vec<u8> {
-        serde_cbor::to_vec(&self).expect("replay receipt record serializes to cbor")
+        crate::cdk::serialize::serialize(&self).expect("replay receipt record serializes to cbor")
     }
 
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
-        serde_cbor::from_slice(bytes.as_ref()).expect("replay receipt record decodes from cbor")
+        crate::cdk::serialize::deserialize(bytes.as_ref())
+            .expect("replay receipt record decodes from cbor")
     }
 }
 
@@ -368,6 +369,29 @@ mod tests {
         let decoded = ReplayReceiptRecord::from_bytes(Cow::Owned(encoded));
 
         assert_eq!(decoded, record);
+    }
+
+    #[test]
+    fn replay_receipt_record_has_exact_stable_bytes() {
+        let record = receipt_record_fixture();
+        let current_bytes = record.into_bytes();
+
+        assert_eq!(
+            current_bytes,
+            hex_fixture(
+                "ad6e736368656d615f76657273696f6e016c636f6d6d616e645f6b696e646f746573742e636f6d6d616e642e76316c6f7065726174696f6e5f696498200909090909090909090909090909090909090909090909090909090909090909656163746f72a2736566666563746976655f7072696e636970616c581d010101010101010101010101010101010101010101010101010101010169617574685f6b696e646c44697265637443616c6c6572781b7061796c6f61645f686173685f736368656d615f76657273696f6e016c7061796c6f61645f6861736898200707070707070707070707070707070707070707070707070707070707070707667374617475736852657365727665646d637265617465645f61745f6e7318646d757064617465645f61745f6e7318646d657870697265735f61745f6e7318c877726573706f6e73655f736368656d615f76657273696f6ef66e726573706f6e73655f6279746573f666656666656374f6"
+            )
+        );
+    }
+
+    fn hex_fixture(hex: &str) -> Vec<u8> {
+        hex.as_bytes()
+            .chunks_exact(2)
+            .map(|pair| {
+                let pair = std::str::from_utf8(pair).expect("fixture hex is UTF-8");
+                u8::from_str_radix(pair, 16).expect("fixture hex byte is valid")
+            })
+            .collect()
     }
 
     #[test]

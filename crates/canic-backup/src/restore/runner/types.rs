@@ -9,7 +9,7 @@ use super::{
     RestoreApplyJournalOperation, RestoreApplyJournalReport, RestoreApplyOperationKind,
     RestoreApplyOperationKindCounts, RestoreApplyPendingSummary, RestoreApplyProgressSummary,
     RestoreApplyReportOperation, RestoreApplyReportOutcome, RestoreApplyRunnerCommand,
-    constants::*,
+    RestorePersistenceError, constants::*,
 };
 use serde::Serialize;
 use std::{io, path::PathBuf};
@@ -142,6 +142,9 @@ pub enum RestoreRunnerError {
 
     #[error(transparent)]
     Journal(#[from] RestoreApplyJournalError),
+
+    #[error(transparent)]
+    Persistence(#[from] RestorePersistenceError),
 }
 
 ///

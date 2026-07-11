@@ -1,10 +1,10 @@
 use super::ReplicaQueryError;
+use super::cbor::{QueryOutcome, decode_query_response, encode_anonymous_query};
 use crate::icp_config::{
     DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port,
     configured_local_gateway_port_from_root,
 };
 use candid::{Encode, Principal};
-use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
     net::TcpStream,
@@ -61,34 +61,22 @@ fn local_query_with_endpoint(
     let canister_id =
         Principal::from_text(canister).map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
     let arg = Encode!().map_err(|err| ReplicaQueryError::Query(err.to_string()))?;
-    let sender = Principal::anonymous();
-    let envelope = QueryEnvelope {
-        content: QueryContent {
-            request_type: "query",
-            canister_id: canister_id.as_slice(),
-            method_name: method,
-            arg: &arg,
-            sender: sender.as_slice(),
-            ingress_expiry: ingress_expiry_nanos()?,
-        },
-    };
-    let body = serde_cbor::to_vec(&envelope)?;
+    let body = encode_anonymous_query(
+        canister_id.as_slice(),
+        method,
+        &arg,
+        ingress_expiry_nanos()?,
+    )?;
     let response = post_cbor(
         &endpoint,
         &format!("/api/v2/canister/{canister}/query"),
         &body,
     )?;
-    let query_response = serde_cbor::from_slice::<QueryResponse>(&response)?;
-
-    match query_response.status {
-        QueryResponseStatus::Replied => query_response
-            .reply
-            .map(|reply| reply.arg)
-            .ok_or_else(|| ReplicaQueryError::Query("missing query reply".to_string())),
-        QueryResponseStatus::Rejected => Err(ReplicaQueryError::Rejected {
-            code: query_response.reject_code.unwrap_or_default(),
-            message: query_response.reject_message.unwrap_or_default(),
-        }),
+    match decode_query_response(&response)? {
+        QueryOutcome::Replied(arg) => Ok(arg),
+        QueryOutcome::Rejected { code, message } => {
+            Err(ReplicaQueryError::Rejected { code, message })
+        }
     }
 }
 
@@ -165,61 +153,6 @@ fn split_http_body(response: &[u8]) -> Result<Vec<u8>, ReplicaQueryError> {
         return Err(ReplicaQueryError::Query(header.to_string()));
     }
     Ok(response[index + marker.len()..].to_vec())
-}
-
-///
-/// QueryEnvelope
-///
-
-#[derive(Serialize)]
-struct QueryEnvelope<'a> {
-    content: QueryContent<'a>,
-}
-
-///
-/// QueryContent
-///
-
-#[derive(Serialize)]
-struct QueryContent<'a> {
-    request_type: &'static str,
-    #[serde(with = "serde_bytes")]
-    canister_id: &'a [u8],
-    method_name: &'a str,
-    #[serde(with = "serde_bytes")]
-    arg: &'a [u8],
-    #[serde(with = "serde_bytes")]
-    sender: &'a [u8],
-    ingress_expiry: u64,
-}
-
-///
-/// QueryResponse
-///
-
-#[derive(Deserialize)]
-struct QueryResponse {
-    status: QueryResponseStatus,
-    reply: Option<QueryReply>,
-    reject_code: Option<u64>,
-    reject_message: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum QueryResponseStatus {
-    Rejected,
-    Replied,
-}
-
-///
-/// QueryReply
-///
-
-#[derive(Deserialize)]
-struct QueryReply {
-    #[serde(with = "serde_bytes")]
-    arg: Vec<u8>,
 }
 
 #[cfg(test)]

@@ -13,6 +13,7 @@ use candid::Decode;
 use canic_core::dto::state::BootstrapStatusResponse;
 use std::{error::Error, fmt, path::Path};
 
+mod cbor;
 mod status;
 mod transport;
 mod wire;
@@ -24,7 +25,7 @@ mod wire;
 #[derive(Debug)]
 pub enum ReplicaQueryError {
     Io(std::io::Error),
-    Cbor(serde_cbor::Error),
+    Cbor(String),
     Json(serde_json::Error),
     Query(String),
     Rejected { code: u64, message: String },
@@ -35,7 +36,7 @@ impl fmt::Display for ReplicaQueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(formatter, "{err}"),
-            Self::Cbor(err) => write!(formatter, "{err}"),
+            Self::Cbor(err) => formatter.write_str(err),
             Self::Json(err) => write!(formatter, "{err}"),
             Self::Query(message) => write!(formatter, "{message}"),
             Self::Rejected { code, message } => {
@@ -53,9 +54,8 @@ impl Error for ReplicaQueryError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Io(err) => Some(err),
-            Self::Cbor(err) => Some(err),
             Self::Json(err) => Some(err),
-            Self::Query(_) | Self::Rejected { .. } => None,
+            Self::Cbor(_) | Self::Query(_) | Self::Rejected { .. } => None,
         }
     }
 }
@@ -67,10 +67,10 @@ impl From<std::io::Error> for ReplicaQueryError {
     }
 }
 
-impl From<serde_cbor::Error> for ReplicaQueryError {
+impl From<cbor::CborError> for ReplicaQueryError {
     // Convert CBOR encode/decode failures.
-    fn from(err: serde_cbor::Error) -> Self {
-        Self::Cbor(err)
+    fn from(err: cbor::CborError) -> Self {
+        Self::Cbor(err.to_string())
     }
 }
 

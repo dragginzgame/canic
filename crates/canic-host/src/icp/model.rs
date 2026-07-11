@@ -5,8 +5,14 @@ use serde::{Deserialize, Serialize};
 pub(super) const LOCAL_NETWORK: &str = "local";
 pub const REQUIRED_ICP_CLI_VERSION: &str = "1.0.0";
 pub const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.0.0, <2.0.0";
-pub const CANIC_ICP_LOCAL_NETWORK_URL_ENV: &str = "CANIC_ICP_LOCAL_NETWORK_URL";
-pub const CANIC_ICP_LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
+
+/// Direct local replica endpoint used when ICP project state is unavailable.
+///
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalReplicaTarget {
+    pub url: String,
+    pub root_key: String,
+}
 
 ///
 /// IcpRawOutput
@@ -30,6 +36,7 @@ pub struct IcpCli {
     pub(super) environment: Option<String>,
     pub(super) network: Option<String>,
     pub(super) cwd: Option<PathBuf>,
+    pub(super) local_replica: Option<LocalReplicaTarget>,
 }
 
 ///

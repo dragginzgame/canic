@@ -5,6 +5,7 @@
 //! Boundary: consumes backup manifests and artifacts to produce restore plans and runner state.
 
 mod apply;
+mod persistence;
 mod plan;
 mod runner;
 
@@ -20,6 +21,7 @@ pub use apply::{
     RestoreApplyProgressSummary, RestoreApplyReportOperation, RestoreApplyReportOutcome,
     RestoreApplyRunnerCommand,
 };
+pub use persistence::{RestorePersistenceError, write_restore_apply_journal, write_restore_plan};
 pub use plan::{
     RestoreIdentitySummary, RestoreMapping, RestoreMappingEntry, RestoreOperationSummary,
     RestoreOrderingDependency, RestoreOrderingRelationship, RestoreOrderingSummary, RestorePlan,

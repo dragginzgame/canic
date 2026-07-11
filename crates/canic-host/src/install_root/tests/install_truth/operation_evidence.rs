@@ -39,6 +39,7 @@ fn resolve_root_canister_operation_owns_current_install_evidence() {
         "local",
         "root",
         Path::new("/workspace/fleets/demo/canic.toml"),
+        None,
     );
 
     let evidence = operation.evidence("aaaaa-aa");
@@ -48,12 +49,10 @@ fn resolve_root_canister_operation_owns_current_install_evidence() {
 
 #[test]
 fn build_install_targets_operation_owns_current_install_evidence() {
+    let context = test_build_context();
     let operation = BuildInstallTargetsOperation::new(
-        "local",
+        &context,
         vec!["root".to_string(), "wasm_store".to_string()],
-        Some(CanisterBuildProfile::Fast),
-        Path::new("/workspace/fleets/demo/canic.toml"),
-        Path::new("/workspace/.icp"),
     );
 
     assert_eq!(
@@ -102,6 +101,7 @@ fn stage_release_set_operation_owns_current_install_staging_evidence() {
         "aaaaa-aa",
         Path::new("/workspace/.icp/local/canisters/root.release-set.json"),
         manifest,
+        None,
     );
 
     let evidence = operation.evidence();
@@ -121,6 +121,7 @@ fn install_root_wasm_operation_owns_current_install_evidence() {
         "local",
         "aaaaa-aa",
         PathBuf::from("/workspace/.icp/local/canisters/root/root.wasm"),
+        None,
     );
 
     let evidence = operation.evidence();
@@ -140,6 +141,7 @@ fn ensure_root_cycles_operation_owns_current_install_evidence() {
         InstallPhaseLabel::FUND_ROOT_PRE_BOOTSTRAP,
         "ensure local root minimum cycles before bootstrap",
         "pre-bootstrap",
+        None,
     );
 
     let evidence = operation.evidence();
@@ -151,7 +153,8 @@ fn ensure_root_cycles_operation_owns_current_install_evidence() {
 
 #[test]
 fn resume_bootstrap_operation_owns_current_install_evidence() {
-    let operation = ResumeBootstrapOperation::new("local", "aaaaa-aa");
+    let operation =
+        ResumeBootstrapOperation::new(Path::new("/workspace/.icp"), "local", "aaaaa-aa", None);
 
     let evidence = operation.evidence();
 
@@ -160,12 +163,27 @@ fn resume_bootstrap_operation_owns_current_install_evidence() {
 
 #[test]
 fn wait_root_ready_operation_owns_current_install_evidence() {
-    let operation = WaitRootReadyOperation::new("local", "aaaaa-aa", 30);
+    let operation =
+        WaitRootReadyOperation::new(Path::new("/workspace/.icp"), "local", "aaaaa-aa", 30, None);
 
     let evidence = operation.evidence();
 
     assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
     assert!(evidence.contains(&"timeout_seconds:30".to_string()));
+}
+
+fn test_build_context() -> WorkspaceBuildContext {
+    WorkspaceBuildContext {
+        role: "root".to_string(),
+        profile: CanisterBuildProfile::Fast,
+        requested_profile: "fast".to_string(),
+        environment: "local".to_string(),
+        build_network: "local".to_string(),
+        workspace_root: PathBuf::from("/workspace"),
+        icp_root: PathBuf::from("/workspace/.icp"),
+        config_path: PathBuf::from("/workspace/fleets/demo/canic.toml"),
+        local_replica: None,
+    }
 }
 
 #[test]

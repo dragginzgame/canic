@@ -1,15 +1,11 @@
-use std::path::Path;
-
 use crate::bootstrap_store::{BootstrapWasmStoreBuildOutput, build_bootstrap_wasm_store_artifact};
 
-use super::{CanisterBuildProfile, model::CanisterArtifactBuildOutput};
+use super::{WorkspaceBuildContext, model::CanisterArtifactBuildOutput};
 
 pub(super) fn build_hidden_wasm_store_artifact(
-    workspace_root: &Path,
-    icp_root: &Path,
-    profile: CanisterBuildProfile,
+    context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let output = build_bootstrap_wasm_store_artifact(workspace_root, icp_root, profile)?;
+    let output = build_bootstrap_wasm_store_artifact(context)?;
     Ok(map_bootstrap_output(output))
 }
 

@@ -1,27 +1,29 @@
-use std::{env, fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
-use crate::{
-    icp_environment_from_env,
-    release_set::{icp_root, workspace_root},
-    selected_icp_environment_from_env,
-};
+use crate::icp::LocalReplicaTarget;
 
 use super::{
     CanisterBuildProfile,
     process::{icp_ancestor_process_id, parent_process_id},
 };
 
-/// WorkspaceBuildContext
+const LOCAL_NETWORK_URL_ENV: &str = "CANIC_ICP_LOCAL_NETWORK_URL";
+const LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
+
+/// Exact authority for one canister artifact build.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceBuildContext {
-    pub profile: String,
+    pub role: String,
+    pub profile: CanisterBuildProfile,
     pub requested_profile: String,
     pub environment: String,
     pub build_network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
+    pub config_path: PathBuf,
+    pub local_replica: Option<LocalReplicaTarget>,
 }
 
 impl WorkspaceBuildContext {
@@ -29,7 +31,8 @@ impl WorkspaceBuildContext {
     pub fn lines(&self) -> Vec<String> {
         let mut lines = vec![
             "Canic build:".to_string(),
-            format!("profile: {}", self.profile),
+            format!("role: {}", self.role),
+            format!("profile: {}", self.profile.target_dir_name()),
             format!("environment: {}", self.environment),
             format!("build network: {}", self.build_network),
             format!("workspace: {}", self.workspace_root.display()),
@@ -44,32 +47,62 @@ impl WorkspaceBuildContext {
 
         lines
     }
+
+    /// Return a copy using a different Cargo profile for one child build.
+    #[must_use]
+    pub fn with_profile(&self, profile: CanisterBuildProfile) -> Self {
+        let mut context = self.clone();
+        context.profile = profile;
+        context
+    }
+
+    /// Return a copy selecting another role in the same workspace authority.
+    #[must_use]
+    pub fn with_role(&self, role: impl Into<String>) -> Self {
+        let mut context = self.clone();
+        context.role = role.into();
+        context
+    }
+
+    /// Apply the exact Canic build authority to one child command.
+    pub fn apply_to_command(&self, command: &mut Command) {
+        command
+            .env("ICP_ENVIRONMENT", &self.build_network)
+            .env_remove("CANIC_ICP_BUILD_ENVIRONMENT")
+            .env("CANIC_WORKSPACE_ROOT", &self.workspace_root)
+            .env("CANIC_ICP_ROOT", &self.icp_root)
+            .env("CANIC_CONFIG_PATH", &self.config_path);
+        if let Some(local_replica) = &self.local_replica {
+            command
+                .env(LOCAL_NETWORK_URL_ENV, &local_replica.url)
+                .env(LOCAL_ROOT_KEY_ENV, &local_replica.root_key);
+        } else {
+            command
+                .env_remove(LOCAL_NETWORK_URL_ENV)
+                .env_remove(LOCAL_ROOT_KEY_ENV);
+        }
+    }
 }
 
 // Print the current build context once per caller session so caller builds
 // stay readable without repeating root/profile diagnostics for every canister.
-pub fn print_current_workspace_build_context_once(
-    profile: CanisterBuildProfile,
+pub fn print_workspace_build_context_once(
+    context: &WorkspaceBuildContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(context) = current_workspace_build_context_once(profile)? {
+    if workspace_build_context_once(context)? {
         eprintln!("{}", context.lines().join("\n"));
     }
 
     Ok(())
 }
 
-// Return the current build context once per caller session.
-pub fn current_workspace_build_context_once(
-    profile: CanisterBuildProfile,
-) -> Result<Option<WorkspaceBuildContext>, Box<dyn std::error::Error>> {
-    let workspace_root = workspace_root()?;
-    let icp_root = icp_root()?;
-    let marker_dir = icp_root.join(".icp");
+// Return whether this caller should print its explicit build context.
+pub fn workspace_build_context_once(
+    context: &WorkspaceBuildContext,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let marker_dir = context.icp_root.join(".icp");
     fs::create_dir_all(&marker_dir)?;
 
-    let requested_profile = env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string());
-    let environment = selected_icp_environment_from_env();
-    let build_network = icp_environment_from_env();
     let marker_key = icp_ancestor_process_id()
         .or_else(parent_process_id)
         .unwrap_or_else(std::process::id)
@@ -77,16 +110,9 @@ pub fn current_workspace_build_context_once(
     let marker_file = marker_dir.join(format!(".canic-build-context-{marker_key}"));
 
     if marker_file.exists() {
-        return Ok(None);
+        return Ok(false);
     }
 
     fs::write(&marker_file, [])?;
-    Ok(Some(WorkspaceBuildContext {
-        profile: profile.target_dir_name().to_string(),
-        requested_profile,
-        environment,
-        build_network,
-        workspace_root,
-        icp_root,
-    }))
+    Ok(true)
 }

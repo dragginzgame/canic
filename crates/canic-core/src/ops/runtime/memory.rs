@@ -141,40 +141,34 @@ fn commit_recovery_response(
     diagnostic: Option<CommitStoreDiagnostic>,
 ) -> MemoryCommitRecoveryResponse {
     let diagnostic = diagnostic.unwrap_or(CommitStoreDiagnostic {
-        slot0: CommitSlotDiagnostic {
-            present: false,
-            generation: None,
-            valid: false,
-        },
-        slot1: CommitSlotDiagnostic {
-            present: false,
-            generation: None,
-            valid: false,
-        },
-        authoritative_generation: None,
-        recovery_error: Some(CommitRecoveryError::NoValidGeneration),
+        slot0: CommitSlotDiagnostic::Empty,
+        slot1: CommitSlotDiagnostic::Empty,
+        recovery: Err(CommitRecoveryError::NoValidGeneration),
     });
+    let (authoritative_generation, recovery_error) = match diagnostic.recovery {
+        Ok(generation) => (Some(generation), None),
+        Err(error) => (None, Some(commit_recovery_error_response(error))),
+    };
     MemoryCommitRecoveryResponse {
         slot0: commit_slot_response(diagnostic.slot0),
         slot1: commit_slot_response(diagnostic.slot1),
-        authoritative_generation: diagnostic.authoritative_generation,
-        recovery_error: diagnostic
-            .recovery_error
-            .map(commit_recovery_error_response),
+        authoritative_generation,
+        recovery_error,
     }
 }
 
 fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocationRecordEntry {
     let memory_size = record.memory_size.map(memory_allocation_size_response);
     let allocation = record.allocation;
+    let allocation_state = allocation.state();
     MemoryAllocationRecordEntry {
         memory_manager_id: allocation.slot().memory_manager_id().ok(),
         stable_key: allocation.stable_key().as_str().to_string(),
-        state: memory_allocation_state_response(allocation.state()),
+        state: memory_allocation_state_response(allocation_state),
         memory_size,
         first_generation: allocation.first_generation(),
         last_seen_generation: allocation.last_seen_generation(),
-        retired_generation: allocation.retired_generation(),
+        retired_generation: allocation_retired_generation(allocation_state),
         schema_history: allocation
             .schema_history()
             .iter()
@@ -227,7 +221,14 @@ const fn memory_allocation_state_response(state: AllocationState) -> MemoryAlloc
     match state {
         AllocationState::Reserved => MemoryAllocationState::Reserved,
         AllocationState::Active => MemoryAllocationState::Active,
-        AllocationState::Retired => MemoryAllocationState::Retired,
+        AllocationState::Retired { .. } => MemoryAllocationState::Retired,
+    }
+}
+
+const fn allocation_retired_generation(state: AllocationState) -> Option<u64> {
+    match state {
+        AllocationState::Retired { generation } => Some(generation),
+        AllocationState::Reserved | AllocationState::Active => None,
     }
 }
 
@@ -255,10 +256,22 @@ fn memory_ledger_generation_response(
 }
 
 const fn commit_slot_response(slot: CommitSlotDiagnostic) -> MemoryCommitSlotResponse {
-    MemoryCommitSlotResponse {
-        present: slot.present,
-        generation: slot.generation,
-        valid: slot.valid,
+    match slot {
+        CommitSlotDiagnostic::Empty => MemoryCommitSlotResponse {
+            present: false,
+            generation: None,
+            valid: false,
+        },
+        CommitSlotDiagnostic::Valid { generation } => MemoryCommitSlotResponse {
+            present: true,
+            generation: Some(generation),
+            valid: true,
+        },
+        CommitSlotDiagnostic::Invalid { generation } => MemoryCommitSlotResponse {
+            present: true,
+            generation: Some(generation),
+            valid: false,
+        },
     }
 }
 
@@ -268,6 +281,9 @@ const fn commit_recovery_error_response(
     match err {
         CommitRecoveryError::NoValidGeneration => {
             MemoryCommitRecoveryErrorResponse::NoValidGeneration
+        }
+        CommitRecoveryError::InvalidCommitSlots { .. } => {
+            MemoryCommitRecoveryErrorResponse::InvalidCommitSlots
         }
         CommitRecoveryError::AmbiguousGeneration { .. } => {
             MemoryCommitRecoveryErrorResponse::AmbiguousGeneration
@@ -293,6 +309,52 @@ mod tests {
         AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationSlotDescriptor,
         SchemaMetadata,
     };
+
+    #[test]
+    fn commit_slot_response_maps_ic_memory_010_variants_exactly() {
+        assert_eq!(
+            commit_slot_response(CommitSlotDiagnostic::Empty),
+            MemoryCommitSlotResponse {
+                present: false,
+                generation: None,
+                valid: false,
+            }
+        );
+        assert_eq!(
+            commit_slot_response(CommitSlotDiagnostic::Valid { generation: 7 }),
+            MemoryCommitSlotResponse {
+                present: true,
+                generation: Some(7),
+                valid: true,
+            }
+        );
+        assert_eq!(
+            commit_slot_response(CommitSlotDiagnostic::Invalid { generation: 8 }),
+            MemoryCommitSlotResponse {
+                present: true,
+                generation: Some(8),
+                valid: false,
+            }
+        );
+    }
+
+    #[test]
+    fn commit_recovery_response_maps_invalid_slots_without_unknown_fallback() {
+        let response = commit_recovery_response(Some(CommitStoreDiagnostic {
+            slot0: CommitSlotDiagnostic::Invalid { generation: 3 },
+            slot1: CommitSlotDiagnostic::Empty,
+            recovery: Err(CommitRecoveryError::InvalidCommitSlots {
+                slot0_invalid: true,
+                slot1_invalid: false,
+            }),
+        }));
+
+        assert_eq!(response.authoritative_generation, None);
+        assert_eq!(
+            response.recovery_error,
+            Some(MemoryCommitRecoveryErrorResponse::InvalidCommitSlots)
+        );
+    }
 
     #[test]
     fn memory_allocation_record_response_includes_live_backing_memory_size() {

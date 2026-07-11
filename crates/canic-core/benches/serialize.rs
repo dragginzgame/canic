@@ -57,7 +57,7 @@ fn bench_canister_signature_verification(criterion: &mut Criterion) {
     let payload_hash = [8; 32];
     let message = root_canister_sig_verification_message(payload_hash);
     let public_key_der = CanisterSigPublicKey::new(p(1), ROOT_SIG_DOMAIN.to_vec()).to_der();
-    let certificate = self_describing_cbor(&serde_cbor::Value::Null);
+    let certificate = self_describing_cbor(&ciborium::Value::Null);
     let signature = CanisterSignatureCbor {
         certificate: Bytes::new(&certificate),
         tree: leaf(Vec::<u8>::new()),
@@ -96,7 +96,7 @@ fn root_canister_sig_verification_message(payload_hash: [u8; 32]) -> Vec<u8> {
 ))]
 fn self_describing_cbor<T: serde::Serialize>(value: &T) -> Vec<u8> {
     let mut encoded = vec![0xd9, 0xd9, 0xf7];
-    encoded.extend(serde_cbor::to_vec(value).expect("fixture must encode"));
+    ciborium::ser::into_writer(value, &mut encoded).expect("fixture must encode");
     encoded
 }
 

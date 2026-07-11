@@ -32,6 +32,7 @@ blob-storage-billing = ["blob-storage"]
 [dependencies]
 async-trait = { workspace = true }
 candid = { workspace = true }
+ciborium = { workspace = true }
 ic-canister-sig-creation = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
 ic-cdk-timers = { workspace = true }
@@ -43,7 +44,6 @@ k256 = { workspace = true, optional = true }
 remain = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
-serde_cbor = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 

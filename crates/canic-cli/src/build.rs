@@ -18,12 +18,11 @@ use crate::{
 };
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
-    CanisterBuildProfile, build_current_workspace_canister_artifact, copy_icp_wasm_output,
-    print_current_workspace_build_context_once,
+    CanisterBuildProfile, WorkspaceBuildContext, build_workspace_canister_artifact,
+    copy_icp_wasm_output, print_workspace_build_context_once,
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
-    CANIC_ICP_BUILD_ENVIRONMENT_ENV,
     icp_config::{
         IcpBuildEnvironment, resolve_current_canic_icp_root,
         resolve_icp_build_environment_from_root,
@@ -31,7 +30,7 @@ use canic_host::{
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
     release_set::{
         configured_fleet_name, configured_role_lifecycle, matching_fleet_config_paths,
-        workspace_root,
+        workspace_root_from,
     },
 };
 use clap::Command as ClapCommand;
@@ -135,15 +134,12 @@ where
     }
 
     let options = BuildOptions::parse(args)?;
-    let _guard = BuildEnvGuard::apply(&options)?;
-    let profile = options
-        .profile
-        .unwrap_or_else(CanisterBuildProfile::current);
-    print_current_workspace_build_context_once(profile)?;
-    validate_attached_role(&options)?;
-    let output = build_current_workspace_canister_artifact(&options.role, profile)?;
+    let context = resolve_build_context(&options)?;
+    print_workspace_build_context_once(&context)?;
+    validate_attached_role(&options, &context.config_path)?;
+    let output = build_workspace_canister_artifact(&context)?;
     copy_icp_wasm_output(&options.role, &output)?;
-    write_build_provenance_if_requested(&options, profile, output.clone())?;
+    write_build_provenance_if_requested(&options, &context, output.clone())?;
     println!("{}", output.wasm_gz_path.display());
     Ok(())
 }
@@ -210,9 +206,11 @@ fn usage() -> String {
     render_usage(build_command)
 }
 
-fn validate_attached_role(options: &BuildOptions) -> Result<(), BuildCommandError> {
-    let config_path = resolve_build_config_path(options)?;
-    let roles = configured_role_lifecycle(&config_path)?;
+fn validate_attached_role(
+    options: &BuildOptions,
+    config_path: &Path,
+) -> Result<(), BuildCommandError> {
+    let roles = configured_role_lifecycle(config_path)?;
     let Some(row) = roles.iter().find(|row| row.role == options.role) else {
         return Err(BuildCommandError::Usage(format!(
             "role {}.{} is not declared in {}",
@@ -232,25 +230,23 @@ fn validate_attached_role(options: &BuildOptions) -> Result<(), BuildCommandErro
 
 fn write_build_provenance_if_requested(
     options: &BuildOptions,
-    profile: CanisterBuildProfile,
+    context: &WorkspaceBuildContext,
     output: canic_host::canister_build::CanisterArtifactBuildOutput,
 ) -> Result<(), BuildCommandError> {
     let Some(path) = &options.provenance else {
         return Ok(());
     };
 
-    let workspace_root = workspace_root()?;
-    let config_path = resolve_build_config_path(options)?;
     let request = BuildProvenanceRequest {
         fleet: options.fleet.clone(),
         role: options.role.clone(),
         network: options.network.clone(),
-        build_network: resolve_build_environment(options)?.as_str().to_string(),
-        profile,
-        workspace_root: workspace_root.clone(),
-        config_path,
+        build_network: context.build_network.clone(),
+        profile: context.profile,
+        workspace_root: context.workspace_root.clone(),
+        config_path: context.config_path.clone(),
         output,
-        command: build_command_provenance(options, &workspace_root),
+        command: build_command_provenance(options, &context.workspace_root),
         generated_at: current_build_generated_at()?,
         canic_version: env!("CARGO_PKG_VERSION").to_string(),
     };
@@ -361,88 +357,51 @@ fn normalize_build_path(path: &str) -> Result<PathBuf, BuildCommandError> {
     }
 }
 
-struct BuildEnvGuard {
-    previous_network: Option<OsString>,
-    previous_build_environment: Option<OsString>,
-    previous_workspace: Option<OsString>,
-    previous_icp_root: Option<OsString>,
-    previous_config: Option<OsString>,
-}
+fn resolve_build_context(
+    options: &BuildOptions,
+) -> Result<WorkspaceBuildContext, BuildCommandError> {
+    let config_path = resolve_build_config_path(options)?.canonicalize()?;
+    let workspace_root = match &options.workspace {
+        Some(workspace) => normalize_build_path(workspace)?.canonicalize()?,
+        None => workspace_root_from(&config_path)?,
+    };
+    let icp_root = match &options.icp_root {
+        Some(root) => normalize_build_path(root)?.canonicalize()?,
+        None => resolve_current_canic_icp_root()
+            .map_err(|err| BuildCommandError::Build(Box::new(err)))?,
+    };
+    let build_environment = resolve_build_environment(&options.network, &icp_root)?;
+    let profile = options
+        .profile
+        .unwrap_or_else(CanisterBuildProfile::current);
+    let requested_profile = options.profile.map_or_else(
+        || env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string()),
+        |profile| profile.target_dir_name().to_string(),
+    );
 
-impl BuildEnvGuard {
-    fn apply(options: &BuildOptions) -> Result<Self, BuildCommandError> {
-        let guard = Self {
-            previous_network: env::var_os("ICP_ENVIRONMENT"),
-            previous_build_environment: env::var_os(CANIC_ICP_BUILD_ENVIRONMENT_ENV),
-            previous_workspace: env::var_os("CANIC_WORKSPACE_ROOT"),
-            previous_icp_root: env::var_os("CANIC_ICP_ROOT"),
-            previous_config: env::var_os("CANIC_CONFIG_PATH"),
-        };
-        let config_path = resolve_build_config_path(options)?;
-        let build_environment = resolve_build_environment(options)?;
-        set_env("ICP_ENVIRONMENT", &options.network);
-        set_env(CANIC_ICP_BUILD_ENVIRONMENT_ENV, build_environment.as_str());
-        set_optional_env("CANIC_WORKSPACE_ROOT", options.workspace.as_deref());
-        set_optional_env("CANIC_ICP_ROOT", options.icp_root.as_deref());
-        set_env("CANIC_CONFIG_PATH", config_path);
-        Ok(guard)
-    }
-}
-
-impl Drop for BuildEnvGuard {
-    fn drop(&mut self) {
-        restore_env("ICP_ENVIRONMENT", self.previous_network.take());
-        restore_env(
-            CANIC_ICP_BUILD_ENVIRONMENT_ENV,
-            self.previous_build_environment.take(),
-        );
-        restore_env("CANIC_WORKSPACE_ROOT", self.previous_workspace.take());
-        restore_env("CANIC_ICP_ROOT", self.previous_icp_root.take());
-        restore_env("CANIC_CONFIG_PATH", self.previous_config.take());
-    }
+    Ok(WorkspaceBuildContext {
+        role: options.role.clone(),
+        profile,
+        requested_profile,
+        environment: options.network.clone(),
+        build_network: build_environment.as_str().to_string(),
+        workspace_root,
+        icp_root,
+        config_path,
+        local_replica: None,
+    })
 }
 
 fn resolve_build_environment(
-    options: &BuildOptions,
+    network: &str,
+    icp_root: &Path,
 ) -> Result<IcpBuildEnvironment, BuildCommandError> {
-    if matches!(options.network.as_str(), "local" | "ic") {
-        return resolve_icp_build_environment_from_root(Path::new("."), &options.network)
+    if matches!(network, "local" | "ic") {
+        return resolve_icp_build_environment_from_root(icp_root, network)
             .map_err(|err| BuildCommandError::Build(Box::new(err)));
     }
-    let icp_root = options.icp_root.as_ref().map_or_else(
-        || resolve_current_canic_icp_root().map_err(|err| BuildCommandError::Build(Box::new(err))),
-        |root| normalize_build_path(root),
-    )?;
-    resolve_icp_build_environment_from_root(&icp_root, &options.network)
+    resolve_icp_build_environment_from_root(icp_root, network)
         .map_err(|err| BuildCommandError::Build(Box::new(err)))
-}
-
-fn set_optional_env(key: &str, value: Option<&str>) {
-    if let Some(value) = value {
-        set_env(key, value);
-    }
-}
-
-fn set_env<K, V>(key: K, value: V)
-where
-    K: AsRef<std::ffi::OsStr>,
-    V: AsRef<std::ffi::OsStr>,
-{
-    // Artifact builds are single-threaded CLI orchestration; the scoped env
-    // value selects the ICP artifact directory seen by Cargo build scripts.
-    unsafe {
-        env::set_var(key, value);
-    }
-}
-
-fn restore_env(key: &str, value: Option<OsString>) {
-    // See set_env: this restores the single-threaded artifact build context.
-    unsafe {
-        match value {
-            Some(value) => env::set_var(key, value),
-            None => env::remove_var(key),
-        }
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -495,7 +454,8 @@ mod tests {
         options.network = "staging".to_string();
         options.icp_root = Some(root.display().to_string());
 
-        let environment = resolve_build_environment(&options).expect("resolve build environment");
+        let environment =
+            resolve_build_environment(&options.network, &root).expect("resolve build environment");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(environment, IcpBuildEnvironment::Ic);
@@ -510,7 +470,8 @@ mod tests {
         options.network = "staging".to_string();
         options.icp_root = Some(root.display().to_string());
 
-        let err = resolve_build_environment(&options).expect_err("missing environment should fail");
+        let err = resolve_build_environment(&options.network, &root)
+            .expect_err("missing environment should fail");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(err.to_string().contains("is not declared"));
@@ -618,7 +579,8 @@ mod tests {
         write_build_config(&root, false);
         let options = build_options(&root, "demo", "app");
 
-        validate_attached_role(&options).expect_err("declared-only role should fail");
+        let config_path = resolve_build_config_path(&options).expect("resolve config");
+        validate_attached_role(&options, &config_path).expect_err("declared-only role should fail");
 
         fs::remove_dir_all(root).expect("remove temp root");
     }
@@ -629,7 +591,8 @@ mod tests {
         write_build_config(&root, true);
         let options = build_options(&root, "demo", "app");
 
-        validate_attached_role(&options).expect("attached role should pass");
+        let config_path = resolve_build_config_path(&options).expect("resolve config");
+        validate_attached_role(&options, &config_path).expect("attached role should pass");
 
         fs::remove_dir_all(root).expect("remove temp root");
     }

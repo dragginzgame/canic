@@ -1,7 +1,5 @@
-use super::build_environment::BuildEnvGuard;
 use crate::canister_build::{
-    CanisterBuildProfile, build_current_workspace_canister_artifact,
-    current_workspace_build_context_once,
+    WorkspaceBuildContext, build_workspace_canister_artifact, workspace_build_context_once,
 };
 use crate::format::wasm_size_label;
 use crate::table::{ColumnAlign, render_separator, render_table_row, table_widths};
@@ -12,27 +10,22 @@ use std::{
 };
 
 pub(super) fn run_canic_build_targets(
-    network: &str,
+    context: &WorkspaceBuildContext,
     targets: &[String],
-    build_profile: Option<CanisterBuildProfile>,
-    config_path: &Path,
-    icp_root: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let _env = BuildEnvGuard::apply(network, config_path, icp_root)?;
-    let profile = build_profile.unwrap_or_else(CanisterBuildProfile::current);
-    if let Some(context) = current_workspace_build_context_once(profile)? {
+    if workspace_build_context_once(context)? {
         for line in context.lines() {
             println!("{line}");
         }
-        println!("config: {}", config_path.display());
+        println!("config: {}", context.config_path.display());
         println!(
             "artifacts: {}",
-            planned_build_artifact_root(icp_root).display()
+            planned_build_artifact_root(&context.icp_root).display()
         );
         println!();
     }
 
-    fs::create_dir_all(planned_build_artifact_root(icp_root))?;
+    fs::create_dir_all(planned_build_artifact_root(&context.icp_root))?;
     println!("Building {} canisters", targets.len());
     println!();
     let headers = ["CANISTER", "PROGRESS", "WASM", "ELAPSED"];
@@ -59,7 +52,7 @@ pub(super) fn run_canic_build_targets(
 
     for (index, target) in targets.iter().enumerate() {
         let started_at = Instant::now();
-        let output = build_current_workspace_canister_artifact(target, profile)
+        let output = build_workspace_canister_artifact(&context.with_role(target))
             .map_err(|err| format!("artifact build failed for {target}: {err}"))?;
         let elapsed = started_at.elapsed();
         let artifact_size = wasm_artifact_size(&output.wasm_path, &output.wasm_gz_path)?;

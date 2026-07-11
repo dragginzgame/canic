@@ -38,7 +38,7 @@ mod truth_check;
 
 use activation::run_root_activation_phases;
 use artifact_promotion::write_artifact_promotion_execution_receipt_for_install;
-use build_environment::BuildEnvGuard;
+use build_environment::resolve_install_build_context;
 pub use config_selection::{
     current_canic_project_root, discover_canic_config_choices, discover_canic_project_root_from,
     discover_project_canic_config_choices, project_fleet_roots,
@@ -132,7 +132,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;
-    let _install_env = BuildEnvGuard::apply(&options.network, &config_path, &icp_root)?;
+    let build_context =
+        current_install_build_context(&workspace_root, &icp_root, &config_path, &options)?;
     let (fleet_name, deployment_name) = resolve_install_identity(&options, &config_path)?;
     let total_started_at = Instant::now();
     let mut timings = CurrentInstallTimingSummary::default();
@@ -149,6 +150,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &config_path,
         &deployment_name,
         &execution_context,
+        &build_context,
     )?;
     timings.create_canisters = prepared.timings.create_canisters;
     timings.build_all = prepared.timings.build_all;
@@ -175,6 +177,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &prepared.root_canister_id,
         &manifest_path,
         total_started_at,
+        &build_context,
     )?;
     timings.install_root = activation_timings.install_root;
     timings.fund_root = activation_timings.fund_root;
@@ -219,4 +222,20 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         &state_path,
     );
     Ok(())
+}
+
+fn current_install_build_context(
+    workspace_root: &std::path::Path,
+    icp_root: &std::path::Path,
+    config_path: &std::path::Path,
+    options: &InstallRootOptions,
+) -> Result<crate::canister_build::WorkspaceBuildContext, Box<dyn std::error::Error>> {
+    resolve_install_build_context(
+        workspace_root,
+        icp_root,
+        config_path,
+        &options.network,
+        &options.root_build_target,
+        options.build_profile,
+    )
 }

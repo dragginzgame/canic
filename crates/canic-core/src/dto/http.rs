@@ -59,9 +59,10 @@ mod tests {
     }
 
     fn assert_http_method_label(method: HttpMethod, label: &str) {
-        let label_bytes = serde_cbor::to_vec(&label).expect("encode HTTP method label");
+        let label_bytes =
+            crate::cdk::serialize::serialize(&label).expect("encode HTTP method label");
         let decoded: HttpMethod =
-            serde_cbor::from_slice(&label_bytes).expect("decode HTTP method label");
+            crate::cdk::serialize::deserialize(&label_bytes).expect("decode HTTP method label");
         assert_eq!(decoded, method);
     }
 }

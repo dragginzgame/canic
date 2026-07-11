@@ -33,6 +33,15 @@ pub fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(std::env::current_dir()?.canonicalize()?)
 }
 
+// Resolve the Cargo workspace containing an explicit config or workspace hint.
+pub fn workspace_root_from(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if let Some(root) = discover_workspace_root_from(path) {
+        return Ok(root);
+    }
+
+    workspace_root()
+}
+
 // Resolve the downstream ICP CLI/project root from the current directory or an
 // explicit override.
 pub fn icp_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
