@@ -10,16 +10,23 @@ use std::{
     process::{Command, Output},
 };
 
-const ICP_STDIN_PATH: &str = "/dev/stdin";
+const ICP_ARGUMENT_STDIN_PATH: &str = "/dev/stdin";
 
-// Run one `icp canister call` and return stdout, preserving stderr on failure.
+#[derive(Clone, Copy)]
+enum CallArgument<'a> {
+    None,
+    Text(&'a str),
+    Binary(&'a [u8]),
+}
+
+// Run one binary-Candid `icp canister call` and return stdout, preserving stderr on failure.
 pub(super) fn icp_call_on_network(
     icp_root: &std::path::Path,
     network: &str,
     local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
-    argument: Option<&str>,
+    argument: Option<&[u8]>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     icp_call_on_network_with_mode(
@@ -28,7 +35,7 @@ pub(super) fn icp_call_on_network(
         local_replica,
         canister,
         method,
-        argument,
+        argument.map_or(CallArgument::None, CallArgument::Binary),
         output,
         false,
     )
@@ -50,7 +57,7 @@ pub(super) fn icp_query_on_network(
         local_replica,
         canister,
         method,
-        argument,
+        argument.map_or(CallArgument::None, CallArgument::Text),
         output,
         true,
     )
@@ -66,7 +73,7 @@ fn icp_call_on_network_with_mode(
     local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
-    argument: Option<&str>,
+    argument: CallArgument<'_>,
     output: Option<&str>,
     query: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
@@ -78,18 +85,14 @@ fn icp_call_on_network_with_mode(
         icp::add_output_arg(&mut command, output);
     }
 
-    if argument.is_some() {
-        command.arg("--args-file").arg(ICP_STDIN_PATH);
-    } else {
-        command.arg("()");
-    }
+    let stdin = add_call_argument(&mut command, argument);
     if query {
         command.arg("--query");
     }
     icp::add_target_args(&mut command, Some(network), None, local_replica);
 
     icp::ensure_command_compatible(&command)?;
-    let result = command_output(&mut command, argument)?;
+    let result = command_output(&mut command, stdin)?;
 
     if !result.status.success() {
         let stderr = String::from_utf8_lossy(&result.stderr);
@@ -112,9 +115,29 @@ fn icp_call_on_network_with_mode(
     Ok(stdout)
 }
 
+fn add_call_argument<'a>(command: &mut Command, argument: CallArgument<'a>) -> Option<&'a [u8]> {
+    match argument {
+        CallArgument::None => {
+            command.arg("()");
+            None
+        }
+        CallArgument::Text(argument) => {
+            command.arg("--args-file").arg(ICP_ARGUMENT_STDIN_PATH);
+            Some(argument.as_bytes())
+        }
+        CallArgument::Binary(argument) => {
+            command
+                .arg("--args-file")
+                .arg(ICP_ARGUMENT_STDIN_PATH)
+                .args(["--args-format", "bin"]);
+            Some(argument)
+        }
+    }
+}
+
 fn command_output(
     command: &mut Command,
-    argument: Option<&str>,
+    argument: Option<&[u8]>,
 ) -> Result<Output, Box<dyn std::error::Error>> {
     let Some(argument) = argument else {
         return Ok(command.output()?);
@@ -125,7 +148,7 @@ fn command_output(
         let _ = argument;
         return Err(io::Error::new(
             io::ErrorKind::Unsupported,
-            "release-set argument streaming requires a Unix /dev/stdin endpoint",
+            "ICP call argument streaming requires a Unix /dev/stdin endpoint",
         )
         .into());
     }
@@ -138,25 +161,29 @@ fn command_output(
             .stderr(std::process::Stdio::piped());
         let mut child = command.spawn()?;
         let Some(mut stdin) = child.stdin.take() else {
-            let _ = child.kill();
-            let _ = child.wait();
+            terminate_child(&mut child);
             return Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
                 "ICP child did not expose piped stdin",
             )
             .into());
         };
-        let write_result = std::io::Write::write_all(&mut stdin, argument.as_bytes());
+        let write_result = std::io::Write::write_all(&mut stdin, argument);
         drop(stdin);
 
         if let Err(error) = write_result {
-            let _ = child.kill();
-            let _ = child.wait();
+            terminate_child(&mut child);
             return Err(error.into());
         }
 
         Ok(child.wait_with_output()?)
     }
+}
+
+#[cfg(unix)]
+fn terminate_child(child: &mut std::process::Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 // -----------------------------------------------------------------------------
@@ -169,13 +196,36 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn command_output_streams_argument_over_stdin() {
+    fn command_output_streams_binary_argument_over_stdin() {
         let mut command = Command::new("cat");
-        let argument = "(record { value = 1 : nat64 })";
+        let argument = b"\0DIDL\x01\xff";
 
         let output = command_output(&mut command, Some(argument)).expect("stdin transport works");
 
         assert!(output.status.success());
-        assert_eq!(output.stdout, argument.as_bytes());
+        assert_eq!(output.stdout, argument);
+    }
+
+    #[test]
+    fn binary_argument_selects_icp_binary_format() {
+        let mut command = Command::new("icp");
+        let argument = b"DIDL";
+
+        let stdin = add_call_argument(&mut command, CallArgument::Binary(argument));
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            args,
+            [
+                "--args-file",
+                ICP_ARGUMENT_STDIN_PATH,
+                "--args-format",
+                "bin"
+            ]
+        );
+        assert_eq!(stdin, Some(argument.as_slice()));
     }
 }

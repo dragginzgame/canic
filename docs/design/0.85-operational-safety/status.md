@@ -16,12 +16,14 @@ Audit source:
 
 ## Current State
 
-Slices A, B, and C are complete and published as `v0.85.0`. The current package
-version is `0.85.0`.
+Slices A, B, and C are complete and published as `v0.85.0`. The stdin transport
+cleanup is published as `v0.85.1`, which is the current package version.
 
-A focused post-release cleanup is in progress for the 0.85 line. It is limited
-to child-command argument transport and release/status accuracy; it does not
-reopen the completed restore, build-authority, or CBOR contracts.
+The next focused cleanup is finalized in the changelog for `0.85.2`, but package
+versions remain `0.85.1` until the human-owned release flow runs. Release
+staging now uses the existing typed request DTOs and binary stdin transport; it
+does not reopen the completed restore, build-authority, or stable-CBOR
+contracts.
 
 ## Locked Scope
 
@@ -156,8 +158,18 @@ Slice C stable-byte validation:
   signature, agent, transport, and PocketIC crates.
 - current published upstream releases still depend on `serde_cbor`:
   `ic-canister-sig-creation 1.3.1`, `ic-signature-verification 0.3.0`,
-  `ic-agent 0.47.3`, and `pocket-ic 15.0.0`.
+  `ic-agent 0.48.1`, and `pocket-ic 14.0.0`.
 - targeted core and control-plane Clippy with warnings denied: pass.
+
+Current release-set transport validation:
+
+- binary Candid mode selects `--args-format bin` and preserves arbitrary stdin
+  bytes, including zero bytes.
+- one local artifact preflight verifies size, canonical chunk size, payload
+  hash, chunk count, and every chunk hash before the first root mutation.
+- a maximum-size chunk request round-trips through the canonical endpoint DTO
+  below the configured payload limit.
+- 53 focused release-set tests and targeted host Clippy pass.
 
 Current `ic-memory 0.10` hard-cut validation:
 
@@ -211,10 +223,15 @@ validation.
 - 2026-07-11: slices A, B, and C were published as `v0.85.0`. The next focused
   cleanup hard-cuts release-set Candid argument files to piped child stdin so
   large call payloads are neither persisted nor placed in process arguments.
+- 2026-07-11: the stdin transport cleanup was published as `v0.85.1`. The next
+  cleanup encodes the canonical template request DTOs as binary Candid, deletes
+  the manual release-set text encoders, validates the complete artifact
+  manifest before root mutation, and keeps a maximum chunk request under the
+  endpoint payload bound.
 
 ## Next Action
 
-Validate the focused release-set stdin transport for the next 0.85 patch.
+Run the human-owned `0.85.2` release flow after reviewing the finalized patch.
 Do not claim that `serde_cbor` left the workspace lock: current published IC
 signature, agent, transport, and PocketIC dependencies still select the
 upstream crate.
