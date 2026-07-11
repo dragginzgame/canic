@@ -11,7 +11,7 @@ use crate::{
     ops::{prelude::*, storage::registry::subnet::SubnetRegistryOps},
     storage::{
         canister::CanisterRecord,
-        stable::pool::{PoolRecord, PoolStatus, PoolStore, PoolStoreRecord},
+        stable::pool::{CanisterPoolData, PoolRecord, PoolStatus, PoolStore},
     },
 };
 
@@ -158,7 +158,7 @@ impl PoolOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> PoolStoreRecord {
+    pub fn data() -> CanisterPoolData {
         PoolStore::export()
     }
 
@@ -202,12 +202,14 @@ impl PoolOps {
     }
 
     fn select_oldest(
-        data: PoolStoreRecord,
+        data: CanisterPoolData,
         status: &PoolStatus,
     ) -> Option<(Principal, PoolRecord)> {
         let mut selected: Option<(Principal, PoolRecord)> = None;
 
-        for (pid, record) in data.entries {
+        for entry in data.entries {
+            let pid = entry.pid;
+            let record = entry.record;
             let matches = match status {
                 PoolStatus::Ready => matches!(record.state.status, PoolStatus::Ready),
                 PoolStatus::PendingReset => matches!(record.state.status, PoolStatus::PendingReset),

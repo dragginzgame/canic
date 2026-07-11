@@ -17,7 +17,11 @@ pub struct ShardingLifecycleOps;
 impl ShardingLifecycleOps {
     #[must_use]
     pub fn active_shards() -> Vec<Principal> {
-        ShardingLifecycle::active_shards()
+        ShardingLifecycle::export()
+            .entries
+            .into_iter()
+            .map(|record| record.pid)
+            .collect()
     }
 
     pub fn set_active(pid: Principal) {

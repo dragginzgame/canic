@@ -20,9 +20,9 @@ impl ShardingWorkflow {
         let direct_children = Self::direct_child_pid_set();
         ShardingRegistryOps::entries_for_pool(pool)
             .iter()
-            .filter(|(pid, _)| direct_children.is_empty() || direct_children.contains(pid))
-            .map(|(pid, entry)| {
-                ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
+            .filter(|record| direct_children.is_empty() || direct_children.contains(&record.pid))
+            .map(|record| {
+                ShardPlacementPolicyInputMapper::record_to_policy_input(record.pid, &record.entry)
             })
             .collect()
     }

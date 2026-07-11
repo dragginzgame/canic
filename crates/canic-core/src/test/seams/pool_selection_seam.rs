@@ -12,8 +12,8 @@ use crate::{
 fn pool_selection_uses_workflow_ordering() {
     let _guard = lock();
 
-    for (pid, _) in PoolOps::data().entries {
-        PoolOps::remove(&pid);
+    for entry in PoolOps::data().entries {
+        PoolOps::remove(&entry.pid);
     }
 
     let pid_a = p(20);

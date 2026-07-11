@@ -93,9 +93,9 @@ impl ShardingWorkflow {
 
         let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
-            .filter(|(pid, _)| routable_active.contains(pid))
-            .map(|(pid, entry)| {
-                ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
+            .filter(|record| routable_active.contains(&record.pid))
+            .map(|record| {
+                ShardPlacementPolicyInputMapper::record_to_policy_input(record.pid, &record.entry)
             })
             .collect();
 
@@ -104,9 +104,12 @@ impl ShardingWorkflow {
         let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
         let assignment_views: Vec<_> = assignments_raw
             .iter()
-            .filter(|(_, pid)| routable_active.contains(pid))
-            .map(|(key, pid)| {
-                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
+            .filter(|record| routable_active.contains(&record.shard))
+            .map(|record| {
+                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(
+                    &record.key,
+                    record.shard,
+                )
             })
             .collect();
         crate::perf!("collect_registry");
@@ -238,9 +241,9 @@ impl ShardingWorkflow {
 
         let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
-            .filter(|(pid, _)| routable_active.contains(pid))
-            .map(|(pid, entry)| {
-                ShardPlacementPolicyInputMapper::record_to_policy_input(*pid, entry)
+            .filter(|record| routable_active.contains(&record.pid))
+            .map(|record| {
+                ShardPlacementPolicyInputMapper::record_to_policy_input(record.pid, &record.entry)
             })
             .collect();
 
@@ -249,9 +252,12 @@ impl ShardingWorkflow {
         let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
         let assignment_views: Vec<_> = assignments_raw
             .iter()
-            .filter(|(_, pid)| routable_active.contains(pid))
-            .map(|(key, pid)| {
-                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(key, *pid)
+            .filter(|record| routable_active.contains(&record.shard))
+            .map(|record| {
+                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(
+                    &record.key,
+                    record.shard,
+                )
             })
             .collect();
 

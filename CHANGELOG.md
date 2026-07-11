@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.6` makes placement-capacity and sharding state declarations truthful
+  with canonical `*Data` snapshots and owner-defined descriptor names while
+  preserving stable-memory IDs and encodings.
+
 - `0.84.5` replaces aspirational app and subnet index snapshot metadata with
   real canonical `*Data` snapshots and named entry records while preserving
   stable-memory IDs and encodings.

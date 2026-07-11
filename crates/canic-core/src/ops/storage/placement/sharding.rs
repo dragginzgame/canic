@@ -8,8 +8,8 @@ use crate::{
     InternalError,
     ops::{prelude::*, storage::StorageOpsError},
     storage::stable::sharding::{
-        ShardEntryRecord, ShardKey,
-        registry::{ShardingRegistry, ShardingRegistryRecord},
+        ShardEntryRecord, ShardKey, ShardingAssignmentRecord, ShardingRegistryData,
+        ShardingRegistryEntryRecord, registry::ShardingRegistry,
     },
 };
 use thiserror::Error as ThisError;
@@ -74,15 +74,15 @@ impl ShardingRegistryOps {
         // Shard counts are expected to be small and bounded.
         ShardingRegistry::with_mut(|core| {
             if slot != ShardEntryRecord::UNASSIGNED_SLOT {
-                for (other_pid, other_entry) in core.all_entries() {
-                    if other_pid != pid
-                        && other_entry.pool.as_ref() == pool
-                        && other_entry.slot == slot
+                for record in core.all_entries() {
+                    if record.pid != pid
+                        && record.entry.pool.as_ref() == pool
+                        && record.entry.slot == slot
                     {
                         return Err(ShardingRegistryOpsError::SlotOccupied {
                             pool: pool.to_string(),
                             slot,
-                            pid: other_pid,
+                            pid: record.pid,
                         }
                         .into());
                     }
@@ -207,20 +207,20 @@ impl ShardingRegistryOps {
     /// Returns canonical assignment keys. Callers should not stringify unless required
     /// at an API or DTO boundary.
     #[must_use]
-    pub fn assignments_for_pool(pool: &str) -> Vec<(ShardKey, Principal)> {
+    pub fn assignments_for_pool(pool: &str) -> Vec<ShardingAssignmentRecord> {
         ShardingRegistry::assignments_for_pool(pool)
     }
 
     /// Return all shard entries registered for one pool.
     #[must_use]
-    pub fn entries_for_pool(pool: &str) -> Vec<(Principal, ShardEntryRecord)> {
+    pub fn entries_for_pool(pool: &str) -> Vec<ShardingRegistryEntryRecord> {
         ShardingRegistry::entries_for_pool(pool)
     }
 
     /// Export all shard entries.
     #[must_use]
-    pub fn export() -> ShardingRegistryRecord {
-        ShardingRegistry::export()
+    pub fn registry_data() -> ShardingRegistryData {
+        ShardingRegistry::export_registry()
     }
 
     #[cfg(test)]

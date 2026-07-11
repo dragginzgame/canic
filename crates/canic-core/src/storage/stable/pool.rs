@@ -21,13 +21,34 @@ eager_static! {
 }
 
 ///
-/// PoolStoreRecord
-/// Canonical storage-level export.
+/// CanisterPoolEntryRecord
+///
+/// One logical canister-pool snapshot row.
 ///
 
 #[derive(Clone, Debug)]
-pub struct PoolStoreRecord {
-    pub entries: Vec<(Principal, PoolRecord)>,
+pub struct CanisterPoolEntryRecord {
+    pub pid: Principal,
+    pub record: PoolRecord,
+}
+
+impl CanisterPoolEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "CanisterPoolEntryRecord";
+}
+
+///
+/// CanisterPoolData
+///
+/// Canonical canister-pool export snapshot.
+///
+
+#[derive(Clone, Debug)]
+pub struct CanisterPoolData {
+    pub entries: Vec<CanisterPoolEntryRecord>,
+}
+
+impl CanisterPoolData {
+    pub const STATE_CONTRACT_NAME: &'static str = "CanisterPoolData";
 }
 
 ///
@@ -142,11 +163,14 @@ impl PoolStore {
     }
 
     #[must_use]
-    pub(crate) fn export() -> PoolStoreRecord {
-        PoolStoreRecord {
+    pub(crate) fn export() -> CanisterPoolData {
+        CanisterPoolData {
             entries: POOL_STORE.with_borrow(|map| {
                 map.iter()
-                    .map(|entry| (*entry.key(), entry.value()))
+                    .map(|entry| CanisterPoolEntryRecord {
+                        pid: *entry.key(),
+                        record: entry.value(),
+                    })
                     .collect()
             }),
         }

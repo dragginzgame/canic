@@ -13,7 +13,6 @@ pub mod pool;
 pub mod registry;
 pub mod replay;
 pub mod scaling;
-#[cfg(feature = "sharding")]
 pub mod sharding;
 pub mod state;
 

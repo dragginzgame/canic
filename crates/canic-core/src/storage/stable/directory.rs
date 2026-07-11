@@ -42,12 +42,34 @@ impl DirectoryKey {
 impl_storable_bounded!(DirectoryKey, DirectoryKey::STORABLE_MAX_SIZE, false);
 
 ///
-/// DirectoryRegistryRecord
+/// DirectoryRegistryEntryRecord
+///
+/// One logical directory-registry snapshot row.
 ///
 
 #[derive(Clone, Debug)]
-pub struct DirectoryRegistryRecord {
-    pub entries: Vec<(DirectoryKey, DirectoryEntryRecord)>,
+pub struct DirectoryRegistryEntryRecord {
+    pub key: DirectoryKey,
+    pub entry: DirectoryEntryRecord,
+}
+
+impl DirectoryRegistryEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "DirectoryRegistryEntryRecord";
+}
+
+///
+/// DirectoryRegistryData
+///
+/// Canonical directory-registry export snapshot.
+///
+
+#[derive(Clone, Debug)]
+pub struct DirectoryRegistryData {
+    pub entries: Vec<DirectoryRegistryEntryRecord>,
+}
+
+impl DirectoryRegistryData {
+    pub const STATE_CONTRACT_NAME: &'static str = "DirectoryRegistryData";
 }
 
 ///
@@ -103,11 +125,14 @@ impl DirectoryRegistry {
     }
 
     #[must_use]
-    pub(crate) fn export() -> DirectoryRegistryRecord {
-        DirectoryRegistryRecord {
+    pub(crate) fn export() -> DirectoryRegistryData {
+        DirectoryRegistryData {
             entries: DIRECTORY_REGISTRY.with_borrow(|map| {
                 map.iter()
-                    .map(|entry| (entry.key().clone(), entry.value()))
+                    .map(|entry| DirectoryRegistryEntryRecord {
+                        key: entry.key().clone(),
+                        entry: entry.value(),
+                    })
                     .collect()
             }),
         }
