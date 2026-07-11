@@ -7,10 +7,9 @@ mod process;
 mod wasm_store;
 
 pub use crate::build_profile::CanisterBuildProfile;
-pub use artifact::{build_current_workspace_canister_artifact, copy_icp_wasm_output};
+pub use artifact::{build_workspace_canister_artifact, copy_icp_wasm_output};
 pub use context::{
-    WorkspaceBuildContext, current_workspace_build_context_once,
-    print_current_workspace_build_context_once,
+    WorkspaceBuildContext, print_workspace_build_context_once, workspace_build_context_once,
 };
 pub use model::CanisterArtifactBuildOutput;
 

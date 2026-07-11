@@ -4,6 +4,7 @@ use canic_backup::{
     persistence::BackupLayout,
     restore::{
         RestoreApplyDryRun, RestoreApplyJournal, RestoreMapping, RestorePlan, RestoreRunResponse,
+        write_restore_apply_journal, write_restore_plan,
     },
 };
 use serde::Serialize;
@@ -248,14 +249,16 @@ fn comparable_path(path: &Path) -> PathBuf {
 }
 
 pub(super) fn write_plan_file(path: &Path, plan: &RestorePlan) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json_file(path, plan)
+    write_restore_plan(path, plan)?;
+    Ok(())
 }
 
 pub(super) fn write_apply_journal_file(
     path: &Path,
     dry_run: &RestoreApplyDryRun,
 ) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json_file(path, &RestoreApplyJournal::from_dry_run(dry_run))
+    write_restore_apply_journal(path, &RestoreApplyJournal::from_dry_run(dry_run))?;
+    Ok(())
 }
 
 pub(super) fn write_prepare_report(
@@ -270,7 +273,10 @@ pub(super) fn write_plan(
     options: &RestorePlanOptions,
     plan: &RestorePlan,
 ) -> Result<(), RestoreCommandError> {
-    output::write_pretty_json(options.out.as_deref(), plan)
+    if let Some(path) = options.out.as_deref() {
+        return write_plan_file(path, plan);
+    }
+    output::write_pretty_json(None, plan)
 }
 
 // Write the computed apply dry-run to stdout or a requested output file.
@@ -290,7 +296,8 @@ pub(super) fn write_apply_journal_if_requested(
         return Ok(());
     };
 
-    output::write_pretty_json_file(path, &RestoreApplyJournal::from_dry_run(dry_run))
+    write_restore_apply_journal(path, &RestoreApplyJournal::from_dry_run(dry_run))?;
+    Ok(())
 }
 
 // Write the restore runner response to stdout or a requested output file.

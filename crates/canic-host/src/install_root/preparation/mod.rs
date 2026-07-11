@@ -10,6 +10,7 @@ use super::phase_receipts::{
 use super::plan_artifacts::validate_plan_artifacts_with_phase;
 use super::timing::InstallTimingSummary;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
+use crate::canister_build::WorkspaceBuildContext;
 use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1};
 use crate::release_set::configured_install_targets;
 use std::{
@@ -30,16 +31,17 @@ pub(super) fn prepare_install_deployment_truth(
     config_path: &Path,
     deployment_name: &str,
     execution_context: &DeploymentExecutionContextV1,
+    build_context: &WorkspaceBuildContext,
 ) -> Result<PreparedInstallTruth, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
     ensure_current_install_executor_capabilities(execution_context)?;
     ensure_icp_environment_ready(icp_root, &options.network)?;
     let (root_canister_id, create_phase, create_duration) =
-        resolve_root_canister_with_phase(options, icp_root, config_path)?;
+        resolve_root_canister_with_phase(options, icp_root, config_path, build_context)?;
     timings.create_canisters = create_duration;
 
     let (build_phase, build_duration) =
-        build_install_targets_with_phase(options, icp_root, config_path)?;
+        build_install_targets_with_phase(options, build_context, icp_root, config_path)?;
     timings.build_all = build_duration;
 
     let deployment_truth_check = run_install_deployment_truth_safety_gate(
@@ -71,12 +73,14 @@ fn resolve_root_canister_with_phase(
     options: &InstallRootOptions,
     icp_root: &Path,
     config_path: &Path,
+    build_context: &WorkspaceBuildContext,
 ) -> Result<(String, CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
     let operation = ResolveRootCanisterOperation::new(
         icp_root,
         &options.network,
         &options.root_canister,
         config_path,
+        build_context.local_replica.as_ref(),
     );
     let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
@@ -95,6 +99,7 @@ fn resolve_root_canister_with_phase(
 
 fn build_install_targets_with_phase(
     options: &InstallRootOptions,
+    build_context: &WorkspaceBuildContext,
     icp_root: &Path,
     config_path: &Path,
 ) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
@@ -103,13 +108,7 @@ fn build_install_targets_with_phase(
     }
 
     let build_targets = configured_install_targets(config_path, &options.root_build_target)?;
-    let operation = BuildInstallTargetsOperation::new(
-        &options.network,
-        build_targets,
-        options.build_profile,
-        config_path,
-        icp_root,
-    );
+    let operation = BuildInstallTargetsOperation::new(build_context, build_targets);
     let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
     operation.execute()?;

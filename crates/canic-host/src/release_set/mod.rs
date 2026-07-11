@@ -20,13 +20,14 @@ pub use config::{
 };
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
-    emit_root_release_set_manifest_if_ready, emit_root_release_set_manifest_with_config,
-    load_root_release_set_manifest,
+    emit_root_release_set_manifest_if_ready, emit_root_release_set_manifest_if_ready_with_config,
+    emit_root_release_set_manifest_with_config, load_root_release_set_manifest,
 };
 pub use paths::{
     canister_manifest_path, canisters_root, config_path, display_workspace_path, icp_root,
     load_root_package_version, load_workspace_package_version, resolve_artifact_root,
     root_manifest_path, root_release_set_manifest_path, workspace_manifest_path, workspace_root,
+    workspace_root_from,
 };
 use stage::build_release_set_entry;
 pub(crate) use stage::icp_query_on_network;

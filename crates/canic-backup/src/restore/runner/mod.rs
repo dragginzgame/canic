@@ -18,7 +18,7 @@ use super::{
     RestoreApplyJournalReport, RestoreApplyOperationKind, RestoreApplyOperationKindCounts,
     RestoreApplyOperationReceipt, RestoreApplyOperationReceiptOutcome, RestoreApplyOperationState,
     RestoreApplyPendingSummary, RestoreApplyProgressSummary, RestoreApplyReportOperation,
-    RestoreApplyReportOutcome, RestoreApplyRunnerCommand,
+    RestoreApplyReportOutcome, RestoreApplyRunnerCommand, RestorePersistenceError,
 };
 
 pub use constants::{

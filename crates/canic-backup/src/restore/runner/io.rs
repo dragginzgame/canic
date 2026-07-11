@@ -8,7 +8,7 @@ use super::{
     RestoreApplyJournal, RestoreApplyOperationReceiptOutcome, RestoreApplyOperationState,
     types::RestoreRunnerError,
 };
-use crate::timestamp::current_timestamp_marker;
+use crate::{restore::write_restore_apply_journal, timestamp::current_timestamp_marker};
 use std::{
     fs,
     io::{self, Write},
@@ -33,8 +33,7 @@ pub(super) fn write_apply_journal_file(
     path: &Path,
     journal: &RestoreApplyJournal,
 ) -> Result<(), RestoreRunnerError> {
-    let data = serde_json::to_vec_pretty(journal)?;
-    fs::write(path, data)?;
+    write_restore_apply_journal(path, journal)?;
     Ok(())
 }
 

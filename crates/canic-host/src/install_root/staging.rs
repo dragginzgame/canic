@@ -3,6 +3,7 @@ use crate::deployment_truth::{
     ArtifactTransportV1, ObservationStatusV1, StagingReceiptV1, VerifiedPostconditionV1,
     staging_receipt_evidence,
 };
+use crate::icp::LocalReplicaTarget;
 use crate::release_set::{RootReleaseSetManifest, stage_root_release_set};
 use std::path::Path;
 
@@ -12,6 +13,7 @@ pub(super) struct StageReleaseSetOperation<'a> {
     root_canister_id: &'a str,
     manifest_path: &'a Path,
     manifest: RootReleaseSetManifest,
+    local_replica: Option<&'a LocalReplicaTarget>,
 }
 
 impl<'a> StageReleaseSetOperation<'a> {
@@ -21,6 +23,7 @@ impl<'a> StageReleaseSetOperation<'a> {
         root_canister_id: &'a str,
         manifest_path: &'a Path,
         manifest: RootReleaseSetManifest,
+        local_replica: Option<&'a LocalReplicaTarget>,
     ) -> Self {
         Self {
             icp_root,
@@ -28,6 +31,7 @@ impl<'a> StageReleaseSetOperation<'a> {
             root_canister_id,
             manifest_path,
             manifest,
+            local_replica,
         }
     }
 }
@@ -49,6 +53,7 @@ impl InstallPhaseOperation for StageReleaseSetOperation<'_> {
         stage_root_release_set(
             self.icp_root,
             self.network,
+            self.local_replica,
             self.root_canister_id,
             &self.manifest,
         )

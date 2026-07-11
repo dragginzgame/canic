@@ -1,6 +1,7 @@
 use super::super::build_targets::run_canic_build_targets;
 use super::super::root_canister::ensure_root_canister_id;
-use crate::canister_build::CanisterBuildProfile;
+use crate::canister_build::WorkspaceBuildContext;
+use crate::icp::LocalReplicaTarget;
 use std::path::Path;
 
 pub(in crate::install_root) struct ResolveRootCanisterOperation<'a> {
@@ -8,6 +9,7 @@ pub(in crate::install_root) struct ResolveRootCanisterOperation<'a> {
     network: &'a str,
     root_canister: &'a str,
     config_path: &'a Path,
+    local_replica: Option<&'a LocalReplicaTarget>,
 }
 
 impl<'a> ResolveRootCanisterOperation<'a> {
@@ -16,12 +18,14 @@ impl<'a> ResolveRootCanisterOperation<'a> {
         network: &'a str,
         root_canister: &'a str,
         config_path: &'a Path,
+        local_replica: Option<&'a LocalReplicaTarget>,
     ) -> Self {
         Self {
             icp_root,
             network,
             root_canister,
             config_path,
+            local_replica,
         }
     }
 
@@ -38,32 +42,24 @@ impl<'a> ResolveRootCanisterOperation<'a> {
             self.network,
             self.root_canister,
             self.config_path,
+            self.local_replica,
         )
     }
 }
 
 pub(in crate::install_root) struct BuildInstallTargetsOperation<'a> {
-    network: &'a str,
+    context: &'a WorkspaceBuildContext,
     build_targets: Vec<String>,
-    build_profile: Option<CanisterBuildProfile>,
-    config_path: &'a Path,
-    icp_root: &'a Path,
 }
 
 impl<'a> BuildInstallTargetsOperation<'a> {
     pub(in crate::install_root) const fn new(
-        network: &'a str,
+        context: &'a WorkspaceBuildContext,
         build_targets: Vec<String>,
-        build_profile: Option<CanisterBuildProfile>,
-        config_path: &'a Path,
-        icp_root: &'a Path,
     ) -> Self {
         Self {
-            network,
+            context,
             build_targets,
-            build_profile,
-            config_path,
-            icp_root,
         }
     }
 
@@ -79,12 +75,6 @@ impl<'a> BuildInstallTargetsOperation<'a> {
     }
 
     pub(in crate::install_root) fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        run_canic_build_targets(
-            self.network,
-            &self.build_targets,
-            self.build_profile,
-            self.config_path,
-            self.icp_root,
-        )
+        run_canic_build_targets(self.context, &self.build_targets)
     }
 }

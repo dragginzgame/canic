@@ -2,7 +2,8 @@ use crate::backup::BackupCommandError;
 use canic_backup::{
     persistence::PersistenceError,
     restore::{
-        RestoreApplyDryRunError, RestoreApplyJournalError, RestorePlanError, RestoreRunnerError,
+        RestoreApplyDryRunError, RestoreApplyJournalError, RestorePersistenceError,
+        RestorePlanError, RestoreRunnerError,
     },
 };
 use canic_host::icp::IcpCommandError;
@@ -157,6 +158,9 @@ pub enum RestoreCommandError {
 
     #[error(transparent)]
     RestoreApplyJournal(#[from] RestoreApplyJournalError),
+
+    #[error(transparent)]
+    RestorePersistence(#[from] RestorePersistenceError),
 }
 
 impl From<RestoreRunnerError> for RestoreCommandError {
@@ -222,6 +226,7 @@ impl From<RestoreRunnerError> for RestoreCommandError {
             RestoreRunnerError::Io(error) => Self::Io(error),
             RestoreRunnerError::Json(error) => Self::Json(error),
             RestoreRunnerError::Journal(error) => Self::RestoreApplyJournal(error),
+            RestoreRunnerError::Persistence(error) => Self::RestorePersistence(error),
         }
     }
 }

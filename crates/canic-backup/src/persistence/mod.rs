@@ -14,6 +14,7 @@ pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,
 };
+pub(crate) use json::write_json_durable;
 pub use layout::BackupLayout;
 
 #[cfg(test)]

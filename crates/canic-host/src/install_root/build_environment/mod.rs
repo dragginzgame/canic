@@ -1,76 +1,43 @@
 use crate::{
-    CANIC_ICP_BUILD_ENVIRONMENT_ENV,
-    icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV},
+    canister_build::{CanisterBuildProfile, WorkspaceBuildContext},
+    icp::{self, LocalReplicaTarget},
     icp_config::resolve_icp_build_environment_from_root,
     replica_query,
 };
-use std::{env, ffi::OsString, path::Path};
+use std::path::Path;
 
-pub(super) struct BuildEnvGuard {
-    previous_network: Option<OsString>,
-    previous_build_environment: Option<OsString>,
-    previous_config_path: Option<OsString>,
-    previous_icp_root: Option<OsString>,
-    previous_local_network_url: Option<OsString>,
-    previous_local_root_key: Option<OsString>,
+pub(super) fn resolve_install_build_context(
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    network: &str,
+    role: &str,
+    build_profile: Option<CanisterBuildProfile>,
+) -> Result<WorkspaceBuildContext, Box<dyn std::error::Error>> {
+    let profile = build_profile.unwrap_or_else(CanisterBuildProfile::current);
+    let requested_profile = build_profile.map_or_else(
+        || std::env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string()),
+        |profile| profile.target_dir_name().to_string(),
+    );
+    let build_network = resolve_icp_build_environment_from_root(icp_root, network)?;
+
+    Ok(WorkspaceBuildContext {
+        role: role.to_string(),
+        profile,
+        requested_profile,
+        environment: network.to_string(),
+        build_network: build_network.as_str().to_string(),
+        workspace_root: workspace_root.to_path_buf(),
+        icp_root: icp_root.to_path_buf(),
+        config_path: config_path.to_path_buf(),
+        local_replica: local_replica_icp_target(network, icp_root),
+    })
 }
 
-impl BuildEnvGuard {
-    pub(super) fn apply(
-        network: &str,
-        config_path: &Path,
-        icp_root: &Path,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let build_environment = resolve_icp_build_environment_from_root(icp_root, network)?;
-        let guard = Self {
-            previous_network: env::var_os("ICP_ENVIRONMENT"),
-            previous_build_environment: env::var_os(CANIC_ICP_BUILD_ENVIRONMENT_ENV),
-            previous_config_path: env::var_os("CANIC_CONFIG_PATH"),
-            previous_icp_root: env::var_os("CANIC_ICP_ROOT"),
-            previous_local_network_url: env::var_os(CANIC_ICP_LOCAL_NETWORK_URL_ENV),
-            previous_local_root_key: env::var_os(CANIC_ICP_LOCAL_ROOT_KEY_ENV),
-        };
-        set_env("ICP_ENVIRONMENT", network);
-        set_env(CANIC_ICP_BUILD_ENVIRONMENT_ENV, build_environment.as_str());
-        set_env("CANIC_CONFIG_PATH", config_path);
-        set_env("CANIC_ICP_ROOT", icp_root);
-        if let Some(target) = local_replica_icp_target(network, icp_root) {
-            set_env(CANIC_ICP_LOCAL_NETWORK_URL_ENV, target.url);
-            set_env(CANIC_ICP_LOCAL_ROOT_KEY_ENV, target.root_key);
-        } else {
-            remove_env(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
-            remove_env(CANIC_ICP_LOCAL_ROOT_KEY_ENV);
-        }
-        Ok(guard)
-    }
-}
-
-impl Drop for BuildEnvGuard {
-    fn drop(&mut self) {
-        restore_env("ICP_ENVIRONMENT", self.previous_network.take());
-        restore_env(
-            CANIC_ICP_BUILD_ENVIRONMENT_ENV,
-            self.previous_build_environment.take(),
-        );
-        restore_env("CANIC_CONFIG_PATH", self.previous_config_path.take());
-        restore_env("CANIC_ICP_ROOT", self.previous_icp_root.take());
-        restore_env(
-            CANIC_ICP_LOCAL_NETWORK_URL_ENV,
-            self.previous_local_network_url.take(),
-        );
-        restore_env(
-            CANIC_ICP_LOCAL_ROOT_KEY_ENV,
-            self.previous_local_root_key.take(),
-        );
-    }
-}
-
-struct LocalReplicaIcpTarget {
-    url: String,
-    root_key: String,
-}
-
-fn local_replica_icp_target(network: &str, icp_root: &Path) -> Option<LocalReplicaIcpTarget> {
+pub(super) fn local_replica_icp_target(
+    network: &str,
+    icp_root: &Path,
+) -> Option<LocalReplicaTarget> {
     if !replica_query::should_use_local_replica_query(Some(network)) {
         return None;
     }
@@ -80,42 +47,10 @@ fn local_replica_icp_target(network: &str, icp_root: &Path) -> Option<LocalRepli
     let root_key = replica_query::local_replica_root_key_from_root(Some(network), icp_root)
         .ok()
         .flatten()?;
-    Some(LocalReplicaIcpTarget {
+    Some(LocalReplicaTarget {
         url: replica_query::local_replica_endpoint_from_root(Some(network), icp_root),
         root_key,
     })
-}
-
-fn set_env<K, V>(key: K, value: V)
-where
-    K: AsRef<std::ffi::OsStr>,
-    V: AsRef<std::ffi::OsStr>,
-{
-    // Install builds are single-threaded host orchestration. The environment is
-    // scoped by BuildEnvGuard so Cargo build scripts see the selected fleet.
-    unsafe {
-        env::set_var(key, value);
-    }
-}
-
-fn remove_env<K>(key: K)
-where
-    K: AsRef<std::ffi::OsStr>,
-{
-    // Install builds are single-threaded host orchestration. The environment is
-    // scoped by BuildEnvGuard so Cargo build scripts see the selected fleet.
-    unsafe {
-        env::remove_var(key);
-    }
-}
-
-fn restore_env(key: &str, value: Option<OsString>) {
-    // See set_env: this restores the single-threaded install build context.
-    if let Some(value) = value {
-        set_env(key, value);
-    } else {
-        remove_env(key);
-    }
 }
 
 pub(super) fn ensure_icp_environment_ready(

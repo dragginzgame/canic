@@ -448,17 +448,17 @@ impl AuthStateData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_cbor::{Value, value::to_value};
+    use ciborium::Value;
     use std::collections::BTreeSet;
 
     fn auth_state_keys(record: &AuthStateRecord) -> BTreeSet<String> {
-        let value = to_value(record).expect("auth state should serialize to CBOR value");
+        let value = Value::serialized(record).expect("auth state should serialize to CBOR value");
         let Value::Map(map) = value else {
             panic!("auth state should serialize as a CBOR map");
         };
 
-        map.into_keys()
-            .map(|key| {
+        map.into_iter()
+            .map(|(key, _)| {
                 let Value::Text(text) = key else {
                     panic!("auth state keys should serialize as text");
                 };

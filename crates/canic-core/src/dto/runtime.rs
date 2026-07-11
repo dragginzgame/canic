@@ -345,14 +345,15 @@ mod tests {
     where
         T: Clone + Debug + DeserializeOwned + Eq + Serialize,
     {
-        let encoded = serde_cbor::to_vec(&value).expect("encode runtime enum label");
+        let encoded = crate::cdk::serialize::serialize(&value).expect("encode runtime enum label");
         let serialized_label: String =
-            serde_cbor::from_slice(&encoded).expect("decode runtime enum label");
+            crate::cdk::serialize::deserialize(&encoded).expect("decode runtime enum label");
         assert_eq!(serialized_label, label);
 
-        let label_bytes = serde_cbor::to_vec(&label).expect("encode canonical runtime enum label");
-        let decoded: T =
-            serde_cbor::from_slice(&label_bytes).expect("decode canonical runtime enum label");
+        let label_bytes =
+            crate::cdk::serialize::serialize(&label).expect("encode canonical runtime enum label");
+        let decoded: T = crate::cdk::serialize::deserialize(&label_bytes)
+            .expect("decode canonical runtime enum label");
         assert_eq!(decoded, value);
     }
 }

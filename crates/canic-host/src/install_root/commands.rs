@@ -1,7 +1,7 @@
-use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV};
+use crate::icp::{self, LocalReplicaTarget};
 use canic_core::cdk::{types::Principal, utils::hash::wasm_hash};
 use serde_json::Value as JsonValue;
-use std::{env, fs, path::Path, process::Command};
+use std::{fs, path::Path, process::Command};
 
 pub(super) fn parse_created_canister_id(output: &str) -> Option<String> {
     if let Ok(value) = serde_json::from_str::<JsonValue>(output) {
@@ -27,8 +27,12 @@ pub(super) fn parse_canister_id_json(value: &JsonValue) -> Option<String> {
     }
 }
 
-pub(super) fn add_create_root_target(command: &mut Command, root_canister: &str) {
-    if env::var_os(CANIC_ICP_LOCAL_NETWORK_URL_ENV).is_some() {
+pub(super) fn add_create_root_target(
+    command: &mut Command,
+    root_canister: &str,
+    local_replica: Option<&LocalReplicaTarget>,
+) {
+    if local_replica.is_some() {
         command.args(["create", "--detached", "--json"]);
     } else {
         command.args(["create", root_canister, "--json"]);
@@ -69,12 +73,6 @@ pub(super) fn run_command_stdout(
     icp::run_output(command).map_err(Into::into)
 }
 
-pub(super) fn icp_command_on_network(network: &str) -> Command {
-    let mut command = icp::default_command();
-    command.env("ICP_ENVIRONMENT", network);
-    command
-}
-
 pub(super) fn icp_command_in_network(icp_root: &Path, network: &str) -> Command {
     let mut command = icp::default_command_in(icp_root);
     command.env("ICP_ENVIRONMENT", network);
@@ -87,6 +85,10 @@ pub(super) fn icp_canister_command_in_network(icp_root: &Path) -> Command {
     command
 }
 
-pub(super) fn add_icp_environment_target(command: &mut Command, network: &str) {
-    icp::add_target_args(command, Some(network), None);
+pub(super) fn add_icp_environment_target(
+    command: &mut Command,
+    network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
+) {
+    icp::add_target_args(command, Some(network), None, local_replica);
 }

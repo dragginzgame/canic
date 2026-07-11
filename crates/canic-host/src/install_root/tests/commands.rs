@@ -2,14 +2,9 @@ use super::*;
 
 #[test]
 fn icp_canister_command_carries_selected_network() {
-    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    unsafe {
-        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
-        env::remove_var(CANIC_ICP_LOCAL_ROOT_KEY_ENV);
-    }
     let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
     command.args(["status", "root"]);
-    add_icp_environment_target(&mut command, "ic");
+    add_icp_environment_target(&mut command, "ic", None);
 
     assert_eq!(command.get_program(), "icp");
     assert_eq!(
@@ -31,19 +26,14 @@ fn icp_canister_command_carries_selected_network() {
 
 #[test]
 fn local_canister_command_uses_http_target_when_configured() {
-    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    unsafe {
-        env::set_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV, "http://127.0.0.1:8000");
-        env::set_var(CANIC_ICP_LOCAL_ROOT_KEY_ENV, "abcd");
-    }
+    let target = LocalReplicaTarget {
+        url: "http://127.0.0.1:8000".to_string(),
+        root_key: "abcd".to_string(),
+    };
     let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
     command.env("ICP_ENVIRONMENT", "local");
     command.args(["status", "root"]);
-    add_icp_environment_target(&mut command, "local");
-    unsafe {
-        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
-        env::remove_var(CANIC_ICP_LOCAL_ROOT_KEY_ENV);
-    }
+    add_icp_environment_target(&mut command, "local", Some(&target));
 
     assert_eq!(
         command
@@ -71,15 +61,12 @@ fn local_canister_command_uses_http_target_when_configured() {
 
 #[test]
 fn local_http_fallback_creates_detached_root() {
-    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    unsafe {
-        env::set_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV, "http://127.0.0.1:8000");
-    }
+    let target = LocalReplicaTarget {
+        url: "http://127.0.0.1:8000".to_string(),
+        root_key: "abcd".to_string(),
+    };
     let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
-    add_create_root_target(&mut command, "root");
-    unsafe {
-        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
-    }
+    add_create_root_target(&mut command, "root", Some(&target));
 
     assert_eq!(
         command
@@ -99,12 +86,8 @@ fn local_http_fallback_creates_detached_root() {
 
 #[test]
 fn environment_create_uses_named_root() {
-    let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-    unsafe {
-        env::remove_var(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
-    }
     let mut command = icp_canister_command_in_network(Path::new("/tmp/canic-icp-root"));
-    add_create_root_target(&mut command, "root");
+    add_create_root_target(&mut command, "root", None);
 
     assert_eq!(
         command

@@ -373,7 +373,7 @@ fn icp_command(target: &IcpTargetOptions, root: &Path) -> std::process::Command 
 }
 
 fn append_target_args(command: &mut std::process::Command, target: &IcpTargetOptions) {
-    canic_host::icp::add_target_args(command, None, Some(&target.network));
+    canic_host::icp::add_target_args(command, None, Some(&target.network), None);
 }
 
 fn run_or_print_command(

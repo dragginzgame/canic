@@ -5,6 +5,7 @@ mod entry;
 mod progress;
 
 use super::{RootReleaseSetManifest, root_time_secs};
+use crate::icp::LocalReplicaTarget;
 use call::icp_call_on_network;
 use entry::stage_release_entry;
 use progress::StageProgress;
@@ -18,6 +19,7 @@ pub(super) use artifact::read_release_artifact;
 pub fn stage_root_release_set(
     icp_root: &std::path::Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -30,6 +32,7 @@ pub fn stage_root_release_set(
         stage_release_entry(
             icp_root,
             network,
+            local_replica,
             root_canister,
             &manifest.release_version,
             entry,
@@ -44,11 +47,15 @@ pub fn stage_root_release_set(
 
 // Trigger root bootstrap resume after the ordinary release set is fully staged.
 pub fn resume_root_bootstrap(
+    icp_root: &std::path::Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _ = icp_call_on_network(
+        icp_root,
         network,
+        local_replica,
         root_canister,
         canic_core::protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
         None,
@@ -59,11 +66,21 @@ pub fn resume_root_bootstrap(
 
 // Run one query-only `icp canister call` and return stdout, preserving stderr on failure.
 pub fn icp_query_on_network(
+    icp_root: &std::path::Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    call::icp_query_on_network(network, canister, method, argument, output)
+    call::icp_query_on_network(
+        icp_root,
+        network,
+        local_replica,
+        canister,
+        method,
+        argument,
+        output,
+    )
 }

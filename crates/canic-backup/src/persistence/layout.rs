@@ -11,7 +11,7 @@ use crate::{
     persistence::{
         BackupExecutionIntegrityReport, BackupIntegrityReport, PersistenceError,
         integrity::{verify_execution_integrity, verify_layout_integrity},
-        json::{read_json, write_json_atomic},
+        json::{read_json, write_json_durable},
     },
     plan::BackupPlan,
 };
@@ -72,13 +72,13 @@ impl BackupLayout {
         self.root.join(EXECUTION_JOURNAL_FILE_NAME)
     }
 
-    /// Write a validated manifest with atomic replace semantics.
+    /// Write a validated manifest with durable replace semantics.
     pub fn write_manifest(
         &self,
         manifest: &DeploymentBackupManifest,
     ) -> Result<(), PersistenceError> {
         manifest.validate()?;
-        write_json_atomic(&self.manifest_path(), manifest)
+        write_json_durable(&self.manifest_path(), manifest)
     }
 
     /// Read and validate a manifest from this backup layout.
@@ -88,10 +88,10 @@ impl BackupLayout {
         Ok(manifest)
     }
 
-    /// Write a validated backup plan with atomic replace semantics.
+    /// Write a validated backup plan with durable replace semantics.
     pub fn write_backup_plan(&self, plan: &BackupPlan) -> Result<(), PersistenceError> {
         plan.validate()?;
-        write_json_atomic(&self.backup_plan_path(), plan)
+        write_json_durable(&self.backup_plan_path(), plan)
     }
 
     /// Read and validate a backup plan from this layout.
@@ -101,10 +101,10 @@ impl BackupLayout {
         Ok(plan)
     }
 
-    /// Write a validated download journal with atomic replace semantics.
+    /// Write a validated download journal with durable replace semantics.
     pub fn write_journal(&self, journal: &DownloadJournal) -> Result<(), PersistenceError> {
         journal.validate()?;
-        write_json_atomic(&self.journal_path(), journal)
+        write_json_durable(&self.journal_path(), journal)
     }
 
     /// Read and validate a download journal from this backup layout.
@@ -114,13 +114,13 @@ impl BackupLayout {
         Ok(journal)
     }
 
-    /// Write a validated backup execution journal with atomic replace semantics.
+    /// Write a validated backup execution journal with durable replace semantics.
     pub fn write_execution_journal(
         &self,
         journal: &BackupExecutionJournal,
     ) -> Result<(), PersistenceError> {
         journal.validate()?;
-        write_json_atomic(&self.execution_journal_path(), journal)
+        write_json_durable(&self.execution_journal_path(), journal)
     }
 
     /// Read and validate a backup execution journal from this layout.

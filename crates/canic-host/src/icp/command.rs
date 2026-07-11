@@ -1,12 +1,11 @@
 use std::{
-    env,
     path::{Path, PathBuf},
     process::Command,
 };
 
 use super::{
     error::IcpCommandError,
-    model::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV, IcpCli, LOCAL_NETWORK},
+    model::{IcpCli, LOCAL_NETWORK, LocalReplicaTarget},
     version::compatible_version_output,
 };
 
@@ -23,6 +22,7 @@ impl IcpCli {
             environment,
             network,
             cwd: None,
+            local_replica: None,
         }
     }
 
@@ -30,6 +30,13 @@ impl IcpCli {
     #[must_use]
     pub fn with_cwd(mut self, cwd: impl Into<PathBuf>) -> Self {
         self.cwd = Some(cwd.into());
+        self
+    }
+
+    /// Return a copy using an explicit direct local replica target.
+    #[must_use]
+    pub fn with_local_replica(mut self, target: Option<LocalReplicaTarget>) -> Self {
+        self.local_replica = target;
         self
     }
 
@@ -74,7 +81,12 @@ impl IcpCli {
     }
 
     pub(super) fn add_target_args(&self, command: &mut Command) {
-        add_target_args(command, self.environment(), self.network());
+        add_target_args(
+            command,
+            self.environment(),
+            self.network(),
+            self.local_replica.as_ref(),
+        );
     }
 
     pub(super) fn add_local_network_target(&self, command: &mut Command) {
@@ -101,16 +113,22 @@ pub fn default_command_in(cwd: &Path) -> Command {
 }
 
 /// Add optional ICP CLI target arguments, preferring named environments.
-pub fn add_target_args(command: &mut Command, environment: Option<&str>, network: Option<&str>) {
+pub fn add_target_args(
+    command: &mut Command,
+    environment: Option<&str>,
+    network: Option<&str>,
+    local_replica: Option<&LocalReplicaTarget>,
+) {
     if let Some(environment) = environment {
         if environment == LOCAL_NETWORK
-            && let Some(url) = env::var_os(CANIC_ICP_LOCAL_NETWORK_URL_ENV)
+            && let Some(local_replica) = local_replica
         {
             command.env_remove("ICP_ENVIRONMENT");
-            command.arg("-n").arg(url);
-            if let Some(root_key) = env::var_os(CANIC_ICP_LOCAL_ROOT_KEY_ENV) {
-                command.arg("-k").arg(root_key);
-            }
+            command
+                .arg("-n")
+                .arg(&local_replica.url)
+                .arg("-k")
+                .arg(&local_replica.root_key);
             return;
         }
         command.args(["-e", environment]);

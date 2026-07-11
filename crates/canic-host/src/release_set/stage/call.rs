@@ -1,4 +1,4 @@
-use crate::icp;
+use crate::icp::{self, LocalReplicaTarget};
 use std::{
     fs,
     path::PathBuf,
@@ -7,36 +7,63 @@ use std::{
 
 // Run one `icp canister call` and return stdout, preserving stderr on failure.
 pub(super) fn icp_call_on_network(
+    icp_root: &std::path::Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    icp_call_on_network_with_mode(network, canister, method, argument, output, false)
+    icp_call_on_network_with_mode(
+        icp_root,
+        network,
+        local_replica,
+        canister,
+        method,
+        argument,
+        output,
+        false,
+    )
 }
 
 // Run one query-only `icp canister call` and return stdout, preserving stderr on failure.
 pub(super) fn icp_query_on_network(
+    icp_root: &std::path::Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    icp_call_on_network_with_mode(network, canister, method, argument, output, true)
+    icp_call_on_network_with_mode(
+        icp_root,
+        network,
+        local_replica,
+        canister,
+        method,
+        argument,
+        output,
+        true,
+    )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the ICP target and call request stay explicit at this command boundary"
+)]
 fn icp_call_on_network_with_mode(
+    icp_root: &std::path::Path,
     network: &str,
+    local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
     query: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let icp_root = super::super::icp_root()?;
-    let mut command = icp::default_command_in(&icp_root);
+    let mut command = icp::default_command_in(icp_root);
     command.env("ICP_ENVIRONMENT", network).arg("canister");
     command.args(["call", canister, method]);
 
@@ -53,7 +80,7 @@ fn icp_call_on_network_with_mode(
     if query {
         command.arg("--query");
     }
-    icp::add_target_args(&mut command, Some(network), None);
+    icp::add_target_args(&mut command, Some(network), None, local_replica);
 
     icp::ensure_command_compatible(&command)?;
     let result = command.output()?;
