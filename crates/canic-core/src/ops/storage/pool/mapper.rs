@@ -9,7 +9,7 @@ use crate::{
     dto::pool::{CanisterPoolEntry, CanisterPoolResponse},
     ops::{
         prelude::*,
-        storage::pool::{PoolRecord, PoolStatus, PoolStoreRecord},
+        storage::pool::{CanisterPoolData, PoolRecord, PoolStatus},
     },
 };
 
@@ -52,12 +52,12 @@ pub struct CanisterPoolResponseMapper;
 
 impl CanisterPoolResponseMapper {
     #[must_use]
-    pub fn record_to_view(data: PoolStoreRecord) -> CanisterPoolResponse {
+    pub fn data_to_view(data: CanisterPoolData) -> CanisterPoolResponse {
         CanisterPoolResponse {
             entries: data
                 .entries
                 .into_iter()
-                .map(|(pid, record)| CanisterPoolEntryMapper::record_to_view(pid, record))
+                .map(|entry| CanisterPoolEntryMapper::record_to_view(entry.pid, entry.record))
                 .collect(),
         }
     }

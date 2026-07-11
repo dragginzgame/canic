@@ -7,7 +7,10 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
     role_contract::allocation::memory::placement::SHARDING_ACTIVE_SET_ID,
-    storage::prelude::*,
+    storage::{
+        prelude::*,
+        stable::sharding::{ShardingActiveSetData, ShardingActiveSetRecord},
+    },
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
@@ -53,8 +56,15 @@ impl ShardingLifecycle {
     // ---------------------------------------------------------------------
 
     #[must_use]
-    pub(crate) fn active_shards() -> Vec<Principal> {
-        Self::with(|core| core.active.iter().map(|entry| *entry.key()).collect())
+    pub(crate) fn export() -> ShardingActiveSetData {
+        ShardingActiveSetData {
+            entries: Self::with(|core| {
+                core.active
+                    .iter()
+                    .map(|entry| ShardingActiveSetRecord { pid: *entry.key() })
+                    .collect()
+            }),
+        }
     }
 
     // ---------------------------------------------------------------------

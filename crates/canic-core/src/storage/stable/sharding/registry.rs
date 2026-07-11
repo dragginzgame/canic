@@ -2,18 +2,12 @@ use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     storage::{
         prelude::*,
-        stable::sharding::{SHARDING_CORE, ShardEntryRecord, ShardKey, ShardingCore},
+        stable::sharding::{
+            SHARDING_CORE, ShardKey, ShardingAssignmentRecord, ShardingAssignmentsData,
+            ShardingCore, ShardingRegistryData, ShardingRegistryEntryRecord,
+        },
     },
 };
-
-///
-/// ShardingRegistryRecord
-///
-
-#[derive(Clone, Debug)]
-pub struct ShardingRegistryRecord {
-    pub entries: Vec<(Principal, ShardEntryRecord)>,
-}
 
 ///
 /// ShardingRegistry
@@ -82,35 +76,32 @@ impl ShardingRegistry {
     /// Lists all partition_keys currently assigned to the specified shard.
     #[must_use]
     pub(crate) fn partition_keys_in_shard(pool: &str, shard: Principal) -> Vec<String> {
-        Self::with(|s| {
-            s.all_assignments()
-                .into_iter()
-                .filter(|(k, v)| v == &shard && k.pool.as_ref() == pool)
-                .map(|(k, _)| k.partition_key.to_string())
-                .collect()
-        })
+        Self::export_assignments()
+            .entries
+            .into_iter()
+            .filter(|record| record.shard == shard && record.key.pool.as_ref() == pool)
+            .map(|record| record.key.partition_key.to_string())
+            .collect()
     }
 
     /// Returns all shard entries registered for one pool.
     #[must_use]
-    pub(crate) fn entries_for_pool(pool: &str) -> Vec<(Principal, ShardEntryRecord)> {
-        Self::with(|s| {
-            s.all_entries()
-                .into_iter()
-                .filter(|(_, entry)| entry.pool.as_ref() == pool)
-                .collect()
-        })
+    pub(crate) fn entries_for_pool(pool: &str) -> Vec<ShardingRegistryEntryRecord> {
+        Self::export_registry()
+            .entries
+            .into_iter()
+            .filter(|record| record.entry.pool.as_ref() == pool)
+            .collect()
     }
 
     /// Returns all assignments registered for one pool.
     #[must_use]
-    pub(crate) fn assignments_for_pool(pool: &str) -> Vec<(ShardKey, Principal)> {
-        Self::with(|s| {
-            s.all_assignments()
-                .into_iter()
-                .filter(|(key, _)| key.pool.as_ref() == pool)
-                .collect()
-        })
+    pub(crate) fn assignments_for_pool(pool: &str) -> Vec<ShardingAssignmentRecord> {
+        Self::export_assignments()
+            .entries
+            .into_iter()
+            .filter(|record| record.key.pool.as_ref() == pool)
+            .collect()
     }
 
     /// Exports all shard entries (structural data only).
@@ -119,9 +110,17 @@ impl ShardingRegistry {
     /// - Assignments are intentionally excluded.
     /// - Partition key → shard mappings are unbounded and must be queried explicitly.
     #[must_use]
-    pub(crate) fn export() -> ShardingRegistryRecord {
-        ShardingRegistryRecord {
+    pub(crate) fn export_registry() -> ShardingRegistryData {
+        ShardingRegistryData {
             entries: Self::with(ShardingCore::all_entries),
+        }
+    }
+
+    /// Export all partition-key assignments.
+    #[must_use]
+    pub(crate) fn export_assignments() -> ShardingAssignmentsData {
+        ShardingAssignmentsData {
+            entries: Self::with(ShardingCore::all_assignments),
         }
     }
 }

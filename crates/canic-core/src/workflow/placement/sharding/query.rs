@@ -38,14 +38,14 @@ impl ShardingQuery {
 
     #[must_use]
     pub fn registry() -> ShardingRegistryResponse {
-        let data = ShardingRegistryOps::export();
+        let data = ShardingRegistryOps::registry_data();
 
         let view = data
             .entries
             .into_iter()
-            .map(|(pid, entry)| ShardingRegistryEntry {
-                pid,
-                entry: ShardEntryMapper::record_to_view(&entry),
+            .map(|record| ShardingRegistryEntry {
+                pid: record.pid,
+                entry: ShardEntryMapper::record_to_view(&record.entry),
             })
             .collect();
 

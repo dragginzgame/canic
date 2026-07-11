@@ -27,14 +27,14 @@ impl PoolQuery {
 
         data.entries
             .into_iter()
-            .find(|(entry_pid, _)| *entry_pid == pid)
-            .map(|(entry_pid, record)| CanisterPoolEntryMapper::record_to_view(entry_pid, record))
+            .find(|entry| entry.pid == pid)
+            .map(|entry| CanisterPoolEntryMapper::record_to_view(entry.pid, entry.record))
     }
 
     /// Return a view of the entire pool
     #[must_use]
     pub fn pool_list() -> CanisterPoolResponse {
         let data = PoolOps::data();
-        CanisterPoolResponseMapper::record_to_view(data)
+        CanisterPoolResponseMapper::data_to_view(data)
     }
 }

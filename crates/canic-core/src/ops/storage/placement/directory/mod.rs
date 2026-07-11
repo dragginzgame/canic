@@ -407,10 +407,10 @@ impl DirectoryRegistryOps {
         let entries = DirectoryRegistry::export()
             .entries
             .into_iter()
-            .map(|(key, entry)| DirectoryRegistryEntry {
-                pool: key.pool.to_string(),
-                key_value: key.key_value.to_string(),
-                status: entry_to_response(entry),
+            .map(|record| DirectoryRegistryEntry {
+                pool: record.key.pool.to_string(),
+                key_value: record.key.key_value.to_string(),
+                status: entry_to_response(record.entry),
             })
             .collect();
 

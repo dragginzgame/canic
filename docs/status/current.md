@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.4`, published and tagged
-  as `v0.84.4`.
+- The current package/release-surface version is `0.84.5`, published and tagged
+  as `v0.84.5`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -116,13 +116,27 @@ before this compaction is archived at
   reinstall; the patch does not seed missing state, adopt retained children,
   or restore manual proof injection.
 
-- The `0.84.5` changelog is prepared for the post-0.84.4 passive
-  state-contract slice; package metadata remains at `0.84.4` pending the
-  maintainer-owned version bump. App and subnet topology indexes now have real canonical
+- The `0.84.5` passive state-contract slice is published and tagged as
+  `v0.84.5`. App and subnet topology indexes now have real canonical
   `AppIndexData` and `SubnetIndexData` snapshots composed of
   `IndexEntryRecord` rows. Their descriptors reference constants owned by
   those types instead of unverified string literals. The underlying stable
-  B-tree keys/values, memory IDs, endpoint DTOs, and Candid are unchanged.
+  B-tree keys and values, memory IDs, endpoint DTOs, and Candid are unchanged.
+
+- The `0.84.6` passive state-contract changelog is prepared; package metadata
+  remains at `0.84.5` pending the maintainer-owned release bump.
+  Canister-pool, scaling-registry, and directory-registry exports now use real
+  canonical `CanisterPoolData`, `ScalingRegistryData`, and
+  `DirectoryRegistryData` snapshots composed of named entry records. Sharding
+  registry, partition-assignment, and active-set state now expose real
+  `ShardingRegistryData`, `ShardingAssignmentsData`, and
+  `ShardingActiveSetData` snapshots; assignment tuples crossing storage, ops,
+  and workflow are hard-cut to named records. Optional sharding schema types
+  remain available to the unconditional descriptor registry while storage
+  implementations remain feature-gated. All affected descriptors compile
+  against owner-defined record and snapshot names. Stable B-tree keys and
+  values, memory IDs, restore behavior, endpoint DTOs, Candid, and persisted
+  bytes are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
@@ -1403,6 +1417,24 @@ one owner/domain group at a time; do not turn it into migration execution or a
 new role-contract architecture.
 
 ## Useful Validation
+
+Focused 0.84.6 placement snapshot validation (passing):
+
+```text
+cargo check --locked -p canic-core
+cargo test --locked -p canic-core placement_descriptors_reference_canonical_data_types --lib
+cargo test --locked -p canic-core pool_selection_uses_workflow_ordering --lib
+cargo test --locked -p canic-core ops::storage::placement::directory::tests --lib
+```
+
+Focused 0.84.6 sharding snapshot validation (passing):
+
+```text
+cargo check --locked -p canic-core --features sharding
+cargo test --locked -p canic-core sharding_descriptors_reference_canonical_data_types --lib
+cargo test --locked -p canic-core --features sharding ops::storage::placement::sharding::tests --lib
+cargo test --locked -p canic-core --features sharding workflow::placement::sharding::release::tests --lib
+```
 
 Focused 0.84.5 topology snapshot validation (passing):
 

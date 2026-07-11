@@ -234,14 +234,20 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
 }
 
 fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
+    use crate::storage::stable::{
+        directory::{DirectoryRegistryData, DirectoryRegistryEntryRecord},
+        pool::{CanisterPoolData, CanisterPoolEntryRecord},
+        scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
+    };
+
     vec![
         descriptor(
             StateAllocationKey::CanisterPool,
             vec![state_domain(
                 "canister_pool",
                 CANISTER_POOL_ID,
-                "PoolStoreRecord",
-                "CanisterPoolData",
+                CanisterPoolEntryRecord::STATE_CONTRACT_NAME,
+                CanisterPoolData::STATE_CONTRACT_NAME,
                 130,
                 "canister_pool_entries_restore_header_state",
             )],
@@ -252,8 +258,8 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
             vec![state_domain(
                 "scaling_registry",
                 SCALING_REGISTRY_ID,
-                "ScalingRegistryRecord",
-                "ScalingRegistryData",
+                ScalingRegistryEntryRecord::STATE_CONTRACT_NAME,
+                ScalingRegistryData::STATE_CONTRACT_NAME,
                 140,
                 "scaling_registry_restores_worker_pool_membership",
             )],
@@ -264,8 +270,8 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
             vec![state_domain(
                 "directory_registry",
                 DIRECTORY_REGISTRY_ID,
-                "DirectoryRegistryRecord",
-                "DirectoryRegistryData",
+                DirectoryRegistryEntryRecord::STATE_CONTRACT_NAME,
+                DirectoryRegistryData::STATE_CONTRACT_NAME,
                 150,
                 "directory_registry_entries_restore_bindings",
             )],
@@ -275,14 +281,19 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
 }
 
 fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
+    use crate::storage::stable::sharding::{
+        ShardEntryRecord, ShardingActiveSetData, ShardingActiveSetRecord, ShardingAssignmentRecord,
+        ShardingAssignmentsData, ShardingRegistryData,
+    };
+
     vec![
         descriptor(
             StateAllocationKey::ShardingRegistry,
             vec![state_domain(
                 "sharding_registry",
                 SHARDING_REGISTRY_ID,
-                "ShardEntryRecord",
-                "ShardingRegistryData",
+                ShardEntryRecord::STATE_CONTRACT_NAME,
+                ShardingRegistryData::STATE_CONTRACT_NAME,
                 160,
                 "sharding_registry_restores_pool_membership",
             )],
@@ -293,8 +304,8 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
             vec![state_domain(
                 "sharding_assignments",
                 SHARDING_ASSIGNMENT_ID,
-                "ShardingAssignmentRecord",
-                "ShardingAssignmentsData",
+                ShardingAssignmentRecord::STATE_CONTRACT_NAME,
+                ShardingAssignmentsData::STATE_CONTRACT_NAME,
                 170,
                 "sharding_assignments_restore_partition_bindings",
             )],
@@ -305,8 +316,8 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
             vec![state_domain(
                 "sharding_active_set",
                 SHARDING_ACTIVE_SET_ID,
-                "ShardingActiveSetRecord",
-                "ShardingActiveSetData",
+                ShardingActiveSetRecord::STATE_CONTRACT_NAME,
+                ShardingActiveSetData::STATE_CONTRACT_NAME,
                 180,
                 "sharding_active_set_restores_active_shards",
             )],
@@ -722,6 +733,95 @@ mod tests {
                 .find(|declaration| declaration.domain == domain)
                 .expect("topology index declaration");
             assert_eq!(declaration.record, IndexEntryRecord::STATE_CONTRACT_NAME);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn placement_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::{
+            directory::{DirectoryRegistryData, DirectoryRegistryEntryRecord},
+            pool::{CanisterPoolData, CanisterPoolEntryRecord},
+            scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
+        };
+
+        let descriptors = canic_state_descriptors();
+
+        for (allocation, domain, record, snapshot) in [
+            (
+                StateAllocationKey::CanisterPool,
+                "canister_pool",
+                CanisterPoolEntryRecord::STATE_CONTRACT_NAME,
+                CanisterPoolData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::ScalingRegistry,
+                "scaling_registry",
+                ScalingRegistryEntryRecord::STATE_CONTRACT_NAME,
+                ScalingRegistryData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::DirectoryRegistry,
+                "directory_registry",
+                DirectoryRegistryEntryRecord::STATE_CONTRACT_NAME,
+                DirectoryRegistryData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("placement descriptor");
+            let declaration = descriptor
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("placement state declaration");
+
+            assert_eq!(declaration.record, record);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn sharding_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::sharding::{
+            ShardEntryRecord, ShardingActiveSetData, ShardingActiveSetRecord,
+            ShardingAssignmentRecord, ShardingAssignmentsData, ShardingRegistryData,
+        };
+
+        let descriptors = canic_state_descriptors();
+
+        for (allocation, domain, record, snapshot) in [
+            (
+                StateAllocationKey::ShardingRegistry,
+                "sharding_registry",
+                ShardEntryRecord::STATE_CONTRACT_NAME,
+                ShardingRegistryData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::ShardingAssignments,
+                "sharding_assignments",
+                ShardingAssignmentRecord::STATE_CONTRACT_NAME,
+                ShardingAssignmentsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::ShardingActiveSet,
+                "sharding_active_set",
+                ShardingActiveSetRecord::STATE_CONTRACT_NAME,
+                ShardingActiveSetData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("sharding descriptor");
+            let declaration = descriptor
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("sharding state declaration");
+
+            assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
         }
     }

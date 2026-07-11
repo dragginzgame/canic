@@ -22,12 +22,34 @@ eager_static! {
 }
 
 ///
-/// ScalingRegistryRecord
+/// ScalingRegistryEntryRecord
+///
+/// One logical scaling-registry snapshot row.
 ///
 
 #[derive(Clone, Debug)]
-pub struct ScalingRegistryRecord {
-    pub entries: Vec<(Principal, WorkerEntryRecord)>,
+pub struct ScalingRegistryEntryRecord {
+    pub pid: Principal,
+    pub entry: WorkerEntryRecord,
+}
+
+impl ScalingRegistryEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ScalingRegistryEntryRecord";
+}
+
+///
+/// ScalingRegistryData
+///
+/// Canonical scaling-registry export snapshot.
+///
+
+#[derive(Clone, Debug)]
+pub struct ScalingRegistryData {
+    pub entries: Vec<ScalingRegistryEntryRecord>,
+}
+
+impl ScalingRegistryData {
+    pub const STATE_CONTRACT_NAME: &'static str = "ScalingRegistryData";
 }
 
 ///
@@ -58,10 +80,16 @@ impl ScalingRegistry {
 
     /// Export full registry
     #[must_use]
-    pub(crate) fn export() -> ScalingRegistryRecord {
-        ScalingRegistryRecord {
-            entries: SCALING_REGISTRY
-                .with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect()),
+    pub(crate) fn export() -> ScalingRegistryData {
+        ScalingRegistryData {
+            entries: SCALING_REGISTRY.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| ScalingRegistryEntryRecord {
+                        pid: *entry.key(),
+                        entry: entry.value(),
+                    })
+                    .collect()
+            }),
         }
     }
 }

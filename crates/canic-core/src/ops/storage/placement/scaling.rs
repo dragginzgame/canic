@@ -35,9 +35,9 @@ impl ScalingRegistryOps {
         let entries = ScalingRegistry::export()
             .entries
             .into_iter()
-            .map(|(pid, entry)| ScalingRegistryEntry {
-                pid,
-                entry: WorkerEntryRecordMapper::record_to_view(&entry),
+            .map(|record| ScalingRegistryEntry {
+                pid: record.pid,
+                entry: WorkerEntryRecordMapper::record_to_view(&record.entry),
             })
             .collect();
 
