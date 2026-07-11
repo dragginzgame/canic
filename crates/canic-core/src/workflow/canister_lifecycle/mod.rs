@@ -416,7 +416,7 @@ fn assert_upgrade_parent(
     };
 
     let registry_data = SubnetRegistryOps::data();
-    let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
+    let registry_input = RegistryPolicyInputMapper::data_to_policy_input(registry_data);
 
     if let Err(err) = TopologyPolicy::assert_parent_exists(&registry_input, parent_pid) {
         record_canister_op(
@@ -460,7 +460,7 @@ fn assert_upgrade_module_hash(
     role: &CanisterRole,
 ) -> Result<(), InternalError> {
     let registry_data = SubnetRegistryOps::data();
-    let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
+    let registry_input = RegistryPolicyInputMapper::data_to_policy_input(registry_data);
 
     if let Err(err) = TopologyPolicy::assert_module_hash(&registry_input, pid, target_hash) {
         record_canister_op(

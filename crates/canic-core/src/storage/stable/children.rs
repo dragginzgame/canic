@@ -13,7 +13,10 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     role_contract::allocation::memory::topology::CANISTER_CHILDREN_ID,
-    storage::{canister::CanisterRecord, prelude::*},
+    storage::{
+        canister::{CanisterEntryRecord, CanisterRecord},
+        prelude::*,
+    },
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
@@ -30,12 +33,18 @@ eager_static! {
 }
 
 ///
-/// CanisterChildrenRecord
+/// CanisterChildrenData
+///
+/// Canonical direct-child projection snapshot.
 ///
 
 #[derive(Clone, Debug)]
-pub struct CanisterChildrenRecord {
-    pub entries: Vec<(Principal, CanisterRecord)>,
+pub struct CanisterChildrenData {
+    pub entries: Vec<CanisterEntryRecord>,
+}
+
+impl CanisterChildrenData {
+    pub const STATE_CONTRACT_NAME: &'static str = "CanisterChildrenData";
 }
 
 ///
@@ -51,18 +60,24 @@ impl CanisterChildren {
     }
 
     #[must_use]
-    pub fn export() -> CanisterChildrenRecord {
-        CanisterChildrenRecord {
-            entries: CANISTER_CHILDREN
-                .with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect()),
+    pub fn export() -> CanisterChildrenData {
+        CanisterChildrenData {
+            entries: CANISTER_CHILDREN.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| CanisterEntryRecord {
+                        pid: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
         }
     }
 
-    pub(crate) fn import(data: CanisterChildrenRecord) {
+    pub(crate) fn import(data: CanisterChildrenData) {
         CANISTER_CHILDREN.with_borrow_mut(|map| {
             map.clear_new();
-            for (pid, entry) in data.entries {
-                map.insert(pid, entry);
+            for entry in data.entries {
+                map.insert(entry.pid, entry.record);
             }
         });
     }

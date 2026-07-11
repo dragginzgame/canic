@@ -12,7 +12,7 @@ use crate::{
     storage::canister::CanisterRecord,
     storage::stable::{
         index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
-        registry::subnet::SubnetRegistryRecord,
+        registry::subnet::SubnetRegistryData,
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -27,21 +27,24 @@ pub struct RootAppIndexBuilder;
 
 impl RootAppIndexBuilder {
     pub fn build(
-        registry: &SubnetRegistryRecord,
+        registry: &SubnetRegistryData,
         app_roles: &BTreeSet<CanisterRole>,
     ) -> Result<AppIndexData, InternalError> {
         let mut entries = BTreeMap::new();
 
-        for (pid, entry) in registry
+        for record in registry
             .entries
             .iter()
-            .filter(|(_, entry)| is_direct_root_child(registry, entry))
-            .filter(|(_, entry)| app_roles.contains(&entry.role))
+            .filter(|record| is_direct_root_child(registry, &record.record))
+            .filter(|record| app_roles.contains(&record.record.role))
         {
-            if entries.insert(entry.role.clone(), *pid).is_some() {
+            if entries
+                .insert(record.record.role.clone(), record.pid)
+                .is_some()
+            {
                 return Err(IndexOpsError::DuplicateRole {
                     index: "app",
-                    role: entry.role.clone(),
+                    role: record.record.role.clone(),
                 }
                 .into());
             }
@@ -66,21 +69,24 @@ pub struct RootSubnetIndexBuilder;
 
 impl RootSubnetIndexBuilder {
     pub fn build(
-        registry: &SubnetRegistryRecord,
+        registry: &SubnetRegistryData,
         subnet_roles: &BTreeSet<CanisterRole>,
     ) -> Result<SubnetIndexData, InternalError> {
         let mut entries = BTreeMap::new();
 
-        for (pid, entry) in registry
+        for record in registry
             .entries
             .iter()
-            .filter(|(_, entry)| is_direct_root_child(registry, entry))
-            .filter(|(_, entry)| subnet_roles.contains(&entry.role))
+            .filter(|record| is_direct_root_child(registry, &record.record))
+            .filter(|record| subnet_roles.contains(&record.record.role))
         {
-            if entries.insert(entry.role.clone(), *pid).is_some() {
+            if entries
+                .insert(record.record.role.clone(), record.pid)
+                .is_some()
+            {
                 return Err(IndexOpsError::DuplicateRole {
                     index: "subnet",
-                    role: entry.role.clone(),
+                    role: record.record.role.clone(),
                 }
                 .into());
             }
@@ -95,15 +101,15 @@ impl RootSubnetIndexBuilder {
     }
 }
 
-fn root_pid(registry: &SubnetRegistryRecord) -> Option<Principal> {
+fn root_pid(registry: &SubnetRegistryData) -> Option<Principal> {
     registry
         .entries
         .iter()
-        .find(|(_pid, entry)| entry.role == CanisterRole::ROOT && entry.parent_pid.is_none())
-        .map(|(pid, _entry)| *pid)
+        .find(|entry| entry.record.role == CanisterRole::ROOT && entry.record.parent_pid.is_none())
+        .map(|entry| entry.pid)
 }
 
-fn is_direct_root_child(registry: &SubnetRegistryRecord, entry: &CanisterRecord) -> bool {
+fn is_direct_root_child(registry: &SubnetRegistryData, entry: &CanisterRecord) -> bool {
     root_pid(registry).is_some_and(|root| entry.parent_pid == Some(root))
 }
 
@@ -114,7 +120,7 @@ fn is_direct_root_child(registry: &SubnetRegistryRecord, entry: &CanisterRecord)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::canister::CanisterRecord;
+    use crate::storage::canister::{CanisterEntryRecord, CanisterRecord};
 
     fn p(n: u8) -> Principal {
         Principal::from_slice(&[n])
@@ -129,8 +135,13 @@ mod tests {
         }
     }
 
-    fn registry(entries: Vec<(Principal, CanisterRecord)>) -> SubnetRegistryRecord {
-        SubnetRegistryRecord { entries }
+    fn registry(entries: Vec<(Principal, CanisterRecord)>) -> SubnetRegistryData {
+        SubnetRegistryData {
+            entries: entries
+                .into_iter()
+                .map(|(pid, record)| CanisterEntryRecord { pid, record })
+                .collect(),
+        }
     }
 
     #[test]

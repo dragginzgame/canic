@@ -7,7 +7,7 @@
 use crate::{
     cdk::types::Principal,
     domain::policy::pure::topology::{RegistryPolicyInput, TopologyPolicyInput},
-    storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistryRecord},
+    storage::{canister::CanisterRecord, stable::registry::subnet::SubnetRegistryData},
 };
 
 ///
@@ -40,12 +40,14 @@ pub struct RegistryPolicyInputMapper;
 
 impl RegistryPolicyInputMapper {
     #[must_use]
-    pub fn record_to_policy_input(record: SubnetRegistryRecord) -> RegistryPolicyInput {
+    pub fn data_to_policy_input(data: SubnetRegistryData) -> RegistryPolicyInput {
         RegistryPolicyInput {
-            entries: record
+            entries: data
                 .entries
                 .into_iter()
-                .map(|(pid, entry)| TopologyPolicyInputMapper::record_to_policy_input(pid, entry))
+                .map(|entry| {
+                    TopologyPolicyInputMapper::record_to_policy_input(entry.pid, entry.record)
+                })
                 .collect(),
         }
     }

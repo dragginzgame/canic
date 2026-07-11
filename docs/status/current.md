@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.6`, published and tagged
-  as `v0.84.6`.
+- The current package/release-surface version is `0.84.7`, published and tagged
+  as `v0.84.7`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -138,9 +138,8 @@ before this compaction is archived at
   values, memory IDs, restore behavior, endpoint DTOs, Candid, and persisted
   bytes are unchanged.
 
-- The `0.84.7` passive state-contract changelog is prepared; package metadata
-  remains at `0.84.6` pending the maintainer-owned release bump. The former
-  shared, test-only `BlobStorageData` snapshot is
+- The `0.84.7` passive state-contract batch is published and tagged as
+  `v0.84.7`. The former shared, test-only `BlobStorageData` snapshot is
   hard-cut into exact `StoredBlobsData`, `BlobDeletionPendingData`,
   `StorageGatewayPrincipalsData`, and `BlobStorageBillingStateData` allocation
   snapshots. Stable-map key/value rows are named, lifecycle ops consume the
@@ -150,6 +149,18 @@ before this compaction is archived at
   feature-gated. Stable-memory IDs and encodings, record serialization,
   restore behavior, DTOs, Candid, JSON reports, and persisted bytes are
   unchanged.
+
+- The `0.84.8` passive state-contract changelog is prepared; package metadata
+  remains at `0.84.7` pending the maintainer-owned release bump. App registry,
+  subnet registry, and direct-child cache storage
+  now expose real canonical `AppRegistryData`, `SubnetRegistryData`, and
+  `CanisterChildrenData` snapshots. Stable map rows crossing storage, ops, and
+  workflow use named `AppRegistryEntryRecord` or `CanisterEntryRecord` values;
+  the former `AppRegistryRecord`, `SubnetRegistryRecord`, and
+  `CanisterChildrenRecord` containers are hard-cut without aliases. Their
+  descriptors compile against owner-defined record and snapshot names.
+  Stable-memory IDs and encodings, `CanisterRecord` serialization, restore
+  behavior, DTOs, Candid, JSON reports, and persisted bytes are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
@@ -1430,6 +1441,19 @@ one owner/domain group at a time; do not turn it into migration execution or a
 new role-contract architecture.
 
 ## Useful Validation
+
+Focused post-0.84.7 topology registry snapshot validation (passing):
+
+```text
+cargo check --locked -p canic-core
+cargo test --locked -p canic-core topology_registry_descriptors_reference_canonical_data_types --lib
+cargo test --locked -p canic-core ops::topology::index::builder::tests --lib
+cargo test --locked -p canic-core storage::stable::registry::subnet::tests --lib
+cargo test --locked -p canic-core ops::storage::registry::app::tests --lib
+cargo test --locked -p canic-core registry_policy_seam --lib
+cargo test --locked -p canic-core index_addressing --lib
+cargo clippy --locked -p canic-core -p canic-control-plane --lib --tests -- -D warnings
+```
 
 Focused post-0.84.6 blob-storage snapshot validation (passing):
 

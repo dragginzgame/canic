@@ -63,7 +63,7 @@ impl PropagationWorkflow {
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
         let registry_data = SubnetRegistryOps::data();
-        let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
+        let registry_input = RegistryPolicyInputMapper::data_to_policy_input(registry_data);
         let app_data = AppIndexOps::data();
         let subnet_data = SubnetIndexOps::data();
         let app_policy_input = IndexEntryMapper::records_to_policy_input(&app_data.entries);

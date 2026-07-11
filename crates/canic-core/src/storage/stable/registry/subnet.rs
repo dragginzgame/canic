@@ -21,7 +21,7 @@ use crate::{
     eager_static,
     ids::CanisterRole,
     role_contract::allocation::memory::topology::SUBNET_REGISTRY_ID,
-    storage::canister::CanisterRecord,
+    storage::canister::{CanisterEntryRecord, CanisterRecord},
 };
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
@@ -35,11 +35,17 @@ eager_static! {
 }
 
 ///
-/// Snapshot of registry contents (for export / tests)
+/// SubnetRegistryData
+///
+/// Canonical subnet-registry export snapshot.
 ///
 #[derive(Clone, Debug)]
-pub struct SubnetRegistryRecord {
-    pub entries: Vec<(Principal, CanisterRecord)>,
+pub struct SubnetRegistryData {
+    pub entries: Vec<CanisterEntryRecord>,
+}
+
+impl SubnetRegistryData {
+    pub const STATE_CONTRACT_NAME: &'static str = "SubnetRegistryData";
 }
 
 ///
@@ -143,7 +149,7 @@ impl SubnetRegistry {
 
     /// Returns all **direct** children of `parent`.
     #[must_use]
-    pub(crate) fn children(parent: Principal) -> Vec<(Principal, CanisterRecord)> {
+    pub(crate) fn children(parent: Principal) -> Vec<CanisterEntryRecord> {
         SUBNET_REGISTRY.with_borrow(|map| {
             map.iter()
                 .filter_map(|e| {
@@ -151,7 +157,7 @@ impl SubnetRegistry {
                     let record = e.value();
 
                     if record.parent_pid == Some(parent) {
-                        Some((pid, record))
+                        Some(CanisterEntryRecord { pid, record })
                     } else {
                         None
                     }
@@ -218,9 +224,15 @@ impl SubnetRegistry {
 
     /// Returns a snapshot of all registry entries.
     #[must_use]
-    pub(crate) fn export() -> SubnetRegistryRecord {
-        SUBNET_REGISTRY.with_borrow(|map| SubnetRegistryRecord {
-            entries: map.iter().map(|e| (*e.key(), e.value())).collect(),
+    pub(crate) fn export() -> SubnetRegistryData {
+        SUBNET_REGISTRY.with_borrow(|map| SubnetRegistryData {
+            entries: map
+                .iter()
+                .map(|entry| CanisterEntryRecord {
+                    pid: *entry.key(),
+                    record: entry.value(),
+                })
+                .collect(),
         })
     }
 }
@@ -268,7 +280,7 @@ mod tests {
         seed_simple_tree();
 
         let children = SubnetRegistry::children(p(1));
-        let pids: Vec<Principal> = children.into_iter().map(|(pid, _)| pid).collect();
+        let pids: Vec<Principal> = children.into_iter().map(|entry| entry.pid).collect();
 
         assert_eq!(pids.len(), 2);
         assert!(pids.contains(&p(2)));
@@ -349,7 +361,11 @@ mod tests {
         seed_simple_tree();
 
         let exported = SubnetRegistry::export();
-        let pids: Vec<Principal> = exported.entries.into_iter().map(|(pid, _)| pid).collect();
+        let pids: Vec<Principal> = exported
+            .entries
+            .into_iter()
+            .map(|entry| entry.pid)
+            .collect();
 
         assert_eq!(pids.len(), 3);
         assert!(pids.contains(&p(1)));

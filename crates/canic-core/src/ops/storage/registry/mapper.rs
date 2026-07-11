@@ -8,7 +8,7 @@ use crate::{
     cdk::types::Principal,
     dto::canister::CanisterInfo,
     dto::topology::{AppRegistryEntry, AppRegistryResponse, SubnetRegistryEntry},
-    storage::stable::registry::app::AppRegistryRecord,
+    storage::stable::registry::app::AppRegistryData,
 };
 
 ///
@@ -21,13 +21,13 @@ pub struct AppRegistryResponseMapper;
 
 impl AppRegistryResponseMapper {
     #[must_use]
-    pub fn record_to_response(data: AppRegistryRecord) -> AppRegistryResponse {
+    pub fn data_to_response(data: AppRegistryData) -> AppRegistryResponse {
         let entries = data
             .entries
             .into_iter()
-            .map(|(subnet_pid, root_pid)| AppRegistryEntry {
-                subnet_pid,
-                root_pid,
+            .map(|entry| AppRegistryEntry {
+                subnet_pid: entry.subnet_pid,
+                root_pid: entry.root_pid,
             })
             .collect();
 
