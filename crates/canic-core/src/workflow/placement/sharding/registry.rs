@@ -40,7 +40,7 @@ impl ShardingWorkflow {
         CanisterChildrenOps::data()
             .entries
             .into_iter()
-            .map(|(pid, _)| pid)
+            .map(|entry| entry.pid)
             .collect()
     }
 

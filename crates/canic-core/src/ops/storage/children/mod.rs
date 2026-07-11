@@ -15,8 +15,8 @@ use crate::{
         storage::{children::mapper::CanisterRecordMapper, registry::subnet::SubnetRegistryOps},
     },
     storage::{
-        canister::CanisterRecord,
-        stable::children::{CanisterChildren, CanisterChildrenRecord},
+        canister::{CanisterEntryRecord, CanisterRecord},
+        stable::children::{CanisterChildren, CanisterChildrenData},
     },
 };
 
@@ -54,9 +54,9 @@ impl CanisterChildrenOps {
         if EnvOps::is_root() {
             SubnetRegistryOps::children(IcOps::canister_self())
                 .iter()
-                .any(|(child_pid, _)| child_pid == pid)
+                .any(|entry| &entry.pid == pid)
         } else {
-            Self::data().entries.iter().any(|(p, _)| p == pid)
+            Self::data().entries.iter().any(|entry| &entry.pid == pid)
         }
     }
 
@@ -64,12 +64,12 @@ impl CanisterChildrenOps {
     pub fn infos() -> Vec<CanisterInfo> {
         Self::records()
             .into_iter()
-            .map(|(pid, record)| CanisterRecordMapper::record_to_response(pid, record))
+            .map(|entry| CanisterRecordMapper::record_to_response(entry.pid, entry.record))
             .collect()
     }
 
     #[must_use]
-    fn records() -> Vec<(Principal, CanisterRecord)> {
+    fn records() -> Vec<CanisterEntryRecord> {
         if EnvOps::is_root() {
             SubnetRegistryOps::children(IcOps::canister_self())
         } else {
@@ -79,7 +79,7 @@ impl CanisterChildrenOps {
 
     #[must_use]
     pub fn pids() -> Vec<Principal> {
-        Self::records().into_iter().map(|(pid, _)| pid).collect()
+        Self::records().into_iter().map(|entry| entry.pid).collect()
     }
 
     // -------------------------------------------------------------------------
@@ -87,7 +87,7 @@ impl CanisterChildrenOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> CanisterChildrenRecord {
+    pub fn data() -> CanisterChildrenData {
         CanisterChildren::export()
     }
 
@@ -96,19 +96,17 @@ impl CanisterChildrenOps {
         children: Vec<(Principal, CanisterRole)>,
     ) {
         // Cache entries omit module hash/created_at; canonical data lives in the registry.
-        let data = CanisterChildrenRecord {
+        let data = CanisterChildrenData {
             entries: children
                 .into_iter()
-                .map(|(pid, role)| {
-                    (
-                        pid,
-                        CanisterRecord {
-                            role,
-                            parent_pid: Some(parent_pid),
-                            module_hash: None,
-                            created_at: 0,
-                        },
-                    )
+                .map(|(pid, role)| CanisterEntryRecord {
+                    pid,
+                    record: CanisterRecord {
+                        role,
+                        parent_pid: Some(parent_pid),
+                        module_hash: None,
+                        created_at: 0,
+                    },
                 })
                 .collect(),
         };

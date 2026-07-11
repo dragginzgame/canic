@@ -401,8 +401,13 @@ fn descriptor(
 }
 
 fn runtime_topology_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::index::{
-        IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData,
+    use crate::storage::{
+        canister::CanisterEntryRecord,
+        stable::{
+            children::CanisterChildrenData,
+            index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
+            registry::subnet::SubnetRegistryData,
+        },
     };
 
     vec![
@@ -425,16 +430,16 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
         state_domain(
             "subnet_registry",
             SUBNET_REGISTRY_ID,
-            "SubnetRegistryRecord",
-            "SubnetRegistryData",
+            CanisterEntryRecord::STATE_CONTRACT_NAME,
+            SubnetRegistryData::STATE_CONTRACT_NAME,
             25,
             "subnet_registry_parent_links_are_restored",
         ),
         state_domain(
             "canister_children",
             CANISTER_CHILDREN_ID,
-            "CanisterChildrenRecord",
-            "CanisterChildrenData",
+            CanisterEntryRecord::STATE_CONTRACT_NAME,
+            CanisterChildrenData::STATE_CONTRACT_NAME,
             30,
             "canister_children_projection_is_imported",
         ),
@@ -442,11 +447,13 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
 }
 
 fn root_app_registry_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::registry::app::{AppRegistryData, AppRegistryEntryRecord};
+
     vec![state_domain(
         "app_registry",
         APP_REGISTRY_ID,
-        "AppRegistryRecord",
-        "AppRegistryData",
+        AppRegistryEntryRecord::STATE_CONTRACT_NAME,
+        AppRegistryData::STATE_CONTRACT_NAME,
         20,
         "app_registry_entries_have_root_principals",
     )]
@@ -739,6 +746,56 @@ mod tests {
                 .find(|declaration| declaration.domain == domain)
                 .expect("topology index declaration");
             assert_eq!(declaration.record, IndexEntryRecord::STATE_CONTRACT_NAME);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn topology_registry_descriptors_reference_canonical_data_types() {
+        use crate::storage::{
+            canister::CanisterEntryRecord,
+            stable::{
+                children::CanisterChildrenData,
+                registry::{
+                    app::{AppRegistryData, AppRegistryEntryRecord},
+                    subnet::SubnetRegistryData,
+                },
+            },
+        };
+
+        let descriptors = canic_state_descriptors();
+
+        for (allocation, domain, record, snapshot) in [
+            (
+                StateAllocationKey::CoreRuntimeTopology,
+                "subnet_registry",
+                CanisterEntryRecord::STATE_CONTRACT_NAME,
+                SubnetRegistryData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreRuntimeTopology,
+                "canister_children",
+                CanisterEntryRecord::STATE_CONTRACT_NAME,
+                CanisterChildrenData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreRootAppRegistry,
+                "app_registry",
+                AppRegistryEntryRecord::STATE_CONTRACT_NAME,
+                AppRegistryData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("topology registry descriptor");
+            let declaration = descriptor
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("topology registry state declaration");
+
+            assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
         }
     }

@@ -6,7 +6,7 @@
 
 use crate::{
     ops::prelude::Principal,
-    storage::stable::registry::app::{AppRegistry, AppRegistryRecord},
+    storage::stable::registry::app::{AppRegistry, AppRegistryData},
 };
 
 ///
@@ -32,7 +32,7 @@ impl AppRegistryOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> AppRegistryRecord {
+    pub fn data() -> AppRegistryData {
         AppRegistry::export()
     }
 }
@@ -61,7 +61,8 @@ mod tests {
         assert!(
             AppRegistryOps::data()
                 .entries
-                .contains(&(subnet_pid, root_pid))
+                .iter()
+                .any(|entry| entry.subnet_pid == subnet_pid && entry.root_pid == root_pid)
         );
     }
 }

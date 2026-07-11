@@ -1,3 +1,9 @@
+//! Module: storage::stable::registry::app
+//!
+//! Responsibility: persist subnet-to-root application registry bindings.
+//! Does not own: topology policy, workflow orchestration, or endpoint DTOs.
+//! Boundary: exports canonical app-registry data for storage ops consumers.
+
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     role_contract::allocation::memory::topology::APP_REGISTRY_ID,
@@ -18,12 +24,34 @@ eager_static! {
 }
 
 ///
-/// AppRegistryRecord
+/// AppRegistryEntryRecord
+///
+/// One logical app-registry row.
 ///
 
 #[derive(Clone, Debug)]
-pub struct AppRegistryRecord {
-    pub entries: Vec<(Principal, Principal)>,
+pub struct AppRegistryEntryRecord {
+    pub subnet_pid: Principal,
+    pub root_pid: Principal,
+}
+
+impl AppRegistryEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "AppRegistryEntryRecord";
+}
+
+///
+/// AppRegistryData
+///
+/// Canonical app-registry export snapshot.
+///
+
+#[derive(Clone, Debug)]
+pub struct AppRegistryData {
+    pub entries: Vec<AppRegistryEntryRecord>,
+}
+
+impl AppRegistryData {
+    pub const STATE_CONTRACT_NAME: &'static str = "AppRegistryData";
 }
 
 ///
@@ -48,10 +76,16 @@ impl AppRegistry {
     }
 
     #[must_use]
-    pub(crate) fn export() -> AppRegistryRecord {
-        AppRegistryRecord {
-            entries: APP_REGISTRY
-                .with_borrow(|map| map.iter().map(|e| (*e.key(), e.value())).collect()),
+    pub(crate) fn export() -> AppRegistryData {
+        AppRegistryData {
+            entries: APP_REGISTRY.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| AppRegistryEntryRecord {
+                        subnet_pid: *entry.key(),
+                        root_pid: entry.value(),
+                    })
+                    .collect()
+            }),
         }
     }
 }

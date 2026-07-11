@@ -19,6 +19,22 @@ impl CanisterRecord {
 
 impl_storable_bounded!(CanisterRecord, CanisterRecord::STORABLE_MAX_SIZE, false);
 
+///
+/// CanisterEntryRecord
+///
+/// One logical topology-registry row preserving its stable principal key.
+///
+
+#[derive(Clone, Debug)]
+pub struct CanisterEntryRecord {
+    pub pid: Principal,
+    pub record: CanisterRecord,
+}
+
+impl CanisterEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "CanisterEntryRecord";
+}
+
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------

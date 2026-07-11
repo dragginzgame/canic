@@ -9,8 +9,8 @@ use crate::{
     dto::topology::SubnetRegistryResponse,
     ops::{prelude::*, storage::StorageOpsError},
     storage::{
-        canister::CanisterRecord,
-        stable::registry::subnet::{SubnetRegistry, SubnetRegistryRecord},
+        canister::{CanisterEntryRecord, CanisterRecord},
+        stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
     },
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -52,16 +52,20 @@ impl From<SubnetRegistryOpsError> for InternalError {
     }
 }
 
-impl SubnetRegistryRecord {
+impl SubnetRegistryData {
     /// Return the canonical parent chain for a canister.
     ///
     /// Returned order: root → … → target
     pub(crate) fn parent_chain(
         &self,
         target: Principal,
-    ) -> Result<Vec<(Principal, CanisterRecord)>, InternalError> {
+    ) -> Result<Vec<CanisterEntryRecord>, InternalError> {
         let registry_len = self.entries.len();
-        let index: HashMap<Principal, CanisterRecord> = self.entries.iter().cloned().collect();
+        let index: HashMap<Principal, CanisterRecord> = self
+            .entries
+            .iter()
+            .map(|entry| (entry.pid, entry.record.clone()))
+            .collect();
 
         let mut chain = Vec::new();
         let mut seen = HashSet::new();
@@ -80,7 +84,10 @@ impl SubnetRegistryRecord {
                 return Err(SubnetRegistryOpsError::ParentChainTooLong(seen.len()).into());
             }
 
-            chain.push((pid, record.clone()));
+            chain.push(CanisterEntryRecord {
+                pid,
+                record: record.clone(),
+            });
 
             if let Some(parent_pid) = record.parent_pid {
                 pid = parent_pid;
@@ -185,7 +192,7 @@ impl SubnetRegistryOps {
 
     /// Direct children (one level).
     #[must_use]
-    pub(crate) fn children(pid: Principal) -> Vec<(Principal, CanisterRecord)> {
+    pub(crate) fn children(pid: Principal) -> Vec<CanisterEntryRecord> {
         SubnetRegistry::children(pid)
     }
 
@@ -204,14 +211,14 @@ impl SubnetRegistryOps {
 
     pub(crate) fn parent_chain(
         target: Principal,
-    ) -> Result<Vec<(Principal, CanisterRecord)>, InternalError> {
+    ) -> Result<Vec<CanisterEntryRecord>, InternalError> {
         SubnetRegistry::export().parent_chain(target)
     }
 
     #[must_use]
     pub(crate) fn direct_children_map(
         parents: &[Principal],
-    ) -> HashMap<Principal, Vec<(Principal, CanisterRecord)>> {
+    ) -> HashMap<Principal, Vec<CanisterEntryRecord>> {
         parents
             .iter()
             .map(|pid| (*pid, Self::children(*pid)))
@@ -223,7 +230,7 @@ impl SubnetRegistryOps {
     // -------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> SubnetRegistryRecord {
+    pub fn data() -> SubnetRegistryData {
         SubnetRegistry::export()
     }
 

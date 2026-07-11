@@ -239,8 +239,8 @@ const fn registry_kind(kind: CanisterKind) -> RegistryCanisterKind {
 fn registry_kind_policy_blocks_but_ops_allows() {
     let _guard = lock();
 
-    for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::unregister(&pid);
+    for entry in SubnetRegistryOps::data().entries {
+        let _ = SubnetRegistryOps::unregister(&entry.pid);
     }
 
     let role = CanisterRole::new("seam_registry_singleton");
@@ -297,7 +297,7 @@ fn registry_kind_policy_blocks_but_ops_allows() {
     let duplicates = SubnetRegistryOps::data()
         .entries
         .into_iter()
-        .filter(|(_, entry)| entry.role == role)
+        .filter(|entry| entry.record.role == role)
         .count();
 
     assert_eq!(duplicates, 2);
@@ -379,8 +379,8 @@ fn registry_service_policy_requires_root_parent() {
 fn registry_singleton_policy_blocks_under_parent() {
     let _guard = lock();
 
-    for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::unregister(&pid);
+    for entry in SubnetRegistryOps::data().entries {
+        let _ = SubnetRegistryOps::unregister(&entry.pid);
     }
 
     let role = CanisterRole::new("seam_registry_singleton_child");

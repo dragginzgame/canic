@@ -150,10 +150,10 @@ impl TopologySnapshotBuilder {
         // Build parent chain (root → target)
         let parents: Vec<TopologyPathNode> = SubnetRegistryOps::parent_chain(target_pid)?
             .into_iter()
-            .map(|(pid, record)| TopologyPathNode {
-                pid,
-                role: record.role.clone(),
-                parent_pid: record.parent_pid,
+            .map(|entry| TopologyPathNode {
+                pid: entry.pid,
+                role: entry.record.role.clone(),
+                parent_pid: entry.record.parent_pid,
             })
             .collect();
 
@@ -166,9 +166,9 @@ impl TopologySnapshotBuilder {
             .map(|(parent_pid, children)| {
                 let mapped = children
                     .into_iter()
-                    .map(|(pid, record)| TopologyDirectChild {
-                        pid,
-                        role: record.role,
+                    .map(|entry| TopologyDirectChild {
+                        pid: entry.pid,
+                        role: entry.record.role,
                     })
                     .collect();
                 (parent_pid, mapped)

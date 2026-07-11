@@ -21,8 +21,8 @@ use crate::{
 fn index_addressing_prefers_index_over_registry_duplicates() {
     let _guard = lock();
 
-    for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::unregister(&pid);
+    for entry in SubnetRegistryOps::data().entries {
+        let _ = SubnetRegistryOps::unregister(&entry.pid);
     }
     SubnetIndexOps::import_trusted_partial(SubnetIndexData {
         entries: Vec::new(),
@@ -55,7 +55,7 @@ fn index_addressing_prefers_index_over_registry_duplicates() {
     let duplicates = SubnetRegistryOps::data()
         .entries
         .into_iter()
-        .filter(|(_, entry)| entry.role == role)
+        .filter(|entry| entry.record.role == role)
         .count();
 
     assert_eq!(duplicates, 2);
@@ -65,8 +65,8 @@ fn index_addressing_prefers_index_over_registry_duplicates() {
 fn index_addressing_does_not_fallback_to_registry() {
     let _guard = lock();
 
-    for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::unregister(&pid);
+    for entry in SubnetRegistryOps::data().entries {
+        let _ = SubnetRegistryOps::unregister(&entry.pid);
     }
     SubnetIndexOps::import_trusted_partial(SubnetIndexData {
         entries: Vec::new(),
@@ -88,7 +88,7 @@ fn index_addressing_does_not_fallback_to_registry() {
     let registry_count = SubnetRegistryOps::data()
         .entries
         .into_iter()
-        .filter(|(_, entry)| entry.role == role)
+        .filter(|entry| entry.record.role == role)
         .count();
     assert_eq!(registry_count, 1);
 }

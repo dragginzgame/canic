@@ -93,13 +93,14 @@ impl StateCascadeWorkflow {
 
         let mut failures = 0;
 
-        for (pid, _) in children {
-            if let Err(err) = Self::send_snapshot(pid, snapshot).await {
+        for entry in children {
+            if let Err(err) = Self::send_snapshot(entry.pid, snapshot).await {
                 failures += 1;
                 log!(
                     Topic::Sync,
                     Warn,
-                    "sync.state: failed to cascade to {pid}: {err}",
+                    "sync.state: failed to cascade to {}: {err}",
+                    entry.pid,
                 );
             }
         }

@@ -53,8 +53,8 @@ fn directory_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
 }
 
 fn clear_subnet_registry() {
-    for (pid, _) in SubnetRegistryOps::data().entries {
-        let _ = SubnetRegistryOps::unregister(&pid);
+    for entry in SubnetRegistryOps::data().entries {
+        let _ = SubnetRegistryOps::unregister(&entry.pid);
     }
 }
 

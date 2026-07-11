@@ -114,7 +114,7 @@ pub(super) fn validate_bind_target_with_reason(
     if !CanisterChildrenOps::data()
         .entries
         .iter()
-        .any(|(child_pid, _)| *child_pid == pid)
+        .any(|entry| entry.pid == pid)
     {
         return Err((
             DirectoryWorkflowError::InstanceNotDirectChild(pid).into(),
