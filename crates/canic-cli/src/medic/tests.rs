@@ -1251,8 +1251,13 @@ fn blob_storage_medic_error_check_classifies_target_errors() {
         "demo",
         "store",
     );
-    let generic =
-        blob_storage_medic_error_check(BlobStorageCommandError::ResponseParse, "demo", "store");
+    let generic = blob_storage_medic_error_check(
+        BlobStorageCommandError::ResponseParse {
+            detail: "sample".to_string(),
+        },
+        "demo",
+        "store",
+    );
 
     assert_eq!(missing.code, "blob_storage_target_missing");
     assert_eq!(ambiguous.code, "blob_storage_target_ambiguous");

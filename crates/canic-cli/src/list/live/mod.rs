@@ -5,7 +5,7 @@ use crate::support::registry_tree::visible_entries;
 use canic_host::{
     canic_metadata::query_canic_metadata_version,
     canister_ready::{query_canister_ready, query_local_canister_ready},
-    cycle_balance::query_cycle_balance_optional,
+    cycle_balance::query_cycle_balance,
     format::{cycles_tc, wasm_size_label},
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
@@ -25,6 +25,9 @@ use std::{
 };
 
 use super::options::ListSource;
+
+const OBSERVATION_ABSENT: &str = "-";
+const OBSERVATION_ERROR: &str = "error";
 
 pub(super) fn load_registry_entries(
     options: &ListOptions,
@@ -67,10 +70,14 @@ pub(super) fn list_cycle_balances(
     let icp = options.icp.clone();
     let network = options.network.clone();
     let icp_root = resolve_live_icp_root(options);
-    collect_visible_entry_optional_values(registry, canister, move |entry| {
-        query_cycle_balance_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
-            .map(cycles_tc)
-    })
+    collect_visible_entry_values(
+        registry,
+        canister,
+        OBSERVATION_ERROR.to_string(),
+        move |entry| {
+            cycle_balance_label_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
+        },
+    )
 }
 
 pub(super) fn list_canic_versions(
@@ -81,9 +88,14 @@ pub(super) fn list_canic_versions(
     let icp = options.icp.clone();
     let network = options.network.clone();
     let icp_root = resolve_live_icp_root(options);
-    collect_visible_entry_optional_values(registry, canister, move |entry| {
-        query_canic_metadata_version_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
-    })
+    collect_visible_entry_values(
+        registry,
+        canister,
+        OBSERVATION_ERROR.to_string(),
+        move |entry| {
+            canic_version_label_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
+        },
+    )
 }
 
 pub(super) fn list_module_hashes(
@@ -165,29 +177,28 @@ fn local_ready_statuses(
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
     let network = options.network.clone();
     let icp_root = resolve_live_icp_root(options);
-    collect_visible_values(
-        registry,
-        canister,
-        move |pid| match query_local_canister_ready(
+    collect_visible_entry_values(registry, canister, ReadyStatus::Error, move |entry| {
+        match query_local_canister_ready(
             network.as_deref().unwrap_or("local"),
-            &pid,
+            &entry.pid,
             icp_root.as_deref(),
         ) {
             Ok(true) => ReadyStatus::Ready,
             Ok(false) => ReadyStatus::NotReady,
             Err(_) => ReadyStatus::Error,
-        },
-    )
+        }
+    })
 }
 
-fn collect_visible_entry_optional_values<T, F>(
+fn collect_visible_entry_values<T, F>(
     registry: &[RegistryEntry],
     canister: Option<&str>,
+    worker_panic_value: T,
     query: F,
 ) -> Result<BTreeMap<String, T>, ListCommandError>
 where
-    T: Send + 'static,
-    F: Fn(RegistryEntry) -> Option<T> + Send + Sync + 'static,
+    T: Clone + Send + 'static,
+    F: Fn(RegistryEntry) -> T + Send + Sync + 'static,
 {
     let query = Arc::new(query);
     let mut handles = Vec::new();
@@ -195,68 +206,43 @@ where
         let entry = entry.clone();
         let pid = entry.pid.clone();
         let query = Arc::clone(&query);
-        handles.push(thread::spawn(move || {
-            let value = query(entry);
-            (pid, value)
-        }));
+        handles.push((pid, thread::spawn(move || query(entry))));
     }
 
-    let values = handles.into_iter().filter_map(|handle| handle.join().ok());
-    Ok(values
-        .filter_map(|(pid, value)| value.map(|value| (pid, value)))
-        .collect())
-}
-
-fn collect_visible_values<T, F>(
-    registry: &[RegistryEntry],
-    canister: Option<&str>,
-    query: F,
-) -> Result<BTreeMap<String, T>, ListCommandError>
-where
-    T: Send + 'static,
-    F: Fn(String) -> T + Send + Sync + 'static,
-{
-    let query = Arc::new(query);
-    let mut handles = Vec::new();
-    for entry in visible_entries(registry, canister)? {
-        let pid = entry.pid.clone();
-        let query = Arc::clone(&query);
-        handles.push(thread::spawn(move || {
-            let value = query(pid.clone());
-            (pid, value)
-        }));
+    let mut values = BTreeMap::new();
+    for (pid, handle) in handles {
+        let value = handle.join().unwrap_or_else(|_| worker_panic_value.clone());
+        values.insert(pid, value);
     }
-
-    Ok(handles
-        .into_iter()
-        .filter_map(|handle| handle.join().ok())
-        .collect())
+    Ok(values)
 }
 
-fn query_cycle_balance_endpoint(
+fn cycle_balance_label_endpoint(
     icp: &str,
     network: Option<String>,
     icp_root: Option<&Path>,
     entry: &RegistryEntry,
-) -> Option<u128> {
+) -> String {
     let network = network.unwrap_or_else(local_network);
     let candid_path = registry_entry_candid_path(icp_root, &network, entry);
     let icp = live_icp(icp, Some(network.clone()), icp_root);
-    query_cycle_balance_optional(&icp, &entry.pid, &network, icp_root, candid_path.as_deref())
+    query_cycle_balance(&icp, &entry.pid, &network, icp_root, candid_path.as_deref())
+        .map_or_else(|_| OBSERVATION_ERROR.to_string(), cycles_tc)
 }
 
-fn query_canic_metadata_version_endpoint(
+fn canic_version_label_endpoint(
     icp: &str,
     network: Option<String>,
     icp_root: Option<&Path>,
     entry: &RegistryEntry,
-) -> Option<String> {
+) -> String {
     let network = network.unwrap_or_else(local_network);
     let candid_path = registry_entry_candid_path(icp_root, &network, entry);
     let icp = live_icp(icp, Some(network), icp_root);
-    query_canic_metadata_version(&icp, &entry.pid, candid_path.as_deref())
-        .ok()
-        .flatten()
+    query_canic_metadata_version(&icp, &entry.pid, candid_path.as_deref()).map_or_else(
+        |_| OBSERVATION_ERROR.to_string(),
+        |version| version.unwrap_or_else(|| OBSERVATION_ABSENT.to_string()),
+    )
 }
 
 fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpCli {

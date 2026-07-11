@@ -77,6 +77,17 @@ fn parses_fund_cycles_strictly() {
 }
 
 #[test]
+fn funding_response_reports_the_malformed_field() {
+    assert_eq!(
+        parse::parse_funding_report(r#"{"requested_cycles":"not-cycles"}"#),
+        Err(parse::BlobStorageParseError::InvalidField {
+            kind: parse::BlobStorageResponseKind::Funding,
+            field: "requested_cycles"
+        })
+    );
+}
+
+#[test]
 fn rejects_non_decimal_cycle_syntax() {
     for value in ["0", "1_000", "1T", "1.5", "1e12", "-1"] {
         let err = BlobStorageOptions::parse([
@@ -116,7 +127,10 @@ fn top_level_forwards_global_icp_and_network() {
 
 #[test]
 fn json_reported_errors_use_structured_blob_storage_shape() {
-    let err = BlobStorageCommandError::ResponseParse.with_json_report("local", "backend");
+    let err = BlobStorageCommandError::ResponseParse {
+        detail: "status response has invalid JSON: sample".to_string(),
+    }
+    .with_json_report("local", "backend");
     let cli_error = crate::CliError::from(err);
     let output = crate::render_cli_error(&cli_error);
     let value = serde_json::from_str::<serde_json::Value>(&output).expect("error json");
@@ -138,11 +152,13 @@ fn json_reported_errors_use_structured_blob_storage_shape() {
 
 #[test]
 fn non_json_blob_storage_errors_keep_top_level_prefix() {
-    let cli_error = crate::CliError::from(BlobStorageCommandError::ResponseParse);
+    let cli_error = crate::CliError::from(BlobStorageCommandError::ResponseParse {
+        detail: "status response has invalid JSON: sample".to_string(),
+    });
 
     assert_eq!(
         crate::render_cli_error(&cli_error),
-        "blob-storage: failed to parse blob-storage canister response"
+        "blob-storage: failed to parse blob-storage canister response: status response has invalid JSON: sample"
     );
     assert_eq!(crate::cli_error_exit_code(&cli_error), 3);
 }

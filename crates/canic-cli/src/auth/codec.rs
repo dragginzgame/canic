@@ -9,7 +9,61 @@ use super::{
 };
 use candid::Principal;
 use canic_host::response_parse::{find_field, parse_json_u64};
-use std::fmt::Write as _;
+use std::{error::Error, fmt, fmt::Write as _};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum AuthResponseKind {
+    RenewalStatus,
+    IssuerStatus,
+}
+
+impl AuthResponseKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::RenewalStatus => "renewal status",
+            Self::IssuerStatus => "issuer status",
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum AuthResponseParseError {
+    InvalidJson {
+        kind: AuthResponseKind,
+        error: String,
+    },
+    InvalidPayload(AuthResponseKind),
+    InvalidField {
+        kind: AuthResponseKind,
+        field: &'static str,
+    },
+}
+
+impl fmt::Display for AuthResponseParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidJson { kind, error } => {
+                write!(
+                    formatter,
+                    "{} response has invalid JSON: {error}",
+                    kind.label()
+                )
+            }
+            Self::InvalidPayload(kind) => {
+                write!(
+                    formatter,
+                    "{} response has an invalid payload",
+                    kind.label()
+                )
+            }
+            Self::InvalidField { kind, field } => {
+                write!(formatter, "{} response has invalid `{field}`", kind.label())
+            }
+        }
+    }
+}
+
+impl Error for AuthResponseParseError {}
 
 pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
     Principal::from_text(issuer)
@@ -19,84 +73,252 @@ pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommand
         })
 }
 
-pub(super) fn parse_renewal_status_summary(output: &str) -> Option<AuthRenewalStatusSummary> {
-    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
+pub(super) fn parse_renewal_status_summary(
+    output: &str,
+) -> Result<AuthRenewalStatusSummary, AuthResponseParseError> {
+    let kind = AuthResponseKind::RenewalStatus;
+    let value = parse_json_response(output, kind)?;
     let payload = find_field(&value, "Ok").unwrap_or(&value);
-    let template = find_field(payload, "template").and_then(option_payload);
-    let state = find_field(payload, "state").and_then(option_payload);
-    let active_attempt = find_field(payload, "active_attempt").and_then(option_payload);
+    if !payload.is_object() {
+        return Err(AuthResponseParseError::InvalidPayload(kind));
+    }
+    let template = parse_optional_record(payload, kind, "template")?;
+    let state = parse_optional_record(payload, kind, "state")?;
+    let active_attempt = parse_optional_record(payload, kind, "active_attempt")?;
 
-    Some(AuthRenewalStatusSummary {
-        template: AuthRenewalTemplateStatus {
-            present: template.is_some(),
-            enabled: template
-                .and_then(|value| find_field(value, "enabled"))
-                .and_then(serde_json::Value::as_bool),
-            cert_ttl_ns: template
-                .and_then(|value| find_field(value, "cert_ttl_ns"))
-                .and_then(parse_u64_deep)
-                .map(|value| value.to_string()),
-        },
-        state: AuthRenewalStateStatus {
-            present: state.is_some(),
-            last_installed_cert_hash: state
-                .and_then(|value| find_field(value, "last_installed_cert_hash"))
-                .and_then(parse_optional_bytes32_hex),
-            last_outcome: state
-                .and_then(|value| find_field(value, "last_outcome"))
-                .and_then(parse_variant_code),
-            consecutive_failures: state
-                .and_then(|value| find_field(value, "consecutive_failures"))
-                .and_then(parse_u64_deep),
-            last_installed_expires_at_ns: state
-                .and_then(|value| find_field(value, "last_installed_expires_at_ns"))
-                .and_then(parse_optional_u64_deep)
-                .map(|value| value.to_string()),
-            last_installed_refresh_after_ns: state
-                .and_then(|value| find_field(value, "last_installed_refresh_after_ns"))
-                .and_then(parse_optional_u64_deep)
-                .map(|value| value.to_string()),
-            next_attempt_after_ns: state
-                .and_then(|value| find_field(value, "next_attempt_after_ns"))
-                .and_then(parse_u64_deep)
-                .map(|value| value.to_string()),
-            active_attempt_id: state
-                .and_then(|value| find_field(value, "active_attempt_id"))
-                .and_then(parse_optional_bytes32_hex),
-        },
-        active_attempt: AuthRenewalActiveAttemptStatus {
-            present: active_attempt.is_some(),
-            status: active_attempt
-                .and_then(|value| find_field(value, "status"))
-                .and_then(parse_variant_code),
-            batch_id: active_attempt
-                .and_then(|value| find_field(value, "batch_id"))
-                .and_then(parse_bytes32_hex_deep),
-            prepared_expires_at_ns: active_attempt
-                .and_then(|value| find_field(value, "prepared_expires_at_ns"))
-                .and_then(parse_u64_deep)
-                .map(|value| value.to_string()),
-            failure: active_attempt
-                .and_then(|value| find_field(value, "failure"))
-                .and_then(parse_optional_variant_code),
-        },
+    Ok(AuthRenewalStatusSummary {
+        template: parse_template_status(template)?,
+        state: parse_state_status(state)?,
+        active_attempt: parse_active_attempt_status(active_attempt)?,
     })
 }
 
-pub(super) fn parse_issuer_observed_status(output: &str) -> Option<AuthIssuerObservedStatus> {
-    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    let payload = find_field(&value, "Ok").unwrap_or(&value);
-
-    Some(AuthIssuerObservedStatus {
-        status: find_field(payload, "status").and_then(parse_variant_code)?,
-        cert_hash: find_field(payload, "cert_hash").and_then(parse_optional_bytes32_hex),
-        expires_at_ns: find_field(payload, "expires_at_ns")
-            .and_then(parse_optional_u64_deep)
-            .map(|value| value.to_string()),
-        refresh_after_ns: find_field(payload, "refresh_after_ns")
-            .and_then(parse_optional_u64_deep)
-            .map(|value| value.to_string()),
+fn parse_template_status(
+    template: Option<&serde_json::Value>,
+) -> Result<AuthRenewalTemplateStatus, AuthResponseParseError> {
+    let kind = AuthResponseKind::RenewalStatus;
+    Ok(AuthRenewalTemplateStatus {
+        present: template.is_some(),
+        enabled: parse_nested_optional_field(
+            template,
+            kind,
+            "enabled",
+            "template.enabled",
+            serde_json::Value::as_bool,
+        )?,
+        cert_ttl_ns: parse_nested_optional_field(
+            template,
+            kind,
+            "cert_ttl_ns",
+            "template.cert_ttl_ns",
+            parse_u64_deep,
+        )?
+        .map(|value| value.to_string()),
     })
+}
+
+fn parse_state_status(
+    state: Option<&serde_json::Value>,
+) -> Result<AuthRenewalStateStatus, AuthResponseParseError> {
+    let kind = AuthResponseKind::RenewalStatus;
+    Ok(AuthRenewalStateStatus {
+        present: state.is_some(),
+        last_installed_cert_hash: parse_nested_optional_field(
+            state,
+            kind,
+            "last_installed_cert_hash",
+            "state.last_installed_cert_hash",
+            parse_optional_bytes32_hex,
+        )?,
+        last_outcome: parse_nested_optional_field(
+            state,
+            kind,
+            "last_outcome",
+            "state.last_outcome",
+            parse_variant_code,
+        )?,
+        consecutive_failures: parse_nested_optional_field(
+            state,
+            kind,
+            "consecutive_failures",
+            "state.consecutive_failures",
+            parse_u64_deep,
+        )?,
+        last_installed_expires_at_ns: parse_nested_optional_field(
+            state,
+            kind,
+            "last_installed_expires_at_ns",
+            "state.last_installed_expires_at_ns",
+            parse_optional_u64_deep,
+        )?
+        .map(|value| value.to_string()),
+        last_installed_refresh_after_ns: parse_nested_optional_field(
+            state,
+            kind,
+            "last_installed_refresh_after_ns",
+            "state.last_installed_refresh_after_ns",
+            parse_optional_u64_deep,
+        )?
+        .map(|value| value.to_string()),
+        next_attempt_after_ns: parse_nested_optional_field(
+            state,
+            kind,
+            "next_attempt_after_ns",
+            "state.next_attempt_after_ns",
+            parse_u64_deep,
+        )?
+        .map(|value| value.to_string()),
+        active_attempt_id: parse_nested_optional_field(
+            state,
+            kind,
+            "active_attempt_id",
+            "state.active_attempt_id",
+            parse_optional_bytes32_hex,
+        )?,
+    })
+}
+
+fn parse_active_attempt_status(
+    active_attempt: Option<&serde_json::Value>,
+) -> Result<AuthRenewalActiveAttemptStatus, AuthResponseParseError> {
+    let kind = AuthResponseKind::RenewalStatus;
+    Ok(AuthRenewalActiveAttemptStatus {
+        present: active_attempt.is_some(),
+        status: parse_nested_optional_field(
+            active_attempt,
+            kind,
+            "status",
+            "active_attempt.status",
+            parse_variant_code,
+        )?,
+        batch_id: parse_nested_optional_field(
+            active_attempt,
+            kind,
+            "batch_id",
+            "active_attempt.batch_id",
+            parse_bytes32_hex_deep,
+        )?,
+        prepared_expires_at_ns: parse_nested_optional_field(
+            active_attempt,
+            kind,
+            "prepared_expires_at_ns",
+            "active_attempt.prepared_expires_at_ns",
+            parse_u64_deep,
+        )?
+        .map(|value| value.to_string()),
+        failure: parse_nested_optional_field(
+            active_attempt,
+            kind,
+            "failure",
+            "active_attempt.failure",
+            parse_optional_variant_code,
+        )?,
+    })
+}
+
+pub(super) fn parse_issuer_observed_status(
+    output: &str,
+) -> Result<AuthIssuerObservedStatus, AuthResponseParseError> {
+    let kind = AuthResponseKind::IssuerStatus;
+    let value = parse_json_response(output, kind)?;
+    let payload = find_field(&value, "Ok").unwrap_or(&value);
+    if !payload.is_object() {
+        return Err(AuthResponseParseError::InvalidPayload(kind));
+    }
+
+    Ok(AuthIssuerObservedStatus {
+        status: parse_required_field(payload, kind, "status", parse_variant_code)?,
+        cert_hash: parse_optional_field(
+            find_field(payload, "cert_hash"),
+            kind,
+            "cert_hash",
+            parse_optional_bytes32_hex,
+        )?,
+        expires_at_ns: parse_optional_field(
+            find_field(payload, "expires_at_ns"),
+            kind,
+            "expires_at_ns",
+            parse_optional_u64_deep,
+        )?
+        .map(|value| value.to_string()),
+        refresh_after_ns: parse_optional_field(
+            find_field(payload, "refresh_after_ns"),
+            kind,
+            "refresh_after_ns",
+            parse_optional_u64_deep,
+        )?
+        .map(|value| value.to_string()),
+    })
+}
+
+fn parse_json_response(
+    output: &str,
+    kind: AuthResponseKind,
+) -> Result<serde_json::Value, AuthResponseParseError> {
+    serde_json::from_str(output).map_err(|error| AuthResponseParseError::InvalidJson {
+        kind,
+        error: error.to_string(),
+    })
+}
+
+fn parse_optional_record<'a>(
+    payload: &'a serde_json::Value,
+    kind: AuthResponseKind,
+    field: &'static str,
+) -> Result<Option<&'a serde_json::Value>, AuthResponseParseError> {
+    let Some(value) = find_field(payload, field) else {
+        return Ok(None);
+    };
+    let Some(value) = option_payload(value) else {
+        return Ok(None);
+    };
+    if !value.is_object() {
+        return Err(AuthResponseParseError::InvalidField { kind, field });
+    }
+    Ok(Some(value))
+}
+
+fn parse_nested_optional_field<T>(
+    record: Option<&serde_json::Value>,
+    kind: AuthResponseKind,
+    field: &'static str,
+    path: &'static str,
+    parse: impl FnOnce(&serde_json::Value) -> Option<T>,
+) -> Result<Option<T>, AuthResponseParseError> {
+    parse_optional_field(
+        record.and_then(|value| find_field(value, field)),
+        kind,
+        path,
+        parse,
+    )
+}
+
+fn parse_required_field<T>(
+    payload: &serde_json::Value,
+    kind: AuthResponseKind,
+    field: &'static str,
+    parse: impl FnOnce(&serde_json::Value) -> Option<T>,
+) -> Result<T, AuthResponseParseError> {
+    find_field(payload, field)
+        .and_then(parse)
+        .ok_or(AuthResponseParseError::InvalidField { kind, field })
+}
+
+fn parse_optional_field<T>(
+    value: Option<&serde_json::Value>,
+    kind: AuthResponseKind,
+    field: &'static str,
+    parse: impl FnOnce(&serde_json::Value) -> Option<T>,
+) -> Result<Option<T>, AuthResponseParseError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.is_null() || matches!(value, serde_json::Value::Array(values) if values.is_empty()) {
+        return Ok(None);
+    }
+    parse(value)
+        .map(Some)
+        .ok_or(AuthResponseParseError::InvalidField { kind, field })
 }
 
 fn option_payload(value: &serde_json::Value) -> Option<&serde_json::Value> {

@@ -1,7 +1,7 @@
 use super::*;
 use crate::metrics::{
     model::{MetricValue, MetricsKind, MetricsReport},
-    parse::parse_metrics_page,
+    parse::{MetricsParseError, parse_metrics_page},
 };
 
 // Ensure the public kind selector accepts the expected CLI vocabulary.
@@ -127,6 +127,9 @@ fn metrics_json_rejects_malformed_entries() {
         parse_metrics_page(
             r#"{"Ok":{"entries":[{"labels":["timer"],"principal":null}],"total":1}}"#
         ),
-        None
+        Err(MetricsParseError::InvalidEntryField {
+            index: 0,
+            field: "value"
+        })
     );
 }

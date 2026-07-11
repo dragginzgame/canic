@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
-use crate::role_contract::{declared_role_manifest_path, finding_detail};
+use crate::{
+    durable_io::write_bytes,
+    role_contract::{declared_role_manifest_path, finding_detail},
+};
 
 use super::{
     build_release_set_entry, config_path, configured_release_roles, load_root_package_version,
@@ -68,7 +71,7 @@ pub fn emit_root_release_set_manifest_with_config(
         entries,
     };
 
-    fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
+    write_bytes(&manifest_path, &serde_json::to_vec_pretty(&manifest)?)?;
     Ok(manifest_path)
 }
 

@@ -4,7 +4,9 @@ use crate::cycles::{
         CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample,
         CyclesCanisterStatus, CyclesCoverageStatus, CyclesReport,
     },
-    parse::{parse_cycle_tracker_page, parse_topup_event_page},
+    parse::{
+        CycleResponseKind, CyclesParseError, parse_cycle_tracker_page, parse_topup_event_page,
+    },
     transport::summarize_cycle_tracker,
 };
 use canic_host::format::compact_duration;
@@ -141,7 +143,11 @@ fn parses_cycle_tracker_json() {
 fn cycle_tracker_json_rejects_malformed_entries() {
     assert_eq!(
         parse_cycle_tracker_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
-        None
+        Err(CyclesParseError::InvalidEntryField {
+            kind: CycleResponseKind::Tracker,
+            index: 0,
+            field: "cycles"
+        })
     );
 }
 
@@ -163,13 +169,21 @@ fn parses_topup_event_json() {
 fn topup_event_json_rejects_malformed_entries() {
     assert_eq!(
         parse_topup_event_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
-        None
+        Err(CyclesParseError::InvalidEntryField {
+            kind: CycleResponseKind::Topup,
+            index: 0,
+            field: "status"
+        })
     );
     assert_eq!(
         parse_topup_event_page(
             r#"{"Ok":{"entries":[{"timestamp_secs":10,"status":{"NotRequestOk":null}}],"total":1}}"#,
         ),
-        None
+        Err(CyclesParseError::InvalidEntryField {
+            kind: CycleResponseKind::Topup,
+            index: 0,
+            field: "status"
+        })
     );
 }
 

@@ -159,7 +159,7 @@ fn emit_root_release_set_manifest_from_plan(
         entries,
     };
 
-    fs::write(&manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
+    crate::durable_io::write_bytes(&manifest_path, &serde_json::to_vec_pretty(&manifest)?)?;
     Ok(manifest_path)
 }
 

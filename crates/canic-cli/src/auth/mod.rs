@@ -45,8 +45,8 @@ use std::{
 use thiserror::Error as ThisError;
 
 use codec::{
-    parse_issuer_observed_status, parse_issuer_principal, parse_renewal_status_summary,
-    root_issuer_renewal_status_arg,
+    AuthResponseParseError, parse_issuer_observed_status, parse_issuer_principal,
+    parse_renewal_status_summary, root_issuer_renewal_status_arg,
 };
 use render::{render_issuer_observation, write_renewal_status_result};
 
@@ -120,15 +120,15 @@ pub enum AuthCommandError {
         actual: &'static str,
     },
 
-    #[error("failed to parse auth renewal response")]
-    ResponseParse,
+    #[error("failed to parse auth renewal response: {detail}")]
+    ResponseParse { detail: String },
 }
 
 impl AuthCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
             Self::ReplicaQuery(_) | Self::IcpFailed { .. } => 2,
-            Self::ResponseParse => 3,
+            Self::ResponseParse { .. } => 3,
             Self::Usage(_)
             | Self::Json(_)
             | Self::NoInstalledDeployment { .. }
@@ -139,6 +139,14 @@ impl AuthCommandError {
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
+        }
+    }
+}
+
+impl From<AuthResponseParseError> for AuthCommandError {
+    fn from(error: AuthResponseParseError) -> Self {
+        Self::ResponseParse {
+            detail: error.to_string(),
         }
     }
 }
@@ -357,7 +365,7 @@ fn renewal_status_result_with_runtime(
         Some(&root_issuer_renewal_status_arg(&issuer_pid)),
         Some("json"),
     )?;
-    let status = parse_renewal_status_summary(&output).ok_or(AuthCommandError::ResponseParse)?;
+    let status = parse_renewal_status_summary(&output)?;
     let issuer_observation =
         issuer_observation_with_runtime(runtime, &options.common, &target, &issuer_pid, &status);
 
@@ -832,7 +840,7 @@ fn issuer_observation_with_runtime(
     ) else {
         return unavailable_issuer_observation("issuer_status_query_failed");
     };
-    let Some(observed) = parse_issuer_observed_status(&output) else {
+    let Ok(observed) = parse_issuer_observed_status(&output) else {
         return unavailable_issuer_observation("issuer_status_parse_failed");
     };
     issuer_observation_from_status(status, observed)

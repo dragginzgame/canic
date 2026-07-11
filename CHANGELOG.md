@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.3` makes host-owned single-file writes durable with bounded role-rename
+  rollback, and makes metrics, cycles, live-list, blob-storage, and auth
+  observation failures explicit instead of silently dropping or flattening
+  them.
+
 - `0.84.2` corrects role-aware state ownership for shared runtime, auth,
   ICP-refill, pool, scaling, directory, and sharding allocations, restores IDs
   `86-99` as Canic control-plane reserve, hard-cuts allocation tombstones and

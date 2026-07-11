@@ -79,6 +79,15 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
   Rust's normal module discovery works.
 
 ## Testing
+- Automated agents must run only targeted checks for the files, package, and
+  behavior they changed. Do not run full workspace, release-matrix, or broad
+  PocketIC suites such as `make test`, `make clippy`, or workspace-wide Cargo
+  test/Clippy commands unless the maintainer explicitly requests that exact
+  broad gate.
+- The maintainer owns full deployment and publish validation. After targeted
+  checks pass, agents should state whether the current change set is ready to
+  push and whether its changelog/version surfaces are ready to publish; an
+  unrun full suite is not, by itself, a blocker.
 - Unit tests live next to code; integration tests live in `tests/`.
 - Canister creation/install/upgrade/inter-canister tests must use PocketIC.
 - Do not add production `cfg(test)` behavior to fake IC management.
@@ -95,4 +104,4 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
   `docs/governance/changelog.md` for `Unreleased` notes and release-finalized
   changelog rules.
 - Respect CLI/host/backup ownership boundaries.
-- Prefer targeted tests first; broaden when risk warrants it.
+- Run targeted checks only, following the Testing policy above.

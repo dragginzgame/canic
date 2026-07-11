@@ -1,10 +1,12 @@
-use flate2::{Compression, GzBuilder};
+use crate::durable_io::write_bytes;
 use std::{
     fs,
     io::{Read, Write},
     path::Path,
     process::Command,
 };
+
+use flate2::{Compression, GzBuilder};
 
 // Apply `ic-wasm shrink` when available; absence of the optional tool is not
 // fatal, but execution failures are surfaced because they usually mean bad IO.
@@ -38,7 +40,7 @@ pub fn write_wasm_artifact(
     target_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = fs::read(source_path)?;
-    write_bytes_atomically(target_path, &bytes)?;
+    write_bytes(target_path, &bytes)?;
     Ok(())
 }
 
@@ -55,7 +57,7 @@ pub fn write_gzip_artifact(
         .write(Vec::new(), Compression::best());
     encoder.write_all(&wasm_bytes)?;
     let gz_bytes = encoder.finish()?;
-    write_bytes_atomically(wasm_gz_path, &gz_bytes)?;
+    write_bytes(wasm_gz_path, &gz_bytes)?;
     Ok(())
 }
 
@@ -104,23 +106,6 @@ fn embed_candid_metadata_with_command(
         .into());
     }
 
-    Ok(())
-}
-
-// Persist one file through a sibling temp path so readers never observe a partial write.
-pub fn write_bytes_atomically(
-    target_path: &Path,
-    bytes: &[u8],
-) -> Result<(), Box<dyn std::error::Error>> {
-    let tmp_path = target_path.with_extension(format!(
-        "{}.tmp",
-        target_path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .unwrap_or_default()
-    ));
-    fs::write(&tmp_path, bytes)?;
-    fs::rename(tmp_path, target_path)?;
     Ok(())
 }
 

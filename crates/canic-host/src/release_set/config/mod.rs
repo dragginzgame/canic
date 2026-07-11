@@ -1,3 +1,4 @@
+use crate::durable_io::write_bytes;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -7,6 +8,8 @@ use std::{
 mod model;
 mod mutation;
 mod projection;
+#[cfg(test)]
+mod tests;
 
 pub use model::{
     AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
@@ -156,7 +159,7 @@ pub fn declare_fleet_role(
     let source = fs::read_to_string(config_path)?;
     let updated = declare_fleet_role_source(&source, expected_fleet, role, package)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
-    fs::write(config_path, updated.source)?;
+    write_bytes(config_path, updated.source.as_bytes())?;
     Ok(updated.role)
 }
 
@@ -171,7 +174,7 @@ pub fn attach_fleet_role(
     let source = fs::read_to_string(config_path)?;
     let updated = attach_fleet_role_source(&source, expected_fleet, role, subnet, kind)
         .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
-    fs::write(config_path, updated.source)?;
+    write_bytes(config_path, updated.source.as_bytes())?;
     Ok(updated.role)
 }
 
@@ -186,11 +189,42 @@ pub fn rename_fleet_role(
     let updated =
         rename_fleet_role_source(&source, config_path, expected_fleet, old_role, new_role)
             .map_err(|err| format!("invalid {}: {err}", config_path.display()))?;
-    fs::write(config_path, updated.source)?;
-    if let (Some(path), Some(source)) = (&updated.package_manifest, &updated.package_source) {
-        fs::write(path, source)?;
-    }
+    commit_role_rename_sources(
+        config_path,
+        &source,
+        &updated.source,
+        updated
+            .package_manifest
+            .as_deref()
+            .zip(updated.package_source.as_deref()),
+    )?;
     Ok(updated.role)
+}
+
+fn commit_role_rename_sources(
+    config_path: &Path,
+    original_config: &str,
+    updated_config: &str,
+    package_update: Option<(&Path, &str)>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    write_bytes(config_path, updated_config.as_bytes())?;
+    let Some((package_path, package_source)) = package_update else {
+        return Ok(());
+    };
+
+    if let Err(write_error) = write_bytes(package_path, package_source.as_bytes()) {
+        if let Err(rollback_error) = write_bytes(config_path, original_config.as_bytes()) {
+            return Err(format!(
+                "failed to update {}: {write_error}; failed to restore {}: {rollback_error}",
+                package_path.display(),
+                config_path.display()
+            )
+            .into());
+        }
+        return Err(write_error.into());
+    }
+
+    Ok(())
 }
 
 // Select config paths whose required [fleet].name matches the requested fleet.

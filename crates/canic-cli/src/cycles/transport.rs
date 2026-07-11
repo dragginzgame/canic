@@ -15,7 +15,7 @@ use crate::{
     },
 };
 use canic_host::{
-    cycle_balance::query_cycle_balance_optional,
+    cycle_balance::query_cycle_balance,
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
@@ -33,6 +33,7 @@ use std::{
 
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
 const ICP_JSON_OUTPUT: &str = "json";
+const CYCLES_WORKER_PANIC: &str = "cycles query worker panicked";
 
 ///
 /// CycleQueryTarget
@@ -78,22 +79,49 @@ fn collect_cycle_tracker_reports(
     for row in rows {
         let RegistryRow { entry, tree_prefix } = row;
         let entry = entry.clone();
+        let worker_entry = entry.clone();
+        let worker_tree_prefix = tree_prefix.clone();
         let query = Arc::clone(&query);
-        handles.push(thread::spawn(move || {
-            cycle_tracker_report(
-                &query,
-                &entry,
-                tree_prefix,
-                requested_since_secs,
-                generated_at_secs,
-            )
-        }));
+        handles.push((
+            worker_entry,
+            worker_tree_prefix,
+            thread::spawn(move || {
+                cycle_tracker_report(
+                    &query,
+                    &entry,
+                    tree_prefix,
+                    requested_since_secs,
+                    generated_at_secs,
+                )
+            }),
+        ));
     }
 
-    Ok(handles
+    Ok(collect_cycle_worker_reports(handles, requested_since_secs))
+}
+
+fn collect_cycle_worker_reports(
+    handles: Vec<(
+        RegistryEntry,
+        String,
+        thread::JoinHandle<CyclesCanisterReport>,
+    )>,
+    requested_since_secs: u64,
+) -> Vec<CyclesCanisterReport> {
+    handles
         .into_iter()
-        .filter_map(|handle| handle.join().ok())
-        .collect())
+        .map(|(entry, tree_prefix, handle)| {
+            handle.join().unwrap_or_else(|_| {
+                cycles_error_report(
+                    &entry,
+                    tree_prefix,
+                    requested_since_secs,
+                    None,
+                    CYCLES_WORKER_PANIC.to_string(),
+                )
+            })
+        })
+        .collect()
 }
 
 fn cycle_tracker_report(
@@ -107,38 +135,84 @@ fn cycle_tracker_report(
     let live_cycles = query_live_cycle_balance(&target);
     let result = query_cycle_tracker(&target, options.limit);
     match result {
-        Ok(page) => summarize_cycle_tracker(
+        Ok(page) => {
+            let topup_events = query_topup_events(&target);
+            let observation_error = cycle_observation_error(
+                live_cycles.as_ref().err().map(String::as_str),
+                topup_events.as_ref().err().map(String::as_str),
+            );
+            let mut report = summarize_cycle_tracker(
+                entry,
+                page,
+                tree_prefix,
+                requested_since_secs,
+                generated_at_secs,
+                live_cycles.as_ref().ok().copied(),
+                topup_events.ok(),
+            );
+            if let Some(error) = observation_error {
+                report.status = CyclesCanisterStatus::Error;
+                report.error = Some(error);
+            }
+            report
+        }
+        Err(error) => cycles_error_report(
             entry,
-            page,
             tree_prefix,
             requested_since_secs,
-            generated_at_secs,
-            live_cycles,
-            query_topup_events(&target).ok(),
+            live_cycles.ok().map(|cycles| (generated_at_secs, cycles)),
+            error,
         ),
-        Err(error) => CyclesCanisterReport {
-            role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
-            tree_prefix,
-            canister_id: entry.pid.clone(),
-            status: CyclesCanisterStatus::Error,
-            sample_count: 0,
-            total_samples: 0,
-            requested_since_secs,
-            coverage_seconds: None,
-            coverage_status: CyclesCoverageStatus::None,
-            latest_timestamp_secs: live_cycles.map(|_| generated_at_secs),
-            latest_cycles: live_cycles,
-            baseline_timestamp_secs: None,
-            baseline_cycles: None,
-            delta_cycles: None,
-            rate_cycles_per_hour: None,
-            burn_cycles: None,
-            burn_cycles_per_hour: None,
-            topup_cycles_per_hour: None,
-            topups: None,
-            error: Some(error),
-        },
     }
+}
+
+fn cycles_error_report(
+    entry: &RegistryEntry,
+    tree_prefix: String,
+    requested_since_secs: u64,
+    live_cycles: Option<(u64, u128)>,
+    error: String,
+) -> CyclesCanisterReport {
+    CyclesCanisterReport {
+        role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
+        tree_prefix,
+        canister_id: entry.pid.clone(),
+        status: CyclesCanisterStatus::Error,
+        sample_count: 0,
+        total_samples: 0,
+        requested_since_secs,
+        coverage_seconds: None,
+        coverage_status: CyclesCoverageStatus::None,
+        latest_timestamp_secs: live_cycles.map(|(timestamp, _)| timestamp),
+        latest_cycles: live_cycles.map(|(_, cycles)| cycles),
+        baseline_timestamp_secs: None,
+        baseline_cycles: None,
+        delta_cycles: None,
+        rate_cycles_per_hour: None,
+        burn_cycles: None,
+        burn_cycles_per_hour: None,
+        topup_cycles_per_hour: None,
+        topups: None,
+        error: Some(error),
+    }
+}
+
+fn first_line(error: &str) -> &str {
+    error.lines().next().unwrap_or(error)
+}
+
+fn cycle_observation_error(
+    live_cycles_error: Option<&str>,
+    topup_events_error: Option<&str>,
+) -> Option<String> {
+    let mut errors = Vec::new();
+    if let Some(error) = live_cycles_error {
+        errors.push(format!("live cycle balance: {}", first_line(error)));
+    }
+    if let Some(error) = topup_events_error {
+        errors.push(format!("top-up events: {}", first_line(error)));
+    }
+    (!errors.is_empty()).then(|| errors.join("; "))
 }
 
 pub(super) fn summarize_cycle_tracker(
@@ -236,14 +310,15 @@ pub(super) fn summarize_cycle_tracker(
     }
 }
 
-fn query_live_cycle_balance(target: &CycleQueryTarget) -> Option<u128> {
-    query_cycle_balance_optional(
+fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, String> {
+    query_cycle_balance(
         &target.icp,
         &target.canister_id,
         &target.network,
         target.icp_root.as_deref(),
         target.candid_path.as_deref(),
     )
+    .map_err(|error| error.to_string())
 }
 
 fn query_topup_events(target: &CycleQueryTarget) -> Result<Vec<CycleTopupEventSample>, String> {
@@ -305,7 +380,7 @@ fn query_topup_event_page(
         .map_err(|err| err.to_string())?;
 
     parse_topup_event_page(&output)
-        .ok_or_else(|| "could not parse canic_cycle_topups response".to_string())
+        .map_err(|error| format!("could not parse canic_cycle_topups response: {error}"))
 }
 
 fn query_cycle_tracker(target: &CycleQueryTarget, limit: u64) -> Result<CycleTrackerPage, String> {
@@ -335,7 +410,7 @@ fn query_cycle_tracker_page(
         .map_err(|err| err.to_string())?;
 
     parse_cycle_tracker_page(&output)
-        .ok_or_else(|| "could not parse canic_cycle_tracker response".to_string())
+        .map_err(|error| format!("could not parse canic_cycle_tracker response: {error}"))
 }
 
 fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQueryTarget {
@@ -431,4 +506,48 @@ fn resolve_cycles_deployment(
 
 fn resolve_cycles_icp_root() -> Option<PathBuf> {
     resolve_current_canic_icp_root().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn panicked_cycles_worker_becomes_an_explicit_canister_error() {
+        let entry = RegistryEntry {
+            pid: "aaaaa-aa".to_string(),
+            role: Some("root".to_string()),
+            kind: Some("root".to_string()),
+            parent_pid: None,
+            module_hash: None,
+        };
+        let reports = collect_cycle_worker_reports(
+            vec![(
+                entry.clone(),
+                "root".to_string(),
+                thread::spawn(|| panic!("simulated cycles worker panic")),
+            )],
+            100,
+        );
+
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].canister_id, entry.pid);
+        assert_eq!(reports[0].status, CyclesCanisterStatus::Error);
+        assert_eq!(reports[0].error.as_deref(), Some(CYCLES_WORKER_PANIC));
+    }
+
+    #[test]
+    fn supplemental_cycle_query_failures_are_not_silently_dropped() {
+        assert_eq!(
+            cycle_observation_error(
+                Some("balance transport failed\nraw details"),
+                Some("top-up response malformed"),
+            )
+            .as_deref(),
+            Some(
+                "live cycle balance: balance transport failed; top-up events: top-up response malformed"
+            )
+        );
+        assert_eq!(cycle_observation_error(None, None), None);
+    }
 }

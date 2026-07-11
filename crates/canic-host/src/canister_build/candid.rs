@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Command};
 
-use crate::artifact_io::write_bytes_atomically;
+use crate::durable_io::write_bytes;
 
 pub(super) fn extract_candid(
     debug_wasm_path: &Path,
@@ -25,7 +25,7 @@ pub(super) fn extract_candid(
         .into());
     }
 
-    write_bytes_atomically(did_path, &output.stdout)?;
+    write_bytes(did_path, &output.stdout)?;
     Ok(())
 }
 
