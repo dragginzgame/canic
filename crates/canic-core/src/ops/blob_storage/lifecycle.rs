@@ -150,9 +150,10 @@ impl BlobStorageLifecycleOps {
     /// Return pending-deletion root hashes in stable key order.
     #[must_use]
     pub fn pending_deletion_hashes() -> Vec<String> {
-        BlobStorageStore::pending_deletions()
+        BlobStorageStore::pending_deletions_data()
+            .entries
             .into_iter()
-            .map(|(key, _)| key.as_str().to_string())
+            .map(|entry| entry.key.as_str().to_string())
             .collect()
     }
 
@@ -167,9 +168,9 @@ impl BlobStorageLifecycleOps {
     /// Replace the authorized storage gateway principal set.
     #[must_use]
     pub fn replace_gateway_principals(principals: &[Principal], now_ns: u64) -> u64 {
-        for (principal, _) in BlobStorageStore::gateway_principals() {
-            if !principals.contains(&principal) {
-                BlobStorageStore::remove_gateway_principal(principal);
+        for record in BlobStorageStore::gateway_principals_data().entries {
+            if !principals.contains(&record.gateway_principal) {
+                BlobStorageStore::remove_gateway_principal(record.gateway_principal);
             }
         }
 

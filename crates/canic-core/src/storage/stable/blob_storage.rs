@@ -4,19 +4,27 @@
 //! Does not own: lifecycle policy, endpoint authorization, or DTO conversion.
 //! Boundary: ops wrap these records before workflow or public API access.
 
+#![cfg_attr(
+    not(feature = "blob-storage"),
+    expect(
+        dead_code,
+        reason = "blob-storage schema remains available to the unconditional state descriptor registry"
+    )
+)]
+
+#[cfg(feature = "blob-storage")]
 use crate::{
-    cdk::{
-        structures::{DefaultMemoryImpl, memory::VirtualMemory},
-        types::BoundedString128,
-    },
+    cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     eager_static,
     model::blob_storage::BlobRootHash,
     role_contract::allocation::memory::blob_storage::{
         BLOB_DELETION_PENDING_ID, STORAGE_GATEWAY_PRINCIPALS_ID, STORED_BLOBS_ID,
     },
-    storage::prelude::*,
 };
+use crate::{cdk::types::BoundedString128, storage::prelude::*};
+#[cfg(feature = "blob-storage")]
 use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
+#[cfg(feature = "blob-storage")]
 use std::cell::RefCell;
 
 #[cfg(feature = "blob-storage-billing")]
@@ -27,12 +35,16 @@ use crate::role_contract::allocation::memory::blob_storage::BLOB_STORAGE_BILLING
 
 pub const BLOB_STORAGE_SCHEMA_VERSION: u32 = 1;
 
+#[cfg(feature = "blob-storage")]
 struct StoredBlobStore;
+#[cfg(feature = "blob-storage")]
 struct BlobDeletionPendingStore;
+#[cfg(feature = "blob-storage")]
 struct StorageGatewayPrincipalStore;
 #[cfg(feature = "blob-storage-billing")]
 struct BlobStorageBillingStore;
 
+#[cfg(feature = "blob-storage")]
 eager_static! {
     static STORED_BLOBS: RefCell<
         StableBtreeMap<BlobRootHashKey, StoredBlobRecord, VirtualMemory<DefaultMemoryImpl>>
@@ -41,6 +53,7 @@ eager_static! {
     );
 }
 
+#[cfg(feature = "blob-storage")]
 eager_static! {
     static BLOB_DELETION_PENDING: RefCell<
         StableBtreeMap<BlobRootHashKey, BlobDeletionPendingRecord, VirtualMemory<DefaultMemoryImpl>>
@@ -49,6 +62,7 @@ eager_static! {
     );
 }
 
+#[cfg(feature = "blob-storage")]
 eager_static! {
     static STORAGE_GATEWAY_PRINCIPALS: RefCell<
         StableBtreeMap<Principal, StorageGatewayPrincipalRecord, VirtualMemory<DefaultMemoryImpl>>
@@ -82,6 +96,7 @@ impl BlobRootHashKey {
     pub const STORABLE_MAX_SIZE: u32 = 128;
 
     #[must_use]
+    #[cfg(feature = "blob-storage")]
     pub fn from_hash(hash: &BlobRootHash) -> Self {
         Self {
             value: BoundedString128::new(hash.as_str()),
@@ -93,7 +108,7 @@ impl BlobRootHashKey {
         self.value.as_ref()
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "blob-storage"))]
     pub fn into_hash(self) -> Result<BlobRootHash, crate::model::blob_storage::BlobRootHashError> {
         BlobRootHash::try_from(self.value.0)
     }
@@ -115,9 +130,11 @@ pub struct StoredBlobRecord {
 }
 
 impl StoredBlobRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "StoredBlobRecord";
     pub const STORABLE_MAX_SIZE: u32 = 160;
 
     #[must_use]
+    #[cfg(feature = "blob-storage")]
     pub fn new(root_hash: &BlobRootHash, registered_at_ns: u64) -> Self {
         Self {
             schema_version: BLOB_STORAGE_SCHEMA_VERSION,
@@ -143,9 +160,11 @@ pub struct BlobDeletionPendingRecord {
 }
 
 impl BlobDeletionPendingRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "BlobDeletionPendingRecord";
     pub const STORABLE_MAX_SIZE: u32 = 160;
 
     #[must_use]
+    #[cfg(feature = "blob-storage")]
     pub fn new(root_hash: &BlobRootHash, marked_at_ns: u64) -> Self {
         Self {
             schema_version: BLOB_STORAGE_SCHEMA_VERSION,
@@ -175,6 +194,7 @@ pub struct StorageGatewayPrincipalRecord {
 }
 
 impl StorageGatewayPrincipalRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "StorageGatewayPrincipalRecord";
     pub const STORABLE_MAX_SIZE: u32 = 96;
 
     #[must_use]
@@ -199,7 +219,6 @@ impl_storable_bounded!(
 /// Stable blob-storage billing configuration record.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageBillingConfigRecord {
     pub schema_version: u32,
@@ -211,18 +230,17 @@ pub struct BlobStorageBillingConfigRecord {
     pub updated_at_ns: u64,
 }
 
-#[cfg(feature = "blob-storage-billing")]
 impl_storable_bounded!(
     BlobStorageBillingConfigRecord,
     BlobStorageBillingConfigRecord::STORABLE_MAX_SIZE,
     false
 );
 
-#[cfg(feature = "blob-storage-billing")]
 impl BlobStorageBillingConfigRecord {
     pub const STORABLE_MAX_SIZE: u32 = 192;
 
     #[must_use]
+    #[cfg(feature = "blob-storage-billing")]
     pub const fn new(
         cashier_canister_id: Principal,
         project_cycles_reserve: u128,
@@ -249,7 +267,6 @@ impl BlobStorageBillingConfigRecord {
 /// Stable singleton state for blob-storage billing.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageBillingStateRecord {
     pub schema_version: u32,
@@ -257,7 +274,6 @@ pub struct BlobStorageBillingStateRecord {
     pub last_gateway_principal_sync_at_ns: Option<u64>,
 }
 
-#[cfg(feature = "blob-storage-billing")]
 impl Default for BlobStorageBillingStateRecord {
     fn default() -> Self {
         Self {
@@ -268,30 +284,99 @@ impl Default for BlobStorageBillingStateRecord {
     }
 }
 
-#[cfg(feature = "blob-storage-billing")]
 impl_storable_bounded!(
     BlobStorageBillingStateRecord,
     BlobStorageBillingStateRecord::STORABLE_MAX_SIZE,
     false
 );
 
-#[cfg(feature = "blob-storage-billing")]
 impl BlobStorageBillingStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "BlobStorageBillingStateRecord";
     pub const STORABLE_MAX_SIZE: u32 = 256;
 }
 
 ///
-/// BlobStorageData
+/// StoredBlobEntryRecord
 ///
-/// Canonical stable snapshot for blob-storage lifecycle state.
+/// One logical stored-blob snapshot row preserving its stable key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredBlobEntryRecord {
+    pub key: BlobRootHashKey,
+    pub record: StoredBlobRecord,
+}
+
+///
+/// StoredBlobsData
+///
+/// Canonical stored-blob allocation snapshot.
 ///
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-#[cfg(test)]
-pub struct BlobStorageData {
-    pub stored_blobs: Vec<(BlobRootHashKey, StoredBlobRecord)>,
-    pub deletion_pending: Vec<(BlobRootHashKey, BlobDeletionPendingRecord)>,
-    pub gateway_principals: Vec<(Principal, StorageGatewayPrincipalRecord)>,
+pub struct StoredBlobsData {
+    pub entries: Vec<StoredBlobEntryRecord>,
+}
+
+impl StoredBlobsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "StoredBlobsData";
+}
+
+///
+/// BlobDeletionPendingEntryRecord
+///
+/// One logical pending-deletion snapshot row preserving its stable key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BlobDeletionPendingEntryRecord {
+    pub key: BlobRootHashKey,
+    pub record: BlobDeletionPendingRecord,
+}
+
+///
+/// BlobDeletionPendingData
+///
+/// Canonical pending-deletion allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BlobDeletionPendingData {
+    pub entries: Vec<BlobDeletionPendingEntryRecord>,
+}
+
+impl BlobDeletionPendingData {
+    pub const STATE_CONTRACT_NAME: &'static str = "BlobDeletionPendingData";
+}
+
+///
+/// StorageGatewayPrincipalsData
+///
+/// Canonical storage-gateway-principal allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct StorageGatewayPrincipalsData {
+    pub entries: Vec<StorageGatewayPrincipalRecord>,
+}
+
+impl StorageGatewayPrincipalsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "StorageGatewayPrincipalsData";
+}
+
+///
+/// BlobStorageBillingStateData
+///
+/// Canonical blob-storage billing allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BlobStorageBillingStateData {
+    pub state: BlobStorageBillingStateRecord,
+}
+
+impl BlobStorageBillingStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "BlobStorageBillingStateData";
 }
 
 ///
@@ -300,13 +385,15 @@ pub struct BlobStorageData {
 /// Stable-memory backing store for non-billing blob-storage lifecycle state.
 ///
 
+#[cfg(feature = "blob-storage")]
 pub struct BlobStorageStore;
 
+#[cfg(feature = "blob-storage")]
 impl BlobStorageStore {
     #[cfg(feature = "blob-storage-billing")]
     #[must_use]
     pub(crate) fn billing_config() -> Option<BlobStorageBillingConfigRecord> {
-        BLOB_STORAGE_BILLING.with_borrow(|cell| cell.get().config.clone())
+        Self::billing_state_data().state.config
     }
 
     #[cfg(feature = "blob-storage-billing")]
@@ -332,7 +419,17 @@ impl BlobStorageStore {
     #[cfg(feature = "blob-storage-billing")]
     #[must_use]
     pub(crate) fn last_gateway_principal_sync_at_ns() -> Option<u64> {
-        BLOB_STORAGE_BILLING.with_borrow(|cell| cell.get().last_gateway_principal_sync_at_ns)
+        Self::billing_state_data()
+            .state
+            .last_gateway_principal_sync_at_ns
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[must_use]
+    pub(crate) fn billing_state_data() -> BlobStorageBillingStateData {
+        BlobStorageBillingStateData {
+            state: BLOB_STORAGE_BILLING.with_borrow(|cell| cell.get().clone()),
+        }
     }
 
     #[must_use]
@@ -358,12 +455,17 @@ impl BlobStorageStore {
 
     #[must_use]
     #[cfg(test)]
-    pub(crate) fn stored_blobs() -> Vec<(BlobRootHashKey, StoredBlobRecord)> {
-        STORED_BLOBS.with_borrow(|map| {
-            map.iter()
-                .map(|entry| (entry.key().clone(), entry.value()))
-                .collect()
-        })
+    pub(crate) fn stored_blobs_data() -> StoredBlobsData {
+        StoredBlobsData {
+            entries: STORED_BLOBS.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| StoredBlobEntryRecord {
+                        key: entry.key().clone(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
     }
 
     #[must_use]
@@ -391,12 +493,17 @@ impl BlobStorageStore {
     }
 
     #[must_use]
-    pub(crate) fn pending_deletions() -> Vec<(BlobRootHashKey, BlobDeletionPendingRecord)> {
-        BLOB_DELETION_PENDING.with_borrow(|map| {
-            map.iter()
-                .map(|entry| (entry.key().clone(), entry.value()))
-                .collect()
-        })
+    pub(crate) fn pending_deletions_data() -> BlobDeletionPendingData {
+        BlobDeletionPendingData {
+            entries: BLOB_DELETION_PENDING.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| BlobDeletionPendingEntryRecord {
+                        key: entry.key().clone(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
     }
 
     #[must_use]
@@ -425,40 +532,39 @@ impl BlobStorageStore {
     }
 
     #[must_use]
-    pub(crate) fn gateway_principals() -> Vec<(Principal, StorageGatewayPrincipalRecord)> {
-        STORAGE_GATEWAY_PRINCIPALS.with_borrow(|map| {
-            map.iter()
-                .map(|entry| (*entry.key(), entry.value()))
-                .collect()
-        })
-    }
-
-    #[must_use]
-    #[cfg(test)]
-    pub(crate) fn export() -> BlobStorageData {
-        BlobStorageData {
-            stored_blobs: Self::stored_blobs(),
-            deletion_pending: Self::pending_deletions(),
-            gateway_principals: Self::gateway_principals(),
+    pub(crate) fn gateway_principals_data() -> StorageGatewayPrincipalsData {
+        StorageGatewayPrincipalsData {
+            entries: STORAGE_GATEWAY_PRINCIPALS
+                .with_borrow(|map| map.iter().map(|entry| entry.value()).collect()),
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn import(data: BlobStorageData) {
-        Self::clear();
+    pub(crate) fn import_stored_blobs(data: StoredBlobsData) {
         STORED_BLOBS.with_borrow_mut(|map| {
-            for (key, record) in data.stored_blobs {
-                map.insert(key, record);
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.key, entry.record);
             }
         });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn import_pending_deletions(data: BlobDeletionPendingData) {
         BLOB_DELETION_PENDING.with_borrow_mut(|map| {
-            for (key, record) in data.deletion_pending {
-                map.insert(key, record);
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.key, entry.record);
             }
         });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn import_gateway_principals(data: StorageGatewayPrincipalsData) {
         STORAGE_GATEWAY_PRINCIPALS.with_borrow_mut(|map| {
-            for (principal, record) in data.gateway_principals {
-                map.insert(principal, record);
+            map.clear_new();
+            for record in data.entries {
+                map.insert(record.gateway_principal, record);
             }
         });
     }
@@ -481,7 +587,7 @@ impl BlobStorageStore {
 // Tests
 // -----------------------------------------------------------------------------
 
-#[cfg(test)]
+#[cfg(all(test, feature = "blob-storage"))]
 mod tests {
     use super::*;
 
@@ -489,7 +595,7 @@ mod tests {
         BlobRootHash::try_from(value).expect("valid blob root hash")
     }
 
-    fn p(id: u8) -> Principal {
+    const fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
     }
 
@@ -548,9 +654,10 @@ mod tests {
             Some(BlobDeletionPendingRecord::new(&lower, 40))
         );
         assert_eq!(
-            BlobStorageStore::pending_deletions()
+            BlobStorageStore::pending_deletions_data()
+                .entries
                 .into_iter()
-                .map(|(key, _)| key.as_str().to_string())
+                .map(|entry| entry.key.as_str().to_string())
                 .collect::<Vec<_>>(),
             vec![lower.as_str().to_string()]
         );
@@ -575,16 +682,39 @@ mod tests {
         assert_eq!(BlobStorageStore::pending_deletion_count(), 1);
         assert_eq!(BlobStorageStore::gateway_principal_count(), 1);
 
-        let exported = BlobStorageStore::export();
+        let stored_blobs = BlobStorageStore::stored_blobs_data();
+        let pending_deletions = BlobStorageStore::pending_deletions_data();
+        let gateway_principals = BlobStorageStore::gateway_principals_data();
         BlobStorageStore::clear();
-        assert_eq!(BlobStorageStore::export(), BlobStorageData::default());
+        assert_eq!(
+            BlobStorageStore::stored_blobs_data(),
+            StoredBlobsData::default()
+        );
+        assert_eq!(
+            BlobStorageStore::pending_deletions_data(),
+            BlobDeletionPendingData::default()
+        );
+        assert_eq!(
+            BlobStorageStore::gateway_principals_data(),
+            StorageGatewayPrincipalsData::default()
+        );
         assert_eq!(BlobStorageStore::stored_blob_count(), 0);
         assert_eq!(BlobStorageStore::pending_deletion_count(), 0);
         assert_eq!(BlobStorageStore::gateway_principal_count(), 0);
 
-        BlobStorageStore::import(exported.clone());
+        BlobStorageStore::import_stored_blobs(stored_blobs.clone());
+        BlobStorageStore::import_pending_deletions(pending_deletions.clone());
+        BlobStorageStore::import_gateway_principals(gateway_principals.clone());
 
-        assert_eq!(BlobStorageStore::export(), exported);
+        assert_eq!(BlobStorageStore::stored_blobs_data(), stored_blobs);
+        assert_eq!(
+            BlobStorageStore::pending_deletions_data(),
+            pending_deletions
+        );
+        assert_eq!(
+            BlobStorageStore::gateway_principals_data(),
+            gateway_principals
+        );
         assert_eq!(BlobStorageStore::stored_blob_count(), 2);
         assert_eq!(BlobStorageStore::pending_deletion_count(), 1);
         assert_eq!(BlobStorageStore::gateway_principal_count(), 1);
@@ -600,6 +730,27 @@ mod tests {
             BlobStorageStore::get_gateway_principal(gateway),
             Some(StorageGatewayPrincipalRecord::new(gateway, 40))
         );
+    }
+
+    #[cfg(feature = "blob-storage-billing")]
+    #[test]
+    fn billing_state_exports_through_canonical_data_snapshot() {
+        BlobStorageStore::clear_billing();
+        assert_eq!(
+            BlobStorageStore::billing_state_data(),
+            BlobStorageBillingStateData::default()
+        );
+
+        let cashier = p(8);
+        BlobStorageStore::set_billing_config(BlobStorageBillingConfigRecord::new(
+            cashier, 10, 20, 30, 40, 50,
+        ));
+        BlobStorageStore::set_last_gateway_principal_sync_at_ns(60);
+
+        let data = BlobStorageStore::billing_state_data();
+        let config = data.state.config.expect("billing config");
+        assert_eq!(config.cashier_canister_id, cashier);
+        assert_eq!(data.state.last_gateway_principal_sync_at_ns, Some(60));
     }
 
     #[test]

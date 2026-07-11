@@ -327,14 +327,20 @@ fn sharding_descriptors() -> Vec<StateAllocationDescriptor> {
 }
 
 fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
+    use crate::storage::stable::blob_storage::{
+        BlobDeletionPendingData, BlobDeletionPendingRecord, BlobStorageBillingStateData,
+        BlobStorageBillingStateRecord, StorageGatewayPrincipalRecord, StorageGatewayPrincipalsData,
+        StoredBlobRecord, StoredBlobsData,
+    };
+
     vec![
         descriptor(
             StateAllocationKey::StoredBlobs,
             vec![state_domain(
                 "stored_blobs",
                 STORED_BLOBS_ID,
-                "StoredBlobRecord",
-                "BlobStorageData",
+                StoredBlobRecord::STATE_CONTRACT_NAME,
+                StoredBlobsData::STATE_CONTRACT_NAME,
                 190,
                 "stored_blobs_restore_live_blob_roots",
             )],
@@ -345,8 +351,8 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
             vec![state_domain(
                 "blob_deletion_pending",
                 BLOB_DELETION_PENDING_ID,
-                "BlobDeletionPendingRecord",
-                "BlobStorageData",
+                BlobDeletionPendingRecord::STATE_CONTRACT_NAME,
+                BlobDeletionPendingData::STATE_CONTRACT_NAME,
                 200,
                 "blob_deletion_pending_restores_gateway_scrub_state",
             )],
@@ -357,8 +363,8 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
             vec![state_domain(
                 "storage_gateway_principals",
                 STORAGE_GATEWAY_PRINCIPALS_ID,
-                "StorageGatewayPrincipalRecord",
-                "BlobStorageData",
+                StorageGatewayPrincipalRecord::STATE_CONTRACT_NAME,
+                StorageGatewayPrincipalsData::STATE_CONTRACT_NAME,
                 210,
                 "storage_gateway_principals_restore_authorized_gateways",
             )],
@@ -369,8 +375,8 @@ fn blob_storage_descriptors() -> Vec<StateAllocationDescriptor> {
             vec![state_domain(
                 "blob_storage_billing",
                 BLOB_STORAGE_BILLING_ID,
-                "BlobStorageBillingStateRecord",
-                "BlobStorageBillingStateData",
+                BlobStorageBillingStateRecord::STATE_CONTRACT_NAME,
+                BlobStorageBillingStateData::STATE_CONTRACT_NAME,
                 220,
                 "blob_storage_billing_restores_cashier_configuration",
             )],
@@ -820,6 +826,57 @@ mod tests {
                 .iter()
                 .find(|declaration| declaration.domain == domain)
                 .expect("sharding state declaration");
+
+            assert_eq!(declaration.record, record);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn blob_storage_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::blob_storage::{
+            BlobDeletionPendingData, BlobDeletionPendingRecord, BlobStorageBillingStateData,
+            BlobStorageBillingStateRecord, StorageGatewayPrincipalRecord,
+            StorageGatewayPrincipalsData, StoredBlobRecord, StoredBlobsData,
+        };
+
+        let descriptors = canic_state_descriptors();
+
+        for (allocation, domain, record, snapshot) in [
+            (
+                StateAllocationKey::StoredBlobs,
+                "stored_blobs",
+                StoredBlobRecord::STATE_CONTRACT_NAME,
+                StoredBlobsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::BlobDeletionPending,
+                "blob_deletion_pending",
+                BlobDeletionPendingRecord::STATE_CONTRACT_NAME,
+                BlobDeletionPendingData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::StorageGatewayPrincipals,
+                "storage_gateway_principals",
+                StorageGatewayPrincipalRecord::STATE_CONTRACT_NAME,
+                StorageGatewayPrincipalsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::BlobStorageBilling,
+                "blob_storage_billing",
+                BlobStorageBillingStateRecord::STATE_CONTRACT_NAME,
+                BlobStorageBillingStateData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("blob-storage descriptor");
+            let declaration = descriptor
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("blob-storage state declaration");
 
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
