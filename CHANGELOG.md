@@ -8,28 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Potentially breaking: the `ic-memory 0.10` hard cut maps its enum-based
-  commit-slot and recovery diagnostics directly, preserves retirement
-  generations in the existing memory-ledger response, and adds the exact
-  `InvalidCommitSlots` Candid recovery variant instead of reporting it as
-  `Unknown`.
+## [0.85.x] - 2026-07-11 - Operational Safety Hardening
 
-- Potentially breaking: Canic's stable serde macros, replay receipts, and local
-  replica query/status wire adapter now use `ciborium` with exact stable and
-  wire-byte proof. All Canic manifests and source hard-cut `serde_cbor`;
-  current upstream IC signature, agent, and PocketIC crates still select it
-  transitively and therefore keep the RustSec warning in the workspace lock.
+Detailed patch breakdown: [docs/changelog/0.85.md](docs/changelog/0.85.md)
 
-- Potentially breaking: canister builds now use one explicit host-owned context
-  for role, paths, profile, selected environment, resolved build network, and
-  direct-local targeting. The CLI and install environment guards and their
-  process-global mutation are hard-cut; host callers of ICP target helpers must
-  pass any direct local replica target explicitly.
-
-- Restore recovery documents now use one backup-owned durable sibling-replace
-  path, so serialization or pre-rename failures preserve the previous valid
-  plan or journal and mutating restore transitions no longer truncate their
-  recovery authority in place.
+- `0.85.0` makes restore recovery persistence durable, replaces global build
+  authority with explicit command context, adopts `ic-memory 0.10`, and moves
+  Canic-owned CBOR to `ciborium` with exact stable and wire-byte proof.
 
 ## [0.84.x] - 2026-07-10 - Role-Aware State Contracts
 
