@@ -16,11 +16,12 @@ Audit source:
 
 ## Current State
 
-Implementation complete. Slices A, B, and C have landed without a package
-version assignment. Release preparation remains maintainer-owned.
+Slices A, B, and C are complete and published as `v0.85.0`. The current package
+version is `0.85.0`.
 
-No package version has been assigned to an implementation slice. The current
-published package version remains 0.84.14.
+A focused post-release cleanup is in progress for the 0.85 line. It is limited
+to child-command argument transport and release/status accuracy; it does not
+reopen the completed restore, build-authority, or CBOR contracts.
 
 ## Locked Scope
 
@@ -207,9 +208,13 @@ validation.
   retirement generations carried by `AllocationState::Retired`. The newly
   meaningful invalid-slot recovery case is exposed exactly rather than folded
   into `Unknown`; no adapter for the 0.9 shape remains.
+- 2026-07-11: slices A, B, and C were published as `v0.85.0`. The next focused
+  cleanup hard-cuts release-set Candid argument files to piped child stdin so
+  large call payloads are neither persisted nor placed in process arguments.
 
 ## Next Action
 
-Review the completed 0.85 diff for release preparation. Do not claim that
-`serde_cbor` left the workspace lock: current published IC signature, agent,
-transport, and PocketIC dependencies still select the upstream crate.
+Validate the focused release-set stdin transport for the next 0.85 patch.
+Do not claim that `serde_cbor` left the workspace lock: current published IC
+signature, agent, transport, and PocketIC dependencies still select the
+upstream crate.
