@@ -215,7 +215,9 @@ before this compaction is archived at
   descriptor registries. Memory IDs, stable keys, storable encodings, runtime
   behavior, DTOs, Candid, and persisted bytes are unchanged.
 
-- A post-release feature-gating fix is in development for `0.84.13`.
+- The `0.84.13` feature-gating and release-safety changelog is prepared;
+  package metadata remains at `0.84.12` pending the maintainer-owned release
+  bump.
   `canic-control-plane::state_contract` is intentionally unconditional for
   passive host inspection, so the control-plane subnet record and snapshot
   schema are now compiled for minimal and wasm-store feature sets. The subnet
@@ -223,7 +225,9 @@ before this compaction is archived at
   gated by `root-control-plane`. This fixes packaged host/CLI compilation
   without allocating root subnet state in wasm-store or minimal builds. State
   descriptors, memory IDs, persisted encodings, runtime behavior, DTOs,
-  Candid, and JSON shapes are unchanged.
+  Candid, and JSON shapes are unchanged. CI and local version-bump gates now
+  run the minimal, wasm-store-only, and host-consumer compile matrix, and the
+  bump script refuses direct execution without a completed release gate.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,

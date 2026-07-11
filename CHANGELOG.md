@@ -8,13 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Packaged host, CLI, and wasm-store feature builds now keep control-plane
-  subnet schema types available to passive state descriptors without enabling
-  the root-only stable-state implementation.
-
 ## [0.84.x] - 2026-07-10 - Role-Aware State Contracts
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
+
+- `0.84.13` fixes minimal and wasm-store packaged control-plane descriptor
+  builds and makes version bumps contingent on the configured feature and test
+  gates passing.
 
 - `0.84.12` completes canonical state snapshots for control-plane template,
   subnet, and GC allocations and hard-cuts aspirational template snapshot

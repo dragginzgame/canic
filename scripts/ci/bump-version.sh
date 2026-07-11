@@ -3,6 +3,12 @@ set -euo pipefail
 
 BUMP_TYPE=${1:-patch}
 
+if [[ "${CANIC_RELEASE_GATES_PASSED:-}" != "1" ]]; then
+  echo "❌ Refusing to bump before release gates pass." >&2
+  echo "Use make patch, make minor, or make major." >&2
+  exit 1
+fi
+
 if ! cargo set-version --help >/dev/null 2>&1; then
   echo "❌ cargo set-version not available. Install cargo-edit or upgrade Rust." >&2
   exit 1

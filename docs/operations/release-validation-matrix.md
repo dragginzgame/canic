@@ -82,6 +82,7 @@ validation:
 
 ```text
 make fmt-check
+bash scripts/ci/check-control-plane-feature-matrix.sh
 make clippy
 make test
 ```
@@ -97,6 +98,7 @@ The GitHub Actions PR/main matrix currently includes:
 
 ```text
 cargo check --workspace --locked
+bash scripts/ci/check-control-plane-feature-matrix.sh
 bash scripts/ci/run-layering-guards.sh
 bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
@@ -116,6 +118,7 @@ The same CI job also installs and checks required helper tools including
 The tag workflow currently includes:
 
 ```text
+bash scripts/ci/check-control-plane-feature-matrix.sh
 bash scripts/ci/check-release-validation-matrix.sh
 bash scripts/ci/check-upgrade-state-audit.sh
 bash scripts/ci/check-recovery-runbooks.sh
