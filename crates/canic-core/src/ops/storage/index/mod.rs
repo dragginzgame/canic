@@ -1,15 +1,16 @@
 //! Module: ops::storage::index
 //!
-//! Responsibility: validate and map app/subnet index storage records.
+//! Responsibility: validate app/subnet index data before stable replacement.
 //! Does not own: stable index schemas, workflow orchestration, or DTO policy.
-//! Boundary: storage ops between workflow snapshots and stable index records.
+//! Boundary: storage ops between canonical snapshots and stable index records.
 
 pub mod app;
 pub mod mapper;
 pub mod subnet;
 
 use crate::{
-    InternalError, cdk::types::Principal, ids::CanisterRole, ops::storage::StorageOpsError,
+    InternalError, ids::CanisterRole, ops::storage::StorageOpsError,
+    storage::stable::index::IndexEntryRecord,
 };
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
@@ -42,15 +43,15 @@ impl From<IndexOpsError> for InternalError {
 }
 
 pub(super) fn ensure_unique_roles(
-    entries: &[(CanisterRole, Principal)],
+    entries: &[IndexEntryRecord],
     index: &'static str,
 ) -> Result<(), IndexOpsError> {
     let mut seen = BTreeSet::new();
-    for (role, _) in entries {
-        if !seen.insert(role.clone()) {
+    for entry in entries {
+        if !seen.insert(entry.role.clone()) {
             return Err(IndexOpsError::DuplicateRole {
                 index,
-                role: role.clone(),
+                role: entry.role.clone(),
             });
         }
     }
@@ -59,7 +60,7 @@ pub(super) fn ensure_unique_roles(
 }
 
 pub(super) fn ensure_required_roles(
-    entries: &[(CanisterRole, Principal)],
+    entries: &[IndexEntryRecord],
     index: &'static str,
     required: &BTreeSet<CanisterRole>,
 ) -> Result<(), IndexOpsError> {
@@ -69,7 +70,7 @@ pub(super) fn ensure_required_roles(
 
     let mut missing = Vec::new();
     for role in required {
-        if !entries.iter().any(|(entry_role, _)| entry_role == role) {
+        if !entries.iter().any(|entry| &entry.role == role) {
             missing.push(role.to_string());
         }
     }
@@ -85,14 +86,14 @@ pub(super) fn ensure_required_roles(
 }
 
 pub(super) fn ensure_allowed_roles(
-    entries: &[(CanisterRole, Principal)],
+    entries: &[IndexEntryRecord],
     index: &'static str,
     allowed: &BTreeSet<CanisterRole>,
 ) -> Result<(), IndexOpsError> {
     let mut unexpected = Vec::new();
-    for (role, _) in entries {
-        if !allowed.contains(role) {
-            unexpected.push(role.to_string());
+    for entry in entries {
+        if !allowed.contains(&entry.role) {
+            unexpected.push(entry.role.to_string());
         }
     }
 

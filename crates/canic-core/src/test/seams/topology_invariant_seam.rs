@@ -3,7 +3,8 @@
 use crate::{
     config::schema::CanisterKind,
     domain::policy::pure::topology::{
-        RegistryPolicyInput, TopologyPolicy, TopologyPolicyError, TopologyPolicyInput,
+        IndexPolicyInput, RegistryPolicyInput, TopologyPolicy, TopologyPolicyError,
+        TopologyPolicyInput,
     },
     ids::CanisterRole,
     test::{
@@ -31,7 +32,10 @@ fn topology_invariants_live_in_policy() {
         }],
     };
 
-    let mismatched = vec![(CanisterRole::new("beta"), p(30))];
+    let mismatched = vec![IndexPolicyInput {
+        role: CanisterRole::new("beta"),
+        pid: p(30),
+    }];
 
     let err = TopologyPolicy::assert_index_consistent_with_registry(&registry_data, &mismatched)
         .expect_err("policy should detect index divergence");

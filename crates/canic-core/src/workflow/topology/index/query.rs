@@ -11,7 +11,8 @@ use crate::{
         topology::IndexEntryResponse,
     },
     ids::CanisterRole,
-    ops::storage::index::{app::AppIndexOps, mapper::IndexResponseMapper, subnet::SubnetIndexOps},
+    ops::storage::index::{app::AppIndexOps, mapper::IndexEntryMapper, subnet::SubnetIndexOps},
+    storage::stable::index::IndexEntryRecord,
     workflow::view::paginate::paginate_vec,
 };
 
@@ -51,10 +52,7 @@ impl SubnetIndexQuery {
     }
 }
 
-// Paginate index tuples and let ops own the tuple -> DTO mapping.
-fn index_page(
-    entries: Vec<(CanisterRole, Principal)>,
-    page: PageRequest,
-) -> Page<IndexEntryResponse> {
-    IndexResponseMapper::record_page_to_response(paginate_vec(entries, page))
+// Paginate index records and let ops own record -> DTO mapping.
+fn index_page(entries: Vec<IndexEntryRecord>, page: PageRequest) -> Page<IndexEntryResponse> {
+    IndexEntryMapper::record_page_to_response(paginate_vec(entries, page))
 }

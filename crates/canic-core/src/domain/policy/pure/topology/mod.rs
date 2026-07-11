@@ -24,6 +24,15 @@ pub struct RegistryPolicyInput {
 }
 
 ///
+/// IndexPolicyInput
+///
+
+pub struct IndexPolicyInput {
+    pub role: CanisterRole,
+    pub pid: Principal,
+}
+
+///
 /// TopologyPolicyError
 ///
 
@@ -130,23 +139,23 @@ impl TopologyPolicy {
 
     pub fn assert_index_consistent_with_registry(
         registry: &RegistryPolicyInput,
-        entries: &[(CanisterRole, Principal)],
+        entries: &[IndexPolicyInput],
     ) -> Result<(), TopologyPolicyError> {
         let mut seen_roles = BTreeSet::new();
 
-        for (role, pid) in entries {
-            let record = Self::registry_record(registry, *pid)?;
+        for entry in entries {
+            let record = Self::registry_record(registry, entry.pid)?;
 
-            if record.role != *role {
+            if record.role != entry.role {
                 return Err(TopologyPolicyError::IndexRoleMismatch {
-                    pid: *pid,
+                    pid: entry.pid,
                     expected: record.role.clone(),
-                    found: role.clone(),
+                    found: entry.role.clone(),
                 });
             }
 
-            if !seen_roles.insert(role.clone()) {
-                return Err(TopologyPolicyError::DuplicateIndexRole(role.clone()));
+            if !seen_roles.insert(entry.role.clone()) {
+                return Err(TopologyPolicyError::DuplicateIndexRole(entry.role.clone()));
             }
         }
 

@@ -11,7 +11,7 @@ use crate::{
     ops::storage::index::IndexOpsError,
     storage::canister::CanisterRecord,
     storage::stable::{
-        index::{app::AppIndexRecord, subnet::SubnetIndexRecord},
+        index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
         registry::subnet::SubnetRegistryRecord,
     },
 };
@@ -29,7 +29,7 @@ impl RootAppIndexBuilder {
     pub fn build(
         registry: &SubnetRegistryRecord,
         app_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<AppIndexRecord, InternalError> {
+    ) -> Result<AppIndexData, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry
@@ -47,8 +47,11 @@ impl RootAppIndexBuilder {
             }
         }
 
-        Ok(AppIndexRecord {
-            entries: entries.into_iter().collect(),
+        Ok(AppIndexData {
+            entries: entries
+                .into_iter()
+                .map(|(role, pid)| IndexEntryRecord { role, pid })
+                .collect(),
         })
     }
 }
@@ -65,7 +68,7 @@ impl RootSubnetIndexBuilder {
     pub fn build(
         registry: &SubnetRegistryRecord,
         subnet_roles: &BTreeSet<CanisterRole>,
-    ) -> Result<SubnetIndexRecord, InternalError> {
+    ) -> Result<SubnetIndexData, InternalError> {
         let mut entries = BTreeMap::new();
 
         for (pid, entry) in registry
@@ -83,8 +86,11 @@ impl RootSubnetIndexBuilder {
             }
         }
 
-        Ok(SubnetIndexRecord {
-            entries: entries.into_iter().collect(),
+        Ok(SubnetIndexData {
+            entries: entries
+                .into_iter()
+                .map(|(role, pid)| IndexEntryRecord { role, pid })
+                .collect(),
         })
     }
 }
@@ -146,7 +152,10 @@ mod tests {
 
         assert_eq!(
             index.entries,
-            vec![(CanisterRole::from("project_hub"), direct_service)]
+            vec![IndexEntryRecord {
+                role: CanisterRole::from("project_hub"),
+                pid: direct_service,
+            }]
         );
     }
 
@@ -184,7 +193,10 @@ mod tests {
 
         assert_eq!(
             index.entries,
-            vec![(CanisterRole::from("project_hub"), direct_service)]
+            vec![IndexEntryRecord {
+                role: CanisterRole::from("project_hub"),
+                pid: direct_service,
+            }]
         );
     }
 
@@ -207,7 +219,10 @@ mod tests {
 
         assert_eq!(
             index.entries,
-            vec![(CanisterRole::from("project_hub"), direct_service)]
+            vec![IndexEntryRecord {
+                role: CanisterRole::from("project_hub"),
+                pid: direct_service,
+            }]
         );
     }
 
@@ -231,7 +246,10 @@ mod tests {
 
         assert_eq!(
             index.entries,
-            vec![(CanisterRole::from("project_hub"), direct_service)]
+            vec![IndexEntryRecord {
+                role: CanisterRole::from("project_hub"),
+                pid: direct_service,
+            }]
         );
     }
 }
