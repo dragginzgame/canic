@@ -562,36 +562,41 @@ fn icp_refill_domains() -> Vec<StateDomainManifest> {
 }
 
 fn runtime_intent_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::intent::{
+        IntentMetaData, IntentPendingData, IntentPendingEntryRecord, IntentRecord,
+        IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord, IntentTotalsData,
+    };
+
     vec![
         state_domain(
             "intent_meta",
             INTENT_META_ID,
-            "IntentStoreMetaRecord",
-            "IntentMetaData",
+            IntentStoreMetaRecord::STATE_CONTRACT_NAME,
+            IntentMetaData::STATE_CONTRACT_NAME,
             110,
             "intent_meta_restores_schema_version",
         ),
         state_domain(
             "intent_records",
             INTENT_RECORDS_ID,
-            "IntentRecord",
-            "IntentRecordsData",
+            IntentRecord::STATE_CONTRACT_NAME,
+            IntentRecordsData::STATE_CONTRACT_NAME,
             111,
             "intent_records_restore_state_transitions",
         ),
         state_domain(
             "intent_totals",
             INTENT_TOTALS_ID,
-            "IntentResourceTotalsRecord",
-            "IntentTotalsData",
+            IntentResourceTotalsRecord::STATE_CONTRACT_NAME,
+            IntentTotalsData::STATE_CONTRACT_NAME,
             112,
             "intent_totals_restore_resource_accounting",
         ),
         state_domain(
             "intent_pending",
             INTENT_PENDING_ID,
-            "IntentPendingEntryRecord",
-            "IntentPendingData",
+            IntentPendingEntryRecord::STATE_CONTRACT_NAME,
+            IntentPendingData::STATE_CONTRACT_NAME,
             113,
             "intent_pending_entries_restore_ttl_metadata",
         ),
@@ -942,6 +947,52 @@ mod tests {
                 .iter()
                 .find(|declaration| declaration.domain == domain)
                 .expect("financial history state declaration");
+
+            assert_eq!(declaration.record, record);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn intent_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::intent::{
+            IntentMetaData, IntentPendingData, IntentPendingEntryRecord, IntentRecord,
+            IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord, IntentTotalsData,
+        };
+
+        let descriptors = canic_state_descriptors();
+        let runtime_intents = descriptors
+            .iter()
+            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeIntent)
+            .expect("runtime intents descriptor");
+
+        for (domain, record, snapshot) in [
+            (
+                "intent_meta",
+                IntentStoreMetaRecord::STATE_CONTRACT_NAME,
+                IntentMetaData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "intent_records",
+                IntentRecord::STATE_CONTRACT_NAME,
+                IntentRecordsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "intent_totals",
+                IntentResourceTotalsRecord::STATE_CONTRACT_NAME,
+                IntentTotalsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "intent_pending",
+                IntentPendingEntryRecord::STATE_CONTRACT_NAME,
+                IntentPendingData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let declaration = runtime_intents
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("runtime intent state declaration");
 
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
