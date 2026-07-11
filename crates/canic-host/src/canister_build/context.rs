@@ -3,6 +3,7 @@ use std::{env, fs, path::PathBuf};
 use crate::{
     icp_environment_from_env,
     release_set::{icp_root, workspace_root},
+    selected_icp_environment_from_env,
 };
 
 use super::{
@@ -17,7 +18,8 @@ use super::{
 pub struct WorkspaceBuildContext {
     pub profile: String,
     pub requested_profile: String,
-    pub network: String,
+    pub environment: String,
+    pub build_network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
 }
@@ -28,7 +30,8 @@ impl WorkspaceBuildContext {
         let mut lines = vec![
             "Canic build:".to_string(),
             format!("profile: {}", self.profile),
-            format!("network: {}", self.network),
+            format!("environment: {}", self.environment),
+            format!("build network: {}", self.build_network),
             format!("workspace: {}", self.workspace_root.display()),
         ];
 
@@ -65,7 +68,8 @@ pub fn current_workspace_build_context_once(
     fs::create_dir_all(&marker_dir)?;
 
     let requested_profile = env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string());
-    let network = icp_environment_from_env();
+    let environment = selected_icp_environment_from_env();
+    let build_network = icp_environment_from_env();
     let marker_key = icp_ancestor_process_id()
         .or_else(parent_process_id)
         .unwrap_or_else(std::process::id)
@@ -80,7 +84,8 @@ pub fn current_workspace_build_context_once(
     Ok(Some(WorkspaceBuildContext {
         profile: profile.target_dir_name().to_string(),
         requested_profile,
-        network,
+        environment,
+        build_network,
         workspace_root,
         icp_root,
     }))

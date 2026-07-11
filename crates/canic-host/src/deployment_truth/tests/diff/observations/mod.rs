@@ -1,7 +1,8 @@
 use super::super::*;
 use crate::deployment_truth::report::{
-    ARTIFACT_FILE_SHA256_DIFF_CATEGORY, ARTIFACT_MISSING_CODE, OBSERVATION_GAP_CODE,
-    PLAN_ASSUMPTION_CODE, UNSAFE_CONTROL_CLASS_CODE, UNVERIFIED_DEPLOYMENT_ROOT_CODE,
+    ARTIFACT_FILE_SHA256_DIFF_CATEGORY, ARTIFACT_MISSING_CODE, CANISTER_UNOBSERVED_CODE,
+    OBSERVATION_GAP_CODE, PLAN_ASSUMPTION_CODE, SUBNET_REGISTRY_ROLE_MISSING_CODE,
+    UNSAFE_CONTROL_CLASS_CODE, UNVERIFIED_DEPLOYMENT_ROOT_CODE,
 };
 
 #[test]
@@ -118,6 +119,61 @@ fn deployment_diff_warns_on_observation_gaps_without_blocking() {
             .any(|item| item.code == OBSERVATION_GAP_CODE)
     );
     assert_eq!(report.status, SafetyStatusV1::Warning);
+}
+
+#[test]
+fn deployment_diff_blocks_missing_bootstrap_role_after_registry_observation() {
+    let mut plan = sample_plan();
+    plan.expected_canisters.push(ExpectedCanisterV1 {
+        role: "user_hub".to_string(),
+        canister_id: None,
+        control_class: CanisterControlClassV1::DeploymentControlled,
+    });
+    let inventory = sample_matching_inventory();
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert_eq!(diff.resume_safety.status, SafetyStatusV1::Blocked);
+    assert!(diff.hard_failures.iter().any(|finding| {
+        finding.code == SUBNET_REGISTRY_ROLE_MISSING_CODE
+            && finding.subject.as_deref() == Some("user_hub")
+    }));
+}
+
+#[test]
+fn deployment_diff_does_not_claim_registry_corruption_when_registry_is_unobserved() {
+    let mut plan = sample_plan();
+    plan.expected_canisters.push(ExpectedCanisterV1 {
+        role: "user_hub".to_string(),
+        canister_id: None,
+        control_class: CanisterControlClassV1::DeploymentControlled,
+    });
+    let mut inventory = sample_matching_inventory();
+    inventory
+        .unresolved_observations
+        .push(DeploymentObservationGapV1 {
+            key: "live_subnet_registry".to_string(),
+            description: "registry query failed".to_string(),
+        });
+
+    let diff = compare_plan_to_inventory(&plan, &inventory);
+
+    assert!(
+        !diff
+            .hard_failures
+            .iter()
+            .any(|finding| finding.code == SUBNET_REGISTRY_ROLE_MISSING_CODE)
+    );
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == CANISTER_UNOBSERVED_CODE)
+    );
+    assert!(
+        diff.warnings
+            .iter()
+            .any(|finding| finding.code == OBSERVATION_GAP_CODE)
+    );
 }
 
 #[test]

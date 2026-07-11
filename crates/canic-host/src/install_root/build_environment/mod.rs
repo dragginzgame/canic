@@ -1,9 +1,14 @@
-use crate::icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
-use crate::replica_query;
+use crate::{
+    CANIC_ICP_BUILD_ENVIRONMENT_ENV,
+    icp::{self, CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV},
+    icp_config::resolve_icp_build_environment_from_root,
+    replica_query,
+};
 use std::{env, ffi::OsString, path::Path};
 
 pub(super) struct BuildEnvGuard {
     previous_network: Option<OsString>,
+    previous_build_environment: Option<OsString>,
     previous_config_path: Option<OsString>,
     previous_icp_root: Option<OsString>,
     previous_local_network_url: Option<OsString>,
@@ -11,15 +16,22 @@ pub(super) struct BuildEnvGuard {
 }
 
 impl BuildEnvGuard {
-    pub(super) fn apply(network: &str, config_path: &Path, icp_root: &Path) -> Self {
+    pub(super) fn apply(
+        network: &str,
+        config_path: &Path,
+        icp_root: &Path,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let build_environment = resolve_icp_build_environment_from_root(icp_root, network)?;
         let guard = Self {
             previous_network: env::var_os("ICP_ENVIRONMENT"),
+            previous_build_environment: env::var_os(CANIC_ICP_BUILD_ENVIRONMENT_ENV),
             previous_config_path: env::var_os("CANIC_CONFIG_PATH"),
             previous_icp_root: env::var_os("CANIC_ICP_ROOT"),
             previous_local_network_url: env::var_os(CANIC_ICP_LOCAL_NETWORK_URL_ENV),
             previous_local_root_key: env::var_os(CANIC_ICP_LOCAL_ROOT_KEY_ENV),
         };
         set_env("ICP_ENVIRONMENT", network);
+        set_env(CANIC_ICP_BUILD_ENVIRONMENT_ENV, build_environment.as_str());
         set_env("CANIC_CONFIG_PATH", config_path);
         set_env("CANIC_ICP_ROOT", icp_root);
         if let Some(target) = local_replica_icp_target(network, icp_root) {
@@ -29,13 +41,17 @@ impl BuildEnvGuard {
             remove_env(CANIC_ICP_LOCAL_NETWORK_URL_ENV);
             remove_env(CANIC_ICP_LOCAL_ROOT_KEY_ENV);
         }
-        guard
+        Ok(guard)
     }
 }
 
 impl Drop for BuildEnvGuard {
     fn drop(&mut self) {
         restore_env("ICP_ENVIRONMENT", self.previous_network.take());
+        restore_env(
+            CANIC_ICP_BUILD_ENVIRONMENT_ENV,
+            self.previous_build_environment.take(),
+        );
         restore_env("CANIC_CONFIG_PATH", self.previous_config_path.take());
         restore_env("CANIC_ICP_ROOT", self.previous_icp_root.take());
         restore_env(

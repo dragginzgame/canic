@@ -25,6 +25,8 @@ pub(in crate::deployment_truth) const PLANNED_CANISTER_ID_CONFLICT_DIFF_CATEGORY
 const CANISTER_DIFF_CATEGORY: &str = "canister";
 const CANISTER_MISSING_CODE: &str = "canister_missing";
 pub(in crate::deployment_truth) const CANISTER_UNOBSERVED_CODE: &str = "canister_unobserved";
+pub(in crate::deployment_truth) const SUBNET_REGISTRY_ROLE_MISSING_CODE: &str =
+    "subnet_registry_role_missing";
 const CONTROL_CLASS_DIFF_CATEGORY: &str = "control_class";
 pub(in crate::deployment_truth) const UNSAFE_CONTROL_CLASS_CODE: &str = "unsafe_control_class";
 pub(in crate::deployment_truth) const CANISTER_ROLE_AMBIGUOUS_CODE: &str =
@@ -101,6 +103,11 @@ pub(super) fn compare_canisters(
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
+    let existing_deployment = plan.deployment_identity.root_principal.is_some();
+    let registry_observed = !inventory
+        .unresolved_observations
+        .iter()
+        .any(|gap| gap.key == "live_subnet_registry");
     let planned_conflicts =
         compare_planned_canister_conflicts(plan, controller_diff, hard_failures, warnings);
     let mut matched_observed = BTreeSet::new();
@@ -142,7 +149,13 @@ pub(super) fn compare_canisters(
             },
         );
         let Some(observed) = observed else {
-            record_missing_canister(expected, controller_diff, hard_failures, warnings);
+            record_missing_canister(
+                expected,
+                existing_deployment && registry_observed,
+                controller_diff,
+                hard_failures,
+                warnings,
+            );
             continue;
         };
         matched_observed.insert(observed.canister_id.as_str());
@@ -259,11 +272,12 @@ fn planned_canister_evidence_label(planned: &ExpectedCanisterV1) -> String {
 
 fn record_missing_canister(
     expected: &ExpectedCanisterV1,
+    registry_incomplete: bool,
     controller_diff: &mut Vec<DiffItemV1>,
     hard_failures: &mut Vec<SafetyFindingV1>,
     warnings: &mut Vec<SafetyFindingV1>,
 ) {
-    let severity = if expected.canister_id.is_some() {
+    let severity = if expected.canister_id.is_some() || registry_incomplete {
         SafetySeverityV1::HardFailure
     } else {
         SafetySeverityV1::Warning
@@ -276,16 +290,25 @@ fn record_missing_canister(
         severity,
     ));
     let finding = finding(
-        if expected.canister_id.is_some() {
+        if registry_incomplete {
+            SUBNET_REGISTRY_ROLE_MISSING_CODE
+        } else if expected.canister_id.is_some() {
             CANISTER_MISSING_CODE
         } else {
             CANISTER_UNOBSERVED_CODE
         },
-        format!("missing observed canister for role {}", expected.role),
+        if registry_incomplete {
+            format!(
+                "subnet registry is missing required bootstrap role {}",
+                expected.role
+            )
+        } else {
+            format!("missing observed canister for role {}", expected.role)
+        },
         severity,
         Some(expected.role.clone()),
     );
-    if expected.canister_id.is_some() {
+    if expected.canister_id.is_some() || registry_incomplete {
         hard_failures.push(finding);
     } else {
         warnings.push(finding);

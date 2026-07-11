@@ -23,6 +23,11 @@ use canic_host::canister_build::{
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
+    CANIC_ICP_BUILD_ENVIRONMENT_ENV,
+    icp_config::{
+        IcpBuildEnvironment, resolve_current_canic_icp_root,
+        resolve_icp_build_environment_from_root,
+    },
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
     release_set::{
         configured_fleet_name, configured_role_lifecycle, matching_fleet_config_paths,
@@ -240,6 +245,7 @@ fn write_build_provenance_if_requested(
         fleet: options.fleet.clone(),
         role: options.role.clone(),
         network: options.network.clone(),
+        build_network: resolve_build_environment(options)?.as_str().to_string(),
         profile,
         workspace_root: workspace_root.clone(),
         config_path,
@@ -357,6 +363,7 @@ fn normalize_build_path(path: &str) -> Result<PathBuf, BuildCommandError> {
 
 struct BuildEnvGuard {
     previous_network: Option<OsString>,
+    previous_build_environment: Option<OsString>,
     previous_workspace: Option<OsString>,
     previous_icp_root: Option<OsString>,
     previous_config: Option<OsString>,
@@ -366,12 +373,15 @@ impl BuildEnvGuard {
     fn apply(options: &BuildOptions) -> Result<Self, BuildCommandError> {
         let guard = Self {
             previous_network: env::var_os("ICP_ENVIRONMENT"),
+            previous_build_environment: env::var_os(CANIC_ICP_BUILD_ENVIRONMENT_ENV),
             previous_workspace: env::var_os("CANIC_WORKSPACE_ROOT"),
             previous_icp_root: env::var_os("CANIC_ICP_ROOT"),
             previous_config: env::var_os("CANIC_CONFIG_PATH"),
         };
         let config_path = resolve_build_config_path(options)?;
+        let build_environment = resolve_build_environment(options)?;
         set_env("ICP_ENVIRONMENT", &options.network);
+        set_env(CANIC_ICP_BUILD_ENVIRONMENT_ENV, build_environment.as_str());
         set_optional_env("CANIC_WORKSPACE_ROOT", options.workspace.as_deref());
         set_optional_env("CANIC_ICP_ROOT", options.icp_root.as_deref());
         set_env("CANIC_CONFIG_PATH", config_path);
@@ -382,10 +392,29 @@ impl BuildEnvGuard {
 impl Drop for BuildEnvGuard {
     fn drop(&mut self) {
         restore_env("ICP_ENVIRONMENT", self.previous_network.take());
+        restore_env(
+            CANIC_ICP_BUILD_ENVIRONMENT_ENV,
+            self.previous_build_environment.take(),
+        );
         restore_env("CANIC_WORKSPACE_ROOT", self.previous_workspace.take());
         restore_env("CANIC_ICP_ROOT", self.previous_icp_root.take());
         restore_env("CANIC_CONFIG_PATH", self.previous_config.take());
     }
+}
+
+fn resolve_build_environment(
+    options: &BuildOptions,
+) -> Result<IcpBuildEnvironment, BuildCommandError> {
+    if matches!(options.network.as_str(), "local" | "ic") {
+        return resolve_icp_build_environment_from_root(Path::new("."), &options.network)
+            .map_err(|err| BuildCommandError::Build(Box::new(err)));
+    }
+    let icp_root = options.icp_root.as_ref().map_or_else(
+        || resolve_current_canic_icp_root().map_err(|err| BuildCommandError::Build(Box::new(err))),
+        |root| normalize_build_path(root),
+    )?;
+    resolve_icp_build_environment_from_root(&icp_root, &options.network)
+        .map_err(|err| BuildCommandError::Build(Box::new(err)))
 }
 
 fn set_optional_env(key: &str, value: Option<&str>) {
@@ -451,6 +480,40 @@ mod tests {
         .expect("parse build options");
 
         assert_eq!(options.network, "localnet");
+    }
+
+    #[test]
+    fn build_resolves_named_ic_environment_from_icp_yaml() {
+        let root = temp_dir("canic-cli-build-environment");
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(
+            root.join("icp.yaml"),
+            "environments:\n  - name: staging\n    network: ic\n",
+        )
+        .expect("write icp yaml");
+        let mut options = build_options(&root, "demo", "app");
+        options.network = "staging".to_string();
+        options.icp_root = Some(root.display().to_string());
+
+        let environment = resolve_build_environment(&options).expect("resolve build environment");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert_eq!(environment, IcpBuildEnvironment::Ic);
+    }
+
+    #[test]
+    fn build_rejects_undeclared_named_environment() {
+        let root = temp_dir("canic-cli-build-environment-missing");
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(root.join("icp.yaml"), "environments: []\n").expect("write icp yaml");
+        let mut options = build_options(&root, "demo", "app");
+        options.network = "staging".to_string();
+        options.icp_root = Some(root.display().to_string());
+
+        let err = resolve_build_environment(&options).expect_err("missing environment should fail");
+
+        fs::remove_dir_all(root).expect("remove temp root");
+        assert!(err.to_string().contains("is not declared"));
     }
 
     #[test]

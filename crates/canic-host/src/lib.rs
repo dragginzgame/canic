@@ -2,6 +2,9 @@
 
 use std::process::Command;
 
+/// Internal build-class override used while compiling Canic Wasm artifacts.
+pub const CANIC_ICP_BUILD_ENVIRONMENT_ENV: &str = "CANIC_ICP_BUILD_ENVIRONMENT";
+
 pub mod adoption;
 mod artifact_io;
 mod bootstrap_store;
@@ -43,11 +46,20 @@ pub(crate) fn cargo_command() -> Command {
     if let Some(toolchain) = std::env::var_os("RUSTUP_TOOLCHAIN") {
         command.env("RUSTUP_TOOLCHAIN", toolchain);
     }
+    if let Some(environment) = std::env::var_os(CANIC_ICP_BUILD_ENVIRONMENT_ENV) {
+        command.env("ICP_ENVIRONMENT", environment);
+    }
 
     command
 }
 
 pub(crate) fn icp_environment_from_env() -> String {
+    std::env::var(CANIC_ICP_BUILD_ENVIRONMENT_ENV)
+        .or_else(|_| std::env::var("ICP_ENVIRONMENT"))
+        .unwrap_or_else(|_| "local".to_string())
+}
+
+pub(crate) fn selected_icp_environment_from_env() -> String {
     std::env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string())
 }
 

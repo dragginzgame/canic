@@ -1,3 +1,4 @@
+use super::build_environment::BuildEnvGuard;
 use super::commands::{
     add_create_root_target, add_icp_environment_target, icp_canister_command_in_network,
     is_missing_canister_id_error, parse_canister_id_json, parse_created_canister_id,
@@ -47,7 +48,6 @@ use super::{
     verify_registered_deployment_root, write_artifact_promotion_execution_receipt_for_install,
     write_install_state_with_deployment_truth_receipt,
 };
-use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
     ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
     CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
@@ -64,6 +64,7 @@ use crate::deployment_truth::{
 use crate::icp::{CANIC_ICP_LOCAL_NETWORK_URL_ENV, CANIC_ICP_LOCAL_ROOT_KEY_ENV};
 use crate::release_set::{ReleaseSetEntry, RootReleaseSetManifest, configured_install_targets};
 use crate::test_support::temp_dir;
+use crate::{CANIC_ICP_BUILD_ENVIRONMENT_ENV, canister_build::CanisterBuildProfile};
 use serde_json::json;
 use std::{
     env, fs,
@@ -79,6 +80,41 @@ mod readiness_parse;
 mod state_root_verification;
 
 static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+#[test]
+fn named_ic_environment_is_scoped_to_ic_for_cargo_builds() {
+    with_guarded_env(|| {
+        let root = temp_dir("canic-install-build-environment");
+        fs::create_dir_all(&root).expect("create root");
+        fs::write(
+            root.join("icp.yaml"),
+            "environments:\n  - name: staging\n    network: ic\n",
+        )
+        .expect("write icp yaml");
+        let previous_network = env::var_os("ICP_ENVIRONMENT");
+        let previous_build_environment = env::var_os(CANIC_ICP_BUILD_ENVIRONMENT_ENV);
+
+        let guard = BuildEnvGuard::apply("staging", &root.join("canic.toml"), &root)
+            .expect("apply build environment");
+
+        assert_eq!(env::var("ICP_ENVIRONMENT").as_deref(), Ok("staging"));
+        assert_eq!(
+            env::var(CANIC_ICP_BUILD_ENVIRONMENT_ENV).as_deref(),
+            Ok("ic")
+        );
+        assert!(crate::cargo_command().get_envs().any(|(key, value)| {
+            key == "ICP_ENVIRONMENT" && value.is_some_and(|value| value == "ic")
+        }));
+
+        drop(guard);
+        assert_eq!(env::var_os("ICP_ENVIRONMENT"), previous_network);
+        assert_eq!(
+            env::var_os(CANIC_ICP_BUILD_ENVIRONMENT_ENV),
+            previous_build_environment
+        );
+        fs::remove_dir_all(root).expect("remove temp root");
+    });
+}
 
 fn source_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     let start_index = source.find(start).expect("source section start exists");

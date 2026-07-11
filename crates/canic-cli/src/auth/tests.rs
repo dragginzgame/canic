@@ -99,7 +99,7 @@ fn renewal_status_queries_root_status_endpoint() {
     assert_eq!(result.kind, AuthRenewalReportKind::Status);
     assert_eq!(result.schema_version, AUTH_RENEWAL_STATUS_SCHEMA_VERSION);
     assert_eq!(result.issuer_pid, issuer);
-    assert_eq!(result.status, AuthRenewalStatusCode::ActiveAttempt);
+    assert_eq!(result.status, AuthRenewalStatusCode::IssuerUnregistered);
     assert_eq!(result.renewal.template.enabled, Some(true));
     assert_eq!(
         result.issuer_observation.status,
@@ -107,7 +107,7 @@ fn renewal_status_queries_root_status_endpoint() {
     );
     assert_eq!(
         result.issuer_observation.reason.as_deref(),
-        Some("issuer_not_in_local_registry")
+        Some(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON)
     );
     assert_eq!(
         result.renewal.state.last_outcome.as_deref(),
@@ -120,11 +120,23 @@ fn renewal_status_queries_root_status_endpoint() {
     let json = serde_json::to_value(&result).expect("serialize auth renewal result");
     assert_eq!(json["kind"], "auth_renewal_status");
     assert_eq!(json["target"]["candid_source"], "installed_deployment");
-    assert_eq!(json["status"], "active_attempt");
+    assert_eq!(json["status"], "issuer_unregistered");
     assert_eq!(json["issuer_observation"]["status"], "unavailable");
     assert_eq!(
         runtime.called_methods(),
         vec![CANIC_ROOT_ISSUER_RENEWAL_STATUS]
+    );
+    let medic = auth_renewal_medic_summary_from_result(&result);
+    assert_eq!(medic.status, AuthRenewalMedicStatus::Warning);
+    assert!(
+        medic
+            .next
+            .contains("reinstalling the affected dependency closure")
+    );
+    assert!(
+        medic
+            .next
+            .contains("do not provision delegation proof state manually")
     );
 }
 

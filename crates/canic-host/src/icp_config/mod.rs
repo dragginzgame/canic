@@ -16,6 +16,28 @@ const ICP_CONFIG_FILE: &str = "icp.yaml";
 pub const DEFAULT_LOCAL_GATEWAY_PORT: u16 = 8000;
 
 ///
+/// IcpBuildEnvironment
+///
+/// Build-time network class baked into Canic Wasm artifacts.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IcpBuildEnvironment {
+    Ic,
+    Local,
+}
+
+impl IcpBuildEnvironment {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ic => "ic",
+            Self::Local => "local",
+        }
+    }
+}
+
+///
 /// IcpConfigError
 ///
 
@@ -117,6 +139,42 @@ pub(crate) fn configured_local_gateway_port() -> Result<u16, IcpConfigError> {
 pub fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpConfigError> {
     let source = fs::read_to_string(root.join(ICP_CONFIG_FILE))?;
     Ok(local_gateway_port_from_yaml(&source))
+}
+
+/// Resolve an ICP environment name to the build-time network class used by Canic.
+///
+/// The implicit `local` and `ic` environments resolve without project config.
+/// Named environments must exist in `icp.yaml`; their declared network decides
+/// whether Cargo builds a local/test artifact or an IC mainnet artifact.
+pub fn resolve_icp_build_environment_from_root(
+    root: &Path,
+    environment: &str,
+) -> Result<IcpBuildEnvironment, IcpConfigError> {
+    let environment = environment.trim();
+    if environment.is_empty() {
+        return Err(IcpConfigError::Config(
+            "ICP environment name must not be empty".to_string(),
+        ));
+    }
+    match environment {
+        "local" => return Ok(IcpBuildEnvironment::Local),
+        "ic" => return Ok(IcpBuildEnvironment::Ic),
+        _ => {}
+    }
+
+    let path = root.join(ICP_CONFIG_FILE);
+    let source = fs::read_to_string(&path).map_err(|err| {
+        if err.kind() == std::io::ErrorKind::NotFound {
+            IcpConfigError::Config(format!(
+                "ICP environment '{environment}' cannot be resolved because {} is missing",
+                path.display()
+            ))
+        } else {
+            IcpConfigError::Io(err)
+        }
+    })?;
+    resolve_icp_build_environment_from_yaml(&source, environment)
+        .map_err(|message| IcpConfigError::Config(format!("{}: {message}", path.display())))
 }
 
 /// Inspect whether `icp.yaml` contains the entries implied by Canic fleet configs.
@@ -301,6 +359,121 @@ fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
         })
         .map_or(lines.len(), |(index, _)| index);
     Some((start, end))
+}
+
+fn resolve_icp_build_environment_from_yaml(
+    source: &str,
+    environment: &str,
+) -> Result<IcpBuildEnvironment, String> {
+    let lines = source.lines().collect::<Vec<_>>();
+    let (_, environment_start, environment_end) =
+        named_item_block(&lines, "environments:", environment)?.ok_or_else(|| {
+            format!(
+                "ICP environment '{environment}' is not declared; add it under environments or use the implicit local/ic environment"
+            )
+        })?;
+    let network = item_scalar_field(&lines, environment_start, environment_end, "network")?
+        .ok_or_else(|| format!("ICP environment '{environment}' has no network"))?;
+
+    match network.as_str() {
+        "ic" => Ok(IcpBuildEnvironment::Ic),
+        "local" => Ok(IcpBuildEnvironment::Local),
+        _ => {
+            let (_, network_start, network_end) = named_item_block(&lines, "networks:", &network)?
+                .ok_or_else(|| {
+                    format!(
+                        "ICP environment '{environment}' references undeclared network '{network}'"
+                    )
+                })?;
+            let mode = item_scalar_field(&lines, network_start, network_end, "mode")?
+                .ok_or_else(|| format!("ICP network '{network}' has no mode"))?;
+            match mode.as_str() {
+                // ICP CLI reserves the implicit `ic` network for mainnet.
+                // Declared managed and connected networks are non-mainnet build classes.
+                "connected" | "managed" => Ok(IcpBuildEnvironment::Local),
+                _ => Err(format!(
+                    "ICP network '{network}' has unsupported mode '{mode}'"
+                )),
+            }
+        }
+    }
+}
+
+fn named_item_block(
+    lines: &[&str],
+    section: &str,
+    name: &str,
+) -> Result<Option<(String, usize, usize)>, String> {
+    let Some((section_start, section_end)) = top_level_section(lines, section) else {
+        return Ok(None);
+    };
+    let starts = lines[section_start + 1..section_end]
+        .iter()
+        .enumerate()
+        .filter_map(|(offset, line)| {
+            if line_indent(line) != 2 {
+                return None;
+            }
+            line.trim()
+                .strip_prefix("- name:")
+                .map(trim_yaml_scalar)
+                .filter(|item_name| !item_name.is_empty())
+                .map(|item_name| (item_name.to_string(), section_start + 1 + offset))
+        })
+        .collect::<Vec<_>>();
+    let matches = starts
+        .iter()
+        .enumerate()
+        .filter(|(_, (item_name, _))| item_name == name)
+        .collect::<Vec<_>>();
+    let [(match_index, (item_name, start))] = matches.as_slice() else {
+        return if matches.is_empty() {
+            Ok(None)
+        } else {
+            Err(format!("duplicate '{name}' entries under {section}"))
+        };
+    };
+    let end = starts
+        .get(match_index + 1)
+        .map_or(section_end, |(_, next_start)| *next_start);
+    Ok(Some((item_name.clone(), *start, end)))
+}
+
+fn item_scalar_field(
+    lines: &[&str],
+    start: usize,
+    end: usize,
+    field: &str,
+) -> Result<Option<String>, String> {
+    let prefix = format!("{field}:");
+    let values = lines[start + 1..end]
+        .iter()
+        .filter_map(|line| {
+            if line_indent(line) != 4 {
+                return None;
+            }
+            line.trim()
+                .strip_prefix(&prefix)
+                .map(trim_yaml_scalar)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        })
+        .collect::<Vec<_>>();
+    match values.as_slice() {
+        [] => Ok(None),
+        [value] => Ok(Some(value.clone())),
+        _ => Err(format!(
+            "duplicate '{field}' fields in '{}'",
+            section_name(lines, start)
+        )),
+    }
+}
+
+fn section_name<'a>(lines: &'a [&'a str], start: usize) -> &'a str {
+    lines[start]
+        .trim()
+        .strip_prefix("- name:")
+        .map_or("item", trim_yaml_scalar)
 }
 
 fn local_gateway_port_from_yaml(source: &str) -> u16 {

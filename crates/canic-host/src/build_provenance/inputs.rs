@@ -1,7 +1,9 @@
 use std::path::Path;
 
 use crate::{
-    evidence_envelope::{InputFingerprintV1, PayloadSchemaRefV1, file_input_fingerprint},
+    evidence_envelope::{
+        InputFingerprintV1, InputPathDisplayV1, PayloadSchemaRefV1, file_input_fingerprint,
+    },
     role_contract::{declared_role_manifest_path, finding_detail},
 };
 
@@ -33,6 +35,19 @@ pub(super) fn build_input_fingerprints(
             None,
         )?);
     }
+    inputs.push(InputFingerprintV1 {
+        kind: "build_environment".to_string(),
+        path: None,
+        path_display: InputPathDisplayV1::Omitted,
+        sha256: None,
+        size_bytes: None,
+        modified_unix_secs: None,
+        schema: Some(PayloadSchemaRefV1::internal("canic.build_environment", "1")),
+        note: Some(format!(
+            "environment={};build_network={}",
+            request.network, request.build_network
+        )),
+    });
     inputs.extend(cargo_config_fingerprints(&request.workspace_root)?);
     Ok(inputs)
 }

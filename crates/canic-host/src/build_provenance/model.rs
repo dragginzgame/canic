@@ -147,6 +147,7 @@ pub struct BuildProvenanceRequest {
     pub fleet: String,
     pub role: String,
     pub network: String,
+    pub build_network: String,
     pub profile: CanisterBuildProfile,
     pub workspace_root: PathBuf,
     pub config_path: PathBuf,

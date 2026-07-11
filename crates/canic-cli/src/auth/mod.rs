@@ -58,6 +58,7 @@ const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
 const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 2;
+const ISSUER_NOT_IN_SUBNET_REGISTRY_REASON: &str = "issuer_not_in_subnet_registry";
 
 const HELP_AFTER: &str = "\
 Examples:
@@ -472,6 +473,7 @@ enum AuthRenewalStatusCode {
     Configured,
     Disabled,
     DriftDetected,
+    IssuerUnregistered,
     Missing,
     Unavailable,
 }
@@ -483,6 +485,7 @@ impl AuthRenewalStatusCode {
             Self::Configured => "configured",
             Self::Disabled => "disabled",
             Self::DriftDetected => "drift_detected",
+            Self::IssuerUnregistered => "issuer_unregistered",
             Self::Missing => "missing",
             Self::Unavailable => "unavailable",
         }
@@ -829,7 +832,7 @@ fn issuer_observation_with_runtime(
         AuthRenewalMethodMode::Query,
     ) {
         Ok(Some(target)) => target,
-        Ok(None) => return unavailable_issuer_observation("issuer_not_in_local_registry"),
+        Ok(None) => return unavailable_issuer_observation(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON),
         Err(_) => return unavailable_issuer_observation("issuer_status_metadata_unavailable"),
     };
     let Ok(output) = runtime.query_issuer_output(
@@ -904,7 +907,9 @@ fn renewal_status_code(
     status: &AuthRenewalStatusSummary,
     issuer_observation: &AuthIssuerObservation,
 ) -> AuthRenewalStatusCode {
-    if issuer_observation.drift_detected {
+    if issuer_observation.reason.as_deref() == Some(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON) {
+        AuthRenewalStatusCode::IssuerUnregistered
+    } else if issuer_observation.drift_detected {
         AuthRenewalStatusCode::DriftDetected
     } else if status.active_attempt.present {
         AuthRenewalStatusCode::ActiveAttempt
@@ -941,7 +946,12 @@ fn auth_renewal_medic_summary_from_result(
         issuer_cert_hash,
         observation.drift_detected
     );
-    let next = if observation.drift_detected {
+    let next = if result.status == AuthRenewalStatusCode::IssuerUnregistered {
+        format!(
+            "restore the registered topology for issuer {} by reinstalling the affected dependency closure; do not provision delegation proof state manually",
+            result.issuer_pid
+        )
+    } else if observation.drift_detected {
         format!(
             "run canic auth renewal status {} --issuer {}; if drift persists, wait for root chain-key renewal or retry an issuer login/update so lazy repair can run",
             result.deployment, result.issuer_pid

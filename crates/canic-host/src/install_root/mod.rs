@@ -132,7 +132,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;
-    let _install_env = BuildEnvGuard::apply(&options.network, &config_path, &icp_root);
+    let _install_env = BuildEnvGuard::apply(&options.network, &config_path, &icp_root)?;
     let (fleet_name, deployment_name) = resolve_install_identity(&options, &config_path)?;
     let total_started_at = Instant::now();
     let mut timings = CurrentInstallTimingSummary::default();
