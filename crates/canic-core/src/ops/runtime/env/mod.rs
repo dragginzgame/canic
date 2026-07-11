@@ -15,7 +15,7 @@ use crate::{
     memory::runtime::is_memory_bootstrap_ready,
     ops::runtime::env::mapper::EnvRecordMapper,
     ops::{prelude::*, runtime::RuntimeOpsError},
-    storage::stable::env::{Env, EnvRecord},
+    storage::stable::env::{Env, EnvData, EnvRecord},
 };
 use thiserror::Error as ThisError;
 
@@ -173,25 +173,25 @@ impl EnvOps {
 
     /// Export the current environment metadata.
     #[must_use]
-    pub fn snapshot() -> EnvRecord {
+    pub fn snapshot() -> EnvData {
         Env::export()
     }
 
     /// Export the current environment metadata as a DTO.
     #[must_use]
     pub fn snapshot_response() -> EnvSnapshotResponse {
-        EnvRecordMapper::record_to_view(&Env::export())
+        EnvRecordMapper::record_to_view(&Env::export().record)
     }
 
     /// Return any missing required fields for a complete environment snapshot.
     #[must_use]
     pub fn missing_required_fields() -> Vec<&'static str> {
         let data = Env::export();
-        required_fields_missing(&data)
+        required_fields_missing(&data.record)
     }
 
-    pub fn import(data: EnvRecord) -> Result<(), InternalError> {
-        let missing = required_fields_missing(&data);
+    pub fn import(data: EnvData) -> Result<(), InternalError> {
+        let missing = required_fields_missing(&data.record);
         if !missing.is_empty() {
             return Err(EnvOpsError::MissingFields(missing.join(", ")).into());
         }
@@ -199,6 +199,7 @@ impl EnvOps {
         // `root_pid` is write-once: first initialization may set it, but any
         // subsequent import must preserve the same root authority.
         let incoming_root_pid = data
+            .record
             .root_pid
             .ok_or_else(|| EnvOpsError::MissingFields("root_pid".to_string()))?;
         ensure_root_pid_immutable(Env::get_root_pid(), incoming_root_pid)?;
@@ -210,7 +211,7 @@ impl EnvOps {
 
     pub fn import_validated(validated: ValidatedEnv) -> Result<(), InternalError> {
         let record = EnvRecordMapper::validated_to_record(validated);
-        Self::import(record)
+        Self::import(EnvData { record })
     }
 
     // ---------------------------------------------------------------------
@@ -344,7 +345,7 @@ mod tests {
     /// EnvRestore
     ///
 
-    struct EnvRestore(EnvRecord);
+    struct EnvRestore(EnvData);
 
     impl Drop for EnvRestore {
         fn drop(&mut self) {
@@ -352,14 +353,16 @@ mod tests {
         }
     }
 
-    fn env_record(root_pid: Principal) -> EnvRecord {
-        EnvRecord {
-            prime_root_pid: Some(root_pid),
-            subnet_role: Some(SubnetRole::PRIME),
-            subnet_pid: Some(root_pid),
-            root_pid: Some(root_pid),
-            canister_role: Some(CanisterRole::ROOT),
-            parent_pid: Some(root_pid),
+    fn env_data(root_pid: Principal) -> EnvData {
+        EnvData {
+            record: EnvRecord {
+                prime_root_pid: Some(root_pid),
+                subnet_role: Some(SubnetRole::PRIME),
+                subnet_pid: Some(root_pid),
+                root_pid: Some(root_pid),
+                canister_role: Some(CanisterRole::ROOT),
+                parent_pid: Some(root_pid),
+            },
         }
     }
 
@@ -394,13 +397,13 @@ mod tests {
         let _restore = EnvRestore(original);
 
         let initial_root = seams::p(11);
-        EnvOps::import(env_record(initial_root)).expect("initial import should succeed");
+        EnvOps::import(env_data(initial_root)).expect("initial import should succeed");
 
         let changed_root = seams::p(12);
-        let result = EnvOps::import(env_record(changed_root));
+        let result = EnvOps::import(env_data(changed_root));
         assert!(result.is_err(), "changing root pid must fail");
 
         let snapshot = EnvOps::snapshot();
-        assert_eq!(snapshot.root_pid, Some(initial_root));
+        assert_eq!(snapshot.record.root_pid, Some(initial_root));
     }
 }

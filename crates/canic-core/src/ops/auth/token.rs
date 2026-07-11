@@ -810,7 +810,7 @@ mod tests {
         dto::error::ErrorCode,
         ids::SubnetRole,
         ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
-        storage::stable::env::{Env, EnvRecord},
+        storage::stable::env::{Env, EnvData, EnvRecord},
         test::config::ConfigTestBuilder,
     };
     use k256::ecdsa::{
@@ -1240,13 +1240,15 @@ mod tests {
         Config::reset_for_tests();
         Config::init_from_model_for_tests(cfg).expect("test config should install");
 
-        Env::import(EnvRecord {
-            prime_root_pid: Some(root_pid()),
-            subnet_role: Some(SubnetRole::PRIME),
-            subnet_pid: Some(p(9)),
-            root_pid: Some(root_pid()),
-            canister_role: Some(CanisterRole::new("project_instance")),
-            parent_pid: Some(root_pid()),
+        Env::import(EnvData {
+            record: EnvRecord {
+                prime_root_pid: Some(root_pid()),
+                subnet_role: Some(SubnetRole::PRIME),
+                subnet_pid: Some(p(9)),
+                root_pid: Some(root_pid()),
+                canister_role: Some(CanisterRole::new("project_instance")),
+                parent_pid: Some(root_pid()),
+            },
         });
     }
 }

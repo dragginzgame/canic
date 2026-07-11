@@ -65,6 +65,7 @@ pub(super) async fn is_child(caller: Principal) -> Result<(), AccessError> {
 pub(super) async fn is_parent(caller: Principal) -> Result<(), AccessError> {
     let snapshot = EnvOps::snapshot();
     let parent_pid = snapshot
+        .record
         .parent_pid
         .ok_or_else(|| dependency_unavailable("parent pid unavailable"))?;
 

@@ -32,9 +32,9 @@ use crate::{
         },
     },
     replay_policy::CostClass,
-    storage::stable::env::{Env, EnvRecord},
+    storage::stable::env::{Env, EnvData, EnvRecord},
     storage::stable::replay::ReplayReceiptRecord,
-    storage::stable::state::app::{AppMode, AppStateRecord},
+    storage::stable::state::app::{AppMode, AppStateData, AppStateRecord},
     test::config::ConfigTestBuilder,
 };
 use candid::encode_one;
@@ -90,7 +90,7 @@ fn seed_root_replay_receipt(
 /// EnvRestore
 ///
 
-struct EnvRestore(EnvRecord);
+struct EnvRestore(EnvData);
 
 impl Drop for EnvRestore {
     fn drop(&mut self) {
@@ -100,10 +100,12 @@ impl Drop for EnvRestore {
 
 fn configure_root_env(root_pid: Principal) -> EnvRestore {
     let original = Env::export();
-    Env::import(EnvRecord {
-        root_pid: Some(root_pid),
-        subnet_role: Some(crate::ids::SubnetRole::PRIME),
-        ..EnvRecord::default()
+    Env::import(EnvData {
+        record: EnvRecord {
+            root_pid: Some(root_pid),
+            subnet_role: Some(crate::ids::SubnetRole::PRIME),
+            ..EnvRecord::default()
+        },
     });
     EnvRestore(original)
 }
@@ -572,9 +574,11 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
     SubnetRegistryOps::register_unchecked(child, &CanisterRole::new("test"), self_pid, vec![], 2)
         .expect("register child");
 
-    AppStateOps::import(AppStateRecord {
-        mode: AppMode::Enabled,
-        cycles_funding_enabled: false,
+    AppStateOps::import(AppStateData {
+        record: AppStateRecord {
+            mode: AppMode::Enabled,
+            cycles_funding_enabled: false,
+        },
     });
 
     let ctx = RootContext {
@@ -623,9 +627,11 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
         Some(&33)
     );
 
-    AppStateOps::import(AppStateRecord {
-        mode: AppMode::Enabled,
-        cycles_funding_enabled: true,
+    AppStateOps::import(AppStateData {
+        record: AppStateRecord {
+            mode: AppMode::Enabled,
+            cycles_funding_enabled: true,
+        },
     });
 }
 
@@ -653,9 +659,11 @@ fn authorize_request_cycles_uses_configured_child_funding_policy() {
     SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
         .expect("register child");
 
-    AppStateOps::import(AppStateRecord {
-        mode: AppMode::Enabled,
-        cycles_funding_enabled: true,
+    AppStateOps::import(AppStateData {
+        record: AppStateRecord {
+            mode: AppMode::Enabled,
+            cycles_funding_enabled: true,
+        },
     });
 
     let ctx = RootContext {

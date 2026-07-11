@@ -46,6 +46,25 @@ pub struct EnvRecord {
 
 impl_storable_bounded!(EnvRecord, 256, true);
 
+impl EnvRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "EnvRecord";
+}
+
+///
+/// EnvData
+///
+/// Canonical environment import/export snapshot.
+///
+
+#[derive(Clone, Debug, Default)]
+pub struct EnvData {
+    pub record: EnvRecord,
+}
+
+impl EnvData {
+    pub const STATE_CONTRACT_NAME: &'static str = "EnvData";
+}
+
 ///
 /// Env
 ///
@@ -110,15 +129,17 @@ impl Env {
 
     // ---- Import / Export ----
 
-    /// Import a complete EnvRecord, replacing any existing state.
-    pub(crate) fn import(data: EnvRecord) {
+    /// Import a complete environment snapshot, replacing any existing state.
+    pub(crate) fn import(data: EnvData) {
         ENV.with_borrow_mut(|cell| {
-            cell.set(data);
+            cell.set(data.record);
         });
     }
 
     #[must_use]
-    pub(crate) fn export() -> EnvRecord {
-        ENV.with_borrow(|cell| cell.get().clone())
+    pub(crate) fn export() -> EnvData {
+        EnvData {
+            record: ENV.with_borrow(|cell| cell.get().clone()),
+        }
     }
 }

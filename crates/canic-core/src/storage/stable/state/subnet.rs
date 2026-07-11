@@ -35,6 +35,25 @@ pub struct SubnetStateRecord {
 
 impl_storable_bounded!(SubnetStateRecord, 1024, true);
 
+impl SubnetStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "SubnetStateRecord";
+}
+
+///
+/// SubnetStateData
+///
+/// Canonical subnet-state import/export snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SubnetStateData {
+    pub record: SubnetStateRecord,
+}
+
+impl SubnetStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "SubnetStateData";
+}
+
 ///
 /// SubnetState
 ///
@@ -42,13 +61,15 @@ impl_storable_bounded!(SubnetStateRecord, 1024, true);
 pub struct SubnetState;
 
 impl SubnetState {
-    pub(crate) fn import(data: SubnetStateRecord) {
-        SUBNET_STATE.with_borrow_mut(|cell| cell.set(data));
+    pub(crate) fn import(data: SubnetStateData) {
+        SUBNET_STATE.with_borrow_mut(|cell| cell.set(data.record));
     }
 
     #[must_use]
-    pub(crate) fn export() -> SubnetStateRecord {
-        SUBNET_STATE.with_borrow(|cell| cell.get().clone())
+    pub(crate) fn export() -> SubnetStateData {
+        SubnetStateData {
+            record: SUBNET_STATE.with_borrow(|cell| cell.get().clone()),
+        }
     }
 }
 
@@ -66,7 +87,9 @@ mod tests {
             auth: SubnetAuthStateRecord {},
         };
 
-        SubnetState::import(record.clone());
-        assert_eq!(SubnetState::export(), record);
+        SubnetState::import(SubnetStateData {
+            record: record.clone(),
+        });
+        assert_eq!(SubnetState::export(), SubnetStateData { record });
     }
 }

@@ -7,7 +7,7 @@
 use crate::{
     dto::state::{SubnetStateInput, SubnetStateResponse},
     ops::storage::state::mapper::SubnetStateMapper,
-    storage::stable::state::subnet::{SubnetState, SubnetStateRecord},
+    storage::stable::state::subnet::{SubnetState, SubnetStateData, SubnetStateRecord},
 };
 
 ///
@@ -22,18 +22,20 @@ impl SubnetStateOps {
     /// Export the current subnet state as a DTO snapshot.
     #[must_use]
     pub fn snapshot_input() -> SubnetStateInput {
-        SubnetStateMapper::record_to_input(SubnetState::export())
+        SubnetStateMapper::record_to_input(SubnetState::export().record)
     }
 
     /// Export the current subnet state as a response snapshot.
     #[must_use]
     pub fn snapshot_response() -> SubnetStateResponse {
-        SubnetStateMapper::record_to_response(SubnetState::export())
+        SubnetStateMapper::record_to_response(SubnetState::export().record)
     }
 
     // Import sanitized subnet state from an operational snapshot.
     fn import_record(data: SubnetStateRecord) {
-        SubnetState::import(sanitized_subnet_state(data));
+        SubnetState::import(SubnetStateData {
+            record: sanitized_subnet_state(data),
+        });
     }
 
     /// Import subnet state from a DTO snapshot.
