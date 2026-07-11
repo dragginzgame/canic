@@ -70,6 +70,7 @@ pub struct CyclesFundingLedgerRecord {
 }
 
 impl CyclesFundingLedgerRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "CyclesFundingLedgerRecord";
     pub const STORABLE_MAX_SIZE: u32 = 64;
 }
 
@@ -78,6 +79,33 @@ impl_storable_bounded!(
     CyclesFundingLedgerRecord::STORABLE_MAX_SIZE,
     false
 );
+
+///
+/// CyclesFundingLedgerEntryRecord
+///
+/// One logical funding-ledger snapshot row preserving its child principal key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CyclesFundingLedgerEntryRecord {
+    pub child: Principal,
+    pub record: CyclesFundingLedgerRecord,
+}
+
+///
+/// CyclesFundingLedgerData
+///
+/// Canonical cycles-funding-ledger allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CyclesFundingLedgerData {
+    pub entries: Vec<CyclesFundingLedgerEntryRecord>,
+}
+
+impl CyclesFundingLedgerData {
+    pub const STATE_CONTRACT_NAME: &'static str = "CyclesFundingLedgerData";
+}
 
 ///
 /// CyclesFundingLedger
@@ -124,6 +152,33 @@ impl CyclesFundingLedger {
     #[cfg(test)]
     pub(crate) fn clear_for_tests() {
         CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| ledger.map.clear_new());
+    }
+
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn export() -> CyclesFundingLedgerData {
+        CyclesFundingLedgerData {
+            entries: CYCLES_FUNDING_LEDGER.with_borrow(|ledger| {
+                ledger
+                    .map
+                    .iter()
+                    .map(|entry| CyclesFundingLedgerEntryRecord {
+                        child: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn import(data: CyclesFundingLedgerData) {
+        CYCLES_FUNDING_LEDGER.with_borrow_mut(|ledger| {
+            ledger.map.clear_new();
+            for entry in data.entries {
+                ledger.map.insert(entry.child, entry.record);
+            }
+        });
     }
 }
 
@@ -214,6 +269,7 @@ pub struct CycleTopupEventRecord {
 }
 
 impl CycleTopupEventRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "CycleTopupEventRecord";
     pub const STORABLE_MAX_SIZE: u32 = 512;
 }
 
@@ -222,6 +278,33 @@ impl_storable_bounded!(
     CycleTopupEventRecord::STORABLE_MAX_SIZE,
     false
 );
+
+///
+/// CycleTopupEventEntryRecord
+///
+/// One logical cycle-top-up snapshot row preserving its stable event key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CycleTopupEventEntryRecord {
+    pub key: CycleTopupEventKey,
+    pub record: CycleTopupEventRecord,
+}
+
+///
+/// CycleTopupEventsData
+///
+/// Canonical cycle-top-up-event allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CycleTopupEventsData {
+    pub entries: Vec<CycleTopupEventEntryRecord>,
+}
+
+impl CycleTopupEventsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "CycleTopupEventsData";
+}
 
 ///
 /// CycleTopupEvents
@@ -273,19 +356,36 @@ impl CycleTopupEvents {
     }
 
     #[must_use]
-    pub(crate) fn entries(
-        offset: usize,
-        limit: usize,
-    ) -> Vec<(CycleTopupEventKey, CycleTopupEventRecord)> {
-        CYCLE_TOPUP_EVENTS.with_borrow(|events| {
-            events
-                .map
-                .iter()
-                .skip(offset)
-                .take(limit)
-                .map(|entry| (*entry.key(), entry.value()))
-                .collect()
-        })
+    pub(crate) fn data(offset: usize, limit: usize) -> CycleTopupEventsData {
+        CycleTopupEventsData {
+            entries: CYCLE_TOPUP_EVENTS.with_borrow(|events| {
+                events
+                    .map
+                    .iter()
+                    .skip(offset)
+                    .take(limit)
+                    .map(|entry| CycleTopupEventEntryRecord {
+                        key: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn import(data: CycleTopupEventsData) {
+        CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| {
+            events.map.clear_new();
+            for entry in data.entries {
+                events.map.insert(entry.key, entry.record);
+            }
+        });
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_for_tests() {
+        CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| events.map.clear_new());
     }
 
     fn purge_inner(&mut self, cutoff: u64) -> usize {
@@ -357,5 +457,45 @@ impl CycleTracker {
 
     fn insert(&mut self, now: u64, cycles: Cycles) -> bool {
         self.map.insert(now, cycles).is_some()
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::seams;
+
+    #[test]
+    fn cycle_history_round_trips_through_canonical_data_snapshots() {
+        let _guard = seams::lock();
+        CycleTopupEvents::clear_for_tests();
+        CyclesFundingLedger::clear_for_tests();
+
+        let child = seams::p(17);
+        CycleTopupEvents::record(
+            10,
+            Cycles::new(20),
+            Some(Cycles::new(19)),
+            CycleTopupEventStatusRecord::RequestOk,
+            None,
+        );
+        CyclesFundingLedger::record_child_grant(child, Cycles::new(30), 40);
+
+        let events = CycleTopupEvents::data(0, usize::MAX);
+        let funding = CyclesFundingLedger::export();
+        CycleTopupEvents::clear_for_tests();
+        CyclesFundingLedger::clear_for_tests();
+
+        CycleTopupEvents::import(events.clone());
+        CyclesFundingLedger::import(funding.clone());
+        assert_eq!(CycleTopupEvents::data(0, usize::MAX), events);
+        assert_eq!(CyclesFundingLedger::export(), funding);
+
+        CycleTopupEvents::clear_for_tests();
+        CyclesFundingLedger::clear_for_tests();
     }
 }

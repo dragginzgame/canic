@@ -89,6 +89,8 @@ pub struct ReplayReceiptRecord {
 }
 
 impl ReplayReceiptRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ReplayReceiptRecord";
+
     pub fn from_receipt(receipt: ReplayReceipt) -> Self {
         Self {
             schema_version: receipt.schema_version,
@@ -147,6 +149,33 @@ impl Storable for ReplayReceiptRecord {
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
         serde_cbor::from_slice(bytes.as_ref()).expect("replay receipt record decodes from cbor")
     }
+}
+
+///
+/// ReplayReceiptEntryRecord
+///
+/// One logical replay-receipt snapshot row preserving its stable slot key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReplayReceiptEntryRecord {
+    pub key: ReplayReceiptSlotKey,
+    pub record: ReplayReceiptRecord,
+}
+
+///
+/// ReplayReceiptsData
+///
+/// Canonical replay-receipt allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ReplayReceiptsData {
+    pub entries: Vec<ReplayReceiptEntryRecord>,
+}
+
+impl ReplayReceiptsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "ReplayReceiptsData";
 }
 
 ///
@@ -270,6 +299,29 @@ fn record_is_pending(record: &ReplayReceiptRecord, now_ns: u64) -> bool {
 
 #[cfg(test)]
 impl ReplayReceiptStore {
+    #[must_use]
+    pub(crate) fn export() -> ReplayReceiptsData {
+        ReplayReceiptsData {
+            entries: REPLAY_RECEIPTS.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| ReplayReceiptEntryRecord {
+                        key: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import(data: ReplayReceiptsData) {
+        REPLAY_RECEIPTS.with_borrow_mut(|map| {
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.key, entry.record);
+            }
+        });
+    }
+
     pub(crate) fn reset_for_tests() {
         REPLAY_RECEIPTS.with_borrow_mut(StableBtreeMap::clear_new);
     }
@@ -412,6 +464,21 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].command_kind, "root.upgrade.v1");
 
+        ReplayReceiptStore::reset_for_tests();
+    }
+
+    #[test]
+    fn replay_receipts_round_trip_through_canonical_data_snapshot() {
+        ReplayReceiptStore::reset_for_tests();
+        let key = ReplayReceiptSlotKey([4; 32]);
+        ReplayReceiptStore::upsert(key, receipt_record_fixture());
+
+        let data = ReplayReceiptStore::export();
+        ReplayReceiptStore::reset_for_tests();
+        assert_eq!(ReplayReceiptStore::export(), ReplayReceiptsData::default());
+
+        ReplayReceiptStore::import(data.clone());
+        assert_eq!(ReplayReceiptStore::export(), data);
         ReplayReceiptStore::reset_for_tests();
     }
 }

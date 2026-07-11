@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.8`, published and tagged
-  as `v0.84.8`.
+- The current package/release-surface version is `0.84.9`, published and tagged
+  as `v0.84.9`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -161,9 +161,8 @@ before this compaction is archived at
   Stable-memory IDs and encodings, `CanisterRecord` serialization, restore
   behavior, DTOs, Candid, JSON reports, and persisted bytes are unchanged.
 
-- The `0.84.9` passive state-contract changelog is prepared; package metadata
-  remains at `0.84.8` pending the maintainer-owned release bump. Environment,
-  application-state, and subnet-state singleton
+- The `0.84.9` passive state-contract batch is published and tagged as
+  `v0.84.9`. Environment, application-state, and subnet-state singleton
   storage now distinguishes persisted `EnvRecord`, `AppStateRecord`, and
   `SubnetStateRecord` values from canonical `EnvData`, `AppStateData`, and
   `SubnetStateData` import/export snapshots. Storage, runtime ops, lifecycle
@@ -172,6 +171,24 @@ before this compaction is archived at
   against owner-defined record and snapshot names. Memory IDs, singleton cell
   keys, record serialization, restore order, DTOs, Candid, JSON reports, and
   persisted bytes are unchanged.
+
+- The `0.84.10` passive state-contract changelog is prepared; package metadata
+  remains at `0.84.9` pending the maintainer-owned release bump. Auth singleton
+  state now has a canonical `AuthStateData`
+  snapshot around its persisted `AuthStateRecord`; replay receipts now expose
+  a canonical `ReplayReceiptsData` snapshot composed of named
+  `ReplayReceiptEntryRecord` rows preserving stable slot keys. The aspirational
+  singular `ReplayReceiptData` name is hard-cut. Auth/replay descriptors compile
+  against owner-defined names, and focused test-only round-trip helpers prove
+  exact snapshot restoration without adding a production whole-state import or
+  migration surface. Memory IDs, stable keys, record serialization, replay
+  behavior, DTOs, Candid, JSON reports, and persisted bytes are unchanged.
+  Cycle top-up history, child funding ledgers, and ICP-refill history now expose
+  canonical `CycleTopupEventsData`, `CyclesFundingLedgerData`, and
+  `IcpRefillRecordsData` snapshots with named rows preserving stable keys.
+  Operational cycle and refill projections use those named rows instead of
+  tuples. Their memory IDs, stable schemas, runtime behavior, and persisted
+  bytes are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
@@ -1452,6 +1469,20 @@ one owner/domain group at a time; do not turn it into migration execution or a
 new role-contract architecture.
 
 ## Useful Validation
+
+Focused post-0.84.9 auth/replay snapshot validation (passing):
+
+```text
+cargo check --locked -p canic-core
+cargo test --locked -p canic-core auth_and_replay_descriptors_reference_canonical_data_types --lib
+cargo test --locked -p canic-core auth_state_round_trips_through_canonical_data_snapshot --lib
+cargo test --locked -p canic-core storage::stable::replay::tests --lib
+cargo test --locked -p canic-core financial_history_descriptors_reference_canonical_data_types --lib
+cargo test --locked -p canic-core cycle_history_round_trips_through_canonical_data_snapshots --lib
+cargo test --locked -p canic-core icp_refill_records_round_trip_through_canonical_data_snapshot --lib
+cargo test --locked -p canic-core hub_self_refill_resumes_in_flight_and_retryable_records --lib
+cargo clippy --locked -p canic-core --lib --tests -- -D warnings
+```
 
 Focused post-0.84.8 runtime environment snapshot validation (passing):
 

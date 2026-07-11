@@ -14,7 +14,7 @@ use crate::{
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ops::storage::StorageOpsError,
     storage::stable::icp_refill::{
-        IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordKey, IcpRefillRecordStatus,
+        IcpRefillEntryRecord, IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordStatus,
         IcpRefillRecords,
     },
     view::icp_refill::IcpRefillOperation,
@@ -495,15 +495,15 @@ impl IcpRefillRecordOps {
     }
 
     #[must_use]
-    pub fn entries() -> Vec<(IcpRefillRecordKey, IcpRefillRecord)> {
-        IcpRefillRecords::entries(0, usize::MAX)
+    pub fn entries() -> Vec<IcpRefillEntryRecord> {
+        IcpRefillRecords::data(0, usize::MAX).entries
     }
 
     #[must_use]
     pub fn records() -> Vec<IcpRefillRecord> {
         Self::entries()
             .into_iter()
-            .map(|(_key, record)| record)
+            .map(|entry| entry.record)
             .collect()
     }
 
@@ -782,9 +782,10 @@ impl IcpRefillRecordOps {
 }
 
 fn next_id() -> Result<u64, IcpRefillRecordOpsError> {
-    IcpRefillRecords::entries(0, usize::MAX)
+    IcpRefillRecords::data(0, usize::MAX)
+        .entries
         .into_iter()
-        .map(|(key, _record)| key.0)
+        .map(|entry| entry.key.0)
         .max()
         .unwrap_or(0)
         .checked_add(1)

@@ -497,42 +497,51 @@ fn runtime_env_domains() -> Vec<StateDomainManifest> {
 }
 
 fn auth_state_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::auth::{AuthStateData, AuthStateRecord};
+
     vec![state_domain(
         "auth_state",
         AUTH_STATE_ID,
-        "AuthStateRecord",
-        "AuthStateData",
+        AuthStateRecord::STATE_CONTRACT_NAME,
+        AuthStateData::STATE_CONTRACT_NAME,
         60,
         "auth_state_delegated_proofs_are_chain_key_only",
     )]
 }
 
 fn replay_receipt_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptsData};
+
     vec![state_domain(
         "replay_receipts",
         REPLAY_RECEIPTS_ID,
-        "ReplayReceiptRecord",
-        "ReplayReceiptData",
+        ReplayReceiptRecord::STATE_CONTRACT_NAME,
+        ReplayReceiptsData::STATE_CONTRACT_NAME,
         70,
         "replay_receipts_reject_unsupported_schema_versions",
     )]
 }
 
 fn runtime_observability_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::cycles::{
+        CycleTopupEventRecord, CycleTopupEventsData, CyclesFundingLedgerData,
+        CyclesFundingLedgerRecord,
+    };
+
     vec![
         state_domain(
             "cycle_topup_events",
             CYCLE_TOPUP_EVENTS_ID,
-            "CycleTopupEventRecord",
-            "CycleTopupEventsData",
+            CycleTopupEventRecord::STATE_CONTRACT_NAME,
+            CycleTopupEventsData::STATE_CONTRACT_NAME,
             80,
             "cycle_topup_events_decode_status_values",
         ),
         state_domain(
             "cycles_funding_ledger",
             CYCLES_FUNDING_LEDGER_ID,
-            "CyclesFundingLedgerRecord",
-            "CyclesFundingLedgerData",
+            CyclesFundingLedgerRecord::STATE_CONTRACT_NAME,
+            CyclesFundingLedgerData::STATE_CONTRACT_NAME,
             90,
             "cycles_funding_ledger_restores_child_budget_state",
         ),
@@ -540,11 +549,13 @@ fn runtime_observability_domains() -> Vec<StateDomainManifest> {
 }
 
 fn icp_refill_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::icp_refill::{IcpRefillRecord, IcpRefillRecordsData};
+
     vec![state_domain(
         "icp_refill_records",
         ICP_REFILL_RECORDS_ID,
-        "IcpRefillRecord",
-        "IcpRefillRecordsData",
+        IcpRefillRecord::STATE_CONTRACT_NAME,
+        IcpRefillRecordsData::STATE_CONTRACT_NAME,
         100,
         "icp_refill_records_decode_status_and_error_codes",
     )]
@@ -846,6 +857,91 @@ mod tests {
                 .iter()
                 .find(|declaration| declaration.domain == domain)
                 .expect("runtime environment state declaration");
+
+            assert_eq!(declaration.record, record);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn auth_and_replay_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::{
+            auth::{AuthStateData, AuthStateRecord},
+            replay::{ReplayReceiptRecord, ReplayReceiptsData},
+        };
+
+        let descriptors = canic_state_descriptors();
+
+        for (allocation, domain, record, snapshot) in [
+            (
+                StateAllocationKey::CoreAuthState,
+                "auth_state",
+                AuthStateRecord::STATE_CONTRACT_NAME,
+                AuthStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreReplayReceipts,
+                "replay_receipts",
+                ReplayReceiptRecord::STATE_CONTRACT_NAME,
+                ReplayReceiptsData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("auth/replay descriptor");
+            let declaration = descriptor
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("auth/replay state declaration");
+
+            assert_eq!(declaration.record, record);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn financial_history_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::{
+            cycles::{
+                CycleTopupEventRecord, CycleTopupEventsData, CyclesFundingLedgerData,
+                CyclesFundingLedgerRecord,
+            },
+            icp_refill::{IcpRefillRecord, IcpRefillRecordsData},
+        };
+
+        let descriptors = canic_state_descriptors();
+
+        for (allocation, domain, record, snapshot) in [
+            (
+                StateAllocationKey::CoreRuntimeObservability,
+                "cycle_topup_events",
+                CycleTopupEventRecord::STATE_CONTRACT_NAME,
+                CycleTopupEventsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreRuntimeObservability,
+                "cycles_funding_ledger",
+                CyclesFundingLedgerRecord::STATE_CONTRACT_NAME,
+                CyclesFundingLedgerData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreIcpRefillRecords,
+                "icp_refill_records",
+                IcpRefillRecord::STATE_CONTRACT_NAME,
+                IcpRefillRecordsData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let descriptor = descriptors
+                .iter()
+                .find(|descriptor| descriptor.allocation == allocation)
+                .expect("financial history descriptor");
+            let declaration = descriptor
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("financial history state declaration");
 
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
