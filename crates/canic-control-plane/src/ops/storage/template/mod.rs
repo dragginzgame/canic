@@ -10,9 +10,7 @@ use crate::{
         TemplateManifestInput, TemplateManifestResponse, WasmStoreCatalogEntryResponse,
     },
     ids::{TemplateId, TemplateManifestState, TemplateReleaseKey},
-    storage::stable::template::{
-        TemplateManifestEntryRecord, TemplateManifestRecord, TemplateManifestStateStore,
-    },
+    storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
 #[cfg(feature = "root-control-plane")]
 use crate::{
@@ -23,6 +21,7 @@ use crate::{
     ids::{
         CanisterRole, TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
     },
+    storage::stable::template::TemplateManifestEntryRecord,
 };
 #[cfg(feature = "root-control-plane")]
 use canic_core::control_plane_support::format::byte_size;

@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.11`, published and tagged
-  as `v0.84.11`.
+- The current package/release-surface version is `0.84.12`, published and tagged
+  as `v0.84.12`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -200,10 +200,9 @@ before this compaction is archived at
   cell/map keys, storable record encodings, runtime behavior, DTOs, Candid,
   JSON reports, and persisted bytes are unchanged.
 
-- The `0.84.12` passive state-contract changelog is prepared; package metadata
-  remains at `0.84.11` pending the maintainer-owned release bump. This completes
-  the planned 0.84 implementation line. Template manifests and chunk-set
-  metadata expose canonical
+- The `0.84.12` passive state-contract batch is published and tagged as
+  `v0.84.12`. This completes the planned 0.84 implementation line. Template
+  manifests and chunk-set metadata expose canonical
   `TemplateManifestsData` and `TemplateChunkSetsData` snapshots with named rows.
   Physical chunk-reference and payload memories are modeled separately as
   `TemplateChunkRefsData` and `TemplateChunkPayloadsData`, preserving stable map
@@ -215,6 +214,16 @@ before this compaction is archived at
   record or snapshot name literals remain in the core or control-plane
   descriptor registries. Memory IDs, stable keys, storable encodings, runtime
   behavior, DTOs, Candid, and persisted bytes are unchanged.
+
+- A post-release feature-gating fix is in development for `0.84.13`.
+  `canic-control-plane::state_contract` is intentionally unconditional for
+  passive host inspection, so the control-plane subnet record and snapshot
+  schema are now compiled for minimal and wasm-store feature sets. The subnet
+  stable cell, memory registration, transitions, ops, and workflows remain
+  gated by `root-control-plane`. This fixes packaged host/CLI compilation
+  without allocating root subnet state in wasm-store or minimal builds. State
+  descriptors, memory IDs, persisted encodings, runtime behavior, DTOs,
+  Candid, and JSON shapes are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,

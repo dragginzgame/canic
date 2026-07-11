@@ -1,16 +1,16 @@
 use crate::ids::{WasmStoreBinding, WasmStoreGcMode};
-use canic_core::eager_static;
+#[cfg(feature = "root-control-plane")]
 use canic_core::{
-    cdk::{
-        structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
-        types::Principal,
-    },
-    impl_storable_bounded,
+    cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::VirtualMemory},
+    eager_static,
     role_contract::allocation::memory::template::CONTROL_PLANE_SUBNET_STATE_ID,
 };
+use canic_core::{cdk::types::Principal, impl_storable_bounded};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "root-control-plane")]
 use std::cell::RefCell;
 
+#[cfg(feature = "root-control-plane")]
 eager_static! {
     //
     // SUBNET_STATE
@@ -68,6 +68,7 @@ pub struct WasmStoreRecord {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(feature = "root-control-plane")]
 pub struct WasmStoreInventoryConflict {
     pub existing_binding: WasmStoreBinding,
     pub existing_pid: Principal,
@@ -80,6 +81,7 @@ pub struct WasmStoreInventoryConflict {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg(feature = "root-control-plane")]
 pub enum WasmStoreUpsertOutcome {
     Inserted,
     Existing,
@@ -117,6 +119,7 @@ impl ControlPlaneSubnetStateData {
     pub const STATE_CONTRACT_NAME: &'static str = "ControlPlaneSubnetStateData";
 }
 
+#[cfg(feature = "root-control-plane")]
 enum PublicationStoreTransition {
     Activate(WasmStoreBinding),
     ClearActive,
@@ -124,6 +127,7 @@ enum PublicationStoreTransition {
     FinalizeRetired,
 }
 
+#[cfg(feature = "root-control-plane")]
 struct PublicationStoreTransitionOutcome {
     changed: bool,
     binding: Option<WasmStoreBinding>,
@@ -133,8 +137,10 @@ struct PublicationStoreTransitionOutcome {
 /// SubnetState
 ///
 
+#[cfg(feature = "root-control-plane")]
 pub struct SubnetState;
 
+#[cfg(feature = "root-control-plane")]
 impl SubnetState {
     fn validate_publication_store_state(state: &PublicationStoreStateRecord) {
         let active = state.active_binding.as_ref();
@@ -462,7 +468,7 @@ impl SubnetState {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "root-control-plane"))]
 mod tests {
     use super::*;
 
