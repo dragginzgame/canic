@@ -1,5 +1,8 @@
 use super::state::{validate_network_name, validate_state_name};
-use crate::deployment_truth::{ArtifactPromotionExecutionReceiptV1, DeploymentReceiptV1};
+use crate::{
+    deployment_truth::{ArtifactPromotionExecutionReceiptV1, DeploymentReceiptV1},
+    durable_io::write_bytes,
+};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -12,12 +15,9 @@ pub(super) fn write_install_deployment_truth_receipt(
     receipt: &DeploymentReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let path = install_deployment_truth_receipt_path(icp_root, network, deployment_name, receipt)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let mut bytes = serde_json::to_vec_pretty(receipt)?;
     bytes.push(b'\n');
-    fs::write(&path, bytes)?;
+    write_bytes(&path, &bytes)?;
     Ok(path)
 }
 
@@ -29,12 +29,9 @@ pub(super) fn write_artifact_promotion_execution_receipt(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let path =
         artifact_promotion_execution_receipt_path(icp_root, network, deployment_name, receipt)?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
     let mut bytes = serde_json::to_vec_pretty(receipt)?;
     bytes.push(b'\n');
-    fs::write(&path, bytes)?;
+    write_bytes(&path, &bytes)?;
     Ok(path)
 }
 

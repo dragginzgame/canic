@@ -219,6 +219,17 @@ fn renewal_status_rejects_invalid_issuer_principal() {
     assert!(runtime.called_methods().is_empty());
 }
 
+#[test]
+fn renewal_response_reports_the_malformed_field() {
+    assert_eq!(
+        codec::parse_renewal_status_summary(r#"{"template":{"enabled":"yes"}}"#),
+        Err(codec::AuthResponseParseError::InvalidField {
+            kind: codec::AuthResponseKind::RenewalStatus,
+            field: "template.enabled"
+        })
+    );
+}
+
 fn renewal_status_options(issuer: &str) -> RenewalStatusOptions {
     RenewalStatusOptions {
         deployment: "local".to_string(),

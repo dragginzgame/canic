@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
 ## Purpose
 
@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.1`, published and tagged
-  as `v0.84.1`; no package version has been changed for `0.84.2` development.
+- The current package/release-surface version is `0.84.2`, published and tagged
+  as `v0.84.2`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -73,7 +73,7 @@ before this compaction is archived at
   Stable-memory IDs, records, encodings, migrations, and the released 0.84.0
   role contract were unchanged by 0.84.1.
 
-- The `0.84.2` memory-map correction is implemented in the current worktree.
+- The `0.84.2` memory-map correction is published and tagged as `v0.84.2`.
   Root-named core groups are hard-cut into exact shared-runtime, auth,
   ICP-refill, pool, scaling, directory, and sharding allocations. Every
   declared role and the built-in wasm store resolves shared IDs 11-13, 15-18,
@@ -87,6 +87,31 @@ before this compaction is archived at
   downstream application allocations at ID 100, and rejects definitions
   outside their owner's range. All other active IDs, records, encodings, and
   restore behavior are unchanged.
+
+- The `0.84.3` changelog is prepared in the current worktree; package metadata
+  remains at `0.84.2` until the maintainer runs the human-owned version bump.
+  The patch contains the completed post-0.84 host durability and
+  observation-loss work described below.
+
+- The 0.84.3 host durability work is complete. One private `canic-host` writer
+  now owns sibling staging,
+  file sync, atomic rename, and directory sync for generated Candid artifacts,
+  deployment install state, deployment receipts, release-set manifests, and
+  single-file fleet role mutations. Role rename also restores the original
+  fleet config if the package-manifest write fails. This is the accepted
+  boundary: do not add a multi-file journal, recovery subsystem, or transaction
+  abstraction without concrete failure evidence.
+
+- The 0.84.3 observation-loss hardening is also complete. Metrics, cycles, and
+  live-list fan-out now convert worker panics
+  into explicit per-canister errors instead of dropping those canisters.
+  Successful cycle-tracker samples remain visible when the live-balance or
+  top-up query fails, while the report status and error field expose the lost
+  observation. Live-list cycle and Canic-version query failures render as
+  `error` rather than absent data. Metrics, cycle-history, blob-storage, and
+  auth response parsers return typed JSON, payload, and field failures; command
+  diagnostics retain the specific malformed field instead of collapsing all
+  parse failures into one message.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
@@ -1344,9 +1369,8 @@ before this compaction is archived at
 ## Open Work
 
 - No open or deferred 0.83 audit findings remain. `0.83.29` is published and
-  tagged. The accepted 0.84 design and all three implementation slices are
-  complete in the current worktree. The remaining work before any release
-  preparation is validation and maintainer review; do not invent a fourth
+  tagged. The accepted 0.84 design, all three implementation slices, and the
+  0.84.2 memory-map correction are published. Do not invent a fourth 0.84
   architecture slice.
 
 - Continue the passive 0.80 state-contract direction through the 0.84 design:
@@ -1355,26 +1379,16 @@ before this compaction is archived at
   execution, stable-memory inspection, state dump/explore commands, generated
   manifest writes, runtime introspection endpoints, or mutation semantics.
 
-- Before release preparation, run the focused gates for touched surfaces and
-  broaden to the release matrix as needed. Do not assign a new patch version or
-  change Cargo package versions unless the maintainer explicitly asks for
-  release preparation.
+- For subsequent automated development, run only the targeted gates for the
+  touched behavior as required by `AGENTS.md`. The maintainer owns full
+  workspace, deployment, and publish validation. Do not assign a new patch
+  version or change Cargo package versions unless the maintainer explicitly
+  asks for release preparation.
 
 ## Queued After 0.84
 
-These are intentionally not prerequisites or scope additions for 0.84. Retain
-them in the handoff until each is completed or explicitly declined:
-
-- Make host-owned deployment state, receipts, release-set manifests, and
-  multi-file role/config mutations crash-safe. Consolidate on one durable
-  temp-write, file-sync, atomic-rename, and directory-sync primitive; prevent a
-  failed second write from leaving `canic.toml` and a package manifest out of
-  sync.
-
-- Make metrics, cycles, blob-storage, and auth observation lossless. Typed parse
-  errors and worker/query failures must produce explicit per-canister findings;
-  fan-out code must not drop panicked workers, top-up query errors, or malformed
-  responses and then present the remaining report as complete.
+No queued post-0.84 items remain. The durability and lossless-observation work
+described above is assigned to the prepared 0.84.3 changelog.
 
 ## Useful Validation
 
@@ -1393,6 +1407,30 @@ cargo clippy --locked -p canic-core -p canic-control-plane -p canic-host -p cani
 cargo test --locked -p canic --test changelog_governance -- --nocapture
 make fmt-check
 git diff --check
+```
+
+Focused post-0.84 durable-write validation (passing):
+
+```text
+cargo test --locked -p canic-host durable_io --lib
+cargo test --locked -p canic-host release_set --lib
+cargo test --locked -p canic-host install_root --lib
+cargo test --locked -p canic-host artifact_io --lib
+cargo clippy --locked -p canic-host --lib --tests -- -D warnings
+cargo fmt --all -- --check
+git diff --check
+```
+
+Focused post-0.84 observation-loss validation (passing):
+
+```text
+cargo test --locked -p canic-cli metrics::transport --lib
+cargo test --locked -p canic-cli cycles::transport --lib
+cargo test --locked -p canic-cli cycles::tests --lib
+cargo test --locked -p canic-cli list::live --lib
+cargo test --locked -p canic-cli blob_storage::tests --lib
+cargo test --locked -p canic-cli auth::tests --lib
+cargo clippy --locked -p canic-cli --lib --tests -- -D warnings
 ```
 
 Focused 0.84.1 typed-failure-classification validation (passing for the patch

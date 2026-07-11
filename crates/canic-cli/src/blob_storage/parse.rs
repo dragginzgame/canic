@@ -19,73 +19,212 @@ use crate::blob_storage::model::{
     BlobStorageStatusResult, BlobStorageTarget,
 };
 use canic_host::response_parse::{find_field, parse_json_u64, parse_json_u128};
+use std::{error::Error, fmt};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum BlobStorageResponseKind {
+    Status,
+    Funding,
+}
+
+impl BlobStorageResponseKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Status => "status",
+            Self::Funding => "funding",
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub(super) enum BlobStorageParseError {
+    InvalidJson {
+        kind: BlobStorageResponseKind,
+        error: String,
+    },
+    MissingField {
+        kind: BlobStorageResponseKind,
+        field: &'static str,
+    },
+    InvalidField {
+        kind: BlobStorageResponseKind,
+        field: &'static str,
+    },
+}
+
+impl fmt::Display for BlobStorageParseError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidJson { kind, error } => {
+                write!(
+                    formatter,
+                    "{} response has invalid JSON: {error}",
+                    kind.label()
+                )
+            }
+            Self::MissingField { kind, field } => {
+                write!(formatter, "{} response is missing `{field}`", kind.label())
+            }
+            Self::InvalidField { kind, field } => {
+                write!(formatter, "{} response has invalid `{field}`", kind.label())
+            }
+        }
+    }
+}
+
+impl Error for BlobStorageParseError {}
 
 pub(super) fn parse_status_result(
     deployment: &str,
     target: BlobStorageTarget,
     output: &str,
-) -> Option<BlobStorageStatusResult> {
-    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    let payment_model = find_field(&value, "payment_model").and_then(parse_variant_code)?;
+) -> Result<BlobStorageStatusResult, BlobStorageParseError> {
+    let kind = BlobStorageResponseKind::Status;
+    let value = parse_json_response(output, kind)?;
+    let payment_model = parse_required_field(&value, kind, "payment_model", parse_variant_code)?;
     let configured = payment_model != BLOB_STORAGE_CODE_NOT_CONFIGURED;
-    let cashier_balance = find_field(&value, "cashier_balance").and_then(parse_optional_u128);
-    let blockers = parse_code_array(find_field(&value, "blockers"), readiness_blocker_code)?;
-    let warnings = parse_code_array(find_field(&value, "warnings"), billing_warning_code)?;
-    let ready = find_field(&value, "ready")?.as_bool()?;
-    let funding = parse_funding_status(find_field(&value, "funding_status")?)?;
+    let cashier_balance = parse_optional_field(
+        find_field(&value, "cashier_balance"),
+        kind,
+        "cashier_balance",
+        parse_optional_u128,
+    )?;
+    let blockers = parse_code_array(
+        find_field(&value, "blockers"),
+        kind,
+        "blockers",
+        readiness_blocker_code,
+    )?;
+    let warnings = parse_code_array(
+        find_field(&value, "warnings"),
+        kind,
+        "warnings",
+        billing_warning_code,
+    )?;
+    let ready = parse_required_field(&value, kind, "ready", serde_json::Value::as_bool)?;
+    let funding_value = required_field(&value, kind, "funding_status")?;
+    let funding = parse_funding_status(funding_value)?;
     let readiness = readiness_status(ready, blockers, warnings);
 
-    Some(BlobStorageStatusResult {
+    Ok(BlobStorageStatusResult {
         schema_version: BLOB_STORAGE_JSON_SCHEMA_VERSION,
         kind: BlobStorageReportKind::Status,
         deployment: deployment.to_string(),
         next: next_actions(deployment, &target, &readiness, &funding),
         target,
         configured,
-        cashier: BlobStorageCashierStatus {
-            canister_id: find_field(&value, "cashier_canister_id").and_then(parse_optional_text),
-            payment_account: find_field(&value, "payment_account").and_then(parse_optional_text),
-            balance_cycles: cashier_balance.map(|cycles| cycles.to_string()),
-            balance_available: cashier_balance.is_some(),
-        },
-        policy: BlobStoragePolicyStatus {
-            min_upload_balance_cycles: find_field(&value, "min_upload_balance")
-                .and_then(parse_optional_u128)
-                .map(|cycles| cycles.to_string()),
-            target_upload_balance_cycles: find_field(&value, "target_upload_balance")
-                .and_then(parse_optional_u128)
-                .map(|cycles| cycles.to_string()),
-            project_cycles_reserve_cycles: find_field(&value, "project_cycles_reserve")
-                .and_then(parse_optional_u128)
-                .map(|cycles| cycles.to_string()),
-            project_cycles_available: find_field(&value, "project_cycles_available")
-                .and_then(parse_u128_deep)?
-                .to_string(),
-        },
-        gateways: BlobStorageGatewayStatus {
-            principal_count: find_field(&value, "gateway_principal_count")
-                .and_then(parse_json_u64)?,
-            last_sync_at_ns: find_field(&value, "last_gateway_principal_sync_at_ns")
-                .and_then(parse_optional_u64)
-                .map(|timestamp| timestamp.to_string()),
-            sync_action: find_field(&value, "gateway_principal_sync_action")
-                .and_then(parse_variant_code)?,
-        },
+        cashier: parse_cashier_status(&value, cashier_balance)?,
+        policy: parse_policy_status(&value)?,
+        gateways: parse_gateway_status(&value)?,
         funding,
         readiness,
     })
 }
 
-pub(super) fn parse_funding_report(output: &str) -> Option<BlobStorageFundingReport> {
-    let value = serde_json::from_str::<serde_json::Value>(output).ok()?;
-    Some(BlobStorageFundingReport {
-        requested_cycles: required_cycles(&value, "requested_cycles")?,
-        attached_cycles: required_cycles(&value, "attached_cycles")?,
-        project_cycles_before: required_cycles(&value, "project_cycles_before")?,
-        project_cycles_after: required_cycles(&value, "project_cycles_after")?,
-        reserve_cycles: required_cycles(&value, "reserve_cycles")?,
-        cashier_total_after: required_cycles(&value, "cashier_total_after")?,
-        skipped_reason: find_field(&value, "skipped_reason").and_then(parse_optional_text),
+fn parse_cashier_status(
+    value: &serde_json::Value,
+    balance: Option<u128>,
+) -> Result<BlobStorageCashierStatus, BlobStorageParseError> {
+    let kind = BlobStorageResponseKind::Status;
+    Ok(BlobStorageCashierStatus {
+        canister_id: parse_optional_field(
+            find_field(value, "cashier_canister_id"),
+            kind,
+            "cashier_canister_id",
+            parse_optional_text,
+        )?,
+        payment_account: parse_optional_field(
+            find_field(value, "payment_account"),
+            kind,
+            "payment_account",
+            parse_optional_text,
+        )?,
+        balance_cycles: balance.map(|cycles| cycles.to_string()),
+        balance_available: balance.is_some(),
+    })
+}
+
+fn parse_policy_status(
+    value: &serde_json::Value,
+) -> Result<BlobStoragePolicyStatus, BlobStorageParseError> {
+    let kind = BlobStorageResponseKind::Status;
+    Ok(BlobStoragePolicyStatus {
+        min_upload_balance_cycles: parse_optional_field(
+            find_field(value, "min_upload_balance"),
+            kind,
+            "min_upload_balance",
+            parse_optional_u128,
+        )?
+        .map(|cycles| cycles.to_string()),
+        target_upload_balance_cycles: parse_optional_field(
+            find_field(value, "target_upload_balance"),
+            kind,
+            "target_upload_balance",
+            parse_optional_u128,
+        )?
+        .map(|cycles| cycles.to_string()),
+        project_cycles_reserve_cycles: parse_optional_field(
+            find_field(value, "project_cycles_reserve"),
+            kind,
+            "project_cycles_reserve",
+            parse_optional_u128,
+        )?
+        .map(|cycles| cycles.to_string()),
+        project_cycles_available: parse_required_field(
+            value,
+            kind,
+            "project_cycles_available",
+            parse_u128_deep,
+        )?
+        .to_string(),
+    })
+}
+
+fn parse_gateway_status(
+    value: &serde_json::Value,
+) -> Result<BlobStorageGatewayStatus, BlobStorageParseError> {
+    let kind = BlobStorageResponseKind::Status;
+    Ok(BlobStorageGatewayStatus {
+        principal_count: parse_required_field(
+            value,
+            kind,
+            "gateway_principal_count",
+            parse_json_u64,
+        )?,
+        last_sync_at_ns: parse_optional_field(
+            find_field(value, "last_gateway_principal_sync_at_ns"),
+            kind,
+            "last_gateway_principal_sync_at_ns",
+            parse_optional_u64,
+        )?
+        .map(|timestamp| timestamp.to_string()),
+        sync_action: parse_required_field(
+            value,
+            kind,
+            "gateway_principal_sync_action",
+            parse_variant_code,
+        )?,
+    })
+}
+
+pub(super) fn parse_funding_report(
+    output: &str,
+) -> Result<BlobStorageFundingReport, BlobStorageParseError> {
+    let kind = BlobStorageResponseKind::Funding;
+    let value = parse_json_response(output, kind)?;
+    Ok(BlobStorageFundingReport {
+        requested_cycles: required_cycles(&value, kind, "requested_cycles")?,
+        attached_cycles: required_cycles(&value, kind, "attached_cycles")?,
+        project_cycles_before: required_cycles(&value, kind, "project_cycles_before")?,
+        project_cycles_after: required_cycles(&value, kind, "project_cycles_after")?,
+        reserve_cycles: required_cycles(&value, kind, "reserve_cycles")?,
+        cashier_total_after: required_cycles(&value, kind, "cashier_total_after")?,
+        skipped_reason: parse_optional_field(
+            find_field(&value, "skipped_reason"),
+            kind,
+            "skipped_reason",
+            parse_optional_text,
+        )?,
     })
 }
 
@@ -109,20 +248,32 @@ const fn readiness_status(
     }
 }
 
-fn parse_funding_status(value: &serde_json::Value) -> Option<BlobStorageFundingStatus> {
-    let variant = parse_variant_name(value)?;
+fn parse_funding_status(
+    value: &serde_json::Value,
+) -> Result<BlobStorageFundingStatus, BlobStorageParseError> {
+    let kind = BlobStorageResponseKind::Status;
+    let variant = parse_variant_name(value).ok_or(BlobStorageParseError::InvalidField {
+        kind,
+        field: "funding_status",
+    })?;
     let status = funding_status_code(&variant);
     let payload = variant_payload(value, &variant);
-    Some(BlobStorageFundingStatus {
+    Ok(BlobStorageFundingStatus {
         status,
-        requested_cycles: payload
-            .and_then(|payload| find_field(payload, "requested_cycles"))
-            .and_then(parse_u128_deep)
-            .map(|cycles| cycles.to_string()),
-        transferable_cycles: payload
-            .and_then(|payload| find_field(payload, "transferable_cycles"))
-            .and_then(parse_u128_deep)
-            .map(|cycles| cycles.to_string()),
+        requested_cycles: parse_optional_field(
+            payload.and_then(|payload| find_field(payload, "requested_cycles")),
+            kind,
+            "funding_status.requested_cycles",
+            parse_u128_deep,
+        )?
+        .map(|cycles| cycles.to_string()),
+        transferable_cycles: parse_optional_field(
+            payload.and_then(|payload| find_field(payload, "transferable_cycles")),
+            kind,
+            "funding_status.transferable_cycles",
+            parse_u128_deep,
+        )?
+        .map(|cycles| cycles.to_string()),
     })
 }
 
@@ -162,24 +313,75 @@ fn next_actions(
     next
 }
 
-fn required_cycles(value: &serde_json::Value, field: &str) -> Option<String> {
-    find_field(value, field)
-        .and_then(parse_u128_deep)
-        .map(|cycles| cycles.to_string())
+fn parse_json_response(
+    output: &str,
+    kind: BlobStorageResponseKind,
+) -> Result<serde_json::Value, BlobStorageParseError> {
+    serde_json::from_str(output).map_err(|error| BlobStorageParseError::InvalidJson {
+        kind,
+        error: error.to_string(),
+    })
+}
+
+fn required_field<'a>(
+    value: &'a serde_json::Value,
+    kind: BlobStorageResponseKind,
+    field: &'static str,
+) -> Result<&'a serde_json::Value, BlobStorageParseError> {
+    find_field(value, field).ok_or(BlobStorageParseError::MissingField { kind, field })
+}
+
+fn parse_required_field<T>(
+    value: &serde_json::Value,
+    kind: BlobStorageResponseKind,
+    field: &'static str,
+    parse: impl FnOnce(&serde_json::Value) -> Option<T>,
+) -> Result<T, BlobStorageParseError> {
+    let value = required_field(value, kind, field)?;
+    parse(value).ok_or(BlobStorageParseError::InvalidField { kind, field })
+}
+
+fn parse_optional_field<T>(
+    value: Option<&serde_json::Value>,
+    kind: BlobStorageResponseKind,
+    field: &'static str,
+    parse: impl FnOnce(&serde_json::Value) -> Option<T>,
+) -> Result<Option<T>, BlobStorageParseError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.is_null() || matches!(value, serde_json::Value::Array(values) if values.is_empty()) {
+        return Ok(None);
+    }
+    parse(value)
+        .map(Some)
+        .ok_or(BlobStorageParseError::InvalidField { kind, field })
+}
+
+fn required_cycles(
+    value: &serde_json::Value,
+    kind: BlobStorageResponseKind,
+    field: &'static str,
+) -> Result<String, BlobStorageParseError> {
+    parse_required_field(value, kind, field, parse_u128_deep).map(|cycles| cycles.to_string())
 }
 
 fn parse_code_array(
     value: Option<&serde_json::Value>,
+    kind: BlobStorageResponseKind,
+    field: &'static str,
     code: fn(&str) -> &'static str,
-) -> Option<Vec<String>> {
+) -> Result<Vec<String>, BlobStorageParseError> {
     let Some(value) = value else {
-        return Some(Vec::new());
+        return Ok(Vec::new());
     };
     value
-        .as_array()?
+        .as_array()
+        .ok_or(BlobStorageParseError::InvalidField { kind, field })?
         .iter()
         .map(|value| parse_variant_name(value).map(|variant| code(&variant).to_string()))
-        .collect()
+        .collect::<Option<Vec<_>>>()
+        .ok_or(BlobStorageParseError::InvalidField { kind, field })
 }
 
 fn parse_optional_text(value: &serde_json::Value) -> Option<String> {

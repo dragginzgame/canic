@@ -73,15 +73,3 @@ pub fn query_cycle_balance(
         output,
     })
 }
-
-/// Query `canic_cycle_balance` for reporting paths that treat missing live data as absent.
-#[must_use]
-pub fn query_cycle_balance_optional(
-    icp: &IcpCli,
-    canister_id: &str,
-    network: &str,
-    icp_root: Option<&Path>,
-    candid_path: Option<&Path>,
-) -> Option<u128> {
-    query_cycle_balance(icp, canister_id, network, icp_root, candid_path).ok()
-}

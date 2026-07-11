@@ -27,7 +27,7 @@ use crate::{
             BlobStorageMethodMode, BlobStorageReadinessState,
         },
         options::{BlobStorageCommand, BlobStorageOptions},
-        parse::{parse_funding_report, parse_status_result},
+        parse::{BlobStorageParseError, parse_funding_report, parse_status_result},
         render::{render_action_result, render_dry_run_command, render_status_result},
         target::resolve_blob_storage_call_target,
     },
@@ -100,8 +100,8 @@ pub enum BlobStorageCommandError {
     #[error("local Candid sidecar {path} does not define blob-storage method {method}")]
     MethodUnavailable { path: PathBuf, method: String },
 
-    #[error("failed to parse blob-storage canister response")]
-    ResponseParse,
+    #[error("failed to parse blob-storage canister response: {detail}")]
+    ResponseParse { detail: String },
 
     #[error("{message}")]
     ReadinessCheckFailed {
@@ -131,7 +131,7 @@ impl BlobStorageCommandError {
         match self {
             Self::JsonReported { exit_code, .. } => *exit_code,
             Self::ReplicaQuery(_) | Self::IcpFailed { .. } => 2,
-            Self::ResponseParse => 3,
+            Self::ResponseParse { .. } => 3,
             Self::ReadinessCheckFailed { .. } => 4,
             Self::Usage(_)
             | Self::InvalidCycles(_)
@@ -176,10 +176,18 @@ impl BlobStorageCommandError {
             Self::ReplicaQuery(_) | Self::IcpFailed { .. } => {
                 BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
             }
-            Self::ResponseParse => BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
+            Self::ResponseParse { .. } => BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
             Self::CandidParse { .. } => BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
             Self::ReadinessCheckFailed { .. } => BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED,
             Self::JsonReported { source, .. } => source.command_error_code(),
+        }
+    }
+}
+
+impl From<BlobStorageParseError> for BlobStorageCommandError {
+    fn from(error: BlobStorageParseError) -> Self {
+        Self::ResponseParse {
+            detail: error.to_string(),
         }
     }
 }
@@ -396,8 +404,7 @@ fn status_result_with_runtime(
         "(record { sync_gateway_principals = false })",
         Some("json"),
     )?;
-    parse_status_result(deployment, target.target, &output)
-        .ok_or(BlobStorageCommandError::ResponseParse)
+    parse_status_result(deployment, target.target, &output).map_err(Into::into)
 }
 
 fn check_status_ready_for_upload(
@@ -539,8 +546,7 @@ fn fund_result_with_runtime(
             &arg,
             output,
         )?;
-        let report =
-            parse_funding_report(&call_output).ok_or(BlobStorageCommandError::ResponseParse)?;
+        let report = parse_funding_report(&call_output)?;
         let result = BlobStorageActionResult::completed(
             &options.deployment,
             BlobStorageActionName::Fund,

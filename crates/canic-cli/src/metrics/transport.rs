@@ -25,6 +25,7 @@ const METRICS_EMPTY_HINT: &str =
     "no metrics rows; check whether this tier is enabled by the deployed role profile";
 const METRICS_NONZERO_EMPTY_HINT: &str =
     "no nonzero metrics rows; rerun without --nonzero or check the deployed role profile";
+const METRICS_WORKER_PANIC: &str = "metrics query worker panicked";
 
 pub(super) fn metrics_report(
     options: &MetricsOptions,
@@ -68,15 +69,27 @@ fn collect_metrics_reports(
     let mut handles = Vec::new();
     for entry in registry {
         let entry = entry.clone();
+        let worker_entry = entry.clone();
         let query = Arc::clone(&query);
-        handles.push(thread::spawn(move || {
-            metrics_canister_report(&query, &entry)
-        }));
+        handles.push((
+            worker_entry,
+            thread::spawn(move || metrics_canister_report(&query, &entry)),
+        ));
     }
 
+    collect_metrics_worker_reports(handles)
+}
+
+fn collect_metrics_worker_reports(
+    handles: Vec<(RegistryEntry, thread::JoinHandle<MetricsCanisterReport>)>,
+) -> Vec<MetricsCanisterReport> {
     handles
         .into_iter()
-        .filter_map(|handle| handle.join().ok())
+        .map(|(entry, handle)| {
+            handle
+                .join()
+                .unwrap_or_else(|_| metrics_error_report(&entry, METRICS_WORKER_PANIC))
+        })
         .collect()
 }
 
@@ -184,7 +197,8 @@ fn query_metrics(
         )
         .map_err(|err| err.to_string())?;
 
-    parse_metrics_page(&output).ok_or_else(|| "could not parse canic_metrics response".to_string())
+    parse_metrics_page(&output)
+        .map_err(|error| format!("could not parse canic_metrics response: {error}"))
 }
 
 fn resolve_metrics_deployment(
@@ -296,5 +310,19 @@ mod tests {
             metrics_kind_candid_variant(MetricsKind::Security),
             "Security"
         );
+    }
+
+    #[test]
+    fn panicked_metrics_worker_becomes_an_explicit_canister_error() {
+        let entry = registry_entry();
+        let reports = collect_metrics_worker_reports(vec![(
+            entry.clone(),
+            thread::spawn(|| panic!("simulated metrics worker panic")),
+        )]);
+
+        assert_eq!(reports.len(), 1);
+        assert_eq!(reports[0].canister_id, entry.pid);
+        assert_eq!(reports[0].status, MetricsCanisterStatus::Error);
+        assert_eq!(reports[0].error.as_deref(), Some(METRICS_WORKER_PANIC));
     }
 }

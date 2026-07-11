@@ -1,6 +1,7 @@
-use crate::release_set::icp_root;
-use serde::{Deserialize, Serialize};
+use crate::{durable_io::write_bytes, release_set::icp_root};
 use std::{fs, path::Path, path::PathBuf};
+
+use serde::{Deserialize, Serialize};
 
 pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 2;
 
@@ -105,10 +106,7 @@ pub(super) fn write_install_state(
         .into());
     }
     let path = deployment_install_state_path(icp_root, network, &state.deployment_name);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(&path, serde_json::to_vec_pretty(state)?)?;
+    write_bytes(&path, &serde_json::to_vec_pretty(state)?)?;
     Ok(path)
 }
 
