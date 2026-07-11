@@ -23,9 +23,9 @@ pub(in crate::release_set) fn build_release_set_entry(
         })?
         .to_string_lossy()
         .to_string();
-    let wasm_module = read_release_artifact(&artifact_path)?;
+    let artifact = read_release_artifact(&artifact_path)?;
 
-    let chunk_hashes = wasm_module
+    let chunk_hashes = artifact
         .chunks(CANIC_WASM_CHUNK_BYTES)
         .map(wasm_hash_hex)
         .collect::<Vec<_>>();
@@ -34,9 +34,9 @@ pub(in crate::release_set) fn build_release_set_entry(
         role: role_name.to_string(),
         template_id: format!("embedded:{role_name}"),
         artifact_relative_path,
-        payload_size_bytes: wasm_module.len() as u64,
-        payload_sha256_hex: wasm_hash_hex(&wasm_module),
-        chunk_size_bytes: CANIC_WASM_CHUNK_BYTES as u64,
+        payload_size_bytes: u64::try_from(artifact.len())?,
+        payload_sha256_hex: wasm_hash_hex(&artifact),
+        chunk_size_bytes: u64::try_from(CANIC_WASM_CHUNK_BYTES)?,
         chunk_sha256_hex: chunk_hashes,
     })
 }

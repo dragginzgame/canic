@@ -8,13 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Release-set ICP calls now stream large Candid arguments through the ICP CLI's
-  Unix `/dev/stdin` endpoint instead of persisting temporary call payloads or
-  placing them on the process command line.
-
 ## [0.85.x] - 2026-07-11 - Operational Safety Hardening
 
 Detailed patch breakdown: [docs/changelog/0.85.md](docs/changelog/0.85.md)
+
+- `0.85.2` hard-cuts manual release-set Candid text construction to typed
+  binary requests and verifies the complete artifact contract before staging.
+
+- `0.85.1` hard-cuts release-set Candid argument files to piped stdin, avoiding
+  persisted call payloads and operating-system command-line limits.
 
 - `0.85.0` makes restore recovery persistence durable, replaces global build
   authority with explicit command context, adopts `ic-memory 0.10`, and moves

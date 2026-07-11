@@ -1,6 +1,5 @@
 mod artifact;
 mod call;
-mod candid;
 mod entry;
 mod progress;
 
