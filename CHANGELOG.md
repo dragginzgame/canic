@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Release-set ICP calls now stream large Candid arguments through the ICP CLI's
+  Unix `/dev/stdin` endpoint instead of persisting temporary call payloads or
+  placing them on the process command line.
+
 ## [0.85.x] - 2026-07-11 - Operational Safety Hardening
 
 Detailed patch breakdown: [docs/changelog/0.85.md](docs/changelog/0.85.md)
