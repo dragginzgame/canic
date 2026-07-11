@@ -18,7 +18,7 @@ pub(super) fn run_canic_build_targets(
     config_path: &Path,
     icp_root: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let _env = BuildEnvGuard::apply(network, config_path, icp_root);
+    let _env = BuildEnvGuard::apply(network, config_path, icp_root)?;
     let profile = build_profile.unwrap_or_else(CanisterBuildProfile::current);
     if let Some(context) = current_workspace_build_context_once(profile)? {
         for line in context.lines() {

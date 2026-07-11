@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.4` resolves named ICP environments to the correct local or mainnet
+  Wasm build class and makes incomplete deployment and auth topology explicit,
+  with provenance and recovery guidance for hard-cut reinstalls.
+
 - `0.84.3` makes host-owned single-file writes durable with bounded role-rename
   rollback, and makes metrics, cycles, live-list, blob-storage, and auth
   observation failures explicit instead of silently dropping or flattening

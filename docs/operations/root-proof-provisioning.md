@@ -120,7 +120,8 @@ Important status outcomes:
 | `disabled` | The renewal template is disabled. |
 | `missing` | Root has no renewal template for the issuer. |
 | `drift_detected` | Issuer-observed active proof differs from root state. |
-| `unavailable` | CLI could not observe issuer-local status from local metadata or transport. |
+| `issuer_unregistered` | Issuer is absent from the root subnet registry; restore topology before proof renewal. |
+| `unavailable` | CLI could not observe issuer-local status from installed metadata or transport. |
 
 For `active_attempt`, allow the root timer or lazy repair path to finish before
 forcing additional work. For `drift_detected`, first re-check status to rule out
@@ -141,6 +142,10 @@ chain-key renewal or issuer lazy repair install a fresh active proof.
 | `CallFailed` | Root could not reach the issuer install endpoint. |
 | `RejectedBySigner` | Issuer rejected the proof after local verification. |
 | `DriftDetected` | Issuer-observed active proof differs from root-managed renewal state. |
+An unregistered issuer is a topology failure, not missing proof material. Do
+not add a manual proof-provisioning bypass. Follow the destructive reinstall
+recovery rules and then allow root renewal or issuer lazy repair to install the
+proof normally.
 
 ## Validation
 

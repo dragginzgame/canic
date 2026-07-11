@@ -14,13 +14,17 @@ use crate::deployment_truth::report::{
 #[test]
 fn deployment_diff_warns_when_unspecified_canister_id_is_unobserved() {
     let mut plan = sample_plan();
+    plan.deployment_identity.root_principal = None;
+    plan.trust_domain.root_trust_anchor = None;
     plan.expected_canisters[0].canister_id = None;
     plan.expected_verifier_readiness.required = false;
+    let mut observed_identity = sample_identity();
+    observed_identity.root_principal = None;
     let inventory = DeploymentInventoryV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         inventory_id: "inventory-1".to_string(),
         observed_at: "2026-05-21T00:00:00Z".to_string(),
-        observed_identity: Some(sample_identity()),
+        observed_identity: Some(observed_identity),
         observed_root: None,
         local_config: LocalDeploymentConfigV1 {
             config_path: Some("icp.yml".to_string()),

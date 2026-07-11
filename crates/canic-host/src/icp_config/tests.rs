@@ -27,6 +27,92 @@ fn ignores_nested_networks_keys_when_reading_local_gateway_port() {
 }
 
 #[test]
+fn resolves_implicit_build_environments_without_project_config() {
+    let root = temp_dir("canic-icp-build-environment-implicit");
+
+    assert_eq!(
+        resolve_icp_build_environment_from_root(&root, "local").expect("resolve local"),
+        IcpBuildEnvironment::Local
+    );
+    assert_eq!(
+        resolve_icp_build_environment_from_root(&root, "ic").expect("resolve ic"),
+        IcpBuildEnvironment::Ic
+    );
+}
+
+#[test]
+fn resolves_named_environment_from_declared_network() {
+    let source = r"
+networks:
+  - name: local
+    mode: managed
+
+environments:
+  - name: demo
+    network: local
+  - name: staging
+    network: ic
+";
+
+    assert_eq!(
+        resolve_icp_build_environment_from_yaml(source, "demo").expect("resolve demo"),
+        IcpBuildEnvironment::Local
+    );
+    assert_eq!(
+        resolve_icp_build_environment_from_yaml(source, "staging").expect("resolve staging"),
+        IcpBuildEnvironment::Ic
+    );
+}
+
+#[test]
+fn resolves_declared_nonmainnet_networks_as_local_builds() {
+    let source = r"
+networks:
+  - name: local-container
+    mode: managed
+  - name: testnet
+    mode: connected
+    url: https://testnet.example
+
+environments:
+  - name: docker
+    network: local-container
+  - name: test
+    network: testnet
+";
+
+    assert_eq!(
+        resolve_icp_build_environment_from_yaml(source, "docker").expect("resolve managed"),
+        IcpBuildEnvironment::Local
+    );
+    assert_eq!(
+        resolve_icp_build_environment_from_yaml(source, "test").expect("resolve connected"),
+        IcpBuildEnvironment::Local
+    );
+}
+
+#[test]
+fn build_environment_resolution_rejects_incomplete_config() {
+    let missing_environment =
+        resolve_icp_build_environment_from_yaml("environments: []\n", "staging")
+            .expect_err("missing environment should fail");
+    let missing_network = resolve_icp_build_environment_from_yaml(
+        "environments:\n  - name: staging\n    network: private\n",
+        "staging",
+    )
+    .expect_err("missing network should fail");
+    let unsupported_mode = resolve_icp_build_environment_from_yaml(
+        "networks:\n  - name: private\n    mode: mystery\nenvironments:\n  - name: staging\n    network: private\n",
+        "staging",
+    )
+    .expect_err("unsupported network mode should fail");
+
+    assert!(missing_environment.contains("is not declared"));
+    assert!(missing_network.contains("references undeclared network 'private'"));
+    assert!(unsupported_mode.contains("unsupported mode 'mystery'"));
+}
+
+#[test]
 fn inspects_icp_yaml_without_mutating_it() {
     let root = temp_dir("canic-icp-read-only");
     let config = root.join("fleets/toko/canic.toml");
