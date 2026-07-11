@@ -1,107 +1,120 @@
 //! Module: ops::storage::index::mapper
 //!
-//! Responsibility: convert app/subnet index records to boundary views and inputs.
+//! Responsibility: convert app/subnet index data to boundary views and inputs.
 //! Does not own: stable index mutation, workflow orchestration, or DTO definitions.
-//! Boundary: storage ops conversion layer for topology index records.
+//! Boundary: storage ops conversion layer for topology index snapshots.
 
 use crate::{
-    cdk::types::Principal,
+    domain::policy::pure::topology::IndexPolicyInput,
     dto::{
         page::Page,
         topology::{AppIndexArgs, IndexEntryInput, IndexEntryResponse, SubnetIndexArgs},
     },
-    ids::CanisterRole,
-    storage::stable::index::{app::AppIndexRecord, subnet::SubnetIndexRecord},
+    storage::stable::index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
 };
 
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
 
-// Map stored index tuples into the shared index input entry shape.
-fn record_entries_to_input(entries: Vec<(CanisterRole, Principal)>) -> Vec<IndexEntryInput> {
+// Map stored index records into the shared index input entry shape.
+fn data_entries_to_input(entries: Vec<IndexEntryRecord>) -> Vec<IndexEntryInput> {
     entries
         .into_iter()
-        .map(|(role, pid)| IndexEntryInput { role, pid })
+        .map(|entry| IndexEntryInput {
+            role: entry.role,
+            pid: entry.pid,
+        })
         .collect()
 }
 
-// Map stored index tuples into the public response entry shape.
-fn record_entries_to_response(entries: Vec<(CanisterRole, Principal)>) -> Vec<IndexEntryResponse> {
+// Map index input entries back into stored index records.
+fn input_entries_to_data(entries: Vec<IndexEntryInput>) -> Vec<IndexEntryRecord> {
     entries
         .into_iter()
-        .map(|(role, pid)| IndexEntryResponse { role, pid })
-        .collect()
-}
-
-// Map index input entries back into stored index tuples.
-fn input_entries_to_record(entries: Vec<IndexEntryInput>) -> Vec<(CanisterRole, Principal)> {
-    entries
-        .into_iter()
-        .map(|entry| (entry.role, entry.pid))
+        .map(|entry| IndexEntryRecord {
+            role: entry.role,
+            pid: entry.pid,
+        })
         .collect()
 }
 
 ///
-/// AppIndexRecordMapper
+/// AppIndexDataMapper
 ///
-/// Storage-ops mapper for app index records and boundary input shapes.
+/// Storage-ops mapper for app index data and boundary input shapes.
 ///
 
-pub struct AppIndexRecordMapper;
+pub struct AppIndexDataMapper;
 
-impl AppIndexRecordMapper {
+impl AppIndexDataMapper {
     #[must_use]
-    pub fn record_to_input(data: AppIndexRecord) -> AppIndexArgs {
-        AppIndexArgs(record_entries_to_input(data.entries))
+    pub fn data_to_input(data: AppIndexData) -> AppIndexArgs {
+        AppIndexArgs(data_entries_to_input(data.entries))
     }
 
     #[must_use]
-    pub fn input_to_record(input: AppIndexArgs) -> AppIndexRecord {
-        AppIndexRecord {
-            entries: input_entries_to_record(input.0),
+    pub fn input_to_data(input: AppIndexArgs) -> AppIndexData {
+        AppIndexData {
+            entries: input_entries_to_data(input.0),
         }
     }
 }
 
 ///
-/// SubnetIndexRecordMapper
+/// SubnetIndexDataMapper
 ///
-/// Storage-ops mapper for subnet index records and boundary input shapes.
+/// Storage-ops mapper for subnet index data and boundary input shapes.
 ///
 
-pub struct SubnetIndexRecordMapper;
+pub struct SubnetIndexDataMapper;
 
-impl SubnetIndexRecordMapper {
+impl SubnetIndexDataMapper {
     #[must_use]
-    pub fn record_to_input(data: SubnetIndexRecord) -> SubnetIndexArgs {
-        SubnetIndexArgs(record_entries_to_input(data.entries))
+    pub fn data_to_input(data: SubnetIndexData) -> SubnetIndexArgs {
+        SubnetIndexArgs(data_entries_to_input(data.entries))
     }
 
     #[must_use]
-    pub fn input_to_record(input: SubnetIndexArgs) -> SubnetIndexRecord {
-        SubnetIndexRecord {
-            entries: input_entries_to_record(input.0),
+    pub fn input_to_data(input: SubnetIndexArgs) -> SubnetIndexData {
+        SubnetIndexData {
+            entries: input_entries_to_data(input.0),
         }
     }
 }
 
 ///
-/// IndexResponseMapper
+/// IndexEntryMapper
 ///
-/// Storage-ops mapper for index record pages and response entries.
+/// Storage-ops mapper for index records, policy inputs, and response entries.
 ///
 
-pub struct IndexResponseMapper;
+pub struct IndexEntryMapper;
 
-impl IndexResponseMapper {
+impl IndexEntryMapper {
     #[must_use]
-    pub fn record_page_to_response(
-        page: Page<(CanisterRole, Principal)>,
-    ) -> Page<IndexEntryResponse> {
+    pub fn record_page_to_response(page: Page<IndexEntryRecord>) -> Page<IndexEntryResponse> {
         Page {
-            entries: record_entries_to_response(page.entries),
+            entries: page
+                .entries
+                .into_iter()
+                .map(|entry| IndexEntryResponse {
+                    role: entry.role,
+                    pid: entry.pid,
+                })
+                .collect(),
             total: page.total,
         }
+    }
+
+    #[must_use]
+    pub fn records_to_policy_input(entries: &[IndexEntryRecord]) -> Vec<IndexPolicyInput> {
+        entries
+            .iter()
+            .map(|entry| IndexPolicyInput {
+                role: entry.role.clone(),
+                pid: entry.pid,
+            })
+            .collect()
     }
 }

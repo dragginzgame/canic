@@ -11,7 +11,7 @@ use crate::{
     ids::CanisterRole,
     ops::{
         storage::{
-            index::{app::AppIndexOps, subnet::SubnetIndexOps},
+            index::{app::AppIndexOps, mapper::IndexEntryMapper, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
         },
         topology::input::mapper::RegistryPolicyInputMapper,
@@ -66,13 +66,15 @@ impl PropagationWorkflow {
         let registry_input = RegistryPolicyInputMapper::record_to_policy_input(registry_data);
         let app_data = AppIndexOps::data();
         let subnet_data = SubnetIndexOps::data();
+        let app_policy_input = IndexEntryMapper::records_to_policy_input(&app_data.entries);
+        let subnet_policy_input = IndexEntryMapper::records_to_policy_input(&subnet_data.entries);
 
-        TopologyPolicy::assert_index_consistent_with_registry(&registry_input, &app_data.entries)
+        TopologyPolicy::assert_index_consistent_with_registry(&registry_input, &app_policy_input)
             .map_err(InternalError::from)?;
 
         TopologyPolicy::assert_index_consistent_with_registry(
             &registry_input,
-            &subnet_data.entries,
+            &subnet_policy_input,
         )
         .map_err(InternalError::from)?;
 

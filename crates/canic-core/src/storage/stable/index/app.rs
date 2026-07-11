@@ -12,12 +12,18 @@ eager_static! {
 }
 
 ///
-/// AppIndexRecord
+/// AppIndexData
 ///
 
+/// Canonical app-index import/export snapshot.
+///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AppIndexRecord {
-    pub entries: Vec<(CanisterRole, Principal)>,
+pub struct AppIndexData {
+    pub entries: Vec<super::IndexEntryRecord>,
+}
+
+impl AppIndexData {
+    pub const STATE_CONTRACT_NAME: &'static str = "AppIndexData";
 }
 
 ///
@@ -28,7 +34,7 @@ pub struct AppIndexRecord {
 /// Invariants:
 /// - Each role appears at most once.
 /// - The index is authoritative; imports replace all existing entries.
-/// - This structure is persisted and replicated via snapshot import/export.
+/// - This structure is persisted and replicated through `AppIndexData`.
 ///
 
 pub struct AppIndex;
@@ -36,21 +42,24 @@ pub struct AppIndex;
 impl AppIndex {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn export() -> AppIndexRecord {
-        AppIndexRecord {
+    pub(crate) fn export() -> AppIndexData {
+        AppIndexData {
             entries: APP_INDEX.with_borrow(|map| {
                 map.iter()
-                    .map(|entry| (entry.key().clone(), entry.value()))
+                    .map(|entry| super::IndexEntryRecord {
+                        role: entry.key().clone(),
+                        pid: entry.value(),
+                    })
                     .collect()
             }),
         }
     }
 
-    pub(crate) fn import(data: AppIndexRecord) {
+    pub(crate) fn import(data: AppIndexData) {
         APP_INDEX.with_borrow_mut(|map| {
             map.clear_new();
-            for (role, pid) in data.entries {
-                map.insert(role, pid);
+            for entry in data.entries {
+                map.insert(entry.role, entry.pid);
             }
         });
     }

@@ -2,6 +2,7 @@
 // This test relies on embedded production config by design.
 
 use canic::{
+    __internal::core::state_contract::STATE_MANIFEST_SCHEMA_VERSION,
     cdk::types::Principal,
     dto::{
         canister::CanisterInfo,
@@ -558,7 +559,8 @@ fn assert_runtime_state_metadata(status: &CanicRuntimeStatus, require_state: boo
     };
 
     assert_eq!(
-        state.manifest_schema_version, 1,
+        state.manifest_schema_version,
+        u32::from(STATE_MANIFEST_SCHEMA_VERSION),
         "runtime state summary should report state manifest schema version"
     );
     assert!(

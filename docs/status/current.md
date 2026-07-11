@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.2`, published and tagged
-  as `v0.84.2`.
+- The current package/release-surface version is `0.84.4`, published and tagged
+  as `v0.84.4`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -88,12 +88,8 @@ before this compaction is archived at
   outside their owner's range. All other active IDs, records, encodings, and
   restore behavior are unchanged.
 
-- The `0.84.3` changelog is prepared in the current worktree; package metadata
-  remains at `0.84.2` until the maintainer runs the human-owned version bump.
-  The patch contains the completed post-0.84 host durability and
-  observation-loss work described below.
-
-- The 0.84.3 host durability work is complete. One private `canic-host` writer
+- The `0.84.3` host durability and observation-loss patch is published and
+  tagged as `v0.84.3`. One private `canic-host` writer
   now owns sibling staging,
   file sync, atomic rename, and directory sync for generated Candid artifacts,
   deployment install state, deployment receipts, release-set manifests, and
@@ -102,8 +98,7 @@ before this compaction is archived at
   boundary: do not add a multi-file journal, recovery subsystem, or transaction
   abstraction without concrete failure evidence.
 
-- The 0.84.3 observation-loss hardening is also complete. Metrics, cycles, and
-  live-list fan-out now convert worker panics
+- Metrics, cycles, and live-list fan-out convert worker panics
   into explicit per-canister errors instead of dropping those canisters.
   Successful cycle-tracker samples remain visible when the live-balance or
   top-up query fails, while the report status and error field expose the lost
@@ -112,6 +107,22 @@ before this compaction is archived at
   auth response parsers return typed JSON, payload, and field failures; command
   diagnostics retain the specific malformed field instead of collapsing all
   parse failures into one message.
+
+- The `0.84.4` environment/topology correction is published and tagged as
+  `v0.84.4`. Named ICP environments resolve their declared network before Wasm
+  compilation, build provenance records both selected environment and build
+  network, observed missing bootstrap roles block deployment checks, and auth
+  renewal reports unregistered issuers. Hard-cut recovery remains destructive
+  reinstall; the patch does not seed missing state, adopt retained children,
+  or restore manual proof injection.
+
+- The `0.84.5` changelog is prepared for the post-0.84.4 passive
+  state-contract slice; package metadata remains at `0.84.4` pending the
+  maintainer-owned version bump. App and subnet topology indexes now have real canonical
+  `AppIndexData` and `SubnetIndexData` snapshots composed of
+  `IndexEntryRecord` rows. Their descriptors reference constants owned by
+  those types instead of unverified string literals. The underlying stable
+  B-tree keys/values, memory IDs, endpoint DTOs, and Candid are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
@@ -1387,10 +1398,25 @@ before this compaction is archived at
 
 ## Queued After 0.84
 
-No queued post-0.84 items remain. The durability and lossless-observation work
-described above is assigned to the prepared 0.84.3 changelog.
+No queued 0.84 release fix remains. Continue the passive state-contract work
+one owner/domain group at a time; do not turn it into migration execution or a
+new role-contract architecture.
 
 ## Useful Validation
+
+Focused 0.84.5 topology snapshot validation (passing):
+
+```text
+cargo test --locked -p canic-core ops::topology::index::builder::tests --lib
+cargo test --locked -p canic-core index_addressing --lib
+cargo test --locked -p canic-core topology_invariants_live_in_policy --lib
+cargo test --locked -p canic-core descriptors_cover_declared_core_memory_ids --lib
+cargo test --locked -p canic-core topology_index_descriptors_reference_canonical_data_types --lib
+cargo test --locked -p canic-host complete_descriptor_registry_satisfies_state_audit_metadata_contract --lib
+cargo clippy --locked -p canic-core -p canic-control-plane --lib --tests -- -D warnings
+cargo fmt --all -- --check
+git diff --check
+```
 
 Focused 0.84.2 memory-map validation (passing):
 

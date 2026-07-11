@@ -12,12 +12,18 @@ eager_static! {
 }
 
 ///
-/// SubnetIndexRecord
+/// SubnetIndexData
 ///
 
+/// Canonical subnet-index import/export snapshot.
+///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SubnetIndexRecord {
-    pub entries: Vec<(CanisterRole, Principal)>,
+pub struct SubnetIndexData {
+    pub entries: Vec<super::IndexEntryRecord>,
+}
+
+impl SubnetIndexData {
+    pub const STATE_CONTRACT_NAME: &'static str = "SubnetIndexData";
 }
 
 ///
@@ -29,7 +35,7 @@ pub struct SubnetIndexRecord {
 /// Invariants:
 /// - Each role appears at most once.
 /// - This index is authoritative and replaced wholesale on import.
-/// - DTO/snapshot representations are constructed in higher layers.
+/// - `SubnetIndexData` is its canonical import/export snapshot.
 ///
 
 pub struct SubnetIndex;
@@ -37,21 +43,24 @@ pub struct SubnetIndex;
 impl SubnetIndex {
     // cannot return an iterator because of stable memory
     #[must_use]
-    pub(crate) fn export() -> SubnetIndexRecord {
-        SubnetIndexRecord {
+    pub(crate) fn export() -> SubnetIndexData {
+        SubnetIndexData {
             entries: SUBNET_INDEX.with_borrow(|map| {
                 map.iter()
-                    .map(|entry| (entry.key().clone(), entry.value()))
+                    .map(|entry| super::IndexEntryRecord {
+                        role: entry.key().clone(),
+                        pid: entry.value(),
+                    })
                     .collect()
             }),
         }
     }
 
-    pub(crate) fn import(data: SubnetIndexRecord) {
+    pub(crate) fn import(data: SubnetIndexData) {
         SUBNET_INDEX.with_borrow_mut(|map| {
             map.clear_new();
-            for (role, pid) in data.entries {
-                map.insert(role, pid);
+            for entry in data.entries {
+                map.insert(entry.role, entry.pid);
             }
         });
     }

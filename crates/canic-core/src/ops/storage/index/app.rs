@@ -12,10 +12,10 @@ use crate::{
         prelude::*,
         storage::index::{
             ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
-            mapper::AppIndexRecordMapper,
+            mapper::AppIndexDataMapper,
         },
     },
-    storage::stable::index::app::{AppIndex, AppIndexRecord},
+    storage::stable::index::app::{AppIndex, AppIndexData},
 };
 
 ///
@@ -36,7 +36,7 @@ impl AppIndexOps {
         AppIndex::export()
             .entries
             .iter()
-            .find_map(|(r, pid)| (r == role).then_some(*pid))
+            .find_map(|entry| (&entry.role == role).then_some(entry.pid))
     }
 
     // -------------------------------------------------------------------------
@@ -44,13 +44,13 @@ impl AppIndexOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> AppIndexRecord {
+    pub fn data() -> AppIndexData {
         AppIndex::export()
     }
 
     #[must_use]
     pub fn snapshot_args() -> AppIndexArgs {
-        AppIndexRecordMapper::record_to_input(AppIndex::export())
+        AppIndexDataMapper::data_to_input(AppIndex::export())
     }
 
     pub(crate) fn filter_args_for_local_config(
@@ -66,7 +66,7 @@ impl AppIndexOps {
     }
 
     pub(crate) fn import_args_allow_incomplete(args: AppIndexArgs) -> Result<(), InternalError> {
-        let data = AppIndexRecordMapper::input_to_record(args);
+        let data = AppIndexDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "app")?;
         let allowed = ConfigOps::get()?.app_index.clone();
         ensure_allowed_roles(&data.entries, "app", &allowed)?;
@@ -75,7 +75,7 @@ impl AppIndexOps {
         Ok(())
     }
 
-    pub(crate) fn import(data: AppIndexRecord) -> Result<(), InternalError> {
+    pub(crate) fn import(data: AppIndexData) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
         let required = ConfigOps::get()?.app_index.clone();
         ensure_allowed_roles(&data.entries, "app", &required)?;
@@ -89,7 +89,7 @@ impl AppIndexOps {
     ///
     /// External/propagated DTO snapshots must use `import_args_allow_incomplete`
     /// so they are checked against the configured AppIndex role set.
-    pub(crate) fn import_trusted_partial(data: AppIndexRecord) -> Result<(), InternalError> {
+    pub(crate) fn import_trusted_partial(data: AppIndexData) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
         AppIndex::import(data);
 

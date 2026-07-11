@@ -15,13 +15,13 @@ use crate::{
         storage::{
             index::{
                 app::AppIndexOps,
-                mapper::{AppIndexRecordMapper, SubnetIndexRecordMapper},
+                mapper::{AppIndexDataMapper, SubnetIndexDataMapper},
                 subnet::SubnetIndexOps,
             },
             registry::subnet::SubnetRegistryOps,
         },
     },
-    storage::stable::index::{app::AppIndexRecord, subnet::SubnetIndexRecord},
+    storage::stable::index::{app::AppIndexData, subnet::SubnetIndexData},
 };
 
 use self::builder::{RootAppIndexBuilder, RootSubnetIndexBuilder};
@@ -35,7 +35,7 @@ use self::builder::{RootAppIndexBuilder, RootSubnetIndexBuilder};
 pub struct AppIndexResolver;
 
 impl AppIndexResolver {
-    pub fn resolve() -> Result<AppIndexRecord, InternalError> {
+    pub fn resolve() -> Result<AppIndexData, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::get()?;
@@ -47,7 +47,7 @@ impl AppIndexResolver {
     }
 
     pub fn resolve_input() -> Result<AppIndexArgs, InternalError> {
-        Self::resolve().map(AppIndexRecordMapper::record_to_input)
+        Self::resolve().map(AppIndexDataMapper::data_to_input)
     }
 }
 
@@ -60,7 +60,7 @@ impl AppIndexResolver {
 pub struct SubnetIndexResolver;
 
 impl SubnetIndexResolver {
-    pub fn resolve() -> Result<SubnetIndexRecord, InternalError> {
+    pub fn resolve() -> Result<SubnetIndexData, InternalError> {
         if EnvOps::is_root() {
             let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::current_subnet()?;
@@ -72,6 +72,6 @@ impl SubnetIndexResolver {
     }
 
     pub fn resolve_input() -> Result<SubnetIndexArgs, InternalError> {
-        Self::resolve().map(SubnetIndexRecordMapper::record_to_input)
+        Self::resolve().map(SubnetIndexDataMapper::data_to_input)
     }
 }

@@ -29,7 +29,7 @@ use canic_core::control_plane_support::{
             ready::ReadyOps,
         },
         storage::{
-            index::{app::AppIndexOps, subnet::SubnetIndexOps},
+            index::{IndexEntryRecord, app::AppIndexOps, subnet::SubnetIndexOps},
             pool::PoolOps,
             registry::{app::AppRegistryOps, subnet::SubnetRegistryOps},
         },
@@ -845,7 +845,7 @@ pub fn root_validate_state() -> ValidationReport {
 
 fn check_index(
     label: &str,
-    entries: &[(CanisterRole, Principal)],
+    entries: &[IndexEntryRecord],
     registry_roles: &BTreeMap<CanisterRole, Vec<Principal>>,
     issues: &mut Vec<ValidationIssue>,
 ) -> (bool, bool) {
@@ -853,23 +853,23 @@ fn check_index(
     let mut consistent = true;
     let mut seen = BTreeMap::<CanisterRole, usize>::new();
 
-    for (role, pid) in entries {
-        let count = seen.entry(role.clone()).or_insert(0);
+    for entry in entries {
+        let count = seen.entry(entry.role.clone()).or_insert(0);
         *count += 1;
         if *count > 1 {
             unique = false;
             issues.push(ValidationIssue {
                 code: "index_role_duplicate".to_string(),
-                message: format!("{label} has duplicate role {role}"),
+                message: format!("{label} has duplicate role {}", entry.role),
             });
         }
 
-        match registry_roles.get(role) {
+        match registry_roles.get(&entry.role) {
             None => {
                 consistent = false;
                 issues.push(ValidationIssue {
                     code: "index_role_missing_in_registry".to_string(),
-                    message: format!("{label} role {role} not present in registry"),
+                    message: format!("{label} role {} not present in registry", entry.role),
                 });
             }
             Some(pids) if pids.len() > 1 => {
@@ -877,19 +877,20 @@ fn check_index(
                 issues.push(ValidationIssue {
                     code: "index_role_duplicate_in_registry".to_string(),
                     message: format!(
-                        "{label} role {role} has multiple registry entries ({})",
+                        "{label} role {} has multiple registry entries ({})",
+                        entry.role,
                         pids.len()
                     ),
                 });
             }
             Some(pids) => {
-                if pids[0] != *pid {
+                if pids[0] != entry.pid {
                     consistent = false;
                     issues.push(ValidationIssue {
                         code: "index_role_pid_mismatch".to_string(),
                         message: format!(
-                            "{label} role {role} points to {pid}, registry has {}",
-                            pids[0]
+                            "{label} role {} points to {}, registry has {}",
+                            entry.role, entry.pid, pids[0]
                         ),
                     });
                 }

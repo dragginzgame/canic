@@ -8,7 +8,7 @@ use crate::{
         index::{app::AppIndexOps, subnet::SubnetIndexOps},
         registry::subnet::SubnetRegistryOps,
     },
-    storage::stable::index::{app::AppIndexRecord, subnet::SubnetIndexRecord},
+    storage::stable::index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
     test::{
         config::ConfigTestBuilder,
         seams::{lock, p},
@@ -24,7 +24,7 @@ fn index_addressing_prefers_index_over_registry_duplicates() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::unregister(&pid);
     }
-    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
+    SubnetIndexOps::import_trusted_partial(SubnetIndexData {
         entries: Vec::new(),
     })
     .expect("clear subnet index");
@@ -41,8 +41,11 @@ fn index_addressing_prefers_index_over_registry_duplicates() {
     SubnetRegistryOps::register_unchecked(pid_b, &role, root_pid, vec![], created_at)
         .expect("register second canister with same role");
 
-    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
-        entries: vec![(role.clone(), pid_b)],
+    SubnetIndexOps::import_trusted_partial(SubnetIndexData {
+        entries: vec![IndexEntryRecord {
+            role: role.clone(),
+            pid: pid_b,
+        }],
     })
     .expect("import subnet index");
 
@@ -65,7 +68,7 @@ fn index_addressing_does_not_fallback_to_registry() {
     for (pid, _) in SubnetRegistryOps::data().entries {
         let _ = SubnetRegistryOps::unregister(&pid);
     }
-    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
+    SubnetIndexOps::import_trusted_partial(SubnetIndexData {
         entries: Vec::new(),
     })
     .expect("clear subnet index");
@@ -100,11 +103,11 @@ fn install_index_service_test_config(service_role: &CanisterRole, singleton_role
 }
 
 fn clear_app_and_subnet_indexes() {
-    AppIndexOps::import_trusted_partial(AppIndexRecord {
+    AppIndexOps::import_trusted_partial(AppIndexData {
         entries: Vec::new(),
     })
     .expect("clear app index");
-    SubnetIndexOps::import_trusted_partial(SubnetIndexRecord {
+    SubnetIndexOps::import_trusted_partial(SubnetIndexData {
         entries: Vec::new(),
     })
     .expect("clear subnet index");
@@ -145,27 +148,45 @@ fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
     }]))
     .expect_err("subnet index should reject non-service roles");
 
-    AppIndexOps::import(AppIndexRecord {
-        entries: vec![(service_role.clone(), service_pid)],
+    AppIndexOps::import(AppIndexData {
+        entries: vec![IndexEntryRecord {
+            role: service_role.clone(),
+            pid: service_pid,
+        }],
     })
     .expect("full app index import should accept exact configured role set");
-    SubnetIndexOps::import(SubnetIndexRecord {
-        entries: vec![(service_role.clone(), service_pid)],
+    SubnetIndexOps::import(SubnetIndexData {
+        entries: vec![IndexEntryRecord {
+            role: service_role.clone(),
+            pid: service_pid,
+        }],
     })
     .expect("full subnet index import should accept exact configured role set");
 
-    AppIndexOps::import(AppIndexRecord {
+    AppIndexOps::import(AppIndexData {
         entries: vec![
-            (service_role.clone(), service_pid),
-            (singleton_role.clone(), singleton_pid),
+            IndexEntryRecord {
+                role: service_role.clone(),
+                pid: service_pid,
+            },
+            IndexEntryRecord {
+                role: singleton_role.clone(),
+                pid: singleton_pid,
+            },
         ],
     })
     .expect_err("full app index import should reject roles outside explicit app_index");
 
-    SubnetIndexOps::import(SubnetIndexRecord {
+    SubnetIndexOps::import(SubnetIndexData {
         entries: vec![
-            (service_role.clone(), service_pid),
-            (singleton_role, singleton_pid),
+            IndexEntryRecord {
+                role: service_role.clone(),
+                pid: service_pid,
+            },
+            IndexEntryRecord {
+                role: singleton_role,
+                pid: singleton_pid,
+            },
         ],
     })
     .expect_err("full subnet index import should reject non-service roles");

@@ -384,20 +384,24 @@ fn descriptor(
 }
 
 fn runtime_topology_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::index::{
+        IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData,
+    };
+
     vec![
         state_domain(
             "app_index",
             APP_INDEX_ID,
-            "AppIndexRecord",
-            "AppIndexData",
+            IndexEntryRecord::STATE_CONTRACT_NAME,
+            AppIndexData::STATE_CONTRACT_NAME,
             10,
             "app_index_import_restores_unique_roles",
         ),
         state_domain(
             "subnet_index",
             SUBNET_INDEX_ID,
-            "SubnetIndexRecord",
-            "SubnetIndexData",
+            IndexEntryRecord::STATE_CONTRACT_NAME,
+            SubnetIndexData::STATE_CONTRACT_NAME,
             15,
             "subnet_index_import_restores_unique_roles",
         ),
@@ -693,6 +697,32 @@ mod tests {
                 ids.contains(&expected),
                 "state manifest should declare memory id {expected}"
             );
+        }
+    }
+
+    #[test]
+    fn topology_index_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::index::{
+            IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData,
+        };
+
+        let descriptors = canic_state_descriptors();
+        let topology = descriptors
+            .iter()
+            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeTopology)
+            .expect("runtime topology descriptor");
+
+        for (domain, snapshot) in [
+            ("app_index", AppIndexData::STATE_CONTRACT_NAME),
+            ("subnet_index", SubnetIndexData::STATE_CONTRACT_NAME),
+        ] {
+            let declaration = topology
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("topology index declaration");
+            assert_eq!(declaration.record, IndexEntryRecord::STATE_CONTRACT_NAME);
+            assert_eq!(declaration.snapshot, snapshot);
         }
     }
 
