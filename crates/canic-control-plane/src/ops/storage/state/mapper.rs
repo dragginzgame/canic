@@ -4,7 +4,7 @@ use crate::{
         template::WasmStorePublicationStateResponse,
     },
     storage::stable::state::subnet::{
-        PublicationStoreStateRecord, SubnetStateRecord, WasmStoreRecord,
+        ControlPlaneSubnetStateData, PublicationStoreStateRecord, WasmStoreRecord,
     },
 };
 
@@ -27,9 +27,10 @@ impl SubnetStateMapper {
 
     // Map the stored subnet-state snapshot into the public response shape.
     #[must_use]
-    pub fn record_to_response(data: SubnetStateRecord) -> SubnetStateResponse {
+    pub fn data_to_response(data: ControlPlaneSubnetStateData) -> SubnetStateResponse {
         SubnetStateResponse {
             wasm_stores: data
+                .record
                 .wasm_stores
                 .into_iter()
                 .map(Self::wasm_store_record_to_response)

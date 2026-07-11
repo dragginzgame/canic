@@ -71,7 +71,38 @@ pub struct TemplateChunkSetRecord {
     pub created_at: u64,
 }
 
+impl TemplateChunkSetRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateChunkSetRecord";
+}
+
 impl_storable_unbounded!(TemplateChunkSetRecord);
+
+///
+/// TemplateChunkSetEntryRecord
+///
+/// One logical chunk-set snapshot row preserving its stable release key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TemplateChunkSetEntryRecord {
+    pub release: TemplateReleaseKey,
+    pub record: TemplateChunkSetRecord,
+}
+
+///
+/// TemplateChunkSetsData
+///
+/// Canonical template-chunk-set allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TemplateChunkSetsData {
+    pub entries: Vec<TemplateChunkSetEntryRecord>,
+}
+
+impl TemplateChunkSetsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateChunkSetsData";
+}
 
 ///
 /// TemplateChunkRecord
@@ -82,10 +113,20 @@ pub struct TemplateChunkRecord {
     pub bytes: Vec<u8>,
 }
 
+///
+/// TemplateChunkRefRecord
+///
+/// Persisted map value linking one stable chunk key to a payload-vector slot.
+///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct TemplateChunkRefRecord {
+pub struct TemplateChunkRefRecord {
     pub slot: u64,
     pub payload_len: u32,
+}
+
+impl TemplateChunkRefRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateChunkRefRecord";
 }
 
 impl Storable for TemplateChunkRefRecord {
@@ -124,9 +165,19 @@ impl Storable for TemplateChunkRefRecord {
     }
 }
 
+///
+/// TemplateChunkPayloadRecord
+///
+/// Persisted stable-vector value containing one raw template chunk payload.
+///
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct TemplateChunkPayloadRecord {
+pub struct TemplateChunkPayloadRecord {
     pub bytes: Vec<u8>,
+}
+
+impl TemplateChunkPayloadRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateChunkPayloadRecord";
 }
 
 impl Storable for TemplateChunkPayloadRecord {
@@ -152,6 +203,60 @@ impl Storable for TemplateChunkPayloadRecord {
 
 type TemplateChunkPayloadVec =
     StableVec<TemplateChunkPayloadRecord, VirtualMemory<DefaultMemoryImpl>>;
+
+///
+/// TemplateChunkRefEntryRecord
+///
+/// One physical chunk-reference snapshot row preserving its stable chunk key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TemplateChunkRefEntryRecord {
+    pub chunk_key: TemplateChunkKey,
+    pub record: TemplateChunkRefRecord,
+}
+
+///
+/// TemplateChunkRefsData
+///
+/// Canonical template-chunk-reference allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TemplateChunkRefsData {
+    pub entries: Vec<TemplateChunkRefEntryRecord>,
+}
+
+impl TemplateChunkRefsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateChunkRefsData";
+}
+
+///
+/// TemplateChunkPayloadEntryRecord
+///
+/// One physical chunk-payload snapshot row preserving its stable vector slot.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TemplateChunkPayloadEntryRecord {
+    pub slot: u64,
+    pub record: TemplateChunkPayloadRecord,
+}
+
+///
+/// TemplateChunkPayloadsData
+///
+/// Canonical template-chunk-payload allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TemplateChunkPayloadsData {
+    pub entries: Vec<TemplateChunkPayloadEntryRecord>,
+}
+
+impl TemplateChunkPayloadsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "TemplateChunkPayloadsData";
+}
 
 ///
 /// TemplateChunkSetStateStore
@@ -186,12 +291,25 @@ impl TemplateChunkSetStateStore {
 
     // Export the full chunk-set metadata snapshot for ops-owned accounting.
     #[must_use]
-    pub fn export() -> Vec<(TemplateReleaseKey, TemplateChunkSetRecord)> {
-        TEMPLATE_CHUNK_SETS.with_borrow(|map| {
-            map.iter()
-                .map(|entry| (entry.key().clone(), entry.value()))
-                .collect()
-        })
+    pub fn export() -> TemplateChunkSetsData {
+        TemplateChunkSetsData {
+            entries: TEMPLATE_CHUNK_SETS.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| TemplateChunkSetEntryRecord {
+                        release: entry.key().clone(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn import(data: TemplateChunkSetsData) {
+        Self::clear();
+        for entry in data.entries {
+            Self::upsert(entry.release, entry.record);
+        }
     }
 
     // Return current chunk-set occupied bytes without cloning the full snapshot.
@@ -291,24 +409,16 @@ impl TemplateChunkStore {
         })
     }
 
-    // Export the full chunk snapshot for ops-owned accounting.
+    // Count indexed chunks whose payload slots resolve.
     #[must_use]
-    pub fn export() -> Vec<(TemplateChunkKey, TemplateChunkRecord)> {
+    pub fn count() -> usize {
         TEMPLATE_CHUNK_REFS.with_borrow(|map| {
             map.iter()
-                .filter_map(|entry| {
-                    TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
-                        payloads.get(entry.value().slot).map(|payload| {
-                            (
-                                entry.key().clone(),
-                                TemplateChunkRecord {
-                                    bytes: payload.bytes,
-                                },
-                            )
-                        })
-                    })
+                .filter(|entry| {
+                    TEMPLATE_CHUNK_PAYLOADS
+                        .with_borrow(|payloads| payloads.get(entry.value().slot).is_some())
                 })
-                .collect()
+                .count()
         })
     }
 
@@ -371,6 +481,75 @@ impl TemplateChunkStore {
     pub fn clear_for_test() {
         Self::clear();
     }
+
+    #[cfg(test)]
+    fn export_refs() -> TemplateChunkRefsData {
+        TemplateChunkRefsData {
+            entries: TEMPLATE_CHUNK_REFS.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| {
+                        let record = entry.value();
+                        TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                            let payload = payloads
+                                .get(record.slot)
+                                .expect("chunk reference slot must resolve to a payload");
+                            assert_eq!(
+                                usize::try_from(record.payload_len).unwrap_or(usize::MAX),
+                                payload.bytes.len(),
+                                "chunk reference payload length must match stored bytes"
+                            );
+                        });
+                        TemplateChunkRefEntryRecord {
+                            chunk_key: entry.key().clone(),
+                            record,
+                        }
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    fn import_refs(data: TemplateChunkRefsData) {
+        TEMPLATE_CHUNK_REFS.with_borrow_mut(|map| {
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.chunk_key, entry.record);
+            }
+        });
+        TEMPLATE_CHUNKS_OCCUPIED_BYTES.with_borrow_mut(|occupied| *occupied = None);
+    }
+
+    #[cfg(test)]
+    fn export_payloads() -> TemplateChunkPayloadsData {
+        TemplateChunkPayloadsData {
+            entries: TEMPLATE_CHUNK_PAYLOADS.with_borrow(|payloads| {
+                (0..payloads.len())
+                    .map(|slot| TemplateChunkPayloadEntryRecord {
+                        slot,
+                        record: payloads
+                            .get(slot)
+                            .expect("chunk payload slot must exist within stable vector length"),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    fn import_payloads(data: TemplateChunkPayloadsData) {
+        TEMPLATE_CHUNK_PAYLOADS.with_borrow_mut(|payloads| {
+            *payloads = reset_chunk_payloads();
+            for entry in data.entries {
+                assert_eq!(
+                    entry.slot,
+                    payloads.len(),
+                    "chunk payload slots must be contiguous"
+                );
+                payloads.push(&entry.record);
+            }
+        });
+    }
 }
 
 fn chunk_set_entry_size(release: &TemplateReleaseKey, record: &TemplateChunkSetRecord) -> u64 {
@@ -418,6 +597,28 @@ mod tests {
     }
 
     #[test]
+    fn chunk_set_store_round_trips_through_canonical_data_snapshot() {
+        TemplateChunkSetStateStore::clear_for_test();
+        TemplateChunkSetStateStore::upsert(
+            release(),
+            TemplateChunkSetRecord {
+                payload_hash: vec![1; 32],
+                payload_size_bytes: 7,
+                chunk_count: 2,
+                chunk_hashes: vec![vec![2; 32], vec![3; 32]],
+                created_at: 99,
+            },
+        );
+
+        let data = TemplateChunkSetStateStore::export();
+        TemplateChunkSetStateStore::clear_for_test();
+        TemplateChunkSetStateStore::import(data.clone());
+
+        assert_eq!(TemplateChunkSetStateStore::export(), data);
+        TemplateChunkSetStateStore::clear_for_test();
+    }
+
+    #[test]
     fn chunk_store_round_trip() {
         TemplateChunkStore::clear_for_test();
         let chunk_key = TemplateChunkKey::new(release(), 0);
@@ -428,6 +629,43 @@ mod tests {
         TemplateChunkStore::upsert(chunk_key.clone(), record.clone());
 
         assert_eq!(TemplateChunkStore::get(&chunk_key), Some(record));
+    }
+
+    #[test]
+    fn chunk_ref_and_payload_stores_round_trip_exact_physical_snapshots() {
+        TemplateChunkStore::clear_for_test();
+        let first_key = TemplateChunkKey::new(release(), 0);
+        let second_key = TemplateChunkKey::new(release(), 1);
+        TemplateChunkStore::upsert(
+            first_key.clone(),
+            TemplateChunkRecord {
+                bytes: vec![1, 2, 3],
+            },
+        );
+        TemplateChunkStore::upsert(
+            second_key.clone(),
+            TemplateChunkRecord { bytes: vec![4, 5] },
+        );
+
+        let refs = TemplateChunkStore::export_refs();
+        let payloads = TemplateChunkStore::export_payloads();
+        TemplateChunkStore::clear_for_test();
+        TemplateChunkStore::import_payloads(payloads.clone());
+        TemplateChunkStore::import_refs(refs.clone());
+
+        assert_eq!(TemplateChunkStore::export_refs(), refs);
+        assert_eq!(TemplateChunkStore::export_payloads(), payloads);
+        assert_eq!(
+            TemplateChunkStore::get(&first_key),
+            Some(TemplateChunkRecord {
+                bytes: vec![1, 2, 3]
+            })
+        );
+        assert_eq!(
+            TemplateChunkStore::get(&second_key),
+            Some(TemplateChunkRecord { bytes: vec![4, 5] })
+        );
+        TemplateChunkStore::clear_for_test();
     }
 
     #[test]

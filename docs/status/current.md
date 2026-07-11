@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.10`, published and tagged
-  as `v0.84.10`.
+- The current package/release-surface version is `0.84.11`, published and tagged
+  as `v0.84.11`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -189,9 +189,9 @@ before this compaction is archived at
   tuples. Their memory IDs, stable schemas, runtime behavior, and persisted
   bytes are unchanged.
 
-- The `0.84.11` passive state-contract changelog is prepared; package metadata
-  remains at `0.84.10` pending the maintainer-owned release bump. Intent
-  metadata, records, per-resource totals, and pending indexes now expose exact
+- The `0.84.11` passive state-contract batch is published and tagged as
+  `v0.84.11`. Intent metadata, records, per-resource totals, and pending indexes
+  now expose exact
   `IntentMetaData`, `IntentRecordsData`, `IntentTotalsData`, and
   `IntentPendingData` snapshots. Map snapshots preserve their stable keys in
   named rows, and the test-only pending projection no longer crosses the
@@ -199,6 +199,22 @@ before this compaction is archived at
   owned by the corresponding record and snapshot types. Memory IDs, stable
   cell/map keys, storable record encodings, runtime behavior, DTOs, Candid,
   JSON reports, and persisted bytes are unchanged.
+
+- The `0.84.12` passive state-contract changelog is prepared; package metadata
+  remains at `0.84.11` pending the maintainer-owned release bump. This completes
+  the planned 0.84 implementation line. Template manifests and chunk-set
+  metadata expose canonical
+  `TemplateManifestsData` and `TemplateChunkSetsData` snapshots with named rows.
+  Physical chunk-reference and payload memories are modeled separately as
+  `TemplateChunkRefsData` and `TemplateChunkPayloadsData`, preserving stable map
+  keys, vector slots, reference metadata, and payload bytes exactly.
+  Control-plane subnet and local wasm-store GC cells expose
+  `ControlPlaneSubnetStateData` and `WasmStoreGcStateData`. The manifest,
+  chunk-set, chunk-ref, and chunk-payload state-report snapshot labels hard-cut
+  their aspirational singular names to the real plural type names. No raw
+  record or snapshot name literals remain in the core or control-plane
+  descriptor registries. Memory IDs, stable keys, storable encodings, runtime
+  behavior, DTOs, Candid, and persisted bytes are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,

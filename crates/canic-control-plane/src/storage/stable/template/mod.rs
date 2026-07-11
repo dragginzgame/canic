@@ -3,7 +3,11 @@ pub mod gc;
 pub mod manifest;
 
 pub use chunked::{
-    TemplateChunkRecord, TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkStore,
+    TemplateChunkRecord, TemplateChunkSetEntryRecord, TemplateChunkSetRecord,
+    TemplateChunkSetStateStore, TemplateChunkSetsData, TemplateChunkStore,
 };
-pub use gc::{WasmStoreGcStateRecord, WasmStoreGcStateStore};
-pub use manifest::{TemplateManifestRecord, TemplateManifestStateStore};
+pub use gc::{WasmStoreGcStateData, WasmStoreGcStateRecord, WasmStoreGcStateStore};
+pub use manifest::{
+    TemplateManifestEntryRecord, TemplateManifestRecord, TemplateManifestStateStore,
+    TemplateManifestsData,
+};
