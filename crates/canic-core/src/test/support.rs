@@ -10,7 +10,7 @@ use crate::{
     },
     ids::{CanisterRole, SubnetRole},
     ops::runtime::env::EnvOps,
-    storage::stable::env::EnvRecord,
+    storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
 };
 
@@ -103,5 +103,5 @@ pub fn import_test_env(
         parent_pid: Some(root_pid),
     };
 
-    EnvOps::import(snapshot).expect("import test env");
+    EnvOps::import(EnvData { record: snapshot }).expect("import test env");
 }

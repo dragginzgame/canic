@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.9` separates persisted environment, application-state, and
+  subnet-state records from canonical `*Data` snapshots while preserving
+  memory IDs and record encodings.
+
 - `0.84.8` makes app, subnet, and direct-child topology registry declarations
   truthful with canonical `*Data` snapshots and named rows while preserving
   stable-memory IDs and encodings.

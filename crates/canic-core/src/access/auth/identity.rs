@@ -72,16 +72,16 @@ pub(super) fn validate_delegated_session_subject(
     }
 
     let env = EnvOps::snapshot();
-    if env.root_pid.is_some_and(|pid| pid == subject) {
+    if env.record.root_pid.is_some_and(|pid| pid == subject) {
         return Err(DelegatedSessionSubjectRejection::RootCanister);
     }
-    if env.parent_pid.is_some_and(|pid| pid == subject) {
+    if env.record.parent_pid.is_some_and(|pid| pid == subject) {
         return Err(DelegatedSessionSubjectRejection::ParentCanister);
     }
-    if env.subnet_pid.is_some_and(|pid| pid == subject) {
+    if env.record.subnet_pid.is_some_and(|pid| pid == subject) {
         return Err(DelegatedSessionSubjectRejection::SubnetCanister);
     }
-    if env.prime_root_pid.is_some_and(|pid| pid == subject) {
+    if env.record.prime_root_pid.is_some_and(|pid| pid == subject) {
         return Err(DelegatedSessionSubjectRejection::PrimeRootCanister);
     }
     if SubnetRegistryOps::is_registered(subject) {

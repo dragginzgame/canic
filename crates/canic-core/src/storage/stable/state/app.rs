@@ -32,6 +32,10 @@ pub struct AppStateRecord {
 
 impl_storable_bounded!(AppStateRecord, 32, true);
 
+impl AppStateRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "AppStateRecord";
+}
+
 const fn default_cycles_funding_enabled() -> bool {
     true
 }
@@ -43,6 +47,21 @@ impl Default for AppStateRecord {
             cycles_funding_enabled: default_cycles_funding_enabled(),
         }
     }
+}
+
+///
+/// AppStateData
+///
+/// Canonical application-state import/export snapshot.
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AppStateData {
+    pub record: AppStateRecord,
+}
+
+impl AppStateData {
+    pub const STATE_CONTRACT_NAME: &'static str = "AppStateData";
 }
 
 ///
@@ -78,13 +97,15 @@ impl AppState {
         });
     }
 
-    pub(crate) fn import(data: AppStateRecord) {
-        APP_STATE.with_borrow_mut(|cell| cell.set(data));
+    pub(crate) fn import(data: AppStateData) {
+        APP_STATE.with_borrow_mut(|cell| cell.set(data.record));
     }
 
     #[must_use]
-    pub(crate) fn export() -> AppStateRecord {
-        APP_STATE.with_borrow(|cell| *cell.get())
+    pub(crate) fn export() -> AppStateData {
+        AppStateData {
+            record: APP_STATE.with_borrow(|cell| *cell.get()),
+        }
     }
 }
 
@@ -98,15 +119,17 @@ mod tests {
     use crate::cdk::structures::storable::Storable;
 
     fn reset_state(mode: AppMode) {
-        AppState::import(AppStateRecord {
-            mode,
-            cycles_funding_enabled: true,
+        AppState::import(AppStateData {
+            record: AppStateRecord {
+                mode,
+                cycles_funding_enabled: true,
+            },
         });
     }
 
     #[test]
     fn default_mode_is_enabled() {
-        AppState::import(AppStateRecord::default());
+        AppState::import(AppStateData::default());
         assert_eq!(AppState::get_mode(), AppMode::Enabled);
     }
 
@@ -129,13 +152,13 @@ mod tests {
             mode: AppMode::Readonly,
             cycles_funding_enabled: false,
         };
-        AppState::import(data);
+        AppState::import(AppStateData { record: data });
 
-        assert_eq!(AppState::export().mode, AppMode::Readonly);
-        assert!(!AppState::export().cycles_funding_enabled);
+        assert_eq!(AppState::export().record.mode, AppMode::Readonly);
+        assert!(!AppState::export().record.cycles_funding_enabled);
 
         let exported = AppState::export();
-        assert_eq!(exported, data);
+        assert_eq!(exported, AppStateData { record: data });
     }
 
     #[test]
@@ -153,7 +176,7 @@ mod tests {
 
     #[test]
     fn cycles_funding_switch_round_trip() {
-        AppState::import(AppStateRecord::default());
+        AppState::import(AppStateData::default());
         assert!(AppState::cycles_funding_enabled());
 
         AppState::set_cycles_funding_enabled(false);

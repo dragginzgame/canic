@@ -13,7 +13,7 @@ use crate::{
         prelude::*,
         storage::state::mapper::{AppStateCommandMapper, AppStateMapper},
     },
-    storage::stable::state::app::{AppMode, AppState, AppStateRecord},
+    storage::stable::state::app::{AppMode, AppState, AppStateData, AppStateRecord},
 };
 
 ///
@@ -120,9 +120,11 @@ impl AppStateOps {
     ///
     /// This is intended for install-time bootstraps only.
     pub fn init_mode(mode: AppMode) {
-        AppState::import(AppStateRecord {
-            mode,
-            cycles_funding_enabled: true,
+        AppState::import(AppStateData {
+            record: AppStateRecord {
+                mode,
+                cycles_funding_enabled: true,
+            },
         });
     }
 
@@ -133,27 +135,27 @@ impl AppStateOps {
     /// Export the current application state as a DTO snapshot.
     #[must_use]
     pub fn snapshot_input() -> AppStateInput {
-        AppStateMapper::record_to_input(AppState::export())
+        AppStateMapper::record_to_input(AppState::export().record)
     }
 
     /// Export the current application state as a response snapshot.
     #[must_use]
     pub fn snapshot_response() -> AppStateResponse {
-        AppStateMapper::record_to_response(AppState::export())
+        AppStateMapper::record_to_response(AppState::export().record)
     }
 
     /// Import application state from an operational snapshot.
     ///
     /// Validation occurs during snapshot → data conversion.
     #[cfg_attr(not(test), expect(dead_code))]
-    pub fn import(data: AppStateRecord) {
+    pub fn import(data: AppStateData) {
         AppState::import(data);
     }
 
     /// Import application state from a DTO snapshot.
     pub fn import_input(view: AppStateInput) {
         let record = AppStateMapper::input_to_record(view);
-        AppState::import(record);
+        AppState::import(AppStateData { record });
     }
 }
 
@@ -182,9 +184,11 @@ mod tests {
     use super::*;
 
     fn reset_state(mode: AppMode, cycles_funding_enabled: bool) {
-        AppStateOps::import(AppStateRecord {
-            mode,
-            cycles_funding_enabled,
+        AppStateOps::import(AppStateData {
+            record: AppStateRecord {
+                mode,
+                cycles_funding_enabled,
+            },
         });
     }
 

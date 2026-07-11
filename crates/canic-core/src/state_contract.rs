@@ -460,28 +460,36 @@ fn root_app_registry_domains() -> Vec<StateDomainManifest> {
 }
 
 fn runtime_env_domains() -> Vec<StateDomainManifest> {
+    use crate::storage::stable::{
+        env::{EnvData, EnvRecord},
+        state::{
+            app::{AppStateData, AppStateRecord},
+            subnet::{SubnetStateData, SubnetStateRecord},
+        },
+    };
+
     vec![
         state_domain(
             "env",
             ENV_ID,
-            "EnvRecord",
-            "EnvData",
+            EnvRecord::STATE_CONTRACT_NAME,
+            EnvData::STATE_CONTRACT_NAME,
             40,
             "env_root_and_role_bindings_are_restored",
         ),
         state_domain(
             "app_state",
             APP_STATE_ID,
-            "AppStateRecord",
-            "AppStateData",
+            AppStateRecord::STATE_CONTRACT_NAME,
+            AppStateData::STATE_CONTRACT_NAME,
             50,
             "app_state_mode_is_restored_before_hooks",
         ),
         state_domain(
             "subnet_state",
             SUBNET_STATE_ID,
-            "SubnetStateRecord",
-            "SubnetStateData",
+            SubnetStateRecord::STATE_CONTRACT_NAME,
+            SubnetStateData::STATE_CONTRACT_NAME,
             55,
             "subnet_state_restores_auth_state",
         ),
@@ -794,6 +802,50 @@ mod tests {
                 .iter()
                 .find(|declaration| declaration.domain == domain)
                 .expect("topology registry state declaration");
+
+            assert_eq!(declaration.record, record);
+            assert_eq!(declaration.snapshot, snapshot);
+        }
+    }
+
+    #[test]
+    fn runtime_env_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::{
+            env::{EnvData, EnvRecord},
+            state::{
+                app::{AppStateData, AppStateRecord},
+                subnet::{SubnetStateData, SubnetStateRecord},
+            },
+        };
+
+        let descriptors = canic_state_descriptors();
+        let runtime_env = descriptors
+            .iter()
+            .find(|descriptor| descriptor.allocation == StateAllocationKey::CoreRuntimeEnvironment)
+            .expect("runtime environment descriptor");
+
+        for (domain, record, snapshot) in [
+            (
+                "env",
+                EnvRecord::STATE_CONTRACT_NAME,
+                EnvData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "app_state",
+                AppStateRecord::STATE_CONTRACT_NAME,
+                AppStateData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "subnet_state",
+                SubnetStateRecord::STATE_CONTRACT_NAME,
+                SubnetStateData::STATE_CONTRACT_NAME,
+            ),
+        ] {
+            let declaration = runtime_env
+                .state
+                .iter()
+                .find(|declaration| declaration.domain == domain)
+                .expect("runtime environment state declaration");
 
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);

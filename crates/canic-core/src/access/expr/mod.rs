@@ -484,8 +484,8 @@ mod tests {
     use crate::{
         access,
         ids::{EndpointCall, EndpointCallKind, EndpointId},
-        storage::stable::env::{Env, EnvRecord},
-        storage::stable::state::app::{AppMode, AppState, AppStateRecord},
+        storage::stable::env::{Env, EnvData, EnvRecord},
+        storage::stable::state::app::{AppMode, AppState, AppStateData, AppStateRecord},
         test::seams,
     };
 
@@ -493,7 +493,7 @@ mod tests {
     /// EnvRestore
     ///
 
-    struct EnvRestore(EnvRecord);
+    struct EnvRestore(EnvData);
 
     impl Drop for EnvRestore {
         fn drop(&mut self) {
@@ -505,7 +505,7 @@ mod tests {
     /// AppRestore
     ///
 
-    struct AppRestore(AppStateRecord);
+    struct AppRestore(AppStateData);
 
     impl Drop for AppRestore {
         fn drop(&mut self) {
@@ -521,9 +521,11 @@ mod tests {
 
         let parent = seams::p(1);
         let other = seams::p(2);
-        Env::import(EnvRecord {
-            parent_pid: Some(parent),
-            ..EnvRecord::default()
+        Env::import(EnvData {
+            record: EnvRecord {
+                parent_pid: Some(parent),
+                ..EnvRecord::default()
+            },
         });
 
         let expr = caller::is_parent();
@@ -564,9 +566,11 @@ mod tests {
         };
 
         for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
-            AppState::import(AppStateRecord {
-                mode,
-                ..AppStateRecord::default()
+            AppState::import(AppStateData {
+                record: AppStateRecord {
+                    mode,
+                    ..AppStateRecord::default()
+                },
             });
             let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
             let direct_result = access::app::guard_app_update();
@@ -592,9 +596,11 @@ mod tests {
         };
 
         for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
-            AppState::import(AppStateRecord {
-                mode,
-                ..AppStateRecord::default()
+            AppState::import(AppStateData {
+                record: AppStateRecord {
+                    mode,
+                    ..AppStateRecord::default()
+                },
             });
             let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
             let direct_result = access::app::guard_app_query();
@@ -639,9 +645,11 @@ mod tests {
 
         let parent = seams::p(10);
         let delegated_subject = seams::p(11);
-        Env::import(EnvRecord {
-            parent_pid: Some(parent),
-            ..EnvRecord::default()
+        Env::import(EnvData {
+            record: EnvRecord {
+                parent_pid: Some(parent),
+                ..EnvRecord::default()
+            },
         });
 
         let expr = caller::is_parent();
