@@ -29,11 +29,12 @@ use canic_core::control_plane_support::{
             ready::ReadyOps,
         },
         storage::{
-            index::{IndexEntryRecord, app::AppIndexOps, subnet::SubnetIndexOps},
+            index::{app::AppIndexOps, subnet::SubnetIndexOps},
             pool::PoolOps,
             registry::{app::AppRegistryOps, subnet::SubnetRegistryOps},
         },
     },
+    view::topology::IndexEntryView,
     workflow::{
         ic::{IcWorkflow, provision::ProvisionWorkflow},
         pool::{PoolWorkflow, query::PoolQuery},
@@ -805,8 +806,8 @@ async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
 }
 
 pub fn root_validate_state() -> ValidationReport {
-    let app_data = AppIndexOps::data();
-    let subnet_data = SubnetIndexOps::data();
+    let app_entries = AppIndexOps::entry_projections();
+    let subnet_entries = SubnetIndexOps::entry_projections();
 
     let mut issues = Vec::new();
 
@@ -822,10 +823,10 @@ pub fn root_validate_state() -> ValidationReport {
     let registry_roles = SubnetRegistryOps::role_index();
 
     let (app_unique, app_consistent) =
-        check_index("app_index", &app_data.entries, &registry_roles, &mut issues);
+        check_index("app_index", &app_entries, &registry_roles, &mut issues);
     let (subnet_unique, subnet_consistent) = check_index(
         "subnet_index",
-        &subnet_data.entries,
+        &subnet_entries,
         &registry_roles,
         &mut issues,
     );
@@ -845,7 +846,7 @@ pub fn root_validate_state() -> ValidationReport {
 
 fn check_index(
     label: &str,
-    entries: &[IndexEntryRecord],
+    entries: &[IndexEntryView],
     registry_roles: &BTreeMap<CanisterRole, Vec<Principal>>,
     issues: &mut Vec<ValidationIssue>,
 ) -> (bool, bool) {

@@ -22,7 +22,6 @@ wasm-store-canister = []
 async-trait = { workspace = true }
 candid = { workspace = true }
 canic-core = { workspace = true }
-ic-memory = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }

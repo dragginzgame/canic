@@ -4,6 +4,7 @@
 //! Does not own: workflow decisions, ledger/CMC calls, or DTO projection.
 //! Boundary: storage ops wrap these records for ICP refill workflows.
 
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::candid::Nat,
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
@@ -11,7 +12,6 @@ use crate::{
     role_contract::allocation::memory::observability::ICP_REFILL_RECORDS_ID,
     storage::prelude::*,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
@@ -20,7 +20,7 @@ eager_static! {
     //
     static ICP_REFILL_RECORDS: RefCell<IcpRefillRecords> =
         RefCell::new(IcpRefillRecords::new(StableBtreeMap::init(
-            crate::ic_memory_key!("canic.core.icp_refill_records.v1", IcpRefillRecords, ICP_REFILL_RECORDS_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.icp_refill_records.v1", ty = IcpRefillRecords, id = ICP_REFILL_RECORDS_ID),
         )));
 }
 

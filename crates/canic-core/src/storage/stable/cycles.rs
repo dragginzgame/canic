@@ -4,6 +4,7 @@
 //! Does not own: cycle funding policy, DTO mapping, or runtime metrics.
 //! Boundary: storage ops wrap these records before workflow access.
 
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::VirtualMemory, storable::Bound},
     eager_static,
@@ -12,7 +13,6 @@ use crate::{
     },
     storage::prelude::*,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
 eager_static! {
@@ -21,7 +21,7 @@ eager_static! {
     //
     static CYCLE_TRACKER: RefCell<CycleTracker> =
         RefCell::new(CycleTracker::new(StableBtreeMap::init(
-            crate::ic_memory_key!("canic.core.cycle_tracker.v1", CycleTracker, CYCLE_TRACKER_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycle_tracker.v1", ty = CycleTracker, id = CYCLE_TRACKER_ID),
         )));
 }
 
@@ -31,7 +31,7 @@ eager_static! {
     //
     static CYCLE_TOPUP_EVENTS: RefCell<CycleTopupEvents> =
         RefCell::new(CycleTopupEvents::new(StableBtreeMap::init(
-            crate::ic_memory_key!("canic.core.cycle_topup_events.v1", CycleTopupEvents, CYCLE_TOPUP_EVENTS_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycle_topup_events.v1", ty = CycleTopupEvents, id = CYCLE_TOPUP_EVENTS_ID),
         )));
 }
 
@@ -41,7 +41,7 @@ eager_static! {
     //
     static CYCLES_FUNDING_LEDGER: RefCell<CyclesFundingLedger> =
         RefCell::new(CyclesFundingLedger::new(StableBtreeMap::init(
-            crate::ic_memory_key!("canic.core.cycles_funding_ledger.v1", CyclesFundingLedger, CYCLES_FUNDING_LEDGER_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.cycles_funding_ledger.v1", ty = CyclesFundingLedger, id = CYCLES_FUNDING_LEDGER_ID),
         )));
 }
 

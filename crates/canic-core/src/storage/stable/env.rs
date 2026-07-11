@@ -13,7 +13,7 @@ eager_static! {
     //
     static ENV: RefCell<Cell<EnvRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!("canic.core.env.v1", EnvRecord, ENV_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.env.v1", ty = EnvRecord, id = ENV_ID),
             EnvRecord::default(),
         ));
 }

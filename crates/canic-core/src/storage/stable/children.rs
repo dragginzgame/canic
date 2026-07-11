@@ -10,6 +10,7 @@
 //!
 //! The contents are replaced wholesale on import.
 
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     role_contract::allocation::memory::topology::CANISTER_CHILDREN_ID,
@@ -18,7 +19,6 @@ use crate::{
         prelude::*,
     },
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
@@ -28,7 +28,7 @@ eager_static! {
     static CANISTER_CHILDREN: RefCell<
         StableBtreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.canister_children.v1", CanisterChildren, CANISTER_CHILDREN_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.canister_children.v1", ty = CanisterChildren, id = CANISTER_CHILDREN_ID)),
     );
 }
 

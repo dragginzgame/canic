@@ -12,9 +12,13 @@ pub mod runtime;
 
 pub use crate::{eager_init, eager_static, ic_memory_key, ic_memory_range};
 
-pub(crate) fn bootstrap_default_memory_manager() -> Result<
-    ic_memory::ValidatedAllocations,
-    ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>,
-> {
+/// Stable allocation-policy authority for Canic core memory declarations.
+pub const CANIC_CORE_MEMORY_AUTHORITY: &str = "canic-core";
+/// Stable allocation-policy authority for Canic control-plane memory declarations.
+pub const CANIC_CONTROL_PLANE_MEMORY_AUTHORITY: &str = "canic-control-plane";
+
+pub(crate) fn bootstrap_default_memory_manager()
+-> Result<(), ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>> {
     ic_memory::bootstrap_default_memory_manager_with_policy(&policy::CanicMemoryManagerPolicy::new())
+        .map(|_| ())
 }

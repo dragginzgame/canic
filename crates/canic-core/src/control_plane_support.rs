@@ -68,16 +68,12 @@ pub mod ops {
 
     pub mod storage {
         pub mod index {
-            pub use crate::storage::stable::index::IndexEntryRecord;
-
             pub mod app {
                 pub use crate::ops::storage::index::app::AppIndexOps;
-                pub use crate::storage::stable::index::app::AppIndexData;
             }
 
             pub mod subnet {
                 pub use crate::ops::storage::index::subnet::SubnetIndexOps;
-                pub use crate::storage::stable::index::subnet::SubnetIndexData;
             }
         }
 
@@ -94,6 +90,12 @@ pub mod ops {
                 pub use crate::ops::storage::registry::subnet::SubnetRegistryOps;
             }
         }
+    }
+}
+
+pub mod view {
+    pub mod topology {
+        pub use crate::view::topology::IndexEntryView;
     }
 }
 

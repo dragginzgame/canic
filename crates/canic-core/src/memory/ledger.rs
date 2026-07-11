@@ -7,14 +7,14 @@
 #[cfg(target_arch = "wasm32")]
 use super::manager;
 use super::{manager::MEMORY_MANAGER, policy, registry::MemoryRegistryError};
+use crate::cdk::structures::{
+    DefaultMemoryImpl, Memory,
+    cell::Cell,
+    memory::{MemoryId, VirtualMemory},
+};
 use ic_memory::{
     AllocationHistory, AllocationLedger, AllocationSlotDescriptor, DiagnosticExport,
     DiagnosticMemorySize, MemoryManagerAuthorityRecord, StableCellLedgerRecord,
-    stable_structures::{
-        DefaultMemoryImpl, Memory,
-        cell::Cell,
-        memory_manager::{MemoryId, VirtualMemory},
-    },
 };
 #[cfg(any(test, target_arch = "wasm32"))]
 use ic_memory::{decode_stable_cell_ledger_record, decode_stable_cell_payload};

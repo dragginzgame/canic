@@ -1,14 +1,14 @@
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     role_contract::allocation::memory::topology::SUBNET_INDEX_ID,
     storage::prelude::*,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
     static SUBNET_INDEX: RefCell<StableBtreeMap<CanisterRole, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(StableBtreeMap::init(crate::ic_memory_key!("canic.core.subnet_index.v1", SubnetIndex, SUBNET_INDEX_ID)));
+        RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.subnet_index.v1", ty = SubnetIndex, id = SUBNET_INDEX_ID)));
 }
 
 ///

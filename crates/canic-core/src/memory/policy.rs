@@ -5,7 +5,10 @@
 //! Boundary: memory bootstrap passes this policy into `ic-memory` validation.
 
 use crate::{
-    memory::registry::MemoryRegistryError,
+    memory::{
+        CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, CANIC_CORE_MEMORY_AUTHORITY,
+        registry::MemoryRegistryError,
+    },
     role_contract::allocation::{
         CANIC_CONTROL_PLANE_MAX_ID, CANIC_CONTROL_PLANE_MIN_ID, CANIC_CORE_MAX_ID,
         CANIC_CORE_MIN_ID,
@@ -16,9 +19,7 @@ use ic_memory::{
     MemoryManagerRangeMode, MemoryManagerSlotError, StableKey,
 };
 
-pub const CANIC_CORE_AUTHORITY_OWNER: &str = "canic-core";
 pub const CANIC_CORE_AUTHORITY_PURPOSE: &str = "Canic core allocation authority";
-pub const CANIC_CONTROL_PLANE_AUTHORITY_OWNER: &str = "canic-control-plane";
 pub const CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE: &str = "Canic control-plane allocation authority";
 
 ///
@@ -90,14 +91,14 @@ pub fn canonical_authority_records() -> Vec<MemoryManagerAuthorityRecord> {
         .expect("valid ic-memory authority record"),
         MemoryManagerAuthorityRecord::new(
             canic_core_range(),
-            CANIC_CORE_AUTHORITY_OWNER,
+            CANIC_CORE_MEMORY_AUTHORITY,
             MemoryManagerRangeMode::Reserved,
             Some(CANIC_CORE_AUTHORITY_PURPOSE.to_string()),
         )
         .expect("valid Canic core authority record"),
         MemoryManagerAuthorityRecord::new(
             canic_control_plane_range(),
-            CANIC_CONTROL_PLANE_AUTHORITY_OWNER,
+            CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,
             MemoryManagerRangeMode::Reserved,
             Some(CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE.to_string()),
         )

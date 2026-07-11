@@ -262,7 +262,7 @@ fn normalize_chain_key_ecdsa_signature_enabled(
             "invalid chain-key ECDSA signature encoding: {err}"
         ))
     })?;
-    Ok(parsed.normalize_s().unwrap_or(parsed).to_bytes().to_vec())
+    Ok(parsed.normalize_s().to_bytes().to_vec())
 }
 
 #[cfg(not(any(feature = "auth-chain-key-ecdsa", test)))]
@@ -419,7 +419,7 @@ mod tests {
         let signature: K256TestSignature = signing_key()
             .sign_prehash(&chain_key_batch_header_hash(header))
             .expect("test prehash signature should sign");
-        if signature.normalize_s().is_some() {
+        if signature.normalize_s() != signature {
             return signature.to_bytes().to_vec();
         }
 
@@ -457,7 +457,7 @@ mod tests {
         config.chain_key_root_proof.derivation_path_hash_hex = Some(hex(&derivation_path_hash));
         config.chain_key_root_proof.public_key_hex = Some(hex(signing_key
             .verifying_key()
-            .to_encoded_point(true)
+            .to_sec1_point(true)
             .as_bytes()));
         config.chain_key_root_proof.key_version = Some(4);
         config.chain_key_root_proof.allow_test_key = true;
@@ -475,7 +475,7 @@ mod tests {
             derivation_path: derivation_path(),
             public_key: signing_key
                 .verifying_key()
-                .to_encoded_point(true)
+                .to_sec1_point(true)
                 .as_bytes()
                 .to_vec(),
             key_version: 4,

@@ -83,7 +83,8 @@ pub const CANIC_MEMORY_MAX: u8 = role_contract::allocation::CANIC_CORE_MAX_ID;
 // The management canister wasm chunk store rejects larger payloads.
 pub const CANIC_WASM_CHUNK_BYTES: usize = 1_048_576;
 
-ic_memory::ic_memory_range!(
+crate::ic_memory_range!(
+    authority = CANIC_CORE_MEMORY_AUTHORITY,
     start = role_contract::allocation::CANIC_CORE_MIN_ID,
     end = role_contract::allocation::CANIC_CORE_MAX_ID,
 );

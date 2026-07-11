@@ -6,16 +6,18 @@
 
 use crate::{
     InternalError,
+    domain::policy::pure::topology::IndexPolicyInput,
     dto::topology::SubnetIndexArgs,
     ops::{
         config::ConfigOps,
         prelude::*,
         storage::index::{
             ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
-            mapper::SubnetIndexDataMapper,
+            mapper::{IndexEntryMapper, SubnetIndexDataMapper},
         },
     },
     storage::stable::index::subnet::{SubnetIndex, SubnetIndexData},
+    view::topology::IndexEntryView,
 };
 
 ///
@@ -46,8 +48,18 @@ impl SubnetIndexOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn data() -> SubnetIndexData {
+    pub(crate) fn data() -> SubnetIndexData {
         SubnetIndex::export()
+    }
+
+    #[must_use]
+    pub fn entry_projections() -> Vec<IndexEntryView> {
+        IndexEntryMapper::records_to_projections(SubnetIndex::export().entries)
+    }
+
+    #[must_use]
+    pub(crate) fn policy_input() -> Vec<IndexPolicyInput> {
+        IndexEntryMapper::records_to_policy_input(&SubnetIndex::export().entries)
     }
 
     #[must_use]

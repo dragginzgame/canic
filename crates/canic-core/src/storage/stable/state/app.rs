@@ -14,7 +14,7 @@ pub use crate::domain::state::AppMode;
 eager_static! {
     static APP_STATE: RefCell<Cell<AppStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!("canic.core.app_state.v1", AppState, APP_STATE_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.app_state.v1", ty = AppState, id = APP_STATE_ID),
             AppStateRecord::default(),
         ));
 }

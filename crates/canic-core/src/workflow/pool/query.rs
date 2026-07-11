@@ -35,6 +35,6 @@ impl PoolQuery {
     #[must_use]
     pub fn pool_list() -> CanisterPoolResponse {
         let data = PoolOps::data();
-        CanisterPoolResponseMapper::data_to_view(data)
+        CanisterPoolResponseMapper::data_to_response(data)
     }
 }

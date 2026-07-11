@@ -2,7 +2,7 @@ use super::super::super::store_pid_for_binding;
 use super::super::WasmStorePublicationWorkflow;
 use crate::{
     ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps,
-    storage::stable::state::subnet::PublicationStoreStateRecord,
+    view::state::PublicationStoreStateView,
 };
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
@@ -26,7 +26,7 @@ impl WasmStorePublicationWorkflow {
 
     // Return true when a binding is already reserved for detached or retired lifecycle state.
     pub(in crate::workflow::runtime::template::publication) fn binding_is_reserved_for_publication(
-        state: &PublicationStoreStateRecord,
+        state: &PublicationStoreStateView,
         binding: &WasmStoreBinding,
     ) -> bool {
         state.detached_binding.as_ref() == Some(binding)
@@ -35,7 +35,7 @@ impl WasmStorePublicationWorkflow {
 
     // Reject explicit publication selection when the binding is already detached or retired.
     fn ensure_binding_is_selectable_for_publication(
-        state: &PublicationStoreStateRecord,
+        state: &PublicationStoreStateView,
         binding: &WasmStoreBinding,
     ) -> Result<(), InternalError> {
         if Self::binding_is_reserved_for_publication(state, binding) {
@@ -51,8 +51,8 @@ impl WasmStorePublicationWorkflow {
     // Emit one structured publication-binding transition record after root-owned state changes.
     pub(in crate::workflow::runtime::template::publication::lifecycle) fn log_publication_state_transition(
         transition_kind: &str,
-        previous: &PublicationStoreStateRecord,
-        current: &PublicationStoreStateRecord,
+        previous: &PublicationStoreStateView,
+        current: &PublicationStoreStateView,
         changed_at: u64,
     ) {
         if previous == current {

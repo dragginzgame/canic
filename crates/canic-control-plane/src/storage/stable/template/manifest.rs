@@ -2,12 +2,12 @@ use crate::ids::{
     CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
     WasmStoreBinding,
 };
+use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use canic_core::cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory, storable::Storable};
 use canic_core::eager_static;
 use canic_core::{
     impl_storable_bounded, role_contract::allocation::memory::template::TEMPLATE_MANIFESTS_ID,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -15,7 +15,7 @@ eager_static! {
     static TEMPLATE_MANIFESTS: RefCell<
         StableBtreeMap<TemplateReleaseKey, TemplateManifestRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(canic_core::ic_memory_key!("canic.control_plane.template_manifest.v1", TemplateManifestStateStore, TEMPLATE_MANIFESTS_ID)),
+        StableBtreeMap::init(canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template_manifest.v1", ty = TemplateManifestStateStore, id = TEMPLATE_MANIFESTS_ID)),
     );
 }
 

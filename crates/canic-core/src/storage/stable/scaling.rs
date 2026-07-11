@@ -1,3 +1,4 @@
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::impl_storable_bounded;
 use crate::{
     cdk::{
@@ -9,7 +10,6 @@ use crate::{
     ids::CanisterRole,
     role_contract::allocation::memory::placement::SCALING_REGISTRY_ID,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -17,7 +17,7 @@ eager_static! {
     static SCALING_REGISTRY: RefCell<
         StableBtreeMap<Principal, WorkerEntryRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.scaling_registry.v1", ScalingRegistry, SCALING_REGISTRY_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.scaling_registry.v1", ty = ScalingRegistry, id = SCALING_REGISTRY_ID)),
     );
 }
 

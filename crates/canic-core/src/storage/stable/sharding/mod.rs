@@ -18,6 +18,8 @@ pub mod lifecycle;
 pub mod registry;
 
 #[cfg(feature = "sharding")]
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
+#[cfg(feature = "sharding")]
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Memory, memory::VirtualMemory},
     role_contract::allocation::memory::placement::{SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID},
@@ -27,8 +29,6 @@ use crate::{
     cdk::types::{BoundedString64, BoundedString128},
     storage::prelude::*,
 };
-#[cfg(feature = "sharding")]
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 #[cfg(feature = "sharding")]
 use std::cell::RefCell;
 
@@ -40,8 +40,8 @@ use std::cell::RefCell;
 eager_static! {
     static SHARDING_CORE: RefCell<ShardingCore<VirtualMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
-            StableBtreeMap::init(crate::ic_memory_key!("canic.core.sharding_registry.v1", ShardingRegistry, SHARDING_REGISTRY_ID)),
-            StableBtreeMap::init(crate::ic_memory_key!("canic.core.sharding_assignment.v1", ShardingRegistry, SHARDING_ASSIGNMENT_ID)),
+            StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding_registry.v1", ty = ShardingRegistry, id = SHARDING_REGISTRY_ID)),
+            StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding_assignment.v1", ty = ShardingRegistry, id = SHARDING_ASSIGNMENT_ID)),
         )
     );
 }

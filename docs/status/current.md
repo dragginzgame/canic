@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.12`, published and tagged
-  as `v0.84.12`.
+- The current package/release-surface version is `0.84.13`, published and tagged
+  as `v0.84.13`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -215,9 +215,8 @@ before this compaction is archived at
   descriptor registries. Memory IDs, stable keys, storable encodings, runtime
   behavior, DTOs, Candid, and persisted bytes are unchanged.
 
-- The `0.84.13` feature-gating and release-safety changelog is prepared;
-  package metadata remains at `0.84.12` pending the maintainer-owned release
-  bump.
+- The `0.84.13` feature-gating and release-safety patch is published and tagged
+  as `v0.84.13`.
   `canic-control-plane::state_contract` is intentionally unconditional for
   passive host inspection, so the control-plane subnet record and snapshot
   schema are now compiled for minimal and wasm-store feature sets. The subnet
@@ -228,6 +227,35 @@ before this compaction is archived at
   Candid, and JSON shapes are unchanged. CI and local version-bump gates now
   run the minimal, wasm-store-only, and host-consumer compile matrix, and the
   bump script refuses direct execution without a completed release gate.
+
+- The `0.84.14` layering-correction changelog is prepared; package metadata
+  remains at `0.84.13` pending the maintainer-owned release bump. Topology index
+  storage ops now project persisted `IndexEntryRecord` values into internal
+  `IndexEntryView` values before workflow use. Core index queries and
+  control-plane root validation paginate or validate those projections, and
+  the public control-plane support facade no longer re-exports the persisted
+  record. Control-plane publication workflows likewise consume ops-owned
+  publication-state and wasm-store projections rather than stable subnet
+  records. The stale pool `data_to_view` response-mapper name is hard-cut to
+  `data_to_response`. The layering guard scans both workflow trees and reports
+  all detected violations in one run instead of stopping after the first. It
+  passes with no suppression. The same patch adopts `ic-memory 0.8.1` through
+  a hard-cut named macro form. All 36 key declarations and both owned ranges
+  name centralized Canic core or control-plane authority constants; the
+  adapter passes those constants through explicit upstream registration
+  without repeating strings at allocation sites. Canic owns a direct
+  `ic-stable-structures 0.7.2` dependency behind its existing CDK facade, and
+  the bootstrap adapter discards the committed-allocation capability after
+  successful persistence. The eight workspace Canic dependency constraints
+  are corrected to `0.84.13`. Stable keys, memory IDs, persisted records and
+  encodings, collection types, DTOs, Candid, JSON, and runtime behavior are
+  unchanged. The patch also completes the `k256 0.14` hard cut: chain-key
+  ECDSA consumes the always-returning low-S normalization API and uses the
+  renamed compressed SEC1 point serializer. Signature and public-key bytes are
+  unchanged. Default-target, wasm-target, and all-feature core checks, the
+  complete control-plane/host feature matrix, publication bootstrap tests,
+  focused chain-key normalization and verification tests, targeted Clippy, and
+  repository guards pass.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,

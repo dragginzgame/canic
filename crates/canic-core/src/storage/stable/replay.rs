@@ -4,6 +4,7 @@
 //! Does not own: replay decisions, receipt lifecycle, or command execution.
 //! Boundary: storage ops convert between these records and replay model types.
 
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 #[cfg(test)]
 use crate::cdk::types::Principal;
 use crate::{
@@ -16,14 +17,13 @@ use crate::{
     role_contract::allocation::memory::auth::REPLAY_RECEIPTS_ID,
     storage::prelude::*,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::{borrow::Cow, cell::RefCell};
 
 eager_static! {
     static REPLAY_RECEIPTS: RefCell<
         StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(
-        StableBtreeMap::init(crate::ic_memory_key!("canic.core.replay_receipts.v1", ReplayReceiptStore, REPLAY_RECEIPTS_ID)),
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.replay_receipts.v1", ty = ReplayReceiptStore, id = REPLAY_RECEIPTS_ID)),
     );
 }
 

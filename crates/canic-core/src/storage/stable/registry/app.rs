@@ -4,12 +4,12 @@
 //! Does not own: topology policy, workflow orchestration, or endpoint DTOs.
 //! Boundary: exports canonical app-registry data for storage ops consumers.
 
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
     role_contract::allocation::memory::topology::APP_REGISTRY_ID,
     storage::prelude::*,
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 //
@@ -20,7 +20,7 @@ use std::cell::RefCell;
 
 eager_static! {
     static APP_REGISTRY: RefCell<StableBtreeMap<Principal, Principal, VirtualMemory<DefaultMemoryImpl>>> =
-        RefCell::new(StableBtreeMap::init(crate::ic_memory_key!("canic.core.app_registry.v1", AppRegistry, APP_REGISTRY_ID)));
+        RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.app_registry.v1", ty = AppRegistry, id = APP_REGISTRY_ID)));
 }
 
 ///

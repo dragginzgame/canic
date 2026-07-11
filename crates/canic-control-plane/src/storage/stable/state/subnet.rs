@@ -18,7 +18,7 @@ eager_static! {
     //
     static SUBNET_STATE: RefCell<Cell<SubnetStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            canic_core::ic_memory_key!("canic.control_plane.subnet_state.v1", SubnetState, CONTROL_PLANE_SUBNET_STATE_ID),
+            canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.subnet_state.v1", ty = SubnetState, id = CONTROL_PLANE_SUBNET_STATE_ID),
             SubnetStateRecord::default(),
         ));
 }

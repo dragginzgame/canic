@@ -13,6 +13,7 @@
 //! - Role uniqueness
 //! - Root singularity
 
+use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::{
         candid::Principal,
@@ -23,14 +24,13 @@ use crate::{
     role_contract::allocation::memory::topology::SUBNET_REGISTRY_ID,
     storage::canister::{CanisterEntryRecord, CanisterRecord},
 };
-use ic_memory::stable_structures::btreemap::BTreeMap as StableBtreeMap;
 use std::cell::RefCell;
 
 eager_static! {
     static SUBNET_REGISTRY: RefCell<
         StableBtreeMap<Principal, CanisterRecord, VirtualMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(
-        crate::ic_memory_key!("canic.core.subnet_registry.v1", SubnetRegistry, SUBNET_REGISTRY_ID)
+        crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.subnet_registry.v1", ty = SubnetRegistry, id = SUBNET_REGISTRY_ID)
     ));
 }
 

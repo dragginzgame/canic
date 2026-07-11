@@ -11,6 +11,7 @@ use crate::{
         topology::{AppIndexArgs, IndexEntryInput, IndexEntryResponse, SubnetIndexArgs},
     },
     storage::stable::index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
+    view::topology::IndexEntryView,
 };
 
 // -----------------------------------------------------------------------------
@@ -93,7 +94,18 @@ pub struct IndexEntryMapper;
 
 impl IndexEntryMapper {
     #[must_use]
-    pub fn record_page_to_response(page: Page<IndexEntryRecord>) -> Page<IndexEntryResponse> {
+    pub fn records_to_projections(entries: Vec<IndexEntryRecord>) -> Vec<IndexEntryView> {
+        entries
+            .into_iter()
+            .map(|entry| IndexEntryView {
+                role: entry.role,
+                pid: entry.pid,
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn projection_page_to_response(page: Page<IndexEntryView>) -> Page<IndexEntryResponse> {
         Page {
             entries: page
                 .entries
@@ -116,5 +128,30 @@ impl IndexEntryMapper {
                 pid: entry.pid,
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{cdk::types::Principal, ids::CanisterRole};
+
+    #[test]
+    fn records_project_before_response_mapping() {
+        let pid = Principal::from_slice(&[1]);
+        let projections = IndexEntryMapper::records_to_projections(vec![IndexEntryRecord {
+            role: CanisterRole::new("app"),
+            pid,
+        }]);
+
+        let response = IndexEntryMapper::projection_page_to_response(Page {
+            entries: projections,
+            total: 1,
+        });
+
+        assert_eq!(response.total, 1);
+        assert_eq!(response.entries.len(), 1);
+        assert_eq!(response.entries[0].role, CanisterRole::new("app"));
+        assert_eq!(response.entries[0].pid, pid);
     }
 }

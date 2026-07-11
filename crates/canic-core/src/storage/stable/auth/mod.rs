@@ -32,7 +32,7 @@ const DELEGATED_SESSION_BOOTSTRAP_BINDING_SUBJECT_CAPACITY: usize = 256;
 eager_static! {
     pub(super) static AUTH_STATE: RefCell<Cell<AuthStateRecord, VirtualMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
-            crate::ic_memory_key!("canic.core.auth_state.v1", AuthState, AUTH_STATE_ID),
+            crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.auth_state.v1", ty = AuthState, id = AUTH_STATE_ID),
             AuthStateRecord::default(),
         ));
 }
