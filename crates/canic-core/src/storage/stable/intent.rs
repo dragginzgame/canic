@@ -110,6 +110,7 @@ pub struct IntentRecord {
 }
 
 impl IntentRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentRecord";
     pub const STORABLE_MAX_SIZE: u32 = 256;
 }
 
@@ -129,6 +130,7 @@ pub struct IntentStoreMetaRecord {
 }
 
 impl IntentStoreMetaRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentStoreMetaRecord";
     pub const STORABLE_MAX_SIZE: u32 = 96;
 }
 
@@ -162,6 +164,7 @@ pub struct IntentResourceTotalsRecord {
 }
 
 impl IntentResourceTotalsRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentResourceTotalsRecord";
     pub const STORABLE_MAX_SIZE: u32 = 64;
 }
 
@@ -185,6 +188,7 @@ pub struct IntentPendingEntryRecord {
 }
 
 impl IntentPendingEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentPendingEntryRecord";
     pub const STORABLE_MAX_SIZE: u32 = 224;
 }
 
@@ -193,6 +197,102 @@ impl_storable_bounded!(
     IntentPendingEntryRecord::STORABLE_MAX_SIZE,
     false
 );
+
+///
+/// IntentMetaData
+///
+/// Canonical intent-store metadata allocation snapshot.
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct IntentMetaData {
+    pub record: IntentStoreMetaRecord,
+}
+
+impl IntentMetaData {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentMetaData";
+}
+
+///
+/// IntentRecordEntryRecord
+///
+/// One logical intent-record snapshot row preserving its stable intent ID key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IntentRecordEntryRecord {
+    pub intent_id: IntentId,
+    pub record: IntentRecord,
+}
+
+///
+/// IntentRecordsData
+///
+/// Canonical intent-records allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct IntentRecordsData {
+    pub entries: Vec<IntentRecordEntryRecord>,
+}
+
+impl IntentRecordsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentRecordsData";
+}
+
+///
+/// IntentTotalsEntryRecord
+///
+/// One logical intent-total snapshot row preserving its stable resource key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IntentTotalsEntryRecord {
+    pub resource_key: IntentResourceKey,
+    pub record: IntentResourceTotalsRecord,
+}
+
+///
+/// IntentTotalsData
+///
+/// Canonical intent-resource-totals allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct IntentTotalsData {
+    pub entries: Vec<IntentTotalsEntryRecord>,
+}
+
+impl IntentTotalsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentTotalsData";
+}
+
+///
+/// IntentPendingIndexEntryRecord
+///
+/// One logical pending-intent snapshot row preserving its stable intent ID key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IntentPendingIndexEntryRecord {
+    pub intent_id: IntentId,
+    pub record: IntentPendingEntryRecord,
+}
+
+///
+/// IntentPendingData
+///
+/// Canonical pending-intent allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct IntentPendingData {
+    pub entries: Vec<IntentPendingIndexEntryRecord>,
+}
+
+impl IntentPendingData {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentPendingData";
+}
 
 ///
 /// IntentStore
@@ -280,10 +380,150 @@ impl IntentStore {
 
 #[cfg(test)]
 impl IntentStore {
+    #[must_use]
+    pub(crate) fn export_meta() -> IntentMetaData {
+        IntentMetaData {
+            record: Self::meta(),
+        }
+    }
+
+    pub(crate) fn import_meta(data: IntentMetaData) {
+        Self::set_meta(data.record);
+    }
+
+    #[must_use]
+    pub(crate) fn export_records() -> IntentRecordsData {
+        IntentRecordsData {
+            entries: INTENT_RECORDS.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| IntentRecordEntryRecord {
+                        intent_id: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_records(data: IntentRecordsData) {
+        INTENT_RECORDS.with_borrow_mut(|map| {
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.intent_id, entry.record);
+            }
+        });
+    }
+
+    #[must_use]
+    pub(crate) fn export_totals() -> IntentTotalsData {
+        IntentTotalsData {
+            entries: INTENT_TOTALS.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| IntentTotalsEntryRecord {
+                        resource_key: entry.key().clone(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_totals(data: IntentTotalsData) {
+        INTENT_TOTALS.with_borrow_mut(|map| {
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.resource_key, entry.record);
+            }
+        });
+    }
+
+    #[must_use]
+    pub(crate) fn export_pending() -> IntentPendingData {
+        IntentPendingData {
+            entries: INTENT_PENDING.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| IntentPendingIndexEntryRecord {
+                        intent_id: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_pending(data: IntentPendingData) {
+        INTENT_PENDING.with_borrow_mut(|map| {
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.intent_id, entry.record);
+            }
+        });
+    }
+
     pub(crate) fn reset_for_tests() {
         INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_TOTALS.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_PENDING.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMetaRecord::default()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn intent_allocations_round_trip_through_canonical_data_snapshots() {
+        IntentStore::reset_for_tests();
+        let intent_id = IntentId(7);
+        let resource_key = IntentResourceKey::new("storage:uploads");
+        let record = IntentRecord {
+            id: intent_id,
+            resource_key: resource_key.clone(),
+            quantity: 11,
+            state: IntentState::Pending,
+            created_at: 13,
+            ttl_secs: Some(17),
+        };
+        let totals = IntentResourceTotalsRecord {
+            reserved_qty: 11,
+            committed_qty: 19,
+            pending_count: 1,
+        };
+        let pending = IntentPendingEntryRecord {
+            resource_key: resource_key.clone(),
+            quantity: 11,
+            created_at: 13,
+            ttl_secs: Some(17),
+        };
+        let meta = IntentStoreMetaRecord {
+            schema_version: INTENT_STORE_SCHEMA_VERSION,
+            next_intent_id: IntentId(8),
+            pending_total: 1,
+            committed_total: 2,
+            aborted_total: 3,
+        };
+
+        IntentStore::set_meta(meta);
+        IntentStore::insert_record(record);
+        IntentStore::set_totals(resource_key, totals);
+        IntentStore::insert_pending(intent_id, pending);
+
+        let meta_data = IntentStore::export_meta();
+        let records_data = IntentStore::export_records();
+        let totals_data = IntentStore::export_totals();
+        let pending_data = IntentStore::export_pending();
+
+        IntentStore::reset_for_tests();
+        IntentStore::import_meta(meta_data);
+        IntentStore::import_records(records_data.clone());
+        IntentStore::import_totals(totals_data.clone());
+        IntentStore::import_pending(pending_data.clone());
+
+        assert_eq!(IntentStore::export_meta(), meta_data);
+        assert_eq!(IntentStore::export_records(), records_data);
+        assert_eq!(IntentStore::export_totals(), totals_data);
+        assert_eq!(IntentStore::export_pending(), pending_data);
+        IntentStore::reset_for_tests();
     }
 }

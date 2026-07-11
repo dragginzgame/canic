@@ -9,7 +9,7 @@ use crate::{
 
 #[doc(hidden)]
 pub(crate) use crate::storage::stable::intent::{
-    IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord, IntentStoreMetaRecord,
+    IntentPendingIndexEntryRecord, IntentRecord, IntentResourceTotalsRecord, IntentStoreMetaRecord,
 };
 
 ///
@@ -81,7 +81,7 @@ impl IntentTestOps {
     }
 
     #[must_use]
-    pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntryRecord)> {
+    pub fn pending_entries_at(now: u64) -> Vec<IntentPendingIndexEntryRecord> {
         IntentStoreOps::pending_entries_at(now)
     }
 

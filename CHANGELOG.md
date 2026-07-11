@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.84.md](docs/changelog/0.84.md)
 
+- `0.84.11` adds exact canonical snapshots for intent metadata, records,
+  resource totals, and pending indexes while preserving stable-memory IDs and
+  persisted encodings.
+
 - `0.84.10` adds canonical snapshots for auth, replay, cycle history, funding
   ledgers, and ICP-refill history with owner-defined descriptor names while
   preserving stable-memory IDs and record encodings.

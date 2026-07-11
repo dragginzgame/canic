@@ -7,6 +7,8 @@
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+use crate::storage::stable::intent::IntentPendingIndexEntryRecord;
 use crate::{
     InternalError,
     ids::{IntentId, IntentResourceKey},
@@ -310,7 +312,7 @@ impl IntentStoreOps {
     }
 
     #[cfg(test)]
-    pub fn pending_entries_at(now: u64) -> Vec<(IntentId, IntentPendingEntryRecord)> {
+    pub fn pending_entries_at(now: u64) -> Vec<IntentPendingIndexEntryRecord> {
         let mut entries = Vec::new();
 
         IntentStore::with_pending_entries(|pending| {
@@ -319,7 +321,10 @@ impl IntentStoreOps {
                 if is_pending_entry_expired(now, &record) {
                     continue;
                 }
-                entries.push((*entry.key(), record));
+                entries.push(IntentPendingIndexEntryRecord {
+                    intent_id: *entry.key(),
+                    record,
+                });
             }
         });
 

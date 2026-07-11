@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.9`, published and tagged
-  as `v0.84.9`.
+- The current package/release-surface version is `0.84.10`, published and tagged
+  as `v0.84.10`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -172,9 +172,8 @@ before this compaction is archived at
   keys, record serialization, restore order, DTOs, Candid, JSON reports, and
   persisted bytes are unchanged.
 
-- The `0.84.10` passive state-contract changelog is prepared; package metadata
-  remains at `0.84.9` pending the maintainer-owned release bump. Auth singleton
-  state now has a canonical `AuthStateData`
+- The `0.84.10` passive state-contract batch is published and tagged as
+  `v0.84.10`. Auth singleton state now has a canonical `AuthStateData`
   snapshot around its persisted `AuthStateRecord`; replay receipts now expose
   a canonical `ReplayReceiptsData` snapshot composed of named
   `ReplayReceiptEntryRecord` rows preserving stable slot keys. The aspirational
@@ -189,6 +188,17 @@ before this compaction is archived at
   Operational cycle and refill projections use those named rows instead of
   tuples. Their memory IDs, stable schemas, runtime behavior, and persisted
   bytes are unchanged.
+
+- The `0.84.11` passive state-contract changelog is prepared; package metadata
+  remains at `0.84.10` pending the maintainer-owned release bump. Intent
+  metadata, records, per-resource totals, and pending indexes now expose exact
+  `IntentMetaData`, `IntentRecordsData`, `IntentTotalsData`, and
+  `IntentPendingData` snapshots. Map snapshots preserve their stable keys in
+  named rows, and the test-only pending projection no longer crosses the
+  storage/ops boundary as a tuple. Intent descriptors compile against names
+  owned by the corresponding record and snapshot types. Memory IDs, stable
+  cell/map keys, storable record encodings, runtime behavior, DTOs, Candid,
+  JSON reports, and persisted bytes are unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
