@@ -1,5 +1,4 @@
 pub mod auth;
-#[cfg(feature = "blob-storage")]
 pub mod blob_storage;
 pub mod children;
 pub mod cycles;

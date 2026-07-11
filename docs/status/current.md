@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.84.5`, published and tagged
-  as `v0.84.5`.
+- The current package/release-surface version is `0.84.6`, published and tagged
+  as `v0.84.6`.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -123,8 +123,8 @@ before this compaction is archived at
   those types instead of unverified string literals. The underlying stable
   B-tree keys and values, memory IDs, endpoint DTOs, and Candid are unchanged.
 
-- The `0.84.6` passive state-contract changelog is prepared; package metadata
-  remains at `0.84.5` pending the maintainer-owned release bump.
+- The `0.84.6` passive state-contract batch is published and tagged as
+  `v0.84.6`.
   Canister-pool, scaling-registry, and directory-registry exports now use real
   canonical `CanisterPoolData`, `ScalingRegistryData`, and
   `DirectoryRegistryData` snapshots composed of named entry records. Sharding
@@ -137,6 +137,19 @@ before this compaction is archived at
   against owner-defined record and snapshot names. Stable B-tree keys and
   values, memory IDs, restore behavior, endpoint DTOs, Candid, and persisted
   bytes are unchanged.
+
+- The `0.84.7` passive state-contract changelog is prepared; package metadata
+  remains at `0.84.6` pending the maintainer-owned release bump. The former
+  shared, test-only `BlobStorageData` snapshot is
+  hard-cut into exact `StoredBlobsData`, `BlobDeletionPendingData`,
+  `StorageGatewayPrincipalsData`, and `BlobStorageBillingStateData` allocation
+  snapshots. Stable-map key/value rows are named, lifecycle ops consume the
+  canonical projections, and descriptors compile against owner-defined record
+  and snapshot names. Blob-storage schema types remain available to the
+  unconditional descriptor registry while storage implementations remain
+  feature-gated. Stable-memory IDs and encodings, record serialization,
+  restore behavior, DTOs, Candid, JSON reports, and persisted bytes are
+  unchanged.
 
 - Slice B shipped in `0.84.0`. `canic-host::role_contract`
   resolves the exact config-declared package and validates one direct,
@@ -1417,6 +1430,18 @@ one owner/domain group at a time; do not turn it into migration execution or a
 new role-contract architecture.
 
 ## Useful Validation
+
+Focused post-0.84.6 blob-storage snapshot validation (passing):
+
+```text
+cargo check --locked -p canic-core
+cargo check --locked -p canic-core --features blob-storage
+cargo check --locked -p canic-core --features blob-storage-billing
+cargo test --locked -p canic-core blob_storage_descriptors_reference_canonical_data_types --lib
+cargo test --locked -p canic-core --features blob-storage storage::stable::blob_storage::tests --lib
+cargo test --locked -p canic-core --features blob-storage ops::blob_storage::lifecycle::tests --lib
+cargo test --locked -p canic-core --features blob-storage-billing billing_state_exports_through_canonical_data_snapshot --lib
+```
 
 Focused 0.84.6 placement snapshot validation (passing):
 
