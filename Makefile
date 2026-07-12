@@ -52,7 +52,7 @@ help:
 	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-commit   Commit and tag the staged release"
-	@echo "  release-push     Push the release commit and tags"
+	@echo "  release-push     Push the release commit and tags, then clear Cargo build artifacts"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the special packaged downstream wasm_store wrapper path"
@@ -177,6 +177,7 @@ release-commit:
 
 release-push:
 	git push --follow-tags
+	cargo clean
 
 package: ensure-clean
 	$(CARGO_ENV) cargo package
@@ -231,11 +232,11 @@ blob-storage-cashier-inventory-gate:
 # `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }` and incomplete HTTP messages.
 test-unit:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh full
+	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh full
 
 test-unit-fast:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh fast
+	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) bash scripts/ci/run-workspace-tests.sh fast
 
 test-auth:
 	$(CARGO_ENV) cargo test --locked -p canic-core auth --lib
@@ -270,7 +271,7 @@ check: ensure-hooks fmt
 	$(CARGO_ENV) cargo check --workspace
 
 clippy:
-	$(CARGO_ENV) cargo clippy --workspace --all-targets --all-features -- -D warnings
+	CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 fmt: ensure-hooks fmt-core
 
