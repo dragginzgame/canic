@@ -23,14 +23,20 @@ The verified-evidence slice is published as `v0.86.4`. Context, identity,
 artifact, inventory, authority, trust-domain, and verifier-readiness evidence
 have one focused owner.
 
-The next slice is changelog-finalized for `0.86.5`. Target-resolution blockers,
+The diagnostics slice is published as `v0.86.5`. Target-resolution blockers,
 unsupported and blocking assumptions, local-state warnings, unresolved
 assumptions, stable diagnostic codes, and diagnostic-specific next actions have
-one focused owner. The parent retains comparison, aggregate status, global next
-actions, proposed operations, and report assembly. Classification, diagnostic
-ordering, CLI behavior, JSON field order, text output, and exit behavior are
-unchanged. Package versions remain `0.86.4` until the human-owned release flow
-runs.
+one focused owner.
+
+The next slice is changelog-finalized for `0.86.6` and completes the deploy-plan
+structural pass. Proposed
+operation labels, global next actions, aggregate status, comparison status, and
+deterministic diagnostic/operation ordering move to one final-outcome module.
+Serialized report fields, statuses, diagnostics, proposed-operation labels, and
+their stable strings move to one report-model module. The 587-line parent
+retains command orchestration, report assembly, path/profile helpers, and
+focused tests. Policy, CLI behavior, JSON field order, text output, and exit
+behavior are unchanged. Package versions remain `0.86.5`.
 
 ## Checklist
 
@@ -49,8 +55,9 @@ runs.
 - [x] Extract command inputs, root discovery, parsing, and usage.
 - [x] Extract verified evidence construction.
 - [x] Extract blocker, warning, and assumption diagnostics.
-- [ ] Extract comparison, status aggregation, and proposed operations.
-- [ ] Preserve command, exit, and report contracts exactly.
+- [x] Extract comparison, status aggregation, and proposed operations.
+- [x] Extract serialized report types and stable labels.
+- [x] Preserve command, exit, and report contracts exactly.
 
 ### Slice C - State manifest
 
@@ -68,8 +75,7 @@ runs.
 
 ## Next Action
 
-Run the human-owned `0.86.5` release flow after reviewing the finalized patch.
-After publication, continue Slice B with comparison, aggregate status, global
-next actions, and proposed operations as a separately reviewable
-responsibility. Do not introduce a generic planning framework or retain
-parallel implementations.
+Run the human-owned `0.86.6` release flow after reviewing the finalized patch.
+After publication, begin Slice C with one mechanical state-manifest
+responsibility. Do not introduce a generic audit framework or retain parallel
+implementations.

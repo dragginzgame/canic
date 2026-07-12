@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.86.4`, published and tagged
-  as `v0.86.4`. The bounded 0.86 structural-maintainability line remains
+- The current package/release-surface version is `0.86.5`, published and tagged
+  as `v0.86.5`. The bounded 0.86 structural-maintainability line remains
   active; its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -52,8 +52,16 @@ before this compaction is archived at
   blocking assumptions, local-state warnings, unresolved assumptions, stable
   diagnostic codes, and next-action classification into one focused owner.
   Comparison, aggregate status, proposed operations, and report assembly remain
-  in the parent. Package versions remain `0.86.4`. This slice is
-  changelog-finalized for `0.86.5` pending the human-owned release flow.
+  in the parent. This diagnostics slice is published as `v0.86.5`.
+
+  The next unreleased slice completes deploy-plan decomposition. Proposed
+  operation labels, global next actions, aggregate status, comparison status,
+  and deterministic ordering move to one focused final-outcome owner. The
+  serialized report types and stable label mappings move to a report-model
+  owner. The parent retains orchestration, report assembly, path/profile
+  helpers, and focused tests. This deploy-plan closeout is changelog-finalized
+  for `0.86.6`; package versions remain `0.86.5` pending the human-owned release
+  flow.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -357,7 +365,11 @@ before this compaction is archived at
   focused owner without changing report or diagnostic contracts. This evidence
   slice is published as `v0.86.4`. Blocker, warning, and assumption diagnostics
   now move to one focused owner without changing their stable codes or
-  classification. This diagnostics slice is changelog-finalized for `0.86.5`.
+  classification. This diagnostics slice is published as `v0.86.5`. Final
+  comparison, status, next-action, proposed-operation, and ordering policy now
+  move to one focused owner. Serialized report fields and stable labels move to
+  another, completing the deploy-plan structural pass.
+  This closeout is changelog-finalized for `0.86.6`.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and

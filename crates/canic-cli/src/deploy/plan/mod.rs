@@ -7,16 +7,15 @@
 mod command;
 mod diagnostics;
 mod evidence;
+mod outcome;
 mod render;
+mod report;
 
 use super::DeployCommandError;
 use crate::{cli::help::print_help_or_version, version_text};
 #[cfg(test)]
 use canic_host::deployment_truth::DeploymentAssumptionV1;
-use canic_host::deployment_truth::{
-    DeploymentAssumptionKindV1, DeploymentPlanV1, LocalDeploymentPlanRequest,
-};
-use serde::Serialize;
+use canic_host::deployment_truth::{DeploymentPlanV1, LocalDeploymentPlanRequest};
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
@@ -24,56 +23,20 @@ use std::{
 
 use command::REPORT_COMMAND;
 pub(super) use command::{DeployPlanOptions, DeployPlanRoots, usage};
-use diagnostics::{
-    is_observed_state_drift_assumption, plan_assumptions, plan_blockers, plan_warnings,
-    target_resolution_blockers,
-};
+use diagnostics::{plan_assumptions, plan_blockers, plan_warnings, target_resolution_blockers};
+use evidence::verified_facts;
 #[cfg(test)]
 use evidence::verifier_readiness_facts;
-use evidence::{verified_facts, verifier_readiness_required};
+use outcome::{
+    aggregate_status, comparison_status, next_actions, proposed_operations, sort_diagnostics,
+};
+#[cfg(test)]
+use outcome::{operation, sort_proposed_operations};
 pub(super) use render::{command_exit_result, write_report};
 #[cfg(test)]
 pub(super) use render::{render_json, render_text};
+use report::{DeploymentPlanReport, REPORT_SCHEMA_VERSION};
 
-const REPORT_SCHEMA_VERSION: u16 = 1;
-const SEVERITY_INFO: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Info;
-const SEVERITY_WARNING: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Warning;
-const SEVERITY_BLOCKED: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Blocked;
-const SEVERITY_UNSUPPORTED: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Unsupported;
-const CATEGORY_ARTIFACT: PlanDiagnosticCategory = PlanDiagnosticCategory::Artifact;
-const CATEGORY_AUTHORITY: PlanDiagnosticCategory = PlanDiagnosticCategory::Authority;
-const CATEGORY_CONFIG: PlanDiagnosticCategory = PlanDiagnosticCategory::Config;
-const CATEGORY_DEPLOYMENT_IDENTITY: PlanDiagnosticCategory =
-    PlanDiagnosticCategory::DeploymentIdentity;
-const CATEGORY_INVENTORY: PlanDiagnosticCategory = PlanDiagnosticCategory::Inventory;
-const CATEGORY_OBSERVATION: PlanDiagnosticCategory = PlanDiagnosticCategory::Observation;
-const CATEGORY_TOPOLOGY: PlanDiagnosticCategory = PlanDiagnosticCategory::Topology;
-const CATEGORY_TRUST_DOMAIN: PlanDiagnosticCategory = PlanDiagnosticCategory::TrustDomain;
-const CATEGORY_UNSUPPORTED_SHAPE: PlanDiagnosticCategory = PlanDiagnosticCategory::UnsupportedShape;
-const CATEGORY_VERIFIER_READINESS: PlanDiagnosticCategory =
-    PlanDiagnosticCategory::VerifierReadiness;
-const SOURCE_CLI_ARG: PlanDiagnosticSource = PlanDiagnosticSource::CliArg;
-const SOURCE_BUILD_PROFILE: PlanDiagnosticSource = PlanDiagnosticSource::BuildProfile;
-const SOURCE_DEPLOYMENT_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::DeploymentConfig;
-const SOURCE_DEPLOYMENT_PLAN_BUILDER: PlanDiagnosticSource =
-    PlanDiagnosticSource::DeploymentPlanBuilder;
-const SOURCE_FLEET_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::FleetConfig;
-const SOURCE_INSTALLED_DEPLOYMENT: PlanDiagnosticSource = PlanDiagnosticSource::InstalledDeployment;
-const SOURCE_LOCAL_OBSERVATION: PlanDiagnosticSource = PlanDiagnosticSource::LocalObservation;
-const FUTURE_APPLY_PREVIEW_PHASE: ProposedOperationPhase =
-    ProposedOperationPhase::FutureApplyPreview;
-const PROPOSED_OPERATION_NOT_EXECUTED: ProposedOperationStatus =
-    ProposedOperationStatus::NotExecuted;
-const OP_CREATE_CANISTER: ProposedOperationKind = ProposedOperationKind::CreateCanister;
-const OP_INSTALL_WASM: ProposedOperationKind = ProposedOperationKind::InstallWasm;
-const OP_UPGRADE_WASM: ProposedOperationKind = ProposedOperationKind::UpgradeWasm;
-const OP_APPLY_POLICY: ProposedOperationKind = ProposedOperationKind::ApplyPolicy;
-const OP_SET_CONTROLLERS: ProposedOperationKind = ProposedOperationKind::SetControllers;
-const OP_REGISTER_CHILD: ProposedOperationKind = ProposedOperationKind::RegisterChild;
-const OP_REGISTER_ROOT: ProposedOperationKind = ProposedOperationKind::RegisterRoot;
-const OP_VERIFY_READINESS: ProposedOperationKind = ProposedOperationKind::VerifyReadiness;
-const OP_VERIFY_TOPOLOGY: ProposedOperationKind = ProposedOperationKind::VerifyTopology;
-const OP_UPLOAD_ARTIFACT: ProposedOperationKind = ProposedOperationKind::UploadArtifact;
 const ASSUMPTION_PREFIX_LOCAL_ARTIFACTS: &str = "local_artifacts.";
 const ASSUMPTION_PREFIX_LOCAL_CONFIG: &str = "local_config.";
 const ASSUMPTION_PREFIX_LOCAL_STATE: &str = "local_state.";
@@ -83,210 +46,6 @@ const ASSUMPTION_KEY_LOCAL_CONFIG_POOLS: &str = "local_config.pools";
 const ASSUMPTION_KEY_LOCAL_CONFIG_ROLES: &str = "local_config.roles";
 const ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID: &str =
     "local_state.unverified_root_canister_id";
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub(super) struct DeploymentPlanReport {
-    schema_version: u16,
-    command: &'static str,
-    target: String,
-    network: String,
-    build_profile: String,
-    config_path: String,
-    status: PlanStatus,
-    comparison_status: ComparisonStatus,
-    plan: DeploymentPlanV1,
-    blockers: Vec<PlanDiagnostic>,
-    warnings: Vec<PlanDiagnostic>,
-    assumptions: Vec<PlanDiagnostic>,
-    verified_facts: Vec<PlanDiagnostic>,
-    proposed_operations: Vec<ProposedOperationLabel>,
-    next_actions: Vec<String>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum PlanStatus {
-    Planned,
-    Warning,
-    Blocked,
-    Unsupported,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ComparisonStatus {
-    NotRequested,
-    NotAvailable,
-    Compared,
-    ComparedWithWarnings,
-    ComparedWithDrift,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct PlanDiagnostic {
-    category: PlanDiagnosticCategory,
-    code: String,
-    severity: PlanDiagnosticSeverity,
-    subject: String,
-    detail: String,
-    next: Option<String>,
-    source: PlanDiagnosticSource,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum PlanDiagnosticCategory {
-    Artifact,
-    Authority,
-    Config,
-    DeploymentIdentity,
-    Inventory,
-    Observation,
-    Topology,
-    TrustDomain,
-    UnsupportedShape,
-    VerifierReadiness,
-}
-
-impl PlanDiagnosticCategory {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Artifact => "artifact",
-            Self::Authority => "authority",
-            Self::Config => "config",
-            Self::DeploymentIdentity => "deployment_identity",
-            Self::Inventory => "inventory",
-            Self::Observation => "observation",
-            Self::Topology => "topology",
-            Self::TrustDomain => "trust_domain",
-            Self::UnsupportedShape => "unsupported_shape",
-            Self::VerifierReadiness => "verifier_readiness",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum PlanDiagnosticSeverity {
-    Blocked,
-    Info,
-    Unsupported,
-    Warning,
-}
-
-impl PlanDiagnosticSeverity {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Blocked => "blocked",
-            Self::Info => "info",
-            Self::Unsupported => "unsupported",
-            Self::Warning => "warning",
-        }
-    }
-
-    const fn sort_rank(self) -> u8 {
-        match self {
-            Self::Blocked => 0,
-            Self::Unsupported => 1,
-            Self::Warning => 2,
-            Self::Info => 3,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum PlanDiagnosticSource {
-    BuildProfile,
-    CliArg,
-    DeploymentConfig,
-    DeploymentPlanBuilder,
-    FleetConfig,
-    InstalledDeployment,
-    LocalObservation,
-}
-
-impl PlanDiagnosticSource {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::BuildProfile => "build_profile",
-            Self::CliArg => "cli_arg",
-            Self::DeploymentConfig => "deployment_config",
-            Self::DeploymentPlanBuilder => "deployment_plan_builder",
-            Self::FleetConfig => "fleet_config",
-            Self::InstalledDeployment => "installed_deployment",
-            Self::LocalObservation => "local_observation",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct ProposedOperationLabel {
-    phase: ProposedOperationPhase,
-    label: ProposedOperationKind,
-    subject: String,
-    status: ProposedOperationStatus,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ProposedOperationPhase {
-    FutureApplyPreview,
-}
-
-impl ProposedOperationPhase {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::FutureApplyPreview => "future_apply_preview",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ProposedOperationKind {
-    ApplyPolicy,
-    CreateCanister,
-    InstallWasm,
-    RegisterChild,
-    RegisterRoot,
-    SetControllers,
-    UpgradeWasm,
-    UploadArtifact,
-    VerifyReadiness,
-    VerifyTopology,
-}
-
-impl ProposedOperationKind {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::ApplyPolicy => "apply_policy",
-            Self::CreateCanister => "create_canister",
-            Self::InstallWasm => "install_wasm",
-            Self::RegisterChild => "register_child",
-            Self::RegisterRoot => "register_root",
-            Self::SetControllers => "set_controllers",
-            Self::UpgradeWasm => "upgrade_wasm",
-            Self::UploadArtifact => "upload_artifact",
-            Self::VerifyReadiness => "verify_readiness",
-            Self::VerifyTopology => "verify_topology",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum ProposedOperationStatus {
-    NotExecuted,
-}
-
-impl ProposedOperationStatus {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::NotExecuted => "not_executed",
-        }
-    }
-}
-
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -365,222 +124,6 @@ fn build_plan(
     })
 }
 
-fn proposed_operations(plan: &DeploymentPlanV1) -> Vec<ProposedOperationLabel> {
-    let mut operations = Vec::new();
-    for canister in &plan.expected_canisters {
-        if canister.canister_id.is_none() {
-            operations.push(operation(OP_CREATE_CANISTER, &canister.role));
-        }
-    }
-    for canister in &plan.expected_pool {
-        if canister.canister_id.is_none() {
-            let subject = pool_operation_subject(&canister.pool, canister.role.as_deref());
-            operations.push(operation(OP_CREATE_CANISTER, &subject));
-        }
-    }
-    for canister in &plan.expected_canisters {
-        if canister.canister_id.is_none() {
-            operations.push(operation(
-                registration_operation_label(&canister.role),
-                &canister.role,
-            ));
-        }
-    }
-    for canister in &plan.expected_pool {
-        if canister.canister_id.is_none() {
-            let subject = pool_operation_subject(&canister.pool, canister.role.as_deref());
-            operations.push(operation(OP_REGISTER_CHILD, &subject));
-        }
-    }
-    for artifact in &plan.role_artifacts {
-        operations.push(operation(OP_UPLOAD_ARTIFACT, &artifact.role));
-        operations.push(operation(
-            wasm_operation_label(plan, &artifact.role),
-            &artifact.role,
-        ));
-    }
-    if !plan.authority_profile.expected_controllers.is_empty() {
-        operations.push(operation(
-            OP_APPLY_POLICY,
-            &plan.deployment_identity.deployment_name,
-        ));
-        operations.push(operation(
-            OP_SET_CONTROLLERS,
-            &plan.deployment_identity.deployment_name,
-        ));
-    }
-    if verifier_readiness_required(plan) {
-        operations.push(operation(
-            OP_VERIFY_READINESS,
-            &plan.deployment_identity.deployment_name,
-        ));
-    }
-    operations.push(operation(
-        OP_VERIFY_TOPOLOGY,
-        &plan.deployment_identity.deployment_name,
-    ));
-    sort_proposed_operations(&mut operations);
-    operations
-}
-
-fn registration_operation_label(role: &str) -> ProposedOperationKind {
-    if role == "root" {
-        OP_REGISTER_ROOT
-    } else {
-        OP_REGISTER_CHILD
-    }
-}
-
-fn pool_operation_subject(pool: &str, role: Option<&str>) -> String {
-    match role {
-        Some(role) => format!("{pool}:{role}"),
-        None => pool.to_string(),
-    }
-}
-
-fn wasm_operation_label(plan: &DeploymentPlanV1, role: &str) -> ProposedOperationKind {
-    if plan
-        .expected_canisters
-        .iter()
-        .any(|canister| canister.role == role && canister.canister_id.is_some())
-    {
-        OP_UPGRADE_WASM
-    } else {
-        OP_INSTALL_WASM
-    }
-}
-
-fn operation(label: ProposedOperationKind, subject: &str) -> ProposedOperationLabel {
-    ProposedOperationLabel {
-        phase: FUTURE_APPLY_PREVIEW_PHASE,
-        label,
-        subject: subject.to_string(),
-        status: PROPOSED_OPERATION_NOT_EXECUTED,
-    }
-}
-
-fn next_actions(
-    options: &DeployPlanOptions,
-    blockers: &[PlanDiagnostic],
-    warnings: &[PlanDiagnostic],
-    assumptions: &[PlanDiagnostic],
-) -> Vec<String> {
-    let mut actions = Vec::new();
-    if !blockers.is_empty() {
-        actions.push("fix blocker diagnostics before designing apply".to_string());
-    }
-    if !warnings.is_empty() || !assumptions.is_empty() {
-        actions.push("resolve warnings before designing apply".to_string());
-    }
-    if has_artifact_diagnostics(blockers)
-        || has_artifact_diagnostics(warnings)
-        || has_artifact_diagnostics(assumptions)
-    {
-        actions
-            .push("run canic build or provide a build profile with resolved artifacts".to_string());
-    }
-    actions.push(format!(
-        "run canic medic deployment {} if operator readiness is uncertain",
-        options.deployment
-    ));
-    actions
-}
-
-fn has_artifact_diagnostics(diagnostics: &[PlanDiagnostic]) -> bool {
-    diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.category == CATEGORY_ARTIFACT)
-}
-
-fn aggregate_status(
-    blockers: &[PlanDiagnostic],
-    warnings: &[PlanDiagnostic],
-    assumptions: &[PlanDiagnostic],
-) -> PlanStatus {
-    if blockers
-        .iter()
-        .any(|diagnostic| diagnostic.severity == SEVERITY_UNSUPPORTED)
-    {
-        return PlanStatus::Unsupported;
-    }
-    if !blockers.is_empty() {
-        return PlanStatus::Blocked;
-    }
-    if !warnings.is_empty() || !assumptions.is_empty() {
-        return PlanStatus::Warning;
-    }
-    PlanStatus::Planned
-}
-
-fn comparison_status(
-    plan: &DeploymentPlanV1,
-    blockers: &[PlanDiagnostic],
-    warnings: &[PlanDiagnostic],
-    assumptions: &[PlanDiagnostic],
-) -> ComparisonStatus {
-    if !blockers.is_empty() {
-        return ComparisonStatus::NotRequested;
-    }
-
-    if has_observed_state_drift(plan) {
-        return ComparisonStatus::ComparedWithDrift;
-    }
-
-    if has_missing_observed_state(plan) {
-        return ComparisonStatus::NotAvailable;
-    }
-
-    if plan.trust_domain.root_trust_anchor.is_none() {
-        return ComparisonStatus::NotRequested;
-    }
-
-    if !warnings.is_empty() || !assumptions.is_empty() {
-        ComparisonStatus::ComparedWithWarnings
-    } else {
-        ComparisonStatus::Compared
-    }
-}
-
-fn has_observed_state_drift(plan: &DeploymentPlanV1) -> bool {
-    plan.unresolved_assumptions
-        .iter()
-        .any(is_observed_state_drift_assumption)
-}
-
-fn has_missing_observed_state(plan: &DeploymentPlanV1) -> bool {
-    plan.unresolved_assumptions.iter().any(|assumption| {
-        assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing)
-            || assumption.has_kind(DeploymentAssumptionKindV1::LocalStateReadFailed)
-    })
-}
-
-fn sort_diagnostics(diagnostics: &mut [PlanDiagnostic]) {
-    diagnostics.sort_by(|left, right| {
-        diagnostic_severity_rank(left.severity)
-            .cmp(&diagnostic_severity_rank(right.severity))
-            .then_with(|| left.severity.label().cmp(right.severity.label()))
-            .then_with(|| left.category.label().cmp(right.category.label()))
-            .then_with(|| left.code.cmp(&right.code))
-            .then_with(|| left.subject.cmp(&right.subject))
-            .then_with(|| left.source.label().cmp(right.source.label()))
-    });
-}
-
-const fn diagnostic_severity_rank(severity: PlanDiagnosticSeverity) -> u8 {
-    severity.sort_rank()
-}
-
-fn sort_proposed_operations(operations: &mut Vec<ProposedOperationLabel>) {
-    operations.sort_by(|left, right| {
-        left.phase
-            .cmp(&right.phase)
-            .then_with(|| left.label.cmp(&right.label))
-            .then_with(|| left.subject.cmp(&right.subject))
-            .then_with(|| left.status.cmp(&right.status))
-    });
-    operations.dedup();
-}
-
 fn plan_config_path(workspace_root: &Path, options: &DeployPlanOptions) -> PathBuf {
     let config = options.config.clone().unwrap_or_else(|| {
         PathBuf::from("fleets")
@@ -602,31 +145,9 @@ fn build_profile_name(options: &DeployPlanOptions) -> String {
     options.build_profile.target_dir_name().to_string()
 }
 
-impl PlanStatus {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::Planned => "planned",
-            Self::Warning => SEVERITY_WARNING.label(),
-            Self::Blocked => SEVERITY_BLOCKED.label(),
-            Self::Unsupported => SEVERITY_UNSUPPORTED.label(),
-        }
-    }
-}
-
-impl ComparisonStatus {
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::NotRequested => "not_requested",
-            Self::NotAvailable => "not_available",
-            Self::Compared => "compared",
-            Self::ComparedWithWarnings => "compared_with_warnings",
-            Self::ComparedWithDrift => "compared_with_drift",
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use super::report::*;
     use super::*;
     use canic_host::deployment_truth::{
         ArtifactSourceV1, AuthorityProfileV1, CanisterControlClassV1, DeploymentIdentityV1,
