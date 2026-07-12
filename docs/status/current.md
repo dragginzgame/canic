@@ -18,9 +18,13 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.85.4`, published and tagged
-  as `v0.85.4`. The 0.85 operational-safety line remains active for focused
-  cleanup; package versions have not yet advanced beyond the published release.
+- The current package/release-surface version is `0.85.5`, published and tagged
+  as `v0.85.5`. The 0.85 operational-safety line is complete. The bounded 0.86
+  structural-maintainability line is active without a package-version change;
+  its design and tracker live under
+  `docs/design/0.86-structural-maintainability/`. The first Medic slice is
+  changelog-finalized for `0.86.0`, while package versions remain `0.85.5`
+  until the human-owned release flow runs.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -293,13 +297,19 @@ before this compaction is archived at
   were hard-cut to piped child stdin in `v0.85.1`. Typed binary staging and
   complete artifact hash/chunk validation shipped in `v0.85.2`. Release
   artifact path containment shipped in `v0.85.3`. Canonical manifest identity
-  admission shipped in `v0.85.4`. The next follow-up is changelog-finalized for
-  `0.85.5`, while package versions remain `0.85.4`: the same manifest authority
-  rejects zero payloads, noncanonical chunk sizes, impossible chunk counts, and
-  malformed SHA-256 fields before artifact access or root mutation. The
-  workspace also adopts `ic-query 0.10.0`; Canic's maintained top-level
-  subnet-catalog integration requires no source migration. The patch does not
-  reopen the stable codec, restore, or build-authority contracts.
+  admission shipped in `v0.85.4`. Static artifact-shape admission and
+  `ic-query 0.10.0` shipped in `v0.85.5`; Canic's maintained top-level
+  subnet-catalog integration required no source migration. The 0.85 line is
+  complete and did not reopen the stable codec, restore, or build-authority
+  contracts.
+
+- The bounded 0.86 structural-maintainability line follows the health audit's
+  deferred hub splits. It is mechanical: preserve public APIs, CLI behavior,
+  diagnostics, JSON, Candid, stable state, and persisted bytes while moving
+  existing private responsibilities into ordinary child modules. No framework,
+  rule engine, cross-crate ownership change, wrapper, alias, or compatibility
+  path is in scope. The first Medic slice extracts auth-renewal and blob-storage
+  check construction while the parent retains check selection and ordering.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and

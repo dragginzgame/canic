@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.86.x] - 2026-07-12 - Structural Maintainability
+
+Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
+
+- `0.86.0` begins the bounded hub-module hard cut by giving Medic auth-renewal
+  and blob-storage diagnostics focused owners without changing command or
+  report contracts.
+
 ## [0.85.x] - 2026-07-11 - Operational Safety Hardening
 
 Detailed patch breakdown: [docs/changelog/0.85.md](docs/changelog/0.85.md)

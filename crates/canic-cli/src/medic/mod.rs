@@ -6,6 +6,8 @@
 //! Boundary: reads local project/deployment state and renders diagnostic-only
 //! medic reports.
 
+mod auth;
+mod blob_storage;
 mod command;
 mod package;
 mod render;
@@ -13,33 +15,34 @@ mod report;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
 use crate::{
-    auth::{self, AuthCommandError, AuthRenewalMedicStatus, AuthRenewalMedicSummary},
-    blob_storage::{
-        self, BlobStorageCommandError, BlobStorageMedicStatus, BlobStorageMedicSummary,
-    },
-    cli::defaults::local_network,
-    support::candid::role_candid_path,
+    auth::{AuthCommandError, AuthRenewalMedicStatus, AuthRenewalMedicSummary},
+    blob_storage::{BlobStorageCommandError, BlobStorageMedicStatus, BlobStorageMedicSummary},
 };
+use crate::{cli::defaults::local_network, support::candid::role_candid_path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
+
 use canic_core::{
     bootstrap::parse_config_model,
     ids::CanisterRole,
-    protocol::{
-        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
-        BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
-    },
     role_contract::{
         ResolvedRoleContract, RoleContractFinding, RoleContractResolution, RoleFeatureRequirement,
         required_features_for_role,
     },
 };
+#[cfg(test)]
+use canic_host::icp::local_canister_candid_path;
 use canic_host::{
-    candid_endpoints::parse_candid_service_endpoints,
     canister_ready::query_canister_ready,
     deployment_truth::{
         DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
     },
-    icp::{IcpCli, IcpCommandError, local_canister_candid_path},
+    icp::{IcpCli, IcpCommandError},
     icp_config::{inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root},
     install_root::{
         InstallState, discover_project_canic_config_choices,
@@ -61,12 +64,16 @@ use canic_host::{
         resolve_project_state_manifest,
     },
 };
-use std::{
-    collections::BTreeMap,
-    fs,
-    path::{Path, PathBuf},
-};
 
+use auth::check_auth_renewal;
+#[cfg(test)]
+use auth::{auth_renewal_medic_check_from_summary, auth_renewal_medic_error_check};
+#[cfg(test)]
+use blob_storage::{
+    blob_storage_billing_roles_from_candid_dir, blob_storage_medic_check_from_summary,
+    blob_storage_medic_error_check, candid_declares_blob_storage_billing,
+};
+use blob_storage::{check_blob_storage_billing, check_blob_storage_not_selected};
 use command::MedicOptions;
 pub use command::{MedicCommandError, run};
 #[cfg(test)]
@@ -1369,205 +1376,5 @@ fn root_readiness_source(network: &str) -> MedicSource {
         MedicSource::LocalReplica
     } else {
         MedicSource::IcpCli
-    }
-}
-
-fn check_blob_storage_billing(options: &MedicOptions, canister: &str, network: &str) -> MedicCheck {
-    match blob_storage::medic_summary(options.deployment_name(), canister, network, &options.icp) {
-        Ok(summary) => blob_storage_medic_check_from_summary(summary),
-        Err(err) => blob_storage_medic_error_check(err, options.deployment_name(), canister),
-    }
-}
-
-fn check_blob_storage_not_selected(
-    options: &MedicOptions,
-    icp_root: Option<&Path>,
-    network: &str,
-) -> MedicCheck {
-    let next = icp_root
-        .and_then(|root| {
-            blob_storage_billing_roles_from_candid_dir(root, network)
-                .into_iter()
-                .next()
-        })
-        .map_or_else(
-            || {
-                "run canic medic deployment <deployment> --blob-storage <canister-or-role>"
-                    .to_string()
-            },
-            |first| {
-                format!(
-                    "run canic medic deployment {} --blob-storage {first}",
-                    options.deployment_name()
-                )
-            },
-        );
-    MedicCheck::not_evaluated(
-        MedicCategory::BlobStorage,
-        "blob_storage_not_selected",
-        "blob_storage",
-        "no blob-storage target was selected",
-        next,
-        MedicSource::Command,
-    )
-}
-
-fn blob_storage_billing_roles_from_candid_dir(icp_root: &Path, network: &str) -> Vec<String> {
-    let canisters_dir = icp_root.join(".icp").join(network).join("canisters");
-    let Ok(entries) = fs::read_dir(canisters_dir) else {
-        return Vec::new();
-    };
-    let mut roles = entries
-        .filter_map(Result::ok)
-        .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|role| {
-            let candid_path = local_canister_candid_path(icp_root, network, role);
-            candid_path_declares_blob_storage_billing(&candid_path)
-        })
-        .collect::<Vec<_>>();
-    roles.sort();
-    roles.dedup();
-    roles
-}
-
-fn candid_path_declares_blob_storage_billing(path: &Path) -> bool {
-    let Ok(candid) = fs::read_to_string(path) else {
-        return false;
-    };
-    candid_declares_blob_storage_billing(&candid)
-}
-
-fn candid_declares_blob_storage_billing(candid: &str) -> bool {
-    let Ok(endpoints) = parse_candid_service_endpoints(candid) else {
-        return false;
-    };
-    [
-        BLOB_STORAGE_STATUS,
-        BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
-        BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES,
-    ]
-    .iter()
-    .all(|method| endpoints.iter().any(|endpoint| endpoint.name == *method))
-}
-
-fn blob_storage_medic_check_from_summary(summary: BlobStorageMedicSummary) -> MedicCheck {
-    match summary.status {
-        BlobStorageMedicStatus::Ready => MedicCheck::pass(
-            MedicCategory::BlobStorage,
-            "blob_storage_billing_ready",
-            "blob_storage",
-            summary.detail,
-            summary.next,
-            MedicSource::BlobStorageReadiness,
-        ),
-        BlobStorageMedicStatus::Warning => MedicCheck::warn(
-            MedicCategory::BlobStorage,
-            "blob_storage_billing_unready",
-            "blob_storage",
-            summary.detail,
-            summary.next,
-            MedicSource::BlobStorageReadiness,
-        ),
-        BlobStorageMedicStatus::Blocked => MedicCheck::fail(
-            MedicCategory::BlobStorage,
-            "blob_storage_billing_unready",
-            "blob_storage",
-            summary.detail,
-            summary.next,
-            MedicSource::BlobStorageReadiness,
-        ),
-    }
-}
-
-fn blob_storage_medic_error_check(
-    error: BlobStorageCommandError,
-    deployment: &str,
-    canister: &str,
-) -> MedicCheck {
-    let (code, next) = match &error {
-        BlobStorageCommandError::UnknownTarget { .. } => (
-            "blob_storage_target_missing",
-            format!(
-                "choose a registered blob-storage role or canister for deployment {deployment}"
-            ),
-        ),
-        BlobStorageCommandError::AmbiguousRole { .. } => (
-            "blob_storage_target_ambiguous",
-            "use one canister principal instead of an ambiguous role".to_string(),
-        ),
-        BlobStorageCommandError::CandidUnavailable { .. }
-        | BlobStorageCommandError::MethodUnavailable { .. } => (
-            "blob_storage_target_not_blob_storage",
-            "select a canister that exposes blob-storage billing readiness endpoints".to_string(),
-        ),
-        _ => (
-            "blob_storage_billing_unready",
-            format!("run canic blob-storage status {deployment} {canister}"),
-        ),
-    };
-
-    MedicCheck::fail(
-        MedicCategory::BlobStorage,
-        code,
-        "blob_storage",
-        error.to_string(),
-        next,
-        MedicSource::BlobStorageReadiness,
-    )
-}
-
-fn check_auth_renewal(options: &MedicOptions, issuer: &str, network: &str) -> MedicCheck {
-    match auth::renewal_medic_summary(options.deployment_name(), issuer, network, &options.icp) {
-        Ok(summary) => auth_renewal_medic_check_from_summary(summary),
-        Err(err) => auth_renewal_medic_error_check(err, options.deployment_name(), issuer),
-    }
-}
-
-fn auth_renewal_medic_error_check(
-    error: AuthCommandError,
-    deployment: &str,
-    issuer: &str,
-) -> MedicCheck {
-    let (code, next, source) = match &error {
-        AuthCommandError::InvalidIssuerPrincipal { .. } => (
-            "auth_renewal_issuer_invalid",
-            "pass a valid issuer canister principal".to_string(),
-            MedicSource::Command,
-        ),
-        _ => (
-            "auth_renewal_drift_fail",
-            format!("run canic auth renewal status {deployment} --issuer {issuer}"),
-            MedicSource::AuthRenewal,
-        ),
-    };
-
-    MedicCheck::fail(
-        MedicCategory::Auth,
-        code,
-        "auth_renewal",
-        error.to_string(),
-        next,
-        source,
-    )
-}
-
-fn auth_renewal_medic_check_from_summary(summary: AuthRenewalMedicSummary) -> MedicCheck {
-    match summary.status {
-        AuthRenewalMedicStatus::Ready => MedicCheck::pass(
-            MedicCategory::Auth,
-            "auth_renewal_ready",
-            "auth_renewal",
-            summary.detail,
-            summary.next,
-            MedicSource::AuthRenewal,
-        ),
-        AuthRenewalMedicStatus::Warning => MedicCheck::warn(
-            MedicCategory::Auth,
-            "auth_renewal_drift_warn",
-            "auth_renewal",
-            summary.detail,
-            summary.next,
-            MedicSource::AuthRenewal,
-        ),
     }
 }
