@@ -10,16 +10,18 @@ history.
 
 ## Current State
 
-The first Medic slice is published as `v0.86.0`. Auth-renewal and blob-storage
-check construction and passive Candid detection have focused child owners.
+The first two Medic slices are published as `v0.86.0` and `v0.86.1`.
+Auth-renewal, blob-storage, project configuration, state audit, role-package,
+and resolved role-contract diagnostics have focused owners.
 
-The next slice is changelog-finalized for `0.86.1`. Project configuration and
-state-audit checks have one focused owner; role-package metadata,
-runtime-feature requirements, resolved role-contract findings, and
-state-descriptor admission checks have another. The parent still owns check
-selection and ordering. CLI behavior, finding codes, report shapes, and
-rendering are unchanged. Package versions remain `0.86.0` until the
-human-owned release flow runs.
+The next slice is changelog-finalized for `0.86.2` and completes the Medic
+structural pass. Deployment
+context, installed-state, receipt, registry, and root-readiness checks move to
+one focused deployment module. The 268-line parent retains project and
+deployment check ordering plus shared ICP CLI checks. CLI behavior, finding
+codes, report shapes, and rendering are unchanged. The workspace also adopts
+`ic-query 0.10.2` after its focused cached-catalog integration passes. Package
+versions remain `0.86.1` until the human-owned release flow runs.
 
 ## Checklist
 
@@ -29,8 +31,8 @@ human-owned release flow runs.
 - [x] Extract blob-storage checks and passive endpoint detection.
 - [x] Extract role-package and resolved role-contract checks.
 - [x] Extract project configuration and state-audit checks.
-- [ ] Continue splitting only coherent existing Medic responsibilities.
-- [ ] Complete the Medic structural pass and record its final module boundary.
+- [x] Extract deployment context, state, receipt, registry, and readiness checks.
+- [x] Complete the Medic structural pass and record its final module boundary.
 
 ### Slice B - Deploy plan
 
@@ -51,7 +53,7 @@ human-owned release flow runs.
 
 ## Next Action
 
-Run the human-owned `0.86.1` release flow after reviewing the finalized patch.
-After publication, continue Slice A with deployment diagnostics as a separately
-reviewable responsibility. Do not introduce a generic check framework or
-retain wrappers in the parent module.
+Run the human-owned `0.86.2` release flow after reviewing the finalized patch.
+After publication, begin Slice B with one mechanical deploy-plan
+responsibility. Do not introduce a generic planning framework or retain
+wrappers in the parent module.

@@ -1,8 +1,42 @@
 use super::*;
-use crate::test_support::temp_dir;
-use crate::{CliError, cli_error_exit_code, render_cli_error};
-use serde_json::Value as JsonValue;
+use super::{
+    auth::{auth_renewal_medic_check_from_summary, auth_renewal_medic_error_check},
+    blob_storage::{
+        blob_storage_billing_roles_from_candid_dir, blob_storage_medic_check_from_summary,
+        blob_storage_medic_error_check, candid_declares_blob_storage_billing,
+    },
+    command::{medic_subcommand_help_requested, usage},
+    deployment::{
+        check_deployment_network, check_deployment_registry_not_evaluated,
+        check_deployment_truth_receipt, check_root_canister_id, check_root_readiness_not_evaluated,
+        deployment_name_conflation_checks, deployment_network_selection,
+        deployment_registry_observed_check, root_readiness_source,
+    },
+    project::project_network_selection_check,
+    render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
+    report::{MedicStatus, aggregate_status},
+    role_contract::project_config_quality_checks,
+};
+use crate::{
+    CliError,
+    auth::{AuthCommandError, AuthRenewalMedicStatus, AuthRenewalMedicSummary},
+    blob_storage::{BlobStorageCommandError, BlobStorageMedicStatus, BlobStorageMedicSummary},
+    cli_error_exit_code, render_cli_error,
+    test_support::temp_dir,
+};
 use std::{ffi::OsString, fs};
+
+use canic_core::ids::CanisterRole;
+use canic_host::{
+    deployment_truth::{
+        DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
+    },
+    icp::local_canister_candid_path,
+    install_root::InstallState,
+    installed_deployment::{InstalledDeploymentResolution, InstalledDeploymentSource},
+    state_manifest::{StateAuditStatus, build_state_audit_report},
+};
+use serde_json::Value as JsonValue;
 
 // Ensure bare top-level medic selects the project scope without inventing a deployment.
 #[test]

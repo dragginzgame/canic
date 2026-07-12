@@ -4,7 +4,10 @@
 //! Does not own: report construction, diagnostic collection, or command parsing.
 //! Boundary: consumes the private medic report model after all checks are complete.
 
-use super::{MedicCommandError, MedicReport, MedicStatus, report::ordered_checks};
+use crate::medic::{
+    command::MedicCommandError,
+    report::{MedicReport, MedicStatus, ordered_checks},
+};
 
 pub(super) const MEDIC_REPORT_WIDTH: usize = 100;
 

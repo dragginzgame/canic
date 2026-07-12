@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
 
+- `0.86.2` completes the Medic ownership split, removes parent-routed test and
+  renderer imports, and adopts `ic-query 0.10.2` without changing command or
+  report contracts.
+
 - `0.86.1` gives Medic project configuration, state-audit, role-package, and
   runtime-contract diagnostics focused owners while preserving check ordering,
   codes, and report shapes.
