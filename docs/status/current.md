@@ -18,16 +18,21 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.86.0`, published and tagged
-  as `v0.86.0`. The bounded 0.86 structural-maintainability line remains
+- The current package/release-surface version is `0.86.1`, published and tagged
+  as `v0.86.1`. The bounded 0.86 structural-maintainability line remains
   active; its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
-  next unreleased slice moves role-package metadata, required runtime-feature,
-  resolved role-contract, and descriptor-admission diagnostics into one
-  focused Medic module, while project configuration and state-audit checks move
-  to a second focused owner. This slice is changelog-finalized for `0.86.1`;
-  package versions remain `0.86.0` until the human-owned release flow runs.
+  second Medic slice owns role-package, required runtime-feature, resolved
+  role-contract, descriptor-admission, project-configuration, and state-audit
+  diagnostics in focused modules. The next unreleased slice completes the
+  Medic pass by moving deployment context, installed state, receipts, registry
+  observation, and root readiness into one focused owner. Test and renderer
+  imports now reference their actual owner modules rather than routing through
+  the parent. The workspace also adopts `ic-query 0.10.2` after its focused
+  cached-catalog integration passes. This slice is changelog-finalized for
+  `0.86.2`; package versions remain `0.86.1` until the human-owned release flow
+  runs.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -318,7 +323,12 @@ before this compaction is archived at
   definitions are removed without wrappers. Project configuration and
   state-audit check construction also move to one focused owner, leaving
   project check ordering in the parent. This slice is changelog-finalized for
-  `0.86.1`.
+  `0.86.1` and is now published. The next slice completes the Medic pass:
+  deployment diagnostics move to one 676-line owner while the 268-line parent
+  retains authoritative project/deployment ordering and shared ICP CLI checks.
+  Test and renderer imports reference the focused owners directly rather than
+  turning parent imports into a private facade. This Medic closeout is
+  changelog-finalized for `0.86.2`.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and
