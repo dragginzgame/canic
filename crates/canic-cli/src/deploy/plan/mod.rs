@@ -1,38 +1,34 @@
-use super::{DeployCommandError, value_arg};
-use crate::{
-    cli::{
-        clap::{
-            flag_arg, parse_matches, path_option, render_usage, required_string,
-            string_option_or_else, typed_option,
-        },
-        defaults::local_network,
-        globals::internal_network_arg,
-        help::print_help_or_version,
-    },
-    version_text,
-};
+//! Module: canic_cli::deploy::plan
+//!
+//! Responsibility: orchestrate deterministic deployment planning and report assembly.
+//! Does not own: deployment mutation, report rendering, or output persistence.
+//! Boundary: resolves local planning evidence and delegates report output to its owner.
+
+mod command;
+mod render;
+
+use super::DeployCommandError;
+use crate::{cli::help::print_help_or_version, version_text};
 use canic_host::{
-    canister_build::CanisterBuildProfile,
     deployment_truth::{
         DeploymentAssumptionKindV1, DeploymentAssumptionV1, DeploymentPlanV1,
         LocalDeploymentPlanRequest, RoleArtifactV1,
     },
-    release_set::{
-        configured_fleet_name, icp_root as resolve_icp_root,
-        workspace_root as resolve_workspace_root,
-    },
+    release_set::configured_fleet_name,
 };
-use clap::Command as ClapCommand;
 use serde::Serialize;
 use std::{
     ffi::OsString,
-    fs::OpenOptions,
-    io::Write,
     path::{Path, PathBuf},
 };
 
+use command::REPORT_COMMAND;
+pub(super) use command::{DeployPlanOptions, DeployPlanRoots, usage};
+pub(super) use render::{command_exit_result, write_report};
+#[cfg(test)]
+pub(super) use render::{render_json, render_text};
+
 const REPORT_SCHEMA_VERSION: u16 = 1;
-const REPORT_COMMAND: &str = "canic deploy plan";
 const SEVERITY_INFO: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Info;
 const SEVERITY_WARNING: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Warning;
 const SEVERITY_BLOCKED: PlanDiagnosticSeverity = PlanDiagnosticSeverity::Blocked;
@@ -80,43 +76,6 @@ const ASSUMPTION_KEY_LOCAL_CONFIG_POOLS: &str = "local_config.pools";
 const ASSUMPTION_KEY_LOCAL_CONFIG_ROLES: &str = "local_config.roles";
 const ASSUMPTION_KEY_LOCAL_STATE_UNVERIFIED_ROOT_CANISTER_ID: &str =
     "local_state.unverified_root_canister_id";
-const DEPLOYMENT_ARG: &str = "deployment";
-const JSON_ARG: &str = "json";
-const OUT_ARG: &str = "out";
-const CONFIG_ARG: &str = "config";
-const BUILD_PROFILE_ARG: &str = "build-profile";
-
-const DEPLOY_PLAN_HELP_AFTER: &str = "\
-Examples:
-  canic deploy plan demo-local
-  canic deploy plan demo-local --json
-  canic deploy plan demo-local --out deployment-plan.json
-  canic deploy plan demo-local --config fleets/demo/canic.toml
-
-Builds a deterministic planning report from local project config. The command
-does not install, upgrade, create canisters, write deployment truth, update
-installed deployment records, or call live IC state. Future-apply preview rows
-are proposed operation labels only; they are not executed and are not apply
-operation objects. JSON output is a DeploymentPlanReport, not an EvidenceEnvelope,
-deployment truth, or authorization to mutate. --out writes JSON only and fails if
-the requested path already exists or its parent directory is missing.";
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct DeployPlanOptions {
-    pub(super) deployment: String,
-    pub(super) network: String,
-    pub(super) json: bool,
-    pub(super) out: Option<PathBuf>,
-    pub(super) config: Option<PathBuf>,
-    pub(super) build_profile: CanisterBuildProfile,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct DeployPlanRoots {
-    pub(super) workspace_root: PathBuf,
-    pub(super) icp_root: PathBuf,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct DeploymentPlanReport {
     schema_version: u16,
@@ -1218,133 +1177,6 @@ fn sort_proposed_operations(operations: &mut Vec<ProposedOperationLabel>) {
     operations.dedup();
 }
 
-pub(super) fn write_report(
-    options: &DeployPlanOptions,
-    report: &DeploymentPlanReport,
-) -> Result<(), DeployCommandError> {
-    if let Some(out) = &options.out {
-        write_json_new(out, report)?;
-    }
-
-    if options.json {
-        print_json(report)
-    } else {
-        println!("{}", render_text(report));
-        Ok(())
-    }
-}
-
-pub(super) fn command_exit_result(report: &DeploymentPlanReport) -> Result<(), DeployCommandError> {
-    match report.status {
-        PlanStatus::Planned | PlanStatus::Warning => Ok(()),
-        PlanStatus::Blocked | PlanStatus::Unsupported => Err(DeployCommandError::PlanBlocked(
-            report.status.as_str().to_string(),
-        )),
-    }
-}
-
-fn write_json_new(path: &Path, report: &DeploymentPlanReport) -> Result<(), DeployCommandError> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(plan_output_error)?;
-    let data = render_json(report)?;
-    file.write_all(data.as_bytes()).map_err(plan_output_error)?;
-    file.write_all(b"\n").map_err(plan_output_error)?;
-    Ok(())
-}
-
-fn print_json(report: &DeploymentPlanReport) -> Result<(), DeployCommandError> {
-    let json = render_json(report)?;
-    println!("{json}");
-    Ok(())
-}
-
-pub(super) fn render_json(report: &DeploymentPlanReport) -> Result<String, DeployCommandError> {
-    serde_json::to_string_pretty(report).map_err(plan_output_error)
-}
-
-fn plan_output_error(err: impl std::error::Error + 'static) -> DeployCommandError {
-    DeployCommandError::PlanOutput(Box::new(err))
-}
-
-pub(super) fn render_text(report: &DeploymentPlanReport) -> String {
-    let mut lines = vec![
-        "Deployment plan".to_string(),
-        format!("schema_version: {}", report.schema_version),
-        format!("command: {}", report.command),
-        format!("status: {}", report.status.as_str()),
-        format!("comparison: {}", report.comparison_status.as_str()),
-        format!("target: {}", report.target),
-        format!("network: {}", report.network),
-        format!("config: {}", report.config_path),
-        format!("build_profile: {}", report.build_profile),
-        String::new(),
-    ];
-
-    append_diagnostics(&mut lines, "blockers", &report.blockers);
-    append_diagnostics(&mut lines, "warnings", &report.warnings);
-    append_diagnostics(&mut lines, "assumptions", &report.assumptions);
-    append_diagnostics(&mut lines, "verified facts", &report.verified_facts);
-    append_operations(&mut lines, &report.proposed_operations);
-    append_next_actions(&mut lines, &report.next_actions);
-
-    lines.join("\n")
-}
-
-fn append_diagnostics(lines: &mut Vec<String>, label: &str, diagnostics: &[PlanDiagnostic]) {
-    if diagnostics.is_empty() {
-        return;
-    }
-
-    lines.push(label.to_string());
-    for diagnostic in diagnostics {
-        lines.push(format!(
-            "  [{}] {} {}",
-            diagnostic.severity.label(),
-            diagnostic.category.label(),
-            diagnostic.code
-        ));
-        lines.push(format!("    subject: {}", diagnostic.subject));
-        lines.push(format!("    detail: {}", diagnostic.detail));
-        lines.push(format!("    source: {}", diagnostic.source.label()));
-        if let Some(next) = &diagnostic.next {
-            lines.push(format!("    next: {next}"));
-        }
-    }
-    lines.push(String::new());
-}
-
-fn append_operations(lines: &mut Vec<String>, operations: &[ProposedOperationLabel]) {
-    if operations.is_empty() {
-        return;
-    }
-
-    lines.push("future apply preview (proposed operation labels; not executed)".to_string());
-    for operation in operations {
-        lines.push(format!(
-            "  - phase: {} label: {} subject: {} status: {}",
-            operation.phase.label(),
-            operation.label.label(),
-            operation.subject,
-            operation.status.label()
-        ));
-    }
-    lines.push(String::new());
-}
-
-fn append_next_actions(lines: &mut Vec<String>, actions: &[String]) {
-    if actions.is_empty() {
-        return;
-    }
-
-    lines.push("next actions".to_string());
-    for action in actions {
-        lines.push(format!("  - {action}"));
-    }
-}
-
 fn plan_config_path(workspace_root: &Path, options: &DeployPlanOptions) -> PathBuf {
     let config = options.config.clone().unwrap_or_else(|| {
         PathBuf::from("fleets")
@@ -1364,91 +1196,6 @@ fn display_path(path: &Path) -> String {
 
 fn build_profile_name(options: &DeployPlanOptions) -> String {
     options.build_profile.target_dir_name().to_string()
-}
-
-impl DeployPlanOptions {
-    pub(super) fn parse<I>(args: I) -> Result<Self, DeployCommandError>
-    where
-        I: IntoIterator<Item = OsString>,
-    {
-        let matches =
-            parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
-        Ok(Self {
-            deployment: required_string(&matches, DEPLOYMENT_ARG),
-            network: string_option_or_else(&matches, "network", local_network),
-            json: matches.get_flag(JSON_ARG),
-            out: path_option(&matches, OUT_ARG),
-            config: path_option(&matches, CONFIG_ARG),
-            build_profile: typed_option(&matches, BUILD_PROFILE_ARG)
-                .unwrap_or_else(CanisterBuildProfile::current),
-        })
-    }
-}
-
-impl DeployPlanRoots {
-    fn discover() -> Result<Self, DeployCommandError> {
-        Ok(Self {
-            workspace_root: resolve_workspace_root().map_err(DeployCommandError::from)?,
-            icp_root: resolve_icp_root().map_err(DeployCommandError::from)?,
-        })
-    }
-}
-
-pub(super) fn command() -> ClapCommand {
-    ClapCommand::new("plan")
-        .bin_name(REPORT_COMMAND)
-        .about("Explain the deterministic deployment plan without mutation")
-        .disable_help_flag(true)
-        .override_usage("canic deploy plan <deployment>")
-        .arg(deployment_arg())
-        .arg(json_arg())
-        .arg(out_arg())
-        .arg(config_arg())
-        .arg(build_profile_arg())
-        .arg(internal_network_arg())
-        .after_help(DEPLOY_PLAN_HELP_AFTER)
-}
-
-fn deployment_arg() -> clap::Arg {
-    value_arg(DEPLOYMENT_ARG)
-        .value_name(DEPLOYMENT_ARG)
-        .required(true)
-        .help("Deployment target name to plan")
-}
-
-fn json_arg() -> clap::Arg {
-    flag_arg(JSON_ARG)
-        .long(JSON_ARG)
-        .help("Print JSON DeploymentPlanReport to stdout")
-}
-
-fn out_arg() -> clap::Arg {
-    value_arg(OUT_ARG)
-        .long(OUT_ARG)
-        .value_name("path")
-        .num_args(1)
-        .help("Write JSON DeploymentPlanReport to a new file")
-}
-
-fn config_arg() -> clap::Arg {
-    value_arg(CONFIG_ARG)
-        .long(CONFIG_ARG)
-        .value_name("path")
-        .num_args(1)
-        .help("Fleet config path used to build the desired plan")
-}
-
-fn build_profile_arg() -> clap::Arg {
-    value_arg(BUILD_PROFILE_ARG)
-        .long(BUILD_PROFILE_ARG)
-        .value_name("debug|fast|release")
-        .num_args(1)
-        .value_parser(clap::value_parser!(CanisterBuildProfile))
-        .help("Expected canister wasm build profile")
-}
-
-pub(super) fn usage() -> String {
-    render_usage(command)
 }
 
 impl PlanStatus {

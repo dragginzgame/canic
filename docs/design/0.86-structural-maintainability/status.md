@@ -10,18 +10,19 @@ history.
 
 ## Current State
 
-The first two Medic slices are published as `v0.86.0` and `v0.86.1`.
+The three Medic slices are published as `v0.86.0` through `v0.86.2`.
 Auth-renewal, blob-storage, project configuration, state audit, role-package,
-and resolved role-contract diagnostics have focused owners.
+resolved role-contract, and deployment diagnostics have focused owners. The
+Medic structural pass is complete.
 
-The next slice is changelog-finalized for `0.86.2` and completes the Medic
-structural pass. Deployment
-context, installed-state, receipt, registry, and root-readiness checks move to
-one focused deployment module. The 268-line parent retains project and
-deployment check ordering plus shared ICP CLI checks. CLI behavior, finding
-codes, report shapes, and rendering are unchanged. The workspace also adopts
-`ic-query 0.10.2` after its focused cached-catalog integration passes. Package
-versions remain `0.86.1` until the human-owned release flow runs.
+The next unreleased slice begins the deploy-plan structural pass. The former
+single file is hard-cut to the required directory-module layout, and report
+rendering, JSON output persistence, and exit classification move to one focused
+child. Command options, root discovery, Clap construction, parsing, and usage
+text move to a second focused child. Report construction, diagnostic ordering,
+CLI behavior, JSON field order, text output, and exit behavior are unchanged.
+The workspace also adopts `ic-query 0.10.4` after its focused cached-catalog
+integration passes. Package versions remain `0.86.2`.
 
 ## Checklist
 
@@ -36,8 +37,10 @@ versions remain `0.86.1` until the human-owned release flow runs.
 
 ### Slice B - Deploy plan
 
-- [ ] Split evidence collection, comparison, diagnostics, and rendering by
-      existing responsibility.
+- [x] Extract rendering, output persistence, and exit classification.
+- [x] Extract command inputs, root discovery, parsing, and usage.
+- [ ] Split evidence collection, comparison, and diagnostics by existing
+      responsibility.
 - [ ] Preserve command, exit, and report contracts exactly.
 
 ### Slice C - State manifest
@@ -49,11 +52,11 @@ versions remain `0.86.1` until the human-owned release flow runs.
 ## Validation
 
 - `cargo test -p canic-cli medic:: --lib`: 51 passed.
+- `cargo test -p canic-cli deploy::tests::plan --lib`: 18 passed.
+- Focused cached subnet-catalog host test against `ic-query 0.10.4`: passed.
 - `cargo clippy -p canic-cli --lib -- -D warnings`: passed.
 
 ## Next Action
 
-Run the human-owned `0.86.2` release flow after reviewing the finalized patch.
-After publication, begin Slice B with one mechanical deploy-plan
-responsibility. Do not introduce a generic planning framework or retain
-wrappers in the parent module.
+Continue Slice B with the next cohesive deploy-plan responsibility. Do not
+introduce a generic planning framework or retain parallel implementations.
