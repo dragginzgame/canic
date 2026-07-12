@@ -1,6 +1,7 @@
 use super::super::plan as deploy_plan;
 use super::*;
 use crate::test_support::TempDir;
+use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::wasm_hash_hex};
 use canic_host::install_root::{InstallState, RootVerificationStatus};
 use serde_json::Value as JsonValue;
 use std::{ffi::OsString, fs, path::PathBuf};
@@ -30,6 +31,8 @@ kind = "root"
 [subnets.prime.canisters.user_hub]
 kind = "service"
 "#;
+
+const USER_HUB_ARTIFACT: &[u8] = b"user-hub-artifact";
 
 const MALFORMED_DESIRED_CONFIG: &str = r#"
 controllers = ["not-a-principal"]
@@ -853,7 +856,7 @@ fn write_artifact(icp_root: &std::path::Path, role: &str, bytes: &[u8]) {
 fn write_complete_local_plan_inputs(icp_root: &std::path::Path) {
     write_artifact(icp_root, "root", b"root-artifact");
     write_artifact(icp_root, "wasm_store", b"wasm-store-artifact");
-    write_artifact(icp_root, "user_hub", b"user-hub-artifact");
+    write_artifact(icp_root, "user_hub", USER_HUB_ARTIFACT);
     write_release_set_manifest(icp_root);
 }
 
@@ -864,16 +867,17 @@ fn write_release_set_manifest(icp_root: &std::path::Path) {
         .join("canisters")
         .join("root")
         .join("root.release-set.json");
+    let user_hub_hash = wasm_hash_hex(USER_HUB_ARTIFACT);
     let manifest = serde_json::json!({
         "release_version": "0.79.0",
         "entries": [{
             "role": "user_hub",
             "template_id": "embedded:user_hub",
             "artifact_relative_path": ".icp/local/canisters/user_hub/user_hub.wasm.gz",
-            "payload_size_bytes": 17,
-            "payload_sha256_hex": "user-hub-hash",
-            "chunk_size_bytes": 1_048_576,
-            "chunk_sha256_hex": ["user-hub-hash"]
+            "payload_size_bytes": USER_HUB_ARTIFACT.len(),
+            "payload_sha256_hex": user_hub_hash,
+            "chunk_size_bytes": CANIC_WASM_CHUNK_BYTES,
+            "chunk_sha256_hex": [user_hub_hash]
         }]
     });
     fs::create_dir_all(path.parent().expect("manifest parent")).expect("create manifest dir");

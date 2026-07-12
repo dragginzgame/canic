@@ -180,6 +180,7 @@ Current release-set transport validation:
 - a maximum-size chunk request round-trips through the canonical endpoint DTO
   below the configured payload limit.
 - 62 focused release-set tests and targeted host Clippy pass.
+- 18 focused deploy-plan tests and targeted CLI Clippy pass.
 - `ic-query 0.10.0` cached subnet-catalog integration: 1 passed.
 - targeted `canic-host` check against `ic-query 0.10.0`: pass.
 
