@@ -1,7 +1,18 @@
-use super::super::{GZIP_MAGIC, ReleaseSetEntry, WASM_MAGIC};
+//! Module: release_set::stage::artifact
+//!
+//! Responsibility: resolve, validate, and describe release-set Wasm artifacts.
+//! Does not own: release staging calls, manifest persistence, or build orchestration.
+//! Boundary: keeps every artifact read within the canonical ICP project root.
+
+use crate::release_set::{GZIP_MAGIC, ReleaseSetEntry, WASM_MAGIC};
+use std::{
+    fs,
+    io::Read,
+    path::{Component, Path, PathBuf},
+};
+
 use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::wasm_hash_hex};
 use flate2::read::GzDecoder;
-use std::{fs, io::Read, path::Path};
 
 // Build one release-set entry from one built ordinary role artifact.
 pub(in crate::release_set) fn build_release_set_entry(
@@ -23,6 +34,7 @@ pub(in crate::release_set) fn build_release_set_entry(
         })?
         .to_string_lossy()
         .to_string();
+    let artifact_path = resolve_release_artifact_path(icp_root, &artifact_relative_path)?;
     let artifact = read_release_artifact(&artifact_path)?;
 
     let chunk_hashes = artifact
@@ -39,6 +51,37 @@ pub(in crate::release_set) fn build_release_set_entry(
         chunk_size_bytes: u64::try_from(CANIC_WASM_CHUNK_BYTES)?,
         chunk_sha256_hex: chunk_hashes,
     })
+}
+
+/// Resolve one manifest artifact path and prove that its canonical target is
+/// contained by the canonical ICP project root.
+pub fn resolve_release_artifact_path(
+    icp_root: &Path,
+    artifact_relative_path: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let relative_path = Path::new(artifact_relative_path);
+    if relative_path.as_os_str().is_empty()
+        || relative_path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(format!(
+            "release artifact path must be relative to the ICP root: {artifact_relative_path}"
+        )
+        .into());
+    }
+
+    let canonical_root = icp_root.canonicalize()?;
+    let canonical_artifact = canonical_root.join(relative_path).canonicalize()?;
+    if !canonical_artifact.starts_with(&canonical_root) {
+        return Err(format!(
+            "release artifact path escapes ICP root: {}",
+            canonical_artifact.display()
+        )
+        .into());
+    }
+
+    Ok(canonical_artifact)
 }
 
 // Read one staged release artifact and validate that it is a non-empty gzip stream

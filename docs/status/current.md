@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 ## Purpose
 
@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.85.1`, published and tagged
-  as `v0.85.1`. The 0.85 operational-safety line remains active for focused
+- The current package/release-surface version is `0.85.2`, published and tagged
+  as `v0.85.2`. The 0.85 operational-safety line remains active for focused
   cleanup; package versions have not yet advanced beyond the published release.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
@@ -290,12 +290,12 @@ before this compaction is archived at
   publication boundaries,
   manifest guards, and the local vulnerability scan otherwise pass.
   These three slices shipped in `v0.85.0`. Release-set Candid argument files
-  were hard-cut to piped child stdin in `v0.85.1`. The next follow-up is
-  changelog-finalized for `0.85.2`, while package versions remain `0.85.1`:
-  release staging encodes the existing template request DTOs directly as binary
-  Candid and validates the complete artifact hash/chunk contract before root
-  mutation, removing manual text construction without reopening the stable
-  codec, restore, or build-authority contracts.
+  were hard-cut to piped child stdin in `v0.85.1`. Typed binary staging and
+  complete artifact hash/chunk validation shipped in `v0.85.2`. The next
+  follow-up is changelog-finalized for `0.85.3`, while package versions remain
+  `0.85.2`: absolute, traversal, and symlink-escaping release artifact paths are
+  rejected before manifest emission or root mutation. The patch does not reopen
+  the stable codec, restore, or build-authority contracts.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and

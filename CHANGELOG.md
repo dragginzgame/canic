@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.85.md](docs/changelog/0.85.md)
 
+- `0.85.3` constrains every release-set artifact read to the canonical ICP
+  project root, rejecting absolute, traversal, and symlink escapes.
+
 - `0.85.2` hard-cuts manual release-set Candid text construction to typed
   binary requests and verifies the complete artifact contract before staging.
 

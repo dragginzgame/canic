@@ -1,6 +1,6 @@
 # 0.85 Status: Operational Safety Hardening
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12
 
 ## Purpose
 
@@ -17,13 +17,14 @@ Audit source:
 ## Current State
 
 Slices A, B, and C are complete and published as `v0.85.0`. The stdin transport
-cleanup is published as `v0.85.1`, which is the current package version.
+cleanup is published as `v0.85.1`, and typed binary staging is published as
+`v0.85.2`, which is the current package version.
 
-The next focused cleanup is finalized in the changelog for `0.85.2`, but package
-versions remain `0.85.1` until the human-owned release flow runs. Release
-staging now uses the existing typed request DTOs and binary stdin transport; it
-does not reopen the completed restore, build-authority, or stable-CBOR
-contracts.
+The next focused cleanup is changelog-finalized for `0.85.3`, while package
+versions remain `0.85.2` until the human-owned release flow runs. Release-set
+artifact reads now prove that canonical targets remain inside the canonical ICP
+project root before manifest emission or staging. It does not reopen the
+completed restore, build-authority, or stable-CBOR contracts.
 
 ## Locked Scope
 
@@ -167,9 +168,11 @@ Current release-set transport validation:
   bytes, including zero bytes.
 - one local artifact preflight verifies size, canonical chunk size, payload
   hash, chunk count, and every chunk hash before the first root mutation.
+- manifest emission and staging reject empty, absolute, parent-traversal, and
+  symlink-escaping artifact paths before reading bytes.
 - a maximum-size chunk request round-trips through the canonical endpoint DTO
   below the configured payload limit.
-- 53 focused release-set tests and targeted host Clippy pass.
+- 56 focused release-set tests and targeted host Clippy pass.
 
 Current `ic-memory 0.10` hard-cut validation:
 
@@ -228,10 +231,13 @@ validation.
   the manual release-set text encoders, validates the complete artifact
   manifest before root mutation, and keeps a maximum chunk request under the
   endpoint payload bound.
+- 2026-07-12: the typed binary staging cleanup was published as `v0.85.2`. The
+  next focused cleanup constrains every release artifact read to a canonical
+  target inside the canonical ICP project root.
 
 ## Next Action
 
-Run the human-owned `0.85.2` release flow after reviewing the finalized patch.
+Run the human-owned `0.85.3` release flow after reviewing the finalized patch.
 Do not claim that `serde_cbor` left the workspace lock: current published IC
 signature, agent, transport, and PocketIC dependencies still select the
 upstream crate.

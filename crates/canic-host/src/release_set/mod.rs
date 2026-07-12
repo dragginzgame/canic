@@ -30,7 +30,7 @@ pub use paths::{
     workspace_root_from,
 };
 use stage::build_release_set_entry;
-pub(crate) use stage::icp_query_on_network;
+pub(crate) use stage::{icp_query_on_network, resolve_release_artifact_path};
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";
