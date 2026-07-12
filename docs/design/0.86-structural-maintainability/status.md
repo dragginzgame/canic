@@ -38,15 +38,30 @@ retains command orchestration, report assembly, path/profile helpers, and
 focused tests. Policy, CLI behavior, JSON field order, text output, and exit
 behavior are unchanged.
 
-Slice C has started. State-manifest package/config and built-in `wasm_store`
+The first Slice C batch is published as `v0.86.7`. State-manifest
+package/config and built-in `wasm_store`
 resolution now has one focused owner; the parent facade re-exports the existing
 resolution type and function. Resolution behavior, blocking findings,
 descriptor materialization, manifests, and reports are unchanged. The same
 batch bounds release disk use by disabling disposable incremental state,
 avoiding duplicate main/tag Clippy and PocketIC jobs, and cleaning local Cargo
-artifacts after a successful release push. This batch is changelog-finalized
-for `0.86.7`; package versions remain `0.86.6` pending the human-owned release
-flow.
+artifacts after a successful release push.
+
+The current unreleased slice completes Slice C and the bounded 0.86 structural
+pass. All audit-check construction moves into one focused owner. Schema,
+role/domain identity, memory-ID, storage, naming, snapshot, migration,
+test-coverage, lifecycle, invariant, and reserved-memory checks move together
+with their typed category/source constants. Status aggregation, next-action
+projection, and deterministic check ordering move to a second focused owner.
+Descriptor joining already has one canonical owner in the role-contract
+descriptor subsystem and is not duplicated here.
+
+The 846-line parent retains the public report model, orchestration, facade, and
+focused tests. Finding codes, details, severity, order, next actions, reports,
+serialization, state contracts, and persisted bytes are unchanged. The parent
+is 726 lines smaller than `0.86.7` and 892 lines smaller than the 1,738-line
+Slice C baseline. This closeout is changelog-finalized for `0.86.8`; package
+versions remain `0.86.7` pending the human-owned release flow.
 
 ## Checklist
 
@@ -72,9 +87,10 @@ flow.
 ### Slice C - State manifest
 
 - [x] Extract package/config and built-in-role resolution.
-- [ ] Extract descriptor joining and audit-category construction.
-- [ ] Extract aggregation and next-action projection.
-- [ ] Preserve state-contract, report, and serialized contracts exactly.
+- [x] Keep descriptor joining with its existing role-contract descriptor owner.
+- [x] Extract audit-category construction.
+- [x] Extract aggregation and next-action projection.
+- [x] Preserve state-contract, report, and serialized contracts exactly.
 
 ## Validation
 
@@ -85,9 +101,13 @@ flow.
 - `cargo clippy -p canic-cli --lib -- -D warnings`: passed.
 - `cargo test --locked -p canic-host state_manifest:: --lib`: 21 passed.
 - `cargo clippy --locked -p canic-host --lib -- -D warnings`: passed.
+- Post-`0.86.7` audit-owner extraction: the same 21 focused state-manifest
+  tests and targeted host-library Clippy pass.
+- Slice C closeout after aggregation extraction: the same 21 focused
+  state-manifest tests and targeted host-library Clippy pass.
 
 ## Next Action
 
-Continue Slice C with one mechanical state-manifest responsibility: separate
-descriptor/audit-category construction from report aggregation. Do not
-introduce a generic audit framework or retain parallel implementations.
+Run the human-owned `0.86.8` release flow after reviewing the finalized patch.
+After publication, close the bounded 0.86 line; any further structural program
+requires a fresh audit and design rather than extending this scope.
