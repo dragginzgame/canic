@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.85.md](docs/changelog/0.85.md)
 
+- `0.85.5` rejects invalid static release artifact shapes before staging and
+  adopts `ic-query 0.10` without changing Canic's subnet-catalog integration.
+
 - `0.85.4` gives every release-set manifest writer, loader, and staging path
   one fail-closed role/template identity admission rule.
 

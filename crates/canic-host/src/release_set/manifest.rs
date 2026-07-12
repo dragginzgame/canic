@@ -2,7 +2,7 @@
 //!
 //! Responsibility: define, validate, load, and persist root release-set manifests.
 //! Does not own: artifact bytes, ICP calls, or bootstrap sequencing.
-//! Boundary: admits one exact role/template identity contract for every consumer.
+//! Boundary: admits one exact identity and artifact-shape contract for every consumer.
 
 use crate::{
     durable_io::write_bytes,
@@ -14,7 +14,10 @@ use crate::{
 };
 use std::{collections::BTreeSet, fs, path::Path};
 
+use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::decode_hex};
 use serde::{Deserialize, Serialize};
+
+const SHA_256_BYTES: usize = 32;
 
 ///
 /// RootReleaseSetManifest
@@ -41,8 +44,8 @@ pub struct ReleaseSetEntry {
     pub chunk_sha256_hex: Vec<String>,
 }
 
-/// Validate the canonical identity contract shared by manifest writers,
-/// loaders, and staging.
+/// Validate the canonical manifest contract shared by writers, loaders, and
+/// staging.
 pub fn validate_root_release_set_manifest(
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -67,8 +70,58 @@ pub fn validate_root_release_set_manifest(
             )
             .into());
         }
+
+        if entry.payload_size_bytes == 0 {
+            return Err(format!(
+                "release-set payload size must be nonzero for role {}",
+                entry.role
+            )
+            .into());
+        }
+
+        let canonical_chunk_size = u64::try_from(CANIC_WASM_CHUNK_BYTES)?;
+        if entry.chunk_size_bytes != canonical_chunk_size {
+            return Err(format!(
+                "release-set chunk size must be {canonical_chunk_size} for role {}",
+                entry.role
+            )
+            .into());
+        }
+
+        validate_sha256_hex(
+            &entry.payload_sha256_hex,
+            &format!("payload hash for role {}", entry.role),
+        )?;
+
+        let expected_chunk_count =
+            usize::try_from(entry.payload_size_bytes.div_ceil(entry.chunk_size_bytes))?;
+        if entry.chunk_sha256_hex.len() != expected_chunk_count {
+            return Err(format!(
+                "release-set chunk count must be {expected_chunk_count} for role {}",
+                entry.role
+            )
+            .into());
+        }
+        for (chunk_index, chunk_hash) in entry.chunk_sha256_hex.iter().enumerate() {
+            validate_sha256_hex(
+                chunk_hash,
+                &format!("chunk hash {chunk_index} for role {}", entry.role),
+            )?;
+        }
     }
 
+    Ok(())
+}
+
+fn validate_sha256_hex(value: &str, field: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = decode_hex(value).map_err(|error| format!("invalid {field}: {error}"))?;
+    if bytes.len() != SHA_256_BYTES {
+        return Err(format!(
+            "invalid {field}: expected {SHA_256_BYTES} bytes, got {}",
+            bytes.len()
+        )
+        .into());
+    }
     Ok(())
 }
 
@@ -214,5 +267,35 @@ mod tests {
         manifest.entries[0].template_id = "embedded:other".to_string();
 
         assert!(validate_root_release_set_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn release_set_manifest_artifact_shape_rejects_zero_payload_and_wrong_chunk_size() {
+        let mut zero_payload = manifest();
+        zero_payload.entries[0].payload_size_bytes = 0;
+        let mut wrong_chunk_size = manifest();
+        wrong_chunk_size.entries[0].chunk_size_bytes -= 1;
+
+        assert!(validate_root_release_set_manifest(&zero_payload).is_err());
+        assert!(validate_root_release_set_manifest(&wrong_chunk_size).is_err());
+    }
+
+    #[test]
+    fn release_set_manifest_artifact_shape_rejects_impossible_chunk_count() {
+        let mut manifest = manifest();
+        manifest.entries[0].chunk_sha256_hex.clear();
+
+        assert!(validate_root_release_set_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn release_set_manifest_artifact_shape_rejects_malformed_hashes() {
+        let mut payload_hash = manifest();
+        payload_hash.entries[0].payload_sha256_hex = "00".to_string();
+        let mut chunk_hash = manifest();
+        chunk_hash.entries[0].chunk_sha256_hex[0] = "not-hex".to_string();
+
+        assert!(validate_root_release_set_manifest(&payload_hash).is_err());
+        assert!(validate_root_release_set_manifest(&chunk_hash).is_err());
     }
 }

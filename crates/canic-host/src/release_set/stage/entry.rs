@@ -76,18 +76,6 @@ impl ValidatedReleaseArtifact {
             .into());
         }
 
-        let canonical_chunk_size = u64::try_from(CANIC_WASM_CHUNK_BYTES)?;
-        if entry.chunk_size_bytes != canonical_chunk_size {
-            return Err(format!(
-                "release chunk size drift for {}: manifest={} canonical={} ({})",
-                entry.role,
-                entry.chunk_size_bytes,
-                canonical_chunk_size,
-                path.display()
-            )
-            .into());
-        }
-
         let payload_hash = wasm_hash(&bytes);
         let declared_payload_hash = decode_hex(&entry.payload_sha256_hex)?;
         if payload_hash != declared_payload_hash {
@@ -366,23 +354,6 @@ mod tests {
             )
             .is_err(),
             "chunk hash drift must reject"
-        );
-    }
-
-    #[test]
-    fn release_artifact_validation_rejects_noncanonical_chunk_size() {
-        let bytes = b"artifact bytes";
-        let mut entry = matching_release_entry(bytes);
-        entry.chunk_size_bytes -= 1;
-
-        assert!(
-            ValidatedReleaseArtifact::validate(
-                Path::new("artifact.wasm.gz"),
-                &entry,
-                bytes.to_vec()
-            )
-            .is_err(),
-            "chunk size drift must reject"
         );
     }
 

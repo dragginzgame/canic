@@ -72,7 +72,10 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
         .iter()
         .find(|artifact| artifact.role == "user_hub")
         .expect("user_hub artifact");
-    assert_eq!(user_hub.wasm_gz_sha256.as_deref(), Some("user-hub-hash"));
+    assert_eq!(
+        user_hub.wasm_gz_sha256.as_deref(),
+        Some(RELEASE_SET_USER_HUB_SHA256)
+    );
     assert_eq!(
         user_hub.wasm_gz_sha256_source,
         Some(ArtifactDigestSourceV1::ReleaseSetManifest)

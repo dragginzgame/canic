@@ -1,5 +1,8 @@
 use super::*;
 
+pub(in crate::deployment_truth::tests) const RELEASE_SET_USER_HUB_SHA256: &str =
+    "771682dfb2e75fd9a27e7a55e7afed9cc0acaf8c1958e97828e0f1026cc3833e";
+
 pub(in crate::deployment_truth::tests) fn assert_sha256_len(value: Option<&String>) {
     assert_eq!(value.map(String::len), Some(64));
 }
@@ -55,9 +58,9 @@ pub(in crate::deployment_truth::tests) fn write_release_set_manifest(icp_root: &
             "template_id": "embedded:user_hub",
             "artifact_relative_path": ".icp/local/canisters/user_hub/user_hub.wasm.gz",
             "payload_size_bytes": 17,
-            "payload_sha256_hex": "user-hub-hash",
+            "payload_sha256_hex": RELEASE_SET_USER_HUB_SHA256,
             "chunk_size_bytes": 1_048_576,
-            "chunk_sha256_hex": ["user-hub-hash"]
+            "chunk_sha256_hex": [RELEASE_SET_USER_HUB_SHA256]
         }]
     });
     fs::create_dir_all(path.parent().expect("manifest parent")).expect("create manifest dir");
