@@ -15,14 +15,15 @@ Auth-renewal, blob-storage, project configuration, state audit, role-package,
 resolved role-contract, and deployment diagnostics have focused owners. The
 Medic structural pass is complete.
 
-The next unreleased slice begins the deploy-plan structural pass. The former
-single file is hard-cut to the required directory-module layout, and report
-rendering, JSON output persistence, and exit classification move to one focused
-child. Command options, root discovery, Clap construction, parsing, and usage
-text move to a second focused child. Report construction, diagnostic ordering,
-CLI behavior, JSON field order, text output, and exit behavior are unchanged.
-The workspace also adopts `ic-query 0.10.4` after its focused cached-catalog
-integration passes. Package versions remain `0.86.2`.
+The next slice is changelog-finalized for `0.86.3` and begins the deploy-plan
+structural pass. The former single file is hard-cut to the required
+directory-module layout. Report rendering, JSON output persistence, and exit
+classification move to one focused child; command options, root discovery,
+Clap construction, parsing, and usage text move to another. Report
+construction, diagnostic ordering, CLI behavior, JSON field order, text output,
+and exit behavior are unchanged. The workspace also adopts `ic-query 0.10.4`
+after its focused cached-catalog integration passes. Package versions remain
+`0.86.2` until the human-owned release flow runs.
 
 ## Checklist
 
@@ -58,5 +59,7 @@ integration passes. Package versions remain `0.86.2`.
 
 ## Next Action
 
-Continue Slice B with the next cohesive deploy-plan responsibility. Do not
-introduce a generic planning framework or retain parallel implementations.
+Run the human-owned `0.86.3` release flow after reviewing the finalized patch.
+After publication, continue Slice B with evidence and diagnostic construction
+as a separately reviewable responsibility. Do not introduce a generic planning
+framework or retain parallel implementations.
