@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.86.2`, published and tagged
-  as `v0.86.2`. The bounded 0.86 structural-maintainability line remains
+- The current package/release-surface version is `0.86.3`, published and tagged
+  as `v0.86.3`. The bounded 0.86 structural-maintainability line remains
   active; its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -40,7 +40,13 @@ before this compaction is archived at
   owner. Report construction, diagnostic order, CLI behavior, JSON/text output,
   and exit behavior are unchanged. The workspace also adopts `ic-query 0.10.4`
   after its focused cached-catalog integration passes. Package versions remain
-  `0.86.2`. This slice is changelog-finalized for `0.86.3` pending the
+  `0.86.2`. This boundary slice is published as `v0.86.3`.
+
+  The next unreleased slice moves verified context, identity, artifact,
+  inventory, authority, trust-domain, and verifier-readiness evidence into one
+  focused deploy-plan owner. Blocker, warning, assumption, comparison, status,
+  and proposed-operation policy remain in the parent. Package versions remain
+  `0.86.3`. This slice is changelog-finalized for `0.86.4` pending the
   human-owned release flow.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
@@ -341,7 +347,9 @@ before this compaction is archived at
   rendering, output persistence, and exit classification into one focused
   owner and command inputs into another without changing the `deploy::plan`
   facade, command surface, or output contracts. This boundary slice is
-  changelog-finalized for `0.86.3`.
+  published as `v0.86.3`. Verified evidence construction now moves to one
+  focused owner without changing report or diagnostic contracts. This evidence
+  slice is changelog-finalized for `0.86.4`.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and

@@ -15,15 +15,16 @@ Auth-renewal, blob-storage, project configuration, state audit, role-package,
 resolved role-contract, and deployment diagnostics have focused owners. The
 Medic structural pass is complete.
 
-The next slice is changelog-finalized for `0.86.3` and begins the deploy-plan
-structural pass. The former single file is hard-cut to the required
-directory-module layout. Report rendering, JSON output persistence, and exit
-classification move to one focused child; command options, root discovery,
-Clap construction, parsing, and usage text move to another. Report
-construction, diagnostic ordering, CLI behavior, JSON field order, text output,
-and exit behavior are unchanged. The workspace also adopts `ic-query 0.10.4`
-after its focused cached-catalog integration passes. Package versions remain
-`0.86.2` until the human-owned release flow runs.
+The first deploy-plan slice is published as `v0.86.3`. Report rendering, JSON
+output persistence, and exit classification have one focused owner; command
+options, root discovery, parsing, and usage have another.
+
+The next slice is changelog-finalized for `0.86.4`. Verified context, identity,
+artifact, inventory, authority, trust-domain, and verifier-readiness evidence
+have one focused owner. The parent retains blocker, warning, assumption,
+comparison, status, and proposed-operation policy. Diagnostic ordering, CLI
+behavior, JSON field order, text output, and exit behavior are unchanged.
+Package versions remain `0.86.3` until the human-owned release flow runs.
 
 ## Checklist
 
@@ -40,8 +41,8 @@ after its focused cached-catalog integration passes. Package versions remain
 
 - [x] Extract rendering, output persistence, and exit classification.
 - [x] Extract command inputs, root discovery, parsing, and usage.
-- [ ] Split evidence collection, comparison, and diagnostics by existing
-      responsibility.
+- [x] Extract verified evidence construction.
+- [ ] Split comparison and diagnostics by existing responsibility.
 - [ ] Preserve command, exit, and report contracts exactly.
 
 ### Slice C - State manifest
@@ -54,12 +55,13 @@ after its focused cached-catalog integration passes. Package versions remain
 
 - `cargo test -p canic-cli medic:: --lib`: 51 passed.
 - `cargo test -p canic-cli deploy::tests::plan --lib`: 18 passed.
+- `cargo test -p canic-cli deploy::plan::tests --lib`: 12 passed.
 - Focused cached subnet-catalog host test against `ic-query 0.10.4`: passed.
 - `cargo clippy -p canic-cli --lib -- -D warnings`: passed.
 
 ## Next Action
 
-Run the human-owned `0.86.3` release flow after reviewing the finalized patch.
-After publication, continue Slice B with evidence and diagnostic construction
-as a separately reviewable responsibility. Do not introduce a generic planning
-framework or retain parallel implementations.
+Run the human-owned `0.86.4` release flow after reviewing the finalized patch.
+After publication, continue Slice B with blocker, warning, and assumption
+diagnostics as a separately reviewable responsibility. Do not introduce a
+generic planning framework or retain parallel implementations.

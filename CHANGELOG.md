@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
 
+- `0.86.4` gives deploy-plan verified context, identity, artifact, inventory,
+  authority, trust-domain, and verifier-readiness evidence one focused owner
+  without changing diagnostic or report contracts.
+
 - `0.86.3` gives deploy-plan command inputs and report output focused owners
   and adopts `ic-query 0.10.4` without changing CLI or report contracts.
 
