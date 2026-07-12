@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
 
+- `0.86.7` begins state-manifest decomposition with focused resolution
+  ownership and bounds release-validation disk growth without changing
+  manifest, finding, or report contracts.
+
 - `0.86.6` completes deploy-plan decomposition with focused final-outcome and
   serialized report-model owners while preserving command, report, diagnostic,
   and exit contracts.

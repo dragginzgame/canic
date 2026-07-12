@@ -28,15 +28,25 @@ unsupported and blocking assumptions, local-state warnings, unresolved
 assumptions, stable diagnostic codes, and diagnostic-specific next actions have
 one focused owner.
 
-The next slice is changelog-finalized for `0.86.6` and completes the deploy-plan
-structural pass. Proposed
+The deploy-plan closeout is published as `v0.86.6` and completes its structural
+pass. Proposed
 operation labels, global next actions, aggregate status, comparison status, and
 deterministic diagnostic/operation ordering move to one final-outcome module.
 Serialized report fields, statuses, diagnostics, proposed-operation labels, and
 their stable strings move to one report-model module. The 587-line parent
 retains command orchestration, report assembly, path/profile helpers, and
 focused tests. Policy, CLI behavior, JSON field order, text output, and exit
-behavior are unchanged. Package versions remain `0.86.5`.
+behavior are unchanged.
+
+Slice C has started. State-manifest package/config and built-in `wasm_store`
+resolution now has one focused owner; the parent facade re-exports the existing
+resolution type and function. Resolution behavior, blocking findings,
+descriptor materialization, manifests, and reports are unchanged. The same
+batch bounds release disk use by disabling disposable incremental state,
+avoiding duplicate main/tag Clippy and PocketIC jobs, and cleaning local Cargo
+artifacts after a successful release push. This batch is changelog-finalized
+for `0.86.7`; package versions remain `0.86.6` pending the human-owned release
+flow.
 
 ## Checklist
 
@@ -61,8 +71,9 @@ behavior are unchanged. Package versions remain `0.86.5`.
 
 ### Slice C - State manifest
 
-- [ ] Split resolution, descriptor joining, audit categories, and aggregation
-      by existing responsibility.
+- [x] Extract package/config and built-in-role resolution.
+- [ ] Extract descriptor joining and audit-category construction.
+- [ ] Extract aggregation and next-action projection.
 - [ ] Preserve state-contract, report, and serialized contracts exactly.
 
 ## Validation
@@ -72,10 +83,11 @@ behavior are unchanged. Package versions remain `0.86.5`.
 - `cargo test -p canic-cli deploy::plan::tests --lib`: 12 passed.
 - Focused cached subnet-catalog host test against `ic-query 0.10.4`: passed.
 - `cargo clippy -p canic-cli --lib -- -D warnings`: passed.
+- `cargo test --locked -p canic-host state_manifest:: --lib`: 21 passed.
+- `cargo clippy --locked -p canic-host --lib -- -D warnings`: passed.
 
 ## Next Action
 
-Run the human-owned `0.86.6` release flow after reviewing the finalized patch.
-After publication, begin Slice C with one mechanical state-manifest
-responsibility. Do not introduce a generic audit framework or retain parallel
-implementations.
+Continue Slice C with one mechanical state-manifest responsibility: separate
+descriptor/audit-category construction from report aggregation. Do not
+introduce a generic audit framework or retain parallel implementations.

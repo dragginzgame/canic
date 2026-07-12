@@ -115,23 +115,16 @@ cargo build -p canic --examples --locked
 The same CI job also installs and checks required helper tools including
 `actionlint`, the ICP CLI, `ic-wasm`, and PocketIC.
 
-The tag workflow currently includes:
+The tag workflow currently includes only the release-specific workspace build:
 
 ```text
-bash scripts/ci/check-control-plane-feature-matrix.sh
-bash scripts/ci/check-release-validation-matrix.sh
-bash scripts/ci/check-upgrade-state-audit.sh
-bash scripts/ci/check-recovery-runbooks.sh
-bash scripts/ci/check-diagnostic-consistency-audit.sh
-bash scripts/ci/check-release-package-install-validation.sh
-bash scripts/ci/check-rc-readiness-audit.sh
-make fmt-check
-make clippy
-make test-unit
 cargo build --release --workspace --locked
 ```
 
-Tag CI also runs workflow linting and helper-tool setup.
+The governed release flow pushes the release commit to `main` and its tag
+together. The `main` run validates that exact commit with the full matrix above;
+the tag run does not repeat Clippy or the PocketIC suite. CI disables Cargo
+incremental state because runner target directories are disposable.
 
 ## Focused Replay, Auth, And Cost Gates
 

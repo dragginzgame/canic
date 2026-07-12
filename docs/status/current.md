@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.86.5`, published and tagged
-  as `v0.86.5`. The bounded 0.86 structural-maintainability line remains
+- The current package/release-surface version is `0.86.6`, published and tagged
+  as `v0.86.6`. The bounded 0.86 structural-maintainability line remains
   active; its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -59,9 +59,20 @@ before this compaction is archived at
   and deterministic ordering move to one focused final-outcome owner. The
   serialized report types and stable label mappings move to a report-model
   owner. The parent retains orchestration, report assembly, path/profile
-  helpers, and focused tests. This deploy-plan closeout is changelog-finalized
-  for `0.86.6`; package versions remain `0.86.5` pending the human-owned release
-  flow.
+  helpers, and focused tests. This deploy-plan closeout is published as
+  `v0.86.6`.
+
+  The `0.86.7` slice bounds release-validation disk use. CI does not retain
+  incremental compiler state, and tag runs build the release workspace without
+  repeating the full checks and PocketIC jobs already running for the identical
+  `main` commit. Broad local Clippy and workspace-test gates also disable
+  incremental state, and a successful `make release-push` clears Cargo build
+  artifacts before the next release cycle. Slice C has also started:
+  state-manifest package/config and built-in `wasm_store` resolution now has one
+  focused host owner while the existing facade, manifest output, blocking
+  findings, and report contracts remain unchanged. This batch is
+  changelog-finalized for `0.86.7`; package versions remain `0.86.6` pending the
+  human-owned release flow.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
