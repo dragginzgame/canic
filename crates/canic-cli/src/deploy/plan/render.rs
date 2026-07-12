@@ -7,7 +7,8 @@
 use crate::deploy::{
     DeployCommandError,
     plan::{
-        DeployPlanOptions, DeploymentPlanReport, PlanDiagnostic, PlanStatus, ProposedOperationLabel,
+        command::DeployPlanOptions,
+        report::{DeploymentPlanReport, PlanDiagnostic, PlanStatus, ProposedOperationLabel},
     },
 };
 use std::{fs::OpenOptions, io::Write, path::Path};

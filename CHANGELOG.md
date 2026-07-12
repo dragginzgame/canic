@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
 
+- `0.86.6` completes deploy-plan decomposition with focused final-outcome and
+  serialized report-model owners while preserving command, report, diagnostic,
+  and exit contracts.
+
 - `0.86.5` gives deploy-plan target blockers, unresolved assumptions, warnings,
   and stable diagnostic codes one focused owner without changing classification
   or report contracts.
