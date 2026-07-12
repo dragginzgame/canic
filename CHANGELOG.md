@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.85.md](docs/changelog/0.85.md)
 
+- `0.85.4` gives every release-set manifest writer, loader, and staging path
+  one fail-closed role/template identity admission rule.
+
 - `0.85.3` constrains every release-set artifact read to the canonical ICP
   project root, rejecting absolute, traversal, and symlink escapes.
 

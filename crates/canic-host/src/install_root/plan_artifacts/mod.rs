@@ -7,7 +7,7 @@ use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentPlanV1};
 use crate::release_set::{
     ReleaseSetEntry, RootReleaseSetManifest, resolve_artifact_root, resolve_release_artifact_path,
-    root_release_set_manifest_path,
+    root_release_set_manifest_path, validate_root_release_set_manifest,
 };
 use canic_core::CANIC_WASM_CHUNK_BYTES;
 use canic_core::cdk::utils::hash::wasm_hash_hex;
@@ -160,6 +160,7 @@ fn emit_root_release_set_manifest_from_plan(
         entries,
     };
 
+    validate_root_release_set_manifest(&manifest)?;
     crate::durable_io::write_bytes(&manifest_path, &serde_json::to_vec_pretty(&manifest)?)?;
     Ok(manifest_path)
 }
