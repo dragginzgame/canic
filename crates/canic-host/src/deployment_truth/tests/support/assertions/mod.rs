@@ -35,7 +35,7 @@ pub(in crate::deployment_truth::tests) fn assert_plan_has_user_hub_release_artif
         plan.role_artifacts
             .iter()
             .any(|artifact| artifact.role == "user_hub"
-                && artifact.wasm_gz_sha256.as_deref() == Some("user-hub-hash")
+                && artifact.wasm_gz_sha256.as_deref() == Some(RELEASE_SET_USER_HUB_SHA256)
                 && artifact.wasm_gz_sha256_source
                     == Some(ArtifactDigestSourceV1::ReleaseSetManifest)
                 && artifact.observed_wasm_gz_file_sha256_source

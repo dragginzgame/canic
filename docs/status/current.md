@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.85.3`, published and tagged
-  as `v0.85.3`. The 0.85 operational-safety line remains active for focused
+- The current package/release-surface version is `0.85.4`, published and tagged
+  as `v0.85.4`. The 0.85 operational-safety line remains active for focused
   cleanup; package versions have not yet advanced beyond the published release.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
@@ -292,12 +292,14 @@ before this compaction is archived at
   These three slices shipped in `v0.85.0`. Release-set Candid argument files
   were hard-cut to piped child stdin in `v0.85.1`. Typed binary staging and
   complete artifact hash/chunk validation shipped in `v0.85.2`. Release
-  artifact path containment shipped in `v0.85.3`. The next follow-up is
-  changelog-finalized for `0.85.4`, while package versions remain `0.85.3`: one
-  manifest-owned validator rejects empty release identities, duplicate roles,
-  and template IDs that do not exactly match `embedded:<role>` across manifest
-  writing, loading, and staging. It does not reopen the stable codec, restore,
-  or build-authority contracts.
+  artifact path containment shipped in `v0.85.3`. Canonical manifest identity
+  admission shipped in `v0.85.4`. The next follow-up is changelog-finalized for
+  `0.85.5`, while package versions remain `0.85.4`: the same manifest authority
+  rejects zero payloads, noncanonical chunk sizes, impossible chunk counts, and
+  malformed SHA-256 fields before artifact access or root mutation. The
+  workspace also adopts `ic-query 0.10.0`; Canic's maintained top-level
+  subnet-catalog integration requires no source migration. The patch does not
+  reopen the stable codec, restore, or build-authority contracts.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and

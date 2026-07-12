@@ -18,13 +18,15 @@ Audit source:
 
 Slices A, B, and C are complete and published as `v0.85.0`. The stdin transport
 cleanup is published as `v0.85.1`, and typed binary staging is published as
-`v0.85.2`. Release artifact path containment is published as `v0.85.3`, which
-is the current package version.
+`v0.85.2`. Release artifact path containment is published as `v0.85.3`, and
+canonical manifest identity admission as `v0.85.4`, which is the current package
+version.
 
-The next focused cleanup is changelog-finalized for `0.85.4`, while package
-versions remain `0.85.3` until the human-owned release flow runs. One
-manifest-owned validator rejects malformed or conflicting release identity rows
-across writing, loading, and staging. It does not reopen the completed restore,
+The next focused cleanup is changelog-finalized for `0.85.5`, while package
+versions remain `0.85.4` until the human-owned release flow runs. The same
+manifest-owned validator now rejects invalid static artifact shapes across
+writing, loading, and staging, and the workspace adopts `ic-query 0.10.0`
+without a Canic source migration. It does not reopen the completed restore,
 build-authority, or stable-CBOR contracts.
 
 ## Locked Scope
@@ -173,9 +175,13 @@ Current release-set transport validation:
   symlink-escaping artifact paths before reading bytes.
 - staging rejects empty versions and roles, duplicate roles, and template IDs
   that do not exactly match `embedded:<role>` before the first root mutation.
+- manifest admission rejects zero payload sizes, noncanonical chunk sizes,
+  impossible chunk counts, and malformed or non-SHA-256-length hex digests.
 - a maximum-size chunk request round-trips through the canonical endpoint DTO
   below the configured payload limit.
-- 60 focused release-set tests and targeted host Clippy pass.
+- 62 focused release-set tests and targeted host Clippy pass.
+- `ic-query 0.10.0` cached subnet-catalog integration: 1 passed.
+- targeted `canic-host` check against `ic-query 0.10.0`: pass.
 
 Current `ic-memory 0.10` hard-cut validation:
 
@@ -240,10 +246,14 @@ validation.
 - 2026-07-12: release artifact path containment was published as `v0.85.3`. The
   next focused cleanup validates release-set version, role, uniqueness, and
   exact embedded template identity before staging begins.
+- 2026-07-12: canonical manifest identity admission was published as
+  `v0.85.4`. The next focused cleanup extends the same validator to the static
+  payload, chunk, and SHA-256 shape before artifact access or root mutation and
+  adopts `ic-query 0.10.0` after its canonical-library-path review passed.
 
 ## Next Action
 
-Run the human-owned `0.85.4` release flow after reviewing the finalized patch.
+Run the human-owned `0.85.5` release flow after reviewing the finalized patch.
 Do not claim that `serde_cbor` left the workspace lock: current published IC
 signature, agent, transport, and PocketIC dependencies still select the
 upstream crate.
