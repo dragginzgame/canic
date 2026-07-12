@@ -1,15 +1,20 @@
-use serde::{Deserialize, Serialize};
-use std::{fs, path::Path};
+//! Module: release_set::manifest
+//!
+//! Responsibility: define, validate, load, and persist root release-set manifests.
+//! Does not own: artifact bytes, ICP calls, or bootstrap sequencing.
+//! Boundary: admits one exact role/template identity contract for every consumer.
 
 use crate::{
     durable_io::write_bytes,
+    release_set::{
+        build_release_set_entry, config_path, configured_release_roles, load_root_package_version,
+        resolve_artifact_root, root_release_set_manifest_path, workspace_manifest_path,
+    },
     role_contract::{declared_role_manifest_path, finding_detail},
 };
+use std::{collections::BTreeSet, fs, path::Path};
 
-use super::{
-    build_release_set_entry, config_path, configured_release_roles, load_root_package_version,
-    resolve_artifact_root, root_release_set_manifest_path, workspace_manifest_path,
-};
+use serde::{Deserialize, Serialize};
 
 ///
 /// RootReleaseSetManifest
@@ -34,6 +39,37 @@ pub struct ReleaseSetEntry {
     pub payload_sha256_hex: String,
     pub chunk_size_bytes: u64,
     pub chunk_sha256_hex: Vec<String>,
+}
+
+/// Validate the canonical identity contract shared by manifest writers,
+/// loaders, and staging.
+pub fn validate_root_release_set_manifest(
+    manifest: &RootReleaseSetManifest,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if manifest.release_version.trim().is_empty() {
+        return Err("release-set manifest version must not be empty".into());
+    }
+
+    let mut roles = BTreeSet::new();
+    for entry in &manifest.entries {
+        if entry.role.trim().is_empty() {
+            return Err("release-set manifest role must not be empty".into());
+        }
+        if !roles.insert(entry.role.as_str()) {
+            return Err(format!("duplicate release-set role: {}", entry.role).into());
+        }
+
+        let expected_template_id = format!("embedded:{}", entry.role);
+        if entry.template_id != expected_template_id {
+            return Err(format!(
+                "release-set template identity mismatch for role {}: expected {}",
+                entry.role, expected_template_id
+            )
+            .into());
+        }
+    }
+
+    Ok(())
 }
 
 // Build and persist the current root release-set manifest from built `.wasm.gz` artifacts.
@@ -71,6 +107,7 @@ pub fn emit_root_release_set_manifest_with_config(
         entries,
     };
 
+    validate_root_release_set_manifest(&manifest)?;
     write_bytes(&manifest_path, &serde_json::to_vec_pretty(&manifest)?)?;
     Ok(manifest_path)
 }
@@ -119,5 +156,63 @@ pub fn load_root_release_set_manifest(
     manifest_path: &Path,
 ) -> Result<RootReleaseSetManifest, Box<dyn std::error::Error>> {
     let source = fs::read(manifest_path)?;
-    Ok(serde_json::from_slice(&source)?)
+    let manifest = serde_json::from_slice(&source)?;
+    validate_root_release_set_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manifest() -> RootReleaseSetManifest {
+        RootReleaseSetManifest {
+            release_version: "test-version".to_string(),
+            entries: vec![ReleaseSetEntry {
+                role: "app".to_string(),
+                template_id: "embedded:app".to_string(),
+                artifact_relative_path: ".icp/local/canisters/app/app.wasm.gz".to_string(),
+                payload_size_bytes: 128,
+                payload_sha256_hex: "00".repeat(32),
+                chunk_size_bytes: 1_048_576,
+                chunk_sha256_hex: vec!["00".repeat(32)],
+            }],
+        }
+    }
+
+    #[test]
+    fn release_set_manifest_identity_accepts_canonical_role() {
+        assert!(validate_root_release_set_manifest(&manifest()).is_ok());
+    }
+
+    #[test]
+    fn release_set_manifest_identity_rejects_empty_version_and_role() {
+        let mut missing_version = manifest();
+        missing_version.release_version.clear();
+        let mut missing_role = manifest();
+        missing_role.entries[0].role.clear();
+
+        assert!(validate_root_release_set_manifest(&missing_version).is_err());
+        assert!(validate_root_release_set_manifest(&missing_role).is_err());
+    }
+
+    #[test]
+    fn release_set_manifest_identity_rejects_duplicate_role() {
+        let mut manifest = manifest();
+        manifest.entries.push(manifest.entries[0].clone());
+
+        assert!(validate_root_release_set_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn release_set_manifest_identity_rejects_template_role_mismatch() {
+        let mut manifest = manifest();
+        manifest.entries[0].template_id = "embedded:other".to_string();
+
+        assert!(validate_root_release_set_manifest(&manifest).is_err());
+    }
 }

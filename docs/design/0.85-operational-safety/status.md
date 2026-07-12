@@ -18,13 +18,14 @@ Audit source:
 
 Slices A, B, and C are complete and published as `v0.85.0`. The stdin transport
 cleanup is published as `v0.85.1`, and typed binary staging is published as
-`v0.85.2`, which is the current package version.
+`v0.85.2`. Release artifact path containment is published as `v0.85.3`, which
+is the current package version.
 
-The next focused cleanup is changelog-finalized for `0.85.3`, while package
-versions remain `0.85.2` until the human-owned release flow runs. Release-set
-artifact reads now prove that canonical targets remain inside the canonical ICP
-project root before manifest emission or staging. It does not reopen the
-completed restore, build-authority, or stable-CBOR contracts.
+The next focused cleanup is changelog-finalized for `0.85.4`, while package
+versions remain `0.85.3` until the human-owned release flow runs. One
+manifest-owned validator rejects malformed or conflicting release identity rows
+across writing, loading, and staging. It does not reopen the completed restore,
+build-authority, or stable-CBOR contracts.
 
 ## Locked Scope
 
@@ -170,9 +171,11 @@ Current release-set transport validation:
   hash, chunk count, and every chunk hash before the first root mutation.
 - manifest emission and staging reject empty, absolute, parent-traversal, and
   symlink-escaping artifact paths before reading bytes.
+- staging rejects empty versions and roles, duplicate roles, and template IDs
+  that do not exactly match `embedded:<role>` before the first root mutation.
 - a maximum-size chunk request round-trips through the canonical endpoint DTO
   below the configured payload limit.
-- 56 focused release-set tests and targeted host Clippy pass.
+- 60 focused release-set tests and targeted host Clippy pass.
 
 Current `ic-memory 0.10` hard-cut validation:
 
@@ -234,10 +237,13 @@ validation.
 - 2026-07-12: the typed binary staging cleanup was published as `v0.85.2`. The
   next focused cleanup constrains every release artifact read to a canonical
   target inside the canonical ICP project root.
+- 2026-07-12: release artifact path containment was published as `v0.85.3`. The
+  next focused cleanup validates release-set version, role, uniqueness, and
+  exact embedded template identity before staging begins.
 
 ## Next Action
 
-Run the human-owned `0.85.3` release flow after reviewing the finalized patch.
+Run the human-owned `0.85.4` release flow after reviewing the finalized patch.
 Do not claim that `serde_cbor` left the workspace lock: current published IC
 signature, agent, transport, and PocketIC dependencies still select the
 upstream crate.

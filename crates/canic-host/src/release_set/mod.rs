@@ -18,6 +18,7 @@ pub use config::{
     matching_fleet_config_paths, plan_attach_fleet_role, plan_declare_fleet_role,
     plan_rename_fleet_role, rename_fleet_role,
 };
+pub(crate) use manifest::validate_root_release_set_manifest;
 pub use manifest::{
     ReleaseSetEntry, RootReleaseSetManifest, emit_root_release_set_manifest,
     emit_root_release_set_manifest_if_ready, emit_root_release_set_manifest_if_ready_with_config,

@@ -1,10 +1,17 @@
+//! Module: release_set::stage
+//!
+//! Responsibility: validate and stage one root release-set manifest.
+//! Does not own: artifact construction, root installation, or bootstrap policy.
+//! Boundary: rejects invalid manifest authority before issuing ICP mutations.
+
 mod artifact;
 mod call;
 mod entry;
 mod progress;
 
-use super::{RootReleaseSetManifest, root_time_secs};
+use super::{RootReleaseSetManifest, root_time_secs, validate_root_release_set_manifest};
 use crate::icp::LocalReplicaTarget;
+
 use call::icp_call_on_network;
 use entry::stage_release_entry;
 use progress::StageProgress;
@@ -23,6 +30,7 @@ pub fn stage_root_release_set(
     root_canister: &str,
     manifest: &RootReleaseSetManifest,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    validate_root_release_set_manifest(manifest)?;
     let now_secs = root_time_secs()?;
     println!("Stage release set:");
     let mut progress = StageProgress::new();
