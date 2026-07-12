@@ -19,15 +19,9 @@ Audit source:
 Slices A, B, and C are complete and published as `v0.85.0`. The stdin transport
 cleanup is published as `v0.85.1`, and typed binary staging is published as
 `v0.85.2`. Release artifact path containment is published as `v0.85.3`, and
-canonical manifest identity admission as `v0.85.4`, which is the current package
-version.
-
-The next focused cleanup is changelog-finalized for `0.85.5`, while package
-versions remain `0.85.4` until the human-owned release flow runs. The same
-manifest-owned validator now rejects invalid static artifact shapes across
-writing, loading, and staging, and the workspace adopts `ic-query 0.10.0`
-without a Canic source migration. It does not reopen the completed restore,
-build-authority, or stable-CBOR contracts.
+canonical manifest identity admission as `v0.85.4`. Static artifact-shape
+admission and the `ic-query 0.10.0` adoption are published as `v0.85.5`, which
+is the current package version. The 0.85 line is complete.
 
 ## Locked Scope
 
@@ -251,10 +245,13 @@ validation.
   `v0.85.4`. The next focused cleanup extends the same validator to the static
   payload, chunk, and SHA-256 shape before artifact access or root mutation and
   adopts `ic-query 0.10.0` after its canonical-library-path review passed.
+- 2026-07-12: static artifact-shape admission and `ic-query 0.10.0` were
+  published as `v0.85.5`. The 0.85 line closed without reopening its restore,
+  build-authority, or stable-CBOR contracts.
 
 ## Next Action
 
-Run the human-owned `0.85.5` release flow after reviewing the finalized patch.
-Do not claim that `serde_cbor` left the workspace lock: current published IC
-signature, agent, transport, and PocketIC dependencies still select the
-upstream crate.
+Continue the bounded 0.86 structural-maintainability line at
+`../0.86-structural-maintainability/status.md`. Do not claim that `serde_cbor`
+left the workspace lock: current published IC signature, agent, transport, and
+PocketIC dependencies still select the upstream crate.
