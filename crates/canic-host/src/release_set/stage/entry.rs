@@ -9,7 +9,9 @@ use crate::{
     release_set::{
         ReleaseSetEntry,
         stage::{
-            artifact::read_release_artifact, call::icp_call_on_network, progress::StageProgress,
+            artifact::{read_release_artifact, resolve_release_artifact_path},
+            call::icp_call_on_network,
+            progress::StageProgress,
         },
     },
 };
@@ -150,7 +152,7 @@ pub(super) fn stage_release_entry(
     progress: &mut StageProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let started_at = Instant::now();
-    let artifact_path = icp_root.join(&entry.artifact_relative_path);
+    let artifact_path = resolve_release_artifact_path(icp_root, &entry.artifact_relative_path)?;
     let artifact = ValidatedReleaseArtifact::read(&artifact_path, entry)?;
     let chunk_count = artifact.chunk_hashes.len();
     let identity = StagedReleaseIdentity::new(entry, release_version);

@@ -6,7 +6,8 @@ use super::receipt_io::write_install_deployment_truth_receipt;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentPlanV1};
 use crate::release_set::{
-    ReleaseSetEntry, RootReleaseSetManifest, resolve_artifact_root, root_release_set_manifest_path,
+    ReleaseSetEntry, RootReleaseSetManifest, resolve_artifact_root, resolve_release_artifact_path,
+    root_release_set_manifest_path,
 };
 use canic_core::CANIC_WASM_CHUNK_BYTES;
 use canic_core::cdk::utils::hash::wasm_hash_hex;
@@ -180,8 +181,9 @@ fn release_set_entry_from_plan_artifact(
         })?
         .to_string_lossy()
         .to_string();
-    let wasm_module = fs::read(&artifact_path)?;
-    let chunk_hashes = wasm_module
+    let artifact_path = resolve_release_artifact_path(icp_root, &artifact_relative_path)?;
+    let artifact_bytes = fs::read(&artifact_path)?;
+    let chunk_hashes = artifact_bytes
         .chunks(CANIC_WASM_CHUNK_BYTES)
         .map(wasm_hash_hex)
         .collect::<Vec<_>>();
@@ -190,9 +192,9 @@ fn release_set_entry_from_plan_artifact(
         role: artifact.role.clone(),
         template_id: format!("embedded:{}", artifact.role),
         artifact_relative_path,
-        payload_size_bytes: wasm_module.len() as u64,
-        payload_sha256_hex: wasm_hash_hex(&wasm_module),
-        chunk_size_bytes: CANIC_WASM_CHUNK_BYTES as u64,
+        payload_size_bytes: u64::try_from(artifact_bytes.len())?,
+        payload_sha256_hex: wasm_hash_hex(&artifact_bytes),
+        chunk_size_bytes: u64::try_from(CANIC_WASM_CHUNK_BYTES)?,
         chunk_sha256_hex: chunk_hashes,
     })
 }

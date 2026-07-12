@@ -34,3 +34,49 @@ fn read_release_artifact_rejects_non_wasm_payload() {
 
     read_release_artifact(&path).expect_err("non-wasm gzip payload must reject");
 }
+
+#[test]
+fn release_artifact_path_resolves_inside_icp_root() {
+    let temp = TempWorkspace::new();
+    let artifact_dir = temp.path().join(".icp/local/canisters/app");
+    fs::create_dir_all(&artifact_dir).expect("create artifact directory");
+    let artifact_path = artifact_dir.join("app.wasm.gz");
+    fs::write(&artifact_path, b"artifact").expect("write artifact");
+
+    let resolved =
+        resolve_release_artifact_path(temp.path(), ".icp/local/canisters/app/app.wasm.gz")
+            .expect("contained artifact resolves");
+
+    assert_eq!(
+        resolved,
+        artifact_path.canonicalize().expect("canonical artifact")
+    );
+}
+
+#[test]
+fn release_artifact_path_rejects_nonrelative_components() {
+    let temp = TempWorkspace::new();
+
+    for path in ["", "../outside.wasm.gz", "/tmp/outside.wasm.gz"] {
+        assert!(
+            resolve_release_artifact_path(temp.path(), path).is_err(),
+            "nonrelative path must reject: {path}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn release_artifact_path_rejects_symlink_escape() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempWorkspace::new();
+    let outside = TempWorkspace::new();
+    let outside_artifact = outside.path().join("app.wasm.gz");
+    fs::write(&outside_artifact, b"artifact").expect("write outside artifact");
+    symlink(outside.path(), temp.path().join("linked-artifacts")).expect("link outside directory");
+
+    let result = resolve_release_artifact_path(temp.path(), "linked-artifacts/app.wasm.gz");
+
+    assert!(result.is_err(), "symlink escape must reject");
+}

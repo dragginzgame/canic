@@ -8,7 +8,7 @@ use super::config::{
     configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
     declare_fleet_role_source, rename_fleet_role_source,
 };
-use super::stage::read_release_artifact;
+use super::stage::{read_release_artifact, resolve_release_artifact_path};
 use super::{
     canister_manifest_path, canisters_root, config_path, configured_install_targets,
     plan_attach_fleet_role, plan_declare_fleet_role, plan_rename_fleet_role, root_manifest_path,
