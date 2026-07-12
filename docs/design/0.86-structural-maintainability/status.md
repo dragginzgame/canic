@@ -10,12 +10,16 @@ history.
 
 ## Current State
 
-Implementation has started without changing package versions. The first Medic
-slice moves auth-renewal and blob-storage check construction and passive Candid
-detection into focused child modules. The parent still owns check selection and
-ordering. CLI behavior, finding codes, report shapes, and rendering are
-unchanged. This slice is changelog-finalized for `0.86.0`; package versions
-remain `0.85.5` until the human-owned release flow runs.
+The first Medic slice is published as `v0.86.0`. Auth-renewal and blob-storage
+check construction and passive Candid detection have focused child owners.
+
+The next slice is changelog-finalized for `0.86.1`. Project configuration and
+state-audit checks have one focused owner; role-package metadata,
+runtime-feature requirements, resolved role-contract findings, and
+state-descriptor admission checks have another. The parent still owns check
+selection and ordering. CLI behavior, finding codes, report shapes, and
+rendering are unchanged. Package versions remain `0.86.0` until the
+human-owned release flow runs.
 
 ## Checklist
 
@@ -23,6 +27,8 @@ remain `0.85.5` until the human-owned release flow runs.
 
 - [x] Extract auth-renewal checks.
 - [x] Extract blob-storage checks and passive endpoint detection.
+- [x] Extract role-package and resolved role-contract checks.
+- [x] Extract project configuration and state-audit checks.
 - [ ] Continue splitting only coherent existing Medic responsibilities.
 - [ ] Complete the Medic structural pass and record its final module boundary.
 
@@ -45,7 +51,7 @@ remain `0.85.5` until the human-owned release flow runs.
 
 ## Next Action
 
-Run the human-owned `0.86.0` release flow after reviewing the finalized patch.
-After publication, continue Slice A with the next cohesive Medic
-responsibility. Do not introduce a generic check framework or retain wrappers
-in the parent module.
+Run the human-owned `0.86.1` release flow after reviewing the finalized patch.
+After publication, continue Slice A with deployment diagnostics as a separately
+reviewable responsibility. Do not introduce a generic check framework or
+retain wrappers in the parent module.

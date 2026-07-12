@@ -10,8 +10,10 @@ mod auth;
 mod blob_storage;
 mod command;
 mod package;
+mod project;
 mod render;
 mod report;
+mod role_contract;
 #[cfg(test)]
 mod tests;
 
@@ -22,28 +24,24 @@ use crate::{
 };
 use crate::{cli::defaults::local_network, support::candid::role_candid_path};
 use std::{
-    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
 
-use canic_core::{
-    bootstrap::parse_config_model,
-    ids::CanisterRole,
-    role_contract::{
-        ResolvedRoleContract, RoleContractFinding, RoleContractResolution, RoleFeatureRequirement,
-        required_features_for_role,
-    },
-};
+#[cfg(test)]
+use canic_core::ids::CanisterRole;
+use canic_core::role_contract::RoleContractFinding;
 #[cfg(test)]
 use canic_host::icp::local_canister_candid_path;
+#[cfg(test)]
+use canic_host::state_manifest::{StateAuditStatus, build_state_audit_report};
 use canic_host::{
     canister_ready::query_canister_ready,
     deployment_truth::{
         DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
     },
     icp::{IcpCli, IcpCommandError},
-    icp_config::{inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root},
+    icp_config::resolve_current_canic_icp_root,
     install_root::{
         InstallState, discover_project_canic_config_choices,
         latest_deployment_truth_receipt_path_from_root,
@@ -53,16 +51,8 @@ use canic_host::{
         InstalledDeploymentSource, read_installed_deployment_state_from_root,
         resolve_installed_deployment_from_root,
     },
-    release_set::{ConfiguredRoleLifecycle, configured_fleet_name, configured_role_lifecycle},
-    role_contract::{
-        PackageValidationMode, RolePackageEvidence, RolePackageValidation, finding_detail,
-        materialize_state_manifest, resolve_declared_role_package_contract,
-        validate_declared_role_package,
-    },
-    state_manifest::{
-        StateAuditStatus, StateManifestResolution, build_state_audit_report,
-        resolve_project_state_manifest,
-    },
+    release_set::{configured_fleet_name, configured_role_lifecycle},
+    state_manifest::{StateManifestResolution, resolve_project_state_manifest},
 };
 
 use auth::check_auth_renewal;
@@ -78,14 +68,16 @@ use command::MedicOptions;
 pub use command::{MedicCommandError, run};
 #[cfg(test)]
 use command::{medic_subcommand_help_requested, usage};
-use package::{
-    canic_dependency_feature_snippet, canic_package_metadata, role_package_manifest_path,
-};
+#[cfg(test)]
+use project::project_network_selection_check;
+use project::{project_config_checks, state_audit_project_check};
 #[cfg(test)]
 use render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text};
 #[cfg(test)]
 use report::aggregate_status;
 use report::{MedicCategory, MedicCheck, MedicReport, MedicScope, MedicSource, MedicStatus};
+#[cfg(test)]
+use role_contract::project_config_quality_checks;
 
 const ICP_SESSION_DETAIL: &str = "password-protected PEM identities can cache sessions";
 const ICP_SESSION_NEXT: &str =
@@ -159,434 +151,6 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
         MedicSource::Command,
     ));
     checks
-}
-
-fn state_audit_project_check(resolution: &StateManifestResolution) -> MedicCheck {
-    let report = build_state_audit_report(resolution, None);
-    let detail = format!(
-        "state audit status {} with {} check(s)",
-        report.status.label(),
-        report.checks.len()
-    );
-
-    match report.status {
-        StateAuditStatus::Pass => MedicCheck::pass(
-            MedicCategory::Runtime,
-            "state_audit_pass",
-            "state_manifest",
-            detail,
-            "none",
-            MedicSource::StateManifest,
-        ),
-        StateAuditStatus::Warn => MedicCheck::warn(
-            MedicCategory::Runtime,
-            "state_audit_warn",
-            "state_manifest",
-            detail,
-            "run canic state audit",
-            MedicSource::StateManifest,
-        ),
-        StateAuditStatus::Fail => MedicCheck::fail(
-            MedicCategory::Runtime,
-            "state_audit_fail",
-            "state_manifest",
-            detail,
-            "run canic state audit and fix failing state metadata checks",
-            MedicSource::StateManifest,
-        ),
-        StateAuditStatus::NotEvaluated => MedicCheck::not_evaluated(
-            MedicCategory::Runtime,
-            "state_audit_not_evaluated",
-            "state_manifest",
-            detail,
-            "declare state metadata, then run canic state audit",
-            MedicSource::StateManifest,
-        ),
-    }
-}
-
-fn project_config_checks(root: &Path, options: &MedicOptions) -> Vec<MedicCheck> {
-    let mut checks = Vec::new();
-    match discover_project_canic_config_choices(root) {
-        Ok(configs) if configs.is_empty() => checks.push(MedicCheck::fail(
-            MedicCategory::ProjectConfig,
-            "fleet_config_missing",
-            "fleets",
-            "no Canic fleet configs found",
-            "create fleets/<fleet>/canic.toml or run canic fleet create <fleet>",
-            MedicSource::FleetConfig,
-        )),
-        Ok(configs) => {
-            checks.push(MedicCheck::pass(
-                MedicCategory::ProjectConfig,
-                "fleet_config_discovered",
-                "fleets",
-                format!("found {} Canic fleet config(s)", configs.len()),
-                "none",
-                MedicSource::FleetConfig,
-            ));
-            checks.extend(project_config_quality_checks(root, &configs));
-        }
-        Err(err) => checks.push(MedicCheck::fail(
-            MedicCategory::ProjectConfig,
-            "fleet_config_missing",
-            "fleets",
-            err.to_string(),
-            "repair Canic fleet config discovery",
-            MedicSource::FleetConfig,
-        )),
-    }
-
-    match inspect_canic_icp_yaml_from_root(root, None) {
-        Ok(report) if report.icp_yaml_present => checks.push(MedicCheck::pass(
-            MedicCategory::ProjectConfig,
-            "icp_yaml_present",
-            "icp.yaml",
-            format!("found {}", report.path.display()),
-            "none",
-            MedicSource::IcpConfig,
-        )),
-        Ok(report) => checks.push(MedicCheck::fail(
-            MedicCategory::ProjectConfig,
-            "icp_yaml_missing",
-            "icp.yaml",
-            format!("missing {}", report.path.display()),
-            "create or repair icp.yaml from the project root",
-            MedicSource::IcpConfig,
-        )),
-        Err(err) => checks.push(MedicCheck::fail(
-            MedicCategory::ProjectConfig,
-            "icp_yaml_missing",
-            "icp.yaml",
-            err.to_string(),
-            "create or repair icp.yaml from the project root",
-            MedicSource::IcpConfig,
-        )),
-    }
-
-    if let Some(network) = project_network_selection_check(options) {
-        checks.push(network);
-    }
-
-    checks
-}
-
-fn project_network_selection_check(options: &MedicOptions) -> Option<MedicCheck> {
-    if options.scope != MedicScope::Project {
-        return None;
-    }
-
-    Some(if options.network.is_some() {
-        MedicCheck::pass(
-            MedicCategory::ProjectConfig,
-            "local_network_explicit",
-            "network",
-            "network selected explicitly",
-            "none",
-            MedicSource::IcpConfig,
-        )
-    } else {
-        MedicCheck::warn(
-            MedicCategory::ProjectConfig,
-            "local_network_implicit",
-            "network",
-            "no network was selected for project-level checks",
-            "select an explicit network before deployment checks",
-            MedicSource::IcpConfig,
-        )
-    })
-}
-
-fn project_config_quality_checks(root: &Path, configs: &[PathBuf]) -> Vec<MedicCheck> {
-    configs
-        .iter()
-        .flat_map(|config| fleet_config_quality_checks(root, config))
-        .collect()
-}
-
-fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
-    let config_display = display_medic_path(root, config);
-    let fleet = match configured_fleet_name(config) {
-        Ok(fleet) => fleet,
-        Err(err) => {
-            return vec![MedicCheck::fail(
-                MedicCategory::ProjectConfig,
-                "fleet_config_missing",
-                config_display,
-                err.to_string(),
-                "repair the fleet config before running deployment checks",
-                MedicSource::FleetConfig,
-            )];
-        }
-    };
-    let roles = match configured_role_lifecycle(config) {
-        Ok(roles) => roles,
-        Err(err) => {
-            return vec![MedicCheck::fail(
-                MedicCategory::ProjectConfig,
-                "fleet_config_missing",
-                config_display,
-                err.to_string(),
-                "repair the fleet config before running deployment checks",
-                MedicSource::FleetConfig,
-            )];
-        }
-    };
-    let required_features_by_role = required_canic_features_by_role(config, &roles);
-    roles
-        .iter()
-        .flat_map(|role| {
-            let mut checks = vec![check_role_package_metadata(root, config, role, &fleet)];
-            let role_id = CanisterRole::owned(role.role.clone());
-            match validate_declared_role_package(config, &role_id, PackageValidationMode::Passive) {
-                RolePackageValidation::Supported(evidence) => {
-                    checks.extend(check_role_contract_resolution(
-                        root,
-                        config,
-                        role,
-                        &evidence,
-                        required_features_by_role
-                            .get(&role.role)
-                            .map(Vec::as_slice)
-                            .unwrap_or_default(),
-                    ));
-                }
-                RolePackageValidation::Unsupported(finding) => {
-                    if let Some(check) = check_role_package_contract(role, &finding) {
-                        checks.push(check);
-                    }
-                }
-            }
-            if !role.attached {
-                checks.push(check_declared_role_not_deployable(root, config, role));
-            }
-            checks
-        })
-        .collect()
-}
-
-fn required_canic_features_by_role(
-    config: &Path,
-    roles: &[ConfiguredRoleLifecycle],
-) -> BTreeMap<String, Vec<RoleFeatureRequirement>> {
-    let Ok(config_source) = fs::read_to_string(config) else {
-        return BTreeMap::new();
-    };
-    let Ok(config_model) = parse_config_model(&config_source) else {
-        return BTreeMap::new();
-    };
-
-    roles
-        .iter()
-        .map(|role| {
-            let role_id = CanisterRole::owned(role.role.clone());
-            (
-                role.role.clone(),
-                required_features_for_role(&config_model, &role_id).unwrap_or_else(|finding| {
-                    panic!("configured role contract rejected: {finding:?}")
-                }),
-            )
-        })
-        .filter(|(_, requirements)| !requirements.is_empty())
-        .collect()
-}
-
-fn check_role_package_metadata(
-    root: &Path,
-    config: &Path,
-    role: &ConfiguredRoleLifecycle,
-    fleet: &str,
-) -> MedicCheck {
-    let manifest = role_package_manifest_path(config, &role.package);
-    match canic_package_metadata(&manifest) {
-        Ok(metadata) if metadata.fleet == fleet && metadata.role == role.role => MedicCheck::pass(
-            MedicCategory::ProjectConfig,
-            "role_package_metadata_present",
-            role.display.clone(),
-            format!(
-                "{} declares [package.metadata.canic] fleet={} role={}",
-                display_medic_path(root, &manifest),
-                metadata.fleet,
-                metadata.role
-            ),
-            "none",
-            MedicSource::FleetConfig,
-        ),
-        Ok(metadata) => MedicCheck::fail(
-            MedicCategory::ProjectConfig,
-            "role_package_metadata_missing",
-            role.display.clone(),
-            format!(
-                "{} declares [package.metadata.canic] fleet={} role={}, expected fleet={} role={}",
-                display_medic_path(root, &manifest),
-                metadata.fleet,
-                metadata.role,
-                fleet,
-                role.role
-            ),
-            "update package metadata or repair the fleet role declaration",
-            MedicSource::FleetConfig,
-        ),
-        Err(err) => MedicCheck::fail(
-            MedicCategory::ProjectConfig,
-            "role_package_metadata_missing",
-            role.display.clone(),
-            err,
-            "add matching [package.metadata.canic] fleet and role metadata",
-            MedicSource::FleetConfig,
-        ),
-    }
-}
-
-fn check_role_contract_resolution(
-    root: &Path,
-    config: &Path,
-    role: &ConfiguredRoleLifecycle,
-    evidence: &RolePackageEvidence,
-    requirements: &[RoleFeatureRequirement],
-) -> Vec<MedicCheck> {
-    match resolve_declared_role_package_contract(config, evidence) {
-        RoleContractResolution::Resolved { contract } => {
-            check_resolved_role_contract(root, role, evidence, requirements, &contract)
-        }
-        RoleContractResolution::Rejected { errors } => errors
-            .iter()
-            .filter_map(|finding| {
-                check_role_resolution_finding(root, role, evidence, requirements, finding)
-            })
-            .collect(),
-    }
-}
-
-fn check_resolved_role_contract(
-    root: &Path,
-    role: &ConfiguredRoleLifecycle,
-    evidence: &RolePackageEvidence,
-    requirements: &[RoleFeatureRequirement],
-    contract: &ResolvedRoleContract,
-) -> Vec<MedicCheck> {
-    let mut checks = requirements
-        .iter()
-        .filter(|requirement| contract.required_features.contains(&requirement.feature))
-        .map(|requirement| {
-            MedicCheck::pass(
-                MedicCategory::ProjectConfig,
-                "role_required_canic_feature_present",
-                role.display.clone(),
-                format!(
-                    "{} resolves required canic feature `{}` for {}",
-                    display_medic_path(root, &evidence.role_manifest_path),
-                    requirement.feature.cargo_name(),
-                    requirement.config_key
-                ),
-                "none",
-                MedicSource::FleetConfig,
-            )
-        })
-        .collect::<Vec<_>>();
-    if let Err(errors) = materialize_state_manifest(std::slice::from_ref(contract)) {
-        checks.extend(
-            errors
-                .iter()
-                .filter_map(|finding| check_role_package_contract(role, finding)),
-        );
-    }
-    checks
-}
-
-fn check_role_resolution_finding(
-    root: &Path,
-    role: &ConfiguredRoleLifecycle,
-    evidence: &RolePackageEvidence,
-    requirements: &[RoleFeatureRequirement],
-    finding: &RoleContractFinding,
-) -> Option<MedicCheck> {
-    if let RoleContractFinding::RequiredFeatureMissing { feature, .. } = finding {
-        let requirement = requirements
-            .iter()
-            .find(|requirement| requirement.feature == *feature)?;
-        return Some(MedicCheck::fail(
-            MedicCategory::ProjectConfig,
-            finding.code(),
-            role.display.clone(),
-            format!(
-                "{} requires canic feature `{}` because {} is enabled ({})",
-                role.display,
-                requirement.feature.cargo_name(),
-                requirement.config_key,
-                requirement.reason
-            ),
-            missing_canic_feature_next_action(
-                root,
-                &evidence.role_manifest_path,
-                requirement.feature.cargo_name(),
-            ),
-            MedicSource::FleetConfig,
-        ));
-    }
-    check_role_package_contract(role, finding)
-}
-
-fn check_role_package_contract(
-    role: &ConfiguredRoleLifecycle,
-    finding: &RoleContractFinding,
-) -> Option<MedicCheck> {
-    if matches!(
-        finding,
-        RoleContractFinding::PackageMissing { .. }
-            | RoleContractFinding::PackageMetadataMismatch { .. }
-            | RoleContractFinding::PackageAmbiguous { .. }
-    ) {
-        return None;
-    }
-
-    let next = match finding {
-        RoleContractFinding::AllocationDescriptorDuplicate { .. }
-        | RoleContractFinding::AllocationDescriptorIdMismatch { .. }
-        | RoleContractFinding::AllocationDescriptorMissing { .. } => {
-            "repair the Canic state descriptor registry and rerun canic medic project"
-        }
-        _ => {
-            "use one direct, unconditional, non-optional normal Canic dependency with no package feature forwarding"
-        }
-    };
-    Some(MedicCheck::fail(
-        MedicCategory::ProjectConfig,
-        finding.code(),
-        role.display.clone(),
-        finding_detail(finding),
-        next,
-        MedicSource::FleetConfig,
-    ))
-}
-
-fn missing_canic_feature_next_action(root: &Path, manifest: &Path, feature: &str) -> String {
-    format!(
-        "edit runtime [dependencies].canic in {} (not [build-dependencies]) and add `{feature}`; for workspace inheritance, edit inherited [workspace.dependencies].canic features; example:\n{}",
-        display_medic_path(root, manifest),
-        canic_dependency_feature_snippet([feature])
-    )
-}
-
-fn check_declared_role_not_deployable(
-    root: &Path,
-    config: &Path,
-    role: &ConfiguredRoleLifecycle,
-) -> MedicCheck {
-    MedicCheck::warn(
-        MedicCategory::ProjectConfig,
-        "declared_role_not_deployable",
-        role.display.clone(),
-        format!(
-            "role is declared in {} but is not attached to topology",
-            display_medic_path(root, config)
-        ),
-        format!(
-            "run canic fleet role attach {} {} --subnet <subnet>, or remove the declaration",
-            role.fleet, role.role
-        ),
-        MedicSource::FleetConfig,
-    )
 }
 
 fn display_medic_path(root: &Path, path: &Path) -> String {

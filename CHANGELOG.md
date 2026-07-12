@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
 
+- `0.86.1` gives Medic project configuration, state-audit, role-package, and
+  runtime-contract diagnostics focused owners while preserving check ordering,
+  codes, and report shapes.
+
 - `0.86.0` begins the bounded hub-module hard cut by giving Medic auth-renewal
   and blob-storage diagnostics focused owners without changing command or
   report contracts.
