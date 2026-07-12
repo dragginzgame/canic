@@ -18,13 +18,16 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.85.5`, published and tagged
-  as `v0.85.5`. The 0.85 operational-safety line is complete. The bounded 0.86
-  structural-maintainability line is active without a package-version change;
-  its design and tracker live under
-  `docs/design/0.86-structural-maintainability/`. The first Medic slice is
-  changelog-finalized for `0.86.0`, while package versions remain `0.85.5`
-  until the human-owned release flow runs.
+- The current package/release-surface version is `0.86.0`, published and tagged
+  as `v0.86.0`. The bounded 0.86 structural-maintainability line remains
+  active; its design and tracker live under
+  `docs/design/0.86-structural-maintainability/`. The published first Medic
+  slice owns auth-renewal and blob-storage diagnostics in focused modules. The
+  next unreleased slice moves role-package metadata, required runtime-feature,
+  resolved role-contract, and descriptor-admission diagnostics into one
+  focused Medic module, while project configuration and state-audit checks move
+  to a second focused owner. This slice is changelog-finalized for `0.86.1`;
+  package versions remain `0.86.0` until the human-owned release flow runs.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -310,6 +313,12 @@ before this compaction is archived at
   rule engine, cross-crate ownership change, wrapper, alias, or compatibility
   path is in scope. The first Medic slice extracts auth-renewal and blob-storage
   check construction while the parent retains check selection and ordering.
+  It shipped as `v0.86.0`. The next slice extracts the existing role-package
+  and resolved role-contract check block into one direct owner; the old parent
+  definitions are removed without wrappers. Project configuration and
+  state-audit check construction also move to one focused owner, leaving
+  project check ordering in the parent. This slice is changelog-finalized for
+  `0.86.1`.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and
