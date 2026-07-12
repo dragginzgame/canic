@@ -19,12 +19,18 @@ The first deploy-plan slice is published as `v0.86.3`. Report rendering, JSON
 output persistence, and exit classification have one focused owner; command
 options, root discovery, parsing, and usage have another.
 
-The next slice is changelog-finalized for `0.86.4`. Verified context, identity,
+The verified-evidence slice is published as `v0.86.4`. Context, identity,
 artifact, inventory, authority, trust-domain, and verifier-readiness evidence
-have one focused owner. The parent retains blocker, warning, assumption,
-comparison, status, and proposed-operation policy. Diagnostic ordering, CLI
-behavior, JSON field order, text output, and exit behavior are unchanged.
-Package versions remain `0.86.3` until the human-owned release flow runs.
+have one focused owner.
+
+The next slice is changelog-finalized for `0.86.5`. Target-resolution blockers,
+unsupported and blocking assumptions, local-state warnings, unresolved
+assumptions, stable diagnostic codes, and diagnostic-specific next actions have
+one focused owner. The parent retains comparison, aggregate status, global next
+actions, proposed operations, and report assembly. Classification, diagnostic
+ordering, CLI behavior, JSON field order, text output, and exit behavior are
+unchanged. Package versions remain `0.86.4` until the human-owned release flow
+runs.
 
 ## Checklist
 
@@ -42,7 +48,8 @@ Package versions remain `0.86.3` until the human-owned release flow runs.
 - [x] Extract rendering, output persistence, and exit classification.
 - [x] Extract command inputs, root discovery, parsing, and usage.
 - [x] Extract verified evidence construction.
-- [ ] Split comparison and diagnostics by existing responsibility.
+- [x] Extract blocker, warning, and assumption diagnostics.
+- [ ] Extract comparison, status aggregation, and proposed operations.
 - [ ] Preserve command, exit, and report contracts exactly.
 
 ### Slice C - State manifest
@@ -61,7 +68,8 @@ Package versions remain `0.86.3` until the human-owned release flow runs.
 
 ## Next Action
 
-Run the human-owned `0.86.4` release flow after reviewing the finalized patch.
-After publication, continue Slice B with blocker, warning, and assumption
-diagnostics as a separately reviewable responsibility. Do not introduce a
-generic planning framework or retain parallel implementations.
+Run the human-owned `0.86.5` release flow after reviewing the finalized patch.
+After publication, continue Slice B with comparison, aggregate status, global
+next actions, and proposed operations as a separately reviewable
+responsibility. Do not introduce a generic planning framework or retain
+parallel implementations.

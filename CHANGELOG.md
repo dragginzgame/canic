@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
 
+- `0.86.5` gives deploy-plan target blockers, unresolved assumptions, warnings,
+  and stable diagnostic codes one focused owner without changing classification
+  or report contracts.
+
 - `0.86.4` gives deploy-plan verified context, identity, artifact, inventory,
   authority, trust-domain, and verifier-readiness evidence one focused owner
   without changing diagnostic or report contracts.
