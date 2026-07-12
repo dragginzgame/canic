@@ -8,15 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Deploy-plan command inputs, root discovery, rendering, JSON persistence, and
-  exit classification now have focused owners while report construction and
-  public command/output contracts remain unchanged.
-- The workspace adopts `ic-query 0.10.4` without changing Canic's maintained
-  subnet-catalog integration.
-
 ## [0.86.x] - 2026-07-12 - Structural Maintainability
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
+
+- `0.86.3` gives deploy-plan command inputs and report output focused owners
+  and adopts `ic-query 0.10.4` without changing CLI or report contracts.
 
 - `0.86.2` completes the Medic ownership split, removes parent-routed test and
   renderer imports, and adopts `ic-query 0.10.2` without changing command or

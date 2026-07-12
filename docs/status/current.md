@@ -40,7 +40,8 @@ before this compaction is archived at
   owner. Report construction, diagnostic order, CLI behavior, JSON/text output,
   and exit behavior are unchanged. The workspace also adopts `ic-query 0.10.4`
   after its focused cached-catalog integration passes. Package versions remain
-  `0.86.2`.
+  `0.86.2`. This slice is changelog-finalized for `0.86.3` pending the
+  human-owned release flow.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
@@ -339,7 +340,8 @@ before this compaction is archived at
   published as `v0.86.2`. The next slice starts the deploy-plan pass by moving
   rendering, output persistence, and exit classification into one focused
   owner and command inputs into another without changing the `deploy::plan`
-  facade, command surface, or output contracts.
+  facade, command surface, or output contracts. This boundary slice is
+  changelog-finalized for `0.86.3`.
 
 - The current workspace dependency is now `ic-memory 0.10.0`. Canic hard-cuts
   the former commit diagnostic struct shape to 0.10's `Empty`, `Valid`, and
