@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::temp_dir;
+use crate::{install_root::InstallState, test_support::temp_dir};
 
 #[test]
 fn catalog_lists_deployment_target_state_sorted_by_deployment() {
@@ -56,6 +56,23 @@ fn catalog_returns_empty_warning_when_deployment_state_is_missing() {
 }
 
 #[test]
+fn catalog_rejects_path_like_network_before_directory_access() {
+    let root = temp_dir("canic-catalog-invalid-network");
+    fs::create_dir_all(&root).expect("create temp root");
+    let mut request = request(&root);
+    request.network = "../outside".to_string();
+
+    let error = build_deployment_catalog_report(&request).expect_err("reject invalid network");
+
+    fs::remove_dir_all(root).expect("clean");
+    std::assert_matches!(
+        error,
+        DeploymentCatalogError::InstallState(InstallStateError::InvalidNetworkName { name })
+            if name == "../outside"
+    );
+}
+
+#[test]
 fn catalog_warns_and_keeps_valid_entries_when_one_entry_is_malformed() {
     let root = temp_dir("canic-catalog-malformed");
     write_state(&root, "local", sample_state("demo", "demo", "root"));
@@ -73,6 +90,28 @@ fn catalog_warns_and_keeps_valid_entries_when_one_entry_is_malformed() {
             .warnings
             .iter()
             .any(|warning| warning.code == MALFORMED_DEPLOYMENT_STATE_WARNING_CODE)
+    );
+}
+
+#[test]
+fn catalog_rejects_unsupported_install_state_schema() {
+    let root = temp_dir("canic-catalog-schema");
+    let mut state = sample_state("future", "demo", "root");
+    state.schema_version = 3;
+    write_state(&root, "local", state);
+
+    let report = build_deployment_catalog_report(&request(&root)).expect("catalog");
+
+    fs::remove_dir_all(root).expect("clean");
+    assert!(report.entries.is_empty());
+    assert_eq!(report.warnings.len(), 1);
+    assert_eq!(
+        report.warnings[0].code,
+        MALFORMED_DEPLOYMENT_STATE_WARNING_CODE
+    );
+    assert_eq!(
+        report.warnings[0].source.as_deref(),
+        Some(".canic/local/deployments/future.json")
     );
 }
 

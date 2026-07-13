@@ -85,9 +85,75 @@ fn install_state_decode_retains_path_and_json_source() {
 }
 
 #[test]
+fn install_state_read_rejects_schema_and_path_identity_mismatches() {
+    let root = temp_dir("canic-install-state-identity-mismatch");
+    let path = deployment_install_state_path(&root, "local", "demo");
+    fs::create_dir_all(path.parent().expect("state parent")).expect("create state parent");
+    let mut state = sample_install_state(&root, "demo", "demo");
+
+    state.schema_version = INSTALL_STATE_SCHEMA_VERSION + 1;
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&state).expect("encode future-schema state"),
+    )
+    .expect("write future-schema state");
+    std::assert_matches!(
+        read_deployment_install_state(&root, "local", "demo"),
+        Err(InstallStateError::SchemaVersionMismatch {
+            state_version,
+            supported_version,
+        }) if state_version == INSTALL_STATE_SCHEMA_VERSION + 1
+            && supported_version == INSTALL_STATE_SCHEMA_VERSION
+    );
+
+    state.schema_version = INSTALL_STATE_SCHEMA_VERSION;
+    state.deployment_name = "other".to_string();
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&state).expect("encode wrong-deployment state"),
+    )
+    .expect("write wrong-deployment state");
+    std::assert_matches!(
+        read_deployment_install_state(&root, "local", "demo"),
+        Err(InstallStateError::DeploymentMismatch {
+            state_deployment,
+            requested_deployment,
+        }) if state_deployment == "other" && requested_deployment == "demo"
+    );
+
+    state.deployment_name = "demo".to_string();
+    state.network = "staging".to_string();
+    fs::write(
+        &path,
+        serde_json::to_vec_pretty(&state).expect("encode wrong-network state"),
+    )
+    .expect("write wrong-network state");
+    std::assert_matches!(
+        read_deployment_install_state(&root, "local", "demo"),
+        Err(InstallStateError::NetworkMismatch {
+            state_network,
+            requested_network,
+        }) if state_network == "staging" && requested_network == "local"
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn install_state_write_retains_mismatch_and_io_failures() {
     let mismatch_root = temp_dir("canic-install-state-network-mismatch");
-    let mismatch_state = sample_install_state(&mismatch_root, "demo", "demo");
+    let mut mismatch_state = sample_install_state(&mismatch_root, "demo", "demo");
+    mismatch_state.schema_version = INSTALL_STATE_SCHEMA_VERSION + 1;
+    std::assert_matches!(
+        write_install_state(&mismatch_root, "local", &mismatch_state),
+        Err(InstallStateError::SchemaVersionMismatch {
+            state_version,
+            supported_version,
+        }) if state_version == INSTALL_STATE_SCHEMA_VERSION + 1
+            && supported_version == INSTALL_STATE_SCHEMA_VERSION
+    );
+
+    mismatch_state.schema_version = INSTALL_STATE_SCHEMA_VERSION;
     std::assert_matches!(
         write_install_state(&mismatch_root, "staging", &mismatch_state),
         Err(InstallStateError::NetworkMismatch {

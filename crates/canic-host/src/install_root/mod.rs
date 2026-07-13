@@ -60,6 +60,7 @@ pub use state::{
     InstallState, InstallStateError, RootVerificationStatus, read_named_deployment_install_state,
     read_named_deployment_install_state_from_root,
 };
+pub(crate) use state::{decode_install_state, validate_network_name};
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 

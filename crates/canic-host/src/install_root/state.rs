@@ -9,6 +9,14 @@ pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 2;
 /// Typed failure while locating, validating, decoding, or persisting install state.
 #[derive(Debug, ThisError)]
 pub enum InstallStateError {
+    #[error(
+        "deployment state identity mismatch: state is for {state_deployment}, requested {requested_deployment}"
+    )]
+    DeploymentMismatch {
+        state_deployment: String,
+        requested_deployment: String,
+    },
+
     #[error("invalid deployment/template name {name:?}; use letters, numbers, '-' or '_'")]
     InvalidStateName { name: String },
 
@@ -21,6 +29,14 @@ pub enum InstallStateError {
     NetworkMismatch {
         state_network: String,
         requested_network: String,
+    },
+
+    #[error(
+        "unsupported deployment state schema version {state_version}; supported version is {supported_version}"
+    )]
+    SchemaVersionMismatch {
+        state_version: u32,
+        supported_version: u32,
     },
 
     #[error("failed to resolve ICP root from {}: {source}", path.display())]
@@ -109,9 +125,24 @@ pub(super) fn read_deployment_install_state(
             return Err(InstallStateError::Read { path, source });
         }
     };
-    let state = serde_json::from_slice(&bytes)
-        .map_err(|source| InstallStateError::Decode { path, source })?;
-    Ok(Some(state))
+    decode_install_state(&bytes, &path, network, deployment).map(Some)
+}
+
+/// Decode and validate install state against its canonical network/deployment path.
+pub fn decode_install_state(
+    bytes: &[u8],
+    path: &Path,
+    network: &str,
+    deployment: &str,
+) -> Result<InstallState, InstallStateError> {
+    validate_network_name(network)?;
+    validate_state_name(deployment)?;
+    let state = serde_json::from_slice(bytes).map_err(|source| InstallStateError::Decode {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    validate_loaded_install_state(&state, network, deployment)?;
+    Ok(state)
 }
 
 /// Read deployment-target install state for the discovered current project.
@@ -159,6 +190,7 @@ pub(super) fn write_install_state(
 ) -> Result<PathBuf, InstallStateError> {
     validate_network_name(network)?;
     validate_state_name(&state.deployment_name)?;
+    validate_schema_version(state.schema_version)?;
     if state.network != network {
         return Err(InstallStateError::NetworkMismatch {
             state_network: state.network.clone(),
@@ -177,6 +209,40 @@ pub(super) fn write_install_state(
     Ok(path)
 }
 
+// Reject state that does not belong to the requested canonical path.
+fn validate_loaded_install_state(
+    state: &InstallState,
+    requested_network: &str,
+    requested_deployment: &str,
+) -> Result<(), InstallStateError> {
+    validate_schema_version(state.schema_version)?;
+    if state.deployment_name != requested_deployment {
+        return Err(InstallStateError::DeploymentMismatch {
+            state_deployment: state.deployment_name.clone(),
+            requested_deployment: requested_deployment.to_string(),
+        });
+    }
+    if state.network != requested_network {
+        return Err(InstallStateError::NetworkMismatch {
+            state_network: state.network.clone(),
+            requested_network: requested_network.to_string(),
+        });
+    }
+    Ok(())
+}
+
+// Keep readers and writers on the one supported install-state schema.
+const fn validate_schema_version(schema_version: u32) -> Result<(), InstallStateError> {
+    if schema_version == INSTALL_STATE_SCHEMA_VERSION {
+        Ok(())
+    } else {
+        Err(InstallStateError::SchemaVersionMismatch {
+            state_version: schema_version,
+            supported_version: INSTALL_STATE_SCHEMA_VERSION,
+        })
+    }
+}
+
 // Keep deployment and template names filesystem-safe and easy to type.
 pub(super) fn validate_state_name(name: &str) -> Result<(), InstallStateError> {
     let valid = !name.is_empty()
@@ -193,7 +259,7 @@ pub(super) fn validate_state_name(name: &str) -> Result<(), InstallStateError> {
 }
 
 // Keep network names safe for `.canic/<network>` state paths.
-pub(super) fn validate_network_name(name: &str) -> Result<(), InstallStateError> {
+pub fn validate_network_name(name: &str) -> Result<(), InstallStateError> {
     let valid = !name.is_empty()
         && name
             .bytes()

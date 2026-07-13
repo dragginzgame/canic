@@ -2,7 +2,9 @@ use crate::{
     evidence_envelope::{
         EvidenceMessageSeverityV1, EvidenceMessageV1, InputFingerprintV1, file_input_fingerprint,
     },
-    install_root::{InstallState, RootVerificationStatus},
+    install_root::{
+        InstallStateError, RootVerificationStatus, decode_install_state, validate_network_name,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -69,6 +71,9 @@ pub enum DeploymentCatalogRootVerificationV1 {
 ///
 #[derive(Debug, ThisError)]
 pub enum DeploymentCatalogError {
+    #[error(transparent)]
+    InstallState(#[from] InstallStateError),
+
     #[error("deployment target {deployment} is not known on network {network}")]
     UnknownDeployment { network: String, deployment: String },
 
@@ -84,6 +89,7 @@ pub const fn deployment_catalog_report_schema_id() -> &'static str {
 pub fn build_deployment_catalog_report(
     request: &DeploymentCatalogRequest,
 ) -> Result<DeploymentCatalogReportV1, DeploymentCatalogError> {
+    validate_network_name(&request.network)?;
     let deployments_dir = deployment_state_dir(&request.icp_root, &request.network);
     let mut entries = Vec::new();
     let mut warnings = Vec::new();
@@ -227,30 +233,8 @@ fn catalog_entry_from_path(
     let bytes = fs::read(path).map_err(|err| {
         malformed_state_warning(path, root, format!("failed to read state: {err}"))
     })?;
-    let state = serde_json::from_slice::<InstallState>(&bytes).map_err(|err| {
-        malformed_state_warning(path, root, format!("failed to decode state: {err}"))
-    })?;
-
-    if state.deployment_name != deployment {
-        return Err(malformed_state_warning(
-            path,
-            root,
-            format!(
-                "deployment state filename is {deployment}, but state records {}",
-                state.deployment_name
-            ),
-        ));
-    }
-    if state.network != network {
-        return Err(malformed_state_warning(
-            path,
-            root,
-            format!(
-                "deployment state is for network {}, but catalog network is {network}",
-                state.network
-            ),
-        ));
-    }
+    let state = decode_install_state(&bytes, path, network, &deployment)
+        .map_err(|error| malformed_install_state_warning(path, root, error))?;
 
     let (local_state_ref, mut warnings) =
         match file_input_fingerprint("deployment_state", path, root, None, None) {
@@ -275,6 +259,30 @@ fn catalog_entry_from_path(
         local_state_ref,
         warnings,
     })
+}
+
+fn malformed_install_state_warning(
+    path: &Path,
+    root: &Path,
+    error: InstallStateError,
+) -> EvidenceMessageV1 {
+    let message = match error {
+        InstallStateError::Decode { source, .. } => format!("failed to decode state: {source}"),
+        InstallStateError::DeploymentMismatch {
+            state_deployment,
+            requested_deployment,
+        } => format!(
+            "deployment state filename is {requested_deployment}, but state records {state_deployment}"
+        ),
+        InstallStateError::NetworkMismatch {
+            state_network,
+            requested_network,
+        } => format!(
+            "deployment state is for network {state_network}, but catalog network is {requested_network}"
+        ),
+        other => other.to_string(),
+    };
+    malformed_state_warning(path, root, message)
 }
 
 fn deployment_state_dir(root: &Path, network: &str) -> PathBuf {
