@@ -1,4 +1,5 @@
 use super::*;
+use crate::release_set::{FleetConfigDeclaration, FleetConfigError};
 
 #[test]
 fn configured_fleet_name_reads_required_config_identity() {
@@ -9,7 +10,7 @@ fn configured_fleet_name_reads_required_config_identity() {
 
 #[test]
 fn configured_fleet_name_rejects_missing_config_identity() {
-    configured_fleet_name_from_source(
+    let error = configured_fleet_name_from_source(
         r#"
 controllers = []
 app_index = []
@@ -23,6 +24,13 @@ kind = "root"
 "#,
     )
     .expect_err("missing fleet name must reject");
+
+    assert!(matches!(
+        error,
+        FleetConfigError::DeclarationMissing {
+            declaration: FleetConfigDeclaration::FleetName,
+        }
+    ));
 }
 
 #[test]

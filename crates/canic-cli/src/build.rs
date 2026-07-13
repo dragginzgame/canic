@@ -29,8 +29,8 @@ use canic_host::{
     },
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
     release_set::{
-        configured_fleet_name, configured_role_lifecycle, matching_fleet_config_paths,
-        workspace_root_from,
+        FleetConfigError, configured_fleet_name, configured_role_lifecycle,
+        matching_fleet_config_paths, workspace_root_from,
     },
 };
 use clap::Command as ClapCommand;
@@ -80,6 +80,9 @@ pub enum BuildCommandError {
 
     #[error(transparent)]
     Build(#[from] Box<dyn std::error::Error>),
+
+    #[error(transparent)]
+    FleetConfig(#[from] FleetConfigError),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),

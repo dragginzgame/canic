@@ -1,13 +1,14 @@
 use super::super::model::{DEFAULT_INITIAL_CYCLES, DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS};
 use super::labels::{metrics_profile_label, metrics_profile_tiers_label, randomness_source_label};
-use canic_core::bootstrap::parse_config_model;
+use super::parse_projection_config;
+use crate::release_set::config::FleetConfigError;
 use std::collections::{BTreeMap, BTreeSet};
 
 // Enumerate verbose configured details from raw config source.
 pub(in crate::release_set) fn configured_role_details_from_source(
     config_source: &str,
-) -> Result<BTreeMap<String, Vec<String>>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+) -> Result<BTreeMap<String, Vec<String>>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
     let mut details = BTreeMap::<String, BTreeSet<String>>::new();
 
     for role in &config.app_index {

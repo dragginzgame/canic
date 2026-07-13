@@ -4,12 +4,12 @@ Last updated: 2026-07-13
 
 ## Current State
 
-The post-0.87 audit selects exactly three implementation slices. Slice A is
-published as `0.88.0`. Slice B is implemented and release-noted as `0.88.1`:
-the existing host durable writer now owns atomic replace and create-new
-publication through one private commit engine, all shared CLI file-output
-helpers use it, and only deployment-plan `--out` uses the no-clobber entry
-point. Package versions remain `0.88.0` until the human-owned release bump.
+The post-0.87 audit selected exactly three implementation slices. Slice A is
+published as `0.88.0`, and Slice B is published as `0.88.1`. Slice C is
+implemented: fleet configuration has one typed host-owned error boundary,
+boxed and string-built error returns are hard-cut, direct CLI consumers retain
+the typed error, and rollback failure preserves both causes. Package versions
+remain `0.88.1` until the human-owned release bump.
 
 One 0.87 closeout correction was recorded before `0.88.0`: install-root no
 longer converts a boxed ICP command failure to text to detect a missing
@@ -58,15 +58,15 @@ canister ID. The existing typed ICP classifier owns all recognized forms.
 
 ### Slice C - Typed fleet-config failure boundary
 
-- [ ] Define one focused fleet-config error enum.
-- [ ] Preserve I/O operation/path context and core-config operation context.
-- [ ] Type invalid-input and mutation-conflict conditions.
-- [ ] Preserve both typed causes when rollback fails.
-- [ ] Remove boxed/string error construction from the config subtree.
-- [ ] Erase the type only after exit, finding, and rollback decisions.
-- [ ] Preserve successful projection values, serialized TOML, and rollback
+- [x] Define one focused fleet-config error enum.
+- [x] Preserve I/O operation/path context and core-config operation context.
+- [x] Type invalid-input and mutation-conflict conditions.
+- [x] Preserve both typed causes when rollback fails.
+- [x] Remove boxed/string error construction from the config subtree.
+- [x] Erase the type only after exit, finding, and rollback decisions.
+- [x] Preserve successful projection values, serialized TOML, and rollback
   behavior.
-- [ ] Keep outer command rendering and exits unchanged.
+- [x] Keep outer command rendering and exits unchanged.
 
 ## Validation
 
@@ -87,14 +87,22 @@ canister ID. The existing typed ICP classifier owns all recognized forms.
   and missing-parent behavior.
 - Targeted `canic-host` and `canic-cli` test-target Clippy passes with warnings
   denied.
+- Five focused fleet-config boundary tests preserve I/O and core parse sources,
+  classify invalid input and mutation conflicts without rendered-text parsing,
+  preserve rollback behavior, and retain both rollback causes.
+- Thirty host release-set projection and mutation tests preserve successful
+  values, serialized TOML, root-subnet validation, and role-contract output.
+- Ninety-five focused build, fleet, and scaffold CLI tests preserve direct
+  consumer behavior after retaining typed fleet-config failures.
 - Audit-only layering guard: pass.
-- Cargo Machete: pass.
+- Cargo Machete reports five pre-existing unused-dependency candidates outside
+  Slice C; this slice changes no dependency manifest.
 - Cargo audit: no known vulnerabilities; four upstream unmaintained warnings.
 - Full workspace, PocketIC, deployment, and broad Wasm suites were not run
   under the targeted-validation policy.
 
 ## Next Action
 
-Run the human-owned `0.88.1` release bump and push Slice B. Slice C is next; do
-not widen the completed host writer into a filesystem framework or route
-excluded multi-file and recovery-owned paths through it.
+Review and release Slice C, then close 0.88. Do not add another slice, widen the
+typed boundary into a global host error framework, or add compatibility
+conversions for the removed boxed error surface.

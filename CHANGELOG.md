@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Potentially breaking: fleet-config host APIs now return one typed error that
+  preserves parse, I/O, validation, mutation, and rollback causes. Boxed and
+  string-built config errors are removed without compatibility conversions.
+
 ## [0.88.x] - 2026-07-13 - Artifact and Configuration Boundaries
 
 Detailed patch breakdown: [docs/changelog/0.88.md](docs/changelog/0.88.md)

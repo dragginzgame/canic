@@ -1,30 +1,48 @@
-pub(super) fn validate_role_name(role: &str) -> Result<(), Box<dyn std::error::Error>> {
+use crate::release_set::config::{FleetConfigError, FleetConfigNameField, FleetConfigNameIssue};
+
+pub(super) fn validate_role_name(role: &str) -> Result<(), FleetConfigError> {
     if role.is_empty() {
-        return Err("role must not be empty".into());
+        return Err(FleetConfigError::InvalidName {
+            field: FleetConfigNameField::Role,
+            issue: FleetConfigNameIssue::Empty,
+            value: role.to_string(),
+        });
     }
     if !role
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
     {
-        return Err("role must contain only ASCII letters, numbers, '_' or '-'".into());
+        return Err(FleetConfigError::InvalidName {
+            field: FleetConfigNameField::Role,
+            issue: FleetConfigNameIssue::InvalidCharacters,
+            value: role.to_string(),
+        });
     }
     Ok(())
 }
 
-pub(super) fn validate_subnet_name(subnet: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn validate_subnet_name(subnet: &str) -> Result<(), FleetConfigError> {
     if subnet.is_empty() {
-        return Err("subnet must not be empty".into());
+        return Err(FleetConfigError::InvalidName {
+            field: FleetConfigNameField::Subnet,
+            issue: FleetConfigNameIssue::Empty,
+            value: subnet.to_string(),
+        });
     }
     if !subnet
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
     {
-        return Err("subnet must contain only ASCII letters, numbers, '_' or '-'".into());
+        return Err(FleetConfigError::InvalidName {
+            field: FleetConfigNameField::Subnet,
+            issue: FleetConfigNameIssue::InvalidCharacters,
+            value: subnet.to_string(),
+        });
     }
     Ok(())
 }
 
-pub(super) fn validate_attach_kind(kind: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn validate_attach_kind(kind: &str) -> Result<(), FleetConfigError> {
     if matches!(
         kind,
         "service" | "singleton" | "shard" | "replica" | "instance"
@@ -32,7 +50,9 @@ pub(super) fn validate_attach_kind(kind: &str) -> Result<(), Box<dyn std::error:
         return Ok(());
     }
 
-    Err("kind must be one of: service, singleton, shard, replica, instance".into())
+    Err(FleetConfigError::InvalidKind {
+        kind: kind.to_string(),
+    })
 }
 
 pub(super) fn toml_assignment_key(line: &str) -> Option<&str> {

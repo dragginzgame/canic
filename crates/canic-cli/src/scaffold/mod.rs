@@ -21,7 +21,7 @@ use canic_host::{
     durable_io::write_bytes,
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
     release_set::{
-        declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
+        FleetConfigError, declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
         plan_declare_fleet_role,
     },
 };
@@ -81,6 +81,9 @@ pub enum ScaffoldCommandError {
 
     #[error("fleet {0} config does not have a parent directory")]
     MissingFleetDirectory(String),
+
+    #[error(transparent)]
+    FleetConfig(#[from] FleetConfigError),
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),

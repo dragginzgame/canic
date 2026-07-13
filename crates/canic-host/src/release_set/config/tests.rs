@@ -1,5 +1,25 @@
 use super::*;
+use canic_core::bootstrap::ConfigError;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+const CONFIG: &str = r#"
+controllers = []
+app_index = []
+
+[fleet]
+name = "demo"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.store]
+kind = "canister"
+package = "store"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
 
 #[test]
 fn failed_package_manifest_write_restores_original_config() {
@@ -10,7 +30,7 @@ fn failed_package_manifest_write_restores_original_config() {
     fs::write(&config_path, "original config").expect("write original config");
     fs::create_dir(&invalid_package_target).expect("create invalid package target directory");
 
-    commit_role_rename_sources(
+    let error = commit_role_rename_sources(
         &config_path,
         "original config",
         "updated config",
@@ -18,12 +38,161 @@ fn failed_package_manifest_write_restores_original_config() {
     )
     .expect_err("package write must fail");
 
+    assert_io_error(
+        &error,
+        FleetConfigIoOperation::WritePackageManifest,
+        &invalid_package_target,
+        io::ErrorKind::IsADirectory,
+    );
+
     assert_eq!(
         fs::read_to_string(&config_path).expect("read rolled back config"),
         "original config"
     );
 
     fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn public_projection_preserves_config_path_and_core_parse_source() {
+    let root = temp_root("typed-core-source");
+    fs::create_dir_all(&root).expect("create temp root");
+    let config_path = root.join("canic.toml");
+    fs::write(&config_path, "controllers = [").expect("write invalid config");
+
+    let error = configured_controllers(&config_path).expect_err("invalid config must fail");
+    match error {
+        FleetConfigError::ConfigInvalid { path, source } => {
+            assert_eq!(path, config_path);
+            assert!(matches!(
+                *source,
+                FleetConfigError::CoreConfig {
+                    operation: FleetConfigOperation::Project,
+                    source: ConfigError::CannotParseToml(_),
+                }
+            ));
+        }
+        other => panic!("expected typed config parse error, got {other:?}"),
+    }
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn public_projection_preserves_read_operation_path_and_io_source() {
+    let config_path = temp_root("missing-config").join("canic.toml");
+
+    let error = configured_fleet_name(&config_path).expect_err("missing config must fail");
+
+    assert_io_error(
+        &error,
+        FleetConfigIoOperation::ReadConfig,
+        &config_path,
+        io::ErrorKind::NotFound,
+    );
+}
+
+#[test]
+fn fleet_mutation_failures_are_classified_without_rendered_text() {
+    assert!(matches!(
+        declare_fleet_role_source(CONFIG, "demo", "bad role", "store")
+            .expect_err("invalid role must fail"),
+        FleetConfigError::InvalidName {
+            field: FleetConfigNameField::Role,
+            issue: FleetConfigNameIssue::InvalidCharacters,
+            ..
+        }
+    ));
+    assert!(matches!(
+        attach_fleet_role_source(CONFIG, "demo", "store", "prime", "worker")
+            .expect_err("invalid kind must fail"),
+        FleetConfigError::InvalidKind { .. }
+    ));
+    assert!(matches!(
+        declare_fleet_role_source(CONFIG, "production", "new_role", "new_role")
+            .expect_err("fleet mismatch must fail"),
+        FleetConfigError::FleetMismatch { .. }
+    ));
+    assert!(matches!(
+        attach_fleet_role_source(CONFIG, "demo", "missing", "prime", "service")
+            .expect_err("missing role must fail"),
+        FleetConfigError::DeclarationMissing {
+            declaration: FleetConfigDeclaration::Role { .. }
+        }
+    ));
+    assert!(matches!(
+        declare_fleet_role_source(CONFIG, "demo", "store", "store")
+            .expect_err("duplicate role must fail"),
+        FleetConfigError::MutationConflict {
+            conflict: FleetConfigMutationConflict::RoleAlreadyDeclared { .. }
+        }
+    ));
+}
+
+#[test]
+fn rollback_failure_preserves_mutation_and_rollback_sources() {
+    let config_path = Path::new("canic.toml");
+    let package_path = Path::new("store/Cargo.toml");
+    let mut writes = 0;
+
+    let error = commit_role_rename_sources_with_writer(
+        config_path,
+        "original config",
+        "updated config",
+        Some((package_path, "updated package")),
+        |_, _| {
+            writes += 1;
+            match writes {
+                1 => Ok(()),
+                2 => Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "package write failed",
+                )),
+                3 => Err(io::Error::new(
+                    io::ErrorKind::StorageFull,
+                    "config rollback failed",
+                )),
+                _ => unreachable!("rename commit performs at most three writes"),
+            }
+        },
+    )
+    .expect_err("rollback failure must retain both causes");
+
+    let FleetConfigError::RollbackFailed { mutation, rollback } = error else {
+        panic!("expected typed rollback failure");
+    };
+    assert_io_error(
+        &mutation,
+        FleetConfigIoOperation::WritePackageManifest,
+        package_path,
+        io::ErrorKind::PermissionDenied,
+    );
+    assert_io_error(
+        &rollback,
+        FleetConfigIoOperation::RestoreConfig,
+        config_path,
+        io::ErrorKind::StorageFull,
+    );
+}
+
+fn assert_io_error(
+    error: &FleetConfigError,
+    expected_operation: FleetConfigIoOperation,
+    expected_path: &Path,
+    expected_kind: io::ErrorKind,
+) {
+    match error {
+        FleetConfigError::Io {
+            operation,
+            path,
+            source,
+        } => {
+            assert_eq!(*operation, expected_operation);
+            assert_eq!(path, expected_path);
+            assert_eq!(source.kind(), expected_kind);
+        }
+        other => panic!("expected typed I/O error, got {other:?}"),
+    }
 }
 
 fn temp_root(label: &str) -> PathBuf {

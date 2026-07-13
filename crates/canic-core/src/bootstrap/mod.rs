@@ -7,7 +7,7 @@
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod render;
 
-use crate::config::{Config, ConfigError, schema::ConfigModel};
+use crate::config::{Config, schema::ConfigModel};
 #[cfg(any(target_arch = "wasm32", test))]
 use crate::domain::auth::{
     DelegatedAuthNetwork, ic_root_public_key_raw_from_der_or_raw, is_mainnet_ic_root_public_key_raw,
@@ -15,6 +15,9 @@ use crate::domain::auth::{
 #[cfg(any(target_arch = "wasm32", test))]
 use std::fmt::Write as _;
 use std::sync::Arc;
+
+#[doc(hidden)]
+pub use crate::config::ConfigError;
 
 #[doc(hidden)]
 pub mod compiled {

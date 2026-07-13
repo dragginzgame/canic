@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.88.0`, published and tagged
-  as `v0.88.0`. The bounded 0.86 structural-maintainability line is complete;
+- The current package/release-surface version is `0.88.1`, published and tagged
+  as `v0.88.1`. The bounded 0.86 structural-maintainability line is complete;
   its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -143,7 +143,7 @@ before this compaction is archived at
   and failed journal persistence exposes neither `Durable` nor its completion
   metric.
 
-  0.88 Slice B is implemented and release-noted as `0.88.1`. The host durable
+  0.88 Slice B is published as `v0.88.1`. The host durable
   byte writer now exposes explicit replacing and create-new operations backed
   by one private staging, file-sync, atomic-publication, cleanup, and
   parent-sync engine. Shared CLI JSON and text file outputs use durable
@@ -151,8 +151,19 @@ before this compaction is archived at
   alone uses atomic no-clobber and still rejects missing parents. Newly created
   shared-output parent hierarchies are synchronized one level at a time.
   Scaffold output, the cycles pending log, and host/backup subsystem
-  persistence remain with their existing owners. Package versions remain
-  `0.88.0` until the human-owned release bump.
+  persistence remain with their existing owners.
+
+  0.88 Slice C is implemented and recorded under `Unreleased`. Fleet config
+  reads, projections, and mutations now return one typed host-owned error.
+  I/O failures retain operation and path, core parse failures retain operation,
+  validation and mutation decisions have bounded variants, and rename rollback
+  failure retains both the mutation and rollback causes. The boxed dynamic and
+  string-built error-return paths are hard-cut; direct build, fleet, and
+  scaffold consumers retain the typed error through their CLI boundaries.
+  Successful projections, serialized TOML, command rendering, exits, and
+  rollback behavior are unchanged. Package versions remain `0.88.1` until the
+  human-owned release bump. After review and release, close 0.88 without adding
+  another slice or a global error framework.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
