@@ -6,16 +6,18 @@
   reruns; low attributable drift risk.
 - [2026-07-11](2026-07-11/summary.md): broad codebase health audit; one high
   recovery finding and two medium ownership findings.
+- [2026-07-12](2026-07-12/codebase-health.md): post-0.86 flow audit; the prior
+  three safety findings are closed, scaffold atomicity is corrected, and the
+  next bounded work is ICP error convergence plus environment-free path tests.
 
 ## Month Status
 
-Partial. Current audit artifacts are indexed and targeted verification passed,
-but the 2026-07-11 broad audit intentionally omitted full tests, PocketIC,
-deployment, and a new Wasm build under repository policy.
+Partial. Current audit artifacts are indexed and targeted verification passed.
+The audits intentionally omit full tests, PocketIC, deployment, and broad Wasm
+rebuilds under repository policy.
 
 ## Carry-Forward Follow-up
 
-1. Make restore journal persistence crash-safe.
-2. Remove process-global unsafe build environment mutation.
-3. Replace the direct unmaintained CBOR owner through one designed hard cut.
-4. Keep root Wasm comparisons separate from leaf/shared-runtime comparisons.
+1. Converge ICP and installed-deployment error handling at the host adapter.
+2. Replace test-only environment mutation with pure path-precedence inputs.
+3. Keep root Wasm comparisons separate from leaf/shared-runtime comparisons.

@@ -372,6 +372,63 @@ fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
     assert!(!fleet_dir.join("app").exists());
 }
 
+// Ensure rollback restores every existing document and removes only the new scaffold root.
+#[test]
+fn scaffold_rollback_restores_documents_and_removes_new_directory() {
+    let root = TempDir::new("canic-cli-scaffold-rollback");
+    let workspace = root.join("Cargo.toml");
+    let config = root.join("fleets/demo/canic.toml");
+    let created_dir = root.join("fleets/demo/store");
+    let workspace_before = b"[workspace]\nmembers = []\n".to_vec();
+    let config_before = b"[fleet]\nname = \"demo\"\n".to_vec();
+    fs::create_dir_all(&created_dir).expect("create partial scaffold");
+    fs::write(created_dir.join("Cargo.toml"), "partial").expect("write partial scaffold");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(&workspace, "changed workspace").expect("write changed workspace");
+    fs::write(&config, "changed config").expect("write changed config");
+
+    rollback_scaffold(
+        &created_dir,
+        &[
+            (workspace.clone(), workspace_before.clone()),
+            (config.clone(), config_before.clone()),
+        ],
+    )
+    .expect("rollback scaffold");
+
+    assert!(!created_dir.exists());
+    assert_eq!(
+        fs::read(workspace).expect("read workspace"),
+        workspace_before
+    );
+    assert_eq!(fs::read(config).expect("read config"), config_before);
+}
+
+// Ensure rollback still removes the new directory when restoring a document fails.
+#[test]
+fn scaffold_rollback_attempts_cleanup_after_restore_failure() {
+    let root = TempDir::new("canic-cli-scaffold-rollback-failure");
+    let created_dir = root.join("fleets/demo/store");
+    let invalid_restore_target = root.join("existing-directory");
+    fs::create_dir_all(&created_dir).expect("create partial scaffold");
+    fs::create_dir_all(&invalid_restore_target).expect("create invalid restore target");
+
+    let error = rollback_scaffold(
+        &created_dir,
+        &[(invalid_restore_target.clone(), b"original".to_vec())],
+    )
+    .expect_err("restore over directory should fail");
+
+    assert!(matches!(
+        error.kind(),
+        io::ErrorKind::IsADirectory
+            | io::ErrorKind::PermissionDenied
+            | io::ErrorKind::AlreadyExists
+    ));
+    assert!(invalid_restore_target.is_dir());
+    assert!(!created_dir.exists());
+}
+
 // Ensure canister scaffold help exposes the declared-only workflow.
 #[test]
 fn scaffold_canister_usage_lists_fleet_and_role() {
