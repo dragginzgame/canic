@@ -550,6 +550,7 @@ dependencies = [
  "ciborium",
  "flate2",
  "ic-query",
+ "rustix",
  "serde",
  "serde_bytes",
  "serde_json",
