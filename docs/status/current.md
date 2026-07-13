@@ -153,7 +153,7 @@ before this compaction is archived at
   Scaffold output, the cycles pending log, and host/backup subsystem
   persistence remain with their existing owners.
 
-  0.88 Slice C is implemented and recorded under `Unreleased`. Fleet config
+  0.88 Slice C is implemented and release-noted as `0.88.2`. Fleet config
   reads, projections, and mutations now return one typed host-owned error.
   I/O failures retain operation and path, core parse failures retain operation,
   validation and mutation decisions have bounded variants, and rename rollback
@@ -162,7 +162,7 @@ before this compaction is archived at
   scaffold consumers retain the typed error through their CLI boundaries.
   Successful projections, serialized TOML, command rendering, exits, and
   rollback behavior are unchanged. Package versions remain `0.88.1` until the
-  human-owned release bump. After review and release, close 0.88 without adding
+  human-owned `0.88.2` release bump. After the push, close 0.88 without adding
   another slice or a global error framework.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
