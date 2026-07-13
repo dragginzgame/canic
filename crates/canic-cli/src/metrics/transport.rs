@@ -207,9 +207,7 @@ fn query_metrics(
 fn resolve_metrics_deployment(
     options: &MetricsOptions,
 ) -> Result<InstalledDeploymentResolution, MetricsCommandError> {
-    let root = resolve_metrics_icp_root().ok_or_else(|| {
-        MetricsCommandError::InstallState("could not resolve ICP root".to_string())
-    })?;
+    let root = resolve_current_canic_icp_root().map_err(MetricsCommandError::IcpRoot)?;
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),
@@ -239,7 +237,7 @@ fn metrics_installed_deployment_error(error: InstalledDeploymentError) -> Metric
         InstalledDeploymentError::ReplicaQuery(error) => MetricsCommandError::ReplicaQuery(error),
         InstalledDeploymentError::Icp(error) => MetricsCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            MetricsCommandError::ReplicaQuery(format!("root canister {root} is not present"))
+            MetricsCommandError::LostLocalRoot { root }
         }
         InstalledDeploymentError::Registry(error) => MetricsCommandError::Registry(error),
         InstalledDeploymentError::Io(error) => MetricsCommandError::Io(error),

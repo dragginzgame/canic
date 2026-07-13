@@ -6,11 +6,14 @@ Last updated: 2026-07-13
 
 The post-0.87 audit selected exactly three implementation slices. Slice A is
 published as `0.88.0`, and Slice B is published as `0.88.1`. Slice C is
-implemented and release-noted as `0.88.2`: fleet configuration has one typed
-host-owned error boundary, boxed and string-built error returns are hard-cut,
-direct CLI consumers retain the typed error, and rollback failure preserves
-both causes. Package versions remain `0.88.1` until the human-owned release
-bump.
+published as `0.88.2`: fleet configuration has one typed host-owned error
+boundary, boxed and string-built error returns are hard-cut, direct CLI
+consumers retain the typed error, and rollback failure preserves both causes.
+The bounded 0.88 line is complete.
+
+The final closeout audit passes with no 0.88 correction slice required. Its
+evidence is recorded at
+`docs/audits/reports/2026-07/2026-07-13/0.88-closeout.md`.
 
 One 0.87 closeout correction was recorded before `0.88.0`: install-root no
 longer converts a boxed ICP command failure to text to detect a missing
@@ -101,9 +104,13 @@ canister ID. The existing typed ICP classifier owns all recognized forms.
 - Cargo audit: no known vulnerabilities; four upstream unmaintained warnings.
 - Full workspace, PocketIC, deployment, and broad Wasm suites were not run
   under the targeted-validation policy.
+- Final closeout audit: pass. Twenty-seven focused implementation tests, one
+  changelog-governance test, targeted warning-denied Clippy for the three
+  affected packages, layering guards, and diff hygiene pass. Cargo Machete's
+  five candidates predate 0.88 and are tracked outside this line.
 
 ## Next Action
 
-Run the human-owned `0.88.2` version bump and push, then close 0.88. Do not add
-another slice, widen the typed boundary into a global host error framework, or
-add compatibility conversions for the removed boxed error surface.
+0.88 is closed. Any further implementation requires a separately reviewed
+design; do not add another 0.88 slice, widen the typed boundary into a global
+host error framework, or restore compatibility for the removed boxed surface.

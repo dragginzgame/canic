@@ -41,8 +41,7 @@ pub(super) fn usage() -> String {
 }
 
 fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let installed = resolve_deployment(&options.target, &root, &options.deployment)?;
     let target = resolve_canister_target(
         &options.deployment,

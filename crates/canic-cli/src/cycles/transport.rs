@@ -489,9 +489,7 @@ fn current_unix_seconds() -> u64 {
 fn resolve_cycles_deployment(
     options: &CyclesOptions,
 ) -> Result<InstalledDeploymentResolution, CyclesCommandError> {
-    let root = resolve_cycles_icp_root().ok_or_else(|| {
-        CyclesCommandError::InstallState("could not resolve ICP root".to_string())
-    })?;
+    let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),

@@ -28,12 +28,14 @@ use canic_core::protocol::{
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     icp::{IcpCli, IcpCommandError},
-    icp_config::resolve_current_canic_icp_root,
+    icp_config::{IcpConfigError, resolve_current_canic_icp_root},
+    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
-    registry::RegistryEntry,
+    registry::{RegistryEntry, RegistryParseError},
+    replica_query::ReplicaQueryError,
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -83,10 +85,22 @@ pub enum AuthCommandError {
     NoInstalledDeployment { network: String, deployment: String },
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[source] InstallStateError),
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
+
+    #[error("failed to read canic deployment state: {0}")]
+    IcpRoot(#[source] IcpConfigError),
+
+    #[error("local replica query failed: root canister {root} is not present")]
+    LostLocalRoot { root: String },
+
+    #[error("failed to read canic deployment state: {0}")]
+    Registry(#[source] RegistryParseError),
+
+    #[error("failed to read canic deployment state: {0}")]
+    Io(#[source] io::Error),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -133,13 +147,16 @@ impl AuthCommandError {
             | Self::Json(_)
             | Self::NoInstalledDeployment { .. }
             | Self::InstallState(_)
+            | Self::IcpRoot(_)
+            | Self::Registry(_)
+            | Self::Io(_)
             | Self::CandidUnavailable { .. }
             | Self::InvalidIssuerPrincipal { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
-            Self::ReplicaQuery(_) | Self::Icp(_) => 2,
+            Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => 2,
             Self::ResponseParse { .. } => 3,
         }
     }
@@ -650,8 +667,7 @@ fn resolve_auth_root_call_target(
     method: &str,
     expected_mode: AuthRenewalMethodMode,
 ) -> Result<AuthRootCallTarget, AuthCommandError> {
-    let icp_root = resolve_current_canic_icp_root()
-        .map_err(|err| AuthCommandError::InstallState(err.to_string()))?;
+    let icp_root = resolve_current_canic_icp_root().map_err(AuthCommandError::IcpRoot)?;
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
@@ -985,11 +1001,9 @@ fn auth_installed_deployment_error(error: InstalledDeploymentError) -> AuthComma
         InstalledDeploymentError::ReplicaQuery(error) => AuthCommandError::ReplicaQuery(error),
         InstalledDeploymentError::Icp(error) => AuthCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            AuthCommandError::ReplicaQuery(format!("root canister {root} is not present"))
+            AuthCommandError::LostLocalRoot { root }
         }
-        InstalledDeploymentError::Registry(error) => {
-            AuthCommandError::InstallState(error.to_string())
-        }
-        InstalledDeploymentError::Io(error) => AuthCommandError::InstallState(error.to_string()),
+        InstalledDeploymentError::Registry(error) => AuthCommandError::Registry(error),
+        InstalledDeploymentError::Io(error) => AuthCommandError::Io(error),
     }
 }

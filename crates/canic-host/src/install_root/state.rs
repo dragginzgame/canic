@@ -1,9 +1,63 @@
 use crate::{durable_io::write_bytes, release_set::icp_root};
-use std::{fs, path::Path, path::PathBuf};
+use std::{fs, io, path::Path, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
 
 pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 2;
+
+/// Typed failure while locating, validating, decoding, or persisting install state.
+#[derive(Debug, ThisError)]
+pub enum InstallStateError {
+    #[error("invalid deployment/template name {name:?}; use letters, numbers, '-' or '_'")]
+    InvalidStateName { name: String },
+
+    #[error("invalid network name {name:?}; use letters, numbers, '-' or '_'")]
+    InvalidNetworkName { name: String },
+
+    #[error(
+        "deployment state network mismatch: state is for {state_network}, requested {requested_network}"
+    )]
+    NetworkMismatch {
+        state_network: String,
+        requested_network: String,
+    },
+
+    #[error("failed to resolve ICP root from {}: {source}", path.display())]
+    ResolveIcpRoot {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("failed to read deployment state {}: {source}", path.display())]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("failed to decode deployment state {}: {source}", path.display())]
+    Decode {
+        path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    #[error("failed to encode deployment state {}: {source}", path.display())]
+    Encode {
+        path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    #[error("failed to write deployment state {}: {source}", path.display())]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+}
 
 ///
 /// RootVerificationStatus
@@ -44,16 +98,19 @@ pub(super) fn read_deployment_install_state(
     icp_root: &Path,
     network: &str,
     deployment: &str,
-) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+) -> Result<Option<InstallState>, InstallStateError> {
     validate_network_name(network)?;
     validate_state_name(deployment)?;
     let path = deployment_install_state_path(icp_root, network, deployment);
-    if !path.is_file() {
-        return Ok(None);
-    }
-
-    let bytes = fs::read(&path)?;
-    let state: InstallState = serde_json::from_slice(&bytes)?;
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => {
+            return Err(InstallStateError::Read { path, source });
+        }
+    };
+    let state = serde_json::from_slice(&bytes)
+        .map_err(|source| InstallStateError::Decode { path, source })?;
     Ok(Some(state))
 }
 
@@ -61,8 +118,12 @@ pub(super) fn read_deployment_install_state(
 pub fn read_named_deployment_install_state(
     network: &str,
     deployment: &str,
-) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
-    let icp_root = icp_root()?;
+) -> Result<Option<InstallState>, InstallStateError> {
+    let start = PathBuf::from(".");
+    let icp_root = icp_root().map_err(|source| InstallStateError::ResolveIcpRoot {
+        path: start,
+        source,
+    })?;
     read_deployment_install_state(&icp_root, network, deployment)
 }
 
@@ -71,7 +132,7 @@ pub fn read_named_deployment_install_state_from_root(
     icp_root: &Path,
     network: &str,
     deployment: &str,
-) -> Result<Option<InstallState>, Box<dyn std::error::Error>> {
+) -> Result<Option<InstallState>, InstallStateError> {
     read_deployment_install_state(icp_root, network, deployment)
 }
 
@@ -95,23 +156,29 @@ pub(super) fn write_install_state(
     icp_root: &Path,
     network: &str,
     state: &InstallState,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+) -> Result<PathBuf, InstallStateError> {
     validate_network_name(network)?;
     validate_state_name(&state.deployment_name)?;
     if state.network != network {
-        return Err(format!(
-            "deployment state network mismatch: state is for {}, requested {network}",
-            state.network
-        )
-        .into());
+        return Err(InstallStateError::NetworkMismatch {
+            state_network: state.network.clone(),
+            requested_network: network.to_string(),
+        });
     }
     let path = deployment_install_state_path(icp_root, network, &state.deployment_name);
-    write_bytes(&path, &serde_json::to_vec_pretty(state)?)?;
+    let bytes = serde_json::to_vec_pretty(state).map_err(|source| InstallStateError::Encode {
+        path: path.clone(),
+        source,
+    })?;
+    write_bytes(&path, &bytes).map_err(|source| InstallStateError::Write {
+        path: path.clone(),
+        source,
+    })?;
     Ok(path)
 }
 
 // Keep deployment and template names filesystem-safe and easy to type.
-pub(super) fn validate_state_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn validate_state_name(name: &str) -> Result<(), InstallStateError> {
     let valid = !name.is_empty()
         && name
             .bytes()
@@ -119,15 +186,14 @@ pub(super) fn validate_state_name(name: &str) -> Result<(), Box<dyn std::error::
     if valid {
         Ok(())
     } else {
-        Err(
-            format!("invalid deployment/template name {name:?}; use letters, numbers, '-' or '_'")
-                .into(),
-        )
+        Err(InstallStateError::InvalidStateName {
+            name: name.to_string(),
+        })
     }
 }
 
 // Keep network names safe for `.canic/<network>` state paths.
-pub(super) fn validate_network_name(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn validate_network_name(name: &str) -> Result<(), InstallStateError> {
     let valid = !name.is_empty()
         && name
             .bytes()
@@ -135,6 +201,8 @@ pub(super) fn validate_network_name(name: &str) -> Result<(), Box<dyn std::error
     if valid {
         Ok(())
     } else {
-        Err(format!("invalid network name {name:?}; use letters, numbers, '-' or '_'").into())
+        Err(InstallStateError::InvalidNetworkName {
+            name: name.to_string(),
+        })
     }
 }

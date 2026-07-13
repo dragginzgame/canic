@@ -178,8 +178,7 @@ fn resolve_snapshot_download_request(
     options: &SnapshotDownloadOptions,
 ) -> Result<ResolvedSnapshotDownload, SnapshotCommandError> {
     let network = state_network(options.network.as_deref());
-    let icp_root = resolve_current_canic_icp_root()
-        .map_err(|err| SnapshotCommandError::InstallState(err.to_string()))?;
+    let icp_root = resolve_current_canic_icp_root().map_err(SnapshotCommandError::IcpRoot)?;
     let installed = match resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),
@@ -398,10 +397,12 @@ fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
 fn snapshot_installed_deployment_error(error: InstalledDeploymentError) -> SnapshotCommandError {
     match error {
         InstalledDeploymentError::NoInstalledDeployment { .. }
-        | InstalledDeploymentError::InstallState(_)
-        | InstalledDeploymentError::ReplicaQuery(_)
         | InstalledDeploymentError::LostLocalDeployment { .. } => {
-            SnapshotCommandError::InstallState(error.to_string())
+            SnapshotCommandError::DeploymentState(error.to_string())
+        }
+        InstalledDeploymentError::InstallState(error) => SnapshotCommandError::InstallState(error),
+        InstalledDeploymentError::ReplicaQuery(error) => {
+            SnapshotCommandError::LocalReplicaQuery(error)
         }
         InstalledDeploymentError::Icp(error) => SnapshotCommandError::Icp(error),
         InstalledDeploymentError::Registry(err) => SnapshotCommandError::Registry(err),

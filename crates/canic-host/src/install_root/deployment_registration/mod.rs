@@ -105,7 +105,7 @@ pub fn register_deployment_state(
         release_set_manifest_path: release_set_manifest_path.display().to_string(),
     };
 
-    write_install_state(&icp_root, &options.network, &state)
+    Ok(write_install_state(&icp_root, &options.network, &state)?)
 }
 
 /// Promote an explicitly registered deployment root from `not_verified` to

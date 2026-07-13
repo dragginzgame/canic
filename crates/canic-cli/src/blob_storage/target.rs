@@ -52,8 +52,7 @@ pub(super) fn resolve_blob_storage_call_target(
     selector: &str,
     method: &str,
 ) -> Result<BlobStorageCallTarget, BlobStorageCommandError> {
-    let icp_root = resolve_current_canic_icp_root()
-        .map_err(|err| BlobStorageCommandError::InstallState(err.to_string()))?;
+    let icp_root = resolve_current_canic_icp_root().map_err(BlobStorageCommandError::IcpRoot)?;
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
