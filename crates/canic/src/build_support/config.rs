@@ -1,6 +1,9 @@
-use std::{fmt::Write as _, fs, path::Path};
+use std::{fs, path::Path};
 
-use canic_core::{bootstrap::compiled::ConfigModel, ids::CanisterRole};
+use canic_core::{
+    bootstrap::compiled::{ConfigModel, validate_canister_role_name},
+    ids::CanisterRole,
+};
 use toml::Value as TomlValue;
 
 ///
@@ -139,15 +142,13 @@ pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
 ///
 /// # Panics
 ///
-/// Panics when `role` is empty or names the root canister.
+/// Panics when `role` is not a canonical non-root canister role.
 #[must_use]
 pub fn standalone_config_source(role: &str) -> String {
     assert!(
-        !role.is_empty() && role != "root",
-        "standalone Canic config requires a non-root role"
+        role != "root" && validate_canister_role_name(role).is_ok(),
+        "standalone Canic config requires a canonical non-root role"
     );
-
-    let role_key = toml_basic_string(role);
 
     format!(
         r#"controllers = []
@@ -156,7 +157,7 @@ app_index = []
 [fleet]
 name = "standalone"
 
-[roles.{role_key}]
+[roles.{role}]
 kind = "canister"
 package = "."
 
@@ -169,31 +170,6 @@ init_mode = "enabled"
 enabled = false
 "#
     )
-}
-
-// Escape a role name as a TOML basic string for quoted table keys.
-fn toml_basic_string(value: &str) -> String {
-    let mut rendered = String::with_capacity(value.len() + 2);
-    rendered.push('"');
-
-    for ch in value.chars() {
-        match ch {
-            '"' => rendered.push_str("\\\""),
-            '\\' => rendered.push_str("\\\\"),
-            '\u{08}' => rendered.push_str("\\b"),
-            '\t' => rendered.push_str("\\t"),
-            '\n' => rendered.push_str("\\n"),
-            '\u{0c}' => rendered.push_str("\\f"),
-            '\r' => rendered.push_str("\\r"),
-            ch if ch.is_control() => {
-                let _ = write!(rendered, "\\u{:04X}", ch as u32);
-            }
-            ch => rendered.push(ch),
-        }
-    }
-
-    rendered.push('"');
-    rendered
 }
 
 #[cfg(test)]
@@ -231,19 +207,26 @@ mod tests {
     }
 
     #[test]
-    fn standalone_config_source_quotes_role_keys() {
-        let source = standalone_config_source("demo.role");
+    fn standalone_config_source_uses_canonical_bare_role_key() {
+        let source = standalone_config_source("demo_role");
         let cfg = parse_config_model(&source).expect("generated standalone config parses");
 
         assert_eq!(cfg.fleet_name(), Some("standalone"));
-        assert!(cfg.roles.contains_key("demo.role"));
+        assert!(source.contains("[roles.demo_role]"));
+        assert!(cfg.roles.contains_key("demo_role"));
         assert!(cfg.subnets.is_empty());
     }
 
     #[test]
-    #[should_panic(expected = "standalone Canic config requires a non-root role")]
+    #[should_panic(expected = "standalone Canic config requires a canonical non-root role")]
     fn standalone_config_source_rejects_root_role() {
         let _ = standalone_config_source("root");
+    }
+
+    #[test]
+    #[should_panic(expected = "standalone Canic config requires a canonical non-root role")]
+    fn standalone_config_source_rejects_noncanonical_role() {
+        let _ = standalone_config_source("demo.role");
     }
 
     #[test]
@@ -254,7 +237,7 @@ mod tests {
             read_config_source_or_default(missing_path.as_path(), false, Some("test"));
 
         assert!(generated);
-        assert!(source.contains("[roles.\"test\"]"));
+        assert!(source.contains("[roles.test]"));
         assert!(!source.contains("[subnets."));
     }
 
