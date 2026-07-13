@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.90.0`, published and tagged
-  as `v0.90.0`. The bounded 0.86 structural-maintainability line is complete;
+- The current package/release-surface version is `0.90.1`, published and tagged
+  as `v0.90.1`. The bounded 0.86 structural-maintainability line is complete;
   its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -214,9 +214,10 @@ before this compaction is archived at
   excludes global error, command-projection, path, dependency-upgrade, and
   broad visibility frameworks.
 
-  The 0.90 receipt-backed intent design is published as `v0.90.0` under
-  `docs/design/0.90-receipt-backed-intent-reconciliation/`. Slice A is complete
-  locally. Canic now has the generic core primitive: existing
+  The 0.90 receipt-backed intent design and generic core primitive are
+  published as `v0.90.1` under
+  `docs/design/0.90-receipt-backed-intent-reconciliation/`. Canic now has the
+  generic core primitive: existing
   `OperationId`, opaque payload binding, bounded terminal evidence, exact-key
   begin/load, and non-awaiting compare-and-set settlement. New state uses one
   operation map on ID 43, whose stable map header is the admission count, while
@@ -231,10 +232,19 @@ before this compaction is archived at
   terminal replay through the public facade. The receipt-exercising fast Wasm
   is 1,252,273 bytes, 70,530 bytes above the local-only fixture. Focused core,
   facade, fixture, stable-state, metrics, role-contract, state-contract,
-  warning-denied Clippy, layering, changelog, and diff checks pass. The next
-  bounded step is Slice B's Toko mint proof; do not extend the generic Canic
-  primitive. The root and detailed `0.90.1` changelog entries are prepared;
-  package versions remain `0.90.0` pending the human-owned release bump.
+  warning-denied Clippy, layering, changelog, and diff checks pass. The current
+  Canic-only slice hard-cuts the fixture's optional outcomes into exact begin
+  and settlement decisions, then proves changed bindings, capacity, stale
+  revisions, missing operations, commit, rollback, terminal replay,
+  contradictory evidence, released rollback capacity, and pending-state
+  upgrade recovery. Its exact-outcome test Wasm is 1,268,888 bytes, 16,615
+  bytes above the published receipt fixture; the increase is confined to the
+  test Candid surface. A focused adapter handoff documents the evidence
+  boundary. Toko mint remains the first planned downstream adoption,
+  implemented and tested by Toko developers only after the compatible Canic
+  patch is published; it is not a Canic publication blocker. The Canic slice is
+  ready for release-note preparation. Do not extend the generic primitive or
+  edit downstream repositories.
 
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at

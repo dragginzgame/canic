@@ -43,6 +43,12 @@ validation notes.
 - [Blob storage source handoff](blob-storage-source-handoff.md) records the
   source and inventory evidence used to unlock the 0.69 implementation line.
 
+## Intent Integration
+
+- [Receipt-backed intent adapter handoff](receipt-backed-intent-adapter.md)
+  defines the narrow begin, evidence-validation, settlement, and focused
+  conformance contract for downstream effect adapters.
+
 ## Release Probe Inventories
 
 - [0.56 v1 release probe inventory](0.56-v1-release-probes.md) records the

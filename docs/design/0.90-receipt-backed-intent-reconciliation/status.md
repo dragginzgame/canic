@@ -4,10 +4,11 @@ Last updated: 2026-07-13
 
 ## Current State
 
-`0.90.0` published the hard-cut MVP design without runtime changes. Slice A is
-complete locally and ready for review.
+`0.90.1` published the hard-cut Canic primitive. The current Canic-only slice
+adds the focused downstream-adapter conformance proof and handoff needed before
+Toko developers adopt the API from a published release.
 
-The Canic core primitive is implemented locally: receipt-backed operations use
+The published Canic core primitive uses
 the existing 32-byte `OperationId`, opaque payload bindings, bounded terminal
 evidence, exact-key stable storage, idempotent begin-or-load, and non-awaiting
 compare-and-set settlement. New state uses one operation map on memory ID 43;
@@ -21,11 +22,12 @@ index or change its maintained pending count, so they cannot start or retain
 cleanup. This reuses existing metadata and removes the migration proposed by
 the design draft.
 
-`CallBuilder::with_intent`, `IntentReservation`, and `IntentKey` are hard-cut.
-The maintained intent race fixture now performs explicit local begin, call,
-and commit-or-rollback operations. The same focused fixture exercises the
-public receipt-backed facade, preserves a pending row through a same-Wasm
-upgrade, and settles it idempotently after upgrade.
+`CallBuilder::with_intent`, `IntentReservation`, and `IntentKey` remain
+hard-cut. The focused intent fixture now reports exact begin and settlement
+decisions instead of collapsing conflicts to an optional record. It proves
+creation, replay, changed binding, shared capacity, stale revision, missing
+operation, commit, rollback, contradictory evidence, released rollback
+capacity, and pending-state upgrade recovery through the public facade.
 
 ## Checklist
 
@@ -48,7 +50,19 @@ upgrade, and settles it idempotently after upgrade.
 - [x] Complete focused stable-upgrade and public-facade behavior proof.
 - [x] Record the reviewed Slice A performance and Wasm-size evidence.
 
-### Slice B - Toko mint proof
+### Slice B - Canic adapter conformance and handoff
+
+- [x] Expose exact test-only begin decisions through the public facade.
+- [x] Expose exact test-only settlement decisions and evidence source.
+- [x] Prove changed payload/resource, capacity, missing operation, stale
+  revision, and settlement binding conflicts without mutation.
+- [x] Prove committed and rolled-back settlement plus exact terminal replay.
+- [x] Prove contradictory evidence preserves the first terminal state.
+- [x] Prove durable rollback releases reservation capacity.
+- [x] Preserve a pending operation through a same-Wasm upgrade.
+- [x] Document the downstream adapter and evidence-validation contract.
+
+### Downstream Toko adoption
 
 - [ ] Define Toko-owned mint request, identity, receipt, and outcome types.
 - [ ] Add caller-scoped applied and durable no-effect ledger receipts.
@@ -57,6 +71,10 @@ upgrade, and settles it idempotently after upgrade.
 - [ ] Retire any co-authoritative mint settlement replay row.
 - [ ] Complete focused PocketIC race, recovery, capacity, upgrade, and
   performance proof.
+
+This checklist is owned by the Toko repository after the compatible Canic
+release is published. It is not implemented by Canic agents and does not block
+publication of the Canic conformance slice.
 
 ## Validation
 
@@ -70,13 +88,14 @@ upgrade, and settles it idempotently after upgrade.
 - Focused state-contract descriptor tests pass for every runtime intent domain
   and declared core memory ID.
 - The focused PocketIC intent test proves explicit local capacity under an
-  overlapping call, receipt begin replay, shared capacity rejection, pending
-  state across upgrade, settlement, and terminal replay.
-- The receipt-exercising fast intent-authority Wasm is 1,252,273 bytes. The
-  local-only Slice A fixture was 1,181,743 bytes, so exercising the new facade
-  adds 70,530 bytes (6.0%). The implementation adds no call, scan, timer, or
-  cleanup entry; begin and settlement each use one exact-key row and the
-  existing exact resource aggregate.
+  overlapping call plus the complete generic adapter decisions listed in
+  Slice B.
+- The exact-outcome fast intent-authority Wasm is 1,268,888 bytes. It is 87,145
+  bytes (7.4%) above the 1,181,743-byte local-only fixture and 16,615 bytes
+  above the published receipt fixture. That increase is confined to test
+  Candid outcome types and branches. Production Canic code adds no call, scan,
+  timer, or cleanup entry; begin and settlement each use one exact-key row and
+  the existing exact resource aggregate.
 - Warning-denied Clippy passes for core, facade, intent authority, and the
   focused integration test. Layering, metrics ordering, changelog governance,
   retired-surface search, formatting, and diff hygiene pass.
@@ -84,6 +103,7 @@ upgrade, and settles it idempotently after upgrade.
 
 ## Next Action
 
-Review and push Slice A as one hard-cut batch. Slice B then integrates only the
-Toko mint proof; do not widen Canic into a generic effect, receipt, resolver,
-or recovery framework.
+The Canic conformance slice is ready for review and release-note preparation.
+After the compatible patch is published, the Toko developers own the
+downstream mint adapter and its domain tests. Do not widen Canic into a generic
+effect, receipt, resolver, or recovery framework.

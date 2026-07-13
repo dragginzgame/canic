@@ -1,0 +1,96 @@
+# Receipt-Backed Intent Adapter Handoff
+
+## Purpose
+
+This document is the downstream integration contract for Canic's
+receipt-backed intent API. It is intentionally narrower than the 0.90 design:
+it describes how one trusted domain adapter binds an external receipt to one
+Canic reservation without adding a generic receipt or recovery framework.
+
+Canic owns reservation identity, capacity accounting, durable pending state,
+and compare-and-set settlement. A downstream adapter owns request identity,
+authorization, the external call, receipt storage, receipt validation, and
+domain responses.
+
+## Required Flow
+
+For every first entrance or retry, the adapter must:
+
+1. Authenticate and validate the complete domain request.
+2. Derive one deterministic `OperationId`, `PayloadBinding`, resource key, and
+   quantity from that request.
+3. Call `ReceiptBackedIntentApi::begin_or_load` before the external effect.
+4. Execute the effect only for `Created`.
+5. Validate any returned or later observed domain receipt.
+6. Construct `TerminalEvidence` only from that validated receipt.
+7. Call `ReceiptBackedIntentApi::settle_if_pending` with the revision returned
+   by `Created` or `ExistingPending`.
+
+There is no `await` inside either Canic mutation. The adapter performs the
+external call between begin and settlement.
+
+## Begin Decisions
+
+| Canic result | Adapter decision |
+| --- | --- |
+| `Created` | Execute the external operation once with the bound ID. |
+| `ExistingPending` | Perform one domain-owned, targeted recovery action. |
+| `ExistingCommitted` | Return or reconstruct the stored success. |
+| `ExistingRolledBack` | Return or reconstruct the stored no-effect result. |
+| `BindingConflict` | Reject without making an external call. |
+| `CapacityExceeded` | Reject this new operation without changing state. |
+| `StoreCapacityReached` | Reject this new operation without changing state. |
+
+An external transport, decode, callback, or local-settlement error does not
+prove that the external operation was not submitted. The reservation remains
+pending until the adapter has validated applied or durable no-effect evidence.
+
+## Evidence Boundary
+
+Before constructing `TerminalEvidence`, the adapter must validate all
+domain-specific facts, including:
+
+- the actual source canister;
+- the caller-scoped operation identity;
+- the canonical payload binding;
+- the receipt schema and terminal decision; and
+- the effect reference or durable no-effect reason represented by the
+  fingerprint.
+
+Canic compares the source, decision, and fingerprint for exact terminal replay.
+It does not decide whether a domain receipt is authentic or sufficient.
+Contradictory terminal evidence is an error and must not be converted into a
+different settlement attempt.
+
+## Focused Conformance Fixture
+
+`crates/canic-tests/tests/pic_intent_race.rs` exercises the public Canic facade
+through the `intent_authority` test canister. The fixture exposes explicit
+begin and settlement decisions instead of collapsing them into an optional
+record. Its focused PocketIC proof covers:
+
+- creation and exact pending replay;
+- changed payload or resource rejection;
+- shared-resource capacity rejection;
+- not-found, stale-revision, and binding-conflict settlement;
+- pending state across a same-Wasm upgrade;
+- committed and rolled-back settlement;
+- exact terminal replay;
+- contradictory evidence preserving the first terminal state; and
+- released capacity after durable rollback.
+
+The seed-based fixture endpoints are test scaffolding, not a downstream API.
+Downstream code should use the typed Canic facade operations directly and keep
+its domain receipt types in its own repository.
+
+## Downstream Adoption
+
+Toko is the first planned consumer. Its developers can implement the mint
+adapter after the compatible Canic release is published. That implementation
+must remain Toko-owned and add focused tests for caller-scoped receipts,
+receipt validation, deterministic no-effect evidence, ambiguous-call
+recovery, cancellation fencing, and retirement of any co-authoritative local
+settlement row.
+
+Canic publication does not certify those downstream properties. It provides
+and tests the generic reservation and settlement contract on which they rely.
