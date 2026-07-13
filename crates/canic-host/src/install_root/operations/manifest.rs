@@ -1,26 +1,20 @@
-use crate::release_set::emit_root_release_set_manifest_with_config;
+use crate::{
+    canister_build::CurrentCanisterArtifactBuildOutput,
+    release_set::{RootReleaseSetBuildSnapshot, emit_root_release_set_manifest_from_build},
+};
 use std::path::{Path, PathBuf};
 
 pub(in crate::install_root) struct EmitRootManifestOperation<'a> {
-    workspace_root: &'a Path,
-    icp_root: &'a Path,
-    network: &'a str,
-    config_path: &'a Path,
+    snapshot: &'a RootReleaseSetBuildSnapshot,
+    outputs: &'a [CurrentCanisterArtifactBuildOutput],
 }
 
 impl<'a> EmitRootManifestOperation<'a> {
     pub(in crate::install_root) const fn new(
-        workspace_root: &'a Path,
-        icp_root: &'a Path,
-        network: &'a str,
-        config_path: &'a Path,
+        snapshot: &'a RootReleaseSetBuildSnapshot,
+        outputs: &'a [CurrentCanisterArtifactBuildOutput],
     ) -> Self {
-        Self {
-            workspace_root,
-            icp_root,
-            network,
-            config_path,
-        }
+        Self { snapshot, outputs }
     }
 
     pub(in crate::install_root) fn evidence(manifest_path: &Path) -> Vec<String> {
@@ -28,11 +22,6 @@ impl<'a> EmitRootManifestOperation<'a> {
     }
 
     pub(in crate::install_root) fn execute(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        emit_root_release_set_manifest_with_config(
-            self.workspace_root,
-            self.icp_root,
-            self.network,
-            self.config_path,
-        )
+        emit_root_release_set_manifest_from_build(self.snapshot, self.outputs)
     }
 }

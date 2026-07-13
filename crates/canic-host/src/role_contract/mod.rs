@@ -11,6 +11,7 @@ pub use descriptor::{
     StateDescriptorRegistry, materialize_state_manifest, validate_state_descriptor_registry,
 };
 
+pub(crate) use package::validate_declared_role_package_from_config;
 pub use package::{
     PackageValidationMode, RolePackageEvidence, RolePackageValidation, declared_role_manifest_path,
     validate_built_in_wasm_store_package, validate_declared_role_package,
@@ -68,9 +69,17 @@ pub fn resolve_declared_role_package_contract(
         }
     };
 
+    resolve_declared_role_package_contract_from_config(&config, evidence)
+}
+
+#[must_use]
+pub(crate) fn resolve_declared_role_package_contract_from_config(
+    config: &canic_core::bootstrap::compiled::ConfigModel,
+    evidence: &RolePackageEvidence,
+) -> RoleContractResolution {
     resolve_role_contract(RoleContractInput {
         source: RoleContractSource::Declared {
-            config: &config,
+            config,
             role: &evidence.role,
         },
         declared_features: evidence.direct_features.clone(),

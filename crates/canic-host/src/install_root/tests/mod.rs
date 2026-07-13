@@ -1,4 +1,5 @@
 use super::build_environment::resolve_install_build_context;
+use super::build_snapshot::InstallBuildTarget;
 use super::commands::{
     add_create_root_target, add_icp_environment_target, icp_canister_command_in_network,
     parse_canister_id_json, parse_created_canister_id, root_init_args,
@@ -47,7 +48,9 @@ use super::{
     verify_registered_deployment_root, write_artifact_promotion_execution_receipt_for_install,
     write_install_state_with_deployment_truth_receipt,
 };
-use crate::canister_build::{CanisterBuildProfile, WorkspaceBuildContext};
+use crate::canister_build::{
+    CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
+};
 use crate::deployment_truth::{
     ArtifactPromotionExecutionReceiptV1, ArtifactPromotionPlanRequest, ArtifactPromotionPlanV1,
     CanisterControlClassV1, DeploymentCheckV1, DeploymentExecutionContextV1,
@@ -62,7 +65,7 @@ use crate::deployment_truth::{
     safety_report_from_diff, validate_deployment_root_verification_receipt,
 };
 use crate::icp::LocalReplicaTarget;
-use crate::release_set::{ReleaseSetEntry, RootReleaseSetManifest, configured_install_targets};
+use crate::release_set::{ReleaseSetEntry, RootReleaseSetBuildSnapshot, RootReleaseSetManifest};
 use crate::test_support::temp_dir;
 use serde_json::json;
 use std::{

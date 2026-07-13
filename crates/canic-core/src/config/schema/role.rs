@@ -4,9 +4,55 @@
 //! Does not own: topology attachment validation, package resolution, or runtime state.
 //! Boundary: config schema re-exports these data shapes for validated models.
 
-use crate::ids::CanisterRole;
+use crate::{ids::CanisterRole, shared_support::is_ascii_snake_case};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+
+///
+/// CanisterRoleNameIssue
+///
+/// Typed reason a canister role cannot cross a configuration or deployment
+/// identity boundary.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanisterRoleNameIssue {
+    Empty,
+    InvalidSnakeCase,
+    TooLong { max_bytes: usize },
+}
+
+impl fmt::Display for CanisterRoleNameIssue {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Empty => formatter.write_str("must not be empty"),
+            Self::InvalidSnakeCase => formatter.write_str(
+                "must use lowercase snake_case beginning with an ASCII letter, with nonempty lowercase alphanumeric words separated by single '_' characters",
+            ),
+            Self::TooLong { max_bytes } => {
+                write!(formatter, "must not exceed {max_bytes} bytes")
+            }
+        }
+    }
+}
+
+/// Validate one canister role at configuration and deployment identity boundaries.
+pub const fn validate_canister_role_name(role: &str) -> Result<(), CanisterRoleNameIssue> {
+    let bytes = role.as_bytes();
+    if bytes.is_empty() {
+        return Err(CanisterRoleNameIssue::Empty);
+    }
+    if bytes.len() > super::NAME_MAX_BYTES {
+        return Err(CanisterRoleNameIssue::TooLong {
+            max_bytes: super::NAME_MAX_BYTES,
+        });
+    }
+    if !is_ascii_snake_case(role) {
+        return Err(CanisterRoleNameIssue::InvalidSnakeCase);
+    }
+
+    Ok(())
+}
 
 ///
 /// FleetRoleRefV1

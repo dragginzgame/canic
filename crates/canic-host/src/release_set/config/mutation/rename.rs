@@ -1,6 +1,6 @@
 use super::{
     RenamedFleetRoleSource,
-    support::{toml_assignment_key, toml_string_literal, validate_role_name},
+    support::{admit_canister_role_name, toml_assignment_key, toml_string_literal},
 };
 use crate::release_set::config::{
     FleetConfigDeclaration, FleetConfigError, FleetConfigIoOperation, FleetConfigMutationConflict,
@@ -20,8 +20,8 @@ pub(in crate::release_set) fn rename_fleet_role_source(
 ) -> Result<RenamedFleetRoleSource, FleetConfigError> {
     let old_role = old_role.trim();
     let new_role = new_role.trim();
-    validate_role_name(old_role)?;
-    validate_role_name(new_role)?;
+    admit_canister_role_name(old_role)?;
+    admit_canister_role_name(new_role)?;
     if old_role == "root" || new_role == "root" {
         return Err(FleetConfigError::MutationConflict {
             conflict: FleetConfigMutationConflict::RootRoleRename,

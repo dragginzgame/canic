@@ -1,24 +1,20 @@
 use crate::release_set::config::{FleetConfigError, FleetConfigNameField, FleetConfigNameIssue};
+use canic_core::bootstrap::compiled::{CanisterRoleNameIssue, validate_canister_role_name};
 
-pub(super) fn validate_role_name(role: &str) -> Result<(), FleetConfigError> {
-    if role.is_empty() {
-        return Err(FleetConfigError::InvalidName {
-            field: FleetConfigNameField::Role,
-            issue: FleetConfigNameIssue::Empty,
-            value: role.to_string(),
-        });
+pub(super) fn admit_canister_role_name(role: &str) -> Result<(), FleetConfigError> {
+    validate_canister_role_name(role).map_err(|issue| FleetConfigError::InvalidName {
+        field: FleetConfigNameField::Role,
+        issue: map_canister_role_name_issue(issue),
+        value: role.to_string(),
+    })
+}
+
+const fn map_canister_role_name_issue(issue: CanisterRoleNameIssue) -> FleetConfigNameIssue {
+    match issue {
+        CanisterRoleNameIssue::Empty => FleetConfigNameIssue::Empty,
+        CanisterRoleNameIssue::InvalidSnakeCase => FleetConfigNameIssue::InvalidSnakeCase,
+        CanisterRoleNameIssue::TooLong { max_bytes } => FleetConfigNameIssue::TooLong { max_bytes },
     }
-    if !role
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-    {
-        return Err(FleetConfigError::InvalidName {
-            field: FleetConfigNameField::Role,
-            issue: FleetConfigNameIssue::InvalidCharacters,
-            value: role.to_string(),
-        });
-    }
-    Ok(())
 }
 
 pub(super) fn validate_subnet_name(subnet: &str) -> Result<(), FleetConfigError> {

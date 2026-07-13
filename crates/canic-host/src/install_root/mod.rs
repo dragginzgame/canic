@@ -9,6 +9,7 @@ use thiserror::Error as ThisError;
 mod activation;
 mod artifact_promotion;
 mod build_environment;
+mod build_snapshot;
 mod build_targets;
 mod capabilities;
 mod clock;
@@ -39,6 +40,7 @@ mod truth_check;
 use activation::run_root_activation_phases;
 use artifact_promotion::write_artifact_promotion_execution_receipt_for_install;
 use build_environment::resolve_install_build_context;
+use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
     current_canic_project_root, discover_canic_config_choices, discover_canic_project_root_from,
     discover_project_canic_config_choices, project_fleet_roots,
@@ -133,9 +135,10 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
         options.config_path.as_deref(),
         options.interactive_config_selection,
     )?;
-    let build_context =
-        current_install_build_context(&workspace_root, &icp_root, &config_path, &options)?;
-    let (fleet_name, deployment_name) = resolve_install_identity(&options, &config_path)?;
+    let (build_context, install_snapshot) =
+        current_install_build_inputs(&workspace_root, &icp_root, &config_path, &options)?;
+    let (fleet_name, deployment_name) =
+        resolve_install_identity(&options, &config_path, &install_snapshot.fleet_name)?;
     let total_started_at = Instant::now();
     let mut timings = CurrentInstallTimingSummary::default();
     let network = options.network.as_str();
@@ -146,24 +149,24 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     println!();
     let prepared = prepare_install_deployment_truth(
         &options,
-        &workspace_root,
         &icp_root,
         &config_path,
         &deployment_name,
         &execution_context,
         &build_context,
+        &install_snapshot,
     )?;
     timings.create_canisters = prepared.timings.create_canisters;
     timings.build_all = prepared.timings.build_all;
 
     let (manifest_path, emit_manifest_duration) = emit_manifest_with_deployment_truth_receipt(
-        &workspace_root,
         &icp_root,
         &options,
-        &config_path,
         &deployment_name,
         &prepared.deployment_truth_check,
         &execution_context,
+        &install_snapshot,
+        &prepared.build_outputs,
     )?;
     timings.emit_manifest = emit_manifest_duration;
     let activation_timings = run_root_activation_phases(
@@ -225,18 +228,30 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-fn current_install_build_context(
+fn current_install_build_inputs(
     workspace_root: &std::path::Path,
     icp_root: &std::path::Path,
     config_path: &std::path::Path,
     options: &InstallRootOptions,
-) -> Result<crate::canister_build::WorkspaceBuildContext, Box<dyn std::error::Error>> {
-    resolve_install_build_context(
+) -> Result<
+    (
+        crate::canister_build::WorkspaceBuildContext,
+        build_snapshot::ValidatedInstallSnapshot,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let context = resolve_install_build_context(
         workspace_root,
         icp_root,
         config_path,
         &options.network,
         &options.root_build_target,
         options.build_profile,
-    )
+    )?;
+    let snapshot = resolve_install_snapshot(
+        &context,
+        &options.root_build_target,
+        options.deployment_plan_override.is_some(),
+    )?;
+    Ok((context, snapshot))
 }

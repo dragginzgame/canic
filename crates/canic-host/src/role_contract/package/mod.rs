@@ -99,6 +99,16 @@ pub fn validate_declared_role_package(
             ));
         }
     };
+    validate_declared_role_package_from_config(config_path, &config, role, mode)
+}
+
+#[must_use]
+pub fn validate_declared_role_package_from_config(
+    config_path: &Path,
+    config: &canic_core::bootstrap::compiled::ConfigModel,
+    role: &CanisterRole,
+    mode: PackageValidationMode,
+) -> RolePackageValidation {
     let Some(declaration) = config.roles.get(role) else {
         return RolePackageValidation::Unsupported(RoleContractFinding::RoleUnknown {
             role: role.clone(),

@@ -1,5 +1,7 @@
+use super::build_snapshot::InstallBuildTarget;
 use crate::canister_build::{
-    WorkspaceBuildContext, build_workspace_canister_artifact, workspace_build_context_once,
+    CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext,
+    build_workspace_canister_artifact_from_spec, workspace_build_context_once,
 };
 use crate::format::wasm_size_label;
 use crate::table::{ColumnAlign, render_separator, render_table_row, table_widths};
@@ -11,8 +13,8 @@ use std::{
 
 pub(super) fn run_canic_build_targets(
     context: &WorkspaceBuildContext,
-    targets: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
+    targets: &[InstallBuildTarget],
+) -> Result<Vec<CurrentCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
     if workspace_build_context_once(context)? {
         for line in context.lines() {
             println!("{line}");
@@ -33,7 +35,7 @@ pub(super) fn run_canic_build_targets(
         .iter()
         .map(|target| {
             [
-                target.clone(),
+                target.role.clone(),
                 progress_bar(targets.len(), targets.len(), 10),
                 "000.00 MiB (gz 000.00 MiB)".to_string(),
                 "0.00s".to_string(),
@@ -50,24 +52,30 @@ pub(super) fn run_canic_build_targets(
     println!("{}", render_table_row(&headers, &widths, &alignments));
     println!("{}", render_separator(&widths));
 
+    let mut outputs = Vec::with_capacity(targets.len());
     for (index, target) in targets.iter().enumerate() {
         let started_at = Instant::now();
-        let output = build_workspace_canister_artifact(&context.with_role(target))
-            .map_err(|err| format!("artifact build failed for {target}: {err}"))?;
+        let target_context = context.with_role(&target.role);
+        let output = build_workspace_canister_artifact_from_spec(&target_context, &target.spec)
+            .map_err(|err| format!("artifact build failed for {}: {err}", target.role))?;
         let elapsed = started_at.elapsed();
         let artifact_size = wasm_artifact_size(&output.wasm_path, &output.wasm_gz_path)?;
 
         let row = [
-            target.clone(),
+            target.role.clone(),
             progress_bar(index + 1, targets.len(), 10),
             artifact_size,
             format!("{:.2}s", elapsed.as_secs_f64()),
         ];
         println!("{}", render_table_row(&row, &widths, &alignments));
+        outputs.push(CurrentCanisterArtifactBuildOutput {
+            role: target.role.clone(),
+            output,
+        });
     }
 
     println!();
-    Ok(())
+    Ok(outputs)
 }
 
 pub(super) fn planned_build_artifact_root(icp_root: &Path) -> PathBuf {

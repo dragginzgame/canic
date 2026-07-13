@@ -5,16 +5,19 @@
 //! Boundary: admits one exact identity and artifact-shape contract for every consumer.
 
 use crate::{
-    durable_io::write_bytes,
-    release_set::{
-        build_release_set_entry, config_path, configured_release_roles, load_root_package_version,
-        resolve_artifact_root, root_release_set_manifest_path, workspace_manifest_path,
-    },
-    role_contract::{declared_role_manifest_path, finding_detail},
+    canister_build::CurrentCanisterArtifactBuildOutput, durable_io::write_bytes,
+    release_set::build_release_set_entry,
 };
-use std::{collections::BTreeSet, fs, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::{Path, PathBuf},
+};
 
-use canic_core::{CANIC_WASM_CHUNK_BYTES, cdk::utils::hash::decode_hex};
+use canic_core::{
+    CANIC_WASM_CHUNK_BYTES, bootstrap::compiled::validate_canister_role_name,
+    cdk::utils::hash::decode_hex,
+};
 use serde::{Deserialize, Serialize};
 
 const SHA_256_BYTES: usize = 32;
@@ -44,6 +47,23 @@ pub struct ReleaseSetEntry {
     pub chunk_sha256_hex: Vec<String>,
 }
 
+/// One required complete-build target and its exact admitted gzip path.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootReleaseSetBuildTarget {
+    pub(crate) role: String,
+    pub(crate) expected_wasm_gz_path: PathBuf,
+    pub(crate) publish_entry: bool,
+}
+
+/// Immutable manifest inputs derived before the complete build starts.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RootReleaseSetBuildSnapshot {
+    pub(crate) icp_root: PathBuf,
+    pub(crate) manifest_path: PathBuf,
+    pub(crate) release_version: String,
+    pub(crate) targets: Vec<RootReleaseSetBuildTarget>,
+}
+
 /// Validate the canonical manifest contract shared by writers, loaders, and
 /// staging.
 pub fn validate_root_release_set_manifest(
@@ -55,9 +75,8 @@ pub fn validate_root_release_set_manifest(
 
     let mut roles = BTreeSet::new();
     for entry in &manifest.entries {
-        if entry.role.trim().is_empty() {
-            return Err("release-set manifest role must not be empty".into());
-        }
+        validate_canister_role_name(&entry.role)
+            .map_err(|issue| format!("invalid release-set role {:?}: {issue}", entry.role))?;
         if !roles.insert(entry.role.as_str()) {
             return Err(format!("duplicate release-set role: {}", entry.role).into());
         }
@@ -125,83 +144,59 @@ fn validate_sha256_hex(value: &str, field: &str) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
-// Build and persist the current root release-set manifest from built `.wasm.gz` artifacts.
-pub fn emit_root_release_set_manifest(
-    workspace_root: &Path,
-    icp_root: &Path,
-    network: &str,
-) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let config_path = config_path(workspace_root);
-    emit_root_release_set_manifest_with_config(workspace_root, icp_root, network, &config_path)
-}
-
-// Build and persist the current root release-set manifest with an explicit config path.
-pub fn emit_root_release_set_manifest_with_config(
-    workspace_root: &Path,
-    icp_root: &Path,
-    network: &str,
-    config_path: &Path,
-) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
-    let manifest_path = root_release_set_manifest_path(&artifact_root)?;
-    let root_manifest_path =
-        declared_role_manifest_path(config_path, &canic_core::ids::CanisterRole::ROOT)
-            .map_err(|finding| finding_detail(&finding))?;
-    let release_version = load_root_package_version(
-        &root_manifest_path,
-        &workspace_manifest_path(workspace_root),
-    )?;
-    let entries = configured_release_roles(config_path)?
-        .into_iter()
-        .map(|role_name| build_release_set_entry(icp_root, &artifact_root, &role_name))
-        .collect::<Result<Vec<_>, _>>()?;
-    let manifest = RootReleaseSetManifest {
-        release_version,
-        entries,
-    };
-
-    validate_root_release_set_manifest(&manifest)?;
-    write_bytes(&manifest_path, &serde_json::to_vec_pretty(&manifest)?)?;
-    Ok(manifest_path)
-}
-
-// Emit the root release-set manifest only once every required ordinary artifact exists.
-pub fn emit_root_release_set_manifest_if_ready(
-    workspace_root: &Path,
-    icp_root: &Path,
-    network: &str,
-) -> Result<Option<std::path::PathBuf>, Box<dyn std::error::Error>> {
-    let config_path = config_path(workspace_root);
-    emit_root_release_set_manifest_if_ready_with_config(
-        workspace_root,
-        icp_root,
-        network,
-        &config_path,
-    )
-}
-
-// Emit the root release-set manifest using an explicit config path once every
-// required ordinary artifact exists.
-pub fn emit_root_release_set_manifest_if_ready_with_config(
-    workspace_root: &Path,
-    icp_root: &Path,
-    network: &str,
-    config_path: &Path,
-) -> Result<Option<std::path::PathBuf>, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
-    let roles = configured_release_roles(config_path)?;
-
-    for role_name in roles {
-        let artifact_path = artifact_root
-            .join(&role_name)
-            .join(format!("{role_name}.wasm.gz"));
-        if !artifact_path.is_file() {
-            return Ok(None);
+// Publish one manifest only from the exact outputs returned by this complete build.
+pub fn emit_root_release_set_manifest_from_build(
+    snapshot: &RootReleaseSetBuildSnapshot,
+    outputs: &[CurrentCanisterArtifactBuildOutput],
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut expected = BTreeMap::<&str, &RootReleaseSetBuildTarget>::new();
+    for target in &snapshot.targets {
+        if expected.insert(&target.role, target).is_some() {
+            return Err(format!("duplicate required build target: {}", target.role).into());
         }
     }
 
-    emit_root_release_set_manifest_with_config(workspace_root, icp_root, network, config_path)
-        .map(Some)
+    let mut current = BTreeMap::<&str, &CurrentCanisterArtifactBuildOutput>::new();
+    for output in outputs {
+        if current.insert(&output.role, output).is_some() {
+            return Err(format!("duplicate current build output: {}", output.role).into());
+        }
+        if !expected.contains_key(output.role.as_str()) {
+            return Err(format!("unexpected current build output: {}", output.role).into());
+        }
+    }
+
+    let mut entries = Vec::new();
+    for target in &snapshot.targets {
+        let output = current
+            .get(target.role.as_str())
+            .ok_or_else(|| format!("missing current build output: {}", target.role))?;
+        if output.output.wasm_gz_path != target.expected_wasm_gz_path {
+            return Err(format!(
+                "current build output path mismatch for {}: expected {}, got {}",
+                target.role,
+                target.expected_wasm_gz_path.display(),
+                output.output.wasm_gz_path.display()
+            )
+            .into());
+        }
+        if target.publish_entry {
+            entries.push(build_release_set_entry(
+                &snapshot.icp_root,
+                &target.role,
+                &output.output.wasm_gz_path,
+            )?);
+        }
+    }
+
+    let manifest = RootReleaseSetManifest {
+        release_version: snapshot.release_version.clone(),
+        entries,
+    };
+    validate_root_release_set_manifest(&manifest)?;
+    let bytes = serde_json::to_vec_pretty(&manifest)?;
+    write_bytes(&snapshot.manifest_path, &bytes)?;
+    Ok(snapshot.manifest_path.clone())
 }
 
 // Load one previously emitted root release-set manifest from disk.
@@ -221,6 +216,12 @@ pub fn load_root_release_set_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        canister_build::{CanisterArtifactBuildOutput, CurrentCanisterArtifactBuildOutput},
+        test_support::temp_dir,
+    };
+    use flate2::{Compression, write::GzEncoder};
+    use std::io::Write;
 
     fn manifest() -> RootReleaseSetManifest {
         RootReleaseSetManifest {
@@ -238,8 +239,14 @@ mod tests {
     }
 
     #[test]
-    fn release_set_manifest_identity_accepts_canonical_role() {
-        assert!(validate_root_release_set_manifest(&manifest()).is_ok());
+    fn release_set_manifest_identity_accepts_canonical_roles() {
+        for role in ["a", "app", "app2", "user_hub", "scale_replica", "role_2"] {
+            let mut manifest = manifest();
+            manifest.entries[0].role = role.to_string();
+            manifest.entries[0].template_id = format!("embedded:{role}");
+
+            assert!(validate_root_release_set_manifest(&manifest).is_ok());
+        }
     }
 
     #[test]
@@ -259,6 +266,32 @@ mod tests {
         manifest.entries.push(manifest.entries[0].clone());
 
         assert!(validate_root_release_set_manifest(&manifest).is_err());
+    }
+
+    #[test]
+    fn release_set_manifest_identity_rejects_unadmitted_roles() {
+        let overlong = "a".repeat(canic_core::bootstrap::compiled::NAME_MAX_BYTES + 1);
+        for role in [
+            "-app",
+            "App",
+            "_app",
+            "1app",
+            "user-hub",
+            "app_",
+            "app__worker",
+            "../sentinel",
+            "app/name",
+            "app.name",
+            "app name",
+            "café",
+            &overlong,
+        ] {
+            let mut manifest = manifest();
+            manifest.entries[0].role = role.to_string();
+            manifest.entries[0].template_id = format!("embedded:{role}");
+
+            assert!(validate_root_release_set_manifest(&manifest).is_err());
+        }
     }
 
     #[test]
@@ -297,5 +330,119 @@ mod tests {
 
         assert!(validate_root_release_set_manifest(&payload_hash).is_err());
         assert!(validate_root_release_set_manifest(&chunk_hash).is_err());
+    }
+
+    #[test]
+    fn complete_build_manifest_preserves_snapshot_order() {
+        let root = temp_dir("canic-complete-build-manifest-order");
+        let snapshot = build_snapshot(&root, &["user_hub", "app"]);
+        write_gzip_wasm(&expected_gzip_path(&root, "user_hub"));
+        write_gzip_wasm(&expected_gzip_path(&root, "app"));
+        let outputs = vec![
+            build_output(&root, "app"),
+            build_output(&root, "root"),
+            build_output(&root, "user_hub"),
+        ];
+
+        let manifest_path =
+            emit_root_release_set_manifest_from_build(&snapshot, &outputs).expect("emit manifest");
+        let manifest = load_root_release_set_manifest(&manifest_path).expect("load manifest");
+
+        fs::remove_dir_all(&root).expect("remove temp root");
+        assert_eq!(
+            manifest
+                .entries
+                .iter()
+                .map(|entry| entry.role.as_str())
+                .collect::<Vec<_>>(),
+            ["user_hub", "app"]
+        );
+    }
+
+    #[test]
+    fn rejected_complete_build_outputs_leave_existing_manifest_unchanged() {
+        let root = temp_dir("canic-complete-build-manifest-rejection");
+        let snapshot = build_snapshot(&root, &["app"]);
+        fs::create_dir_all(snapshot.manifest_path.parent().expect("manifest parent"))
+            .expect("create manifest parent");
+        let previous = b"previous manifest bytes";
+
+        let root_output = build_output(&root, "root");
+        let app_output = build_output(&root, "app");
+        let wrong_path_output = CurrentCanisterArtifactBuildOutput {
+            role: "app".to_string(),
+            output: CanisterArtifactBuildOutput {
+                wasm_gz_path: root.join("wrong/app.wasm.gz"),
+                ..app_output.output.clone()
+            },
+        };
+        let cases = vec![
+            vec![root_output.clone()],
+            vec![root_output.clone(), app_output.clone(), app_output.clone()],
+            vec![
+                root_output.clone(),
+                app_output.clone(),
+                build_output(&root, "unexpected"),
+            ],
+            vec![root_output.clone(), wrong_path_output],
+            vec![root_output, app_output],
+        ];
+
+        for outputs in cases {
+            fs::write(&snapshot.manifest_path, previous).expect("restore previous manifest");
+            assert!(emit_root_release_set_manifest_from_build(&snapshot, &outputs).is_err());
+            assert_eq!(
+                fs::read(&snapshot.manifest_path).expect("read preserved manifest"),
+                previous
+            );
+        }
+
+        fs::remove_dir_all(&root).expect("remove temp root");
+    }
+
+    fn build_snapshot(root: &Path, release_roles: &[&str]) -> RootReleaseSetBuildSnapshot {
+        let mut targets = vec![RootReleaseSetBuildTarget {
+            role: "root".to_string(),
+            expected_wasm_gz_path: expected_gzip_path(root, "root"),
+            publish_entry: false,
+        }];
+        targets.extend(release_roles.iter().map(|role| RootReleaseSetBuildTarget {
+            role: (*role).to_string(),
+            expected_wasm_gz_path: expected_gzip_path(root, role),
+            publish_entry: true,
+        }));
+        RootReleaseSetBuildSnapshot {
+            icp_root: root.to_path_buf(),
+            manifest_path: root.join(".icp/local/canisters/root/root.release-set.json"),
+            release_version: "test-version".to_string(),
+            targets,
+        }
+    }
+
+    fn build_output(root: &Path, role: &str) -> CurrentCanisterArtifactBuildOutput {
+        let artifact_root = root.join(".icp/local/canisters").join(role);
+        CurrentCanisterArtifactBuildOutput {
+            role: role.to_string(),
+            output: CanisterArtifactBuildOutput {
+                wasm_path: artifact_root.join(format!("{role}.wasm")),
+                wasm_gz_path: artifact_root.join(format!("{role}.wasm.gz")),
+                did_path: artifact_root.join(format!("{role}.did")),
+                artifact_root,
+            },
+        }
+    }
+
+    fn expected_gzip_path(root: &Path, role: &str) -> PathBuf {
+        root.join(".icp/local/canisters")
+            .join(role)
+            .join(format!("{role}.wasm.gz"))
+    }
+
+    fn write_gzip_wasm(path: &Path) {
+        fs::create_dir_all(path.parent().expect("artifact parent"))
+            .expect("create artifact parent");
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(b"\0asm\x01\0\0\0").expect("encode wasm");
+        fs::write(path, encoder.finish().expect("finish gzip")).expect("write gzip wasm");
     }
 }

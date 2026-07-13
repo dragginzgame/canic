@@ -4,9 +4,9 @@ Last updated: 2026-07-13
 
 ## Current State
 
-`0.90.1` published the hard-cut Canic primitive. The current Canic-only slice
-adds the focused downstream-adapter conformance proof and handoff needed before
-Toko developers adopt the API from a published release.
+`0.90.2` publishes the complete hard-cut Canic primitive, focused
+downstream-adapter conformance proof, and handoff. The Canic-owned line is
+closed; Toko developers can now adopt the API from the published release.
 
 The published Canic core primitive uses
 the existing 32-byte `OperationId`, opaque payload bindings, bounded terminal
@@ -16,11 +16,11 @@ its stable map header is the exact admission count. Existing local intent
 records, totals, pending index, metadata, and encodings remain on IDs
 39 through 42 unchanged.
 
-The persisted resource aggregate is now the single accounting authority.
-Receipt-backed rows contribute to that aggregate but never enter the local TTL
-index or change its maintained pending count, so they cannot start or retain
-cleanup. This reuses existing metadata and removes the migration proposed by
-the design draft.
+The persisted resource aggregate is the single accounting authority.
+Receipt-backed rows contribute to its `pending_count`, but never enter the
+local TTL index or change the metadata's expirable-pending count, so they cannot
+start or retain cleanup. This reuses existing metadata and avoids another
+aggregate migration.
 
 `CallBuilder::with_intent`, `IntentReservation`, and `IntentKey` remain
 hard-cut. The focused intent fixture now reports exact begin and settlement
@@ -103,7 +103,10 @@ publication of the Canic conformance slice.
 
 ## Next Action
 
-The Canic conformance slice is ready for review and release-note preparation.
-After the compatible patch is published, the Toko developers own the
-downstream mint adapter and its domain tests. Do not widen Canic into a generic
-effect, receipt, resolver, or recovery framework.
+The Canic line is closed at published `v0.90.2`; the focused closeout audit
+passes without a correction. Toko developers now own the downstream mint
+adapter and its domain tests. Do not widen Canic into a generic effect,
+receipt, resolver, or recovery framework.
+
+Multi-step claim orchestration is deferred to a separately accepted future
+design. No numbered release line is reserved for it.

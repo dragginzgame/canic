@@ -11,18 +11,23 @@ mod subnet;
 
 use crate::{
     config::schema::{
-        CanisterKind, ConfigModel, ConfigSchemaError, NAME_MAX_BYTES, RoleDeclarationKind, Validate,
+        CanisterKind, ConfigModel, ConfigSchemaError, NAME_MAX_BYTES, RoleDeclarationKind,
+        Validate, validate_canister_role_name,
     },
     ids::{CanisterRole, SubnetRole},
 };
 
-fn validate_canister_role_len(role: &CanisterRole, context: &str) -> Result<(), ConfigSchemaError> {
-    if role.as_ref().len() > NAME_MAX_BYTES {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "{context} '{role}' exceeds {NAME_MAX_BYTES} bytes",
-        )));
-    }
-    Ok(())
+fn validate_canister_role(
+    role: &CanisterRole,
+    context: &'static str,
+) -> Result<(), ConfigSchemaError> {
+    validate_canister_role_name(role.as_str()).map_err(|issue| {
+        ConfigSchemaError::InvalidCanisterRoleName {
+            context,
+            role: role.to_string(),
+            issue,
+        }
+    })
 }
 
 fn validate_subnet_role_len(role: &SubnetRole, context: &str) -> Result<(), ConfigSchemaError> {
@@ -91,7 +96,7 @@ impl Validate for ConfigModel {
         }
 
         for canister_role in &self.app_index {
-            validate_canister_role_len(canister_role, "app index canister")?;
+            validate_canister_role(canister_role, "app index canister")?;
 
             let canister_cfg = prime_subnet.canisters.get(canister_role).ok_or_else(|| {
                 ConfigSchemaError::ValidationError(format!(
@@ -140,7 +145,7 @@ fn validate_role_declarations(config: &ConfigModel) -> Result<(), ConfigSchemaEr
     }
 
     for (role, declaration) in &config.roles {
-        validate_canister_role_len(role, "role declaration")?;
+        validate_canister_role(role, "role declaration")?;
 
         if role.is_root() && declaration.kind != RoleDeclarationKind::Root {
             return Err(ConfigSchemaError::ValidationError(

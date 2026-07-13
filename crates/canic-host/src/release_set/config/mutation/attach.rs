@@ -1,7 +1,7 @@
 use super::{
     AttachedFleetRoleSource,
     support::{
-        toml_string_literal, validate_attach_kind, validate_role_name, validate_subnet_name,
+        admit_canister_role_name, toml_string_literal, validate_attach_kind, validate_subnet_name,
     },
 };
 use crate::release_set::config::{
@@ -20,7 +20,7 @@ pub(in crate::release_set) fn attach_fleet_role_source(
     let role = role.trim();
     let subnet = subnet.trim();
     let kind = kind.trim();
-    validate_role_name(role)?;
+    admit_canister_role_name(role)?;
     validate_subnet_name(subnet)?;
     validate_attach_kind(kind)?;
     if role == "root" {

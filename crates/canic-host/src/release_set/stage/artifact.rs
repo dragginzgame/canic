@@ -17,12 +17,9 @@ use flate2::read::GzDecoder;
 // Build one release-set entry from one built ordinary role artifact.
 pub(in crate::release_set) fn build_release_set_entry(
     icp_root: &Path,
-    artifact_root: &Path,
     role_name: &str,
+    artifact_path: &Path,
 ) -> Result<ReleaseSetEntry, Box<dyn std::error::Error>> {
-    let artifact_path = artifact_root
-        .join(role_name)
-        .join(format!("{role_name}.wasm.gz"));
     let artifact_relative_path = artifact_path
         .strip_prefix(icp_root)
         .map_err(|_| {

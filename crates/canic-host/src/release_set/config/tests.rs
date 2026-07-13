@@ -99,7 +99,7 @@ fn fleet_mutation_failures_are_classified_without_rendered_text() {
             .expect_err("invalid role must fail"),
         FleetConfigError::InvalidName {
             field: FleetConfigNameField::Role,
-            issue: FleetConfigNameIssue::InvalidCharacters,
+            issue: FleetConfigNameIssue::InvalidSnakeCase,
             ..
         }
     ));
@@ -127,6 +127,42 @@ fn fleet_mutation_failures_are_classified_without_rendered_text() {
             conflict: FleetConfigMutationConflict::RoleAlreadyDeclared { .. }
         }
     ));
+}
+
+#[test]
+fn fleet_mutations_use_canonical_canister_role_admission() {
+    let declare_error = declare_fleet_role_source(CONFIG, "demo", "user-hub", "store")
+        .expect_err("kebab-case declaration must fail");
+    let attach_error = attach_fleet_role_source(CONFIG, "demo", "Store", "prime", "service")
+        .expect_err("mixed-case attachment must fail");
+    let rename_error =
+        rename_fleet_role_source(CONFIG, Path::new("canic.toml"), "demo", "store", "store_")
+            .expect_err("trailing-underscore rename must fail");
+
+    for error in [declare_error, attach_error, rename_error] {
+        assert!(matches!(
+            error,
+            FleetConfigError::InvalidName {
+                field: FleetConfigNameField::Role,
+                issue: FleetConfigNameIssue::InvalidSnakeCase,
+                ..
+            }
+        ));
+    }
+
+    let long_role = "a".repeat(canic_core::bootstrap::compiled::NAME_MAX_BYTES + 1);
+    assert!(matches!(
+        declare_fleet_role_source(CONFIG, "demo", &long_role, "store")
+            .expect_err("overlong declaration must fail"),
+        FleetConfigError::InvalidName {
+            field: FleetConfigNameField::Role,
+            issue: FleetConfigNameIssue::TooLong { max_bytes },
+            ..
+        } if max_bytes == canic_core::bootstrap::compiled::NAME_MAX_BYTES
+    ));
+
+    declare_fleet_role_source(CONFIG, "demo", "new_role", "store")
+        .expect("canonical role should be admitted");
 }
 
 #[test]

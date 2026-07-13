@@ -87,14 +87,24 @@ impl Display for FleetConfigNameField {
 pub enum FleetConfigNameIssue {
     Empty,
     InvalidCharacters,
+    InvalidSnakeCase,
+    TooLong { max_bytes: usize },
 }
 
 impl Display for FleetConfigNameIssue {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::Empty => "must not be empty",
-            Self::InvalidCharacters => "must contain only ASCII letters, numbers, '_' or '-'",
-        })
+        match self {
+            Self::Empty => formatter.write_str("must not be empty"),
+            Self::InvalidCharacters => formatter.write_str(
+                "must begin with an ASCII letter, number, or '_' and contain only ASCII letters, numbers, '_' or '-'",
+            ),
+            Self::InvalidSnakeCase => formatter.write_str(
+                "must use lowercase snake_case beginning with an ASCII letter, with nonempty lowercase alphanumeric words separated by single '_' characters",
+            ),
+            Self::TooLong { max_bytes } => {
+                write!(formatter, "must not exceed {max_bytes} bytes")
+            }
+        }
     }
 }
 

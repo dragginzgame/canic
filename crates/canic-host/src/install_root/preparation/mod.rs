@@ -1,4 +1,5 @@
 use super::build_environment::ensure_icp_environment_ready;
+use super::build_snapshot::ValidatedInstallSnapshot;
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
 };
@@ -10,9 +11,8 @@ use super::phase_receipts::{
 use super::plan_artifacts::validate_plan_artifacts_with_phase;
 use super::timing::InstallTimingSummary;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
-use crate::canister_build::WorkspaceBuildContext;
+use crate::canister_build::{CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext};
 use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1};
-use crate::release_set::configured_install_targets;
 use std::{
     path::Path,
     time::{Duration, Instant},
@@ -22,16 +22,17 @@ pub(super) struct PreparedInstallTruth {
     pub(super) root_canister_id: String,
     pub(super) deployment_truth_check: DeploymentCheckV1,
     pub(super) timings: InstallTimingSummary,
+    pub(super) build_outputs: Vec<CurrentCanisterArtifactBuildOutput>,
 }
 
 pub(super) fn prepare_install_deployment_truth(
     options: &InstallRootOptions,
-    workspace_root: &Path,
     icp_root: &Path,
     config_path: &Path,
     deployment_name: &str,
     execution_context: &DeploymentExecutionContextV1,
     build_context: &WorkspaceBuildContext,
+    install_snapshot: &ValidatedInstallSnapshot,
 ) -> Result<PreparedInstallTruth, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
     ensure_current_install_executor_capabilities(execution_context)?;
@@ -40,13 +41,13 @@ pub(super) fn prepare_install_deployment_truth(
         resolve_root_canister_with_phase(options, icp_root, config_path, build_context)?;
     timings.create_canisters = create_duration;
 
-    let (build_phase, build_duration) =
-        build_install_targets_with_phase(options, build_context, icp_root, config_path)?;
+    let (build_phase, build_duration, build_outputs) =
+        build_install_targets_with_phase(options, build_context, icp_root, install_snapshot)?;
     timings.build_all = build_duration;
 
     let deployment_truth_check = run_install_deployment_truth_safety_gate(
         options,
-        workspace_root,
+        &build_context.workspace_root,
         icp_root,
         config_path,
         deployment_name,
@@ -66,6 +67,7 @@ pub(super) fn prepare_install_deployment_truth(
         root_canister_id,
         deployment_truth_check,
         timings,
+        build_outputs,
     })
 }
 
@@ -101,17 +103,29 @@ fn build_install_targets_with_phase(
     options: &InstallRootOptions,
     build_context: &WorkspaceBuildContext,
     icp_root: &Path,
-    config_path: &Path,
-) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
+    install_snapshot: &ValidatedInstallSnapshot,
+) -> Result<
+    (
+        CompletedInstallPhase,
+        Duration,
+        Vec<CurrentCanisterArtifactBuildOutput>,
+    ),
+    Box<dyn std::error::Error>,
+> {
     if let Some(plan) = &options.deployment_plan_override {
-        return validate_plan_artifacts_with_phase(plan, icp_root, &options.network);
+        let (phase, duration) =
+            validate_plan_artifacts_with_phase(plan, icp_root, &options.network)?;
+        return Ok((phase, duration, Vec::new()));
     }
 
-    let build_targets = configured_install_targets(config_path, &options.root_build_target)?;
-    let operation = BuildInstallTargetsOperation::new(build_context, build_targets);
+    let complete_build = install_snapshot
+        .complete_build
+        .as_ref()
+        .ok_or_else(|| "normal install is missing its complete-build snapshot".to_string())?;
+    let operation = BuildInstallTargetsOperation::new(build_context, &complete_build.targets);
     let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
-    operation.execute()?;
+    let outputs = operation.execute()?;
     let duration = started.elapsed();
     let phase = CompletedInstallPhase {
         phase: InstallPhaseLabel::BUILD_ARTIFACTS,
@@ -121,5 +135,5 @@ fn build_install_targets_with_phase(
         evidence: operation.evidence(),
         role_names: operation.role_names(),
     };
-    Ok((phase, duration))
+    Ok((phase, duration, outputs))
 }

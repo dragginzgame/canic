@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.91.x] - 2026-07-13 - Role Admission and Complete-Build Manifests
+
+Detailed patch breakdown: [docs/changelog/0.91.md](docs/changelog/0.91.md)
+
+- `0.91.0` is potentially breaking: it admits only lowercase snake_case
+  canister roles and hard-cuts filesystem-readiness manifest publication so a
+  root release set can authorize only one complete install build's outputs.
+
 ## [0.90.x] - 2026-07-13 - Receipt-Backed Intent Reconciliation
 
 Detailed patch breakdown: [docs/changelog/0.90.md](docs/changelog/0.90.md)
@@ -19,12 +27,11 @@ Detailed patch breakdown: [docs/changelog/0.90.md](docs/changelog/0.90.md)
   settlement on the existing resource authority, and hard-cuts automatic
   call-builder intent orchestration in favor of explicit local operations.
 
-- `0.90.0` reserves a hard-cut receipt-backed intent MVP: Canic owns only
-  generic reservation identity and at-most-once local settlement, while Toko
-  owns mint as the first consumer. It removes generic call-builder intent
-  semantics without adding a generic effect framework, successful-path receipt
-  call, or background work. This is design scope only and changes no runtime
-  behavior.
+- `0.90.0` reserves a hard-cut receipt-backed intent MVP: Canic owns generic
+  reservation identity and at-most-once local settlement, Toko owns mint as
+  the first consumer, and multi-step claims require a separately accepted
+  future design rather than a reserved release number. This is design scope
+  only and changes no runtime behavior.
 
 ## [0.89.x] - 2026-07-13 - Deployment Evidence and Surface Truth
 

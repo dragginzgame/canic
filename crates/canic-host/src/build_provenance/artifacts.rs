@@ -26,15 +26,6 @@ pub(super) fn artifact_provenance(
         ArtifactProvenanceKindV1::Candid,
         &request.output.did_path,
     )?;
-    if let Some(path) = &request.output.manifest_path {
-        push_existing_artifact(
-            &mut artifacts,
-            request,
-            ArtifactProvenanceKindV1::Metadata,
-            path,
-        )?;
-    }
-
     Ok(artifacts)
 }
 

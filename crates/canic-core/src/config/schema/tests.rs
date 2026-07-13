@@ -93,6 +93,99 @@ fn fleet_name_is_required() {
 }
 
 #[test]
+fn canister_role_name_admission_accepts_canonical_segments() {
+    for role in ["a", "app", "app2", "user_hub", "scale_replica", "role_2"] {
+        validate_canister_role_name(role)
+            .unwrap_or_else(|issue| panic!("{role:?} should be admitted: {issue}"));
+    }
+}
+
+#[test]
+fn canister_role_name_admission_rejects_typed_invalid_segments() {
+    for role in [
+        "-",
+        "--help",
+        "-App",
+        "App",
+        "_",
+        "_app",
+        "1app",
+        "app-",
+        "scale-1",
+        "app_",
+        "app__worker",
+        "../sentinel",
+        "app/name",
+        "app.name",
+        "app name",
+        "café",
+    ] {
+        assert_eq!(
+            validate_canister_role_name(role),
+            Err(CanisterRoleNameIssue::InvalidSnakeCase),
+            "{role:?} should be rejected",
+        );
+    }
+    assert_eq!(
+        validate_canister_role_name(""),
+        Err(CanisterRoleNameIssue::Empty),
+    );
+    assert_eq!(
+        validate_canister_role_name(&"a".repeat(NAME_MAX_BYTES + 1)),
+        Err(CanisterRoleNameIssue::TooLong {
+            max_bytes: NAME_MAX_BYTES,
+        }),
+    );
+}
+
+#[test]
+fn complete_config_validation_rejects_unadmitted_role_declarations() {
+    let invalid_roles = [
+        String::new(),
+        "a".repeat(NAME_MAX_BYTES + 1),
+        "-app".to_string(),
+        "App".to_string(),
+        "_app".to_string(),
+        "1app".to_string(),
+        "user-hub".to_string(),
+        "app_".to_string(),
+        "app__worker".to_string(),
+        "app.name".to_string(),
+        "../sentinel".to_string(),
+        "app/name".to_string(),
+        "café".to_string(),
+        "app name".to_string(),
+        "app+worker".to_string(),
+    ];
+
+    for role in invalid_roles {
+        let mut cfg = ConfigModel::test_default();
+        cfg.roles.insert(
+            CanisterRole::owned(role.clone()),
+            RoleDeclaration {
+                kind: RoleDeclarationKind::Canister,
+                package: "app".to_string(),
+            },
+        );
+
+        let error = cfg
+            .validate()
+            .expect_err("unadmitted role declaration should fail");
+        assert!(
+            matches!(
+                error,
+                ConfigSchemaError::InvalidCanisterRoleName {
+                    context: "role declaration",
+                    role: invalid_role,
+                    ..
+                } if invalid_role == role
+            ),
+            "{role:?} should fail canonical config admission",
+        );
+    }
+}
+
+#[test]
 fn test_fleet_configs_validate_with_chain_key_batch_policy() {
     let root = workspace_root();
     for rel_path in [
