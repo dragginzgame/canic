@@ -67,9 +67,8 @@ use crate::release_set::{ReleaseSetEntry, RootReleaseSetManifest, configured_ins
 use crate::test_support::temp_dir;
 use serde_json::json;
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
     time::Duration,
 };
 
@@ -78,8 +77,6 @@ mod config_selection;
 mod install_truth;
 mod readiness_parse;
 mod state_root_verification;
-
-static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 #[test]
 fn named_ic_environment_is_explicit_for_cargo_builds() {
@@ -108,12 +105,6 @@ fn named_ic_environment_is_explicit_for_cargo_builds() {
     assert!(command.get_envs().any(|(key, value)| {
         key == "ICP_ENVIRONMENT" && value.is_some_and(|value| value == "ic")
     }));
-    assert!(
-        command
-            .get_envs()
-            .any(|(key, value)| { key == "CANIC_ICP_BUILD_ENVIRONMENT" && value.is_none() })
-    );
-
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -547,20 +538,4 @@ fn sample_role_promotion_input_for_install(check: &DeploymentCheckV1) -> RolePro
 
 fn sample_sha256(seed: &str) -> String {
     seed.repeat(64)
-}
-
-fn with_guarded_env(run: impl FnOnce()) {
-    let lock = ENV_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().expect("env lock poisoned");
-    run();
-}
-
-fn restore_env_var(key: &str, previous: Option<std::ffi::OsString>) {
-    unsafe {
-        if let Some(value) = previous {
-            env::set_var(key, value);
-        } else {
-            env::remove_var(key);
-        }
-    }
 }

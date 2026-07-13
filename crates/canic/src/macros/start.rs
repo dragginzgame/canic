@@ -15,7 +15,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         ) {
             let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
             let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-            let config_path = env!("CANIC_CONFIG_PATH");
+            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
             (config_model, config_source, config_path)
         }
 
@@ -93,7 +93,7 @@ macro_rules! __canic_start_local_lifecycle_core {
         ) {
             let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
             let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-            let config_path = env!("CANIC_CONFIG_PATH");
+            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
             (config_model, config_source, config_path)
         }
 
@@ -198,7 +198,7 @@ macro_rules! __canic_root_lifecycle_core {
         ) {
             let config_model = include!(env!("CANIC_CONFIG_MODEL_PATH"));
             let config_source = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
-            let config_path = env!("CANIC_CONFIG_PATH");
+            let config_path = env!("CANIC_CONFIG_ORIGIN_PATH");
             (config_model, config_source, config_path)
         }
 

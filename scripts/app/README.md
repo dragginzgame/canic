@@ -91,7 +91,8 @@ This repo's `icp.yaml` uses custom build commands which call the host artifact
 builder directly from the checkout:
 
 ```bash
-CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- <canister>
+CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- \
+  <canister> <debug|fast|release> <workspace-root> <icp-root> <config-path>
 ```
 
 Downstream repos that consume Canic from crates.io should use the installed CLI
@@ -121,14 +122,14 @@ That file remains the canonical published interface for the implicit bootstrap
 `wasm_store` crate and the packaged downstream CLI path.
 
 Ordinary bootstrap builds copy that checked-in DID into `.icp/local`; they do
-not rewrite the checked-in source file unless
-`CANIC_REFRESH_WASM_STORE_DID=1` is set intentionally.
+not rewrite the checked-in source file. Maintainers refresh it explicitly with
+the low-level builder's `--refresh-wasm-store-did` argument.
 
 Profile selection for the builder is:
 - `canic build <fleet> <role> --profile debug|fast|release` when using the
   installed CLI
-- `CANIC_WASM_PROFILE=debug|fast|release` for lower-level host-library or
-  repo-local script paths
+- explicit role, profile, workspace-root, ICP-root, and config-path arguments
+  for the low-level `build_artifact` example
 
 ## Why `.wasm.gz` Exists
 

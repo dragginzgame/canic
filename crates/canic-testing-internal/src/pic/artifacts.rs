@@ -97,6 +97,7 @@ pub(super) fn icp_artifact_ready_with_snapshot(
     watched_inputs: WatchedInputSnapshot,
     network: &str,
     profile: CanicWasmBuildProfile,
+    config_path: &Path,
     extra_env: &[(&str, &str)],
 ) -> bool {
     match fs::metadata(artifact_path) {
@@ -104,7 +105,7 @@ pub(super) fn icp_artifact_ready_with_snapshot(
             watched_inputs
                 .artifact_is_fresh(artifact_path)
                 .unwrap_or(false)
-                && build_stamp_matches(workspace_root, network, profile, extra_env)
+                && build_stamp_matches(workspace_root, network, profile, config_path, extra_env)
         }
         _ => false,
     }
@@ -115,16 +116,23 @@ pub(super) fn build_icp_all_with_env(
     lock_path: &Path,
     network: &str,
     profile: CanicWasmBuildProfile,
+    config_path: &Path,
     extra_env: &[(&str, &str)],
 ) {
-    let output =
-        run_local_artifact_build_with_lock(workspace_root, lock_path, network, profile, extra_env);
+    let output = run_local_artifact_build_with_lock(
+        workspace_root,
+        lock_path,
+        network,
+        profile,
+        config_path,
+        extra_env,
+    );
     assert!(
         output.status.success(),
         "local artifact build failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    write_build_stamp(workspace_root, network, profile, extra_env)
+    write_build_stamp(workspace_root, network, profile, config_path, extra_env)
         .expect("write local artifact build env stamp");
 }
 
@@ -132,16 +140,19 @@ fn build_stamp_matches(
     workspace_root: &Path,
     network: &str,
     profile: CanicWasmBuildProfile,
+    config_path: &Path,
     extra_env: &[(&str, &str)],
 ) -> bool {
-    fs::read_to_string(icp_build_env_stamp_path(workspace_root))
-        .is_ok_and(|current| current == build_stamp_contents(network, profile, extra_env))
+    fs::read_to_string(icp_build_env_stamp_path(workspace_root)).is_ok_and(|current| {
+        current == build_stamp_contents(network, profile, config_path, extra_env)
+    })
 }
 
 fn write_build_stamp(
     workspace_root: &Path,
     network: &str,
     profile: CanicWasmBuildProfile,
+    config_path: &Path,
     extra_env: &[(&str, &str)],
 ) -> io::Result<()> {
     let stamp_path = icp_build_env_stamp_path(workspace_root);
@@ -150,18 +161,20 @@ fn write_build_stamp(
     }
     fs::write(
         stamp_path,
-        build_stamp_contents(network, profile, extra_env),
+        build_stamp_contents(network, profile, config_path, extra_env),
     )
 }
 
 fn build_stamp_contents(
     network: &str,
     profile: CanicWasmBuildProfile,
+    config_path: &Path,
     extra_env: &[(&str, &str)],
 ) -> String {
     let mut lines = vec![
         format!("ICP_ENVIRONMENT={network}"),
-        format!("CANIC_WASM_PROFILE={}", profile.canic_wasm_profile_value()),
+        format!("profile={}", profile.canic_wasm_profile_value()),
+        format!("config_path={}", config_path.display()),
     ];
 
     let mut extra = extra_env.to_vec();
@@ -180,6 +193,7 @@ fn run_local_artifact_build_with_lock(
     lock_file: &Path,
     network: &str,
     profile: CanicWasmBuildProfile,
+    config_path: &Path,
     extra_env: &[(&str, &str)],
 ) -> Output {
     let target_dir = icp_build_target_dir(workspace_root);
@@ -194,9 +208,10 @@ fn run_local_artifact_build_with_lock(
         .arg(lock_file.as_os_str())
         .arg("bash")
         .env("ICP_ENVIRONMENT", network)
-        .env("CANIC_WASM_PROFILE", profile.canic_wasm_profile_value())
         .env("CARGO_TARGET_DIR", &target_dir)
-        .arg(build_ci_wasm_artifacts_script(workspace_root));
+        .arg(build_ci_wasm_artifacts_script(workspace_root))
+        .arg(profile.canic_wasm_profile_value())
+        .arg(config_path);
     for (key, value) in extra_env {
         flock.env(key, value);
     }
@@ -204,7 +219,7 @@ fn run_local_artifact_build_with_lock(
     match flock.output() {
         Ok(output) => output,
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
-            run_local_artifact_build(workspace_root, network, profile, extra_env)
+            run_local_artifact_build(workspace_root, network, profile, config_path, extra_env)
         }
         Err(err) => panic!("failed to run `flock` for local artifact build: {err}"),
     }
@@ -214,6 +229,7 @@ fn run_local_artifact_build(
     workspace_root: &Path,
     network: &str,
     profile: CanicWasmBuildProfile,
+    config_path: &Path,
     extra_env: &[(&str, &str)],
 ) -> Output {
     let target_dir = icp_build_target_dir(workspace_root);
@@ -223,9 +239,10 @@ fn run_local_artifact_build(
     build
         .current_dir(workspace_root)
         .env("ICP_ENVIRONMENT", network)
-        .env("CANIC_WASM_PROFILE", profile.canic_wasm_profile_value())
         .env("CARGO_TARGET_DIR", &target_dir)
-        .arg(build_ci_wasm_artifacts_script(workspace_root));
+        .arg(build_ci_wasm_artifacts_script(workspace_root))
+        .arg(profile.canic_wasm_profile_value())
+        .arg(config_path);
     for (key, value) in extra_env {
         build.env(key, value);
     }

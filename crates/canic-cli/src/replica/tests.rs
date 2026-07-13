@@ -195,17 +195,18 @@ fn maps_missing_project_manifest_error() {
 // Ensure owner parsing keeps the ICP network/environment separate from the project path.
 #[test]
 fn parses_foreign_local_replica_owner() {
-    let owner = extract_foreign_local_owner(
-        "Error: port 8000 is in use by the demo network of the project at '/home/adam/projects/toko'\n",
-    )
-    .expect("parse foreign owner");
+    let error = IcpCommandError::Failed {
+        command: "icp network start local".to_string(),
+        stderr: "Error: port 8000 is in use by the demo network of the project at '/home/adam/projects/toko'\n".to_string(),
+    };
+    let Some(IcpDiagnostic::ForeignLocalReplicaOwner { network, project }) = error.diagnostic()
+    else {
+        panic!("expected foreign replica owner diagnostic");
+    };
 
     assert_eq!(
-        owner,
-        LocalReplicaOwner {
-            network: "demo".to_string(),
-            project: "/home/adam/projects/toko".to_string(),
-        }
+        (network, project),
+        ("demo".to_string(), "/home/adam/projects/toko".to_string())
     );
 }
 

@@ -19,7 +19,10 @@ use crate::{
     version_text,
 };
 use canic_backup::discovery::DiscoveryError;
-use canic_host::{installed_deployment::InstalledDeploymentError, registry::RegistryParseError};
+use canic_host::{
+    icp::IcpCommandError, installed_deployment::InstalledDeploymentError,
+    registry::RegistryParseError,
+};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
@@ -43,8 +46,8 @@ pub enum CyclesCommandError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error("invalid duration {0}; use values like 1h, 6h, 24h, 7d, or 30m")]
     InvalidDuration(String),
@@ -126,9 +129,7 @@ fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesC
         },
         InstalledDeploymentError::InstallState(error) => CyclesCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            CyclesCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => CyclesCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             CyclesCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }

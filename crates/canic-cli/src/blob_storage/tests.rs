@@ -170,10 +170,10 @@ fn json_error_codes_distinguish_candid_and_transport_failures() {
         target: "backend".to_string(),
     }
     .with_json_report("local", "backend");
-    let transport = BlobStorageCommandError::IcpFailed {
+    let transport = BlobStorageCommandError::Icp(IcpCommandError::Failed {
         command: "icp canister call".to_string(),
         stderr: "network unavailable".to_string(),
-    }
+    })
     .with_json_report("local", "backend");
 
     let candid = serde_json::from_str::<serde_json::Value>(
@@ -195,6 +195,18 @@ fn json_error_codes_distinguish_candid_and_transport_failures() {
         model::BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
     );
     assert_eq!(transport["error"]["exit_code"], 2);
+
+    let io = BlobStorageCommandError::Icp(IcpCommandError::Io(std::io::Error::other("sample")))
+        .with_json_report("local", "backend");
+    let io =
+        serde_json::from_str::<serde_json::Value>(&io.json_error_report().expect("I/O error json"))
+            .expect("decode I/O error json");
+
+    assert_eq!(
+        io["error"]["code"],
+        model::BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED
+    );
+    assert_eq!(io["error"]["exit_code"], 1);
 }
 
 #[test]

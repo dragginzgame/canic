@@ -28,8 +28,6 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_children)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_topology_placement)");
     println!("cargo:rustc-check-cfg=cfg(canic_disable_bundle_nonroot_sync_topology)");
-    // If the env var changes, we must re-run to pick up a different config.
-    println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
     println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_METRICS");
 

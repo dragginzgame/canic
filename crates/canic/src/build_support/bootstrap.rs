@@ -41,7 +41,8 @@ pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
     let generated_path = out_dir.join(ROOT_WASM_STORE_BOOTSTRAP_RELEASE_SET_FILE);
     let embedded_asset_path = out_dir.join(ROOT_WASM_STORE_BOOTSTRAP_ASSET_FILE);
     let strict_artifacts =
-        env::var("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS").is_ok_and(|value| value == "1");
+        env::var(canic_core::role_contract::CANONICAL_BUILD_REQUIRE_EMBEDDED_ARTIFACTS_ENV)
+            .is_ok_and(|value| value == canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE);
     let artifact_path = artifact_root
         .join(ROOT_WASM_STORE_BOOTSTRAP_ROLE)
         .join(format!("{ROOT_WASM_STORE_BOOTSTRAP_ROLE}.wasm.gz"));
@@ -50,8 +51,14 @@ pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
     println!("cargo:rerun-if-changed={}", config_path.display());
     println!("cargo:rerun-if-changed={}", artifact_root.display());
     println!("cargo:rerun-if-changed={}", artifact_path.display());
-    println!("cargo:rerun-if-env-changed=CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS");
-    println!("cargo:rerun-if-env-changed=CANIC_ICP_ROOT");
+    println!(
+        "cargo:rerun-if-env-changed={}",
+        canic_core::role_contract::CANONICAL_BUILD_REQUIRE_EMBEDDED_ARTIFACTS_ENV
+    );
+    println!(
+        "cargo:rerun-if-env-changed={}",
+        canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV
+    );
 
     if !artifact_path.is_file() {
         assert!(
@@ -140,7 +147,7 @@ pub fn manifest_declares_workspace(source: &str) -> bool {
 }
 
 fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
-    if let Ok(root) = env::var("CANIC_ICP_ROOT") {
+    if let Ok(root) = env::var(canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV) {
         let icp_root = PathBuf::from(root);
         let network = env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string());
         let network_root = icp_root.join(".icp").join(&network).join("canisters");

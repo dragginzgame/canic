@@ -1,5 +1,6 @@
 mod canister;
 mod command;
+mod diagnostic;
 mod error;
 mod model;
 mod replica;
@@ -12,6 +13,7 @@ pub use command::{
     default_command, default_command_in, ensure_command_compatible,
     existing_local_canister_candid_path, local_canister_candid_path,
 };
+pub use diagnostic::{IcpDiagnostic, classify_icp_diagnostic};
 pub use error::IcpCommandError;
 pub use model::{
     ICP_CLI_SUPPORTED_VERSION_RANGE, IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli,

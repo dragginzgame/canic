@@ -20,8 +20,10 @@ const EMBEDDED_CANISTER_PACKAGES: [&str; 3] = [
     "project_hub_stub",
     "project_instance_stub",
 ];
-const REQUIRE_EMBEDDED_ARTIFACTS_ENV: (&str, &str) =
-    ("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS", "1");
+const REQUIRE_EMBEDDED_ARTIFACTS_ENV: (&str, &str) = (
+    canic_core::role_contract::CANONICAL_BUILD_REQUIRE_EMBEDDED_ARTIFACTS_ENV,
+    canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+);
 static BUILD_ONCE: Once = Once::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
@@ -120,8 +122,6 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path) {
         .current_dir(workspace_root)
         .env("CARGO_INCREMENTAL", "0")
         .env("CARGO_TARGET_DIR", target_dir)
-        .env("CANIC_CONFIG_PATH", config_path)
-        .env("CANIC_WASM_PROFILE", "fast")
         .env("ICP_ENVIRONMENT", "local")
         .env(INTERNAL_TEST_ENDPOINTS_ENV.0, INTERNAL_TEST_ENDPOINTS_ENV.1)
         .args([
@@ -136,6 +136,10 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path) {
             "--locked",
             "--",
             "wasm_store",
+            "fast",
+            workspace_root.to_str().expect("workspace root UTF-8"),
+            workspace_root.to_str().expect("ICP root UTF-8"),
+            config_path.to_str().expect("config path UTF-8"),
         ])
         .output()
         .expect("run bootstrap wasm_store artifact builder");

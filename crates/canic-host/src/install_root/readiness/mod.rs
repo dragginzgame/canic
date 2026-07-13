@@ -5,7 +5,7 @@ use self::diagnostics::{
 pub(super) use self::parsing::parse_bootstrap_status_value;
 use crate::{
     canister_ready::query_canister_ready,
-    icp::{IcpCli, LocalReplicaTarget},
+    icp::{IcpCli, IcpDiagnostic, LocalReplicaTarget, classify_icp_diagnostic},
     release_set::icp_query_on_network,
     replica_query,
 };
@@ -111,11 +111,10 @@ fn root_bootstrap_status(
     ) {
         Ok(output) => output,
         Err(err) => {
-            let message = err.to_string();
-            if message.contains("has no query method")
-                || message.contains("method not found")
-                || message.contains("Canister has no query method")
-            {
+            if matches!(
+                classify_icp_diagnostic(&err.to_string()),
+                Some(IcpDiagnostic::MethodMissing)
+            ) {
                 return Ok(None);
             }
             return Err(err);

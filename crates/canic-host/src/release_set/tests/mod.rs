@@ -19,7 +19,6 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
 };
 
 mod artifacts;
@@ -28,7 +27,6 @@ mod mutations;
 mod paths;
 mod roles;
 
-static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 const REAL_CONFIG: &str = r#"
 controllers = []
 app_index = ["user_hub", "scale_hub"]
@@ -128,22 +126,6 @@ init_mode = "enabled"
 [subnets.prime.canisters.user_hub]
 kind = "service"
 "#;
-
-fn with_guarded_env<T>(test: impl FnOnce() -> T) -> T {
-    let lock = ENV_LOCK.get_or_init(|| Mutex::new(()));
-    let _guard = lock.lock().unwrap();
-    test()
-}
-
-fn restore_env(key: &str, previous: Option<std::ffi::OsString>) {
-    unsafe {
-        if let Some(value) = previous {
-            std::env::set_var(key, value);
-        } else {
-            std::env::remove_var(key);
-        }
-    }
-}
 
 struct TempWorkspace {
     path: PathBuf,

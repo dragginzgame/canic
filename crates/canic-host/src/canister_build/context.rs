@@ -7,9 +7,6 @@ use super::{
     process::{icp_ancestor_process_id, parent_process_id},
 };
 
-const LOCAL_NETWORK_URL_ENV: &str = "CANIC_ICP_LOCAL_NETWORK_URL";
-const LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
-
 /// Exact authority for one canister artifact build.
 ///
 
@@ -17,13 +14,13 @@ const LOCAL_ROOT_KEY_ENV: &str = "CANIC_ICP_LOCAL_ROOT_KEY";
 pub struct WorkspaceBuildContext {
     pub role: String,
     pub profile: CanisterBuildProfile,
-    pub requested_profile: String,
     pub environment: String,
     pub build_network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
     pub config_path: PathBuf,
     pub local_replica: Option<LocalReplicaTarget>,
+    pub refresh_canonical_wasm_store_did: bool,
 }
 
 impl WorkspaceBuildContext {
@@ -38,9 +35,6 @@ impl WorkspaceBuildContext {
             format!("workspace: {}", self.workspace_root.display()),
         ];
 
-        if self.requested_profile != "unset" {
-            lines.push(format!("requested profile: {}", self.requested_profile));
-        }
         if self.icp_root != self.workspace_root {
             lines.push(format!("icp root: {}", self.icp_root.display()));
         }
@@ -68,19 +62,14 @@ impl WorkspaceBuildContext {
     pub fn apply_to_command(&self, command: &mut Command) {
         command
             .env("ICP_ENVIRONMENT", &self.build_network)
-            .env_remove("CANIC_ICP_BUILD_ENVIRONMENT")
-            .env("CANIC_WORKSPACE_ROOT", &self.workspace_root)
-            .env("CANIC_ICP_ROOT", &self.icp_root)
-            .env("CANIC_CONFIG_PATH", &self.config_path);
-        if let Some(local_replica) = &self.local_replica {
-            command
-                .env(LOCAL_NETWORK_URL_ENV, &local_replica.url)
-                .env(LOCAL_ROOT_KEY_ENV, &local_replica.root_key);
-        } else {
-            command
-                .env_remove(LOCAL_NETWORK_URL_ENV)
-                .env_remove(LOCAL_ROOT_KEY_ENV);
-        }
+            .env(
+                canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV,
+                &self.icp_root,
+            )
+            .env(
+                canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+                &self.config_path,
+            );
     }
 }
 

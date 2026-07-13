@@ -1,6 +1,9 @@
 use std::{error::Error, fmt};
 
-use super::model::{ICP_CLI_SUPPORTED_VERSION_RANGE, REQUIRED_ICP_CLI_VERSION};
+use super::{
+    diagnostic::{IcpDiagnostic, classify_icp_diagnostic},
+    model::{ICP_CLI_SUPPORTED_VERSION_RANGE, REQUIRED_ICP_CLI_VERSION},
+};
 
 ///
 /// IcpCommandError
@@ -28,6 +31,24 @@ pub enum IcpCommandError {
     SnapshotIdUnavailable {
         output: String,
     },
+}
+
+impl IcpCommandError {
+    /// Return the typed meaning of external ICP CLI output when Canic recognizes it.
+    #[must_use]
+    pub fn diagnostic(&self) -> Option<IcpDiagnostic> {
+        self.external_output().and_then(classify_icp_diagnostic)
+    }
+
+    /// Return raw external ICP CLI output carried by this error.
+    #[must_use]
+    pub fn external_output(&self) -> Option<&str> {
+        match self {
+            Self::Failed { stderr, .. } => Some(stderr),
+            Self::Json { output, .. } | Self::SnapshotIdUnavailable { output } => Some(output),
+            Self::Io(_) | Self::MissingCli { .. } | Self::IncompatibleCliVersion { .. } => None,
+        }
+    }
 }
 
 impl fmt::Display for IcpCommandError {

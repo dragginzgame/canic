@@ -19,10 +19,6 @@ SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
 CARGO_ENV := ICP_ENVIRONMENT=$(ICP_ENVIRONMENT)
-ifneq ($(CANIC_WASM_PROFILE),)
-export CANIC_WASM_PROFILE
-CARGO_ENV := CANIC_WASM_PROFILE=$(CANIC_WASM_PROFILE) $(CARGO_ENV)
-endif
 
 # Check for clean git state
 ensure-clean:
@@ -82,7 +78,7 @@ help:
 	@echo "  make patch       # Bump patch version"
 	@echo "  make release-patch # Bump, stage, commit, tag, and push patch release"
 	@echo "  make release-stage release-commit release-push # Finish reviewed manual bump"
-	@echo "  make test-fleet-install # Fast local install using fast wasm (override with CANIC_WASM_PROFILE=debug|fast|release)"
+	@echo "  make test-fleet-install # Install the reference fleet using fast wasm"
 	@echo "  make test        # Run workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
 	@echo "  make build       # Build project"
@@ -200,7 +196,7 @@ test-installed-canic-cli:
 
 test-fleet-install:
 	@mkdir -p "$(TEST_TMPDIR)"
-	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo run -q --profile fast -p canic-cli --bin canic -- install --profile "$(if $(CANIC_WASM_PROFILE),$(CANIC_WASM_PROFILE),fast)" test
+	TMPDIR="$(TEST_TMPDIR)" CARGO_INCREMENTAL=0 $(CARGO_ENV) cargo run -q --profile fast -p canic-cli --bin canic -- install --profile fast test
 
 test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
 

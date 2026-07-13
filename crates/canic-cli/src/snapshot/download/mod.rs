@@ -30,7 +30,7 @@ use canic_backup::{
     timestamp::current_timestamp_marker,
 };
 use canic_host::{
-    icp::{IcpCli, IcpCommandError},
+    icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
     install_root::InstallState,
     installed_deployment::{
@@ -395,29 +395,6 @@ fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
     IcpCli::new(&request.icp, None, request.network.clone()).with_cwd(&request.icp_root)
 }
 
-fn snapshot_icp_error(error: IcpCommandError) -> SnapshotCommandError {
-    match error {
-        IcpCommandError::Io(err) => SnapshotCommandError::Io(err),
-        IcpCommandError::Failed { command, stderr } => {
-            SnapshotCommandError::IcpFailed { command, stderr }
-        }
-        IcpCommandError::Json {
-            command, output, ..
-        } => SnapshotCommandError::IcpFailed {
-            command,
-            stderr: output,
-        },
-        error @ (IcpCommandError::MissingCli { .. }
-        | IcpCommandError::IncompatibleCliVersion { .. }) => SnapshotCommandError::IcpFailed {
-            command: "icp --version".to_string(),
-            stderr: error.to_string(),
-        },
-        IcpCommandError::SnapshotIdUnavailable { output } => {
-            SnapshotCommandError::SnapshotIdUnavailable(output)
-        }
-    }
-}
-
 fn snapshot_installed_deployment_error(error: InstalledDeploymentError) -> SnapshotCommandError {
     match error {
         InstalledDeploymentError::NoInstalledDeployment { .. }
@@ -426,9 +403,7 @@ fn snapshot_installed_deployment_error(error: InstalledDeploymentError) -> Snaps
         | InstalledDeploymentError::LostLocalDeployment { .. } => {
             SnapshotCommandError::InstallState(error.to_string())
         }
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            SnapshotCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => SnapshotCommandError::Icp(error),
         InstalledDeploymentError::Registry(err) => SnapshotCommandError::Registry(err),
         InstalledDeploymentError::Io(err) => SnapshotCommandError::Io(err),
     }
@@ -454,7 +429,7 @@ fn call_subnet_registry(
 fn snapshot_subnet_registry_error(error: SubnetRegistryQueryError) -> SnapshotCommandError {
     match error {
         SubnetRegistryQueryError::Replica(err) => SnapshotCommandError::from(err),
-        SubnetRegistryQueryError::Icp(err) => snapshot_icp_error(err),
+        SubnetRegistryQueryError::Icp(err) => SnapshotCommandError::Icp(err),
     }
 }
 
@@ -464,7 +439,7 @@ fn create_snapshot(
 ) -> Result<String, SnapshotCommandError> {
     icp(request)
         .snapshot_create_id(canister_id)
-        .map_err(snapshot_icp_error)
+        .map_err(SnapshotCommandError::from)
 }
 
 fn stop_canister(
@@ -473,7 +448,7 @@ fn stop_canister(
 ) -> Result<(), SnapshotCommandError> {
     icp(request)
         .stop_canister(canister_id)
-        .map_err(snapshot_icp_error)
+        .map_err(SnapshotCommandError::from)
 }
 
 fn start_canister(
@@ -482,7 +457,7 @@ fn start_canister(
 ) -> Result<(), SnapshotCommandError> {
     icp(request)
         .start_canister(canister_id)
-        .map_err(snapshot_icp_error)
+        .map_err(SnapshotCommandError::from)
 }
 
 fn download_snapshot(
@@ -493,7 +468,7 @@ fn download_snapshot(
 ) -> Result<(), SnapshotCommandError> {
     icp(request)
         .snapshot_download(canister_id, snapshot_id, artifact_path)
-        .map_err(snapshot_icp_error)
+        .map_err(SnapshotCommandError::from)
 }
 
 fn create_snapshot_command_display(

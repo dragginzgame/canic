@@ -27,7 +27,7 @@ use canic_core::protocol::{
 };
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
-    icp::IcpCli,
+    icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
@@ -88,8 +88,8 @@ pub enum AuthCommandError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error(
         "root target in deployment {deployment} has no local Candid sidecar; rebuild or register local metadata before using auth renewal commands"
@@ -128,9 +128,8 @@ pub enum AuthCommandError {
 impl AuthCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
-            Self::ReplicaQuery(_) | Self::IcpFailed { .. } => 2,
-            Self::ResponseParse { .. } => 3,
-            Self::Usage(_)
+            Self::Icp(IcpCommandError::Io(_))
+            | Self::Usage(_)
             | Self::Json(_)
             | Self::NoInstalledDeployment { .. }
             | Self::InstallState(_)
@@ -140,6 +139,8 @@ impl AuthCommandError {
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
+            Self::ReplicaQuery(_) | Self::Icp(_) => 2,
+            Self::ResponseParse { .. } => 3,
         }
     }
 }
@@ -798,7 +799,7 @@ fn live_query_output(
             Some(target.candid_path.as_path()),
         )
     };
-    result.map_err(auth_icp_error)
+    result.map_err(AuthCommandError::from)
 }
 
 fn live_query_issuer_output(
@@ -814,7 +815,7 @@ fn live_query_issuer_output(
         output,
         Some(target.candid_path.as_path()),
     )
-    .map_err(auth_icp_error)
+    .map_err(AuthCommandError::from)
 }
 
 fn issuer_observation_with_runtime(
@@ -982,9 +983,7 @@ fn auth_installed_deployment_error(error: InstalledDeploymentError) -> AuthComma
         },
         InstalledDeploymentError::InstallState(error) => AuthCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => AuthCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            AuthCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => AuthCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             AuthCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }
@@ -992,32 +991,5 @@ fn auth_installed_deployment_error(error: InstalledDeploymentError) -> AuthComma
             AuthCommandError::InstallState(error.to_string())
         }
         InstalledDeploymentError::Io(error) => AuthCommandError::InstallState(error.to_string()),
-    }
-}
-
-fn auth_icp_error(error: canic_host::icp::IcpCommandError) -> AuthCommandError {
-    match error {
-        canic_host::icp::IcpCommandError::Io(err) => {
-            AuthCommandError::InstallState(err.to_string())
-        }
-        canic_host::icp::IcpCommandError::Failed { command, stderr }
-        | canic_host::icp::IcpCommandError::Json {
-            command,
-            output: stderr,
-            ..
-        } => AuthCommandError::IcpFailed { command, stderr },
-        canic_host::icp::IcpCommandError::SnapshotIdUnavailable { output } => {
-            AuthCommandError::IcpFailed {
-                command: "icp canister call".to_string(),
-                stderr: output,
-            }
-        }
-        error @ (canic_host::icp::IcpCommandError::MissingCli { .. }
-        | canic_host::icp::IcpCommandError::IncompatibleCliVersion { .. }) => {
-            AuthCommandError::IcpFailed {
-                command: "icp --version".to_string(),
-                stderr: error.to_string(),
-            }
-        }
     }
 }

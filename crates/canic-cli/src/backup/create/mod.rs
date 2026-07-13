@@ -163,9 +163,7 @@ fn backup_installed_deployment_error(error: InstalledDeploymentError) -> BackupC
         },
         InstalledDeploymentError::InstallState(error) => BackupCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => BackupCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            BackupCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => BackupCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment {
             network,
             deployment,

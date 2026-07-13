@@ -85,8 +85,8 @@ pub enum InstalledDeploymentError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error(
         "deployment target {deployment} points to root {root}, but that canister is not present on network {network}"
@@ -241,7 +241,7 @@ fn installed_deployment_registry_error(
 ) -> InstalledDeploymentError {
     match error {
         SubnetRegistryQueryError::Replica(err) => local_registry_error(request, root, err),
-        SubnetRegistryQueryError::Icp(err) => installed_deployment_icp_error(err),
+        SubnetRegistryQueryError::Icp(err) => InstalledDeploymentError::Icp(err),
     }
 }
 
@@ -268,30 +268,6 @@ const fn is_missing_destination_error(error: &ReplicaQueryError) -> bool {
             ..
         }
     )
-}
-
-fn installed_deployment_icp_error(error: IcpCommandError) -> InstalledDeploymentError {
-    match error {
-        IcpCommandError::Io(err) => InstalledDeploymentError::Io(err),
-        IcpCommandError::Failed { command, stderr } => {
-            InstalledDeploymentError::IcpFailed { command, stderr }
-        }
-        IcpCommandError::Json {
-            command, output, ..
-        } => InstalledDeploymentError::IcpFailed {
-            command,
-            stderr: output,
-        },
-        error @ (IcpCommandError::MissingCli { .. }
-        | IcpCommandError::IncompatibleCliVersion { .. }) => InstalledDeploymentError::IcpFailed {
-            command: "icp --version".to_string(),
-            stderr: error.to_string(),
-        },
-        IcpCommandError::SnapshotIdUnavailable { output } => InstalledDeploymentError::IcpFailed {
-            command: "icp canister snapshot create".to_string(),
-            stderr: output,
-        },
-    }
 }
 
 #[cfg(test)]

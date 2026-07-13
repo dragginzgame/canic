@@ -238,12 +238,6 @@ fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
 
 /// Resolve the ICP project root implied by the current Canic fleet layout.
 pub fn resolve_current_canic_icp_root() -> Result<PathBuf, IcpConfigError> {
-    if let Ok(path) = std::env::var("CANIC_ICP_ROOT") {
-        return PathBuf::from(path)
-            .canonicalize()
-            .map_err(IcpConfigError::from);
-    }
-
     let search_root = current_project_search_root()?;
     let choices = discover_project_canic_config_choices(&search_root)
         .map_err(|err| IcpConfigError::Config(err.to_string()))?;

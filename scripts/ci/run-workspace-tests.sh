@@ -70,20 +70,10 @@ clear_pocketic_build_targets() {
             1 | true | TRUE | yes | YES) ;;
             *) return ;;
         esac
-    else
-        case "${CI:-}" in
-            1 | true | TRUE | yes | YES) ;;
-            *)
-                # Local runs clean once on exit by default. Developers can
-                # explicitly retain caches when speed matters more than disk.
-                case "${CANIC_KEEP_WASM_BUILD_CACHE:-}" in
-                    1 | true | TRUE | yes | YES) return ;;
-                    *) ;;
-                esac
-                ;;
-        esac
     fi
 
+    # Final cleanup runs locally and in CI so transient Wasm targets do not
+    # accumulate across suites or release attempts.
     for target_dir in "${target_dirs[@]}"; do
         if [[ ! -e "$target_dir" ]]; then
             continue

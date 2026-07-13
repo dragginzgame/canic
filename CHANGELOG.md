@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.87.md](docs/changelog/0.87.md)
 
+- `0.87.1` centralizes typed ICP diagnostics and hard-cuts public environment
+  shortcuts in favor of explicit inputs, canonical discovery, and private
+  Cargo handoffs.
+
 - `0.87.0` makes fleet and canister scaffolding failure-atomic with durable
   project-file replacement and one bounded rollback path.
 

@@ -176,13 +176,13 @@ fn test_build_context() -> WorkspaceBuildContext {
     WorkspaceBuildContext {
         role: "root".to_string(),
         profile: CanisterBuildProfile::Fast,
-        requested_profile: "fast".to_string(),
         environment: "local".to_string(),
         build_network: "local".to_string(),
         workspace_root: PathBuf::from("/workspace"),
         icp_root: PathBuf::from("/workspace/.icp"),
         config_path: PathBuf::from("/workspace/fleets/demo/canic.toml"),
         local_replica: None,
+        refresh_canonical_wasm_store_did: false,
     }
 }
 

@@ -31,6 +31,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
         &spec.icp_build_lock_path,
         spec.build_network,
         spec.build_profile,
+        &spec.build_config_path,
         &effective_build_env(spec),
     );
     progress_elapsed(spec, "finished local ICP artifact build", started_at);
@@ -163,6 +164,7 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
         watched_inputs,
         spec.build_network,
         spec.build_profile,
+        &spec.build_config_path,
         &build_env,
     ) {
         return false;
@@ -180,6 +182,7 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
             watched_inputs,
             spec.build_network,
             spec.build_profile,
+            &spec.build_config_path,
             &build_env,
         )
     })

@@ -307,9 +307,13 @@ incremental = true\n",
     }
 
     fs::write(wrapper_root.join("Cargo.toml"), cargo_toml)?;
+    let config_path_env = canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV;
     fs::write(
         wrapper_root.join("build.rs"),
-        "fn main() {\n    let config_path = std::env::var(\"CANIC_CONFIG_PATH\")\n        .expect(\"CANIC_CONFIG_PATH must be set for generated wasm_store wrapper\");\n\n    canic::build!(config_path);\n}\n",
+        format!(
+            "fn main() {{\n    let config_path = std::env::var({config_path_env:?})\n        .expect({error:?});\n\n    canic::build!(config_path);\n}}\n",
+            error = format!("{config_path_env} must be set for generated wasm_store wrapper"),
+        ),
     )?;
     fs::write(
         wrapper_root.join("src/lib.rs"),
@@ -464,7 +468,7 @@ fn ensure_wasm_store_did(
     // Ordinary artifact builds must treat the checked-in bootstrap `.did` as
     // canonical source, not as a cache file that gets rewritten on unrelated
     // workspace changes. Regeneration is explicit.
-    if source_did_path.is_file() && !refresh_canonical_wasm_store_did_enabled() {
+    if source_did_path.is_file() && !context.refresh_canonical_wasm_store_did {
         fs::copy(source_did_path, artifact_did_path)?;
         return Ok(());
     }
@@ -509,17 +513,6 @@ fn ensure_wasm_store_did(
     }
 
     Ok(())
-}
-
-// Regeneration of the canonical bootstrap-store `.did` is explicit so normal
-// artifact builds do not rewrite checked-in source files as a side effect.
-fn refresh_canonical_wasm_store_did_enabled() -> bool {
-    matches!(
-        std::env::var("CANIC_REFRESH_WASM_STORE_DID")
-            .ok()
-            .as_deref(),
-        Some("1" | "true" | "TRUE" | "yes" | "YES")
-    )
 }
 
 #[cfg(test)]

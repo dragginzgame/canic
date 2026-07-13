@@ -18,7 +18,7 @@ use crate::{
     version_text,
 };
 use canic_host::{
-    icp::{IcpCli, IcpCommandError},
+    icp::{IcpCli, IcpCommandError, IcpDiagnostic},
     icp_config::{
         DEFAULT_LOCAL_GATEWAY_PORT, IcpConfigError, IcpProjectConfigReport,
         configured_local_gateway_port_from_root, inspect_canic_icp_yaml,
@@ -93,8 +93,8 @@ pub enum ReplicaCommandError {
     )]
     ProjectConfigIncomplete { details: String },
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
@@ -444,49 +444,23 @@ fn local_replica_http_reachable(icp_root: &Path) -> bool {
 }
 
 fn replica_icp_error(error: IcpCommandError) -> ReplicaCommandError {
-    match error {
-        IcpCommandError::Io(err) => ReplicaCommandError::Io(err),
-        IcpCommandError::Failed { command, stderr } => {
-            if let Some(owner) = extract_foreign_local_owner(&stderr) {
-                return ReplicaCommandError::ForeignLocalReplicaOwner {
-                    network: owner.network,
-                    project: owner.project,
-                };
-            }
-            if project_manifest_missing(&stderr) {
-                return ReplicaCommandError::ProjectManifestMissing;
-            }
-            ReplicaCommandError::IcpFailed { command, stderr }
+    match error.diagnostic() {
+        Some(IcpDiagnostic::ForeignLocalReplicaOwner { network, project }) => {
+            return ReplicaCommandError::ForeignLocalReplicaOwner { network, project };
         }
-        IcpCommandError::Json {
-            command, output, ..
-        } => ReplicaCommandError::IcpFailed {
-            command,
-            stderr: output,
-        },
-        error @ (IcpCommandError::MissingCli { .. }
-        | IcpCommandError::IncompatibleCliVersion { .. }) => ReplicaCommandError::IcpFailed {
-            command: "icp --version".to_string(),
-            stderr: error.to_string(),
-        },
-        IcpCommandError::SnapshotIdUnavailable { output } => ReplicaCommandError::IcpFailed {
-            command: "icp canister snapshot".to_string(),
-            stderr: output,
-        },
+        Some(IcpDiagnostic::ProjectManifestMissing) => {
+            return ReplicaCommandError::ProjectManifestMissing;
+        }
+        _ => {}
     }
-}
 
-fn project_manifest_missing(stderr: &str) -> bool {
-    stderr.contains("failed to locate project directory")
-        || stderr.contains("project manifest not found")
+    ReplicaCommandError::Icp(error)
 }
 
 fn local_network_not_running(error: &IcpCommandError) -> bool {
     matches!(
-        error,
-        IcpCommandError::Failed { stderr, .. }
-            if stderr.contains("network 'local' is not running")
-                || stderr.contains("the local network for this project is not running")
+        error.diagnostic(),
+        Some(IcpDiagnostic::LocalNetworkNotRunning)
     )
 }
 
@@ -496,8 +470,13 @@ fn probe_reachable_local_replica_owner(
     debug: bool,
 ) -> Option<LocalReplicaOwner> {
     match icp.local_replica_start_in(icp_root, true, debug) {
-        Err(IcpCommandError::Failed { stderr, .. }) => extract_foreign_local_owner(&stderr),
-        Err(_) | Ok(_) => None,
+        Err(error) => match error.diagnostic() {
+            Some(IcpDiagnostic::ForeignLocalReplicaOwner { network, project }) => {
+                Some(LocalReplicaOwner { network, project })
+            }
+            _ => None,
+        },
+        Ok(_) => None,
     }
 }
 
@@ -507,22 +486,6 @@ fn probe_reachable_local_replica_owner(
 struct LocalReplicaOwner {
     network: String,
     project: String,
-}
-
-fn extract_foreign_local_owner(stderr: &str) -> Option<LocalReplicaOwner> {
-    let marker = " network of the project at '";
-    let marker_start = stderr.find(marker)?;
-    let network = stderr[..marker_start]
-        .split_whitespace()
-        .last()?
-        .to_string();
-    let start = marker_start + marker.len();
-    let rest = &stderr[start..];
-    let end = rest.find('\'')?;
-    Some(LocalReplicaOwner {
-        network,
-        project: rest[..end].to_string(),
-    })
 }
 
 fn replica_command() -> ClapCommand {

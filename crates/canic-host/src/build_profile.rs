@@ -12,16 +12,6 @@ pub enum CanisterBuildProfile {
 }
 
 impl CanisterBuildProfile {
-    // Resolve the current requested build profile from the explicit Canic wasm selector.
-    #[must_use]
-    pub fn current() -> Self {
-        match std::env::var("CANIC_WASM_PROFILE").ok().as_deref() {
-            Some("debug") => Self::Debug,
-            Some("fast") => Self::Fast,
-            _ => Self::Release,
-        }
-    }
-
     // Return the cargo profile flags for one Canic canister build.
     #[must_use]
     pub(crate) const fn cargo_args(self) -> &'static [&'static str] {

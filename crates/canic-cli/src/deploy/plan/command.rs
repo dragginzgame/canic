@@ -76,7 +76,7 @@ impl DeployPlanOptions {
             out: path_option(&matches, OUT_ARG),
             config: path_option(&matches, CONFIG_ARG),
             build_profile: typed_option(&matches, BUILD_PROFILE_ARG)
-                .unwrap_or_else(CanisterBuildProfile::current),
+                .unwrap_or(CanisterBuildProfile::Release),
         })
     }
 }

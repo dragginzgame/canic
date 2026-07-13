@@ -4,6 +4,13 @@ use crate::{cli::globals, run};
 use std::{cell::RefCell, collections::VecDeque};
 
 #[test]
+fn icp_io_failure_keeps_usage_exit_class() {
+    let error = AuthCommandError::Icp(IcpCommandError::Io(std::io::Error::other("sample")));
+
+    assert_eq!(error.exit_code(), 1);
+}
+
+#[test]
 fn parses_renewal_status_options() {
     let command = AuthOptions::parse([
         OsString::from("renewal"),

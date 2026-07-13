@@ -205,7 +205,10 @@ fn run_canister_build(
     configure_canister_cargo_command(&mut command, &context.workspace_root);
 
     if require_embedded_release_artifacts {
-        command.env("CANIC_REQUIRE_EMBEDDED_RELEASE_ARTIFACTS", "1");
+        command.env(
+            canic_core::role_contract::CANONICAL_BUILD_REQUIRE_EMBEDDED_ARTIFACTS_ENV,
+            canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE,
+        );
     }
 
     let output = command.output()?;

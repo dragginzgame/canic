@@ -89,7 +89,7 @@ fn run_project_checks(options: &MedicOptions) -> Vec<MedicCheck> {
                 "project_root_missing",
                 "project_root",
                 err.to_string(),
-                "run from a Canic project root or set CANIC_ICP_ROOT",
+                "run from a Canic project root",
                 MedicSource::Command,
             ));
             checks.push(MedicCheck::not_evaluated(

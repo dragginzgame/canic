@@ -50,16 +50,15 @@ Public thin-root flow:
 
 Build profile selection:
 
-- `CANIC_WASM_PROFILE=debug` builds raw debug wasm
-- `CANIC_WASM_PROFILE=fast` builds the middle shrunk local/test/demo lane
-- `CANIC_WASM_PROFILE=release` builds the shipping/install lane
+- `canic build <fleet> <role> --profile debug` builds raw debug wasm
+- `canic build <fleet> <role> --profile fast` builds the middle shrunk local/test/demo lane
+- `canic build <fleet> <role> --profile release` builds the shipping/install lane
 
-If unset, backend builds default to `release`.
+If omitted, CLI builds default to `release`.
 
-When the Rust workspace root and ICP CLI/project root differ, set both:
-
-- `CANIC_WORKSPACE_ROOT` for Cargo, `canic.toml`, and canister manifests
-- `CANIC_ICP_ROOT` for `icp.yaml`, `.icp`, and emitted artifacts
+When the Rust workspace root and ICP CLI/project root differ, pass
+`--workspace`, `--icp-root`, and `--config` to `canic build`. The low-level
+`build_artifact` example takes those three paths after its role and profile.
 
 If canister crates live outside the default `fleets/` directory, host
 discovery first tries Cargo workspace metadata. Every Canic-managed canister
@@ -70,13 +69,6 @@ package must declare the fleet-scoped role it implements in Cargo metadata:
 fleet = "project"
 role = "project_ledger"
 ```
-
-If you need to override discovery explicitly, set:
-
-- `CANIC_CANISTERS_ROOT` for the canister crate root relative to `CANIC_WORKSPACE_ROOT`
-
-or point `CANIC_CONFIG_PATH` at the real `canic.toml` path and host discovery
-will infer the canister-manifest root from that config location.
 
 For `canic install`, the implicit network default is always `local`; use
 `--network <name>` for one command against another network. The public CLI

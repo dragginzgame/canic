@@ -10,7 +10,7 @@ use crate::deployment_truth::{
     deployment_execution_preflight_from_check, safety_report_from_diff,
     validate_deployment_execution_preflight_for_check,
 };
-use crate::release_set::{configured_fleet_name, icp_root, workspace_root};
+use crate::release_set::{configured_fleet_name, icp_root, workspace_root_from};
 use std::path::{Path, PathBuf};
 
 struct CurrentInstallTruthInputs {
@@ -97,7 +97,7 @@ pub(super) fn current_install_deployment_truth_check_at(
 
     let build_profile = options
         .build_profile
-        .unwrap_or_else(CanisterBuildProfile::current)
+        .unwrap_or(CanisterBuildProfile::Release)
         .target_dir_name()
         .to_string();
 
@@ -135,7 +135,6 @@ pub(super) fn validate_expected_fleet_name(
 fn resolve_current_install_truth_inputs(
     options: &InstallRootOptions,
 ) -> Result<CurrentInstallTruthInputs, Box<dyn std::error::Error>> {
-    let workspace_root = workspace_root()?;
     let icp_root = match &options.icp_root {
         Some(path) => path.canonicalize()?,
         None => icp_root()?,
@@ -169,6 +168,7 @@ fn resolve_current_install_truth_inputs(
             )?
         }
     };
+    let workspace_root = workspace_root_from(&config_path)?;
     let fleet_template = configured_fleet_name(&config_path)?;
     let expected_fleet = options
         .expected_fleet

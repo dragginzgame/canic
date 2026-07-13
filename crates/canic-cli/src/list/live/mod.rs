@@ -7,7 +7,7 @@ use canic_host::{
     canister_ready::{query_canister_ready, query_local_canister_ready},
     cycle_balance::query_cycle_balance,
     format::{cycles_tc, wasm_size_label},
-    icp::IcpCli,
+    icp::{IcpCli, IcpDiagnostic, classify_icp_diagnostic},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
@@ -307,9 +307,7 @@ fn list_installed_deployment_error(error: InstalledDeploymentError) -> ListComma
         },
         InstalledDeploymentError::InstallState(error) => ListCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => ListCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            ListCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => ListCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment {
             deployment,
             network,
@@ -325,34 +323,27 @@ fn list_installed_deployment_error(error: InstalledDeploymentError) -> ListComma
 }
 
 fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
-    let ListCommandError::IcpFailed { command, stderr } = error else {
+    let ListCommandError::Icp(source) = error else {
         return error;
     };
 
-    let Some(hint) = root_registry_hint(&stderr) else {
-        return ListCommandError::IcpFailed { command, stderr };
+    let Some(hint) = source.external_output().and_then(root_registry_hint) else {
+        return ListCommandError::Icp(source);
     };
 
-    ListCommandError::IcpFailed {
-        command,
-        stderr: format!("{stderr}\nHint: {hint}\n"),
-    }
+    ListCommandError::IcpHint { source, hint }
 }
 
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
-    if stderr.contains("Cannot find canister id") {
-        return Some(
+    match classify_icp_diagnostic(stderr) {
+        Some(IcpDiagnostic::CanisterIdMissing) => Some(
             "no root canister id exists for this deployment target. Use `canic fleet config <fleet-template>` for the selected fleet config, or run `canic install <fleet-template>` before querying the root registry.",
-        );
-    }
-
-    if stderr.contains("contains no Wasm module") || stderr.contains("wasm-module-not-found") {
-        return Some(
+        ),
+        Some(IcpDiagnostic::CanisterWasmMissing) => Some(
             "the root canister id exists but no Canic root code is installed. Run `canic install <name>`, then use `canic info list <name>`.",
-        );
+        ),
+        _ => None,
     }
-
-    None
 }
 
 #[cfg(test)]
