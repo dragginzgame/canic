@@ -6,7 +6,7 @@ use crate::{
     artifacts::ArtifactChecksum,
     discovery::SnapshotTarget,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
-    persistence::BackupLayout,
+    persistence::{BackupLayout, commit_artifact_directory},
     timestamp::current_timestamp_marker,
 };
 use std::{
@@ -164,19 +164,9 @@ fn capture_snapshot_artifact_body(
 
     journal.operation_metrics.artifact_finalize_started += 1;
     layout.write_journal(journal)?;
-    if artifact_path.exists() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::AlreadyExists,
-            format!("artifact path already exists: {}", artifact_path.display()),
-        )
-        .into());
-    }
-    fs::rename(&temp_path, &artifact_path)?;
-    journal.operation_metrics.artifact_finalize_completed += 1;
-    entry.temp_path = None;
-    entry.advance_to(ArtifactState::Durable, current_timestamp_marker())?;
-    update_journal_entry(journal, &entry);
-    layout.write_journal(journal)?;
+    commit_artifact_directory(&temp_path, &artifact_path, &checksum.hash)?;
+
+    persist_durable_artifact_journal(journal, &entry, |completed| layout.write_journal(completed))?;
 
     Ok(SnapshotArtifact {
         canister_id: target.canister_id.clone(),
@@ -186,10 +176,74 @@ fn capture_snapshot_artifact_body(
     })
 }
 
+fn persist_durable_artifact_journal(
+    journal: &mut DownloadJournal,
+    entry: &ArtifactJournalEntry,
+    write: impl FnOnce(&DownloadJournal) -> Result<(), crate::persistence::PersistenceError>,
+) -> Result<(), SnapshotDownloadError> {
+    let mut completed_journal = journal.clone();
+    let mut completed_entry = entry.clone();
+    completed_entry.temp_path = None;
+    completed_entry.advance_to(ArtifactState::Durable, current_timestamp_marker())?;
+    update_journal_entry(&mut completed_journal, &completed_entry);
+    completed_journal
+        .operation_metrics
+        .artifact_finalize_completed += 1;
+    write(&completed_journal)?;
+    *journal = completed_journal;
+    Ok(())
+}
+
 fn update_journal_entry(journal: &mut DownloadJournal, entry: &ArtifactJournalEntry) {
     if let Some(existing) = journal.artifacts.iter_mut().find(|existing| {
         existing.canister_id == entry.canister_id && existing.snapshot_id == entry.snapshot_id
     }) {
         *existing = entry.clone();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{journal::DownloadOperationMetrics, persistence::PersistenceError};
+
+    #[test]
+    fn failed_durable_journal_write_exposes_neither_state_nor_metric() {
+        let entry = ArtifactJournalEntry {
+            canister_id: "aaaaa-aa".to_string(),
+            snapshot_id: "snapshot-1".to_string(),
+            state: ArtifactState::ChecksumVerified,
+            temp_path: Some("aaaaa-aa.tmp".to_string()),
+            artifact_path: "aaaaa-aa".to_string(),
+            checksum_algorithm: "sha256".to_string(),
+            checksum: Some("checksum".to_string()),
+            updated_at: "before".to_string(),
+        };
+        let mut journal = DownloadJournal {
+            journal_version: 1,
+            backup_id: "backup-1".to_string(),
+            discovery_topology_hash: None,
+            pre_snapshot_topology_hash: None,
+            operation_metrics: DownloadOperationMetrics {
+                artifact_finalize_started: 1,
+                ..DownloadOperationMetrics::default()
+            },
+            artifacts: vec![entry.clone()],
+        };
+
+        let error = persist_durable_artifact_journal(&mut journal, &entry, |_| {
+            Err(PersistenceError::Io(std::io::Error::other(
+                "injected journal write failure",
+            )))
+        })
+        .expect_err("journal write failure must reject");
+
+        std::assert_matches!(
+            error,
+            SnapshotDownloadError::Persistence(PersistenceError::Io(_))
+        );
+        assert_eq!(journal.artifacts[0].state, ArtifactState::ChecksumVerified);
+        assert!(journal.artifacts[0].temp_path.is_some());
+        assert_eq!(journal.operation_metrics.artifact_finalize_completed, 0);
     }
 }

@@ -147,6 +147,40 @@ fn download_snapshots_writes_manifest_and_durable_journal() {
     );
 }
 
+// Ensure a conflicting canonical artifact cannot advance journal state or completion metrics.
+#[test]
+fn snapshot_artifact_conflict_leaves_journal_checksum_verified() {
+    let root = temp_dir("canic-backup-download-conflict");
+    let out = root.join("backup");
+    let canonical = out.join(ROOT);
+    fs::create_dir_all(&canonical).expect("create conflicting artifact");
+    fs::write(canonical.join("unrelated.txt"), b"unrelated").expect("write conflicting artifact");
+    let config = single_snapshot_config(out.clone());
+    let mut driver = FakeSnapshotDriver;
+
+    let error = download_snapshots(&config, &mut driver)
+        .expect_err("conflicting canonical artifact must reject");
+    let journal = BackupLayout::new(out)
+        .read_journal()
+        .expect("read interrupted journal");
+
+    std::assert_matches!(
+        error,
+        SnapshotDownloadError::Persistence(
+            crate::persistence::PersistenceError::ArtifactCommitPathConflict { .. }
+        )
+    );
+    assert_eq!(journal.artifacts[0].state, ArtifactState::ChecksumVerified);
+    assert_eq!(journal.operation_metrics.artifact_finalize_started, 1);
+    assert_eq!(journal.operation_metrics.artifact_finalize_completed, 0);
+    assert_eq!(
+        fs::read(canonical.join("unrelated.txt")).expect("read conflicting artifact"),
+        b"unrelated"
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure dry-run planning returns commands without writing backup state.
 #[test]
 fn dry_run_returns_planned_commands_without_writing_manifest() {
