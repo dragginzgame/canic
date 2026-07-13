@@ -4,7 +4,10 @@ use super::{
         toml_string_literal, validate_attach_kind, validate_role_name, validate_subnet_name,
     },
 };
-use crate::release_set::config::model::AttachedFleetRole;
+use crate::release_set::config::{
+    FleetConfigDeclaration, FleetConfigError, FleetConfigMutationConflict, FleetConfigOperation,
+    model::AttachedFleetRole,
+};
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 
 pub(in crate::release_set) fn attach_fleet_role_source(
@@ -13,7 +16,7 @@ pub(in crate::release_set) fn attach_fleet_role_source(
     role: &str,
     subnet: &str,
     kind: &str,
-) -> Result<AttachedFleetRoleSource, Box<dyn std::error::Error>> {
+) -> Result<AttachedFleetRoleSource, FleetConfigError> {
     let role = role.trim();
     let subnet = subnet.trim();
     let kind = kind.trim();
@@ -21,27 +24,45 @@ pub(in crate::release_set) fn attach_fleet_role_source(
     validate_subnet_name(subnet)?;
     validate_attach_kind(kind)?;
     if role == "root" {
-        return Err("root role must already be attached through root topology".into());
+        return Err(FleetConfigError::MutationConflict {
+            conflict: FleetConfigMutationConflict::RootRoleAttach,
+        });
     }
 
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let config =
+        parse_config_model(config_source).map_err(|source| FleetConfigError::CoreConfig {
+            operation: FleetConfigOperation::AttachRole,
+            source,
+        })?;
     let actual_fleet = config
         .fleet_name()
-        .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?;
+        .ok_or(FleetConfigError::DeclarationMissing {
+            declaration: FleetConfigDeclaration::FleetName,
+        })?;
     if actual_fleet != expected_fleet {
-        return Err(format!(
-            "selected config declares fleet {actual_fleet:?}, not {expected_fleet:?}"
-        )
-        .into());
+        return Err(FleetConfigError::FleetMismatch {
+            actual: actual_fleet.to_string(),
+            expected: expected_fleet.to_string(),
+        });
     }
 
     let role_id = CanisterRole::owned(role.to_string());
     config
         .roles
         .get(&role_id)
-        .ok_or_else(|| format!("role {expected_fleet}.{role} is not declared"))?;
+        .ok_or_else(|| FleetConfigError::DeclarationMissing {
+            declaration: FleetConfigDeclaration::Role {
+                fleet: expected_fleet.to_string(),
+                role: role.to_string(),
+            },
+        })?;
     if config.attached_roles().contains(&role_id) {
-        return Err(format!("role {expected_fleet}.{role} is already attached").into());
+        return Err(FleetConfigError::MutationConflict {
+            conflict: FleetConfigMutationConflict::RoleAlreadyAttached {
+                fleet: expected_fleet.to_string(),
+                role: role.to_string(),
+            },
+        });
     }
 
     let mut source = config_source.trim_end().to_string();
@@ -53,7 +74,10 @@ pub(in crate::release_set) fn attach_fleet_role_source(
     source.push_str(&toml_string_literal(kind));
     source.push('\n');
 
-    parse_config_model(&source).map_err(|err| err.to_string())?;
+    parse_config_model(&source).map_err(|source| FleetConfigError::CoreConfig {
+        operation: FleetConfigOperation::AttachRole,
+        source,
+    })?;
 
     Ok(AttachedFleetRoleSource {
         source,

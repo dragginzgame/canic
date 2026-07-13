@@ -1,14 +1,16 @@
 use super::super::model::ConfiguredRoleLifecycle;
 use super::labels::metrics_profile_label;
+use super::parse_projection_config;
 use crate::format::cycles_tc;
-use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
+use crate::release_set::config::{FleetConfigDeclaration, FleetConfigError};
+use canic_core::ids::CanisterRole;
 use std::collections::{BTreeMap, BTreeSet};
 
 // Enumerate configured role kinds from raw config source.
 pub(in crate::release_set) fn configured_role_kinds_from_source(
     config_source: &str,
-) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+) -> Result<BTreeMap<String, String>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
     let mut kinds = BTreeMap::<String, String>::new();
 
     for subnet in config.subnets.values() {
@@ -33,11 +35,13 @@ pub(in crate::release_set) fn configured_role_kinds_from_source(
 // Enumerate declared role lifecycle state from raw config source.
 pub(in crate::release_set) fn configured_role_lifecycle_from_source(
     config_source: &str,
-) -> Result<Vec<ConfiguredRoleLifecycle>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+) -> Result<Vec<ConfiguredRoleLifecycle>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
     let fleet = config
         .fleet_name()
-        .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?
+        .ok_or(FleetConfigError::DeclarationMissing {
+            declaration: FleetConfigDeclaration::FleetName,
+        })?
         .to_string();
     let attached_roles = config.attached_roles();
     let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
@@ -101,8 +105,8 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_source(
 // Enumerate derived auto-created service roles from raw config source.
 pub(in crate::release_set) fn configured_role_auto_create_from_source(
     config_source: &str,
-) -> Result<BTreeSet<String>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+) -> Result<BTreeSet<String>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
     let mut auto_create = BTreeSet::<String>::new();
 
     for subnet in config.subnets.values() {
@@ -120,8 +124,8 @@ pub(in crate::release_set) fn configured_role_auto_create_from_source(
 // Enumerate configured top-up policy summaries from raw config source.
 pub(in crate::release_set) fn configured_role_topups_from_source(
     config_source: &str,
-) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+) -> Result<BTreeMap<String, String>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
     let mut topups = BTreeMap::<String, String>::new();
 
     for subnet in config.subnets.values() {
@@ -145,8 +149,8 @@ pub(in crate::release_set) fn configured_role_topups_from_source(
 // Enumerate resolved metrics profiles from raw config source.
 pub(in crate::release_set) fn configured_role_metrics_profiles_from_source(
     config_source: &str,
-) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+) -> Result<BTreeMap<String, String>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
     let mut profiles = BTreeMap::<String, String>::new();
 
     for subnet in config.subnets.values() {

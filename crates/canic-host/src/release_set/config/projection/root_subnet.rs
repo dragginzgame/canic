@@ -1,7 +1,12 @@
 use super::super::model::{
     ConfiguredPoolExpectation, DEFAULT_INITIAL_CYCLES, LOCAL_ROOT_MIN_READY_CYCLES,
 };
-use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
+use super::parse_projection_config;
+use crate::release_set::config::FleetConfigError;
+use canic_core::{
+    bootstrap::compiled::{ConfigModel, SubnetConfig},
+    ids::CanisterRole,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -22,26 +27,9 @@ impl RootSubnetRoleScope {
 // Estimate local root create funding from the root subnet bootstrap obligations.
 pub(in crate::release_set) fn configured_local_root_create_cycles_from_source(
     config_source: &str,
-) -> Result<u128, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
-    let mut root_subnet = None;
-
-    for (subnet_role, subnet) in &config.subnets {
-        if !subnet.canisters.keys().any(CanisterRole::is_root) {
-            continue;
-        }
-        if root_subnet.is_some() {
-            return Err(format!(
-                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
-            )
-            .into());
-        }
-        root_subnet = Some(subnet);
-    }
-
-    let subnet = root_subnet.ok_or_else(|| {
-        "no subnet defines a root canister; expected exactly one root subnet".to_string()
-    })?;
+) -> Result<u128, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
+    let subnet = root_subnet(&config);
 
     let mut cycles = subnet
         .get_canister(&CanisterRole::WASM_STORE)
@@ -61,28 +49,9 @@ pub(in crate::release_set) fn configured_local_root_create_cycles_from_source(
 // Enumerate configured pool identities for the single subnet that owns `root`.
 pub(in crate::release_set) fn configured_pool_expectations_from_source(
     config_source: &str,
-) -> Result<Vec<ConfiguredPoolExpectation>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
-    let mut root_subnet = None;
-
-    for (subnet_role, subnet) in &config.subnets {
-        if !subnet.canisters.keys().any(CanisterRole::is_root) {
-            continue;
-        }
-
-        if root_subnet.is_some() {
-            return Err(format!(
-                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
-            )
-            .into());
-        }
-
-        root_subnet = Some(subnet);
-    }
-
-    let subnet = root_subnet.ok_or_else(|| {
-        "no subnet defines a root canister; expected exactly one root subnet".to_string()
-    })?;
+) -> Result<Vec<ConfiguredPoolExpectation>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
+    let subnet = root_subnet(&config);
     let mut pools = BTreeMap::<String, ConfiguredPoolExpectation>::new();
 
     for canister in subnet.canisters.values() {
@@ -127,7 +96,7 @@ pub(in crate::release_set) fn configured_pool_expectations_from_source(
 // Enumerate the configured ordinary roles for the single subnet that owns `root`.
 pub(in crate::release_set) fn configured_release_roles_from_source(
     config_source: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, FleetConfigError> {
     configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Release)
 }
 
@@ -135,35 +104,16 @@ pub(in crate::release_set) fn configured_release_roles_from_source(
 // implicit `wasm_store` bootstrap canister.
 pub(in crate::release_set) fn configured_deployable_roles_from_source(
     config_source: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> Result<Vec<String>, FleetConfigError> {
     configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Deployable)
 }
 
 // Enumerate roles expected to be present once root bootstrap has completed.
 pub(in crate::release_set) fn configured_bootstrap_roles_from_source(
     config_source: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
-    let mut root_subnet = None;
-
-    for (subnet_role, subnet) in &config.subnets {
-        if !subnet.canisters.keys().any(CanisterRole::is_root) {
-            continue;
-        }
-
-        if root_subnet.is_some() {
-            return Err(format!(
-                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
-            )
-            .into());
-        }
-
-        root_subnet = Some(subnet);
-    }
-
-    let subnet = root_subnet.ok_or_else(|| {
-        "no subnet defines a root canister; expected exactly one root subnet".to_string()
-    })?;
+) -> Result<Vec<String>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
+    let subnet = root_subnet(&config);
 
     let mut roles = BTreeSet::<String>::new();
     roles.insert(CanisterRole::ROOT.as_str().to_string());
@@ -203,38 +153,26 @@ pub(in crate::release_set) fn configured_bootstrap_roles_from_source(
 fn configured_root_subnet_roles_from_source(
     config_source: &str,
     scope: RootSubnetRoleScope,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
-    let mut root_subnet_roles = None;
-
-    for (subnet_role, subnet) in &config.subnets {
-        if !subnet.canisters.keys().any(CanisterRole::is_root) {
-            continue;
-        }
-
-        if root_subnet_roles.is_some() {
-            return Err(format!(
-                "multiple subnets define a root canister; expected exactly one root subnet (found at least '{subnet_role}')"
-            )
-            .into());
-        }
-
-        root_subnet_roles = Some(
-            subnet
-                .canisters
-                .keys()
-                .filter(|role| !role.is_wasm_store())
-                .filter(|role| scope.includes_root() || !role.is_root())
-                .map(|role| role.as_str().to_string())
-                .collect::<Vec<_>>(),
-        );
-    }
-
-    let root_subnet_roles = root_subnet_roles.ok_or_else(|| {
-        "no subnet defines a root canister; expected exactly one root subnet".to_string()
-    })?;
+) -> Result<Vec<String>, FleetConfigError> {
+    let config = parse_projection_config(config_source)?;
+    let subnet = root_subnet(&config);
+    let root_subnet_roles = subnet
+        .canisters
+        .keys()
+        .filter(|role| !role.is_wasm_store())
+        .filter(|role| scope.includes_root() || !role.is_root())
+        .map(|role| role.as_str().to_string())
+        .collect::<Vec<_>>();
 
     Ok(sort_root_subnet_roles(root_subnet_roles))
+}
+
+fn root_subnet(config: &ConfigModel) -> &SubnetConfig {
+    config
+        .subnets
+        .values()
+        .find(|subnet| subnet.canisters.keys().any(CanisterRole::is_root))
+        .expect("validated config must contain exactly one root subnet")
 }
 
 // Sort display/build roles deterministically, keeping `root` first when present.

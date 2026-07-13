@@ -1,4 +1,6 @@
 use super::super::*;
+use crate::release_set::{FleetConfigError, FleetConfigOperation};
+use canic_core::bootstrap::ConfigError;
 
 #[test]
 fn configured_release_roles_filters_root_and_wasm_store() {
@@ -98,14 +100,30 @@ fn configured_deployable_roles_include_root_first() {
 
 #[test]
 fn configured_release_roles_rejects_multiple_root_subnets() {
-    configured_release_roles_from_source(MULTI_ROOT_CONFIG)
+    let error = configured_release_roles_from_source(MULTI_ROOT_CONFIG)
         .expect_err("multiple root roles must reject");
+
+    assert!(matches!(
+        error,
+        FleetConfigError::CoreConfig {
+            operation: FleetConfigOperation::Project,
+            source: ConfigError::ConfigSchema(_),
+        }
+    ));
 }
 
 #[test]
 fn configured_release_roles_rejects_missing_root() {
-    configured_release_roles_from_source(NO_ROOT_CONFIG)
+    let error = configured_release_roles_from_source(NO_ROOT_CONFIG)
         .expect_err("missing root role must reject");
+
+    assert!(matches!(
+        error,
+        FleetConfigError::CoreConfig {
+            operation: FleetConfigOperation::Project,
+            source: ConfigError::ConfigSchema(_),
+        }
+    ));
 }
 
 #[test]

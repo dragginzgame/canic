@@ -4,6 +4,9 @@ mod labels;
 mod roles;
 mod root_subnet;
 
+use crate::release_set::config::{FleetConfigError, FleetConfigOperation};
+use canic_core::bootstrap::{compiled::ConfigModel, parse_config_model};
+
 pub(in crate::release_set) use details::configured_role_details_from_source;
 pub(in crate::release_set) use fleet::{
     configured_controllers_from_source, configured_fleet_name_from_source,
@@ -18,3 +21,10 @@ pub(in crate::release_set) use root_subnet::{
     configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
     configured_release_roles_from_source,
 };
+
+fn parse_projection_config(config_source: &str) -> Result<ConfigModel, FleetConfigError> {
+    parse_config_model(config_source).map_err(|source| FleetConfigError::CoreConfig {
+        operation: FleetConfigOperation::Project,
+        source,
+    })
+}

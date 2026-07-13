@@ -19,9 +19,9 @@ use canic_host::{
         current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
     },
     release_set::{
-        attach_fleet_role, configured_role_lifecycle, declare_fleet_role, display_workspace_path,
-        matching_fleet_config_paths, plan_attach_fleet_role, plan_declare_fleet_role,
-        plan_rename_fleet_role, rename_fleet_role,
+        FleetConfigError, attach_fleet_role, configured_role_lifecycle, declare_fleet_role,
+        display_workspace_path, matching_fleet_config_paths, plan_attach_fleet_role,
+        plan_declare_fleet_role, plan_rename_fleet_role, rename_fleet_role,
     },
 };
 use command::{
@@ -99,6 +99,9 @@ pub enum FleetCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+
+    #[error(transparent)]
+    FleetConfig(#[from] FleetConfigError),
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),

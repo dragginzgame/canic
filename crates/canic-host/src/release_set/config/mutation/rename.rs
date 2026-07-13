@@ -2,7 +2,11 @@ use super::{
     RenamedFleetRoleSource,
     support::{toml_assignment_key, toml_string_literal, validate_role_name},
 };
-use crate::release_set::config::model::RenamedFleetRole;
+use crate::release_set::config::{
+    FleetConfigDeclaration, FleetConfigError, FleetConfigIoOperation, FleetConfigMutationConflict,
+    FleetConfigOperation, FleetConfigPackageIssue, FleetConfigTomlOperation,
+    model::RenamedFleetRole,
+};
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 use std::{fs, path::Path};
 use toml::Value as TomlValue;
@@ -13,41 +17,65 @@ pub(in crate::release_set) fn rename_fleet_role_source(
     expected_fleet: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<RenamedFleetRoleSource, Box<dyn std::error::Error>> {
+) -> Result<RenamedFleetRoleSource, FleetConfigError> {
     let old_role = old_role.trim();
     let new_role = new_role.trim();
     validate_role_name(old_role)?;
     validate_role_name(new_role)?;
     if old_role == "root" || new_role == "root" {
-        return Err("root role cannot be renamed through fleet role rename".into());
+        return Err(FleetConfigError::MutationConflict {
+            conflict: FleetConfigMutationConflict::RootRoleRename,
+        });
     }
     if old_role == new_role {
-        return Err("old role and new role must differ".into());
+        return Err(FleetConfigError::MutationConflict {
+            conflict: FleetConfigMutationConflict::SameRoleRename,
+        });
     }
 
-    let config = parse_config_model(config_source).map_err(|err| err.to_string())?;
+    let config =
+        parse_config_model(config_source).map_err(|source| FleetConfigError::CoreConfig {
+            operation: FleetConfigOperation::RenameRole,
+            source,
+        })?;
     let actual_fleet = config
         .fleet_name()
-        .ok_or_else(|| "missing required [fleet].name in canic.toml".to_string())?;
+        .ok_or(FleetConfigError::DeclarationMissing {
+            declaration: FleetConfigDeclaration::FleetName,
+        })?;
     if actual_fleet != expected_fleet {
-        return Err(format!(
-            "selected config declares fleet {actual_fleet:?}, not {expected_fleet:?}"
-        )
-        .into());
+        return Err(FleetConfigError::FleetMismatch {
+            actual: actual_fleet.to_string(),
+            expected: expected_fleet.to_string(),
+        });
     }
 
     let old_id = CanisterRole::owned(old_role.to_string());
     let new_id = CanisterRole::owned(new_role.to_string());
-    let declaration = config
-        .roles
-        .get(&old_id)
-        .ok_or_else(|| format!("role {expected_fleet}.{old_role} is not declared"))?;
+    let declaration =
+        config
+            .roles
+            .get(&old_id)
+            .ok_or_else(|| FleetConfigError::DeclarationMissing {
+                declaration: FleetConfigDeclaration::Role {
+                    fleet: expected_fleet.to_string(),
+                    role: old_role.to_string(),
+                },
+            })?;
     if config.declares_role(&new_id) {
-        return Err(format!("role {expected_fleet}.{new_role} is already declared").into());
+        return Err(FleetConfigError::MutationConflict {
+            conflict: FleetConfigMutationConflict::RoleAlreadyDeclared {
+                fleet: expected_fleet.to_string(),
+                role: new_role.to_string(),
+            },
+        });
     }
 
     let source = rename_config_role_references(config_source, old_role, new_role)?;
-    parse_config_model(&source).map_err(|err| err.to_string())?;
+    parse_config_model(&source).map_err(|source| FleetConfigError::CoreConfig {
+        operation: FleetConfigOperation::RenameRole,
+        source,
+    })?;
 
     let (package_manifest, package_source, package_manifest_note) =
         config_path.parent().map_or_else(
@@ -89,7 +117,7 @@ fn rename_config_role_references(
     source: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, FleetConfigError> {
     let old_literal = toml_string_literal(old_role);
     let new_literal = toml_string_literal(new_role);
     let mut updated = Vec::new();
@@ -116,7 +144,7 @@ fn rename_role_header(
     line: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+) -> Result<String, FleetConfigError> {
     let trimmed = line.trim();
     if !trimmed.starts_with('[') || !trimmed.ends_with(']') || trimmed.starts_with("[[") {
         return Ok(line.to_string());
@@ -149,7 +177,7 @@ fn rename_role_header(
     ))
 }
 
-fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, FleetConfigError> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut chars = path.chars();
@@ -161,7 +189,9 @@ fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, Box<dyn std::error:
             '"' if in_quote => in_quote = false,
             '\\' if in_quote => {
                 let Some(escaped) = chars.next() else {
-                    return Err("unterminated TOML escape in table header".into());
+                    return Err(FleetConfigError::InvalidTableHeader {
+                        detail: "unterminated TOML escape in table header",
+                    });
                 };
                 current.push(escaped);
             }
@@ -174,7 +204,9 @@ fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, Box<dyn std::error:
     }
 
     if in_quote {
-        return Err("unterminated quoted TOML table header".into());
+        return Err(FleetConfigError::InvalidTableHeader {
+            detail: "unterminated quoted TOML table header",
+        });
     }
     parts.push(current.trim().to_string());
     Ok(parts)
@@ -185,13 +217,26 @@ fn update_package_manifest_role(
     expected_fleet: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<Option<String>, Box<dyn std::error::Error>> {
+) -> Result<Option<String>, FleetConfigError> {
     if !manifest.is_file() {
         return Ok(None);
     }
 
-    let source = fs::read_to_string(manifest)?;
-    let Some((fleet, role)) = package_canic_metadata(&source)? else {
+    let source = fs::read_to_string(manifest).map_err(|source| {
+        FleetConfigError::io(
+            FleetConfigIoOperation::ReadPackageManifest,
+            manifest,
+            source,
+        )
+    })?;
+    let Some((fleet, role)) = package_canic_metadata(&source).map_err(|source| {
+        FleetConfigError::Toml {
+            operation: FleetConfigTomlOperation::ParsePackageManifest,
+            source,
+        }
+        .at_config_path(manifest)
+    })?
+    else {
         return Ok(None);
     };
     if fleet != expected_fleet || role != old_role {
@@ -199,27 +244,34 @@ fn update_package_manifest_role(
     }
 
     let updated = rename_package_metadata_role_source(&source, old_role, new_role);
-    let Some((updated_fleet, updated_role)) = package_canic_metadata(&updated)? else {
-        return Err(format!(
-            "updated {} would remove [package.metadata.canic]",
-            manifest.display()
-        )
-        .into());
+    let Some((updated_fleet, updated_role)) =
+        package_canic_metadata(&updated).map_err(|source| {
+            FleetConfigError::Toml {
+                operation: FleetConfigTomlOperation::ParsePackageManifest,
+                source,
+            }
+            .at_config_path(manifest)
+        })?
+    else {
+        return Err(FleetConfigError::PackageMetadataInvalid {
+            path: manifest.to_path_buf(),
+            issue: FleetConfigPackageIssue::MetadataMissing,
+        });
     };
     if updated_fleet != expected_fleet || updated_role != new_role {
-        return Err(format!(
-            "updated {} would not contain expected Canic metadata fleet={expected_fleet:?} role={new_role:?}",
-            manifest.display()
-        )
-        .into());
+        return Err(FleetConfigError::PackageMetadataInvalid {
+            path: manifest.to_path_buf(),
+            issue: FleetConfigPackageIssue::MetadataMismatch {
+                expected_fleet: expected_fleet.to_string(),
+                expected_role: new_role.to_string(),
+            },
+        });
     }
 
     Ok(Some(updated))
 }
 
-fn package_canic_metadata(
-    source: &str,
-) -> Result<Option<(String, String)>, Box<dyn std::error::Error>> {
+fn package_canic_metadata(source: &str) -> Result<Option<(String, String)>, toml::de::Error> {
     let metadata = toml::from_str::<TomlValue>(source)?;
     let Some(canic_metadata) = metadata
         .get("package")
