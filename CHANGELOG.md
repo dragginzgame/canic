@@ -8,13 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Potentially breaking: fleet-config host APIs now return one typed error that
-  preserves parse, I/O, validation, mutation, and rollback causes. Boxed and
-  string-built config errors are removed without compatibility conversions.
-
 ## [0.88.x] - 2026-07-13 - Artifact and Configuration Boundaries
 
 Detailed patch breakdown: [docs/changelog/0.88.md](docs/changelog/0.88.md)
+
+- `0.88.2` gives fleet configuration one typed failure boundary and hard-cuts
+  boxed and string-built errors while preserving CLI and TOML behavior.
 
 - `0.88.1` makes CLI file output publication-atomic through one durable host
   writer, including atomic no-clobber deployment-plan output.

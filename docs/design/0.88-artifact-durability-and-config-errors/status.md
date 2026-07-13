@@ -6,10 +6,11 @@ Last updated: 2026-07-13
 
 The post-0.87 audit selected exactly three implementation slices. Slice A is
 published as `0.88.0`, and Slice B is published as `0.88.1`. Slice C is
-implemented: fleet configuration has one typed host-owned error boundary,
-boxed and string-built error returns are hard-cut, direct CLI consumers retain
-the typed error, and rollback failure preserves both causes. Package versions
-remain `0.88.1` until the human-owned release bump.
+implemented and release-noted as `0.88.2`: fleet configuration has one typed
+host-owned error boundary, boxed and string-built error returns are hard-cut,
+direct CLI consumers retain the typed error, and rollback failure preserves
+both causes. Package versions remain `0.88.1` until the human-owned release
+bump.
 
 One 0.87 closeout correction was recorded before `0.88.0`: install-root no
 longer converts a boxed ICP command failure to text to detect a missing
@@ -103,6 +104,6 @@ canister ID. The existing typed ICP classifier owns all recognized forms.
 
 ## Next Action
 
-Review and release Slice C, then close 0.88. Do not add another slice, widen the
-typed boundary into a global host error framework, or add compatibility
-conversions for the removed boxed error surface.
+Run the human-owned `0.88.2` version bump and push, then close 0.88. Do not add
+another slice, widen the typed boundary into a global host error framework, or
+add compatibility conversions for the removed boxed error surface.
