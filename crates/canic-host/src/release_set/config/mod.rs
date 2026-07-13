@@ -24,14 +24,14 @@ pub use model::{
 pub(super) use mutation::{
     attach_fleet_role_source, declare_fleet_role_source, rename_fleet_role_source,
 };
+pub use projection::configured_release_roles_from_config;
 pub(super) use projection::{
     configured_bootstrap_roles_from_source, configured_controllers_from_source,
     configured_deployable_roles_from_source, configured_fleet_name_from_source,
     configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
-    configured_release_roles_from_source, configured_role_auto_create_from_source,
-    configured_role_details_from_source, configured_role_kinds_from_source,
-    configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
-    configured_role_topups_from_source,
+    configured_role_auto_create_from_source, configured_role_details_from_source,
+    configured_role_kinds_from_source, configured_role_lifecycle_from_source,
+    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
 };
 
 // Validate a package-backed role declaration without writing `canic.toml`.
@@ -75,13 +75,6 @@ pub fn plan_rename_fleet_role(
     Ok(updated.role)
 }
 
-// Enumerate the configured ordinary roles that root must publish before bootstrap resumes.
-pub fn configured_release_roles(config_path: &Path) -> Result<Vec<String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_release_roles_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
 // Enumerate deployable roles in the single subnet that owns `root`.
 pub fn configured_deployable_roles(config_path: &Path) -> Result<Vec<String>, FleetConfigError> {
     let config_source = read_config_source(config_path)?;
@@ -94,16 +87,6 @@ pub fn configured_bootstrap_roles(config_path: &Path) -> Result<Vec<String>, Fle
     let config_source = read_config_source(config_path)?;
     configured_bootstrap_roles_from_source(&config_source)
         .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate the local install targets: root plus the ordinary roles owned by its subnet.
-pub fn configured_install_targets(
-    config_path: &Path,
-    root_canister: &str,
-) -> Result<Vec<String>, FleetConfigError> {
-    let mut targets = vec![root_canister.to_string()];
-    targets.extend(configured_release_roles(config_path)?);
-    Ok(targets)
 }
 
 // Estimate local root cycles needed to create bootstrap-owned canisters.

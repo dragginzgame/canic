@@ -93,11 +93,9 @@ pub(in crate::release_set) fn configured_pool_expectations_from_source(
     Ok(pools.into_values().collect())
 }
 
-// Enumerate the configured ordinary roles for the single subnet that owns `root`.
-pub(in crate::release_set) fn configured_release_roles_from_source(
-    config_source: &str,
-) -> Result<Vec<String>, FleetConfigError> {
-    configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Release)
+// Project ordinary release members from one already-validated configuration snapshot.
+pub fn configured_release_roles_from_config(config: &ConfigModel) -> Vec<String> {
+    configured_root_subnet_roles(config, RootSubnetRoleScope::Release)
 }
 
 // Enumerate deployable roles for the single subnet that owns `root`, except the
@@ -155,7 +153,11 @@ fn configured_root_subnet_roles_from_source(
     scope: RootSubnetRoleScope,
 ) -> Result<Vec<String>, FleetConfigError> {
     let config = parse_projection_config(config_source)?;
-    let subnet = root_subnet(&config);
+    Ok(configured_root_subnet_roles(&config, scope))
+}
+
+fn configured_root_subnet_roles(config: &ConfigModel, scope: RootSubnetRoleScope) -> Vec<String> {
+    let subnet = root_subnet(config);
     let root_subnet_roles = subnet
         .canisters
         .keys()
@@ -164,7 +166,7 @@ fn configured_root_subnet_roles_from_source(
         .map(|role| role.as_str().to_string())
         .collect::<Vec<_>>();
 
-    Ok(sort_root_subnet_roles(root_subnet_roles))
+    sort_root_subnet_roles(root_subnet_roles)
 }
 
 fn root_subnet(config: &ConfigModel) -> &SubnetConfig {

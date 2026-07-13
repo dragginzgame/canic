@@ -2,7 +2,7 @@ use super::config::{
     attach_fleet_role_source, configured_bootstrap_roles_from_source,
     configured_controllers_from_source, configured_deployable_roles_from_source,
     configured_fleet_name_from_source, configured_local_root_create_cycles_from_source,
-    configured_pool_expectations_from_source, configured_release_roles_from_source,
+    configured_pool_expectations_from_source, configured_release_roles_from_config,
     configured_role_auto_create_from_source, configured_role_details_from_source,
     configured_role_kinds_from_source, configured_role_lifecycle_from_source,
     configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
@@ -10,8 +10,8 @@ use super::config::{
 };
 use super::stage::{read_release_artifact, resolve_release_artifact_path};
 use super::{
-    canister_manifest_path, canisters_root, config_path, configured_install_targets,
-    plan_attach_fleet_role, plan_declare_fleet_role, plan_rename_fleet_role, root_manifest_path,
+    canister_manifest_path, canisters_root, config_path, plan_attach_fleet_role,
+    plan_declare_fleet_role, plan_rename_fleet_role, root_manifest_path,
 };
 use crate::test_support::temp_dir;
 use flate2::{Compression, write::GzEncoder};

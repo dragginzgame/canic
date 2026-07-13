@@ -33,6 +33,13 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum ConfigSchemaError {
+    #[error("validation error: {context} '{role}' {issue}")]
+    InvalidCanisterRoleName {
+        context: &'static str,
+        role: String,
+        issue: CanisterRoleNameIssue,
+    },
+
     #[error("validation error: {0}")]
     ValidationError(String),
 }
@@ -46,7 +53,6 @@ pub enum ConfigSchemaError {
 /// - Avoids accidental abuse via extremely long role names
 ///
 
-#[cfg(any(not(target_arch = "wasm32"), test))]
 pub const NAME_MAX_BYTES: usize = 40;
 
 ///
@@ -85,7 +91,7 @@ pub trait Validate {
 /// - Exactly one ROOT canister MUST exist globally
 /// - ROOT canister MUST be in the PRIME subnet
 /// - App index canisters must be SERVICEs in PRIME
-/// - Role names are length-limited
+/// - Canister role names follow the canonical deployment identity rule
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
 ///

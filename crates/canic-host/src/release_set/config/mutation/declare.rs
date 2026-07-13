@@ -1,6 +1,6 @@
 use super::{
     DeclaredFleetRoleSource,
-    support::{toml_string_literal, validate_role_name},
+    support::{admit_canister_role_name, toml_string_literal},
 };
 use crate::release_set::config::{
     FleetConfigDeclaration, FleetConfigError, FleetConfigMutationConflict, FleetConfigNameField,
@@ -16,7 +16,7 @@ pub(in crate::release_set) fn declare_fleet_role_source(
 ) -> Result<DeclaredFleetRoleSource, FleetConfigError> {
     let role = role.trim();
     let package = package.trim();
-    validate_role_name(role)?;
+    admit_canister_role_name(role)?;
     if package.is_empty() {
         return Err(FleetConfigError::InvalidName {
             field: FleetConfigNameField::Package,

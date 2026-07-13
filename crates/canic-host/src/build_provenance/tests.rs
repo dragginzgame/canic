@@ -63,7 +63,6 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
             wasm_path,
             wasm_gz_path,
             did_path,
-            manifest_path: None,
         },
     );
     let artifacts = artifact_provenance(&request).expect("artifact provenance");
@@ -211,7 +210,6 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
         wasm_path,
         wasm_gz_path,
         did_path,
-        manifest_path: None,
     }
 }
 

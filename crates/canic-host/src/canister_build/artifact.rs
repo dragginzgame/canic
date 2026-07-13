@@ -8,12 +8,11 @@ use crate::{
         embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
     },
     bootstrap_store::build_bootstrap_wasm_store_artifact,
-    cargo_command,
-    release_set::{configured_role_lifecycle, emit_root_release_set_manifest_if_ready_with_config},
-    remove_optional_file,
+    cargo_command, remove_optional_file,
     role_contract::{
         PackageValidationMode, RolePackageEvidence, RolePackageValidation, finding_detail,
-        resolve_declared_role_package_contract, validate_declared_role_package,
+        resolve_declared_role_package_contract_from_config,
+        validate_declared_role_package_from_config,
     },
     should_export_candid_artifacts,
 };
@@ -23,8 +22,8 @@ use super::{
     cache::{canister_build_target_root, configure_canister_cargo_command},
     candid::{extract_candid, remove_stale_icp_candid_sidecars},
     model::{
-        CanisterArtifactBuildOutput, LOCAL_ARTIFACT_ROOT_RELATIVE, ROOT_ROLE, WASM_STORE_ROLE,
-        WASM_TARGET,
+        CanisterArtifactBuildOutput, CanisterArtifactBuildSpec, LOCAL_ARTIFACT_ROOT_RELATIVE,
+        ROOT_ROLE, WASM_STORE_ROLE, WASM_TARGET,
     },
     wasm_store::build_hidden_wasm_store_artifact,
 };
@@ -32,7 +31,14 @@ use super::{
 pub fn build_workspace_canister_artifact(
     context: &WorkspaceBuildContext,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    build_canister_artifact(context)
+    if context.role == WASM_STORE_ROLE {
+        return build_hidden_wasm_store_artifact(context);
+    }
+
+    let config_source = fs::read_to_string(&context.config_path)?;
+    let config = canic_core::bootstrap::parse_config_model(&config_source)?;
+    let spec = resolve_canister_artifact_build_spec(context, &config)?;
+    build_workspace_canister_artifact_from_spec(context, &spec)
 }
 
 /// Copy the uncompressed artifact to the path requested by ICP custom builds.
@@ -63,90 +69,103 @@ pub fn copy_icp_wasm_output(
     Ok(())
 }
 
-// Build one visible Canic canister artifact and keep the thin-root special cases.
-fn build_canister_artifact(
+// Build one visible Canic canister artifact from already-admitted package and path authority.
+pub fn build_workspace_canister_artifact_from_spec(
     context: &WorkspaceBuildContext,
+    spec: &CanisterArtifactBuildSpec,
 ) -> Result<CanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
-    let canister_name = context.role.as_str();
-    if canister_name == WASM_STORE_ROLE {
-        return build_hidden_wasm_store_artifact(context);
+    if context.role != spec.role {
+        return Err(format!(
+            "build context role {} does not match admitted role {}",
+            context.role, spec.role
+        )
+        .into());
     }
 
-    validate_artifact_role_attached(&context.config_path, canister_name)?;
-    let role_package = require_declared_role_contract(&context.config_path, canister_name)?;
-    let canister_manifest_path = role_package.role_manifest_path;
-    let canister_package_name = role_package.role_package_name;
-    let artifact_root = context
-        .icp_root
-        .join(LOCAL_ARTIFACT_ROOT_RELATIVE)
-        .join(canister_name);
-    let wasm_path = artifact_root.join(format!("{canister_name}.wasm"));
-    let wasm_gz_path = artifact_root.join(format!("{canister_name}.wasm.gz"));
-    let did_path = artifact_root.join(format!("{canister_name}.did"));
+    let canister_name = spec.role.as_str();
     let require_embedded_release_artifacts = canister_name == ROOT_ROLE;
 
     if require_embedded_release_artifacts {
         build_bootstrap_wasm_store_artifact(context)?;
     }
 
-    fs::create_dir_all(&artifact_root)?;
-    remove_stale_icp_candid_sidecars(&artifact_root)?;
+    fs::create_dir_all(&spec.artifact_root)?;
+    remove_stale_icp_candid_sidecars(&spec.artifact_root)?;
 
     let release_wasm_path = run_canister_build(
         context,
-        &canister_manifest_path,
-        &canister_package_name,
+        &spec.package_manifest_path,
+        &spec.package_name,
         require_embedded_release_artifacts,
     )?;
-    write_wasm_artifact(&release_wasm_path, &wasm_path)?;
-    maybe_shrink_wasm_artifact(&wasm_path)?;
+    write_wasm_artifact(&release_wasm_path, &spec.wasm_path)?;
+    maybe_shrink_wasm_artifact(&spec.wasm_path)?;
 
     let network = &context.build_network;
     if should_export_candid_artifacts(network) {
         let debug_context = context.with_profile(CanisterBuildProfile::Debug);
         let debug_wasm_path = run_canister_build(
             &debug_context,
-            &canister_manifest_path,
-            &canister_package_name,
+            &spec.package_manifest_path,
+            &spec.package_name,
             require_embedded_release_artifacts,
         )?;
-        extract_candid(&debug_wasm_path, &did_path)?;
-        embed_candid_metadata(&wasm_path, &did_path)?;
+        extract_candid(&debug_wasm_path, &spec.did_path)?;
+        embed_candid_metadata(&spec.wasm_path, &spec.did_path)?;
     } else {
-        remove_optional_file(&did_path)?;
+        remove_optional_file(&spec.did_path)?;
     }
-    write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
-
-    let manifest_path = emit_root_release_set_manifest_if_ready_with_config(
-        &context.workspace_root,
-        &context.icp_root,
-        network,
-        &context.config_path,
-    )?;
+    write_gzip_artifact(&spec.wasm_path, &spec.wasm_gz_path)?;
 
     Ok(CanisterArtifactBuildOutput {
+        artifact_root: spec.artifact_root.clone(),
+        wasm_path: spec.wasm_path.clone(),
+        wasm_gz_path: spec.wasm_gz_path.clone(),
+        did_path: spec.did_path.clone(),
+    })
+}
+
+pub fn resolve_canister_artifact_build_spec(
+    context: &WorkspaceBuildContext,
+    config: &canic_core::bootstrap::compiled::ConfigModel,
+) -> Result<CanisterArtifactBuildSpec, Box<dyn std::error::Error>> {
+    let canister_name = context.role.as_str();
+    let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
+    validate_artifact_role_attached(config, canister_name)?;
+    let evidence = match validate_declared_role_package_from_config(
+        &context.config_path,
+        config,
+        &role,
+        PackageValidationMode::Build,
+    ) {
+        RolePackageValidation::Supported(evidence) => evidence,
+        RolePackageValidation::Unsupported(finding) => {
+            return Err(format!("{}: {}", finding.code(), finding_detail(&finding)).into());
+        }
+    };
+    require_declared_role_contract(config, &evidence)?;
+
+    let artifact_root = context
+        .icp_root
+        .join(LOCAL_ARTIFACT_ROOT_RELATIVE)
+        .join(canister_name);
+    Ok(CanisterArtifactBuildSpec {
+        role: canister_name.to_string(),
+        package_name: evidence.role_package_name,
+        package_manifest_path: evidence.role_manifest_path,
+        wasm_path: artifact_root.join(format!("{canister_name}.wasm")),
+        wasm_gz_path: artifact_root.join(format!("{canister_name}.wasm.gz")),
+        did_path: artifact_root.join(format!("{canister_name}.did")),
         artifact_root,
-        wasm_path,
-        wasm_gz_path,
-        did_path,
-        manifest_path,
     })
 }
 
 fn require_declared_role_contract(
-    config_path: &Path,
-    canister_name: &str,
-) -> Result<RolePackageEvidence, Box<dyn std::error::Error>> {
-    let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
-    let evidence =
-        match validate_declared_role_package(config_path, &role, PackageValidationMode::Build) {
-            RolePackageValidation::Supported(evidence) => evidence,
-            RolePackageValidation::Unsupported(finding) => {
-                return Err(format!("{}: {}", finding.code(), finding_detail(&finding)).into());
-            }
-        };
-    match resolve_declared_role_package_contract(config_path, &evidence) {
-        canic_core::role_contract::RoleContractResolution::Resolved { .. } => Ok(evidence),
+    config: &canic_core::bootstrap::compiled::ConfigModel,
+    evidence: &RolePackageEvidence,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match resolve_declared_role_package_contract_from_config(config, evidence) {
+        canic_core::role_contract::RoleContractResolution::Resolved { .. } => Ok(()),
         canic_core::role_contract::RoleContractResolution::Rejected { errors } => Err(errors
             .iter()
             .map(|finding| format!("{}: {}", finding.code(), finding_detail(finding)))
@@ -157,21 +176,20 @@ fn require_declared_role_contract(
 }
 
 fn validate_artifact_role_attached(
-    config_path: &Path,
+    config: &canic_core::bootstrap::compiled::ConfigModel,
     canister_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let roles = configured_role_lifecycle(config_path)?;
-    let Some(row) = roles.iter().find(|row| row.role == canister_name) else {
+    let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
+    if !config.roles.contains_key(&role) {
         return Err(format!(
-            "role {canister_name} is not declared in {}; declare the role before building an artifact",
-            config_path.display()
+            "role {canister_name} is not declared; declare the role before building an artifact"
         )
         .into());
-    };
-    if !row.attached {
+    }
+    if !config.attached_roles().contains(&role) {
+        let fleet = config.fleet_name().unwrap_or("<unknown>");
         return Err(format!(
-            "role {}.{} is declared but not attached to topology; run `canic fleet role attach {} {} --subnet <subnet>` before building an artifact",
-            row.fleet, row.role, row.fleet, row.role
+            "role {fleet}.{canister_name} is declared but not attached to topology; run `canic fleet role attach {fleet} {canister_name} --subnet <subnet>` before building an artifact"
         )
         .into());
     }

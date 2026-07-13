@@ -17,6 +17,7 @@ use crate::{
     cli::render::append_dry_run_footer,
     version_text,
 };
+use canic_core::shared_support::is_ascii_snake_case;
 use canic_host::{
     durable_io::write_bytes,
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
@@ -897,22 +898,7 @@ fn selected_fleet_config_path(
 }
 
 fn parse_project_name(name: &str) -> Result<String, String> {
-    let mut previous_underscore = false;
-    for (index, ch) in name.chars().enumerate() {
-        let valid = ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_';
-        if !valid {
-            return Err(format!("project name must be snake_case: {name}"));
-        }
-        if index == 0 && !ch.is_ascii_lowercase() {
-            return Err(format!("project name must be snake_case: {name}"));
-        }
-        if ch == '_' && previous_underscore {
-            return Err(format!("project name must be snake_case: {name}"));
-        }
-        previous_underscore = ch == '_';
-    }
-
-    if name.is_empty() || name.ends_with('_') {
+    if !is_ascii_snake_case(name) {
         return Err(format!("project name must be snake_case: {name}"));
     }
 

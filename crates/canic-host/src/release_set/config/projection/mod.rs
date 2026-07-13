@@ -16,10 +16,10 @@ pub(in crate::release_set) use roles::{
     configured_role_lifecycle_from_source, configured_role_metrics_profiles_from_source,
     configured_role_topups_from_source,
 };
+pub use root_subnet::configured_release_roles_from_config;
 pub(in crate::release_set) use root_subnet::{
     configured_bootstrap_roles_from_source, configured_deployable_roles_from_source,
     configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
-    configured_release_roles_from_source,
 };
 
 fn parse_projection_config(config_source: &str) -> Result<ConfigModel, FleetConfigError> {

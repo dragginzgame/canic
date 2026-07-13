@@ -9,19 +9,10 @@ use crate::{
         CanisterConfig, CanisterKind, ConfigSchemaError, CyclesFundingPolicyConfig, NAME_MAX_BYTES,
         SubnetConfig, TopupPolicy, Validate,
     },
+    config::validation::validate_canister_role,
     ids::CanisterRole,
 };
 use std::collections::BTreeMap;
-
-fn validate_role_len(role: &CanisterRole, context: &str) -> Result<(), ConfigSchemaError> {
-    if role.as_ref().len() > NAME_MAX_BYTES {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "{context} '{role}' exceeds {NAME_MAX_BYTES} bytes",
-        )));
-    }
-
-    Ok(())
-}
 
 impl Validate for SubnetConfig {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
@@ -33,7 +24,7 @@ impl Validate for SubnetConfig {
         }
 
         for (role, cfg) in &self.canisters {
-            validate_role_len(role, "canister")?;
+            validate_canister_role(role, "canister")?;
 
             if cfg.randomness.enabled && cfg.randomness.reseed_interval_secs == 0 {
                 return Err(ConfigSchemaError::ValidationError(format!(

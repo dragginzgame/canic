@@ -50,10 +50,8 @@ fn resolve_root_canister_operation_owns_current_install_evidence() {
 #[test]
 fn build_install_targets_operation_owns_current_install_evidence() {
     let context = test_build_context();
-    let operation = BuildInstallTargetsOperation::new(
-        &context,
-        vec!["root".to_string(), "wasm_store".to_string()],
-    );
+    let targets = [build_target("root"), build_target("wasm_store")];
+    let operation = BuildInstallTargetsOperation::new(&context, &targets);
 
     assert_eq!(
         operation.evidence(),
@@ -64,12 +62,13 @@ fn build_install_targets_operation_owns_current_install_evidence() {
 
 #[test]
 fn emit_root_manifest_operation_owns_current_install_evidence() {
-    let _operation = EmitRootManifestOperation::new(
-        Path::new("/workspace"),
-        Path::new("/workspace/.icp"),
-        "local",
-        Path::new("/workspace/fleets/demo/canic.toml"),
-    );
+    let snapshot = RootReleaseSetBuildSnapshot {
+        icp_root: PathBuf::from("/workspace"),
+        manifest_path: PathBuf::from("/workspace/.icp/local/canisters/root/root.release-set.json"),
+        release_version: "0.91.0".to_string(),
+        targets: Vec::new(),
+    };
+    let _operation = EmitRootManifestOperation::new(&snapshot, &[]);
 
     let evidence = EmitRootManifestOperation::evidence(Path::new(
         "/workspace/.icp/local/canisters/root.release-set.json",
@@ -79,6 +78,24 @@ fn emit_root_manifest_operation_owns_current_install_evidence() {
         evidence,
         ["manifest_path:/workspace/.icp/local/canisters/root.release-set.json"]
     );
+}
+
+fn build_target(role: &str) -> InstallBuildTarget {
+    let artifact_root = PathBuf::from("/workspace/.icp/local/canisters").join(role);
+    InstallBuildTarget {
+        role: role.to_string(),
+        spec: CanisterArtifactBuildSpec {
+            role: role.to_string(),
+            package_name: format!("canister_{role}"),
+            package_manifest_path: PathBuf::from("/workspace/fleets")
+                .join(role)
+                .join("Cargo.toml"),
+            wasm_path: artifact_root.join(format!("{role}.wasm")),
+            wasm_gz_path: artifact_root.join(format!("{role}.wasm.gz")),
+            did_path: artifact_root.join(format!("{role}.did")),
+            artifact_root,
+        },
+    }
 }
 
 #[test]
