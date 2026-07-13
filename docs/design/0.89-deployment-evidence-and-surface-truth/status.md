@@ -4,16 +4,22 @@ Last updated: 2026-07-13
 
 ## Current State
 
-The post-0.88 audit selected exactly three bounded slices, and all three are
-complete. Install-state persistence owns one typed error, all six boxed
+The post-0.88 audit selected exactly three bounded slices, and all three shipped
+in `0.89.0`. Install-state persistence owns one typed error, all six boxed
 signatures are hard-cut, real read failures are no longer treated as missing
 files, and ICP-root discovery exposes its actual I/O contract. Installed
 deployment resolution and all ten command-owned projectors retain concrete
 install-state and replica-query sources through local classification. Four
 compilation-proven dead declarations are removed, the facade's generated
 `ic-cdk` test consumer is explicitly accounted for, and the audited RPC
-adapters are private to their dispatch owner. Package versions remain
-`0.88.2`.
+adapters are private to their dispatch owner.
+
+A post-release conformance scan found one Slice A admission gap: decoded state
+was not checked against schema version 2 or its requested deployment/network
+path, while deployment-catalog enumeration maintained a second partial check.
+One owner decoder now applies all three checks to named reads and catalog
+enumeration. Package versions remain `0.89.0` until the maintainer requests the
+next release bump.
 
 ## Checklist
 
@@ -40,6 +46,14 @@ adapters are private to their dispatch owner. Package versions remain
 - [x] Make three concrete RPC adapters private.
 - [x] Keep request ops/error visibility within the private ops tree.
 - [x] Restore a clean Cargo Machete result.
+
+### Post-release Slice A correction
+
+- [x] Reject unsupported install-state schema versions on read and write.
+- [x] Reject deployment/network identity mismatches on read.
+- [x] Route deployment-catalog decoding through the same admission owner.
+- [x] Reject path-like catalog networks before directory construction.
+- [x] Preserve valid schema-2 bytes and existing catalog warning contracts.
 
 ## Validation
 
@@ -71,10 +85,20 @@ adapters are private to their dispatch owner. Package versions remain
 - Warning-denied Clippy passes for core, facade, test root, runtime probe, and
   integration-test packages.
 - Cargo Machete reports no unused dependency.
+- Nine focused install-state/deployment-observation tests pass, including
+  schema, deployment, and network mismatch rejection.
+- Eight focused deployment-catalog tests pass, including unsupported-schema
+  exclusion and pre-path network validation while valid entries and report
+  behavior remain unchanged.
+- Five focused CLI deployment-catalog tests preserve parsing, dispatch, help,
+  and JSON output behavior.
+- Warning-denied `canic-host` library/test Clippy passes for the correction.
 - Full workspace, PocketIC, deployment, and broad Wasm suites were not run.
 
 ## Next Action
 
-The bounded 0.89 implementation is complete. Prepare its changelog and release
-version only when explicitly requested; do not add another implementation
-slice or widen the line into dependency upgrades or broad visibility cleanup.
+The bounded `0.89.0` implementation remains closed. The root and detailed
+`0.89.1` changelog entries are prepared for the post-release Slice A
+correction; package versions remain `0.89.0` until the maintainer requests the
+release bump. Do not add another implementation slice or widen the line into
+dependency upgrades or broad visibility cleanup.

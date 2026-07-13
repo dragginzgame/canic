@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.89.md](docs/changelog/0.89.md)
 
+- `0.89.1` centralizes install-state admission and rejects unsupported,
+  misplaced, or path-escaping deployment state before it can supply deployment
+  evidence.
+
 - `0.89.0` makes deployment evidence typed end to end and aligns dependency
   and RPC surfaces with their real consumers without changing persisted state
   or command behavior.
