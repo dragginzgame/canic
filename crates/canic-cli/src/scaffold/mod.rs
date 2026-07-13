@@ -18,6 +18,7 @@ use crate::{
     version_text,
 };
 use canic_host::{
+    durable_io::write_bytes,
     install_root::{current_canic_project_root, discover_project_canic_config_choices},
     release_set::{
         declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
@@ -86,6 +87,12 @@ pub enum ScaffoldCommandError {
 
     #[error(transparent)]
     Io(#[from] io::Error),
+
+    #[error("scaffold failed: {operation}; rollback failed: {rollback}")]
+    Rollback {
+        operation: Box<Self>,
+        rollback: io::Error,
+    },
 }
 
 ///
@@ -363,19 +370,32 @@ fn scaffold_project_at(
     let root_src_dir = result.root_dir.join("src");
     let app_src_dir = result.app_dir.join("src");
 
-    write_new_file(&result.config_path, &canic_toml(&options.name))?;
-    write_new_file(
-        &result.root_dir.join("Cargo.toml"),
-        &root_cargo_toml(&options.name),
-    )?;
-    write_new_file(&result.root_dir.join("build.rs"), ROOT_BUILD_RS)?;
-    write_new_file(&root_src_dir.join("lib.rs"), ROOT_LIB_RS)?;
-    write_new_file(
-        &result.app_dir.join("Cargo.toml"),
-        &app_cargo_toml(&options.name),
-    )?;
-    write_new_file(&result.app_dir.join("build.rs"), APP_BUILD_RS)?;
-    write_new_file(&app_src_dir.join("lib.rs"), APP_LIB_RS)?;
+    let write_result = (|| {
+        write_new_file(&result.config_path, &canic_toml(&options.name))?;
+        write_new_file(
+            &result.root_dir.join("Cargo.toml"),
+            &root_cargo_toml(&options.name),
+        )?;
+        write_new_file(&result.root_dir.join("build.rs"), ROOT_BUILD_RS)?;
+        write_new_file(&root_src_dir.join("lib.rs"), ROOT_LIB_RS)?;
+        write_new_file(
+            &result.app_dir.join("Cargo.toml"),
+            &app_cargo_toml(&options.name),
+        )?;
+        write_new_file(&result.app_dir.join("build.rs"), APP_BUILD_RS)?;
+        write_new_file(&app_src_dir.join("lib.rs"), APP_LIB_RS)?;
+        Ok::<(), ScaffoldCommandError>(())
+    })();
+
+    if let Err(operation) = write_result {
+        return match rollback_scaffold(&result.project_dir, &[]) {
+            Ok(()) => Err(operation),
+            Err(rollback) => Err(ScaffoldCommandError::Rollback {
+                operation: Box::new(operation),
+                rollback,
+            }),
+        };
+    }
 
     Ok(plan.result)
 }
@@ -438,20 +458,37 @@ fn scaffold_canister_at(
 ) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
     let plan = plan_scaffold_canister_at(project_root, options)?;
     let src_dir = plan.canister_dir.join("src");
+    let mut originals = vec![(plan.config_path.clone(), fs::read(&plan.config_path)?)];
+    if let Some(manifest_path) = &plan.workspace_manifest_path {
+        originals.push((manifest_path.clone(), fs::read(manifest_path)?));
+    }
 
-    write_new_file(
-        &plan.canister_dir.join("Cargo.toml"),
-        &canister_cargo_toml(&options.fleet, &options.role),
-    )?;
-    write_new_file(&plan.canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
-    write_new_file(&src_dir.join("lib.rs"), CANISTER_LIB_RS)?;
-    append_workspace_member(project_root, &plan.workspace_member)?;
-    declare_fleet_role(
-        &plan.config_path,
-        &options.fleet,
-        &options.role,
-        &plan.result.package,
-    )?;
+    let write_result = (|| {
+        write_new_file(
+            &plan.canister_dir.join("Cargo.toml"),
+            &canister_cargo_toml(&options.fleet, &options.role),
+        )?;
+        write_new_file(&plan.canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
+        write_new_file(&src_dir.join("lib.rs"), CANISTER_LIB_RS)?;
+        append_workspace_member(project_root, &plan.workspace_member)?;
+        declare_fleet_role(
+            &plan.config_path,
+            &options.fleet,
+            &options.role,
+            &plan.result.package,
+        )?;
+        Ok::<(), ScaffoldCommandError>(())
+    })();
+
+    if let Err(operation) = write_result {
+        return match rollback_scaffold(&plan.canister_dir, &originals) {
+            Ok(()) => Err(operation),
+            Err(rollback) => Err(ScaffoldCommandError::Rollback {
+                operation: Box::new(operation),
+                rollback,
+            }),
+        };
+    }
 
     Ok(plan.result)
 }
@@ -466,9 +503,33 @@ fn append_workspace_member(
     let source = fs::read_to_string(&manifest_path)?;
     let updated = append_workspace_member_source(&source, member)?;
     if updated != source {
-        fs::write(manifest_path, updated)?;
+        write_bytes(&manifest_path, updated.as_bytes())?;
     }
     Ok(())
+}
+
+fn rollback_scaffold(created_dir: &Path, originals: &[(PathBuf, Vec<u8>)]) -> io::Result<()> {
+    let mut first_error = None;
+
+    for (path, bytes) in originals {
+        if let Err(error) = write_bytes(path, bytes)
+            && first_error.is_none()
+        {
+            first_error = Some(error);
+        }
+    }
+
+    if created_dir.exists()
+        && let Err(error) = fs::remove_dir_all(created_dir)
+        && first_error.is_none()
+    {
+        first_error = Some(error);
+    }
+
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
 
 fn validate_workspace_member_update(

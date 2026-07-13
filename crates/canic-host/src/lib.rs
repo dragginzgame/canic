@@ -15,7 +15,7 @@ mod cargo_metadata;
 pub mod cycle_balance;
 pub mod deployment_catalog;
 pub mod deployment_truth;
-mod durable_io;
+pub mod durable_io;
 pub mod duration;
 pub mod evidence_envelope;
 pub mod format;

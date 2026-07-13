@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.87.x] - 2026-07-13 - Operator Boundary Hygiene
+
+Detailed patch breakdown: [docs/changelog/0.87.md](docs/changelog/0.87.md)
+
+- `0.87.0` makes fleet and canister scaffolding failure-atomic with durable
+  project-file replacement and one bounded rollback path.
+
 ## [0.86.x] - 2026-07-12 - Structural Maintainability
 
 Detailed patch breakdown: [docs/changelog/0.86.md](docs/changelog/0.86.md)
