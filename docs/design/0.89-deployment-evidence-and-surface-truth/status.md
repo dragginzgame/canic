@@ -18,8 +18,13 @@ A post-release conformance scan found one Slice A admission gap: decoded state
 was not checked against schema version 2 or its requested deployment/network
 path, while deployment-catalog enumeration maintained a second partial check.
 One owner decoder now applies all three checks to named reads and catalog
-enumeration. Package versions remain `0.89.0` until the maintainer requests the
-next release bump.
+enumeration. That correction is published as `0.89.1`.
+
+The following closeout scan found one Slice B source-retention gap: passive
+deployment inventory rendered `InstallStateError` into text immediately after
+the canonical read. The inventory error now retains that concrete source while
+preserving its display text. Package versions remain `0.89.1` until the
+maintainer requests the next release bump.
 
 ## Checklist
 
@@ -54,6 +59,12 @@ next release bump.
 - [x] Route deployment-catalog decoding through the same admission owner.
 - [x] Reject path-like catalog networks before directory construction.
 - [x] Preserve valid schema-2 bytes and existing catalog warning contracts.
+
+### Post-release Slice B correction
+
+- [x] Retain the concrete install-state source in passive deployment inventory.
+- [x] Delete the early string conversion without adding a shared projector.
+- [x] Preserve existing display text and successful inventory behavior.
 
 ## Validation
 
@@ -93,12 +104,17 @@ next release bump.
 - Five focused CLI deployment-catalog tests preserve parsing, dispatch, help,
   and JSON output behavior.
 - Warning-denied `canic-host` library/test Clippy passes for the correction.
+- The focused passive-inventory test retains the install-state decode path and
+  JSON source through `DeploymentTruthError`.
+- Source scans find no remaining install-state-to-string conversion in host or
+  CLI deployment paths.
 - Full workspace, PocketIC, deployment, and broad Wasm suites were not run.
 
 ## Next Action
 
-The bounded `0.89.0` implementation remains closed. The root and detailed
-`0.89.1` changelog entries are prepared for the post-release Slice A
-correction; package versions remain `0.89.0` until the maintainer requests the
-release bump. Do not add another implementation slice or widen the line into
-dependency upgrades or broad visibility cleanup.
+The bounded `0.89.0` implementation remains closed and the Slice A correction
+is published as `0.89.1`. The post-release Slice B correction is implemented
+without opening another slice, and the root and detailed `0.89.2` changelog
+entries are prepared. Package versions remain `0.89.1` until the maintainer
+requests a release bump. Do not widen the line into dependency upgrades or
+broad visibility cleanup.

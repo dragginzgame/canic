@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.89.0`, published and tagged
-  as `v0.89.0`. The bounded 0.86 structural-maintainability line is complete;
+- The current package/release-surface version is `0.89.1`, published and tagged
+  as `v0.89.1`. The bounded 0.86 structural-maintainability line is complete;
   its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -197,15 +197,20 @@ before this compaction is archived at
   fixture, and integration checks, warning-denied Clippy, Cargo Machete,
   layering, formatting, and diff hygiene pass. All three bounded 0.89 slices
   are complete and published as `v0.89.0`. A post-release Slice A conformance
-  correction now gives named reads and deployment-catalog enumeration one
-  install-state-owned admission rule: only schema version 2 state whose
+  correction, published as `v0.89.1`, gives named reads and
+  deployment-catalog enumeration one install-state-owned admission rule: only
+  schema version 2 state whose
   deployment and network match its requested canonical path may supply
   deployment evidence. Catalog network names are validated before directory
   construction, preventing path-like values from escaping the canonical state
   hierarchy. Unsupported or misplaced state fails closed with typed errors;
-  valid bytes and catalog warning contracts are unchanged. Package versions
-  remain `0.89.0`, and the root and detailed `0.89.1` changelog entries are
-  prepared pending an explicitly requested patch bump. The design explicitly
+  valid bytes and catalog warning contracts are unchanged. A subsequent
+  closeout scan found one passive deployment-inventory path that still
+  rendered `InstallStateError` into text immediately after the canonical read.
+  `DeploymentTruthError` now retains that concrete source while preserving its
+  display text. This is a Slice B conformance correction, not another slice or
+  a shared error framework. The root and detailed `0.89.2` changelog entries
+  are prepared; package versions remain `0.89.1`. The design explicitly
   excludes global error, command-projection, path, dependency-upgrade, and
   broad visibility frameworks.
   The `0.84` role-aware state-contract line shipped all three accepted slices
