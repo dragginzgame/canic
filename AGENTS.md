@@ -7,6 +7,14 @@ with this file, the code is wrong.
 - At the start of a new session, read `docs/status/current.md` first. Treat it
   as the compact handoff and avoid replaying old chat history unless needed.
 
+## Repository Scope
+- Automated edits are restricted to this Canic repository. Do not modify,
+  format, generate files in, or otherwise mutate sibling or external
+  repositories, even when a Canic design names a downstream integration.
+- Treat every repository outside the Canic repository root as read-only.
+  Record or report downstream work that remains instead of implementing it in
+  another repository.
+
 ## CI, Git, and Deployment
 - Follow `docs/governance/ci-deployment.md`; it is the authoritative policy for
   commands, git boundaries, versioning, release, network selection, and

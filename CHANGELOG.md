@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.90.md](docs/changelog/0.90.md)
 
+- `0.90.2` adds an exact downstream-adapter conformance proof and handoff for
+  receipt-backed intents without changing production APIs or stable state.
+
 - `0.90.1` implements exact-key receipt-backed reservations and at-most-once
   settlement on the existing resource authority, and hard-cuts automatic
   call-builder intent orchestration in favor of explicit local operations.

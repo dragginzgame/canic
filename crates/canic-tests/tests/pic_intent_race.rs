@@ -18,19 +18,70 @@ const INSTALL_CODE_RETRY_LIMIT: usize = 3;
 const CANISTERS: [&str; 3] = ["intent_authority", "intent_external", "intent_client"];
 static BUILD_ONCE: Once = Once::new();
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 enum ReceiptStateView {
     Pending,
-    Committed { fingerprint: [u8; 32] },
-    RolledBack { fingerprint: [u8; 32] },
+    Committed {
+        source_canister: Principal,
+        fingerprint: [u8; 32],
+    },
+    RolledBack {
+        source_canister: Principal,
+        fingerprint: [u8; 32],
+    },
 }
 
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 struct ReceiptIntentView {
     payload_digest: [u8; 32],
     quantity: u64,
     revision: u64,
     state: ReceiptStateView,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+enum ReceiptBeginStatus {
+    Created,
+    ExistingPending,
+    ExistingCommitted,
+    ExistingRolledBack,
+    BindingConflict,
+    CapacityExceeded {
+        current_quantity: u64,
+        requested_quantity: u64,
+        limit: u64,
+    },
+    StoreCapacityReached {
+        current_records: u64,
+        limit: u64,
+    },
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct ReceiptBeginView {
+    status: ReceiptBeginStatus,
+    intent: Option<ReceiptIntentView>,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+enum ReceiptSettlementStatus {
+    Settled,
+    AlreadySettled,
+    NotFound,
+    RevisionConflict { actual_revision: u64 },
+    BindingConflict,
+}
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct ReceiptSettlementView {
+    status: ReceiptSettlementStatus,
+    intent: Option<ReceiptIntentView>,
+}
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+enum ReceiptDecisionView {
+    Committed,
+    RolledBack,
 }
 
 #[test]
@@ -120,54 +171,140 @@ fn intent_race_capacity_one() {
     assert_eq!(success_count, 1, "expected exactly one success");
     println!("intent_race: success_count={success_count}");
 
-    assert_receipt_backed_facade_survives_upgrade(&pic, authority_id, &authority_wasm);
+    assert_receipt_backed_adapter_conformance(&pic, authority_id, external_id, &authority_wasm);
 }
 
-fn assert_receipt_backed_facade_survives_upgrade(
+fn assert_receipt_backed_adapter_conformance(
     pic: &ic_testkit::pic::Pic,
     authority_id: Principal,
+    evidence_source: Principal,
     authority_wasm: &[u8],
 ) {
-    let operation_seed = 11_u8;
-    let payload_seed = 12_u8;
-    let evidence_seed = 13_u8;
+    let pending = assert_pending_begin_decisions(pic, authority_id);
+    assert_pending_settlement_decisions(pic, authority_id, evidence_source, &pending);
+    upgrade_authority(pic, authority_id, authority_wasm);
+    assert_eq!(load_receipt(pic, authority_id, 11), Some(pending.clone()));
+    assert_committed_decisions(pic, authority_id, evidence_source, pending);
+
+    let rollback_pending = assert_rollback_capacity_decisions(pic, authority_id);
+    assert_rolled_back_decisions(pic, authority_id, evidence_source, rollback_pending);
+}
+
+fn assert_pending_begin_decisions(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+) -> ReceiptIntentView {
     let pending = ReceiptIntentView {
-        payload_digest: [payload_seed; 32],
+        payload_digest: [12; 32],
         quantity: 1,
         revision: 1,
         state: ReceiptStateView::Pending,
     };
 
-    let created: Option<ReceiptIntentView> = pic
-        .update_call::<Result<Option<ReceiptIntentView>, String>, _>(
-            authority_id,
-            "begin_receipt",
-            (operation_seed, payload_seed, 1_u64),
-        )
-        .expect("begin receipt transport")
-        .expect("begin receipt application");
-    assert_eq!(created, Some(pending));
+    assert_eq!(
+        begin_receipt(pic, authority_id, 11, 12, 1, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::Created,
+            intent: Some(pending.clone()),
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 11, 12, 1, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::ExistingPending,
+            intent: Some(pending.clone()),
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 11, 99, 1, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::BindingConflict,
+            intent: None,
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 11, 12, 2, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::BindingConflict,
+            intent: None,
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 21, 22, 1, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::CapacityExceeded {
+                current_quantity: 1,
+                requested_quantity: 1,
+                limit: 1,
+            },
+            intent: None,
+        }
+    );
 
-    let replayed: Option<ReceiptIntentView> = pic
-        .update_call::<Result<Option<ReceiptIntentView>, String>, _>(
-            authority_id,
-            "begin_receipt",
-            (operation_seed, payload_seed, 1_u64),
-        )
-        .expect("replay receipt transport")
-        .expect("replay receipt application");
-    assert_eq!(replayed, Some(pending));
+    pending
+}
 
-    let rejected: Option<ReceiptIntentView> = pic
-        .update_call::<Result<Option<ReceiptIntentView>, String>, _>(
+fn assert_pending_settlement_decisions(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+    evidence_source: Principal,
+    pending: &ReceiptIntentView,
+) {
+    assert_eq!(
+        settle_receipt(
+            pic,
             authority_id,
-            "begin_receipt",
-            (21_u8, 22_u8, 1_u64),
+            99,
+            99,
+            1,
+            ReceiptDecisionView::Committed,
+            evidence_source,
+            99,
         )
-        .expect("capacity receipt transport")
-        .expect("capacity receipt application");
-    assert_eq!(rejected, None);
+        .expect("missing receipt settlement"),
+        ReceiptSettlementView {
+            status: ReceiptSettlementStatus::NotFound,
+            intent: None,
+        }
+    );
+    assert_eq!(
+        settle_receipt(
+            pic,
+            authority_id,
+            11,
+            12,
+            0,
+            ReceiptDecisionView::Committed,
+            evidence_source,
+            13,
+        )
+        .expect("stale receipt settlement"),
+        ReceiptSettlementView {
+            status: ReceiptSettlementStatus::RevisionConflict { actual_revision: 1 },
+            intent: None,
+        }
+    );
+    assert_eq!(
+        settle_receipt(
+            pic,
+            authority_id,
+            11,
+            99,
+            1,
+            ReceiptDecisionView::Committed,
+            evidence_source,
+            13,
+        )
+        .expect("binding-conflict receipt settlement"),
+        ReceiptSettlementView {
+            status: ReceiptSettlementStatus::BindingConflict,
+            intent: None,
+        }
+    );
+    assert_eq!(load_receipt(pic, authority_id, 11), Some(pending.clone()),);
+}
 
+fn upgrade_authority(pic: &ic_testkit::pic::Pic, authority_id: Principal, authority_wasm: &[u8]) {
     pic.wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     pic.retry_install_code_ok(INSTALL_CODE_RETRY_LIMIT, INSTALL_CODE_COOLDOWN, || {
         pic.upgrade_canister(
@@ -179,43 +316,234 @@ fn assert_receipt_backed_facade_survives_upgrade(
         .map_err(|err| err.to_string())
     })
     .expect("upgrade intent authority");
+}
 
-    let after_upgrade: Option<ReceiptIntentView> = pic
-        .query_call::<Result<Option<ReceiptIntentView>, String>, _>(
-            authority_id,
-            "load_receipt",
-            (operation_seed,),
-        )
-        .expect("load receipt after upgrade transport")
-        .expect("load receipt after upgrade application");
-    assert_eq!(after_upgrade, Some(pending));
-
+fn assert_committed_decisions(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+    evidence_source: Principal,
+    pending: ReceiptIntentView,
+) {
     let committed = ReceiptIntentView {
         revision: 2,
         state: ReceiptStateView::Committed {
-            fingerprint: [evidence_seed; 32],
+            source_canister: evidence_source,
+            fingerprint: [13; 32],
         },
         ..pending
     };
-    let settled: Option<ReceiptIntentView> = pic
-        .update_call::<Result<Option<ReceiptIntentView>, String>, _>(
+    assert_eq!(
+        settle_receipt(
+            pic,
             authority_id,
-            "commit_receipt",
-            (operation_seed, payload_seed, evidence_seed),
+            11,
+            12,
+            1,
+            ReceiptDecisionView::Committed,
+            evidence_source,
+            13,
         )
-        .expect("settle receipt transport")
-        .expect("settle receipt application");
-    assert_eq!(settled, Some(committed));
+        .expect("commit receipt settlement"),
+        ReceiptSettlementView {
+            status: ReceiptSettlementStatus::Settled,
+            intent: Some(committed.clone()),
+        }
+    );
+    assert_eq!(
+        settle_receipt(
+            pic,
+            authority_id,
+            11,
+            12,
+            1,
+            ReceiptDecisionView::Committed,
+            evidence_source,
+            13,
+        )
+        .expect("replayed commit receipt settlement"),
+        ReceiptSettlementView {
+            status: ReceiptSettlementStatus::AlreadySettled,
+            intent: Some(committed.clone()),
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 11, 12, 1, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::ExistingCommitted,
+            intent: Some(committed.clone()),
+        }
+    );
 
-    let settled_replay: Option<ReceiptIntentView> = pic
-        .update_call::<Result<Option<ReceiptIntentView>, String>, _>(
+    let contradictory = settle_receipt(
+        pic,
+        authority_id,
+        11,
+        12,
+        2,
+        ReceiptDecisionView::RolledBack,
+        evidence_source,
+        14,
+    );
+    assert!(contradictory.is_err());
+    assert_eq!(load_receipt(pic, authority_id, 11), Some(committed));
+}
+
+fn assert_rollback_capacity_decisions(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+) -> ReceiptIntentView {
+    let rollback_pending = ReceiptIntentView {
+        payload_digest: [32; 32],
+        quantity: 1,
+        revision: 1,
+        state: ReceiptStateView::Pending,
+    };
+    assert_eq!(
+        begin_receipt(pic, authority_id, 31, 32, 2, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::Created,
+            intent: Some(rollback_pending.clone()),
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 41, 42, 2, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::CapacityExceeded {
+                current_quantity: 1,
+                requested_quantity: 1,
+                limit: 1,
+            },
+            intent: None,
+        }
+    );
+
+    rollback_pending
+}
+
+fn assert_rolled_back_decisions(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+    evidence_source: Principal,
+    rollback_pending: ReceiptIntentView,
+) {
+    let rolled_back = ReceiptIntentView {
+        revision: 2,
+        state: ReceiptStateView::RolledBack {
+            source_canister: evidence_source,
+            fingerprint: [33; 32],
+        },
+        ..rollback_pending
+    };
+    assert_eq!(
+        settle_receipt(
+            pic,
             authority_id,
-            "commit_receipt",
-            (operation_seed, payload_seed, evidence_seed),
+            31,
+            32,
+            1,
+            ReceiptDecisionView::RolledBack,
+            evidence_source,
+            33,
         )
-        .expect("replay settlement transport")
-        .expect("replay settlement application");
-    assert_eq!(settled_replay, Some(committed));
+        .expect("rollback receipt settlement"),
+        ReceiptSettlementView {
+            status: ReceiptSettlementStatus::Settled,
+            intent: Some(rolled_back.clone()),
+        }
+    );
+    assert_eq!(
+        settle_receipt(
+            pic,
+            authority_id,
+            31,
+            32,
+            1,
+            ReceiptDecisionView::RolledBack,
+            evidence_source,
+            33,
+        )
+        .expect("replayed rollback receipt settlement"),
+        ReceiptSettlementView {
+            status: ReceiptSettlementStatus::AlreadySettled,
+            intent: Some(rolled_back.clone()),
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 31, 32, 2, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::ExistingRolledBack,
+            intent: Some(rolled_back),
+        }
+    );
+    assert_eq!(
+        begin_receipt(pic, authority_id, 41, 42, 2, 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::Created,
+            intent: Some(ReceiptIntentView {
+                payload_digest: [42; 32],
+                quantity: 1,
+                revision: 1,
+                state: ReceiptStateView::Pending,
+            }),
+        }
+    );
+}
+
+fn begin_receipt(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+    operation_seed: u8,
+    payload_seed: u8,
+    resource_seed: u8,
+    quantity: u64,
+) -> ReceiptBeginView {
+    pic.update_call::<Result<ReceiptBeginView, String>, _>(
+        authority_id,
+        "begin_receipt",
+        (operation_seed, payload_seed, resource_seed, quantity),
+    )
+    .expect("begin receipt transport")
+    .expect("begin receipt application")
+}
+
+#[expect(clippy::too_many_arguments)]
+fn settle_receipt(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+    operation_seed: u8,
+    payload_seed: u8,
+    expected_revision: u64,
+    decision: ReceiptDecisionView,
+    source_canister: Principal,
+    evidence_seed: u8,
+) -> Result<ReceiptSettlementView, String> {
+    pic.update_call::<Result<ReceiptSettlementView, String>, _>(
+        authority_id,
+        "settle_receipt",
+        (
+            operation_seed,
+            payload_seed,
+            expected_revision,
+            decision,
+            source_canister,
+            evidence_seed,
+        ),
+    )
+    .expect("settle receipt transport")
+}
+
+fn load_receipt(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+    operation_seed: u8,
+) -> Option<ReceiptIntentView> {
+    pic.query_call::<Result<Option<ReceiptIntentView>, String>, _>(
+        authority_id,
+        "load_receipt",
+        (operation_seed,),
+    )
+    .expect("load receipt transport")
+    .expect("load receipt application")
 }
 
 fn build_canisters(workspace_root: &Path) {

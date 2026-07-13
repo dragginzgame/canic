@@ -21,8 +21,14 @@ const RECEIPT_CAPACITY: u64 = 1;
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
 enum ReceiptStateView {
     Pending,
-    Committed { fingerprint: [u8; 32] },
-    RolledBack { fingerprint: [u8; 32] },
+    Committed {
+        source_canister: Principal,
+        fingerprint: [u8; 32],
+    },
+    RolledBack {
+        source_canister: Principal,
+        fingerprint: [u8; 32],
+    },
 }
 
 #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
@@ -31,6 +37,51 @@ struct ReceiptIntentView {
     quantity: u64,
     revision: u64,
     state: ReceiptStateView,
+}
+
+#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+enum ReceiptBeginStatus {
+    Created,
+    ExistingPending,
+    ExistingCommitted,
+    ExistingRolledBack,
+    BindingConflict,
+    CapacityExceeded {
+        current_quantity: u64,
+        requested_quantity: u64,
+        limit: u64,
+    },
+    StoreCapacityReached {
+        current_records: u64,
+        limit: u64,
+    },
+}
+
+#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+struct ReceiptBeginView {
+    status: ReceiptBeginStatus,
+    intent: Option<ReceiptIntentView>,
+}
+
+#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+enum ReceiptSettlementStatus {
+    Settled,
+    AlreadySettled,
+    NotFound,
+    RevisionConflict { actual_revision: u64 },
+    BindingConflict,
+}
+
+#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+struct ReceiptSettlementView {
+    status: ReceiptSettlementStatus,
+    intent: Option<ReceiptIntentView>,
+}
+
+#[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
+enum ReceiptDecisionView {
+    Committed,
+    RolledBack,
 }
 
 thread_local! {
@@ -90,30 +141,59 @@ async fn buy(qty: u64) -> Result<(), String> {
 fn begin_receipt(
     operation_seed: u8,
     payload_seed: u8,
+    resource_seed: u8,
     quantity: u64,
-) -> Result<Option<ReceiptIntentView>, String> {
+) -> Result<ReceiptBeginView, String> {
     init_memory();
     let operation_id = operation_id(operation_seed);
     let result = ReceiptBackedIntentApi::begin_or_load(&BeginReceiptBackedIntentInput {
         operation_id,
         payload_binding: payload_binding(payload_seed),
-        resource_key: receipt_key()?,
+        resource_key: receipt_key(resource_seed)?,
         quantity,
         reservation_limit: RECEIPT_CAPACITY,
     })
     .map_err(|err| err.to_string())?;
 
-    match result {
-        BeginReceiptBackedIntentResult::Created { .. }
-        | BeginReceiptBackedIntentResult::ExistingPending { .. }
-        | BeginReceiptBackedIntentResult::ExistingCommitted { .. }
-        | BeginReceiptBackedIntentResult::ExistingRolledBack { .. } => {
-            load_receipt_view(operation_id)
+    let status = match result {
+        BeginReceiptBackedIntentResult::Created { .. } => ReceiptBeginStatus::Created,
+        BeginReceiptBackedIntentResult::ExistingPending { .. } => {
+            ReceiptBeginStatus::ExistingPending
         }
-        BeginReceiptBackedIntentResult::BindingConflict
-        | BeginReceiptBackedIntentResult::CapacityExceeded { .. }
-        | BeginReceiptBackedIntentResult::StoreCapacityReached { .. } => Ok(None),
-    }
+        BeginReceiptBackedIntentResult::ExistingCommitted { .. } => {
+            ReceiptBeginStatus::ExistingCommitted
+        }
+        BeginReceiptBackedIntentResult::ExistingRolledBack { .. } => {
+            ReceiptBeginStatus::ExistingRolledBack
+        }
+        BeginReceiptBackedIntentResult::BindingConflict => ReceiptBeginStatus::BindingConflict,
+        BeginReceiptBackedIntentResult::CapacityExceeded {
+            current_quantity,
+            requested_quantity,
+            limit,
+        } => ReceiptBeginStatus::CapacityExceeded {
+            current_quantity,
+            requested_quantity,
+            limit,
+        },
+        BeginReceiptBackedIntentResult::StoreCapacityReached {
+            current_records,
+            limit,
+        } => ReceiptBeginStatus::StoreCapacityReached {
+            current_records,
+            limit,
+        },
+    };
+    let intent = match &status {
+        ReceiptBeginStatus::Created
+        | ReceiptBeginStatus::ExistingPending
+        | ReceiptBeginStatus::ExistingCommitted
+        | ReceiptBeginStatus::ExistingRolledBack => load_receipt_view(operation_id)?,
+        ReceiptBeginStatus::BindingConflict
+        | ReceiptBeginStatus::CapacityExceeded { .. }
+        | ReceiptBeginStatus::StoreCapacityReached { .. } => None,
+    };
+    Ok(ReceiptBeginView { status, intent })
 }
 
 #[query]
@@ -122,32 +202,50 @@ fn load_receipt(operation_seed: u8) -> Result<Option<ReceiptIntentView>, String>
 }
 
 #[update]
-fn commit_receipt(
+fn settle_receipt(
     operation_seed: u8,
     payload_seed: u8,
+    expected_revision: u64,
+    decision: ReceiptDecisionView,
+    source_canister: Principal,
     evidence_seed: u8,
-) -> Result<Option<ReceiptIntentView>, String> {
+) -> Result<ReceiptSettlementView, String> {
     init_memory();
     let operation_id = operation_id(operation_seed);
+    let decision = match decision {
+        ReceiptDecisionView::Committed => TerminalEvidenceDecision::Committed,
+        ReceiptDecisionView::RolledBack => TerminalEvidenceDecision::RolledBack,
+    };
     let result = ReceiptBackedIntentApi::settle_if_pending(&SettleReceiptBackedIntentInput {
         operation_id,
-        expected_revision: 1,
+        expected_revision,
         expected_payload_binding: payload_binding(payload_seed),
-        evidence: TerminalEvidence::new(
-            canic::cdk::api::canister_self(),
-            TerminalEvidenceDecision::Committed,
-            [evidence_seed; 32],
-        ),
+        evidence: TerminalEvidence::new(source_canister, decision, [evidence_seed; 32]),
     })
     .map_err(|err| err.to_string())?;
 
-    match result {
-        SettleReceiptBackedIntentResult::Settled { .. }
-        | SettleReceiptBackedIntentResult::AlreadySettled { .. } => load_receipt_view(operation_id),
-        SettleReceiptBackedIntentResult::NotFound
-        | SettleReceiptBackedIntentResult::RevisionConflict { .. }
-        | SettleReceiptBackedIntentResult::BindingConflict => Ok(None),
-    }
+    let status = match result {
+        SettleReceiptBackedIntentResult::Settled { .. } => ReceiptSettlementStatus::Settled,
+        SettleReceiptBackedIntentResult::AlreadySettled { .. } => {
+            ReceiptSettlementStatus::AlreadySettled
+        }
+        SettleReceiptBackedIntentResult::NotFound => ReceiptSettlementStatus::NotFound,
+        SettleReceiptBackedIntentResult::RevisionConflict { actual_revision } => {
+            ReceiptSettlementStatus::RevisionConflict { actual_revision }
+        }
+        SettleReceiptBackedIntentResult::BindingConflict => {
+            ReceiptSettlementStatus::BindingConflict
+        }
+    };
+    let intent = match &status {
+        ReceiptSettlementStatus::Settled | ReceiptSettlementStatus::AlreadySettled => {
+            load_receipt_view(operation_id)?
+        }
+        ReceiptSettlementStatus::NotFound
+        | ReceiptSettlementStatus::RevisionConflict { .. }
+        | ReceiptSettlementStatus::BindingConflict => None,
+    };
+    Ok(ReceiptSettlementView { status, intent })
 }
 
 fn init_memory() {
@@ -159,8 +257,8 @@ fn intent_key() -> Result<IntentResourceKey, String> {
     IntentResourceKey::try_new("capacity")
 }
 
-fn receipt_key() -> Result<IntentResourceKey, String> {
-    IntentResourceKey::try_new("receipt_capacity")
+fn receipt_key(seed: u8) -> Result<IntentResourceKey, String> {
+    IntentResourceKey::try_new(format!("receipt_capacity:{seed}"))
 }
 
 const fn operation_id(seed: u8) -> OperationId {
@@ -182,9 +280,11 @@ impl From<ReceiptBackedIntent> for ReceiptIntentView {
         let state = match intent.state {
             ReceiptBackedIntentState::Pending => ReceiptStateView::Pending,
             ReceiptBackedIntentState::Committed { evidence } => ReceiptStateView::Committed {
+                source_canister: evidence.source_canister,
                 fingerprint: evidence.fingerprint,
             },
             ReceiptBackedIntentState::RolledBack { evidence } => ReceiptStateView::RolledBack {
+                source_canister: evidence.source_canister,
                 fingerprint: evidence.fingerprint,
             },
         };
