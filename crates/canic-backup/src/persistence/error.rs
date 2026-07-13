@@ -5,8 +5,11 @@
 //! Boundary: aggregates lower-layer errors returned by persistence APIs.
 
 use crate::{
-    artifacts::ArtifactChecksumError, execution::BackupExecutionJournalError,
-    journal::JournalValidationError, manifest::ManifestValidationError, plan::BackupPlanError,
+    artifacts::ArtifactChecksumError,
+    execution::BackupExecutionJournalError,
+    journal::{ArtifactState, JournalValidationError},
+    manifest::ManifestValidationError,
+    plan::BackupPlanError,
 };
 
 use std::io;
@@ -22,6 +25,33 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum PersistenceError {
+    #[error(
+        "artifact commit paths must be distinct siblings: temporary={temporary}, canonical={canonical}"
+    )]
+    ArtifactCommitPathMismatch {
+        temporary: String,
+        canonical: String,
+    },
+
+    #[error(
+        "artifact commit found both temporary and canonical directories: temporary={temporary}, canonical={canonical}"
+    )]
+    ArtifactCommitPathConflict {
+        temporary: String,
+        canonical: String,
+    },
+
+    #[error(
+        "artifact commit found neither temporary nor canonical directory: temporary={temporary}, canonical={canonical}"
+    )]
+    ArtifactCommitPathMissing {
+        temporary: String,
+        canonical: String,
+    },
+
+    #[error("durable artifact directory publication is unsupported on platform {platform}")]
+    ArtifactCommitUnsupportedPlatform { platform: &'static str },
+
     #[error("artifact path escapes backup root: {artifact_path}")]
     ArtifactPathEscapesBackup { artifact_path: String },
 
@@ -97,6 +127,15 @@ pub enum PersistenceError {
         snapshot_id: String,
     },
 
+    #[error(
+        "journal artifact {canister_id} snapshot {snapshot_id} must be checksum verified before durable publication; found {state:?}"
+    )]
+    ArtifactNotChecksumVerified {
+        canister_id: String,
+        snapshot_id: String,
+        state: ArtifactState,
+    },
+
     #[error("journal artifact {canister_id} snapshot {snapshot_id} is not durable")]
     NonDurableArtifact {
         canister_id: String,
@@ -123,4 +162,7 @@ pub enum PersistenceError {
         canister_id: String,
         snapshot_id: String,
     },
+
+    #[error("unsupported artifact filesystem entry at {path}: {kind}")]
+    UnsupportedArtifactEntry { path: String, kind: String },
 }

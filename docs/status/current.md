@@ -131,6 +131,17 @@ before this compaction is archived at
   failure-atomic, and give fleet configuration one typed error boundary. Close
   0.88 after those three slices; broad visibility churn, dependency forks,
   filesystem frameworks, and global error architectures are excluded.
+
+  0.88 Slice A is implemented and release-noted as `0.88.0`. Direct snapshot
+  capture and planned backup finalization now share one backup-owned directory
+  commit that opens without following artifact symlinks, syncs files and
+  directories bottom-up, publishes through atomic no-replace, and syncs the
+  parent.
+  Interruption after publication but before the journal transition recovers
+  only a journal-bound `ChecksumVerified` directory after checksum
+  reverification and resynchronization. Unrelated destinations fail closed,
+  and failed journal persistence exposes neither `Durable` nor its completion
+  metric. Package versions remain `0.87.1`; the release bump is human-owned.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is

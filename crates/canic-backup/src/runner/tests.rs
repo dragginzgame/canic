@@ -152,6 +152,99 @@ fn runner_resumes_after_max_steps_without_replaying_completed_work() {
     );
 }
 
+// Ensure a published artifact is reverified after interruption before its durable journal update.
+#[test]
+fn runner_recovers_artifact_published_before_durable_journal_transition() {
+    let root = prepared_layout("canic-backup-runner-published-artifact-resume");
+    let layout = BackupLayout::new(root.clone());
+
+    let mut first_executor = FakeExecutor::default();
+    let first = backup_run_execute_with_executor(
+        &runner_config(root.clone(), Some(5)),
+        &mut first_executor,
+    )
+    .expect("run through artifact verification");
+    assert!(!first.complete);
+    assert_eq!(first.executed_operation_count, 5);
+
+    let interrupted_journal = layout.read_journal().expect("read interrupted journal");
+    let interrupted_entry = &interrupted_journal.artifacts[0];
+    assert_eq!(
+        interrupted_entry.state,
+        crate::journal::ArtifactState::ChecksumVerified
+    );
+    let temporary = PathBuf::from(
+        interrupted_entry
+            .temp_path
+            .as_deref()
+            .expect("verified artifact temp path"),
+    );
+    let canonical = root.join(&interrupted_entry.artifact_path);
+    fs::rename(&temporary, &canonical).expect("simulate publication before journal transition");
+
+    let mut resumed_executor = FakeExecutor::default();
+    let resumed =
+        backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut resumed_executor)
+            .expect("recover published artifact");
+    let recovered_journal = layout.read_journal().expect("read recovered journal");
+    let recovered_entry = &recovered_journal.artifacts[0];
+    let integrity = layout.verify_integrity().expect("verify recovered layout");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(resumed.complete);
+    assert_eq!(resumed.executed_operation_count, 1);
+    assert!(resumed_executor.commands.is_empty());
+    assert_eq!(
+        recovered_entry.state,
+        crate::journal::ArtifactState::Durable
+    );
+    assert!(recovered_entry.temp_path.is_none());
+    assert_eq!(integrity.durable_artifacts, 1);
+}
+
+// Ensure recovery never adopts a published directory whose bytes differ from the journal checksum.
+#[test]
+fn runner_rejects_unverifiable_post_publication_artifact() {
+    let root = prepared_layout("canic-backup-runner-unverifiable-artifact");
+    let layout = BackupLayout::new(root.clone());
+
+    let mut first_executor = FakeExecutor::default();
+    backup_run_execute_with_executor(&runner_config(root.clone(), Some(5)), &mut first_executor)
+        .expect("run through artifact verification");
+    let interrupted_journal = layout.read_journal().expect("read interrupted journal");
+    let interrupted_entry = &interrupted_journal.artifacts[0];
+    let temporary = PathBuf::from(
+        interrupted_entry
+            .temp_path
+            .as_deref()
+            .expect("verified artifact temp path"),
+    );
+    let canonical = root.join(&interrupted_entry.artifact_path);
+    fs::rename(&temporary, &canonical).expect("simulate interrupted publication");
+    fs::write(canonical.join("snapshot.bin"), b"different snapshot")
+        .expect("change published artifact");
+
+    let mut resumed_executor = FakeExecutor::default();
+    let error =
+        backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut resumed_executor)
+            .expect_err("changed published artifact must reject");
+    let rejected_journal = layout.read_journal().expect("read rejected journal");
+
+    std::assert_matches!(
+        error,
+        BackupRunnerError::Persistence(crate::persistence::PersistenceError::Checksum(
+            crate::artifacts::ArtifactChecksumError::ChecksumMismatch { .. }
+        ))
+    );
+    assert_eq!(
+        rejected_journal.artifacts[0].state,
+        crate::journal::ArtifactState::ChecksumVerified
+    );
+    assert!(rejected_journal.artifacts[0].temp_path.is_some());
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure command failures are durably journaled and can be retried without replaying prior work.
 #[test]
 fn runner_records_failed_operation_and_retries_from_that_operation() {

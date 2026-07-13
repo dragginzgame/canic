@@ -4,8 +4,11 @@ Last updated: 2026-07-13
 
 ## Current State
 
-The post-0.87 audit selects exactly three implementation slices. No 0.88 code
-has started. Package versions remain `0.87.1`.
+The post-0.87 audit selects exactly three implementation slices. Slice A is
+implemented and release-noted as `0.88.0`: both snapshot-finalization paths use
+one backup-owned durable directory commit, and verified post-publication
+artifacts can resume without trusting unrelated destinations. Package versions
+remain `0.87.1` until the human-owned release bump.
 
 One 0.87 closeout correction is release-noted as `0.87.2`: install-root no
 longer converts a boxed ICP command failure to text to detect a missing
@@ -16,33 +19,65 @@ Package versions remain `0.87.1` until the human-owned release bump.
 
 ### Slice A - Durable backup artifact commit
 
-- [ ] Add one backup-owned durable artifact-directory commit function.
-- [ ] Sync supported entries and directories before final rename.
-- [ ] Sync the artifact parent after rename.
-- [ ] Use the function from both artifact-finalization paths.
-- [ ] Advance durable journal state only after commit success.
-- [ ] Prove failure leaves the journal non-durable.
+- [x] Add one backup-owned durable artifact-directory commit function.
+- [x] Require a unique sibling temporary directory and atomic no-replace
+  publication.
+- [x] Walk/open without following symlinks and reject unsupported entries.
+- [x] Sync regular files, nested directories bottom-up, and the temporary root.
+- [x] Sync the artifact parent after publication.
+- [x] Use the function from both artifact-finalization paths.
+- [x] Recover only a journal-bound, checksum-verified artifact published before
+  its durable transition; reject every other existing destination.
+- [x] Commit journal state and metric through an uncommitted copy so a failed
+  durable journal replacement exposes neither update.
+- [x] Prove every injected failure preserves the expected journal state and
+  metric.
 
-### Slice B - Failure-atomic CLI file output
+### Slice B - Publication-atomic CLI file output
 
-- [ ] Add bounded durable create-new support beside the existing host writer.
-- [ ] Route shared CLI JSON/text file output through durable replacement.
-- [ ] Preserve deployment-plan no-overwrite behavior through create-new.
-- [ ] Reuse create-new for scaffold files when behavior remains unchanged.
-- [ ] Prove existing files are unchanged on serialization/write failure.
-- [ ] Prove no temporary files remain after success or handled failure.
+- [ ] Add explicit `create_new_bytes` beside the existing `write_bytes` entry
+  point.
+- [ ] Delegate both entry points to one private staging, sync, publication, and
+  cleanup implementation.
+- [ ] Require unique sibling staging and fail if the platform cannot provide
+  required publication or directory-sync semantics.
+- [ ] Make create-new publication atomically no-clobber without an
+  exists-then-rename race.
+- [ ] Route every file destination behind the three shared CLI output helpers
+  through durable replacement.
+- [ ] Route only deployment-plan `--out` through durable create-new.
+- [ ] Preserve shared-output parent creation and deployment-plan missing-parent
+  rejection.
+- [ ] Durably create and sync every newly introduced parent entry.
+- [ ] Prove replace results are old-complete or new-complete and create-new
+  results are absent or new-complete across injected failures.
+- [ ] Prove no in-scope path opens the final destination for truncating or
+  incremental writes and no handled temporary residue remains.
+- [ ] Keep scaffold, cycles pending-log, and subsystem-owned persistence paths
+  outside the slice.
 
 ### Slice C - Typed fleet-config failure boundary
 
 - [ ] Define one focused fleet-config error enum.
-- [ ] Preserve I/O and core config errors as sources.
+- [ ] Preserve I/O operation/path context and core-config operation context.
 - [ ] Type invalid-input and mutation-conflict conditions.
+- [ ] Preserve both typed causes when rollback fails.
 - [ ] Remove boxed/string error construction from the config subtree.
-- [ ] Preserve successful config bytes and rollback behavior.
+- [ ] Erase the type only after exit, finding, and rollback decisions.
+- [ ] Preserve successful projection values, serialized TOML, and rollback
+  behavior.
 - [ ] Keep outer command rendering and exits unchanged.
 
 ## Validation
 
+- Four focused artifact-commit tests pass, including no-replace race,
+  unsupported-entry, post-publication recovery, and injected sync/publication
+  failures.
+- Focused direct-capture success, destination-conflict, and failed-journal
+  tests pass.
+- Focused runner success, post-publication recovery, and checksum-rejection
+  tests pass.
+- Targeted `canic-backup` library Clippy passes with warnings denied.
 - Audit-only layering guard: pass.
 - Cargo Machete: pass.
 - Cargo audit: no known vulnerabilities; four upstream unmaintained warnings.
@@ -51,5 +86,6 @@ Package versions remain `0.87.1` until the human-owned release bump.
 
 ## Next Action
 
-Run the human-owned `0.87.2` release bump, then begin 0.88 Slice A. Do not carry
-unfinished 0.87 acceptance work into the 0.88 design.
+Run the human-owned `0.88.0` release bump and push Slice A. Slice B is next; do
+not extend the completed directory-commit owner into the host single-file
+writer.

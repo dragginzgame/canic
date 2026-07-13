@@ -478,6 +478,7 @@ name = "canic-backup"
 version = "0.87.1"
 dependencies = [
  "candid",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.10.9",

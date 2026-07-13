@@ -10,7 +10,7 @@ use crate::{
         BackupExecutionJournal, BackupExecutionJournalOperation, BackupExecutionOperationReceipt,
     },
     journal::{ArtifactJournalEntry, ArtifactState},
-    persistence::BackupLayout,
+    persistence::{BackupLayout, PersistenceError, commit_artifact_directory},
     plan::BackupPlan,
     runner::{
         BackupRunnerConfig, BackupRunnerError, BackupRunnerExecutor,
@@ -28,7 +28,7 @@ use crate::{
     timestamp::current_timestamp_marker,
 };
 
-use std::{fs, io, path::Path};
+use std::{fs, path::Path};
 
 pub(super) fn execute_create_snapshot(
     executor: &mut impl BackupRunnerExecutor,
@@ -144,6 +144,15 @@ pub(super) fn execute_finalize_manifest(
             continue;
         }
         let canister_id = download_journal.artifacts[index].canister_id.clone();
+        let snapshot_id = download_journal.artifacts[index].snapshot_id.clone();
+        if download_journal.artifacts[index].state != ArtifactState::ChecksumVerified {
+            return Err(PersistenceError::ArtifactNotChecksumVerified {
+                canister_id,
+                snapshot_id,
+                state: download_journal.artifacts[index].state,
+            }
+            .into());
+        }
         let temp_path = download_journal.artifacts[index]
             .temp_path
             .clone()
@@ -155,18 +164,21 @@ pub(super) fn execute_finalize_manifest(
         let artifact_path = layout
             .root()
             .join(&download_journal.artifacts[index].artifact_path);
-        if artifact_path.exists() {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                format!("artifact path already exists: {}", artifact_path.display()),
-            )
-            .into());
-        }
-        fs::rename(&temp_path, artifact_path)?;
-        download_journal.artifacts[index].temp_path = None;
-        download_journal.artifacts[index]
+        let checksum = download_journal.artifacts[index]
+            .checksum
+            .as_deref()
+            .ok_or_else(|| PersistenceError::MissingJournalArtifactChecksum {
+                canister_id: download_journal.artifacts[index].canister_id.clone(),
+                snapshot_id: download_journal.artifacts[index].snapshot_id.clone(),
+            })?;
+        commit_artifact_directory(Path::new(&temp_path), &artifact_path, checksum)?;
+
+        let mut completed_journal = download_journal.clone();
+        completed_journal.artifacts[index].temp_path = None;
+        completed_journal.artifacts[index]
             .advance_to(ArtifactState::Durable, current_timestamp_marker())?;
-        layout.write_journal(&download_journal)?;
+        layout.write_journal(&completed_journal)?;
+        download_journal = completed_journal;
     }
 
     let manifest = build_manifest(config, plan, &download_journal)?;

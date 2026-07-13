@@ -47,11 +47,16 @@ impl ArtifactChecksum {
     /// Compute a SHA-256 checksum from one filesystem file.
     pub fn from_file(path: &Path) -> Result<Self, ArtifactChecksumError> {
         let mut file = File::open(path)?;
+        Self::from_reader(&mut file)
+    }
+
+    /// Compute a file checksum from an already-open artifact descriptor.
+    pub(crate) fn from_reader(reader: &mut impl Read) -> Result<Self, ArtifactChecksumError> {
         let mut hasher = Sha256::new();
         let mut buffer = vec![0u8; 64 * 1024];
 
         loop {
-            let read = file.read(&mut buffer)?;
+            let read = reader.read(&mut buffer)?;
             if read == 0 {
                 break;
             }
@@ -79,20 +84,31 @@ impl ArtifactChecksum {
         collect_files(path, path, &mut files)?;
         files.sort();
 
+        let checksums = files
+            .into_iter()
+            .map(|relative_path| {
+                let checksum = Self::from_file(&path.join(&relative_path))?;
+                Ok((relative_path, checksum))
+            })
+            .collect::<Result<Vec<_>, ArtifactChecksumError>>()?;
+        Ok(Self::from_relative_file_checksums(checksums))
+    }
+
+    /// Compose the maintained directory checksum from relative file checksums.
+    pub(crate) fn from_relative_file_checksums(mut files: Vec<(PathBuf, Self)>) -> Self {
+        files.sort_by(|left, right| left.0.cmp(&right.0));
         let mut hasher = Sha256::new();
-        for relative_path in files {
-            let full_path = path.join(&relative_path);
-            let file_checksum = Self::from_file(&full_path)?;
+        for (relative_path, file_checksum) in files {
             hasher.update(relative_path.to_string_lossy().as_bytes());
             hasher.update([0]);
             hasher.update(file_checksum.hash.as_bytes());
             hasher.update(*b"\n");
         }
 
-        Ok(Self {
+        Self {
             algorithm: SHA256_ALGORITHM.to_string(),
             hash: hex_bytes(hasher.finalize()),
-        })
+        }
     }
 
     /// Verify that the checksum matches an expected SHA-256 hash.

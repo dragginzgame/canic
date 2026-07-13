@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.88.x] - 2026-07-13 - Artifact and Configuration Boundaries
+
+Detailed patch breakdown: [docs/changelog/0.88.md](docs/changelog/0.88.md)
+
+- `0.88.0` makes backup artifact-directory publication durable and atomically
+  no-clobber, with checksum-verified recovery before journals report durable
+  state.
+
 ## [0.87.x] - 2026-07-13 - Operator Boundary Hygiene
 
 Detailed patch breakdown: [docs/changelog/0.87.md](docs/changelog/0.87.md)
