@@ -20,9 +20,10 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum IntentMetricSurface {
-    Call,
     Cleanup,
+    Local,
     Pool,
+    ReceiptBacked,
 }
 
 impl IntentMetricSurface {
@@ -30,9 +31,10 @@ impl IntentMetricSurface {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::Call => "call",
             Self::Cleanup => "cleanup",
+            Self::Local => "local",
             Self::Pool => "pool",
+            Self::ReceiptBacked => "receipt_backed",
         }
     }
 }
@@ -201,13 +203,13 @@ mod tests {
         IntentMetrics::reset();
 
         IntentMetrics::record(
-            IntentMetricSurface::Call,
+            IntentMetricSurface::Local,
             IntentMetricOperation::Reserve,
             IntentMetricOutcome::Completed,
             IntentMetricReason::Ok,
         );
         IntentMetrics::record(
-            IntentMetricSurface::Call,
+            IntentMetricSurface::Local,
             IntentMetricOperation::Reserve,
             IntentMetricOutcome::Completed,
             IntentMetricReason::Ok,
@@ -222,7 +224,7 @@ mod tests {
         let map = snapshot_map();
         assert_eq!(
             map.get(&IntentMetricKey {
-                surface: IntentMetricSurface::Call,
+                surface: IntentMetricSurface::Local,
                 operation: IntentMetricOperation::Reserve,
                 outcome: IntentMetricOutcome::Completed,
                 reason: IntentMetricReason::Ok,

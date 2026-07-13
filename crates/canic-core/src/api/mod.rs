@@ -12,6 +12,7 @@ pub mod config;
 pub mod error;
 pub mod ic;
 pub mod icp_refill;
+pub mod intent;
 pub mod lifecycle;
 pub mod memory;
 pub mod metadata;

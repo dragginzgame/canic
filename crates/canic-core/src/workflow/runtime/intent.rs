@@ -5,8 +5,15 @@
 //! Boundary: runtime workflow timer coordinating intent storage cleanup and metrics.
 
 use crate::{
+    InternalError, InternalErrorOrigin,
+    ids::IntentId,
     log,
     log::Topic,
+    model::intent::{
+        BeginLocalIntentInput, BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
+        ReceiptBackedIntent, SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult,
+        TerminalEvidenceDecision,
+    },
     ops::{
         ic::IcOps,
         runtime::{
@@ -16,7 +23,7 @@ use crate::{
             },
             timer::TimerId,
         },
-        storage::intent::IntentStoreOps,
+        storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_INTENT_CLEANUP_INTERVAL},
@@ -30,6 +37,181 @@ thread_local! {
 }
 
 const CLEANUP_INTERVAL: Duration = WORKFLOW_INTENT_CLEANUP_INTERVAL;
+
+/// Direct workflow for locally decidable, expirable reservations.
+pub struct LocalIntentWorkflow;
+
+impl LocalIntentWorkflow {
+    pub fn begin(input: BeginLocalIntentInput) -> Result<IntentId, InternalError> {
+        let now = IcOps::now_secs();
+        if let Some(limit) = input.reservation_limit {
+            let current = IntentStoreOps::totals(&input.resource_key).reserved_qty;
+            let next = current.checked_add(input.quantity).ok_or_else(|| {
+                record_intent(
+                    IntentMetricSurface::Local,
+                    IntentMetricOperation::CapacityCheck,
+                    IntentMetricOutcome::Failed,
+                    IntentMetricReason::Overflow,
+                );
+                InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    "local intent reservation overflow",
+                )
+            })?;
+            if next > limit {
+                record_intent(
+                    IntentMetricSurface::Local,
+                    IntentMetricOperation::CapacityCheck,
+                    IntentMetricOutcome::Failed,
+                    IntentMetricReason::Capacity,
+                );
+                return Err(InternalError::domain(
+                    InternalErrorOrigin::Domain,
+                    format!(
+                        "local intent capacity exceeded key={} in_flight={current} requested={} limit={limit}",
+                        input.resource_key, input.quantity
+                    ),
+                ));
+            }
+            record_intent(
+                IntentMetricSurface::Local,
+                IntentMetricOperation::CapacityCheck,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::Ok,
+            );
+        }
+
+        let intent_id = IntentStoreOps::allocate_intent_id().inspect_err(|_| {
+            record_intent(
+                IntentMetricSurface::Local,
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+        })?;
+        IntentStoreOps::try_reserve(
+            intent_id,
+            input.resource_key,
+            input.quantity,
+            now,
+            input.ttl_secs,
+            now,
+        )
+        .inspect_err(|_| {
+            record_intent(
+                IntentMetricSurface::Local,
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+        })?;
+        record_intent(
+            IntentMetricSurface::Local,
+            IntentMetricOperation::Reserve,
+            IntentMetricOutcome::Completed,
+            IntentMetricReason::Ok,
+        );
+        IntentCleanupWorkflow::ensure_started();
+        Ok(intent_id)
+    }
+
+    pub fn commit(intent_id: IntentId) -> Result<(), InternalError> {
+        IntentStoreOps::commit_at(intent_id, IcOps::now_secs()).inspect_err(|_| {
+            record_intent(
+                IntentMetricSurface::Local,
+                IntentMetricOperation::Commit,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+        })?;
+        record_intent(
+            IntentMetricSurface::Local,
+            IntentMetricOperation::Commit,
+            IntentMetricOutcome::Completed,
+            IntentMetricReason::Ok,
+        );
+        Ok(())
+    }
+
+    pub fn rollback(intent_id: IntentId) -> Result<(), InternalError> {
+        IntentStoreOps::abort(intent_id).inspect_err(|_| {
+            record_intent(
+                IntentMetricSurface::Local,
+                IntentMetricOperation::Abort,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+        })?;
+        record_intent(
+            IntentMetricSurface::Local,
+            IntentMetricOperation::Abort,
+            IntentMetricOutcome::Completed,
+            IntentMetricReason::Ok,
+        );
+        Ok(())
+    }
+}
+
+/// Non-awaiting workflow facade for exact-key receipt-backed operations.
+pub struct ReceiptBackedIntentWorkflow;
+
+impl ReceiptBackedIntentWorkflow {
+    pub fn begin_or_load(
+        input: &BeginReceiptBackedIntentInput,
+    ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+        let result =
+            ReceiptBackedIntentOps::begin_or_load(input, IcOps::now_nanos()).inspect_err(|_| {
+                record_intent(
+                    IntentMetricSurface::ReceiptBacked,
+                    IntentMetricOperation::Reserve,
+                    IntentMetricOutcome::Failed,
+                    IntentMetricReason::StorageFailed,
+                );
+            })?;
+        if matches!(result, BeginReceiptBackedIntentResult::Created { .. }) {
+            record_intent(
+                IntentMetricSurface::ReceiptBacked,
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::Ok,
+            );
+        }
+        Ok(result)
+    }
+
+    pub fn load(
+        operation_id: crate::model::replay::OperationId,
+    ) -> Result<Option<ReceiptBackedIntent>, InternalError> {
+        ReceiptBackedIntentOps::load(operation_id)
+    }
+
+    pub fn settle_if_pending(
+        input: &SettleReceiptBackedIntentInput,
+    ) -> Result<SettleReceiptBackedIntentResult, InternalError> {
+        let operation = match input.evidence.decision {
+            TerminalEvidenceDecision::Committed => IntentMetricOperation::Commit,
+            TerminalEvidenceDecision::RolledBack => IntentMetricOperation::Abort,
+        };
+        let result = ReceiptBackedIntentOps::settle_if_pending(input, IcOps::now_nanos())
+            .inspect_err(|_| {
+                record_intent(
+                    IntentMetricSurface::ReceiptBacked,
+                    operation,
+                    IntentMetricOutcome::Failed,
+                    IntentMetricReason::StorageFailed,
+                );
+            })?;
+        if matches!(result, SettleReceiptBackedIntentResult::Settled { .. }) {
+            record_intent(
+                IntentMetricSurface::ReceiptBacked,
+                operation,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::Ok,
+            );
+        }
+        Ok(result)
+    }
+}
 
 ///
 /// IntentCleanupWorkflow
@@ -136,7 +318,7 @@ impl IntentCleanupWorkflow {
 
     // Stop the cleanup timer once there are no pending intents left.
     fn stop_when_idle() -> bool {
-        match IntentStoreOps::pending_total() {
+        match IntentStoreOps::expirable_pending_total() {
             Ok(0) => {
                 let _ = TimerWorkflow::clear_guarded(&INTENT_CLEANUP_TIMER);
                 true
@@ -166,4 +348,13 @@ fn record_cleanup_intent(
     reason: IntentMetricReason,
 ) {
     IntentMetrics::record(IntentMetricSurface::Cleanup, operation, outcome, reason);
+}
+
+fn record_intent(
+    surface: IntentMetricSurface,
+    operation: IntentMetricOperation,
+    outcome: IntentMetricOutcome,
+    reason: IntentMetricReason,
+) {
+    IntentMetrics::record(surface, operation, outcome, reason);
 }

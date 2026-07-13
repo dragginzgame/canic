@@ -10,8 +10,13 @@ use crate::{
         DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
     },
     ids::{IntentId, IntentResourceKey},
+    model::{
+        intent::{PayloadBinding, ReceiptBackedIntent, ReceiptBackedIntentState},
+        replay::OperationId,
+    },
     role_contract::allocation::memory::intent::{
         INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
+        RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     storage::prelude::*,
 };
@@ -29,6 +34,21 @@ eager_static! {
             crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_meta.v1", ty = IntentStoreMetaRecord, id = INTENT_META_ID),
             IntentStoreMetaRecord::default(),
         ));
+}
+
+eager_static! {
+    static RECEIPT_BACKED_INTENT_RECORDS: RefCell<
+        StableBtreeMap<
+            OperationId,
+            ReceiptBackedIntentRecord,
+            VirtualMemory<DefaultMemoryImpl>,
+        >
+    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
+        authority = CANIC_CORE_MEMORY_AUTHORITY,
+        key = "canic.core.receipt_backed_intent_records.v1",
+        ty = ReceiptBackedIntentRecord,
+        id = RECEIPT_BACKED_INTENT_RECORDS_ID
+    )));
 }
 
 eager_static! {
@@ -80,6 +100,29 @@ impl Storable for IntentId {
         arr.copy_from_slice(b);
 
         Self(u64::from_be_bytes(arr))
+    }
+}
+
+impl Storable for OperationId {
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 32,
+        is_fixed_size: true,
+    };
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Borrowed(self.as_bytes())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.as_bytes().to_vec()
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let mut operation_id = [0_u8; 32];
+        if bytes.len() == operation_id.len() {
+            operation_id.copy_from_slice(bytes.as_ref());
+        }
+        Self::from_bytes(operation_id)
     }
 }
 
@@ -198,6 +241,46 @@ impl_storable_bounded!(
     false
 );
 
+/// Stable representation of one permanently retained receipt-backed intent.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReceiptBackedIntentRecord {
+    pub schema_version: u32,
+    pub operation_id: OperationId,
+    pub payload_binding: PayloadBinding,
+    pub resource_key: IntentResourceKey,
+    pub quantity: u64,
+    pub state: ReceiptBackedIntentState,
+    pub revision: u64,
+    pub created_at_ns: u64,
+    pub updated_at_ns: u64,
+}
+
+impl ReceiptBackedIntentRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ReceiptBackedIntentRecord";
+    pub const STORABLE_MAX_SIZE: u32 = 1024;
+
+    #[must_use]
+    pub fn into_intent(self) -> ReceiptBackedIntent {
+        ReceiptBackedIntent {
+            schema_version: self.schema_version,
+            operation_id: self.operation_id,
+            payload_binding: self.payload_binding,
+            resource_key: self.resource_key,
+            quantity: self.quantity,
+            state: self.state,
+            revision: self.revision,
+            created_at_ns: self.created_at_ns,
+            updated_at_ns: self.updated_at_ns,
+        }
+    }
+}
+
+impl_storable_bounded!(
+    ReceiptBackedIntentRecord,
+    ReceiptBackedIntentRecord::STORABLE_MAX_SIZE,
+    false
+);
+
 ///
 /// IntentMetaData
 ///
@@ -294,6 +377,23 @@ impl IntentPendingData {
     pub const STATE_CONTRACT_NAME: &'static str = "IntentPendingData";
 }
 
+/// One logical receipt-backed intent snapshot row.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReceiptBackedIntentEntryRecord {
+    pub operation_id: OperationId,
+    pub record: ReceiptBackedIntentRecord,
+}
+
+/// Canonical receipt-backed intent record allocation snapshot.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ReceiptBackedIntentsData {
+    pub entries: Vec<ReceiptBackedIntentEntryRecord>,
+}
+
+impl ReceiptBackedIntentsData {
+    pub const STATE_CONTRACT_NAME: &'static str = "ReceiptBackedIntentsData";
+}
+
 ///
 /// IntentStore
 ///
@@ -369,6 +469,26 @@ impl IntentStore {
         ) -> R,
     ) -> R {
         INTENT_PENDING.with_borrow(|map| f(map))
+    }
+}
+
+/// Stable store for receipt-backed operations addressed by exact operation ID.
+pub struct ReceiptBackedIntentStore;
+
+impl ReceiptBackedIntentStore {
+    #[must_use]
+    pub(crate) fn len() -> u64 {
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow(StableBtreeMap::len)
+    }
+
+    #[must_use]
+    pub(crate) fn get(operation_id: OperationId) -> Option<ReceiptBackedIntentRecord> {
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| records.get(&operation_id))
+    }
+
+    pub(crate) fn insert(record: ReceiptBackedIntentRecord) -> Option<ReceiptBackedIntentRecord> {
+        RECEIPT_BACKED_INTENT_RECORDS
+            .with_borrow_mut(|records| records.insert(record.operation_id, record))
     }
 }
 
@@ -465,12 +585,50 @@ impl IntentStore {
         INTENT_TOTALS.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_PENDING.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMetaRecord::default()));
+        ReceiptBackedIntentStore::reset_for_tests();
+    }
+}
+
+#[cfg(test)]
+impl ReceiptBackedIntentStore {
+    #[must_use]
+    pub(crate) fn export_records() -> ReceiptBackedIntentsData {
+        ReceiptBackedIntentsData {
+            entries: RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| {
+                records
+                    .iter()
+                    .map(|entry| ReceiptBackedIntentEntryRecord {
+                        operation_id: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_records(data: ReceiptBackedIntentsData) {
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(|records| {
+            records.clear_new();
+            for entry in data.entries {
+                records.insert(entry.operation_id, entry.record);
+            }
+        });
+    }
+
+    pub(crate) fn reset_for_tests() {
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        cdk::types::Principal,
+        model::intent::{
+            RECEIPT_BACKED_INTENT_SCHEMA_VERSION, TerminalEvidence, TerminalEvidenceDecision,
+        },
+    };
 
     #[test]
     fn intent_allocations_round_trip_through_canonical_data_snapshots() {
@@ -524,6 +682,41 @@ mod tests {
         assert_eq!(IntentStore::export_records(), records_data);
         assert_eq!(IntentStore::export_totals(), totals_data);
         assert_eq!(IntentStore::export_pending(), pending_data);
+        IntentStore::reset_for_tests();
+    }
+
+    #[test]
+    fn receipt_backed_allocations_round_trip_through_canonical_data_snapshots() {
+        IntentStore::reset_for_tests();
+        let operation_id = OperationId::from_bytes([7; 32]);
+        let evidence = TerminalEvidence::new(
+            Principal::from_slice(&[1; 29]),
+            TerminalEvidenceDecision::Committed,
+            [8; 32],
+        );
+        let record = ReceiptBackedIntentRecord {
+            schema_version: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
+            operation_id,
+            payload_binding: PayloadBinding::new([9; 32]),
+            resource_key: IntentResourceKey::new("mint:collection"),
+            quantity: 11,
+            state: ReceiptBackedIntentState::Committed { evidence },
+            revision: 2,
+            created_at_ns: 13,
+            updated_at_ns: 17,
+        };
+        ReceiptBackedIntentStore::insert(record);
+        let records_data = ReceiptBackedIntentStore::export_records();
+
+        ReceiptBackedIntentStore::reset_for_tests();
+        assert_eq!(
+            ReceiptBackedIntentStore::export_records(),
+            ReceiptBackedIntentsData::default()
+        );
+
+        ReceiptBackedIntentStore::import_records(records_data.clone());
+        assert_eq!(ReceiptBackedIntentStore::len(), 1);
+        assert_eq!(ReceiptBackedIntentStore::export_records(), records_data);
         IntentStore::reset_for_tests();
     }
 }

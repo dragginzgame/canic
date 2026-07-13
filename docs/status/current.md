@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.89.1`, published and tagged
-  as `v0.89.1`. The bounded 0.86 structural-maintainability line is complete;
+- The current package/release-surface version is `0.90.0`, published and tagged
+  as `v0.90.0`. The bounded 0.86 structural-maintainability line is complete;
   its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -213,6 +213,29 @@ before this compaction is archived at
   are prepared; package versions remain `0.89.1`. The design explicitly
   excludes global error, command-projection, path, dependency-upgrade, and
   broad visibility frameworks.
+
+  The 0.90 receipt-backed intent design is published as `v0.90.0` under
+  `docs/design/0.90-receipt-backed-intent-reconciliation/`. Slice A is complete
+  locally. Canic now has the generic core primitive: existing
+  `OperationId`, opaque payload binding, bounded terminal evidence, exact-key
+  begin/load, and non-awaiting compare-and-set settlement. New state uses one
+  operation map on ID 43, whose stable map header is the admission count, while
+  existing local intent bytes on IDs 39 through 42 remain unchanged.
+  Receipt-backed rows share the persisted resource aggregate but
+  never enter the local TTL index or its timer-idle count. The published design
+  is tightened accordingly, eliminating an unnecessary aggregate/meta
+  migration. `CallBuilder::with_intent`, `IntentReservation`, and `IntentKey`
+  are hard-cut; the maintained fixture uses explicit local intent operations.
+  Its targeted PocketIC proof covers overlapping local capacity, receipt
+  replay, capacity rejection, same-Wasm pending-state upgrade, settlement, and
+  terminal replay through the public facade. The receipt-exercising fast Wasm
+  is 1,252,273 bytes, 70,530 bytes above the local-only fixture. Focused core,
+  facade, fixture, stable-state, metrics, role-contract, state-contract,
+  warning-denied Clippy, layering, changelog, and diff checks pass. The next
+  bounded step is Slice B's Toko mint proof; do not extend the generic Canic
+  primitive. The root and detailed `0.90.1` changelog entries are prepared;
+  package versions remain `0.90.0` pending the human-owned release bump.
+
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is

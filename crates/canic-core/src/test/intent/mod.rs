@@ -76,8 +76,8 @@ impl IntentTestOps {
     // -------------------------------------------------------------------------
 
     #[must_use]
-    pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotalsRecord {
-        IntentStoreOps::totals_at(resource_key, now)
+    pub fn totals(resource_key: &IntentResourceKey) -> IntentResourceTotalsRecord {
+        IntentStoreOps::totals(resource_key)
     }
 
     #[must_use]

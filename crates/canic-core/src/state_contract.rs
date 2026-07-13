@@ -16,7 +16,10 @@ use crate::role_contract::allocation::memory::{
         STORED_BLOBS_ID,
     },
     env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
-    intent::{INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID},
+    intent::{
+        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
+        RECEIPT_BACKED_INTENT_RECORDS_ID,
+    },
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
         LOG_DATA_ID, LOG_INDEX_ID,
@@ -565,6 +568,7 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::intent::{
         IntentMetaData, IntentPendingData, IntentPendingEntryRecord, IntentRecord,
         IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord, IntentTotalsData,
+        ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
     };
 
     vec![
@@ -599,6 +603,14 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
             IntentPendingData::STATE_CONTRACT_NAME,
             113,
             "intent_pending_entries_restore_ttl_metadata",
+        ),
+        state_domain(
+            "receipt_backed_intent_records",
+            RECEIPT_BACKED_INTENT_RECORDS_ID,
+            ReceiptBackedIntentRecord::STATE_CONTRACT_NAME,
+            ReceiptBackedIntentsData::STATE_CONTRACT_NAME,
+            114,
+            "receipt_backed_intent_records_restore_terminal_evidence",
         ),
     ]
 }
@@ -730,6 +742,7 @@ mod tests {
             INTENT_RECORDS_ID,
             INTENT_TOTALS_ID,
             INTENT_PENDING_ID,
+            RECEIPT_BACKED_INTENT_RECORDS_ID,
             CANISTER_POOL_ID,
             SCALING_REGISTRY_ID,
             DIRECTORY_REGISTRY_ID,
@@ -958,6 +971,7 @@ mod tests {
         use crate::storage::stable::intent::{
             IntentMetaData, IntentPendingData, IntentPendingEntryRecord, IntentRecord,
             IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord, IntentTotalsData,
+            ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
         };
 
         let descriptors = canic_state_descriptors();
@@ -986,6 +1000,11 @@ mod tests {
                 "intent_pending",
                 IntentPendingEntryRecord::STATE_CONTRACT_NAME,
                 IntentPendingData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "receipt_backed_intent_records",
+                ReceiptBackedIntentRecord::STATE_CONTRACT_NAME,
+                ReceiptBackedIntentsData::STATE_CONTRACT_NAME,
             ),
         ] {
             let declaration = runtime_intents

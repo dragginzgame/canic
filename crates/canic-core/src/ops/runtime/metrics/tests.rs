@@ -726,19 +726,25 @@ fn intent_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
 
     IntentMetrics::record(
-        IntentMetricSurface::Call,
+        IntentMetricSurface::Local,
         IntentMetricOperation::Reserve,
         IntentMetricOutcome::Completed,
         IntentMetricReason::Ok,
     );
     IntentMetrics::record(
-        IntentMetricSurface::Call,
+        IntentMetricSurface::Local,
         IntentMetricOperation::Commit,
         IntentMetricOutcome::Failed,
         IntentMetricReason::StorageFailed,
     );
     IntentMetrics::record(
-        IntentMetricSurface::Call,
+        IntentMetricSurface::ReceiptBacked,
+        IntentMetricOperation::Abort,
+        IntentMetricOutcome::Completed,
+        IntentMetricReason::Ok,
+    );
+    IntentMetrics::record(
+        IntentMetricSurface::Local,
         IntentMetricOperation::Commit,
         IntentMetricOutcome::Failed,
         IntentMetricReason::StorageFailed,
@@ -748,13 +754,18 @@ fn intent_metrics_are_exposed_with_stable_labels() {
 
     assert_metric_count(
         &entries,
-        &["intent", "call", "reserve", "completed", "ok"],
+        &["intent", "local", "reserve", "completed", "ok"],
         1,
     );
     assert_metric_count(
         &entries,
-        &["intent", "call", "commit", "failed", "storage_failed"],
+        &["intent", "local", "commit", "failed", "storage_failed"],
         2,
+    );
+    assert_metric_count(
+        &entries,
+        &["intent", "receipt_backed", "abort", "completed", "ok"],
+        1,
     );
 }
 
@@ -945,7 +956,7 @@ fn seed_all_metric_families_for_reset_test() {
     );
     InterCanisterCallMetrics::record_call(principal, "canic_sync");
     IntentMetrics::record(
-        IntentMetricSurface::Call,
+        IntentMetricSurface::Local,
         IntentMetricOperation::Reserve,
         IntentMetricOutcome::Completed,
         IntentMetricReason::Ok,
