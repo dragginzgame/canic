@@ -6,7 +6,7 @@ use super::artifacts::{
 use super::config::observe_local_config_facts;
 use super::identity::{InventoryIdentityFacts, local_inventory_identity};
 use super::root::{install_state_observations, observed_root_observation};
-use crate::install_root::read_named_deployment_install_state_from_root;
+use crate::install_root::{InstallStateError, read_named_deployment_install_state_from_root};
 use std::path::PathBuf;
 use thiserror::Error as ThisError;
 
@@ -29,7 +29,7 @@ pub struct LocalInventoryRequest {
 #[derive(Debug, ThisError)]
 pub enum DeploymentTruthError {
     #[error("failed to read local deployment state: {0}")]
-    LocalState(String),
+    LocalState(#[source] InstallStateError),
 }
 
 /// Collect read-only local deployment facts without querying or mutating IC state.
@@ -45,7 +45,7 @@ pub fn collect_local_deployment_inventory(
         &request.network,
         &request.deployment_name,
     )
-    .map_err(|err| DeploymentTruthError::LocalState(err.to_string()))?;
+    .map_err(DeploymentTruthError::LocalState)?;
     let raw_config_sha256 = observe_config_sha256(&config, &mut unresolved_observations);
     let canonical_runtime_config_digest =
         observe_canonical_runtime_config_digest(&config, &mut unresolved_observations);

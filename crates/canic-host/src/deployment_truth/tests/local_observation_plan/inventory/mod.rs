@@ -190,3 +190,35 @@ fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
     assert_eq!(observed_root.deployment_name, "prod");
     assert_eq!(observed_root.fleet_template, "unknown");
 }
+
+#[test]
+fn local_inventory_retains_install_state_decode_source() {
+    let temp = TempWorkspace::new("canic-host-local-state-error");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let state_path = icp_root
+        .join(".canic")
+        .join("local")
+        .join("deployments")
+        .join("demo.json");
+    fs::create_dir_all(state_path.parent().expect("state parent")).expect("create state dir");
+    fs::write(&state_path, b"not-json").expect("write malformed state");
+
+    let error = collect_local_deployment_inventory(&LocalInventoryRequest {
+        deployment_name: "demo".to_string(),
+        network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        config_path: None,
+        observed_at: "2026-05-27T00:00:00Z".to_string(),
+    })
+    .expect_err("malformed install state must fail");
+
+    assert!(matches!(
+        error,
+        DeploymentTruthError::LocalState(InstallStateError::Decode {
+            path,
+            source: _
+        }) if path == state_path
+    ));
+}

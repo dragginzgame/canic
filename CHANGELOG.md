@@ -8,9 +8,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.90.x] - 2026-07-13 - Receipt-Backed Intent Reconciliation
+
+Detailed patch breakdown: [docs/changelog/0.90.md](docs/changelog/0.90.md)
+
+- `0.90.0` reserves a hard-cut receipt-backed intent MVP: Canic owns only
+  generic reservation identity and at-most-once local settlement, while Toko
+  owns mint as the first consumer. It removes generic call-builder intent
+  semantics without adding a generic effect framework, successful-path receipt
+  call, or background work. This is design scope only and changes no runtime
+  behavior.
+
 ## [0.89.x] - 2026-07-13 - Deployment Evidence and Surface Truth
 
 Detailed patch breakdown: [docs/changelog/0.89.md](docs/changelog/0.89.md)
+
+- `0.89.2` retains typed install-state failures through passive deployment
+  inventory instead of flattening them to text, without changing reports or
+  command behavior.
 
 - `0.89.1` centralizes install-state admission and rejects unsupported,
   misplaced, or path-escaping deployment state before it can supply deployment

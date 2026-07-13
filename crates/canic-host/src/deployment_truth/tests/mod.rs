@@ -6,7 +6,7 @@ use crate::deployment_truth::observe::{
 };
 use crate::deployment_truth::report::{RootSubnetEvidence, RootSubnetEvidenceSource};
 use crate::icp::{IcpCanisterStatusReport, IcpCanisterStatusSettings};
-use crate::install_root::{InstallState, RootVerificationStatus};
+use crate::install_root::{InstallState, InstallStateError, RootVerificationStatus};
 use crate::registry::RegistryEntry;
 use crate::release_set::{ConfiguredPoolExpectation, ROOT_RELEASE_SET_MANIFEST_FILE};
 use crate::test_support::temp_dir;
