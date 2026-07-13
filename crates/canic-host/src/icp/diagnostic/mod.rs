@@ -43,7 +43,11 @@ pub fn classify_icp_diagnostic(message: &str) -> Option<IcpDiagnostic> {
     {
         return Some(IcpDiagnostic::MethodMissing);
     }
-    if message.contains("Cannot find canister id") {
+    if message.contains("Cannot find canister id")
+        || message.contains("failed to lookup canister ID")
+        || message.contains("could not find ID for canister")
+        || message.contains("Canister ID is missing")
+    {
         return Some(IcpDiagnostic::CanisterIdMissing);
     }
     if message.contains("contains no Wasm module") || message.contains("wasm-module-not-found") {
@@ -102,6 +106,18 @@ mod tests {
             ),
             (
                 "Cannot find canister id for root",
+                IcpDiagnostic::CanisterIdMissing,
+            ),
+            (
+                "failed to lookup canister ID for canister 'root' in environment 'local'",
+                IcpDiagnostic::CanisterIdMissing,
+            ),
+            (
+                "could not find ID for canister 'root' in environment 'local'",
+                IcpDiagnostic::CanisterIdMissing,
+            ),
+            (
+                "Canister ID is missing for canister 'root'",
                 IcpDiagnostic::CanisterIdMissing,
             ),
             (

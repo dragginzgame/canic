@@ -1,8 +1,7 @@
 use super::build_environment::resolve_install_build_context;
 use super::commands::{
     add_create_root_target, add_icp_environment_target, icp_canister_command_in_network,
-    is_missing_canister_id_error, parse_canister_id_json, parse_created_canister_id,
-    root_init_args,
+    parse_canister_id_json, parse_created_canister_id, root_init_args,
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
