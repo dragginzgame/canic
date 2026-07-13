@@ -5,11 +5,11 @@ Last updated: 2026-07-13
 ## Current State
 
 The fresh post-0.86 audit defines a bounded three-slice line. Slice A is
-published as `0.87.0`. Slices B and C are implemented under `Unreleased`.
-Slice C's environment-input audit is complete: public profile, path/config,
+published as `0.87.0`. Slices B and C are published as `0.87.1`. Slice C's
+environment-input audit is complete: public profile, path/config,
 cache-retention, target-directory, and Candid-refresh shortcuts are hard-cut;
 three unread child values are deleted; and the remaining Cargo handoffs have
-private names owned by core constants. Package versions are `0.87.0`.
+private names owned by core constants. Package versions are `0.87.1`.
 
 Slice A routes scaffold workspace replacement through the existing durable
 host writer. Project and canister scaffolds use one rollback function, restore
@@ -21,6 +21,14 @@ Slice B gives the host ICP adapter one typed classifier for external diagnostics
 on which Canic acts. Commands retain the original `IcpCommandError` rather than
 copying command/output strings and losing I/O or JSON sources. Command-specific
 exit and hint policy remains local.
+
+A post-release closeout scan found one install-root helper that still matched
+three missing-canister-ID phrases after erasing `IcpCommandError`. The current
+correction moves those phrases into the existing classifier, keeps the command
+failure typed through root resolution, and removes the local helper. It is
+release-noted as `0.87.2`: a conformance correction to completed Slice B, not a
+fourth slice or 0.88 carry-over. Package versions remain `0.87.1` until the
+human-owned release bump.
 
 ## Checklist
 
@@ -79,6 +87,7 @@ exit and hint policy remains local.
 
 ## Next Action
 
-Run the bounded closeout scan and review Slices B and C as the next release
-batch. Do not extend 0.87 with new abstractions or preserve removed environment
-names as aliases.
+The three planned 0.87 slices are complete and the narrow Slice B closeout is
+prepared as `0.87.2`. Run the human-owned release bump, then begin the
+separately designed 0.88 work. Do not add another 0.87 slice or preserve
+removed environment names as aliases.

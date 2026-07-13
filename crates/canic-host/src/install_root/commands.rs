@@ -1,4 +1,4 @@
-use crate::icp::{self, LocalReplicaTarget};
+use crate::icp::{self, IcpCommandError, LocalReplicaTarget};
 use canic_core::cdk::{types::Principal, utils::hash::wasm_hash};
 use serde_json::Value as JsonValue;
 use std::{fs, path::Path, process::Command};
@@ -39,12 +39,6 @@ pub(super) fn add_create_root_target(
     }
 }
 
-pub(super) fn is_missing_canister_id_error(message: &str) -> bool {
-    message.contains("failed to lookup canister ID")
-        || message.contains("could not find ID for canister")
-        || message.contains("Canister ID is missing")
-}
-
 pub(super) fn root_init_args(root_wasm: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let wasm = fs::read(root_wasm)?;
     Ok(format!(
@@ -67,10 +61,8 @@ pub(super) fn run_command(command: &mut Command) -> Result<(), Box<dyn std::erro
     icp::run_status(command).map_err(Into::into)
 }
 
-pub(super) fn run_command_stdout(
-    command: &mut Command,
-) -> Result<String, Box<dyn std::error::Error>> {
-    icp::run_output(command).map_err(Into::into)
+pub(super) fn run_command_stdout(command: &mut Command) -> Result<String, IcpCommandError> {
+    icp::run_output(command)
 }
 
 pub(super) fn icp_command_in_network(icp_root: &Path, network: &str) -> Command {

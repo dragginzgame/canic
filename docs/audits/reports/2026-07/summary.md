@@ -13,6 +13,10 @@
   audit; public profile, path/config, cache-retention, target-directory, and
   Candid-refresh shortcuts are hard-cut, three unread child-build values are
   deleted, and required Cargo/build-script handoff values remain private.
+- [2026-07-13 codebase health](2026-07-13/codebase-health.md): post-0.87 audit;
+  one narrow 0.87 typed-ICP closeout correction and three bounded 0.88
+  candidates covering backup durability, CLI file output, and fleet-config
+  errors.
 
 ## Month Status
 
@@ -23,3 +27,5 @@ rebuilds under repository policy.
 ## Carry-Forward Follow-up
 
 1. Keep root Wasm comparisons separate from leaf/shared-runtime comparisons.
+2. Execute only the three slices accepted by the bounded 0.88 design; do not
+   expand them into cross-crate filesystem or global error frameworks.

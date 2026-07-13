@@ -58,16 +58,3 @@ fn parses_json_canister_ids() {
         None
     );
 }
-
-#[test]
-fn detects_missing_canister_id_errors() {
-    assert!(is_missing_canister_id_error(
-        "Error: failed to lookup canister ID for canister 'root' in environment 'local'"
-    ));
-    assert!(is_missing_canister_id_error(
-        "could not find ID for canister 'root' in environment 'local'"
-    ));
-    assert!(!is_missing_canister_id_error(
-        "Error: failed to connect to replica"
-    ));
-}

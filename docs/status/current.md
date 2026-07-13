@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.87.0`, published and tagged
-  as `v0.87.0`. The bounded 0.86 structural-maintainability line is complete;
+- The current package/release-surface version is `0.87.1`, published and tagged
+  as `v0.87.1`. The bounded 0.86 structural-maintainability line is complete;
   its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -96,7 +96,7 @@ before this compaction is archived at
   duplicate explicit inputs or canonical discovery. The design explicitly
   excludes a transaction framework, project-context service, global error
   framework, generic fan-out helper, and compatibility paths. Slice A is
-  published as `v0.87.0`. Slice B is implemented under `Unreleased`: external
+  published as `v0.87.0`. Slice B is published in `v0.87.1`: external
   ICP CLI wording has one typed host classifier, commands retain typed ICP
   failures and their original sources, and the copied command/string transport
   errors are hard-cut. Slice C now begins with a decision ledger for every
@@ -115,7 +115,22 @@ before this compaction is archived at
   Wasm-store DID refresh with one explicit maintainer builder argument, and
   gives the embedded-release-artifact Cargo handoff one private core-owned
   name. Slice C is complete; do not extend it with a configuration service or
-  compatibility paths.
+  compatibility paths. Slices B and C are both published in `v0.87.1`; all
+  three planned 0.87 slices are complete. A post-release closeout scan found
+  one install-root missing-canister-ID classifier that still erased a typed ICP
+  command error. The `0.87.2` correction moves that wording into the existing
+  host classifier and keeps resolution typed; package versions remain
+  `0.87.1` until the human-owned bump. This is a Slice B conformance correction,
+  not another slice or 0.88 carry-over.
+
+  The fresh post-0.87 audit is recorded at
+  `docs/audits/reports/2026-07/2026-07-13/codebase-health.md`. It defines the
+  bounded 0.88 design under
+  `docs/design/0.88-artifact-durability-and-config-errors/`: make backup
+  artifact-directory finalization genuinely durable, make CLI file output
+  failure-atomic, and give fleet configuration one typed error boundary. Close
+  0.88 after those three slices; broad visibility churn, dependency forks,
+  filesystem frameworks, and global error architectures are excluded.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is
