@@ -2,22 +2,15 @@ use super::*;
 
 #[test]
 fn install_config_defaults_to_project_config_when_present() {
-    with_guarded_env(|| {
-        let root = temp_dir("canic-install-config-default");
-        let config = root.join("fleets/canic.toml");
-        fs::create_dir_all(config.parent().expect("config parent")).expect("create parent");
-        fs::write(&config, "").expect("write config");
-        let previous = env::var_os("CANIC_CONFIG_PATH");
-        unsafe {
-            env::remove_var("CANIC_CONFIG_PATH");
-        }
+    let root = temp_dir("canic-install-config-default");
+    let config = root.join("fleets/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create parent");
+    fs::write(&config, "").expect("write config");
 
-        let resolved = resolve_install_config_path(&root, None, false).expect("resolve config");
+    let resolved = resolve_install_config_path(&root, None, false).expect("resolve config");
 
-        assert_eq!(resolved, config);
-        restore_env_var("CANIC_CONFIG_PATH", previous);
-        fs::remove_dir_all(root).expect("clean temp dir");
-    });
+    assert_eq!(resolved, config);
+    fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
@@ -32,16 +25,15 @@ fn install_config_accepts_explicit_path() {
 
 #[test]
 fn install_config_error_lists_choices_when_project_default_missing() {
-    with_guarded_env(|| {
-        let root = temp_dir("canic-install-config-choices");
-        let demo = root.join("fleets/demo/canic.toml");
-        let test = root.join("canisters/test/runtime_probe/canic.toml");
-        fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
-        fs::create_dir_all(test.parent().expect("test parent")).expect("create test parent");
-        fs::create_dir_all(root.join("fleets/demo/root")).expect("create demo root");
-        fs::write(
-            &demo,
-            r#"
+    let root = temp_dir("canic-install-config-choices");
+    let demo = root.join("fleets/demo/canic.toml");
+    let test = root.join("canisters/test/runtime_probe/canic.toml");
+    fs::create_dir_all(demo.parent().expect("demo parent")).expect("create demo parent");
+    fs::create_dir_all(test.parent().expect("test parent")).expect("create test parent");
+    fs::create_dir_all(root.join("fleets/demo/root")).expect("create demo root");
+    fs::write(
+        &demo,
+        r#"
 [fleet]
 name = "demo"
 
@@ -94,30 +86,23 @@ kind = "service"
 [subnets.prime.canisters.user_hub]
 kind = "service"
 "#,
-        )
-        .expect("write demo config");
-        fs::write(&test, "").expect("write test config");
-        fs::write(root.join("fleets/demo/root/Cargo.toml"), "").expect("write demo root manifest");
-        let previous = env::var_os("CANIC_CONFIG_PATH");
-        unsafe {
-            env::remove_var("CANIC_CONFIG_PATH");
-        }
+    )
+    .expect("write demo config");
+    fs::write(&test, "").expect("write test config");
+    fs::write(root.join("fleets/demo/root/Cargo.toml"), "").expect("write demo root manifest");
+    let err = resolve_install_config_path(&root, None, false).expect_err("selection must fail");
+    let message = err.to_string();
 
-        let err = resolve_install_config_path(&root, None, false).expect_err("selection must fail");
-        let message = err.to_string();
+    assert!(message.contains("missing default Canic config at fleets/canic.toml"));
+    assert!(!message.contains("found one install config:"));
+    assert!(message.contains("fleets/demo/canic.toml"));
+    assert!(message.contains("3 (root, app, user_hub)"));
+    assert!(message.contains("fleets/canic.toml\n\n#"));
+    assert!(message.contains("3 (root, app, user_hub)\n\nrun:"));
+    assert!(!message.contains("canisters/test/runtime_probe/canic.toml"));
+    assert!(message.contains("run: canic install demo"));
 
-        assert!(message.contains("missing default Canic config at fleets/canic.toml"));
-        assert!(!message.contains("found one install config:"));
-        assert!(message.contains("fleets/demo/canic.toml"));
-        assert!(message.contains("3 (root, app, user_hub)"));
-        assert!(message.contains("fleets/canic.toml\n\n#"));
-        assert!(message.contains("3 (root, app, user_hub)\n\nrun:"));
-        assert!(!message.contains("canisters/test/runtime_probe/canic.toml"));
-        assert!(message.contains("run: canic install demo"));
-
-        restore_env_var("CANIC_CONFIG_PATH", previous);
-        fs::remove_dir_all(root).expect("clean temp dir");
-    });
+    fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]

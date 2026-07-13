@@ -31,6 +31,7 @@ pub struct RootBaselineSpec<'a> {
     pub icp_build_lock_path: PathBuf,
     pub build_network: &'a str,
     pub build_profile: CanicWasmBuildProfile,
+    pub build_config_path: PathBuf,
     pub build_extra_env: Vec<(String, String)>,
     pub bootstrap_tick_limit: usize,
     pub root_setup_max_attempts: usize,

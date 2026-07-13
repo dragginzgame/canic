@@ -167,15 +167,15 @@ EOF
 
 run_packaged_canic() {
     (
-        cd "$TOOL_ROOT"
+        cd "$DOWNSTREAM_ROOT"
         HOME="$PROOF_HOME" \
             CARGO_HOME="$HOST_CARGO_HOME" \
             CARGO_TARGET_DIR="$PROOF_TARGET_DIR" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
             FAKE_ICP_STATE="$FAKE_ICP_STATE" \
-            CANIC_WORKSPACE_ROOT="$DOWNSTREAM_ROOT" \
-            cargo run --offline -q -p canic-cli --bin canic -- "$@"
+            cargo run --manifest-path "$TOOL_ROOT/Cargo.toml" --offline -q -p canic-cli \
+                --bin canic -- "$@"
     )
 }
 

@@ -36,7 +36,7 @@ pub fn init_nonroot_canister_before_bootstrap(
         );
         lifecycle_trap(
             LifecyclePhase::Init,
-            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+            format!("config init failed (config_path={config_path}): {err}"),
         );
     }
 

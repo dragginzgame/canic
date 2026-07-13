@@ -46,7 +46,9 @@ macro_rules! __canic_build_internal {
         let __canic_fleet_name = __canic_package_metadata.fleet;
         let __canic_role_name = __canic_package_metadata.role;
         let default_cfg_path = std::path::PathBuf::from(&manifest_dir).join($file);
-        let env_cfg = std::env::var("CANIC_CONFIG_PATH").ok();
+        let __canic_config_path_env =
+            $crate::__internal::core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV;
+        let env_cfg = std::env::var(__canic_config_path_env).ok();
         let mut $cfg_path = env_cfg.as_ref().map_or(default_cfg_path, |value| {
             let path = std::path::PathBuf::from(value);
             if path.is_relative() {
@@ -57,7 +59,7 @@ macro_rules! __canic_build_internal {
         });
         println!("cargo:rerun-if-changed={}", $cfg_path.display());
         println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
-        println!("cargo:rerun-if-env-changed=CANIC_CONFIG_PATH");
+        println!("cargo:rerun-if-env-changed={__canic_config_path_env}");
         println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
 
         let __canic_default_role = (__canic_role_name != "root").then(|| __canic_role_name.clone());
@@ -292,7 +294,10 @@ macro_rules! __canic_build_internal {
             "cargo:rustc-env=CANIC_CANISTER_ROLE_ATTACHED={}",
             if __canic_role_attached { "true" } else { "false" }
         );
-        println!("cargo:rustc-env=CANIC_CONFIG_PATH={}", source_abs.display());
+        println!(
+            "cargo:rustc-env=CANIC_CONFIG_ORIGIN_PATH={}",
+            source_abs.display()
+        );
         println!(
             "cargo:rustc-env=CANIC_CONFIG_SOURCE_PATH={}",
             compact_abs.display()

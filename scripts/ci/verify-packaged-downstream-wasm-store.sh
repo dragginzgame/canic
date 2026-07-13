@@ -159,15 +159,15 @@ run_probe() {
     assert_packaged_tool_root "$tool_root" "$package_root"
 
     (
-        cd "$tool_root"
+        cd "$downstream_root"
         HOME="$PROOF_HOME" \
             CARGO_HOME="$HOST_CARGO_HOME" \
             CARGO_TARGET_DIR="$target_dir" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            CANIC_WORKSPACE_ROOT="$downstream_root" \
-            CANIC_WASM_PROFILE=fast \
-            cargo run --offline -q -p canic-host --example build_artifact -- wasm_store >/dev/null
+            cargo run --manifest-path "$tool_root/Cargo.toml" --offline -q -p canic-host \
+                --example build_artifact -- wasm_store fast "$downstream_root" \
+                "$downstream_root" "$downstream_root/fleets/canic.toml" >/dev/null
     )
 }
 

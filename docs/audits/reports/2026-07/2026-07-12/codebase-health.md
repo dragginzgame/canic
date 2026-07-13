@@ -89,6 +89,15 @@ Recommended hard cut:
 Do not add a global error framework or classify arbitrary text outside the ICP
 adapter.
 
+Current correction:
+
+- The host ICP adapter now owns one typed classifier for every inventoried
+  external diagnostic.
+- Production consumers no longer match those ICP strings directly.
+- Command and installed-deployment errors retain `IcpCommandError` instead of
+  copying command/output strings and discarding I/O or JSON sources.
+- Command-specific hints and exit policy remain local.
+
 ### Medium - Test-only process environment mutation is not globally coordinated
 
 Evidence:
@@ -104,13 +113,16 @@ Impact:
 The unsafe surface is test-only, but parallel host tests can become flaky or
 invalidate the safety assumptions around process-wide environment mutation.
 
-Recommended hard cut:
+Revised hard cut:
 
-- Preserve the existing public environment-reading path functions.
-- Move their precedence decisions into small pure functions taking explicit
-  override values and a start path.
-- Test those pure inputs directly and delete the environment mutation helpers
-  and locks.
+- Audit every maintained product-level environment input before preserving any
+  public wrapper.
+- Remove shortcuts that duplicate explicit options, selected configuration,
+  package metadata, or canonical discovery.
+- Internalize only values that must cross a Cargo/build-script process
+  boundary.
+- Test any remaining precedence through explicit inputs and delete the
+  environment mutation helpers and locks.
 
 Do not introduce a generalized project-context service. Project-root,
 workspace-root, ICP-root, config-choice, and manifest discovery have distinct
@@ -159,8 +171,8 @@ The two manifests now ignore only the macro-derived `serde` use and the
 1. Keep the implemented scaffold failure-atomicity correction as Slice A.
 2. Make the host ICP adapter the one owner of external diagnostic
    classification and remove repeated command-side error reconstruction.
-3. Remove test-only process environment mutation through explicit pure resolver
-   inputs, without creating a project-context abstraction.
+3. Execute the environment-input decision ledger, removing public shortcuts
+   and test mutation while internalizing only required process-boundary values.
 
 After those three bounded slices, close 0.87 and audit again. Do not turn the
 line into another broad module-splitting program.
@@ -171,8 +183,11 @@ line into another broad module-splitting program.
   transitive warnings.
 - `cargo machete`: passes after the two exact metadata corrections.
 - Production unsafe/environment scan: no global environment mutation.
-- Repeated-flow scan: ten installed-deployment translators, seven direct CLI
-  ICP translators, and six consumer areas with ICP wording classification.
+- Baseline repeated-flow scan: ten installed-deployment translators, seven
+  direct CLI ICP translators, and six consumer areas with ICP wording
+  classification.
+- Post-correction scan: no copied `IcpFailed` command shape and no production
+  ICP diagnostic wording outside the host adapter.
 - Focused scaffold tests: 23 passed.
 - Targeted `canic-cli` library Clippy: passed with warnings denied.
 - Full test/PocketIC/Wasm matrix: not run under targeted-validation policy.

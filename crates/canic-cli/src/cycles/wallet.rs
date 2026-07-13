@@ -11,7 +11,7 @@ use crate::{
 };
 use canic_host::{
     format::cycles_tc,
-    icp::{IcpCli, IcpCommandError, command_display, run_output_with_stderr},
+    icp::{IcpCli, command_display, run_output_with_stderr},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
     registry::RegistryEntry,
@@ -423,7 +423,7 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
 
     let output = icp
         .canister_top_up_output(&target.canister_id, options.amount_cycles)
-        .map_err(cycles_icp_error)?;
+        .map_err(CyclesCommandError::from)?;
     if options.json {
         println!(
             "{}",
@@ -578,7 +578,7 @@ fn run_or_print_command(
         println!("{}", command_display(command));
         return Ok(());
     }
-    let output = run_output_with_stderr(command).map_err(cycles_icp_error)?;
+    let output = run_output_with_stderr(command).map_err(CyclesCommandError::from)?;
     if !output.is_empty() {
         println!("{output}");
     }
@@ -760,30 +760,6 @@ fn transfer_usage() -> String {
 
 fn topup_usage() -> String {
     render_usage(topup_command)
-}
-
-pub(super) fn cycles_icp_error(error: IcpCommandError) -> CyclesCommandError {
-    match error {
-        IcpCommandError::Io(error) => CyclesCommandError::Io(error),
-        IcpCommandError::Failed { command, stderr } => {
-            CyclesCommandError::IcpFailed { command, stderr }
-        }
-        IcpCommandError::Json {
-            command, output, ..
-        } => CyclesCommandError::IcpFailed {
-            command,
-            stderr: output,
-        },
-        error @ (IcpCommandError::MissingCli { .. }
-        | IcpCommandError::IncompatibleCliVersion { .. }) => CyclesCommandError::IcpFailed {
-            command: "icp --version".to_string(),
-            stderr: error.to_string(),
-        },
-        IcpCommandError::SnapshotIdUnavailable { output } => CyclesCommandError::IcpFailed {
-            command: "icp canister snapshot create".to_string(),
-            stderr: output,
-        },
-    }
 }
 
 #[cfg(test)]

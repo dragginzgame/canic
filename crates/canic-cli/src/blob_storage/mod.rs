@@ -72,8 +72,8 @@ pub enum BlobStorageCommandError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error("deployment target {deployment} has no canister or role named {target}")]
     UnknownTarget { deployment: String, target: String },
@@ -130,10 +130,8 @@ impl BlobStorageCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
             Self::JsonReported { exit_code, .. } => *exit_code,
-            Self::ReplicaQuery(_) | Self::IcpFailed { .. } => 2,
-            Self::ResponseParse { .. } => 3,
-            Self::ReadinessCheckFailed { .. } => 4,
-            Self::Usage(_)
+            Self::Icp(IcpCommandError::Io(_))
+            | Self::Usage(_)
             | Self::InvalidCycles(_)
             | Self::Json(_)
             | Self::NoInstalledDeployment { .. }
@@ -144,6 +142,9 @@ impl BlobStorageCommandError {
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. } => 1,
+            Self::ReplicaQuery(_) | Self::Icp(_) => 2,
+            Self::ResponseParse { .. } => 3,
+            Self::ReadinessCheckFailed { .. } => 4,
         }
     }
 
@@ -168,14 +169,13 @@ impl BlobStorageCommandError {
             | Self::InstallState(_)
             | Self::NoInstalledDeployment { .. }
             | Self::UnknownTarget { .. }
-            | Self::AmbiguousRole { .. } => BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,
+            | Self::AmbiguousRole { .. }
+            | Self::Icp(IcpCommandError::Io(_)) => BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,
             Self::CandidUnavailable { .. } | Self::CandidRead { .. } => {
                 BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE
             }
             Self::MethodUnavailable { .. } => BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
-            Self::ReplicaQuery(_) | Self::IcpFailed { .. } => {
-                BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
-            }
+            Self::ReplicaQuery(_) | Self::Icp(_) => BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED,
             Self::ResponseParse { .. } => BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
             Self::CandidParse { .. } => BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
             Self::ReadinessCheckFailed { .. } => BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED,
@@ -635,7 +635,7 @@ fn live_call_output(
             Some(target.candid_path.as_path()),
         ),
     };
-    result.map_err(blob_storage_icp_error)
+    result.map_err(BlobStorageCommandError::from)
 }
 
 fn blob_storage_installed_deployment_error(
@@ -655,9 +655,7 @@ fn blob_storage_installed_deployment_error(
         InstalledDeploymentError::ReplicaQuery(error) => {
             BlobStorageCommandError::ReplicaQuery(error)
         }
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            BlobStorageCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => BlobStorageCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             BlobStorageCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }
@@ -667,27 +665,6 @@ fn blob_storage_installed_deployment_error(
         InstalledDeploymentError::Io(error) => {
             BlobStorageCommandError::InstallState(error.to_string())
         }
-    }
-}
-
-fn blob_storage_icp_error(error: IcpCommandError) -> BlobStorageCommandError {
-    match error {
-        IcpCommandError::Io(err) => BlobStorageCommandError::InstallState(err.to_string()),
-        IcpCommandError::Failed { command, stderr }
-        | IcpCommandError::Json {
-            command,
-            output: stderr,
-            ..
-        } => BlobStorageCommandError::IcpFailed { command, stderr },
-        IcpCommandError::SnapshotIdUnavailable { output } => BlobStorageCommandError::IcpFailed {
-            command: "icp canister call".to_string(),
-            stderr: output,
-        },
-        error @ (IcpCommandError::MissingCli { .. }
-        | IcpCommandError::IncompatibleCliVersion { .. }) => BlobStorageCommandError::IcpFailed {
-            command: "icp --version".to_string(),
-            stderr: error.to_string(),
-        },
     }
 }
 

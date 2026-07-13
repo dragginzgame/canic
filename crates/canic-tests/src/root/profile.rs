@@ -113,71 +113,41 @@ pub fn built_root_wasm_path() -> PathBuf {
 
 // Map one test profile to its embedded config override without leaking relative
 // crate-local paths into the shared build environment.
-fn profile_build_extra_env(
-    profile: RootSetupProfile,
-    workspace_root: &std::path::Path,
-) -> Vec<(String, String)> {
-    let test_fleet_root = workspace_root.join("fleets").join("test");
-    let test_fleet_root_env = || {
-        (
-            "CANIC_CANISTERS_ROOT".to_string(),
-            test_fleet_root.display().to_string(),
-        )
-    };
-
+fn profile_build_extra_env(profile: RootSetupProfile) -> Vec<(String, String)> {
     match profile {
-        RootSetupProfile::Topology => vec![test_fleet_root_env()],
-        RootSetupProfile::ReconcileSmallStore => vec![
-            (
-                "RUSTFLAGS".to_string(),
-                TEST_SMALL_STORE_RUSTFLAGS.to_string(),
-            ),
-            test_fleet_root_env(),
-        ],
-        RootSetupProfile::Capability => vec![
-            (
-                "CANIC_CONFIG_PATH".to_string(),
-                test_fleet_root
-                    .join("test-configs")
-                    .join("root-capability.toml")
-                    .display()
-                    .to_string(),
-            ),
-            test_fleet_root_env(),
-        ],
-        RootSetupProfile::Scaling => vec![
-            (
-                "CANIC_CONFIG_PATH".to_string(),
-                test_fleet_root
-                    .join("test-configs")
-                    .join("root-scaling.toml")
-                    .display()
-                    .to_string(),
-            ),
-            test_fleet_root_env(),
-        ],
-        RootSetupProfile::Sharding => vec![
-            (
-                "CANIC_CONFIG_PATH".to_string(),
-                test_fleet_root
-                    .join("test-configs")
-                    .join("root-sharding.toml")
-                    .display()
-                    .to_string(),
-            ),
-            test_fleet_root_env(),
-        ],
+        RootSetupProfile::Topology => Vec::new(),
+        RootSetupProfile::ReconcileSmallStore => vec![(
+            "RUSTFLAGS".to_string(),
+            TEST_SMALL_STORE_RUSTFLAGS.to_string(),
+        )],
+        RootSetupProfile::Capability | RootSetupProfile::Scaling | RootSetupProfile::Sharding => {
+            Vec::new()
+        }
+    }
+}
+
+fn profile_build_config_path(profile: RootSetupProfile, workspace_root: &Path) -> PathBuf {
+    let test_fleet_root = workspace_root.join("fleets").join("test");
+    match profile {
+        RootSetupProfile::Topology | RootSetupProfile::ReconcileSmallStore => {
+            test_fleet_root.join("canic.toml")
+        }
+        RootSetupProfile::Capability => test_fleet_root.join("test-configs/root-capability.toml"),
+        RootSetupProfile::Scaling => test_fleet_root.join("test-configs/root-scaling.toml"),
+        RootSetupProfile::Sharding => test_fleet_root.join("test-configs/root-sharding.toml"),
     }
 }
 
 // Build one reusable baseline spec for a named root harness profile.
 fn baseline_spec_for_profile(profile: RootSetupProfile) -> RootBaselineSpec<'static> {
     let workspace_root = workspace_root();
-    let build_extra_env = profile_build_extra_env(profile, &workspace_root);
+    let build_extra_env = profile_build_extra_env(profile);
+    let build_config_path = profile_build_config_path(profile, &workspace_root);
     baseline_spec_for_roles_owned_env(
         workspace_root,
         profile.release_roles(),
         profile.build_profile(),
+        build_config_path,
         build_extra_env,
     )
 }
@@ -187,6 +157,7 @@ fn baseline_spec_for_roles_owned_env(
     workspace_root: PathBuf,
     release_roles: &'static [&'static str],
     build_profile: CanicWasmBuildProfile,
+    build_config_path: PathBuf,
     mut build_extra_env: Vec<(String, String)>,
 ) -> RootBaselineSpec<'static> {
     if build_extra_env
@@ -215,6 +186,7 @@ fn baseline_spec_for_roles_owned_env(
         workspace_root,
         build_network: "local",
         build_profile,
+        build_config_path,
         build_extra_env,
         bootstrap_tick_limit: BOOTSTRAP_TICK_LIMIT,
         root_setup_max_attempts: ROOT_SETUP_MAX_ATTEMPTS,

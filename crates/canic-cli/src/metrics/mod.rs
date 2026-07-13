@@ -14,7 +14,7 @@ use crate::{
     version_text,
 };
 use canic_backup::discovery::DiscoveryError;
-use canic_host::registry::RegistryParseError;
+use canic_host::{icp::IcpCommandError, registry::RegistryParseError};
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
 
@@ -40,8 +40,8 @@ pub enum MetricsCommandError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error(
         "invalid metrics kind {0}; use core, placement, platform, runtime, security, or storage"

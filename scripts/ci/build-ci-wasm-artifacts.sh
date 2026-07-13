@@ -23,25 +23,29 @@ require_cmd candid-extractor
 require_cmd ic-wasm
 require_icp_tools
 
-# Build the middle fast artifacts by default so PocketIC/test harnesses and
-# local demo flows get smaller faster wasm without paying full release cost.
-BUILD_WASM_PROFILE="${CANIC_WASM_PROFILE:-}"
-if [ -z "$BUILD_WASM_PROFILE" ]; then
-    BUILD_WASM_PROFILE="fast"
+if [ "$#" -ne 2 ]; then
+    echo "usage: $0 <debug|fast|release> <config-path>" >&2
+    exit 2
 fi
+BUILD_WASM_PROFILE="$1"
+BUILD_CONFIG="$2"
+case "$BUILD_WASM_PROFILE" in
+    debug|fast|release) ;;
+    *)
+        echo "invalid wasm profile '$BUILD_WASM_PROFILE'; use debug, fast, or release" >&2
+        exit 2
+        ;;
+esac
 
 # Keep PocketIC-oriented CI artifacts small.
 export CARGO_INCREMENTAL=0
 export RUSTFLAGS="${RUSTFLAGS:-} -C debuginfo=0"
 
-DEFAULT_BUILD_CONFIG="$ROOT_DIR/fleets/test/canic.toml"
-export CANIC_CONFIG_PATH="${CANIC_CONFIG_PATH:-$DEFAULT_BUILD_CONFIG}"
-
 if [ -n "${CANIC_REFERENCE_CANISTERS:-}" ]; then
     # Allow focused harnesses to build only the canisters they actually stage.
     read -r -a BUILD_CANISTERS <<<"$CANIC_REFERENCE_CANISTERS"
 else
-    DEFAULT_BUILD_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config "$CANIC_CONFIG_PATH" --ci-order)"
+    DEFAULT_BUILD_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config "$BUILD_CONFIG" --ci-order)"
     mapfile -t BUILD_CANISTERS <<<"$DEFAULT_BUILD_CANISTERS"
 fi
 
@@ -49,7 +53,8 @@ fi
 # can emit once the full root-subnet ordinary artifact set exists. Root itself builds the
 # implicit bootstrap `wasm_store` artifact internally.
 for canister in "${BUILD_CANISTERS[@]}"; do
-    CANIC_WASM_PROFILE="$BUILD_WASM_PROFILE" cargo run -q --profile fast -p canic-host --example build_artifact --locked -- "$canister"
+    cargo run -q --profile fast -p canic-host --example build_artifact --locked -- \
+        "$canister" "$BUILD_WASM_PROFILE" "$ROOT_DIR" "$ROOT_DIR" "$BUILD_CONFIG"
 
     if [ "$canister" = "root" ]; then
         ROOT_WASM_GZ_PATH=".icp/local/canisters/root/root.wasm.gz"

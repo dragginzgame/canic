@@ -1,12 +1,15 @@
 # 0.87 Status: Operator Boundary Hygiene
 
-Last updated: 2026-07-12
+Last updated: 2026-07-13
 
 ## Current State
 
 The fresh post-0.86 audit defines a bounded three-slice line. Slice A is
-changelog-finalized for `0.87.0`; Slices B and C have not started. Package
-versions remain `0.86.8` pending the human-owned release flow.
+published as `0.87.0`. Slices B and C are implemented under `Unreleased`.
+Slice C's environment-input audit is complete: public profile, path/config,
+cache-retention, target-directory, and Candid-refresh shortcuts are hard-cut;
+three unread child values are deleted; and the remaining Cargo handoffs have
+private names owned by core constants. Package versions are `0.87.0`.
 
 Slice A routes scaffold workspace replacement through the existing durable
 host writer. Project and canister scaffolds use one rollback function, restore
@@ -14,9 +17,10 @@ captured workspace/fleet bytes exactly, and remove only preflight-proven new
 directories. Rollback failure is typed and retains the original operation
 failure.
 
-The next slice will converge repeated ICP and installed-deployment error flows
-at the existing host ICP adapter. It will not add a global error framework or
-move command-specific exit and hint policy into the host.
+Slice B gives the host ICP adapter one typed classifier for external diagnostics
+on which Canic acts. Commands retain the original `IcpCommandError` rather than
+copying command/output strings and losing I/O or JSON sources. Command-specific
+exit and hint policy remains local.
 
 ## Checklist
 
@@ -31,20 +35,26 @@ move command-specific exit and hint policy into the host.
 
 ### Slice B - Typed ICP failure boundary
 
-- [ ] Inventory the exact external ICP diagnostics Canic acts upon.
-- [ ] Add one typed classifier under `canic-host::icp`.
-- [ ] Remove consumer-local ICP diagnostic string matching.
-- [ ] Remove repeated command-side `IcpCommandError` reconstruction.
-- [ ] Remove repeated installed-deployment transport reconstruction.
-- [ ] Preserve focused exit, hint, source, and raw-diagnostic behavior.
+- [x] Inventory the exact external ICP diagnostics Canic acts upon.
+- [x] Add one typed classifier under `canic-host::icp`.
+- [x] Remove consumer-local ICP diagnostic string matching.
+- [x] Remove repeated command-side `IcpCommandError` reconstruction.
+- [x] Remove repeated installed-deployment transport reconstruction.
+- [x] Preserve focused exit, hint, source, and raw-diagnostic behavior.
 
-### Slice C - Pure path precedence inputs
+### Slice C - Environment-input audit and hard cuts
 
-- [ ] Extract focused pure precedence functions behind current public wrappers.
-- [ ] Convert release-set path tests to explicit inputs.
-- [ ] Convert install-root selection/preflight tests to explicit inputs.
-- [ ] Delete host test environment mutation helpers and locks.
-- [ ] Prove existing precedence and path normalization with focused tests.
+- [x] Inventory product-level `CANIC_*` environment inputs.
+- [x] Record preliminary remove, internalize, or keep decisions.
+- [x] Remove variables with no production reader.
+- [x] Replace public Wasm profile selection with existing typed inputs.
+- [x] Remove public path/config shortcuts and use explicit inputs or discovery.
+- [x] Internalize only the required config and ICP-root Cargo handoff values.
+- [x] Convert path/config precedence tests to explicit inputs.
+- [x] Delete host test environment mutation helpers and locks.
+- [x] Remove public shortcuts duplicated by explicit inputs or discovery.
+- [x] Internalize required Cargo/build-script handoff values.
+- [x] Remove stale help, README, script, and fixture references.
 
 ## Validation
 
@@ -53,11 +63,22 @@ move command-specific exit and hint policy into the host.
 - Cargo-machete passes after the two audit-identified manifest metadata fixes.
 - Cargo metadata, formatting, changelog governance, and diff-hygiene checks
   pass.
+- All 24 focused host ICP tests, two installed-deployment tests, and five
+  install-readiness parsing tests pass for Slice B.
+- Focused auth, blob-storage, cycles, token, backup-create, snapshot, list,
+  metrics, environment-export, inspect, replica, and Medic CLI tests pass.
+- Targeted host and CLI library Clippy passes with warnings denied.
+- The active source/script/documentation scan contains no remaining
+  `CANIC_WASM_PROFILE` or removed unread child-build environment references.
+- The active source/script/help scan contains no removed public path/config
+  names; all host test environment mutations and both locks are gone.
+- The final source/script/help scan contains no removed cache-retention,
+  target-directory, Candid-refresh, or old embedded-artifact marker names.
 - Full workspace, PocketIC, and release suites were not run under the targeted
   validation policy.
 
 ## Next Action
 
-Run the human-owned `0.87.0` release flow after reviewing the finalized patch,
-then implement Slice B as a hard cut. `0.87.0` opens the line; it does not close
-the broader design. Do not broaden Slice B into a general error architecture.
+Run the bounded closeout scan and review Slices B and C as the next release
+batch. Do not extend 0.87 with new abstractions or preserve removed environment
+names as aliases.

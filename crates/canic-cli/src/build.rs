@@ -189,7 +189,7 @@ fn build_command() -> ClapCommand {
                 .value_name("debug|fast|release")
                 .num_args(1)
                 .value_parser(clap::value_parser!(CanisterBuildProfile))
-                .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
+                .help("Canister wasm build profile; defaults to release"),
         )
         .arg(
             value_arg("provenance")
@@ -371,24 +371,18 @@ fn resolve_build_context(
             .map_err(|err| BuildCommandError::Build(Box::new(err)))?,
     };
     let build_environment = resolve_build_environment(&options.network, &icp_root)?;
-    let profile = options
-        .profile
-        .unwrap_or_else(CanisterBuildProfile::current);
-    let requested_profile = options.profile.map_or_else(
-        || env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string()),
-        |profile| profile.target_dir_name().to_string(),
-    );
+    let profile = options.profile.unwrap_or(CanisterBuildProfile::Release);
 
     Ok(WorkspaceBuildContext {
         role: options.role.clone(),
         profile,
-        requested_profile,
         environment: options.network.clone(),
         build_network: build_environment.as_str().to_string(),
         workspace_root,
         icp_root,
         config_path,
         local_replica: None,
+        refresh_canonical_wasm_store_did: false,
     })
 }
 

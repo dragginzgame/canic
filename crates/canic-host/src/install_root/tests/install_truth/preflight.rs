@@ -2,68 +2,62 @@ use super::*;
 
 #[test]
 fn install_truth_preflight_uses_current_install_inputs_without_mutation() {
-    with_guarded_env(|| {
-        let root = temp_dir("canic-install-truth-preflight");
-        fs::create_dir_all(root.join("fleets/demo")).expect("create config dir");
-        fs::write(
-            root.join("fleets/demo/canic.toml"),
-            demo_config_source(
-                r#"
+    let root = temp_dir("canic-install-truth-preflight");
+    fs::create_dir_all(&root).expect("create project root");
+    fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n")
+        .expect("write workspace manifest");
+    fs::create_dir_all(root.join("fleets/demo")).expect("create config dir");
+    fs::write(
+        root.join("fleets/demo/canic.toml"),
+        demo_config_source(
+            r#"
 [subnets.prime.canisters.root]
 kind = "root"
 
 [subnets.prime.canisters.user_hub]
 kind = "service"
 "#,
-            ),
-        )
-        .expect("write config");
-        write_wasm_gz_artifact(&root, "root", b"root-artifact");
-        write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
-        write_wasm_gz_artifact(&root, "user_hub", b"user-hub-artifact");
-        let previous_workspace_root = env::var_os("CANIC_WORKSPACE_ROOT");
-        unsafe {
-            env::set_var("CANIC_WORKSPACE_ROOT", &root);
-        }
+        ),
+    )
+    .expect("write config");
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
+    write_wasm_gz_artifact(&root, "user_hub", b"user-hub-artifact");
+    let options = local_demo_install_options(&root);
 
-        let options = local_demo_install_options(&root);
+    let check = check_install_deployment_truth(&options, "2026-05-22T00:00:00Z")
+        .expect("install truth preflight");
+    let execution_preflight = check_install_execution_preflight(&options, "2026-05-22T00:00:01Z")
+        .expect("install execution preflight");
 
-        let check = check_install_deployment_truth(&options, "2026-05-22T00:00:00Z")
-            .expect("install truth preflight");
-        let execution_preflight =
-            check_install_execution_preflight(&options, "2026-05-22T00:00:01Z")
-                .expect("install execution preflight");
+    assert_eq!(check.check_id, "local:local:demo:check");
+    assert_eq!(check.plan.fleet_template, "demo");
+    assert_eq!(
+        check
+            .plan
+            .role_artifacts
+            .iter()
+            .map(|artifact| artifact.build_profile.as_str())
+            .collect::<Vec<_>>(),
+        vec!["fast", "fast", "fast"]
+    );
+    assert_eq!(check.inventory.observed_artifacts.len(), 3);
+    enforce_install_deployment_truth_gate(&check)
+        .expect("complete local artifacts should pass gate");
+    assert_eq!(execution_preflight.plan_id, check.plan.plan_id);
+    assert_eq!(
+        execution_preflight.backend,
+        DeploymentExecutorBackendV1::CurrentCli
+    );
+    assert!(execution_preflight.missing_capabilities.is_empty());
+    assert_eq!(
+        execution_preflight.status,
+        DeploymentExecutionPreflightStatusV1::Ready
+    );
+    assert!(execution_preflight.blockers.is_empty());
+    assert!(!root.join(".canic").exists());
 
-        assert_eq!(check.check_id, "local:local:demo:check");
-        assert_eq!(check.plan.fleet_template, "demo");
-        assert_eq!(
-            check
-                .plan
-                .role_artifacts
-                .iter()
-                .map(|artifact| artifact.build_profile.as_str())
-                .collect::<Vec<_>>(),
-            vec!["fast", "fast", "fast"]
-        );
-        assert_eq!(check.inventory.observed_artifacts.len(), 3);
-        enforce_install_deployment_truth_gate(&check)
-            .expect("complete local artifacts should pass gate");
-        assert_eq!(execution_preflight.plan_id, check.plan.plan_id);
-        assert_eq!(
-            execution_preflight.backend,
-            DeploymentExecutorBackendV1::CurrentCli
-        );
-        assert!(execution_preflight.missing_capabilities.is_empty());
-        assert_eq!(
-            execution_preflight.status,
-            DeploymentExecutionPreflightStatusV1::Ready
-        );
-        assert!(execution_preflight.blockers.is_empty());
-        assert!(!root.join(".canic").exists());
-
-        restore_env_var("CANIC_WORKSPACE_ROOT", previous_workspace_root);
-        fs::remove_dir_all(root).expect("clean temp dir");
-    });
+    fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]

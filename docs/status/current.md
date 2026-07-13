@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-12
+Last updated: 2026-07-13
 
 ## Purpose
 
@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.86.8`, published and tagged
-  as `v0.86.8`. The bounded 0.86 structural-maintainability line is complete;
+- The current package/release-surface version is `0.87.0`, published and tagged
+  as `v0.87.0`. The bounded 0.86 structural-maintainability line is complete;
   its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -91,14 +91,31 @@ before this compaction is archived at
   removed. Rollback failure is typed and retains the original operation
   failure. Slice B will hard-cut repeated ICP and installed-deployment error
   reconstruction into the existing host ICP adapter, which will become the one
-  owner of external ICP diagnostic classification. Slice C will replace
-  test-only process environment mutation with pure path-precedence inputs while
-  preserving the public environment-reading wrappers. The design explicitly
+  owner of external ICP diagnostic classification. Slice C audits every
+  product-level `CANIC_*` environment input and removes public shortcuts that
+  duplicate explicit inputs or canonical discovery. The design explicitly
   excludes a transaction framework, project-context service, global error
   framework, generic fan-out helper, and compatibility paths. Slice A is
-  changelog-finalized for `0.87.0`; package versions remain `0.86.8` pending
-  the human-owned release flow. Slices B and C remain on the 0.87 line after
-  that opening release.
+  published as `v0.87.0`. Slice B is implemented under `Unreleased`: external
+  ICP CLI wording has one typed host classifier, commands retain typed ICP
+  failures and their original sources, and the copied command/string transport
+  errors are hard-cut. Slice C now begins with a decision ledger for every
+  maintained product-level `CANIC_*` environment input. Shortcuts duplicated
+  by explicit options, configuration, metadata, or project discovery are
+  candidates for removal; only required process-boundary handoff values may be
+  internalized rather than deleted. The first implementation hard-cuts
+  `CANIC_WASM_PROFILE` in favor of typed profile inputs and deletes three
+  unread child-build environment writes/cleanup paths without replacements.
+  The next hard cut removes all six public workspace, ICP-root, config,
+  canister-root, and manifest overrides; explicit command inputs and canonical
+  discovery own selection, while only private config and ICP-root values cross
+  the Cargo build boundary. Host tests no longer mutate process environment or
+  carry environment locks. The final Slice C hard cut removes the public cache
+  retention and Canic-specific target-directory switches, replaces ambient
+  Wasm-store DID refresh with one explicit maintainer builder argument, and
+  gives the embedded-release-artifact Cargo handoff one private core-owned
+  name. Slice C is complete; do not extend it with a configuration service or
+  compatibility paths.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is

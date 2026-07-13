@@ -14,23 +14,19 @@ pub(super) fn resolve_install_build_context(
     role: &str,
     build_profile: Option<CanisterBuildProfile>,
 ) -> Result<WorkspaceBuildContext, Box<dyn std::error::Error>> {
-    let profile = build_profile.unwrap_or_else(CanisterBuildProfile::current);
-    let requested_profile = build_profile.map_or_else(
-        || std::env::var("CANIC_WASM_PROFILE").unwrap_or_else(|_| "unset".to_string()),
-        |profile| profile.target_dir_name().to_string(),
-    );
+    let profile = build_profile.unwrap_or(CanisterBuildProfile::Release);
     let build_network = resolve_icp_build_environment_from_root(icp_root, network)?;
 
     Ok(WorkspaceBuildContext {
         role: role.to_string(),
         profile,
-        requested_profile,
         environment: network.to_string(),
         build_network: build_network.as_str().to_string(),
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
         config_path: config_path.to_path_buf(),
         local_replica: local_replica_icp_target(network, icp_root),
+        refresh_canonical_wasm_store_did: false,
     })
 }
 

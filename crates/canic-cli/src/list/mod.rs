@@ -5,7 +5,7 @@ mod options;
 mod render;
 
 use canic_backup::discovery::DiscoveryError;
-use canic_host::registry::RegistryParseError;
+use canic_host::{icp::IcpCommandError, registry::RegistryParseError};
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
     list_canic_versions, list_cycle_balances, list_module_hashes, list_ready_statuses,
@@ -36,8 +36,14 @@ pub enum ListCommandError {
     #[error(transparent)]
     RegistryTree(#[from] crate::support::registry_tree::RegistryTreeError),
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
+
+    #[error("{source}\nHint: {hint}")]
+    IcpHint {
+        source: IcpCommandError,
+        hint: &'static str,
+    },
 
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),

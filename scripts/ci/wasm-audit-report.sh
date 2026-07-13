@@ -346,7 +346,8 @@ build_and_cache_artifacts() {
     fi
 
     for canister in "${CANISTERS[@]}"; do
-        CANIC_CONFIG_PATH="$TEST_FLEET_CONFIG_ABS" CANIC_WASM_PROFILE="$CANIC_BUILD_PROFILE" CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- "$canister"
+        CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- \
+            "$canister" "$CANIC_BUILD_PROFILE" "$ROOT_DIR" "$ROOT_DIR" "$TEST_FLEET_CONFIG_ABS"
     done
 
     for canister in "${CANISTERS[@]}"; do

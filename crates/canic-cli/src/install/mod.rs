@@ -21,6 +21,7 @@ use crate::{
     version_text,
 };
 use canic_host::canister_build::CanisterBuildProfile;
+use canic_host::icp::{IcpDiagnostic, classify_icp_diagnostic};
 use canic_host::icp_config::resolve_current_canic_icp_root;
 use canic_host::install_root::{InstallRootBlockedError, InstallRootOptions, install_root};
 use clap::Command as ClapCommand;
@@ -41,8 +42,8 @@ inspect with canic info list and canic medic deployment, then use the
 project upgrade flow.
 
 Install removes its transient target/canic-wasm Cargo cache after canonical
-.icp artifacts are written. Set CANIC_KEEP_WASM_BUILD_CACHE=1 to retain it for
-faster repeated local installs.
+.icp artifacts are written. Advanced Cargo callers can select their own target
+with the standard CARGO_TARGET_DIR input.
 
 The selected canic.toml must include:
   [fleet]
@@ -141,7 +142,7 @@ fn install_command() -> ClapCommand {
                 .value_name("debug|fast|release")
                 .num_args(1)
                 .value_parser(clap::value_parser!(CanisterBuildProfile))
-                .help("Canister wasm build profile; defaults to CANIC_WASM_PROFILE or release"),
+                .help("Canister wasm build profile; defaults to release"),
         )
         .arg(internal_network_arg())
         .after_help(INSTALL_HELP_AFTER)
@@ -199,12 +200,8 @@ fn install_error_needs_existing_deployment_hint(error: &(dyn std::error::Error +
         source = error.source();
     }
 
-    external_already_installed_diagnostic(&error.to_string())
-}
-
-// External diagnostic adapter for install transports that expose only text.
-fn external_already_installed_diagnostic(message: &str) -> bool {
-    let lower = message.to_ascii_lowercase();
-    lower.contains("already")
-        && (lower.contains("install") || lower.contains("installed") || lower.contains("canister"))
+    matches!(
+        classify_icp_diagnostic(&error.to_string()),
+        Some(IcpDiagnostic::AlreadyInstalled)
+    )
 }

@@ -38,7 +38,7 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
         );
         lifecycle_trap(
             LifecyclePhase::PostUpgrade,
-            format!("config init failed (CANIC_CONFIG_PATH={config_path}): {err}"),
+            format!("config init failed (config_path={config_path}): {err}"),
         );
     }
 

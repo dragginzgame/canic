@@ -67,8 +67,8 @@ pub enum TokenCommandError {
     #[error("local replica query failed: {0}")]
     ReplicaQuery(String),
 
-    #[error("icp command failed: {command}\n{stderr}")]
-    IcpFailed { command: String, stderr: String },
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
     #[error("recipient must be a principal/account or <deployment>/<role-or-canister>")]
     InvalidRecipient,
@@ -384,7 +384,7 @@ fn run_or_print_command(
         println!("{}", command_display(command));
         return Ok(());
     }
-    let output = run_output_with_stderr(command).map_err(token_icp_error)?;
+    let output = run_output_with_stderr(command).map_err(TokenCommandError::from)?;
     if !output.is_empty() {
         println!("{output}");
     }
@@ -481,38 +481,12 @@ fn token_installed_deployment_error(error: InstalledDeploymentError) -> TokenCom
         },
         InstalledDeploymentError::InstallState(error) => TokenCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => TokenCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            TokenCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => TokenCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             TokenCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }
         InstalledDeploymentError::Registry(error) => TokenCommandError::Registry(error),
         InstalledDeploymentError::Io(error) => TokenCommandError::Io(error),
-    }
-}
-
-fn token_icp_error(error: IcpCommandError) -> TokenCommandError {
-    match error {
-        IcpCommandError::Io(error) => TokenCommandError::Io(error),
-        IcpCommandError::Failed { command, stderr } => {
-            TokenCommandError::IcpFailed { command, stderr }
-        }
-        IcpCommandError::Json {
-            command, output, ..
-        } => TokenCommandError::IcpFailed {
-            command,
-            stderr: output,
-        },
-        error @ (IcpCommandError::MissingCli { .. }
-        | IcpCommandError::IncompatibleCliVersion { .. }) => TokenCommandError::IcpFailed {
-            command: "icp --version".to_string(),
-            stderr: error.to_string(),
-        },
-        IcpCommandError::SnapshotIdUnavailable { output } => TokenCommandError::IcpFailed {
-            command: "icp canister snapshot create".to_string(),
-            stderr: output,
-        },
     }
 }
 

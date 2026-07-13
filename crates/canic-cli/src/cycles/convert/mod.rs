@@ -7,8 +7,7 @@ use crate::{
     cycles::{
         CyclesCommandError,
         wallet::{
-            ResolvedCanisterTarget, cycles_icp_error, resolve_canister_target, resolve_deployment,
-            target_label,
+            ResolvedCanisterTarget, resolve_canister_target, resolve_deployment, target_label,
         },
     },
     support::candid::role_candid_path,
@@ -119,7 +118,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
             json_output_arg(options.json),
             source_candid_path.as_deref(),
         )
-        .map_err(cycles_icp_error)?;
+        .map_err(CyclesCommandError::from)?;
     mark_pending_operation_completed(&root, pending_operation_key.as_deref(), operation_id);
     if options.json {
         println!(
@@ -180,7 +179,7 @@ fn run_fabricate(
             &request_arg,
             json_output_arg(options.json),
         )
-        .map_err(cycles_icp_error)?;
+        .map_err(CyclesCommandError::from)?;
     if options.json {
         println!(
             "{}",

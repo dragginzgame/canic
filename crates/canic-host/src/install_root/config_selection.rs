@@ -60,13 +60,6 @@ pub(super) fn resolve_install_config_path(
         ));
     }
 
-    if let Some(path) = env::var_os("CANIC_CONFIG_PATH") {
-        return Ok(normalize_workspace_path(
-            workspace_root,
-            PathBuf::from(path),
-        ));
-    }
-
     let default = workspace_root.join(FLEETS_ROOT).join(ROOT_CONFIG_RELATIVE);
     if default.is_file() {
         return Ok(default);

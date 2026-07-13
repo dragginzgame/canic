@@ -11,8 +11,6 @@ use std::{
 };
 
 const DEFAULT_WASM_TARGET_RELATIVE: &str = "target/canic-wasm";
-const KEEP_WASM_BUILD_CACHE_ENV: &str = "CANIC_KEEP_WASM_BUILD_CACHE";
-const WASM_TARGET_DIR_ENV: &str = "CANIC_WASM_TARGET_DIR";
 
 pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &Path) {
     command.env("CARGO_INCREMENTAL", "0").env(
@@ -23,8 +21,7 @@ pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &
 
 #[must_use]
 pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
-    env::var_os(WASM_TARGET_DIR_ENV)
-        .or_else(|| env::var_os("CARGO_TARGET_DIR"))
+    env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .map_or_else(
             || workspace_root.join(DEFAULT_WASM_TARGET_RELATIVE),
@@ -40,7 +37,7 @@ pub struct DefaultCanisterBuildCacheCleanup {
 impl DefaultCanisterBuildCacheCleanup {
     #[must_use]
     pub fn for_install(workspace_root: &Path) -> Self {
-        let path = if explicit_target_dir_selected() || keep_wasm_build_cache() {
+        let path = if env::var_os("CARGO_TARGET_DIR").is_some() {
             None
         } else {
             Some(workspace_root.join(DEFAULT_WASM_TARGET_RELATIVE))
@@ -63,15 +60,6 @@ impl Drop for DefaultCanisterBuildCacheCleanup {
             ),
         }
     }
-}
-
-fn explicit_target_dir_selected() -> bool {
-    env::var_os(WASM_TARGET_DIR_ENV).is_some() || env::var_os("CARGO_TARGET_DIR").is_some()
-}
-
-fn keep_wasm_build_cache() -> bool {
-    env::var(KEEP_WASM_BUILD_CACHE_ENV)
-        .is_ok_and(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
 }
 
 fn absolute_from(workspace_root: &Path, path: PathBuf) -> PathBuf {

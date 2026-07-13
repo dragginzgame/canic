@@ -9,7 +9,7 @@ use crate::metrics::{
 };
 use crate::support::candid::registry_entry_candid_path;
 use canic_host::{
-    icp::IcpCli,
+    icp::{IcpCli, IcpDiagnostic, classify_icp_diagnostic},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
@@ -135,7 +135,10 @@ fn metrics_empty_report(entry: &RegistryEntry, nonzero: bool) -> MetricsCanister
 }
 
 fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
-    let (status, error) = if error.contains("has no query method 'canic_metrics'") {
+    let (status, error) = if matches!(
+        classify_icp_diagnostic(error),
+        Some(IcpDiagnostic::MethodMissing)
+    ) {
         (MetricsCanisterStatus::Unavailable, METRICS_UNAVAILABLE_HINT)
     } else {
         (
@@ -234,9 +237,7 @@ fn metrics_installed_deployment_error(error: InstalledDeploymentError) -> Metric
         },
         InstalledDeploymentError::InstallState(error) => MetricsCommandError::InstallState(error),
         InstalledDeploymentError::ReplicaQuery(error) => MetricsCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::IcpFailed { command, stderr } => {
-            MetricsCommandError::IcpFailed { command, stderr }
-        }
+        InstalledDeploymentError::Icp(error) => MetricsCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             MetricsCommandError::ReplicaQuery(format!("root canister {root} is not present"))
         }

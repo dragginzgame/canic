@@ -246,7 +246,7 @@ pub(super) fn check_deployment_truth_receipt(
             "deployment_truth_incomplete",
             "deployment_truth",
             "deployment truth receipt lookup skipped because the project root was not resolved",
-            "run from a Canic project root or set CANIC_ICP_ROOT",
+            "run from a Canic project root",
             MedicSource::DeploymentTruth,
         );
     };
@@ -397,7 +397,7 @@ fn check_deployment_registry_observation(
             "deployment_registry_not_evaluated",
             "registry",
             "deployment registry observation skipped because the project root was not resolved",
-            "run from a Canic project root or set CANIC_ICP_ROOT",
+            "run from a Canic project root",
             MedicSource::InstalledDeployment,
         );
     };
@@ -532,7 +532,7 @@ fn deployment_registry_error_check(error: InstalledDeploymentError) -> MedicChec
     let source = match error {
         InstalledDeploymentError::ReplicaQuery(_)
         | InstalledDeploymentError::LostLocalDeployment { .. } => MedicSource::LocalReplica,
-        InstalledDeploymentError::IcpFailed { .. } => MedicSource::IcpCli,
+        InstalledDeploymentError::Icp(_) => MedicSource::IcpCli,
         InstalledDeploymentError::NoInstalledDeployment { .. }
         | InstalledDeploymentError::InstallState(_)
         | InstalledDeploymentError::Registry(_)

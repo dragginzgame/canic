@@ -4,42 +4,42 @@ canisters:
       steps:
         - type: script
           commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- root
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- root release . . fleets/test/canic.toml
 
   - name: app
     build:
       steps:
         - type: script
           commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- app
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- app release . . fleets/test/canic.toml
 
   - name: scale_hub
     build:
       steps:
         - type: script
           commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- scale_hub
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- scale_hub release . . fleets/test/canic.toml
 
   - name: scale_replica
     build:
       steps:
         - type: script
           commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- scale_replica
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- scale_replica release . . fleets/test/canic.toml
 
   - name: user_hub
     build:
       steps:
         - type: script
           commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_hub
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_hub release . . fleets/test/canic.toml
 
   - name: user_shard
     build:
       steps:
         - type: script
           commands:
-            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_shard
+            - CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- user_shard release . . fleets/test/canic.toml
 
 networks:
   - name: local

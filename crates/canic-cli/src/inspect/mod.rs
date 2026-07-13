@@ -615,9 +615,7 @@ fn installed_deployment_error(error: InstalledDeploymentError) -> InspectCommand
         InstalledDeploymentError::InstallState(error)
         | InstalledDeploymentError::ReplicaQuery(error) => InspectCommandError::Target(error),
         InstalledDeploymentError::Registry(error) => InspectCommandError::Target(error.to_string()),
-        InstalledDeploymentError::IcpFailed { command, stderr } => InspectCommandError::Target(
-            format!("failed to resolve deployment target via `{command}`: {stderr}"),
-        ),
+        InstalledDeploymentError::Icp(error) => InspectCommandError::Icp(error),
         InstalledDeploymentError::Io(error) => InspectCommandError::Target(error.to_string()),
     }
 }
