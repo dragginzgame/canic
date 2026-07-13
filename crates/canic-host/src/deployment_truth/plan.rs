@@ -1,6 +1,8 @@
 use super::*;
 use crate::{
-    install_root::{RootVerificationStatus, read_named_deployment_install_state_from_root},
+    install_root::{
+        InstallStateError, RootVerificationStatus, read_named_deployment_install_state_from_root,
+    },
     release_set::{
         ConfiguredPoolExpectation, configured_bootstrap_roles, configured_controllers,
         configured_fleet_name, configured_pool_expectations,
@@ -176,13 +178,10 @@ fn local_root_canister_id(
         &request.network,
         &request.deployment_name,
     ) {
-        Ok(Some(state))
-            if state.network == request.network
-                && state.root_verification == RootVerificationStatus::Verified =>
-        {
+        Ok(Some(state)) if state.root_verification == RootVerificationStatus::Verified => {
             Some(state.root_canister_id)
         }
-        Ok(Some(state)) if state.network == request.network => {
+        Ok(Some(state)) => {
             assumptions.push(assumption(
                 "local_state.unverified_root_canister_id",
                 format!(
@@ -192,12 +191,15 @@ fn local_root_canister_id(
             ));
             None
         }
-        Ok(Some(state)) => {
+        Err(InstallStateError::NetworkMismatch {
+            state_network,
+            requested_network,
+        }) => {
             assumptions.push(assumption(
                 DeploymentAssumptionKindV1::LocalStateNetworkMismatch.key(),
                 format!(
                     "deployment state for {} has network {}, expected {}",
-                    request.deployment_name, state.network, request.network
+                    request.deployment_name, state_network, requested_network
                 ),
             ));
             None
