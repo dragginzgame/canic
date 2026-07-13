@@ -40,8 +40,9 @@ use canic_core::protocol::{
 };
 use canic_host::icp::IcpCli;
 use canic_host::{
-    candid_endpoints::CandidEndpointError, icp::IcpCommandError,
-    installed_deployment::InstalledDeploymentError,
+    candid_endpoints::CandidEndpointError, icp::IcpCommandError, icp_config::IcpConfigError,
+    install_root::InstallStateError, installed_deployment::InstalledDeploymentError,
+    registry::RegistryParseError, replica_query::ReplicaQueryError,
 };
 use std::{ffi::OsString, io, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -67,10 +68,22 @@ pub enum BlobStorageCommandError {
     NoInstalledDeployment { network: String, deployment: String },
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[source] InstallStateError),
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
+
+    #[error("failed to read canic deployment state: {0}")]
+    IcpRoot(#[source] IcpConfigError),
+
+    #[error("local replica query failed: root canister {root} is not present")]
+    LostLocalRoot { root: String },
+
+    #[error("failed to read canic deployment state: {0}")]
+    Registry(#[source] RegistryParseError),
+
+    #[error("failed to read canic deployment state: {0}")]
+    Io(#[source] io::Error),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -136,13 +149,16 @@ impl BlobStorageCommandError {
             | Self::Json(_)
             | Self::NoInstalledDeployment { .. }
             | Self::InstallState(_)
+            | Self::IcpRoot(_)
+            | Self::Registry(_)
+            | Self::Io(_)
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
             | Self::CandidUnavailable { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. } => 1,
-            Self::ReplicaQuery(_) | Self::Icp(_) => 2,
+            Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => 2,
             Self::ResponseParse { .. } => 3,
             Self::ReadinessCheckFailed { .. } => 4,
         }
@@ -167,6 +183,9 @@ impl BlobStorageCommandError {
             Self::Usage(_)
             | Self::Json(_)
             | Self::InstallState(_)
+            | Self::IcpRoot(_)
+            | Self::Registry(_)
+            | Self::Io(_)
             | Self::NoInstalledDeployment { .. }
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
@@ -175,7 +194,9 @@ impl BlobStorageCommandError {
                 BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE
             }
             Self::MethodUnavailable { .. } => BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
-            Self::ReplicaQuery(_) | Self::Icp(_) => BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED,
+            Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => {
+                BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
+            }
             Self::ResponseParse { .. } => BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
             Self::CandidParse { .. } => BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
             Self::ReadinessCheckFailed { .. } => BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED,
@@ -657,14 +678,10 @@ fn blob_storage_installed_deployment_error(
         }
         InstalledDeploymentError::Icp(error) => BlobStorageCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            BlobStorageCommandError::ReplicaQuery(format!("root canister {root} is not present"))
+            BlobStorageCommandError::LostLocalRoot { root }
         }
-        InstalledDeploymentError::Registry(error) => {
-            BlobStorageCommandError::InstallState(error.to_string())
-        }
-        InstalledDeploymentError::Io(error) => {
-            BlobStorageCommandError::InstallState(error.to_string())
-        }
+        InstalledDeploymentError::Registry(error) => BlobStorageCommandError::Registry(error),
+        InstalledDeploymentError::Io(error) => BlobStorageCommandError::Io(error),
     }
 }
 

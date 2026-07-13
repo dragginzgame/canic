@@ -5,7 +5,10 @@ mod options;
 mod render;
 
 use canic_backup::discovery::DiscoveryError;
-use canic_host::{icp::IcpCommandError, registry::RegistryParseError};
+use canic_host::{
+    icp::IcpCommandError, install_root::InstallStateError, registry::RegistryParseError,
+    replica_query::ReplicaQueryError,
+};
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
     list_canic_versions, list_cycle_balances, list_module_hashes, list_ready_statuses,
@@ -46,7 +49,7 @@ pub enum ListCommandError {
     },
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
 
     #[error(
         "deployment target {deployment} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install <fleet-template>` to recreate it or re-register {deployment} with `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified`."
@@ -58,7 +61,13 @@ pub enum ListCommandError {
     },
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[source] InstallStateError),
+
+    #[error("failed to read canic deployment state: could not resolve ICP root")]
+    IcpRootUnavailable,
+
+    #[error("failed to read canic deployment state: {0}")]
+    Config(String),
 
     #[error(
         "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` to deploy it, `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` to register existing state, or `canic fleet config <fleet-template>` to inspect its config"

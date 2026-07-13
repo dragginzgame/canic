@@ -335,8 +335,7 @@ impl TopupOptions {
 }
 
 fn run_balance(options: &BalanceOptions) -> Result<(), CyclesCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let mut command = icp_command(&options.target, &root);
     command.args(["cycles", WalletCommandKind::Balance.label()]);
     append_optional_long_arg(&mut command, SUBACCOUNT_ARG, options.subaccount.as_deref());
@@ -352,8 +351,7 @@ fn run_balance(options: &BalanceOptions) -> Result<(), CyclesCommandError> {
 }
 
 fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let mut command = icp_command(&options.target, &root);
     command.args(["cycles", WalletCommandKind::Mint.label()]);
     append_optional_long_arg(&mut command, "icp", options.icp_amount.as_deref());
@@ -374,8 +372,7 @@ fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
 }
 
 fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
     let mut command = icp_command(&options.target, &root);
     command.args(["cycles", WalletCommandKind::Transfer.label()]);
@@ -398,8 +395,7 @@ fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
 }
 
 fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| CyclesCommandError::InstallState(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let installed = resolve_deployment(&options.target, &root, &options.deployment)?;
     let target = resolve_canister_target(
         &options.deployment,

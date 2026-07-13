@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.89.x] - 2026-07-13 - Deployment Evidence and Surface Truth
+
+Detailed patch breakdown: [docs/changelog/0.89.md](docs/changelog/0.89.md)
+
+- `0.89.0` makes deployment evidence typed end to end and aligns dependency
+  and RPC surfaces with their real consumers without changing persisted state
+  or command behavior.
+
 ## [0.88.x] - 2026-07-13 - Artifact and Configuration Boundaries
 
 Detailed patch breakdown: [docs/changelog/0.88.md](docs/changelog/0.88.md)

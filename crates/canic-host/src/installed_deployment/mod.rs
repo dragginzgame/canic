@@ -1,7 +1,7 @@
 use crate::{
     icp::{IcpCli, IcpCommandError, existing_local_canister_candid_path},
     install_root::{
-        InstallState, read_named_deployment_install_state,
+        InstallState, InstallStateError, read_named_deployment_install_state,
         read_named_deployment_install_state_from_root,
     },
     registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
@@ -80,10 +80,10 @@ pub enum InstalledDeploymentError {
     NoInstalledDeployment { network: String, deployment: String },
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[from] InstallStateError),
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -147,7 +147,7 @@ pub fn read_installed_deployment_state(
     deployment: &str,
 ) -> Result<InstallState, InstalledDeploymentError> {
     read_named_deployment_install_state(network, deployment)
-        .map_err(|err| InstalledDeploymentError::InstallState(err.to_string()))?
+        .map_err(InstalledDeploymentError::InstallState)?
         .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
             network: network.to_string(),
             deployment: deployment.to_string(),
@@ -160,7 +160,7 @@ pub fn read_installed_deployment_state_from_root(
     icp_root: &Path,
 ) -> Result<InstallState, InstalledDeploymentError> {
     read_named_deployment_install_state_from_root(icp_root, network, deployment)
-        .map_err(|err| InstalledDeploymentError::InstallState(err.to_string()))?
+        .map_err(InstalledDeploymentError::InstallState)?
         .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
             network: network.to_string(),
             deployment: deployment.to_string(),
@@ -257,7 +257,7 @@ fn local_registry_error(
             root: root.to_string(),
         };
     }
-    InstalledDeploymentError::ReplicaQuery(error.to_string())
+    InstalledDeploymentError::ReplicaQuery(error)
 }
 
 const fn is_missing_destination_error(error: &ReplicaQueryError) -> bool {

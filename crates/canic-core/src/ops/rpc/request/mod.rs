@@ -7,6 +7,5 @@
 mod dispatch;
 mod error;
 
-#[expect(unused_imports)]
-pub use dispatch::{CyclesRpc, RequestOps, UpgradeCanisterRpc};
-pub use error::RequestOpsError;
+pub use dispatch::RequestOps;
+pub(super) use error::RequestOpsError;

@@ -57,7 +57,7 @@ use plan_artifacts::emit_manifest_with_deployment_truth_receipt;
 use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 pub use state::{
-    InstallState, RootVerificationStatus, read_named_deployment_install_state,
+    InstallState, InstallStateError, RootVerificationStatus, read_named_deployment_install_state,
     read_named_deployment_install_state_from_root,
 };
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;

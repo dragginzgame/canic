@@ -1,5 +1,8 @@
 use crate::workspace_discovery::{discover_icp_root_from, discover_workspace_root_from};
-use std::path::{Path, PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use super::super::{CANISTERS_ROOT_RELATIVE, ROOT_CONFIG_FILE, WORKSPACE_MANIFEST_RELATIVE};
 
@@ -22,7 +25,7 @@ pub fn workspace_root_from(path: &Path) -> Result<PathBuf, Box<dyn std::error::E
 }
 
 // Resolve the downstream ICP CLI/project root from the current directory.
-pub fn icp_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub fn icp_root() -> io::Result<PathBuf> {
     let current_dir = std::env::current_dir()?.canonicalize()?;
     if let Some(root) = discover_icp_root_from(&current_dir) {
         return Ok(root);

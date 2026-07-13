@@ -20,8 +20,9 @@ use crate::{
 };
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
-    icp::IcpCommandError, installed_deployment::InstalledDeploymentError,
-    registry::RegistryParseError,
+    icp::IcpCommandError, icp_config::IcpConfigError, install_root::InstallStateError,
+    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
+    replica_query::ReplicaQueryError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -41,10 +42,16 @@ pub enum CyclesCommandError {
     NoInstalledDeployment { network: String, deployment: String },
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[source] InstallStateError),
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
+
+    #[error("failed to read canic deployment state: {0}")]
+    IcpRoot(#[source] IcpConfigError),
+
+    #[error("local replica query failed: root canister {root} is not present")]
+    LostLocalRoot { root: String },
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -131,7 +138,7 @@ fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesC
         InstalledDeploymentError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),
         InstalledDeploymentError::Icp(error) => CyclesCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            CyclesCommandError::ReplicaQuery(format!("root canister {root} is not present"))
+            CyclesCommandError::LostLocalRoot { root }
         }
         InstalledDeploymentError::Registry(error) => CyclesCommandError::Registry(error),
         InstalledDeploymentError::Io(error) => CyclesCommandError::Io(error),

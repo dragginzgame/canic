@@ -34,8 +34,7 @@ use plan::{
 pub(super) fn backup_create(
     options: &BackupCreateOptions,
 ) -> Result<BackupCreateReport, BackupCommandError> {
-    let icp_root = resolve_current_canic_icp_root()
-        .map_err(|err| BackupCommandError::InstallState(err.to_string()))?;
+    let icp_root = resolve_current_canic_icp_root().map_err(BackupCommandError::IcpRoot)?;
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),

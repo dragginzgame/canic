@@ -18,12 +18,14 @@ use crate::{
 };
 use canic_host::{
     icp::IcpCommandError,
-    icp_config::resolve_current_canic_icp_root,
+    icp_config::{IcpConfigError, resolve_current_canic_icp_root},
+    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry, RegistryParseError},
+    replica_query::ReplicaQueryError,
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -58,13 +60,16 @@ pub enum InfoEnvCommandError {
     NoInstalledDeployment { network: String, deployment: String },
 
     #[error("failed to resolve ICP project root: {0}")]
-    IcpRoot(String),
+    IcpRoot(#[source] IcpConfigError),
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[source] InstallStateError),
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
+
+    #[error("local replica query failed: root canister {root} is not present")]
+    LostLocalRoot { root: String },
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -144,8 +149,7 @@ where
 }
 
 fn load_env_report(options: &InfoEnvOptions) -> Result<InfoEnvReport, InfoEnvCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| InfoEnvCommandError::IcpRoot(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(InfoEnvCommandError::IcpRoot)?;
     let resolution = resolve_info_env_deployment(options, &root)?;
     Ok(env_report(options, &resolution))
 }
@@ -179,7 +183,7 @@ fn info_env_installed_deployment_error(error: InstalledDeploymentError) -> InfoE
         InstalledDeploymentError::ReplicaQuery(error) => InfoEnvCommandError::ReplicaQuery(error),
         InstalledDeploymentError::Icp(error) => InfoEnvCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            InfoEnvCommandError::ReplicaQuery(format!("root canister {root} is not present"))
+            InfoEnvCommandError::LostLocalRoot { root }
         }
         InstalledDeploymentError::Registry(error) => InfoEnvCommandError::Registry(error),
         InstalledDeploymentError::Io(error) => InfoEnvCommandError::Io(error),

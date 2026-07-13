@@ -18,8 +18,8 @@ before this compaction is archived at
   build-cache, and module-hygiene hardening release rather than a reopened
   ledger slice.
 
-- The current package/release-surface version is `0.88.1`, published and tagged
-  as `v0.88.1`. The bounded 0.86 structural-maintainability line is complete;
+- The current package/release-surface version is `0.88.2`, published and tagged
+  as `v0.88.2`. The bounded 0.86 structural-maintainability line is complete;
   its design and tracker live under
   `docs/design/0.86-structural-maintainability/`. The published first Medic
   slice owns auth-renewal and blob-storage diagnostics in focused modules. The
@@ -153,7 +153,7 @@ before this compaction is archived at
   Scaffold output, the cycles pending log, and host/backup subsystem
   persistence remain with their existing owners.
 
-  0.88 Slice C is implemented and release-noted as `0.88.2`. Fleet config
+  0.88 Slice C is published as `v0.88.2`. Fleet config
   reads, projections, and mutations now return one typed host-owned error.
   I/O failures retain operation and path, core parse failures retain operation,
   validation and mutation decisions have bounded variants, and rename rollback
@@ -161,9 +161,45 @@ before this compaction is archived at
   string-built error-return paths are hard-cut; direct build, fleet, and
   scaffold consumers retain the typed error through their CLI boundaries.
   Successful projections, serialized TOML, command rendering, exits, and
-  rollback behavior are unchanged. Package versions remain `0.88.1` until the
-  human-owned `0.88.2` release bump. After the push, close 0.88 without adding
-  another slice or a global error framework.
+  rollback behavior are unchanged. The bounded 0.88 line is complete; do not
+  add another slice or widen the typed boundary into a global error framework.
+  The final 0.88 closeout audit at
+  `docs/audits/reports/2026-07/2026-07-13/0.88-closeout.md` passes with no
+  correction slice required. Twenty-seven focused implementation tests,
+  targeted warning-denied Clippy, layering, changelog governance, release
+  surface, and diff checks pass. Five Cargo Machete candidates are proven to
+  predate 0.88 and remain forward work rather than a 0.88 blocker.
+
+  A fresh post-0.88 audit is recorded at
+  `docs/audits/reports/2026-07/2026-07-13-post-0.88.md`. It proposes a bounded
+  0.89 design under
+  `docs/design/0.89-deployment-evidence-and-surface-truth/`: type install-state
+  persistence, retain install-state and replica-query sources through
+  installed-deployment command classification, then remove the four
+  compilation-proven dead dependency declarations, account for one generated
+  proc-macro consumer, and narrow the audited RPC request adapters. No
+  version change has started. Slice A is complete: one typed
+  `InstallStateError` replaces all six boxed persistence signatures, retains
+  validation, mismatch, path, I/O, and JSON evidence, and preserves schema,
+  paths, values, and exact serialized bytes. ICP-root discovery now returns its
+  real `io::Result`. Focused owner, registration, and CLI caller checks plus
+  warning-denied host Clippy pass. Slice B is also complete: installed
+  deployment resolution and all ten command-owned projectors retain concrete
+  install-state and replica-query sources through local classification. Early
+  text conversion of both source families is gone, while existing exit, hint,
+  finding, JSON, missing/lost guidance, and successful-output policy remains
+  local and unchanged. Slice C is complete: four compilation-proven dead
+  declarations are removed; the facade's endpoint-macro-required `ic-cdk`
+  development dependency is retained with one narrow Cargo Machete annotation;
+  all three concrete request adapters are private to dispatch; and their two
+  unused exports are gone. The existing private `ops` root remains the request
+  facade's effective external boundary. Targeted host, CLI, core, facade,
+  fixture, and integration checks, warning-denied Clippy, Cargo Machete,
+  layering, formatting, and diff hygiene pass. All three bounded 0.89 slices
+  are complete. The release-finalized `0.89.0` root and detailed changelog
+  entries are prepared. Package versions remain `0.88.2`. The design explicitly
+  excludes global error, command-projection, path, dependency-upgrade, and broad
+  visibility frameworks.
   The `0.84` role-aware state-contract line shipped all three accepted slices
   in `0.84.0`. Its review-revised and scope-trimmed design remains at
   `docs/design/0.84-role-aware-state-contracts/0.84-design.md`. Slice A is

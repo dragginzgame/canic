@@ -25,9 +25,94 @@ fn install_state_round_trips_from_project_state_dir() {
         .expect("named deployment exists");
 
     assert_eq!(path, root.join(".canic/local/deployments/demo.json"));
+    assert_eq!(
+        fs::read(&path).expect("read state bytes"),
+        serde_json::to_vec_pretty(&state).expect("encode expected state")
+    );
     assert_eq!(named, state);
 
     fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_state_validation_failures_are_typed() {
+    std::assert_matches!(
+        validate_state_name("bad/name"),
+        Err(InstallStateError::InvalidStateName { name }) if name == "bad/name"
+    );
+    std::assert_matches!(
+        validate_network_name("bad/network"),
+        Err(InstallStateError::InvalidNetworkName { name }) if name == "bad/network"
+    );
+}
+
+#[test]
+fn install_state_read_retains_path_and_io_source() {
+    let root = temp_dir("canic-install-state-read-error");
+    let path = deployment_install_state_path(&root, "local", "demo");
+    fs::create_dir_all(&path).expect("create directory at state path");
+    fs::write(path.join("child"), b"not state").expect("make state directory non-empty");
+
+    let error = read_deployment_install_state(&root, "local", "demo")
+        .expect_err("directory state path must reject");
+
+    std::assert_matches!(
+        error,
+        InstallStateError::Read { path: error_path, source }
+            if error_path == path && source.kind() == std::io::ErrorKind::IsADirectory
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_state_decode_retains_path_and_json_source() {
+    let root = temp_dir("canic-install-state-decode-error");
+    let path = deployment_install_state_path(&root, "local", "demo");
+    fs::create_dir_all(path.parent().expect("state parent")).expect("create state parent");
+    fs::write(&path, b"{").expect("write invalid state");
+
+    let error = read_deployment_install_state(&root, "local", "demo")
+        .expect_err("invalid state JSON must reject");
+
+    std::assert_matches!(
+        error,
+        InstallStateError::Decode { path: error_path, source }
+            if error_path == path && source.is_eof()
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_state_write_retains_mismatch_and_io_failures() {
+    let mismatch_root = temp_dir("canic-install-state-network-mismatch");
+    let mismatch_state = sample_install_state(&mismatch_root, "demo", "demo");
+    std::assert_matches!(
+        write_install_state(&mismatch_root, "staging", &mismatch_state),
+        Err(InstallStateError::NetworkMismatch {
+            state_network,
+            requested_network,
+        }) if state_network == "local" && requested_network == "staging"
+    );
+
+    let write_root = temp_dir("canic-install-state-write-error");
+    let write_state = sample_install_state(&write_root, "demo", "demo");
+    let path = deployment_install_state_path(&write_root, "local", "demo");
+    fs::create_dir_all(&path).expect("create directory at write target");
+    fs::write(path.join("child"), b"preserved").expect("make target non-empty");
+
+    let error = write_install_state(&write_root, "local", &write_state)
+        .expect_err("directory write target must reject");
+    std::assert_matches!(
+        error,
+        InstallStateError::Write { path: error_path, .. } if error_path == path
+    );
+
+    if mismatch_root.exists() {
+        fs::remove_dir_all(mismatch_root).expect("clean mismatch root");
+    }
+    fs::remove_dir_all(write_root).expect("clean write root");
 }
 
 #[test]

@@ -269,8 +269,7 @@ fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
 fn resolve_list_deployment(
     options: &ListOptions,
 ) -> Result<InstalledDeploymentResolution, ListCommandError> {
-    let icp_root = resolve_live_icp_root(options)
-        .ok_or_else(|| ListCommandError::InstallState("could not resolve ICP root".to_string()))?;
+    let icp_root = resolve_live_icp_root(options).ok_or(ListCommandError::IcpRootUnavailable)?;
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.target.clone(),

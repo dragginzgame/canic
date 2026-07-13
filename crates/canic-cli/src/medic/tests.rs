@@ -32,7 +32,7 @@ use canic_host::{
         DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
     },
     icp::local_canister_candid_path,
-    install_root::InstallState,
+    install_root::{InstallState, InstallStateError},
     installed_deployment::{InstalledDeploymentResolution, InstalledDeploymentSource},
     state_manifest::{StateAuditStatus, build_state_audit_report},
 };
@@ -1332,7 +1332,9 @@ fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
         "not a principal",
     );
     let generic = auth_renewal_medic_error_check(
-        AuthCommandError::InstallState("missing state".to_string()),
+        AuthCommandError::InstallState(InstallStateError::InvalidStateName {
+            name: "missing state".to_string(),
+        }),
         "demo",
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );

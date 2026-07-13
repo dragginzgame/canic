@@ -16,12 +16,14 @@ use crate::{
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError, command_display, run_output_with_stderr},
-    icp_config::resolve_current_canic_icp_root,
+    icp_config::{IcpConfigError, resolve_current_canic_icp_root},
+    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry, RegistryParseError},
+    replica_query::ReplicaQueryError,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::Path};
@@ -62,10 +64,16 @@ pub enum TokenCommandError {
     NoInstalledDeployment { network: String, deployment: String },
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[source] InstallStateError),
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
+
+    #[error("failed to read canic deployment state: {0}")]
+    IcpRoot(#[source] IcpConfigError),
+
+    #[error("local replica query failed: root canister {root} is not present")]
+    LostLocalRoot { root: String },
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -254,8 +262,7 @@ impl TokenTransferOptions {
 }
 
 fn run_balance(options: &TokenBalanceOptions) -> Result<(), TokenCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| TokenCommandError::InstallState(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(TokenCommandError::IcpRoot)?;
     let mut command = icp_command(&options.target, &root);
     command.args(["token", &options.token, "balance"]);
     append_optional_arg(&mut command, "--subaccount", options.subaccount.as_deref());
@@ -271,8 +278,7 @@ fn run_balance(options: &TokenBalanceOptions) -> Result<(), TokenCommandError> {
 }
 
 fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| TokenCommandError::InstallState(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(TokenCommandError::IcpRoot)?;
     let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
     let mut command = icp_command(&options.target, &root);
     command.args(["token", &options.token, "transfer"]);
@@ -483,7 +489,7 @@ fn token_installed_deployment_error(error: InstalledDeploymentError) -> TokenCom
         InstalledDeploymentError::ReplicaQuery(error) => TokenCommandError::ReplicaQuery(error),
         InstalledDeploymentError::Icp(error) => TokenCommandError::Icp(error),
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            TokenCommandError::ReplicaQuery(format!("root canister {root} is not present"))
+            TokenCommandError::LostLocalRoot { root }
         }
         InstalledDeploymentError::Registry(error) => TokenCommandError::Registry(error),
         InstalledDeploymentError::Io(error) => TokenCommandError::Io(error),

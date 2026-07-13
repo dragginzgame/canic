@@ -77,7 +77,7 @@ where
 }
 
 fn config_error(error: impl Display) -> ListCommandError {
-    ListCommandError::InstallState(error.to_string())
+    ListCommandError::Config(error.to_string())
 }
 
 pub(super) fn missing_config_roles(
@@ -112,7 +112,7 @@ pub(super) fn selected_config_path(options: &ListOptions) -> Result<PathBuf, Lis
     match matches.as_slice() {
         [] => Err(ListCommandError::UnknownFleet(fleet.clone())),
         [path] => Ok(path.clone()),
-        _ => Err(ListCommandError::InstallState(format!(
+        _ => Err(ListCommandError::Config(format!(
             "multiple configs declare fleet {fleet}"
         ))),
     }

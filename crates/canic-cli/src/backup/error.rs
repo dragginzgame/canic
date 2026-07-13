@@ -8,7 +8,10 @@ use canic_backup::{
     discovery::DiscoveryError, execution::BackupExecutionJournalError,
     persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
 };
-use canic_host::{icp::IcpCommandError, registry::RegistryParseError};
+use canic_host::{
+    icp::IcpCommandError, icp_config::IcpConfigError, install_root::InstallStateError,
+    registry::RegistryParseError, replica_query::ReplicaQueryError,
+};
 use thiserror::Error as ThisError;
 
 ///
@@ -68,10 +71,13 @@ pub enum BackupCommandError {
     },
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(String),
+    InstallState(#[source] InstallStateError),
 
     #[error("local replica query failed: {0}")]
-    ReplicaQuery(String),
+    ReplicaQuery(#[source] ReplicaQueryError),
+
+    #[error("failed to read canic deployment state: {0}")]
+    IcpRoot(#[source] IcpConfigError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),

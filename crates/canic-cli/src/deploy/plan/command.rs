@@ -85,7 +85,8 @@ impl DeployPlanRoots {
     pub(super) fn discover() -> Result<Self, DeployCommandError> {
         Ok(Self {
             workspace_root: resolve_workspace_root().map_err(DeployCommandError::from)?,
-            icp_root: resolve_icp_root().map_err(DeployCommandError::from)?,
+            icp_root: resolve_icp_root()
+                .map_err(|source| DeployCommandError::Check(Box::new(source)))?,
         })
     }
 }

@@ -21,11 +21,14 @@ use canic_core::dto::runtime::{
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError},
-    icp_config::resolve_current_canic_icp_root,
+    icp_config::{IcpConfigError, resolve_current_canic_icp_root},
+    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
+    registry::RegistryParseError,
+    replica_query::ReplicaQueryError,
 };
 use clap::{Arg, Command as ClapCommand};
 use serde::Serialize;
@@ -58,6 +61,18 @@ pub enum InspectCommandError {
     #[error("{0}")]
     Target(String),
 
+    #[error("{0}")]
+    InstallState(#[source] InstallStateError),
+
+    #[error("{0}")]
+    ReplicaQuery(#[source] ReplicaQueryError),
+
+    #[error("{0}")]
+    Registry(#[source] RegistryParseError),
+
+    #[error("{0}")]
+    Io(#[source] std::io::Error),
+
     #[error("icp command failed: {0}")]
     Icp(#[from] IcpCommandError),
 
@@ -68,7 +83,7 @@ pub enum InspectCommandError {
     ReportStatus(String),
 
     #[error("failed to resolve ICP project root: {0}")]
-    IcpRoot(String),
+    IcpRoot(#[source] IcpConfigError),
 
     #[error("failed to render inspect JSON: {0}")]
     Json(#[from] serde_json::Error),
@@ -81,6 +96,10 @@ impl InspectCommandError {
             Self::Usage(_)
             | Self::InvalidPrincipal { .. }
             | Self::Target(_)
+            | Self::InstallState(_)
+            | Self::ReplicaQuery(_)
+            | Self::Registry(_)
+            | Self::Io(_)
             | Self::Icp(_)
             | Self::InvalidResponse(_)
             | Self::IcpRoot(_)
@@ -309,8 +328,7 @@ fn resolve_deployment_target(
     icp: &str,
     json: bool,
 ) -> Result<ResolvedInspectTarget, InspectCommandError> {
-    let root = resolve_current_canic_icp_root()
-        .map_err(|err| InspectCommandError::IcpRoot(err.to_string()))?;
+    let root = resolve_current_canic_icp_root().map_err(InspectCommandError::IcpRoot)?;
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
@@ -612,11 +630,11 @@ fn installed_deployment_error(error: InstalledDeploymentError) -> InspectCommand
         InstalledDeploymentError::LostLocalDeployment { root, .. } => {
             InspectCommandError::Target(format!("root canister {root} is not present"))
         }
-        InstalledDeploymentError::InstallState(error)
-        | InstalledDeploymentError::ReplicaQuery(error) => InspectCommandError::Target(error),
-        InstalledDeploymentError::Registry(error) => InspectCommandError::Target(error.to_string()),
+        InstalledDeploymentError::InstallState(error) => InspectCommandError::InstallState(error),
+        InstalledDeploymentError::ReplicaQuery(error) => InspectCommandError::ReplicaQuery(error),
+        InstalledDeploymentError::Registry(error) => InspectCommandError::Registry(error),
         InstalledDeploymentError::Icp(error) => InspectCommandError::Icp(error),
-        InstalledDeploymentError::Io(error) => InspectCommandError::Target(error.to_string()),
+        InstalledDeploymentError::Io(error) => InspectCommandError::Io(error),
     }
 }
 

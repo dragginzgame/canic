@@ -148,9 +148,9 @@ impl Rpc for CreateCanisterRpc {
 /// Internal command adapter for upgrade-canister RPCs.
 ///
 
-pub struct UpgradeCanisterRpc {
-    pub canister_pid: Principal,
-    pub metadata: Option<RootRequestMetadata>,
+struct UpgradeCanisterRpc {
+    canister_pid: Principal,
+    metadata: Option<RootRequestMetadata>,
 }
 
 impl Rpc for UpgradeCanisterRpc {
@@ -177,9 +177,9 @@ impl Rpc for UpgradeCanisterRpc {
 /// Internal command adapter for recycle-canister RPCs.
 ///
 
-pub struct RecycleCanisterRpc {
-    pub canister_pid: Principal,
-    pub metadata: Option<RootRequestMetadata>,
+struct RecycleCanisterRpc {
+    canister_pid: Principal,
+    metadata: Option<RootRequestMetadata>,
 }
 
 impl Rpc for RecycleCanisterRpc {
@@ -206,9 +206,9 @@ impl Rpc for RecycleCanisterRpc {
 /// Internal command adapter for cycles-funding RPCs.
 ///
 
-pub struct CyclesRpc {
-    pub cycles: u128,
-    pub metadata: Option<RootRequestMetadata>,
+struct CyclesRpc {
+    cycles: u128,
+    metadata: Option<RootRequestMetadata>,
 }
 
 impl Rpc for CyclesRpc {
@@ -300,5 +300,33 @@ mod tests {
             RecycleCanisterResponse {},
         ))
         .expect_err("wrong response variant rejected");
+    }
+
+    #[test]
+    fn private_request_adapters_preserve_request_shapes() {
+        let canister_pid = p(43);
+        let recycle_metadata = metadata(8);
+        let recycle_request = RecycleCanisterRpc {
+            canister_pid,
+            metadata: Some(recycle_metadata),
+        }
+        .into_request();
+        let Request::RecycleCanister(recycle_request) = recycle_request else {
+            panic!("recycle RPC must encode a recycle request");
+        };
+        assert_eq!(recycle_request.canister_pid, canister_pid);
+        assert_eq!(recycle_request.metadata, Some(recycle_metadata));
+
+        let cycles_metadata = metadata(9);
+        let cycles_request = CyclesRpc {
+            cycles: 1_000_000,
+            metadata: Some(cycles_metadata),
+        }
+        .into_request();
+        let Request::Cycles(cycles_request) = cycles_request else {
+            panic!("cycles RPC must encode a cycles request");
+        };
+        assert_eq!(cycles_request.cycles, 1_000_000);
+        assert_eq!(cycles_request.metadata, Some(cycles_metadata));
     }
 }

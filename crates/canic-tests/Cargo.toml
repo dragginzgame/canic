@@ -20,7 +20,6 @@ canic-control-plane = { workspace = true, features = [
     "wasm-store-canister",
 ] }
 canic-core = { workspace = true }
-canic-host = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
