@@ -11,7 +11,10 @@ use crate::deploy::{
         report::{DeploymentPlanReport, PlanDiagnostic, PlanStatus, ProposedOperationLabel},
     },
 };
-use std::{fs::OpenOptions, io::Write, path::Path};
+
+use std::path::Path;
+
+use canic_host::durable_io::create_new_bytes;
 
 pub(in crate::deploy) fn write_report(
     options: &DeployPlanOptions,
@@ -41,15 +44,9 @@ pub(in crate::deploy) fn command_exit_result(
 }
 
 fn write_json_new(path: &Path, report: &DeploymentPlanReport) -> Result<(), DeployCommandError> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(plan_output_error)?;
-    let data = render_json(report)?;
-    file.write_all(data.as_bytes()).map_err(plan_output_error)?;
-    file.write_all(b"\n").map_err(plan_output_error)?;
-    Ok(())
+    let mut data = render_json(report)?.into_bytes();
+    data.push(b'\n');
+    create_new_bytes(path, &data).map_err(plan_output_error)
 }
 
 fn print_json(report: &DeploymentPlanReport) -> Result<(), DeployCommandError> {

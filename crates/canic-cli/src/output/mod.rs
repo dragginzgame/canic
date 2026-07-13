@@ -7,12 +7,14 @@
 #[cfg(test)]
 mod tests;
 
-use serde::{Serialize, de::DeserializeOwned};
 use std::{
     fs,
     io::{self, Write},
     path::Path,
 };
+
+use canic_host::durable_io::write_bytes;
+use serde::{Serialize, de::DeserializeOwned};
 
 /// Write a pretty JSON payload to a requested file or stdout.
 pub fn write_pretty_json<T, E>(out: Option<&Path>, value: &T) -> Result<(), E>
@@ -21,9 +23,8 @@ where
     E: From<io::Error> + From<serde_json::Error>,
 {
     if let Some(path) = out {
-        ensure_parent_dir::<E>(path)?;
         let data = serde_json::to_vec_pretty(value)?;
-        fs::write(path, data)?;
+        write_bytes(path, &data)?;
         return Ok(());
     }
 
@@ -40,9 +41,8 @@ where
     T: Serialize,
     E: From<io::Error> + From<serde_json::Error>,
 {
-    ensure_parent_dir::<E>(path)?;
     let data = serde_json::to_vec_pretty(value)?;
-    fs::write(path, data)?;
+    write_bytes(path, &data)?;
     Ok(())
 }
 
@@ -52,8 +52,7 @@ where
     E: From<io::Error>,
 {
     if let Some(path) = out {
-        ensure_parent_dir::<E>(path)?;
-        fs::write(path, text)?;
+        write_bytes(path, text.as_bytes())?;
     } else {
         println!("{text}");
     }
@@ -68,16 +67,4 @@ where
 {
     let data = fs::read_to_string(path)?;
     serde_json::from_str(&data).map_err(E::from)
-}
-
-fn ensure_parent_dir<E>(path: &Path) -> Result<(), E>
-where
-    E: From<io::Error>,
-{
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent)?;
-    }
-    Ok(())
 }
