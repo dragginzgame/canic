@@ -23,6 +23,17 @@ pub mod icp_refill {
     pub use crate::__internal::core::api::icp_refill::IcpRefillApi;
 }
 
+/// Local and receipt-backed reservation helpers.
+pub mod intent {
+    pub use crate::__internal::core::api::intent::{
+        BeginLocalIntentInput, BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
+        IntentId, IntentResourceKey, LocalIntentApi, OperationId, PayloadBinding,
+        ReceiptBackedIntent, ReceiptBackedIntentApi, ReceiptBackedIntentState,
+        SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult, TerminalEvidence,
+        TerminalEvidenceDecision,
+    };
+}
+
 /// Environment queries
 pub mod env {
     pub use crate::__internal::core::api::env::EnvQuery;
@@ -30,9 +41,7 @@ pub mod env {
 
 /// IC primitives (calls, HTTP, crypto, network, system APIs)
 pub mod ic {
-    pub use crate::__internal::core::api::ic::{
-        Call, CallBuilder, CallResult, IntentKey, IntentReservation,
-    };
+    pub use crate::__internal::core::api::ic::{Call, CallBuilder, CallResult};
 
     pub mod http {
         pub use crate::__internal::core::api::ic::http::HttpApi;

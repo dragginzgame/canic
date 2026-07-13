@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.90.md](docs/changelog/0.90.md)
 
+- `0.90.1` implements exact-key receipt-backed reservations and at-most-once
+  settlement on the existing resource authority, and hard-cuts automatic
+  call-builder intent orchestration in favor of explicit local operations.
+
 - `0.90.0` reserves a hard-cut receipt-backed intent MVP: Canic owns only
   generic reservation identity and at-most-once local settlement, while Toko
   owns mint as the first consumer. It removes generic call-builder intent

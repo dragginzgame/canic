@@ -220,7 +220,7 @@ mod tests {
         );
         assert_first_metric_labels(
             MetricsKind::Runtime,
-            ["intent", "call", "capacity_check", "failed", "capacity"],
+            ["intent", "local", "capacity_check", "failed", "capacity"],
         );
         assert_first_metric_labels(
             MetricsKind::Platform,
@@ -358,7 +358,7 @@ mod tests {
             IntentMetricReason::Ok,
         );
         IntentMetrics::record(
-            IntentMetricSurface::Call,
+            IntentMetricSurface::Local,
             IntentMetricOperation::CapacityCheck,
             IntentMetricOutcome::Failed,
             IntentMetricReason::Capacity,

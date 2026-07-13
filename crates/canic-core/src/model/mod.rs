@@ -6,4 +6,5 @@
 
 #[cfg(feature = "blob-storage")]
 pub mod blob_storage;
+pub mod intent;
 pub mod replay;

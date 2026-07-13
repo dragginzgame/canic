@@ -258,7 +258,7 @@ fn enforce_quota(
     quota_key: &IntentResourceKey,
     request: &CostGuardRequest,
 ) -> Result<(), CostGuardReserveError> {
-    let totals = IntentStoreOps::totals_at(quota_key, request.now_secs);
+    let totals = IntentStoreOps::totals(quota_key);
     let used = totals.committed_qty.saturating_add(totals.reserved_qty);
     if used >= request.max_operations_per_window {
         return Err(CostGuardReserveError::QuotaExceeded {
@@ -274,8 +274,7 @@ fn enforce_cycle_reserve(
     reservation_key: &IntentResourceKey,
     request: &CostGuardRequest,
 ) -> Result<(), CostGuardReserveError> {
-    let outstanding =
-        u128::from(IntentStoreOps::totals_at(reservation_key, request.now_secs).reserved_qty);
+    let outstanding = u128::from(IntentStoreOps::totals(reservation_key).reserved_qty);
     let available = request.current_cycle_balance.saturating_sub(outstanding);
     let required = request
         .min_cycles_after_reservation
@@ -413,7 +412,7 @@ mod tests {
             err.public_kind(),
             Some(CostGuardReservePublicKind::ResourceExhausted)
         );
-        assert_eq!(IntentStoreOps::pending_total().expect("meta"), 0);
+        assert_eq!(IntentStoreOps::expirable_pending_total().expect("meta"), 0);
     }
 
     #[test]
@@ -421,11 +420,17 @@ mod tests {
         reset();
 
         let permit = CostGuardOps::reserve(request(10)).expect("reservation");
-        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 2);
+        assert_eq!(
+            IntentStoreOps::expirable_pending_total().expect("pending"),
+            2
+        );
 
         CostGuardOps::abort(&permit).expect("abort");
 
-        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 0);
+        assert_eq!(
+            IntentStoreOps::expirable_pending_total().expect("pending"),
+            0
+        );
     }
 
     #[test]

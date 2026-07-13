@@ -12,13 +12,25 @@ use crate::storage::stable::intent::IntentPendingIndexEntryRecord;
 use crate::{
     InternalError,
     ids::{IntentId, IntentResourceKey},
+    model::{
+        intent::{
+            BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
+            PAYLOAD_BINDING_SCHEMA_VERSION, PayloadBinding, RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
+            ReceiptBackedIntent, ReceiptBackedIntentState, SettleReceiptBackedIntentInput,
+            SettleReceiptBackedIntentResult, TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence,
+        },
+        replay::OperationId,
+    },
     ops::storage::StorageOpsError,
     storage::stable::intent::{
         INTENT_STORE_SCHEMA_VERSION, IntentPendingEntryRecord, IntentRecord,
         IntentResourceTotalsRecord, IntentState, IntentStore, IntentStoreMetaRecord,
+        ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
 };
 use thiserror::Error as ThisError;
+
+pub const RECEIPT_BACKED_INTENT_RECORD_LIMIT: u64 = 100_000;
 
 // -----------------------------------------------------------------------------
 // Errors
@@ -79,6 +91,27 @@ pub enum IntentStoreOpsError {
 
     #[error("intent totals missing for resource {0}")]
     TotalsMissing(IntentResourceKey),
+
+    #[error("receipt-backed intent {0} conflicts with an existing record")]
+    ReceiptBackedConflict(OperationId),
+
+    #[error("receipt-backed intent {0} has contradictory terminal evidence")]
+    ReceiptBackedEvidenceConflict(OperationId),
+
+    #[error(
+        "receipt-backed intent record schema mismatch for {operation_id} (expected {expected}, found {found})"
+    )]
+    ReceiptBackedRecordSchemaMismatch {
+        operation_id: OperationId,
+        expected: u32,
+        found: u32,
+    },
+
+    #[error("unsupported payload binding schema version {found} (expected {expected})")]
+    UnsupportedPayloadBindingSchema { expected: u32, found: u32 },
+
+    #[error("unsupported terminal evidence schema version {found} (expected {expected})")]
+    UnsupportedTerminalEvidenceSchema { expected: u32, found: u32 },
 }
 
 impl From<IntentStoreOpsError> for InternalError {
@@ -284,31 +317,8 @@ impl IntentStoreOps {
     // Read-only views (TTL authoritative)
     // -------------------------------------------------------------------------
 
-    pub fn totals_at(resource_key: &IntentResourceKey, now: u64) -> IntentResourceTotalsRecord {
-        let committed_qty = IntentStore::get_totals(resource_key).map_or(0, |t| t.committed_qty);
-
-        let mut reserved_qty: u64 = 0;
-        let mut pending_count: u64 = 0;
-
-        IntentStore::with_pending_entries(|pending| {
-            for entry in pending.iter() {
-                let record = entry.value();
-                if record.resource_key.as_ref() != resource_key.as_ref() {
-                    continue;
-                }
-                if is_pending_entry_expired(now, &record) {
-                    continue;
-                }
-                reserved_qty = reserved_qty.saturating_add(record.quantity);
-                pending_count = pending_count.saturating_add(1);
-            }
-        });
-
-        IntentResourceTotalsRecord {
-            reserved_qty,
-            committed_qty,
-            pending_count,
-        }
+    pub fn totals(resource_key: &IntentResourceKey) -> IntentResourceTotalsRecord {
+        IntentStore::get_totals(resource_key).unwrap_or_default()
     }
 
     #[cfg(test)]
@@ -346,8 +356,8 @@ impl IntentStoreOps {
         expired
     }
 
-    /// Return the stored pending-intent count without scanning the pending index.
-    pub fn pending_total() -> Result<u64, InternalError> {
+    /// Return the stored local TTL-index count without scanning that index.
+    pub fn expirable_pending_total() -> Result<u64, InternalError> {
         Ok(ensure_schema()?.pending_total)
     }
 
@@ -391,6 +401,162 @@ impl IntentStoreOps {
     }
 }
 
+/// Exact-key receipt-backed reservation and settlement operations.
+pub struct ReceiptBackedIntentOps;
+
+impl ReceiptBackedIntentOps {
+    pub fn begin_or_load(
+        input: &BeginReceiptBackedIntentInput,
+        now_ns: u64,
+    ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+        Self::begin_or_load_with_limit(input, now_ns, RECEIPT_BACKED_INTENT_RECORD_LIMIT)
+    }
+
+    fn begin_or_load_with_limit(
+        input: &BeginReceiptBackedIntentInput,
+        now_ns: u64,
+        record_limit: u64,
+    ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+        validate_payload_binding(input.payload_binding)?;
+
+        if let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) {
+            ensure_receipt_backed_record_schema(&record)?;
+            if record.payload_binding != input.payload_binding
+                || record.resource_key != input.resource_key
+                || record.quantity != input.quantity
+            {
+                return Ok(BeginReceiptBackedIntentResult::BindingConflict);
+            }
+            return Ok(begin_result_for_existing(&record));
+        }
+
+        let record_count = ReceiptBackedIntentStore::len();
+        if record_count >= record_limit {
+            return Ok(BeginReceiptBackedIntentResult::StoreCapacityReached {
+                current_records: record_count,
+                limit: record_limit,
+            });
+        }
+
+        let totals = IntentStore::get_totals(&input.resource_key).unwrap_or_default();
+        let current_quantity =
+            checked_add(totals.reserved_qty, totals.committed_qty, "accounted_qty")?;
+        let next_quantity = checked_add(current_quantity, input.quantity, "accounted_qty")?;
+        if next_quantity > input.reservation_limit {
+            return Ok(BeginReceiptBackedIntentResult::CapacityExceeded {
+                current_quantity,
+                requested_quantity: input.quantity,
+                limit: input.reservation_limit,
+            });
+        }
+
+        let new_totals = IntentResourceTotalsRecord {
+            reserved_qty: checked_add(totals.reserved_qty, input.quantity, "reserved_qty")?,
+            committed_qty: totals.committed_qty,
+            pending_count: checked_add(totals.pending_count, 1, "pending_count")?,
+        };
+        let revision = 1;
+        let record = ReceiptBackedIntentRecord {
+            schema_version: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
+            operation_id: input.operation_id,
+            payload_binding: input.payload_binding,
+            resource_key: input.resource_key.clone(),
+            quantity: input.quantity,
+            state: ReceiptBackedIntentState::Pending,
+            revision,
+            created_at_ns: now_ns,
+            updated_at_ns: now_ns,
+        };
+
+        if ReceiptBackedIntentStore::insert(record).is_some() {
+            return Err(IntentStoreOpsError::ReceiptBackedConflict(input.operation_id).into());
+        }
+        IntentStore::set_totals(input.resource_key.clone(), new_totals);
+
+        Ok(BeginReceiptBackedIntentResult::Created { revision })
+    }
+
+    pub fn load(operation_id: OperationId) -> Result<Option<ReceiptBackedIntent>, InternalError> {
+        let Some(record) = ReceiptBackedIntentStore::get(operation_id) else {
+            return Ok(None);
+        };
+        ensure_receipt_backed_record_schema(&record)?;
+        Ok(Some(record.into_intent()))
+    }
+
+    pub fn settle_if_pending(
+        input: &SettleReceiptBackedIntentInput,
+        now_ns: u64,
+    ) -> Result<SettleReceiptBackedIntentResult, InternalError> {
+        validate_payload_binding(input.expected_payload_binding)?;
+        validate_terminal_evidence(input.evidence.schema_version)?;
+        let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) else {
+            return Ok(SettleReceiptBackedIntentResult::NotFound);
+        };
+        ensure_receipt_backed_record_schema(&record)?;
+
+        if record.payload_binding != input.expected_payload_binding {
+            return Ok(SettleReceiptBackedIntentResult::BindingConflict);
+        }
+
+        if record.state != ReceiptBackedIntentState::Pending {
+            if terminal_evidence(&record.state) == Some(input.evidence) {
+                return Ok(SettleReceiptBackedIntentResult::AlreadySettled {
+                    revision: record.revision,
+                    state: record.state,
+                });
+            }
+            return Err(
+                IntentStoreOpsError::ReceiptBackedEvidenceConflict(input.operation_id).into(),
+            );
+        }
+
+        if record.revision != input.expected_revision {
+            return Ok(SettleReceiptBackedIntentResult::RevisionConflict {
+                actual_revision: record.revision,
+            });
+        }
+
+        let totals = IntentStore::get_totals(&record.resource_key)
+            .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?;
+        let committed_qty = match input.evidence.decision {
+            crate::model::intent::TerminalEvidenceDecision::Committed => {
+                checked_add(totals.committed_qty, record.quantity, "committed_qty")?
+            }
+            crate::model::intent::TerminalEvidenceDecision::RolledBack => totals.committed_qty,
+        };
+        let new_totals = IntentResourceTotalsRecord {
+            reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
+            committed_qty,
+            pending_count: checked_sub(totals.pending_count, 1, "pending_count")?,
+        };
+        let revision = checked_add(record.revision, 1, "revision")?;
+        let state = match input.evidence.decision {
+            crate::model::intent::TerminalEvidenceDecision::Committed => {
+                ReceiptBackedIntentState::Committed {
+                    evidence: input.evidence,
+                }
+            }
+            crate::model::intent::TerminalEvidenceDecision::RolledBack => {
+                ReceiptBackedIntentState::RolledBack {
+                    evidence: input.evidence,
+                }
+            }
+        };
+        let updated = ReceiptBackedIntentRecord {
+            state,
+            revision,
+            updated_at_ns: now_ns,
+            ..record
+        };
+
+        IntentStore::set_totals(updated.resource_key.clone(), new_totals);
+        ReceiptBackedIntentStore::insert(updated);
+
+        Ok(SettleReceiptBackedIntentResult::Settled { revision, state })
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------------
@@ -404,6 +570,72 @@ fn ensure_schema() -> Result<IntentStoreMetaRecord, IntentStoreOpsError> {
         });
     }
     Ok(meta)
+}
+
+const fn ensure_receipt_backed_record_schema(
+    record: &ReceiptBackedIntentRecord,
+) -> Result<(), IntentStoreOpsError> {
+    if record.schema_version == RECEIPT_BACKED_INTENT_SCHEMA_VERSION {
+        Ok(())
+    } else {
+        Err(IntentStoreOpsError::ReceiptBackedRecordSchemaMismatch {
+            operation_id: record.operation_id,
+            expected: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
+            found: record.schema_version,
+        })
+    }
+}
+
+const fn validate_payload_binding(binding: PayloadBinding) -> Result<(), IntentStoreOpsError> {
+    if binding.schema_version == PAYLOAD_BINDING_SCHEMA_VERSION {
+        Ok(())
+    } else {
+        Err(IntentStoreOpsError::UnsupportedPayloadBindingSchema {
+            expected: PAYLOAD_BINDING_SCHEMA_VERSION,
+            found: binding.schema_version,
+        })
+    }
+}
+
+const fn validate_terminal_evidence(schema_version: u32) -> Result<(), IntentStoreOpsError> {
+    if schema_version == TERMINAL_EVIDENCE_SCHEMA_VERSION {
+        Ok(())
+    } else {
+        Err(IntentStoreOpsError::UnsupportedTerminalEvidenceSchema {
+            expected: TERMINAL_EVIDENCE_SCHEMA_VERSION,
+            found: schema_version,
+        })
+    }
+}
+
+const fn begin_result_for_existing(
+    record: &ReceiptBackedIntentRecord,
+) -> BeginReceiptBackedIntentResult {
+    match record.state {
+        ReceiptBackedIntentState::Pending => BeginReceiptBackedIntentResult::ExistingPending {
+            revision: record.revision,
+        },
+        ReceiptBackedIntentState::Committed { evidence } => {
+            BeginReceiptBackedIntentResult::ExistingCommitted {
+                revision: record.revision,
+                evidence,
+            }
+        }
+        ReceiptBackedIntentState::RolledBack { evidence } => {
+            BeginReceiptBackedIntentResult::ExistingRolledBack {
+                revision: record.revision,
+                evidence,
+            }
+        }
+    }
+}
+
+const fn terminal_evidence(state: &ReceiptBackedIntentState) -> Option<TerminalEvidence> {
+    match state {
+        ReceiptBackedIntentState::Pending => None,
+        ReceiptBackedIntentState::Committed { evidence }
+        | ReceiptBackedIntentState::RolledBack { evidence } => Some(*evidence),
+    }
 }
 
 fn ensure_pending_exists(intent_id: IntentId) -> Result<(), IntentStoreOpsError> {
