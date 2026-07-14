@@ -1,6 +1,6 @@
 //! Module: artifacts
 //!
-//! Responsibility: compute and validate backup artifact checksums.
+//! Responsibility: derive artifact path identities and compute or validate checksums.
 //! Does not own: snapshot capture, artifact storage, or restore planning.
 //! Boundary: provides deterministic checksum primitives to backup workflows.
 
@@ -20,6 +20,16 @@ use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 const SHA256_ALGORITHM: &str = "sha256";
+
+pub(crate) fn artifact_path_segment(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => ch,
+            _ => '_',
+        })
+        .collect()
+}
 
 ///
 /// ArtifactChecksum

@@ -1,9 +1,6 @@
-use super::{
-    SnapshotArtifact, SnapshotDownloadConfig, SnapshotDownloadError, SnapshotDriver,
-    support::safe_path_segment,
-};
+use super::{SnapshotArtifact, SnapshotDownloadConfig, SnapshotDownloadError, SnapshotDriver};
 use crate::{
-    artifacts::ArtifactChecksum,
+    artifacts::{ArtifactChecksum, artifact_path_segment},
     discovery::SnapshotTarget,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal},
     persistence::{BackupLayout, commit_artifact_directory},
@@ -26,9 +23,9 @@ pub(super) struct SnapshotArtifactPaths {
 
 impl SnapshotArtifactPaths {
     pub(super) fn new(root: &Path, canister_id: &str) -> Self {
-        let relative_path = PathBuf::from(safe_path_segment(canister_id));
+        let relative_path = PathBuf::from(artifact_path_segment(canister_id));
         let artifact_path = root.join(&relative_path);
-        let temp_path = root.join(format!("{}.tmp", safe_path_segment(canister_id)));
+        let temp_path = root.join(format!("{}.tmp", artifact_path_segment(canister_id)));
 
         Self {
             artifact_path,

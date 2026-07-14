@@ -13,13 +13,3 @@ pub(super) fn target_role(
         }
     })
 }
-
-pub(super) fn safe_path_segment(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| match ch {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => ch,
-            _ => '_',
-        })
-        .collect()
-}

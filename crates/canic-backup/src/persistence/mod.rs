@@ -7,6 +7,7 @@
 mod artifact_commit;
 mod error;
 mod integrity;
+mod journal_lock;
 mod json;
 mod layout;
 
@@ -16,6 +17,7 @@ pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,
 };
+pub(crate) use journal_lock::{JournalLock, JournalLockError};
 pub(crate) use json::write_json_durable;
 pub use layout::BackupLayout;
 

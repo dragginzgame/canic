@@ -1,5 +1,6 @@
 use super::{
-    DeployCommandError, output_format::RootOutputFormat, print_json, read_json_file, value_arg,
+    DeployCommandError, output_format::JsonTextOutputFormat, print_json_or_text, read_json_file,
+    value_arg,
 };
 use crate::{
     cli::{
@@ -86,7 +87,7 @@ const TEXT_ARG: &str = "text";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct DeployRootInspectOptions {
     pub(super) request: PathBuf,
-    pub(super) format: RootOutputFormat,
+    pub(super) format: JsonTextOutputFormat,
 }
 
 ///
@@ -97,7 +98,7 @@ pub(super) struct DeployRootVerifyOptions {
     pub(super) deployment: String,
     pub(super) from_check: PathBuf,
     pub(super) network: String,
-    pub(super) format: RootOutputFormat,
+    pub(super) format: JsonTextOutputFormat,
 }
 
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -130,11 +131,11 @@ where
     let options = DeployRootInspectOptions::parse(args)?;
     let request = read_json_file::<DeploymentRootVerificationRequestV1>(&options.request)?;
     let report = build_verification_report(request)?;
-    match options.format {
-        RootOutputFormat::Json => print_json(&report)?,
-        RootOutputFormat::Text => println!("{}", deployment_root_verification_report_text(&report)),
-    }
-    Ok(())
+    print_json_or_text(
+        options.format,
+        &report,
+        deployment_root_verification_report_text,
+    )
 }
 
 fn run_verify<I>(args: I) -> Result<(), DeployCommandError>
@@ -156,13 +157,11 @@ where
         icp_root: resolve_current_canic_icp_root().ok(),
     })
     .map_err(DeployCommandError::from)?;
-    match options.format {
-        RootOutputFormat::Json => print_json(&receipt)?,
-        RootOutputFormat::Text => {
-            println!("{}", deployment_root_verification_receipt_text(&receipt));
-        }
-    }
-    Ok(())
+    print_json_or_text(
+        options.format,
+        &receipt,
+        deployment_root_verification_receipt_text,
+    )
 }
 
 pub(super) fn build_verification_report(
@@ -183,7 +182,7 @@ impl DeployRootInspectOptions {
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: root_output_format(matches.get_flag(TEXT_ARG)),
+            format: JsonTextOutputFormat::from_text_flag(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -199,7 +198,7 @@ impl DeployRootVerifyOptions {
             deployment: required_string(&matches, "deployment"),
             from_check: required_path(&matches, "from-check"),
             network: string_option_or_else(&matches, "network", local_network),
-            format: root_output_format(matches.get_flag(TEXT_ARG)),
+            format: JsonTextOutputFormat::from_text_flag(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -249,14 +248,6 @@ fn text_arg() -> clap::Arg {
     flag_arg(TEXT_ARG)
         .long(TEXT_ARG)
         .help("Print human-readable text output")
-}
-
-const fn root_output_format(text: bool) -> RootOutputFormat {
-    if text {
-        RootOutputFormat::Text
-    } else {
-        RootOutputFormat::Json
-    }
 }
 
 fn root_passthrough_command(spec: RootCommand) -> ClapCommand {

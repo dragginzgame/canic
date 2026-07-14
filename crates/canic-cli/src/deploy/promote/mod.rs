@@ -19,7 +19,7 @@ pub(super) use command::{
 };
 pub(super) use options::DeployPromoteReportOptions;
 
-use super::{DeployCommandError, output_format::PromotionOutputFormat, print_json, read_json_file};
+use super::{DeployCommandError, print_json_or_text, read_json_file};
 use crate::{
     cli::{clap::parse_subcommand, help::print_help_or_version},
     version_text,
@@ -303,9 +303,5 @@ where
     let options = DeployPromoteReportOptions::parse(args, command, usage)?;
     let request = read_json_file::<R>(&options.request)?;
     let output = build(request)?;
-    match options.format {
-        PromotionOutputFormat::Json => print_json(&output)?,
-        PromotionOutputFormat::Text => println!("{}", render_text(&output)),
-    }
-    Ok(())
+    print_json_or_text(options.format, &output, render_text)
 }

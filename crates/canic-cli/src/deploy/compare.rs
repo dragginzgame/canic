@@ -1,6 +1,6 @@
 use super::{
-    DeployCommandError, current_observed_at, output_format::CompareOutputFormat, print_json,
-    read_json_file, value_arg,
+    DeployCommandError, current_observed_at, output_format::JsonTextOutputFormat,
+    print_json_or_text, read_json_file, value_arg,
 };
 use crate::{
     cli::{
@@ -41,7 +41,7 @@ pub(super) struct DeployCompareOptions {
     pub(super) right: PathBuf,
     pub(super) left_label: Option<String>,
     pub(super) right_label: Option<String>,
-    pub(super) format: CompareOutputFormat,
+    pub(super) format: JsonTextOutputFormat,
 }
 
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -56,11 +56,7 @@ where
     let options = DeployCompareOptions::parse(args)?;
     let format = options.format;
     let report = build_report(options)?;
-    match format {
-        CompareOutputFormat::Json => print_json(&report)?,
-        CompareOutputFormat::Text => println!("{}", deployment_comparison_report_text(&report)),
-    }
-    Ok(())
+    print_json_or_text(format, &report, deployment_comparison_report_text)
 }
 
 fn build_report(
@@ -114,7 +110,7 @@ impl DeployCompareOptions {
             right: required_path(&matches, RIGHT_ARG),
             left_label: string_option(&matches, LEFT_LABEL_ARG),
             right_label: string_option(&matches, RIGHT_LABEL_ARG),
-            format: compare_output_format(matches.get_flag(TEXT_ARG)),
+            format: JsonTextOutputFormat::from_text_flag(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -161,14 +157,6 @@ fn text_arg() -> clap::Arg {
     flag_arg(TEXT_ARG)
         .long(TEXT_ARG)
         .help("Print human-readable text output")
-}
-
-const fn compare_output_format(text: bool) -> CompareOutputFormat {
-    if text {
-        CompareOutputFormat::Text
-    } else {
-        CompareOutputFormat::Json
-    }
 }
 
 pub(super) fn usage() -> String {

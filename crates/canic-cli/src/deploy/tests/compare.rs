@@ -1,6 +1,6 @@
 use super::super::compare as deploy_compare;
 use super::super::inspect as deploy_inspect;
-use super::super::output_format::CompareOutputFormat;
+use super::super::output_format::JsonTextOutputFormat;
 use super::fixtures::*;
 use super::*;
 
@@ -29,7 +29,7 @@ fn deploy_compare_parses_artifact_paths_and_text_flag() {
     assert_eq!(options.right, PathBuf::from("prod-check.json"));
     assert_eq!(options.left_label.as_deref(), Some("staging"));
     assert_eq!(options.right_label.as_deref(), Some("prod"));
-    assert_eq!(options.format, CompareOutputFormat::Text);
+    assert_eq!(options.format, JsonTextOutputFormat::Text);
 }
 
 #[test]

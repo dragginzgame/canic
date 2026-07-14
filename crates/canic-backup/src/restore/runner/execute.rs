@@ -11,7 +11,7 @@ use super::{
         RESTORE_RUN_COMMAND_EXIT_PREFIX, RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID,
         RESTORE_RUN_OUTPUT_RECEIPT_LIMIT, RESTORE_RUN_STOPPED_PRECONDITION_FAILED,
     },
-    io::{RestoreJournalLock, read_apply_journal_file, state_updated_at, write_apply_journal_file},
+    io::{read_apply_journal_file, write_apply_journal_file},
     precondition::enforce_stopped_canister_precondition,
     status::{
         enforce_restore_run_command_available, enforce_restore_run_executable,
@@ -25,6 +25,7 @@ use super::{
         RestoreRunnerOutcome, RestoreStoppedPreconditionFailure,
     },
 };
+use crate::{persistence::JournalLock, timestamp::state_updated_at};
 
 /// Execute ready restore apply journal operations through an injected command executor.
 pub fn restore_run_execute_with_executor(
@@ -43,7 +44,7 @@ pub fn restore_run_execute_result_with_executor(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
 ) -> Result<RestoreRunnerOutcome, RestoreRunnerError> {
-    let _lock = RestoreJournalLock::acquire(&config.journal)?;
+    let _lock = JournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
     let mut executed_operations = Vec::new();
     let mut operation_receipts = Vec::new();

@@ -15,7 +15,7 @@ fn deploy_root_inspect_parses_request_and_text_flag() {
     .expect("parse deploy inspect root");
 
     assert_eq!(options.request, PathBuf::from("root-verification.json"));
-    assert_eq!(options.format, output_format::RootOutputFormat::Text);
+    assert_eq!(options.format, output_format::JsonTextOutputFormat::Text);
 }
 
 #[test]
@@ -27,7 +27,7 @@ fn deploy_root_inspect_defaults_to_json() {
     .expect("parse deploy inspect root");
 
     assert_eq!(options.request, PathBuf::from("root-verification.json"));
-    assert_eq!(options.format, output_format::RootOutputFormat::Json);
+    assert_eq!(options.format, output_format::JsonTextOutputFormat::Json);
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn deploy_root_verify_parses_deployment_check_and_text_flag() {
     assert_eq!(options.deployment, "demo-local");
     assert_eq!(options.from_check, PathBuf::from("deployment-check.json"));
     assert_eq!(options.network, "ic");
-    assert_eq!(options.format, output_format::RootOutputFormat::Text);
+    assert_eq!(options.format, output_format::JsonTextOutputFormat::Text);
 }
 
 #[test]

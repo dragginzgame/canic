@@ -1,6 +1,6 @@
 //! Module: restore::runner::io
 //!
-//! Responsibility: read, write, lock, and receipt-check restore apply journals.
+//! Responsibility: read, write, and receipt-check restore apply journals.
 //! Does not own: command execution, response rendering, or restore plan construction.
 //! Boundary: filesystem adapter for native restore runner journal state.
 
@@ -8,12 +8,8 @@ use super::{
     RestoreApplyJournal, RestoreApplyOperationReceiptOutcome, RestoreApplyOperationState,
     types::RestoreRunnerError,
 };
-use crate::{restore::write_restore_apply_journal, timestamp::current_timestamp_marker};
-use std::{
-    fs,
-    io::{self, Write},
-    path::{Path, PathBuf},
-};
+use crate::restore::write_restore_apply_journal;
+use std::{fs, path::Path};
 
 pub(super) fn read_apply_journal_file(
     path: &Path,
@@ -25,61 +21,12 @@ pub(super) fn read_apply_journal_file(
     Ok(journal)
 }
 
-pub(super) fn state_updated_at(updated_at: Option<&String>) -> String {
-    updated_at.cloned().unwrap_or_else(current_timestamp_marker)
-}
-
 pub(super) fn write_apply_journal_file(
     path: &Path,
     journal: &RestoreApplyJournal,
 ) -> Result<(), RestoreRunnerError> {
     write_restore_apply_journal(path, journal)?;
     Ok(())
-}
-
-///
-/// RestoreJournalLock
-///
-/// Sidecar filesystem lock for mutating restore runner operations.
-/// Owned by restore runner IO and held while journal state is advanced.
-///
-
-pub(super) struct RestoreJournalLock {
-    path: PathBuf,
-}
-
-impl RestoreJournalLock {
-    pub(super) fn acquire(journal_path: &Path) -> Result<Self, RestoreRunnerError> {
-        let path = journal_lock_path(journal_path);
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-        {
-            Ok(mut file) => {
-                writeln!(file, "pid={}", std::process::id())?;
-                Ok(Self { path })
-            }
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                Err(RestoreRunnerError::JournalLocked {
-                    lock_path: path.to_string_lossy().to_string(),
-                })
-            }
-            Err(error) => Err(error.into()),
-        }
-    }
-}
-
-impl Drop for RestoreJournalLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
-}
-
-fn journal_lock_path(path: &Path) -> PathBuf {
-    let mut lock_path = path.as_os_str().to_os_string();
-    lock_path.push(".lock");
-    PathBuf::from(lock_path)
 }
 
 fn validate_terminal_operation_receipts(

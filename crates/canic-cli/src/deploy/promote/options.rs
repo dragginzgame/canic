@@ -1,4 +1,4 @@
-use super::super::{DeployCommandError, output_format::PromotionOutputFormat};
+use super::super::{DeployCommandError, output_format::JsonTextOutputFormat};
 use super::command::TEXT_ARG;
 use crate::cli::clap::{parse_matches, required_path};
 use clap::Command as ClapCommand;
@@ -10,7 +10,7 @@ use std::{ffi::OsString, path::PathBuf};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeployPromoteReportOptions {
     pub request: PathBuf,
-    pub format: PromotionOutputFormat,
+    pub format: JsonTextOutputFormat,
 }
 impl DeployPromoteReportOptions {
     pub fn parse<I>(
@@ -25,15 +25,7 @@ impl DeployPromoteReportOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             request: required_path(&matches, "request"),
-            format: promotion_output_format(matches.get_flag(TEXT_ARG)),
+            format: JsonTextOutputFormat::from_text_flag(matches.get_flag(TEXT_ARG)),
         })
-    }
-}
-
-const fn promotion_output_format(text: bool) -> PromotionOutputFormat {
-    if text {
-        PromotionOutputFormat::Text
-    } else {
-        PromotionOutputFormat::Json
     }
 }

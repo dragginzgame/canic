@@ -13,7 +13,7 @@ fn deploy_authority_leaf_commands_default_to_json() {
         .unwrap_or_else(|_| panic!("parse deploy authority {name}"));
 
         assert_eq!(options.truth.deployment, "demo");
-        assert_eq!(options.format, output_format::AuthorityOutputFormat::Json);
+        assert_eq!(options.format, output_format::JsonTextOutputFormat::Json);
     }
 }
 
@@ -28,7 +28,7 @@ fn deploy_authority_leaf_commands_parse_text_flag() {
         .unwrap_or_else(|_| panic!("parse deploy authority {name} text"));
 
         assert_eq!(options.truth.deployment, "demo");
-        assert_eq!(options.format, output_format::AuthorityOutputFormat::Text);
+        assert_eq!(options.format, output_format::JsonTextOutputFormat::Text);
     }
 }
 

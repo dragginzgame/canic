@@ -1,5 +1,5 @@
 use super::{
-    DeployCommandError, current_observed_at, output_format::CatalogOutputFormat, value_arg,
+    DeployCommandError, current_observed_at, output_format::JsonTextOutputFormat, value_arg,
 };
 use crate::{
     cli::{
@@ -81,7 +81,7 @@ const INSPECT_COMMAND: CatalogCommand = CatalogCommand {
 pub(super) struct DeployCatalogOptions {
     pub(super) deployment: Option<String>,
     pub(super) network: String,
-    pub(super) format: CatalogOutputFormat,
+    pub(super) format: JsonTextOutputFormat,
     pub(super) output: Option<PathBuf>,
 }
 
@@ -147,12 +147,12 @@ pub(super) fn write_report(
     report: &DeploymentCatalogReportV1,
 ) -> Result<(), DeployCommandError> {
     match options.format {
-        CatalogOutputFormat::Text => output::write_text::<Box<dyn std::error::Error>>(
+        JsonTextOutputFormat::Text => output::write_text::<Box<dyn std::error::Error>>(
             options.output.as_deref(),
             &deployment_catalog_report_text(report),
         )
         .map_err(DeployCommandError::from),
-        CatalogOutputFormat::Json => output::write_pretty_json::<_, Box<dyn std::error::Error>>(
+        JsonTextOutputFormat::Json => output::write_pretty_json::<_, Box<dyn std::error::Error>>(
             options.output.as_deref(),
             report,
         )
@@ -197,7 +197,7 @@ impl DeployCatalogOptions {
         Ok(Self {
             deployment: None,
             network: string_option_or_else(&matches, "network", local_network),
-            format: catalog_output_format(matches.get_flag(JSON_ARG)),
+            format: JsonTextOutputFormat::from_json_flag(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
         })
     }
@@ -211,7 +211,7 @@ impl DeployCatalogOptions {
         Ok(Self {
             deployment: Some(required_string(&matches, "deployment")),
             network: string_option_or_else(&matches, "network", local_network),
-            format: catalog_output_format(matches.get_flag(JSON_ARG)),
+            format: JsonTextOutputFormat::from_json_flag(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
         })
     }
@@ -241,14 +241,6 @@ fn inspect_command() -> ClapCommand {
             .required(true)
             .help("Deployment target name to inspect"),
     )
-}
-
-const fn catalog_output_format(json: bool) -> CatalogOutputFormat {
-    if json {
-        CatalogOutputFormat::Json
-    } else {
-        CatalogOutputFormat::Text
-    }
 }
 
 fn json_arg() -> clap::Arg {

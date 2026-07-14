@@ -1,4 +1,4 @@
-use super::super::output_format::PromotionOutputFormat;
+use super::super::output_format::JsonTextOutputFormat;
 use super::super::promote::*;
 use super::*;
 
@@ -13,7 +13,7 @@ fn deploy_promote_leaf_commands_default_to_json() {
         .expect("parse promote leaf command");
 
         assert_eq!(options.request, PathBuf::from(request));
-        assert_eq!(options.format, PromotionOutputFormat::Json);
+        assert_eq!(options.format, JsonTextOutputFormat::Json);
     }
 }
 
@@ -32,7 +32,7 @@ fn deploy_promote_leaf_commands_parse_text_flag() {
         .expect("parse promote leaf command text");
 
         assert_eq!(options.request, PathBuf::from(request));
-        assert_eq!(options.format, PromotionOutputFormat::Text);
+        assert_eq!(options.format, JsonTextOutputFormat::Text);
     }
 }
 

@@ -1,8 +1,6 @@
-use super::{
-    SnapshotArtifact, SnapshotManifestError, SnapshotManifestInput,
-    support::{safe_path_segment, target_role},
-};
+use super::{SnapshotArtifact, SnapshotManifestError, SnapshotManifestInput, support::target_role};
 use crate::{
+    artifacts::artifact_path_segment,
     discovery::SnapshotTarget,
     manifest::{
         BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
@@ -114,7 +112,7 @@ fn deployment_member(
             snapshot_id: artifact.snapshot_id.clone(),
             module_hash: target.module_hash.clone(),
             code_version: None,
-            artifact_path: safe_path_segment(&target.canister_id),
+            artifact_path: artifact_path_segment(&target.canister_id),
             checksum_algorithm: "sha256".to_string(),
             checksum: Some(artifact.checksum.clone()),
         },

@@ -7,12 +7,12 @@
 use super::{
     RestoreApplyCommandOutputPair, RestoreApplyJournalOperation, RestoreApplyRunnerCommand,
     constants::{RESTORE_RUN_OUTPUT_RECEIPT_LIMIT, RESTORE_RUN_STOPPED_PRECONDITION_FAILED},
-    io::state_updated_at,
     types::{
         RestoreRunnerCommandExecutor, RestoreRunnerConfig, RestoreRunnerError,
         RestoreStoppedPreconditionFailure,
     },
 };
+use crate::timestamp::state_updated_at;
 
 pub(super) fn enforce_stopped_canister_precondition(
     config: &RestoreRunnerConfig,
