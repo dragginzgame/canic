@@ -107,7 +107,8 @@ impl PoolWorkflow {
             {
                 Ok(pid) => pid,
                 Err(err) => {
-                    let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+                    let err =
+                        CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
                     mark_recovery_required(
                         &token,
                         RecoveryReason::ExternalEffectStatusUnknown,
@@ -124,7 +125,7 @@ impl PoolWorkflow {
                 commit_pool_create_empty_success(&token, &cost_permit, pid, cycles, response_bytes);
             }
             Err(err) => {
-                let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+                let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
                 mark_recovery_required(
                     &token,
                     RecoveryReason::ResponseCommitFailed,

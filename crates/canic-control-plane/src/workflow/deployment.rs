@@ -67,10 +67,11 @@ pub async fn create_canister_with_deployment_guard(
             CostGuardOps::complete(&cost_permit, IcOps::now_secs())?;
             Ok(result)
         }
-        Err(err) => {
-            let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
-            Err(err)
-        }
+        Err(err) => Err(CostGuardOps::recover_after_failure(
+            &cost_permit,
+            IcOps::now_secs(),
+            err,
+        )),
     }
 }
 

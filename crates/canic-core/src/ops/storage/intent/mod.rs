@@ -28,6 +28,7 @@ use crate::{
         ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
 };
+use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
 
 pub const RECEIPT_BACKED_INTENT_RECORD_LIMIT: u64 = 100_000;
@@ -80,6 +81,9 @@ pub enum IntentStoreOpsError {
     #[error("intent {0} not found")]
     NotFound(IntentId),
 
+    #[error("intent {0} cannot appear twice in one settlement")]
+    RepeatedSettlementIntent(IntentId),
+
     #[error("intent pending index missing for {0}")]
     PendingIndexMissing(IntentId),
 
@@ -131,6 +135,12 @@ impl From<IntentStoreOpsError> for InternalError {
 ///
 
 pub struct IntentStoreOps;
+
+#[derive(Clone, Copy)]
+enum IntentSettlement {
+    Commit,
+    AbortIfPending,
+}
 
 impl IntentStoreOps {
     // -------------------------------------------------------------------------
@@ -313,6 +323,32 @@ impl IntentStoreOps {
         Ok(updated)
     }
 
+    // Commit two intents only after both terminal transitions validate.
+    pub(crate) fn commit_pair_at(
+        first_intent_id: IntentId,
+        second_intent_id: IntentId,
+        now: u64,
+    ) -> Result<(), InternalError> {
+        settle_pair_at(
+            (first_intent_id, IntentSettlement::Commit),
+            (second_intent_id, IntentSettlement::Commit),
+            now,
+        )
+    }
+
+    // Commit one intent and abort the other only after the pair validates.
+    pub(crate) fn commit_and_abort_pending_pair_at(
+        commit_intent_id: IntentId,
+        abort_intent_id: IntentId,
+        now: u64,
+    ) -> Result<(), InternalError> {
+        settle_pair_at(
+            (commit_intent_id, IntentSettlement::Commit),
+            (abort_intent_id, IntentSettlement::AbortIfPending),
+            now,
+        )
+    }
+
     // -------------------------------------------------------------------------
     // Read-only views (TTL authoritative)
     // -------------------------------------------------------------------------
@@ -399,6 +435,102 @@ impl IntentStoreOps {
         );
         Ok(true)
     }
+}
+
+fn settle_pair_at(
+    first: (IntentId, IntentSettlement),
+    second: (IntentId, IntentSettlement),
+    now: u64,
+) -> Result<(), InternalError> {
+    if first.0 == second.0 {
+        return Err(IntentStoreOpsError::RepeatedSettlementIntent(first.0).into());
+    }
+
+    let mut meta = ensure_schema()?;
+    let mut totals_by_resource = BTreeMap::<IntentResourceKey, IntentResourceTotalsRecord>::new();
+    let mut updates = Vec::<IntentRecord>::with_capacity(2);
+
+    for (intent_id, settlement) in [first, second] {
+        let Some(record) = IntentStore::get_record(intent_id) else {
+            if matches!(settlement, IntentSettlement::AbortIfPending) {
+                continue;
+            }
+            return Err(IntentStoreOpsError::NotFound(intent_id).into());
+        };
+
+        let target_state = match (settlement, record.state) {
+            (IntentSettlement::Commit, IntentState::Committed)
+            | (IntentSettlement::AbortIfPending, IntentState::Committed | IntentState::Aborted) => {
+                continue;
+            }
+            (IntentSettlement::Commit, IntentState::Aborted) => {
+                return Err(IntentStoreOpsError::InvalidTransition {
+                    id: intent_id,
+                    from: IntentState::Aborted,
+                    to: IntentState::Committed,
+                }
+                .into());
+            }
+            (IntentSettlement::Commit, IntentState::Pending) => IntentState::Committed,
+            (IntentSettlement::AbortIfPending, IntentState::Pending) => IntentState::Aborted,
+        };
+
+        if target_state == IntentState::Committed && is_record_expired(now, &record) {
+            return Err(expired_err(intent_id, &record).into());
+        }
+        ensure_pending_exists(intent_id)?;
+
+        let current_totals = match totals_by_resource.get(&record.resource_key) {
+            Some(totals) => *totals,
+            None => IntentStore::get_totals(&record.resource_key)
+                .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?,
+        };
+        let committed_qty = if target_state == IntentState::Committed {
+            checked_add(
+                current_totals.committed_qty,
+                record.quantity,
+                "committed_qty",
+            )?
+        } else {
+            current_totals.committed_qty
+        };
+        let new_totals = IntentResourceTotalsRecord {
+            reserved_qty: checked_sub(
+                current_totals.reserved_qty,
+                record.quantity,
+                "reserved_qty",
+            )?,
+            committed_qty,
+            pending_count: checked_sub(current_totals.pending_count, 1, "pending_count")?,
+        };
+        totals_by_resource.insert(record.resource_key.clone(), new_totals);
+
+        meta.pending_total = checked_sub(meta.pending_total, 1, "pending_total")?;
+        match target_state {
+            IntentState::Committed => {
+                meta.committed_total = checked_add(meta.committed_total, 1, "committed_total")?;
+            }
+            IntentState::Aborted => {
+                meta.aborted_total = checked_add(meta.aborted_total, 1, "aborted_total")?;
+            }
+            IntentState::Pending => unreachable!("settlement target must be terminal"),
+        }
+
+        updates.push(IntentRecord {
+            state: target_state,
+            ..record
+        });
+    }
+
+    for record in updates {
+        IntentStore::remove_pending(record.id);
+        IntentStore::insert_record(record);
+    }
+    for (resource_key, totals) in totals_by_resource {
+        IntentStore::set_totals(resource_key, totals);
+    }
+    IntentStore::set_meta(meta);
+    Ok(())
 }
 
 /// Exact-key receipt-backed reservation and settlement operations.

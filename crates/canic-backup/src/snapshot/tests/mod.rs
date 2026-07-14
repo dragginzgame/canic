@@ -109,7 +109,7 @@ fn download_snapshots_writes_manifest_and_durable_journal() {
     let root = temp_dir("canic-backup-download");
     let out = root.join("backup");
     let config = single_snapshot_config(out.clone());
-    let mut driver = FakeSnapshotDriver;
+    let mut driver = FakeSnapshotDriver::default();
 
     let result = download_snapshots(&config, &mut driver).expect("download snapshots");
     let layout = BackupLayout::new(out);
@@ -156,7 +156,7 @@ fn snapshot_artifact_conflict_leaves_journal_checksum_verified() {
     fs::create_dir_all(&canonical).expect("create conflicting artifact");
     fs::write(canonical.join("unrelated.txt"), b"unrelated").expect("write conflicting artifact");
     let config = single_snapshot_config(out.clone());
-    let mut driver = FakeSnapshotDriver;
+    let mut driver = FakeSnapshotDriver::default();
 
     let error = download_snapshots(&config, &mut driver)
         .expect_err("conflicting canonical artifact must reject");
@@ -189,7 +189,7 @@ fn dry_run_returns_planned_commands_without_writing_manifest() {
     let mut config = single_snapshot_config(out.clone());
     config.dry_run = true;
     config.lifecycle = SnapshotLifecycleMode::StopAndResume;
-    let mut driver = FakeSnapshotDriver;
+    let mut driver = FakeSnapshotDriver::default();
 
     let result = download_snapshots(&config, &mut driver).expect("dry-run snapshots");
 
@@ -207,12 +207,79 @@ fn dry_run_returns_planned_commands_without_writing_manifest() {
     assert!(!out.join("deployment-backup-manifest.json").exists());
 }
 
+// Preserve the capture cause when the requested restart succeeds.
+#[test]
+fn capture_failure_is_returned_after_successful_restart() {
+    let root = temp_dir("canic-backup-capture-failure-restart-success");
+    let mut config = single_snapshot_config(root.join("backup"));
+    config.lifecycle = SnapshotLifecycleMode::StopAndResume;
+    let mut driver = FakeSnapshotDriver {
+        fail_download: true,
+        ..FakeSnapshotDriver::default()
+    };
+
+    let error = download_snapshots(&config, &mut driver).expect_err("capture must fail");
+
+    std::assert_matches!(error, SnapshotDownloadError::Driver(_));
+    assert_eq!(driver.start_attempts, 1);
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Classify restart failure separately after a durable capture.
+#[test]
+fn restart_failure_after_successful_capture_is_typed() {
+    let root = temp_dir("canic-backup-capture-success-restart-failure");
+    let mut config = single_snapshot_config(root.join("backup"));
+    config.lifecycle = SnapshotLifecycleMode::StopAndResume;
+    let mut driver = FakeSnapshotDriver {
+        fail_start: true,
+        ..FakeSnapshotDriver::default()
+    };
+
+    let error = download_snapshots(&config, &mut driver).expect_err("restart must fail");
+
+    std::assert_matches!(error, SnapshotDownloadError::Restart(_));
+    assert_eq!(driver.start_attempts, 1);
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Retain both typed causes when capture and requested restart fail together.
+#[test]
+fn capture_and_restart_failures_preserve_both_typed_causes() {
+    let root = temp_dir("canic-backup-capture-and-restart-failure");
+    let mut config = single_snapshot_config(root.join("backup"));
+    config.lifecycle = SnapshotLifecycleMode::StopAndResume;
+    let mut driver = FakeSnapshotDriver {
+        fail_download: true,
+        fail_start: true,
+        ..FakeSnapshotDriver::default()
+    };
+
+    let error =
+        download_snapshots(&config, &mut driver).expect_err("capture and restart must fail");
+
+    let SnapshotDownloadError::CaptureAndRestart {
+        capture,
+        restart: _,
+    } = error
+    else {
+        panic!("expected typed capture and restart failure");
+    };
+    std::assert_matches!(*capture, SnapshotDownloadError::Driver(_));
+    assert_eq!(driver.start_attempts, 1);
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 ///
 /// FakeSnapshotDriver
 ///
 
 #[derive(Default)]
-struct FakeSnapshotDriver;
+struct FakeSnapshotDriver {
+    fail_download: bool,
+    fail_start: bool,
+    start_attempts: usize,
+}
 
 impl SnapshotDriver for FakeSnapshotDriver {
     /// Return no registry data because single-canister tests do not need it.
@@ -237,7 +304,12 @@ impl SnapshotDriver for FakeSnapshotDriver {
 
     /// Record a successful fake start operation.
     fn start_canister(&mut self, _canister_id: &str) -> Result<(), SnapshotDriverError> {
-        Ok(())
+        self.start_attempts += 1;
+        if self.fail_start {
+            Err(SnapshotDriverError::new(FakeDriverError("start failed")))
+        } else {
+            Ok(())
+        }
     }
 
     /// Write deterministic fake snapshot bytes into the artifact directory.
@@ -247,6 +319,9 @@ impl SnapshotDriver for FakeSnapshotDriver {
         snapshot_id: &str,
         artifact_path: &Path,
     ) -> Result<(), SnapshotDriverError> {
+        if self.fail_download {
+            return Err(SnapshotDriverError::new(FakeDriverError("download failed")));
+        }
         fs::create_dir_all(artifact_path)?;
         fs::write(
             artifact_path.join("snapshot.txt"),

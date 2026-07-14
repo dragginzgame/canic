@@ -11,19 +11,33 @@ use flate2::{Compression, GzBuilder};
 // Apply `ic-wasm shrink` when available; absence of the optional tool is not
 // fatal, but execution failures are surfaced because they usually mean bad IO.
 pub fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    maybe_shrink_wasm_artifact_with_command("ic-wasm", wasm_path)
+}
+
+fn maybe_shrink_wasm_artifact_with_command(
+    command_name: &str,
+    wasm_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
-    match Command::new("ic-wasm")
+    match Command::new(command_name)
         .arg(wasm_path)
         .arg("-o")
         .arg(&shrunk_path)
         .arg("shrink")
-        .status()
+        .output()
     {
-        Ok(status) if status.success() => {
+        Ok(output) if output.status.success() => {
             fs::rename(shrunk_path, wasm_path)?;
         }
-        Ok(_) => {
+        Ok(output) => {
             let _ = fs::remove_file(shrunk_path);
+            return Err(format!(
+                "ic-wasm shrink failed for {} with status {}: {}",
+                wasm_path.display(),
+                output.status,
+                String::from_utf8_lossy(&output.stderr).trim()
+            )
+            .into());
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => {

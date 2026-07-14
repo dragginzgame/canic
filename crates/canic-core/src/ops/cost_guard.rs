@@ -213,18 +213,35 @@ impl CostGuardOps {
     ///
     /// Commit both quota and cycle reservation intents after the protected operation succeeds.
     pub fn complete(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {
-        IntentStoreOps::commit_at(permit.quota_intent_id, now_secs)?;
-        IntentStoreOps::commit_at(permit.reservation_id, now_secs)?;
-        Ok(())
+        IntentStoreOps::commit_pair_at(permit.quota_intent_id, permit.reservation_id, now_secs)
     }
 
     /// recover
     ///
     /// Commit quota while releasing cycle reservation after uncertain external effects.
     pub fn recover(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {
-        IntentStoreOps::commit_at(permit.quota_intent_id, now_secs)?;
-        let _ = IntentStoreOps::abort_intent_if_pending(permit.reservation_id)?;
-        Ok(())
+        IntentStoreOps::commit_and_abort_pending_pair_at(
+            permit.quota_intent_id,
+            permit.reservation_id,
+            now_secs,
+        )
+    }
+
+    /// Recover a failed protected operation and retain any settlement failure
+    /// as diagnostic context on the original typed error.
+    #[must_use]
+    pub fn recover_after_failure(
+        permit: &CostGuardPermit,
+        now_secs: u64,
+        error: InternalError,
+    ) -> InternalError {
+        match Self::recover(permit, now_secs) {
+            Ok(()) => error,
+            Err(recovery_error) => error.with_diagnostic_context(format!(
+                "cost guard recovery failed for reservation {}: {recovery_error}",
+                permit.reservation_id
+            )),
+        }
     }
 
     /// abort
@@ -430,6 +447,65 @@ mod tests {
         assert_eq!(
             IntentStoreOps::expirable_pending_total().expect("pending"),
             0
+        );
+    }
+
+    #[test]
+    fn complete_rejects_pair_without_partial_quota_commit() {
+        reset();
+
+        let permit = CostGuardOps::reserve(request(10)).expect("reservation");
+        IntentStoreOps::abort(permit.reservation_id).expect("abort reservation intent");
+
+        CostGuardOps::complete(&permit, 10)
+            .expect_err("aborted reservation must reject completion");
+
+        assert_eq!(
+            IntentStoreOps::expirable_pending_total().expect("pending"),
+            1
+        );
+        assert!(
+            IntentStoreOps::abort_intent_if_pending(permit.quota_intent_id).expect("quota cleanup")
+        );
+    }
+
+    #[test]
+    fn recovery_failure_preserves_original_type_without_partial_settlement() {
+        reset();
+
+        let permit = CostGuardOps::reserve(request(10)).expect("reservation");
+        IntentStoreOps::abort(permit.quota_intent_id).expect("abort quota intent");
+        let original = InternalError::resource_exhausted("protected operation failed");
+
+        let error = CostGuardOps::recover_after_failure(&permit, 10, original);
+
+        assert!(error.is_public_resource_exhausted());
+        assert_eq!(
+            IntentStoreOps::expirable_pending_total().expect("pending"),
+            1
+        );
+        assert!(
+            IntentStoreOps::abort_intent_if_pending(permit.reservation_id)
+                .expect("reservation cleanup")
+        );
+    }
+
+    #[test]
+    fn recovery_commits_quota_and_releases_reservation_together() {
+        reset();
+
+        let permit = CostGuardOps::reserve(request(10)).expect("reservation");
+
+        CostGuardOps::recover(&permit, 10).expect("recover cost guard");
+
+        assert_eq!(
+            IntentStoreOps::expirable_pending_total().expect("pending"),
+            0
+        );
+        IntentStoreOps::commit_at(permit.quota_intent_id, 10).expect("quota intent is committed");
+        assert!(
+            !IntentStoreOps::abort_intent_if_pending(permit.reservation_id)
+                .expect("reservation is terminal")
         );
     }
 
