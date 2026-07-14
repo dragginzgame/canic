@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.91.md](docs/changelog/0.91.md)
 
+- `0.91.3` bounds the audit archive to primary reports and comparison
+  baselines, removes 1,768 redundant generated artifacts, and updates audit
+  generators to avoid recreating duplicate exports.
+
 - `0.91.2` is potentially breaking: it updates allocation governance to
   `ic-memory 0.11.1`, requiring destructive reinstall from 0.10.x state, and
   rejects unsafe release-set artifact paths during manifest admission.

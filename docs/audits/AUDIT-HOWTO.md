@@ -2,12 +2,17 @@
 
 This document defines how to run and store architecture audits under `docs/audits/`.
 
-## 0. Folder Structure (Canonical)
+## 0. Folder Structure and Ownership
 
 ```text
 docs/audits/
+├─ README.md
 ├─ AUDIT-HOWTO.md
 ├─ META-AUDIT.md
+├─ modular/
+│  ├─ README.md
+│  ├─ module-surface-hardening.md
+│  └─ module-cleanup-runner.md
 ├─ recurring/
 │  ├─ README.md
 │  ├─ invariants/
@@ -16,13 +21,21 @@ docs/audits/
 │  └─ system/
 │     ├─ README.md
 │     └─ <focus>.md
+├─ release-lines/
+│  ├─ README.md
+│  └─ <line>-closeout.md
 └─ reports/
+   ├─ README.md
    └─ YYYY-MM/
       ├─ summary.md
       └─ YYYY-MM-DD/
          ├─ <scope>.md
          └─ summary.md
 ```
+
+`0.83-technical-debt/` is a retained historical release-specific ledger. Do
+not create new top-level release directories beside it; use `release-lines/`
+or the dated report layout.
 
 ## 1. Audit Types
 
@@ -56,6 +69,34 @@ Use these file patterns:
 - Same-day reruns for a scope: `<scope>-2.md`, `<scope>-3.md`, ...
 - Required report directory: `docs/audits/reports/YYYY-MM/YYYY-MM-DD/`
 - Required month summary: `docs/audits/reports/YYYY-MM/summary.md`
+
+## 2.1 Generated Artifact Discipline
+
+The Markdown report is the primary audit artifact. Retain generated evidence
+only when it is necessary to reproduce a finding or compare a future run.
+
+For new runs:
+
+- Store supporting files under
+  `docs/audits/reports/YYYY-MM/YYYY-MM-DD/artifacts/<scope>/`.
+- Name every retained artifact or artifact directory in the owning report and
+  state why the report summary is insufficient by itself.
+- Prefer one compact machine-readable representation. Do not retain the same
+  evidence as parallel text, JSON, CSV, TSV, and log files merely because a
+  tool emitted them.
+- Do not retain build products, complete command transcripts, transient retry
+  logs, package caches, or outputs that can be reproduced cheaply from the
+  recorded command and code snapshot.
+- A same-day rerun may reference unchanged baseline artifacts. Retain new raw
+  output only when it supplies new evidence needed by the rerun.
+- Keep artifacts out of month roots, recurring definitions, modular playbooks,
+  and release-line directories.
+
+Historical primary reports remain append-only. Generated evidence may be
+pruned when it is reproducible or duplicates evidence already preserved in the
+owning Markdown report and compact machine-readable baseline. Pruning must not
+remove the only source for a finding, comparison, or typed diagnostic, and it
+must leave no broken report links.
 
 ## 3. Audit Execution Discipline
 
@@ -150,12 +191,21 @@ Month `summary.md` is append/update within that month only; never rewrite prior 
 
 ## 5. History Preservation Rule
 
-Audit history is append-only.
+Primary audit history is append-only.
 
 Required:
-- No audit definition or report artifact may be deleted.
+
+- Do not delete or rewrite historical Markdown reports to change their
+  findings or conclusions.
+- Keep compact machine-readable data used by retained baseline comparisons.
+- Generated artifacts may be deleted when they are reproducible, obsolete, or
+  duplicate retained report content. Update the owning report or archive note
+  so no link claims that a deleted artifact remains available.
+- Never delete the only retained evidence for a finding, comparison, or
+  diagnostic.
 - Existing historical reports must remain accessible.
-- If a relocation or rename collides with an existing filename, preserve the older artifact as `*_legacy.md`.
+- If a relocation or rename collides with an existing filename, preserve the
+  older Markdown report as `*_legacy.md`.
 
 ## 6. Required Governance Files
 

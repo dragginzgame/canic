@@ -29,13 +29,6 @@
 - Retained size: `1634931`
 - Shallow size: `231050`
 
-## Artifacts
+## Retained Evidence
 
-- [test.size-report.json](test.size-report.json)
-- [test.built.ic-wasm-info.txt](test.built.ic-wasm-info.txt)
-- [test.shrunk.ic-wasm-info.txt](test.shrunk.ic-wasm-info.txt)
-- [test.twiggy-top.txt](test.twiggy-top.txt)
-- [test.twiggy-top.csv](test.twiggy-top.csv)
-- [test.twiggy-retained.csv](test.twiggy-retained.csv)
-- [test.twiggy-dominators.txt](test.twiggy-dominators.txt)
-- [test.twiggy-monos.txt](test.twiggy-monos.txt)
+The summarized metrics above are the retained historical evidence. Raw per-canister tool output was pruned after extraction because it duplicated this detail report and the aggregate run artifacts.

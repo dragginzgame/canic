@@ -705,10 +705,12 @@ Required capture artifacts:
 
 - `scenario-manifest.json`
 - `perf-rows.tsv` or `perf-rows.json`
-- `flow-checkpoints.log`
 - `verification-readout.md`
 - `method.json`
 - `environment.json`
+
+The primary Markdown report embeds the normalized endpoint matrix and current
+checkpoint scan. Do not emit duplicate TSV or log copies of those sections.
 
 The report may additionally attach raw current-transport metrics responses, but
 those are supporting artifacts, not the audit authority.

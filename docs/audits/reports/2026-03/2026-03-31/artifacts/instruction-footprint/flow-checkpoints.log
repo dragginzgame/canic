@@ -1,1 +1,0 @@
-crates/canic/tests/instruction_audit.rs:611:if line.contains("perf!(") {
