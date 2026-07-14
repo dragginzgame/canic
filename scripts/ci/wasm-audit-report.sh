@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-METHOD_TAG="Method V2"
+METHOD_ID="CANIC-WASM-001"
+METHOD_VERSION="1"
+METHOD_TAG="$METHOD_ID/v$METHOD_VERSION"
 AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
 DEFAULT_PROFILE="release"
@@ -10,6 +12,40 @@ DEFAULT_PROFILE="release"
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 source "$ROOT_DIR/scripts/ci/require_icp.sh"
+
+GIT_DIR="$(cd "$(git rev-parse --git-dir)" && pwd)"
+GIT_COMMON_DIR="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+if [ "$GIT_DIR" = "$GIT_COMMON_DIR" ]; then
+    echo "wasm audit requires a disposable linked Git worktree" >&2
+    exit 2
+fi
+if [ -n "$(git status --porcelain=v1 --untracked-files=all)" ]; then
+    echo "wasm audit requires a clean disposable worktree" >&2
+    exit 2
+fi
+if [ "${ICP_ENVIRONMENT:-local}" = "ic" ]; then
+    echo "wasm audit must not run against the ic environment" >&2
+    exit 2
+fi
+
+RUN_TMP="$(mktemp -d)"
+cleanup() {
+    rm -rf "$RUN_TMP"
+}
+trap cleanup EXIT
+export CARGO_TARGET_DIR="${CANIC_AUDIT_CARGO_TARGET_DIR:-$RUN_TMP/target}"
+export CARGO_NET_OFFLINE="true"
+METHOD_FINGERPRINT="$(
+    sha256sum \
+        "$ROOT_DIR/$DEFINITION_PATH" \
+        "$ROOT_DIR/scripts/ci/wasm-audit-report.sh" \
+        "$ROOT_DIR/scripts/ci/list-config-canisters.sh" \
+        "$ROOT_DIR/scripts/ci/require_icp.sh" \
+        "$ROOT_DIR/crates/canic-host/examples/build_artifact.rs" \
+    | sort -k2 \
+    | sha256sum \
+    | awk '{print $1}'
+)"
 
 TEST_FLEET_CONFIG="fleets/test/canic.toml"
 TEST_FLEET_ROOT="$(dirname "$TEST_FLEET_CONFIG")"
@@ -52,6 +88,14 @@ declare -i DEBUG_CAPTURED=0
 
 has_cmd() {
     command -v "$1" >/dev/null 2>&1
+}
+
+tool_version() {
+    if has_cmd "$1"; then
+        "$1" --version 2>&1 | head -n 1
+    else
+        printf 'unavailable'
+    fi
 }
 
 record_verification() {
@@ -278,7 +322,7 @@ ensure_raw_canister() {
     mkdir -p ".icp/local/canisters/$canister"
     cargo build --target wasm32-unknown-unknown -p "$package_name" $CARGO_PROFILE_FLAG --locked
 
-    local source_wasm="target/wasm32-unknown-unknown/$PROFILE_DIR/$package_target.wasm"
+    local source_wasm="$CARGO_TARGET_DIR/wasm32-unknown-unknown/$PROFILE_DIR/$package_target.wasm"
     local raw_wasm="$CACHE_RAW_DIR/$canister.wasm"
     local raw_gz="$CACHE_RAW_DIR/$canister.wasm.gz"
 
@@ -307,7 +351,7 @@ ensure_debug_raw_canister() {
 
     cargo build --target wasm32-unknown-unknown -p "$package_name" --locked
 
-    local source_wasm="target/wasm32-unknown-unknown/debug/$package_target.wasm"
+    local source_wasm="$CARGO_TARGET_DIR/wasm32-unknown-unknown/debug/$package_target.wasm"
     local raw_wasm="$DEBUG_CACHE_RAW_DIR/$canister.wasm"
     local raw_gz="$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz"
 
@@ -485,45 +529,10 @@ write_per_canister_markdown() {
 ## Retained Evidence
 
 The summarized metrics above are the retained evidence. Raw \`ic-wasm info\`
-and \`twiggy\` output is transient analysis input; aggregate data is retained in
-\`size-report.json\` and \`size-metrics.tsv\`.
+and \`twiggy\` output is transient analysis input. Canonical machine-readable
+data is retained once in \`size-metrics.tsv\`; \`evidence-manifest.yml\` binds every
+retained per-run artifact to the run.
 EOF
-}
-
-write_aggregate_json() {
-    local output="$1"
-    local first=1
-    local canister
-
-    {
-        printf '{\n'
-        printf '  "scope": "%s",\n' "$AUDIT_SLUG"
-        printf '  "profile": "%s",\n' "$PROFILE_NAME"
-        printf '  "canisters": [\n'
-        for canister in "${CANISTERS[@]}"; do
-            if [ "$first" -eq 0 ]; then
-                printf ',\n'
-            fi
-            first=0
-            printf '    {\n'
-            printf '      "canister": "%s",\n' "$canister"
-            printf '      "kind": "%s",\n' "${CANISTER_KIND[$canister]}"
-            printf '      "built_wasm_bytes": %s,\n' "${BUILT_WASM_BYTES[$canister]}"
-            printf '      "built_wasm_gz_bytes": %s,\n' "${BUILT_WASM_GZ_BYTES[$canister]}"
-            printf '      "shrunk_wasm_bytes": %s,\n' "${SHRUNK_WASM_BYTES[$canister]}"
-            printf '      "shrunk_wasm_gz_bytes": %s,\n' "${SHRUNK_WASM_GZ_BYTES[$canister]}"
-            printf '      "debug_built_wasm_bytes": %s,\n' "${DEBUG_BUILT_WASM_BYTES[$canister]}"
-            printf '      "debug_built_wasm_gz_bytes": %s,\n' "${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}"
-            printf '      "debug_vs_profile_delta_bytes": "%s",\n' "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}"
-            printf '      "debug_vs_profile_delta_percent": "%s",\n' "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}"
-            printf '      "shrink_delta_bytes": %s,\n' "${SHRINK_DELTA_BYTES[$canister]}"
-            printf '      "shrink_delta_percent": %s,\n' "${SHRINK_DELTA_PCT[$canister]}"
-            printf '      "baseline_delta_bytes": "%s"\n' "${BASELINE_DELTA_BYTES[$canister]}"
-            printf '    }'
-        done
-        printf '\n  ]\n'
-        printf '}\n'
-    } >"$output"
 }
 
 profile_command_note() {
@@ -662,13 +671,13 @@ normalize_branch() {
 }
 
 normalize_commit() {
-    git rev-parse --short HEAD 2>/dev/null || printf 'N/A'
+    git rev-parse HEAD 2>/dev/null || printf 'N/A'
 }
 
 render_report() {
     local report_path="$1"
     local checklist_artifacts
-    local checklist_json
+    local checklist_metrics
     local checklist_top
     local checklist_dominators
     local checklist_monos
@@ -679,7 +688,7 @@ render_report() {
     local canister
 
     checklist_artifacts="PASS"
-    checklist_json="PASS"
+    checklist_metrics="PASS"
     checklist_top="PASS"
     checklist_dominators="PASS"
     checklist_monos="PASS"
@@ -714,12 +723,18 @@ render_report() {
 - Compared baseline report path: \`$BASELINE_PATH\`
 - Code snapshot identifier: \`$COMMIT\`
 - Method tag/version: \`$METHOD_TAG\`
+- Audit method ID: \`$METHOD_ID\`
+- Audit method version: \`$METHOD_VERSION\`
+- Audit method fingerprint: \`$METHOD_FINGERPRINT\`
 - Comparability status: \`$COMPARABILITY\`
 - Auditor: \`codex\`
 - Run timestamp (UTC): \`$RUN_TIMESTAMP\`
 - Branch: \`$BRANCH\`
 - Worktree: \`$WORKTREE\`
 - Profile: \`$PROFILE_NAME\`
+- Environment class: \`disposable linked Git worktree\`
+- Cargo network mode: \`offline\`
+- Cargo target isolation: \`temporary CARGO_TARGET_DIR\`
 - Target canisters in scope: $(format_canister_list)
 - Analysis artifact note: \`twiggy\` ran against cached raw Cargo wasm to preserve readable symbol names; built/shrunk byte metrics still use the canonical built and \`icp\`-shrunk artifacts.
 
@@ -727,14 +742,15 @@ render_report() {
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Wasm artifacts captured for scope | $checklist_artifacts | Cached raw artifacts under \`artifacts/wasm-size/$PROFILE_NAME/raw/\` and shrunk artifacts under \`artifacts/wasm-size/$PROFILE_NAME/shrunk/\` were recorded for $(format_canister_list). |
-| Artifact sizes recorded in machine-readable artifact | $checklist_json | [size-report.json]($ARTIFACT_LINK_PREFIX/size-report.json) and [size-metrics.tsv]($ARTIFACT_LINK_PREFIX/size-metrics.tsv) retain aggregate and baseline data. |
+| Wasm artifacts captured for scope | $checklist_artifacts | Raw and shrunk build artifacts were analyzed from the isolated temporary cache for $(format_canister_list); only summarized evidence is retained. |
+| Artifact sizes recorded in machine-readable artifact | $checklist_metrics | [size-metrics.tsv]($ARTIFACT_LINK_PREFIX/size-metrics.tsv) is the canonical aggregate and baseline data. |
+| Retained evidence integrity recorded | PASS | [evidence-manifest.yml]($ARTIFACT_LINK_PREFIX/evidence-manifest.yml) records run identity, retention/redaction, tool versions, and SHA-256 hashes for every retained artifact. |
 | Twiggy top analyzed | $checklist_top | Offender and retained-size summaries are retained in the per-canister detail reports when \`twiggy\` is available. |
 | Twiggy dominators analyzed | $checklist_dominators | Retained-size ownership is analyzed transiently and summarized in the report. |
 | Twiggy monos analyzed | $checklist_monos | Generic-bloat analysis runs transiently; the report retains the resulting hotspot diagnosis. |
 | Baseline path selected by daily baseline discipline | $checklist_baseline | Current run stem is \`$SCOPE_STEM\`; baseline path resolves to \`$BASELINE_PATH\`. |
 | Size deltas versus baseline recorded when baseline exists | $checklist_delta | $( [ "$BASELINE_PATH" = "N/A" ] && printf 'First run of day; baseline deltas are `N/A`.' || printf 'Baseline deltas were calculated from `%s`.' "$BASELINE_PATH" ) |
-| \`wasm-debug\` built artifacts captured | $checklist_debug | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug raw artifacts under `artifacts/wasm-size/wasm-debug/raw/` were recorded for %s.' "$(format_canister_list)"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
+| \`wasm-debug\` built artifacts captured | $checklist_debug | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug raw artifacts were analyzed from the isolated temporary cache for %s.' "$(format_canister_list)"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
 | Debug-vs-audit size deltas recorded | $checklist_debug_delta | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug-vs-`%s` built wasm deltas were recorded in the report and machine-readable artifacts.' "$PROFILE_NAME"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
 | Verification readout captured | PASS | Command outcomes are recorded in the Verification Readout section. |
 
@@ -951,7 +967,8 @@ EOF
 
 - [$SCOPE_STEM.md]($REPORT_LINK_PREFIX/$SCOPE_STEM.md)
 - [size-summary.md]($ARTIFACT_LINK_PREFIX/size-summary.md)
-- [size-report.json]($ARTIFACT_LINK_PREFIX/size-report.json)
+- [size-metrics.tsv]($ARTIFACT_LINK_PREFIX/size-metrics.tsv)
+- [evidence-manifest.yml]($ARTIFACT_LINK_PREFIX/evidence-manifest.yml)
 EOF
 
     for canister in "${CANISTERS[@]}"; do
@@ -981,11 +998,12 @@ fi
 REPORT_LINK_PREFIX="."
 ARTIFACT_LINK_PREFIX="artifacts/$SCOPE_STEM"
 
-CACHE_ROOT="artifacts/wasm-size/$PROFILE_NAME"
+CACHE_BASE="${WASM_AUDIT_CACHE_ROOT:-$RUN_TMP/cache}"
+CACHE_ROOT="$CACHE_BASE/$PROFILE_NAME"
 CACHE_RAW_DIR="$CACHE_ROOT/raw"
 CACHE_SHRUNK_DIR="$CACHE_ROOT/shrunk"
 CACHE_ANALYSIS_DIR="$CACHE_ROOT/analysis"
-DEBUG_CACHE_ROOT="artifacts/wasm-size/wasm-debug"
+DEBUG_CACHE_ROOT="$CACHE_BASE/wasm-debug"
 DEBUG_CACHE_RAW_DIR="$DEBUG_CACHE_ROOT/raw"
 mkdir -p "$CACHE_ROOT" "$CACHE_RAW_DIR" "$CACHE_SHRUNK_DIR" "$CACHE_ANALYSIS_DIR"
 
@@ -1189,7 +1207,6 @@ else
     record_verification "baseline comparison" "BLOCKED" "first run of day; no baseline comparison available"
 fi
 
-write_aggregate_json "$ARTIFACTS_DIR/size-report.json"
 run_top_summary "$ARTIFACTS_DIR/size-summary.md"
 
 for canister in "${CANISTERS[@]}"; do
@@ -1198,5 +1215,48 @@ done
 
 determine_risk_score
 render_report "$REPORT_PATH"
+
+baseline_identity="$BASELINE_PATH"
+if [ "$BASELINE_PATH" != "N/A" ] && [ -f "$BASELINE_PATH" ]; then
+    baseline_identity="$BASELINE_PATH@sha256:$(sha256sum "$BASELINE_PATH" | awk '{print $1}')"
+fi
+completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+retained_hashes="$(
+    {
+        printf '%s\n' "$REPORT_PATH"
+        find "$ARTIFACTS_DIR" -maxdepth 1 -type f ! -name evidence-manifest.yml -print
+    } | sort | xargs -r sha256sum
+)"
+
+(
+    cd "$ARTIFACTS_DIR"
+    {
+        printf 'command: "bash scripts/ci/wasm-audit-report.sh"\n'
+        printf 'working_directory: "repository_root"\n'
+        printf 'exit_code: 0\n'
+        printf 'stdout_path: "not_retained"\n'
+        printf 'stderr_path: "not_retained"\n'
+        printf 'baseline_identity: "%s"\n' "$baseline_identity"
+        printf 'method_identity: "%s/v%s@sha256:%s"\n' "$METHOD_ID" "$METHOD_VERSION" "$METHOD_FINGERPRINT"
+        printf 'tool_versions:\n'
+        printf '  cargo: "%s"\n' "$(tool_version cargo)"
+        printf '  rustc: "%s"\n' "$(tool_version rustc)"
+        printf '  icp: "%s"\n' "$(tool_version icp)"
+        printf '  ic-wasm: "%s"\n' "$(tool_version ic-wasm)"
+        printf '  twiggy: "%s"\n' "$(tool_version twiggy)"
+        printf 'timestamps:\n'
+        printf '  started_at: "%s"\n' "$RUN_TIMESTAMP"
+        printf '  completed_at: "%s"\n' "$completed_at"
+        printf 'artifact_hashes:\n'
+        sed 's/^/  /' <<<"$retained_hashes"
+        printf 'retention_class: "primary_markdown_and_compact_supporting_evidence"\n'
+        printf 'redactions_applied: "repository root and disposable cache normalized; no credentials, tokens, or private material retained"\n'
+    } >evidence-manifest.yml
+)
+
+if ! git diff-index --quiet HEAD --; then
+    echo "wasm audit mutated tracked source in its disposable worktree" >&2
+    exit 1
+fi
 
 printf 'wrote %s\n' "$REPORT_PATH"

@@ -8,19 +8,11 @@ GUARD_LABEL="release package/install validation"
 CHECKLIST="$ROOT/docs/operations/release-package-install-validation.md"
 OPERATIONS_INDEX="$ROOT/docs/operations/README.md"
 MATRIX="$ROOT/docs/operations/release-validation-matrix.md"
-DIAGNOSTIC_AUDIT="$ROOT/docs/operations/diagnostic-consistency-audit.md"
-OLD_CHECKLIST_NAME="0.62-release-package"
-OLD_CHECKLIST_NAME="$OLD_CHECKLIST_NAME-install-validation.md"
 
-require_files "$GUARD_LABEL" "$CHECKLIST" "$OPERATIONS_INDEX" "$MATRIX" "$DIAGNOSTIC_AUDIT"
-
-forbid_operations_file "$OLD_CHECKLIST_NAME" "release package/install validation must use the non-versioned operations path"
-forbid_git_reference "$OLD_CHECKLIST_NAME" "release package/install docs must not point at an old versioned checklist path" docs CHANGELOG.md .github scripts
+require_files "$GUARD_LABEL" "$CHECKLIST" "$OPERATIONS_INDEX" "$MATRIX"
 
 require_texts "$OPERATIONS_INDEX" "$GUARD_LABEL" "release-package-install-validation.md"
 require_texts "$MATRIX" "$GUARD_LABEL" "release-package-install-validation.md"
-require_texts "$DIAGNOSTIC_AUDIT" "$GUARD_LABEL" "release-package-install-validation.md"
-
 require_texts "$CHECKLIST" "$GUARD_LABEL" \
     "## Scope" \
     "## Existing Package and Install Gates" \

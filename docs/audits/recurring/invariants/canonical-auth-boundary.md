@@ -1,5 +1,21 @@
 # Audit: Canonical Auth Boundary Invariant
 
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-BOUNDARY-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: authenticated entrypoint convergence and endpoint verifier boundary
+- Kind/profile: security `invariant`
+- Trace mode: `code_trace`; focused rejection execution may use PocketIC
+- Cost/runtime: medium; 30-60 minutes
+- Prerequisites: Git, ripgrep, endpoint macro/access/auth code, generated
+  endpoints, and bypass rejection fixtures
+- False-positive boundary: private token-material/proof helpers are not
+  endpoint authorization when every reachable endpoint still converges on the
+  full boundary
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Ensure every authenticated request enters through one canonical verification boundary.
@@ -76,7 +92,7 @@ Every report generated from this audit must include:
 - Scope
 - Compared baseline report path
 - Code snapshot identifier
-- Method tag/version: `canonical-auth-boundary/current`
+- Method tag/version: `CANIC-AUTH-BOUNDARY-001/v1`
 - Comparability status
 
 ## Audit Checklist

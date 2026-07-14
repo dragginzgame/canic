@@ -1,84 +1,61 @@
 # Release Validation Matrix
 
-This matrix is the durable release-validation inventory for Canic release work.
+This is the active inventory of Canic slice, CI, RC, and final-release gates.
+General command, git, versioning, network, and release authority remains in
+`docs/governance/ci-deployment.md`. Current line state remains in
+`docs/status/current.md`; a dated release-line closeout owns the final verdict.
 
-It documents existing repo checks and when they should run. It is intentionally
-not named after a release line; release numbers belong in changelogs and status
-docs, not in the operational validation entry point.
-
-This matrix is linked from `docs/governance/ci-deployment.md` and guarded by CI
-so it remains the active release-validation reference. The governance document
-remains the general policy for command tiers, git boundaries, versioning,
-release flow, network selection, and automation language rules.
-
-Current release-line context comes from `docs/status/current.md`. This matrix
-originated during the 0.62 release-durability line and remains the
-non-versioned validation reference for current release work.
+There is no standing RC-readiness audit or evergreen no-blocker conclusion.
 
 ## Scope
 
-Release validation distinguishes four checkpoints:
-
 | Checkpoint | Purpose | Required outcome |
 | --- | --- | --- |
-| Slice close-out | Prove the current slice is scoped and clean. | Focused checks pass, diff is understood, and any skipped broader check is recorded. |
-| Implementation close-out | Decide whether no more implementation/docs slices are needed for the current release line. | Required local and focused gates pass; remaining work is RC/full release validation only. |
-| RC promotion | Decide whether the branch is ready for release-candidate handling. | Full local/CI matrix passes or every environment-specific gap is explicitly assigned. |
-| Final release/tag | Validate the published release path. | Tag CI, release package, install, and smoke checks pass where applicable. |
+| Slice closeout | Prove one bounded change and its invariant. | Targeted checks pass; diff and skipped wider gates are recorded. |
+| Implementation closeout | Decide whether current accepted findings/slices are complete. | Required focused gates pass; remaining work is explicitly RC/final validation. |
+| RC promotion | Account for the full maintained local/CI/package/environment matrix. | Every required gate passes or is assigned with a concrete limitation. |
+| Final release/tag | Validate the exact release commit, packages, artifacts, and tag path. | Human-owned release flow and final gates pass. |
 
-Implementation close-out is not the same as RC promotion. A slice can close
-without running every package/install gate, but RC promotion must account for
-the full matrix.
-
-## Scope Declaration
-
-Every release-line slice must state whether it changes:
-
-| Surface | Expected default |
-| --- | --- |
-| Runtime behavior | No |
-| CLI behavior or text output | No |
-| Candid | No |
-| JSON/output formats | No |
-| Cargo.toml or workspace dependency versions | No |
-| Cargo.lock | No |
-| Fixtures, snapshots, generated files, or package artifacts | No |
-
-Any exception must name the concrete RC/release blocker or approved charter item
-that justifies it.
+Each slice declares impact on runtime behavior, CLI/text, Candid, JSON/config,
+stable state, package features, dependencies/lockfile, fixtures/generated
+output, and release artifacts. Unstated impact is not permission to change it.
 
 ## Required Slice Gates
 
-Docs-only release-line slices should use docs-appropriate validation:
+Use the narrowest checks that exercise changed files and behavior.
+
+Documentation/audit-governance slices use applicable guards plus:
 
 ```text
-cargo fmt --all -- --check
-cargo test --locked -p canic --test changelog_governance -- --nocapture
 bash scripts/ci/check-release-validation-matrix.sh
-bash scripts/ci/check-upgrade-state-audit.sh
+bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
-bash scripts/ci/check-diagnostic-consistency-audit.sh
 bash scripts/ci/check-release-package-install-validation.sh
-bash scripts/ci/check-rc-readiness-audit.sh
+cargo test --locked -p canic --test changelog_governance -- --nocapture
 git diff --check
 ```
 
-If a docs-only slice does not touch changelog/status files, the changelog
-governance test may be recorded as not applicable.
+The changelog test applies when changelog/status/governance surfaces change.
+Do not run workspace-wide tests, Clippy, broad PocketIC, package, or deployment
+gates for an ordinary focused slice unless the maintainer explicitly requests
+them or the changed invariant requires them.
 
-Code, test, tooling, or CI slices must also run the narrowest command that
-exercises the touched invariant. If a change is cross-cutting, add the relevant
-package or workspace gate from this matrix.
+Rust code slices add targeted formatting, check/Clippy, and tests for the
+changed package and behavior. Direct Cargo commands use `--locked` when
+supported. Unexplained lockfile churn is a blocker.
 
-Direct Cargo validation commands should use `--locked` when the command
-supports it. Makefile targets keep the repo's existing wrapper behavior.
-Unexplained `Cargo.lock` churn is a blocker.
+Full release validation, not ordinary slice validation, includes:
+
+```text
+cargo fmt --all -- --check
+make fmt-check
+make clippy
+make test
+```
 
 ## Required Local RC Gates
 
-These are the local gates a maintainer should run before RC promotion unless a
-documented environment limitation assigns them to CI or final release
-validation:
+Before RC promotion, the maintainer runs or explicitly assigns:
 
 ```text
 make fmt-check
@@ -87,113 +64,55 @@ make clippy
 make test
 ```
 
-`make test` runs `make test-unit` with the repository's deterministic test
-sequencing. Running `make clippy` separately before `make test` keeps lint
-failures distinct from test failures without recompiling lint-only targets as
-part of the test command.
+The maintainer records environment-specific gaps rather than treating an
+unexecuted gate as a pass.
 
 ## Required CI Gates
 
-The GitHub Actions PR/main matrix currently includes:
+The active workflow is the source of truth. At the current matrix it includes:
 
 ```text
 cargo check --workspace --locked
-bash scripts/ci/check-control-plane-feature-matrix.sh
 bash scripts/ci/run-layering-guards.sh
+bash scripts/ci/check-control-plane-feature-matrix.sh
+bash scripts/ci/check-blob-storage-inventory-gate.sh
+bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
 bash scripts/ci/check-release-validation-matrix.sh
-bash scripts/ci/check-upgrade-state-audit.sh
+bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
-bash scripts/ci/check-diagnostic-consistency-audit.sh
 bash scripts/ci/check-release-package-install-validation.sh
-bash scripts/ci/check-rc-readiness-audit.sh
 make fmt-check
 make clippy
 make test-unit
 cargo build -p canic --examples --locked
-```
-
-The same CI job also installs and checks required helper tools including
-`actionlint`, the ICP CLI, `ic-wasm`, and PocketIC.
-
-The tag workflow currently includes only the release-specific workspace build:
-
-```text
 cargo build --release --workspace --locked
 ```
 
-The governed release flow pushes the release commit to `main` and its tag
-together. The `main` run validates that exact commit with the full matrix above;
-the tag run does not repeat Clippy or the PocketIC suite. CI disables Cargo
-incremental state because runner target directories are disposable.
+CI also validates workflow syntax and installs declared ICP/Wasm helpers. Audit
+definitions must not claim a guard runs in CI unless the current workflow
+contains it.
 
 ## Focused Replay, Auth, And Cost Gates
 
-These gates should be run during implementation close-out and before RC
-promotion when a release line touches or relies on the replay/auth/cost
-boundary:
+When a slice touches or relies on replay/auth/cost behavior, select the exact
+relevant commands, for example:
 
 ```text
 cargo test --locked -p canic-core replay_policy --lib -- --nocapture
 cargo test --locked -p canic-core --test cost_guard_boundary_guard -- --nocapture
 cargo test --locked -p canic-core ops::auth::delegated --lib -- --nocapture
-```
-
-For normal local iteration, these Make aliases group the most common focused
-auth/runtime surfaces without replacing the explicit command inventory above:
-
-```text
 make test-auth
 make test-auth-chain-key
-make test-cli
-make test-runtime-fast
 ```
 
-`test-auth` covers delegated-auth/role-attestation unit and protocol-surface
-checks. `test-auth-chain-key` covers the 0.76 chain-key batch renewal and lazy
-repair unit gates. `test-cli` covers CLI behavior plus public install/reference
-surface checks. `test-runtime-fast` is the named alias for the existing fast
-deterministic workspace lane.
+When stable memory or upgrade behavior changes, add focused ABI/storage and
+PocketIC upgrade tests for that state owner. The current audit method and dated
+report establish compatibility; a literal documentation guard does not.
 
-If the slice touches stable memory, replay receipt state, or upgrade/state
-compatibility, also run the relevant focused stable-state gates:
-
-```text
-bash scripts/ci/check-upgrade-state-audit.sh
-cargo test --locked -p canic-core --test stable_memory_abi_guard -- --nocapture
-cargo test --locked -p canic-core storage::stable::replay --lib -- --nocapture
-```
-
-If the slice touches operator recovery wording or retry/runbook expectations,
-also run:
-
-```text
-bash scripts/ci/check-recovery-runbooks.sh
-```
-
-If the slice touches diagnostic wording or public-output impact rules, also
-run:
-
-```text
-bash scripts/ci/check-diagnostic-consistency-audit.sh
-```
-
-If the slice touches package/install validation wording or release artifact
-accounting, also run:
-
-```text
-bash scripts/ci/check-release-package-install-validation.sh
-```
-
-If the slice touches implementation close-out or RC-readiness wording, also
-run:
-
-```text
-bash scripts/ci/check-rc-readiness-audit.sh
-```
+When diagnostics change, assert typed causes internally and exact text, JSON,
+or exit behavior only where it is a documented operator contract.
 
 ## Governance Gates
-
-Changelog and workspace governance checks are:
 
 ```text
 cargo test --locked -p canic --test changelog_governance -- --nocapture
@@ -202,80 +121,68 @@ cargo test --locked -p canic --test release_index_guard -- --nocapture
 cargo test --locked -p canic --test install_script_surface -- --nocapture
 ```
 
-Use `changelog_governance` for any changelog/status/governance slice. Use
-`workspace_manifest`, `release_index_guard`, and `install_script_surface` during
-RC or release-preparation validation, and for focused slices that touch package
-metadata, release index behavior, install URLs, or script/version surfaces.
+Use only the applicable focused governance test during development. Run the
+full relevant set during release preparation or after changing those surfaces.
 
 ## Package And Install Gates
 
-Package and install checks are RC/final-release gates rather than ordinary
-docs-slice gates:
+Package/install validation is RC/final-release work unless the current slice
+changes packaging:
 
 ```text
+make package
 make test-installed-canic-cli
 make test-packaged-downstream-cli
 make test-packaged-downstream-wasm-store
-make package
 ```
 
-These checks exercise installed binaries, packaged downstream crate resolution,
-the special packaged `wasm_store` bootstrap paths, and publishable package
-creation. They may require a clean worktree, local Cargo cache state, or network
-access depending on the environment. If they are not run locally, the RC audit
-must record where they will be run.
+These checks may require a clean worktree, isolated temporary package roots,
+local caches, or authorized network access. A skipped gate records its owner,
+reason, and target environment.
 
 ## Local ICP And Canister Gates
-
-The local ICP/canister gates are environment-specific:
 
 ```text
 make test-fleet-install
 make test-canisters
 ```
 
-Run these before RC promotion when the local ICP CLI, local replica, and
-canister build environment are available. If they are skipped, the RC audit must
-record the reason and identify the CI/manual environment that covers them.
+These are maintainer-owned, environment-specific RC gates. They require the
+named local ICP environment and must never target mainnet as an incidental
+test default.
 
-## Broad Workspace Gates
+## Final Release And Artifact Gates
 
-The broad Cargo equivalents are:
+Final release accounting includes:
 
 ```text
-cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-cargo test --locked --workspace
 cargo build --release --workspace --locked
+make package
 ```
 
-Prefer the Makefile gates for normal local validation because they include the
-repo's wrapper behavior and deterministic workspace test sequencing. Use direct
-Cargo gates when debugging or when CI reports them directly.
+It also records the exact source commit/tree, lockfile/toolchain/features,
+artifact checksums and provenance, package/install probes, supported
+host/target matrix, and any authorized environment-specific validation.
+Versioning, staging, commits, tags, pushes, publish, and deployment remain
+human-owned.
 
 ## Reporting Format
 
-Release-readiness reports should classify each command as:
-
 | Result | Meaning |
 | --- | --- |
-| PASS | Command ran and passed. |
-| FAIL | Command ran and failed; include the failing package/test/target. |
-| SKIPPED | Command was intentionally not run; include the reason and owner. |
-| NOT APPLICABLE | Gate does not apply to the slice surface. |
+| `PASS` | Command ran and passed. |
+| `FAIL` | Command ran and failed; retain the typed or exact command cause. |
+| `BLOCKED` | Required authoritative evidence could not be produced. |
+| `SKIPPED` | A non-required gate was intentionally not run, with reason/owner. |
+| `NOT_APPLICABLE` | A conditional trigger is absent, with evidence. |
 
-Do not treat an unrun broad gate as an implementation blocker for a docs-only
-slice. Do treat it as required accounting before RC promotion.
+Do not translate `BLOCKED`, `SKIPPED`, or unavailable into `PASS`.
 
 ## Related Operation Docs
 
-The package/install gates above are documented in:
-
-- [RC readiness audit](rc-readiness-audit.md)
 - [Release package and install validation](release-package-install-validation.md)
-- [Diagnostic consistency audit](diagnostic-consistency-audit.md)
 - [Recovery and retry runbooks](recovery-retry-runbooks.md)
-- [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
 - [0.56 v1 release probe inventory](0.56-v1-release-probes.md)
 - [Installed CLI smoke](0.56-installed-cli-smoke.md)
 - [Packaged downstream CLI](0.56-packaged-downstream-cli.md)
-- [Packaged wasm store](0.56-packaged-wasm-store.md)
+- [Packaged Wasm store](0.56-packaged-wasm-store.md)

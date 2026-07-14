@@ -1,4 +1,9 @@
-# MODULAR AUDIT - Module Cleanup Runner
+# Finding-Backed Module Cleanup Workflow
+
+This is not an independent audit method and cannot issue a separate audit
+verdict. It may implement only accepted findings from
+`CANIC-MODULE-SURFACE-001/v2` or another named current method. The owning audit
+report remains the evidence authority.
 
 Use this workflow when the user asks to clean up a named Canic module or crate
 using Module Surface Hardening rules.

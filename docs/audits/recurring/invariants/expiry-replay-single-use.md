@@ -1,5 +1,21 @@
 # Audit: Expiry Replay Single-Use Invariant
 
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-REPLAY-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: credential freshness and replay/single-use boundary
+- Kind/profile: security `invariant`
+- Trace mode: `code_trace`; focused rejection and replay execution may use
+  PocketIC
+- Cost/runtime: medium; 30-60 minutes excluding PocketIC fixtures
+- Prerequisites: Git, ripgrep, auth/replay state and policy, stable-state
+  evidence, and expiry/duplicate/conflict fixtures
+- False-positive boundary: bearer-token verification is not domain operation
+  replay protection; command effects must use their owning durable receipt
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Ensure credentials are rejected when stale, replayed, or reused beyond the system's defined freshness rules.

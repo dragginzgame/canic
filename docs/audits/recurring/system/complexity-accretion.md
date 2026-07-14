@@ -1,5 +1,20 @@
 # Audit: Complexity Accretion
 
+## Method Contract
+
+- Audit ID: `CANIC-COMPLEXITY-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: structural branching, decision-axis, and hub complexity trends
+- Kind/profile: `trend` plus manual attribution
+- Trace mode: `code_trace`
+- Cost/runtime: high; 60-120 minutes
+- Prerequisites: Git, ripgrep, GNU find/coreutils, and a method-compatible
+  baseline
+- False-positive boundary: size or fan-in alone is pressure, not a defect;
+  findings require a concrete ownership, correctness, or change-risk link
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Measure conceptual growth, branching pressure, and cognitive load expansion in `canic-core`.

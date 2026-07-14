@@ -1,6 +1,20 @@
 # Audit: Wasm Footprint
 
-Method: `wasm-footprint-v2`
+## Method Contract
+
+- Audit ID: `CANIC-WASM-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: built, shrunk, gzip, and retained-size Wasm measurements
+- Kind/profile: `measured`
+- Trace mode: `execution_trace` in an isolated local build environment
+- Cost/runtime: high; 60-180 minutes depending on roster/profile
+- Prerequisites: Rust/Cargo Wasm target, ICP CLI helpers required by the build,
+  `ic-wasm` where configured, frozen canister roster, isolated `.icp` state,
+  and isolated `CARGO_TARGET_DIR`
+- False-positive boundary: profile/tool/roster drift makes results
+  non-comparable; size change alone is pressure until attributed
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
 ## Purpose
 
@@ -229,7 +243,9 @@ Preferred command:
 Optional controls:
 
 - `WASM_AUDIT_DATE=YYYY-MM-DD` to pin the report day path
-- `WASM_AUDIT_SKIP_BUILD=1` to reuse cached artifacts under `artifacts/wasm-size/`
+- `WASM_AUDIT_SKIP_BUILD=1` to reuse artifacts from the explicitly supplied
+  `WASM_AUDIT_CACHE_ROOT`; the default temporary cache cannot be reused
+- `WASM_AUDIT_CACHE_ROOT=<path>` to provide an isolated disposable cache root
 - `WASM_CANISTER_NAME=<name>` to scope to a single canister
 - `WASM_PROFILE=release|fast|wasm-debug`
 
@@ -237,7 +253,8 @@ Recurring-run rule:
 
 - a normal dated audit run must audit `release`
 - the same dated run must also capture `wasm-debug` built artifacts for profile
-  comparison; `scripts/ci/wasm-audit-report.sh` reports this as `Method V2`
+  comparison; `scripts/ci/wasm-audit-report.sh` reports this as
+  `CANIC-WASM-001/v1`
 - a report that lacks `wasm-debug` comparison must call that out explicitly as `PARTIAL` or `BLOCKED`
 
 Optional scope note:
@@ -260,17 +277,20 @@ Per-run artifact directory:
 
 - `docs/audits/reports/YYYY-MM/YYYY-MM-DD/artifacts/<scope-stem>/`
 
-Transient reusable build cache:
+Transient build cache:
 
-- `artifacts/wasm-size/<profile>/`
+- a temporary directory outside the source tree by default
+- an explicitly supplied disposable `WASM_AUDIT_CACHE_ROOT` when cache reuse is
+  required
 
 Required artifacts for each run:
 
-- aggregated size report JSON (`size-report.json`)
-- compact baseline metrics (`size-metrics.tsv`)
+- canonical compact baseline metrics (`size-metrics.tsv`)
 - aggregated size summary markdown (`size-summary.md`)
 - debug/profile comparison markdown or table artifact when `wasm-debug` is available
 - per-canister detailed markdown (`<canister>.md`)
+- evidence manifest recording the run contract and SHA-256 hashes for every
+  retained run artifact (`evidence-manifest.yml`)
 
 Raw `ic-wasm info` and `twiggy` output is transient analysis input. Extract its
 structure and hotspot evidence into the aggregate and per-canister reports; do

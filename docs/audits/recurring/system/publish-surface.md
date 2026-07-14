@@ -1,5 +1,21 @@
 # Audit: Publish Surface / Package Contract Discipline
 
+## Method Contract
+
+- Audit ID: `CANIC-PUBLISH-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: published package contents, features, docs/examples, and downstream
+  package contract
+- Kind/profile: package invariant plus comparable `trend`
+- Trace mode: `code_trace`; package execution uses an isolated temporary root
+- Cost/runtime: medium/high; 30-90 minutes depending on package gates
+- Prerequisites: Cargo metadata/package support and named package verification
+  scripts; network only when explicitly authorized
+- False-positive boundary: workspace-private items are not published surface
+  unless included, re-exported, or required by a shipped package
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 `Cargo.toml` package posture plus published crate docs, examples, and binary surface
 
 ## Purpose

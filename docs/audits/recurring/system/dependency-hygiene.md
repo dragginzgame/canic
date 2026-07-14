@@ -1,5 +1,22 @@
 # Audit: Dependency Hygiene / Feature / Publish Surface
 
+## Method Contract
+
+- Audit ID: `CANIC-DEPENDENCY-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: Cargo dependency/feature graph, advisories, licenses, and lockfile
+  integrity; `CANIC-PUBLISH-001` owns shipped package contract
+- Kind/profile: dependency invariants plus comparable `trend`
+- Trace mode: `code_trace`; advisory execution may use an explicitly
+  authorized network or recorded current advisory database
+- Cost/runtime: medium; 30-60 minutes excluding dependency downloads
+- Prerequisites: Cargo metadata/tree, lockfile, package metadata, and advisory
+  tooling when the required advisory check runs
+- False-positive boundary: dev/build/target-specific edges are classified by
+  their real compile and publish reach before becoming findings
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 `Cargo.toml` workspace graph plus public support crates where relevant
 
 ## Purpose
@@ -383,8 +400,8 @@ Baseline rule:
 
 * Use the first run of the current day (`<scope>.md`) as `Previous`.
 * If this is the first run of the day, mark `Previous` as `N/A`.
-* For release-cycle trend analysis, `Previous` is the most recent prior
-  comparable run.
+* For release-line trend analysis, compare cumulatively to the frozen product
+  baseline and causally to the immediate parent when validating a fix slice.
 
 Produce:
 
@@ -403,6 +420,34 @@ Rules:
 * deltas must compare only against a comparable baseline
 * if no comparable baseline exists, state `N/A`
 * do not invent trend claims when the prior method differs materially
+
+### STEP 0A — Advisory, License, And Lockfile Integrity
+
+Record the exact lockfile hash and prove that dependency resolution uses the
+checked-in lockfile:
+
+```bash
+sha256sum Cargo.lock
+cargo metadata --locked --format-version 1
+cargo tree --workspace --locked
+git diff --name-status <baseline-commit> -- Cargo.toml Cargo.lock crates canisters fleets
+```
+
+Run an approved advisory database check and an approved transitive license
+check. Record tool version, database/rule identity, network mode, exit status,
+and findings. Network is disabled by default; refreshing an advisory database
+requires named authorization. A stale cached database is reported as stale,
+not current.
+
+Required result rules:
+
+* unexplained lockfile or resolved-graph drift: `FAIL`
+* known vulnerable reachable dependency without an accepted finding/waiver:
+  `FAIL`
+* prohibited or unknown transitive license: `FAIL`
+* unavailable advisory/license tool or database: `BLOCKED`
+* conditional target-only findings: classify their supported-target reach
+  before severity, but retain them in evidence
 
 ---
 

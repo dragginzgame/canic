@@ -2,7 +2,20 @@
 
 `canic-core`
 
-Method: `change-friction-current-root-proof-provisioning`
+## Method Contract
+
+- Audit ID: `CANIC-CHANGE-FRICTION-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: empirical edit blast radius and decision-axis friction
+- Kind/profile: `trend` plus manual attribution
+- Trace mode: `code_trace`
+- Cost/runtime: high; 60-120 minutes for a frozen commit sample
+- Prerequisites: Git history, ripgrep, GNU find/coreutils, and an explicitly
+  selected comparable change sample
+- False-positive boundary: formatting, generated output, and mechanical file
+  movement are excluded unless they change authority or maintained surface
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
 ## Purpose
 

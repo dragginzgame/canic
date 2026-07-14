@@ -17,15 +17,20 @@
   one narrow 0.87 typed-ICP closeout correction and three bounded 0.88
   candidates covering backup durability, CLI file output, and fleet-config
   errors.
+- [2026-07-14](2026-07-14/summary.md): 0.92 audit-system inventory and
+  hardening; six P1 method/governance findings have validated corrections,
+  with immutable freeze and product-tree review pending the maintainer commit.
 
 ## Month Status
 
 Partial. Current audit artifacts are indexed and targeted verification passed.
-The audits intentionally omit full tests, PocketIC, deployment, and broad Wasm
-rebuilds under repository policy.
+The 0.92 audit-system inventory and prepared Phase B corrections are complete.
+The method set is not yet committed/frozen, so the holistic product baseline
+has not started. The audits intentionally omit full tests, PocketIC,
+deployment, and broad Wasm rebuilds under repository policy.
 
 ## Carry-Forward Follow-up
 
-1. Keep root Wasm comparisons separate from leaf/shared-runtime comparisons.
-2. Execute only the three slices accepted by the bounded 0.88 design; do not
-   expand them into cross-crate filesystem or global error frameworks.
+1. Commit and freeze the corrected methods, review the committed product-tree
+   delta, then mark the six audit-system findings fixed and begin Phase C.
+2. Keep root Wasm comparisons separate from leaf/shared-runtime comparisons.

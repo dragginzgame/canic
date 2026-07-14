@@ -1,6 +1,20 @@
 # Audit: Auth Abstraction Equivalence Invariant
 
-Method: `auth-abstraction-equivalence-v2`
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-EQUIVALENCE-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: equivalence between supported auth abstractions and generated paths
+- Kind/profile: security `invariant`
+- Trace mode: `code_trace`; focused execution when generated/manual paths
+  cannot be proven statically
+- Cost/runtime: medium; 30-60 minutes
+- Prerequisites: Git, ripgrep, macro expansion/source, facade/runtime paths,
+  and equivalent positive/rejection fixtures
+- False-positive boundary: deliberately different credential types need equal
+  required properties, not byte-identical implementation
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
 ## Purpose
 

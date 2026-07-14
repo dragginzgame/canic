@@ -1,6 +1,19 @@
 # Audit: Capability Scope Enforcement Invariant
 
-Method: `capability-scope-enforcement-current`
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-CAPABILITY-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: capability, attestation, and local-role scope enforcement
+- Kind/profile: security `invariant`
+- Trace mode: `code_trace`; focused rejection execution may use PocketIC
+- Cost/runtime: medium; 30-60 minutes
+- Prerequisites: Git, ripgrep, capability/access/attestation code, and
+  missing/wrong-scope rejection fixtures
+- False-positive boundary: declared or transported scope that is not trusted
+  by an execution decision is not an enforcement surface
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
 ## Purpose
 

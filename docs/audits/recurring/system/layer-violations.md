@@ -1,5 +1,22 @@
 # Audit: Layer Boundary
 
+## Method Contract
+
+- Audit ID: `CANIC-LAYERING-001`
+- Method version: `1`
+- Disposition: `revise`; absorbs the retired access-, ops-, and workflow-purity
+  definitions
+- Owner: endpoint, access, workflow, policy, ops, model, DTO, record, view,
+  conversion, and side-effect placement
+- Kind/profile: architecture `invariant` plus named manual responsibility review
+- Trace mode: `code_trace`
+- Cost/runtime: high; 45-90 minutes
+- Prerequisites: Git, ripgrep, GNU find/awk, Cargo metadata, and
+  `scripts/ci/run-layering-guards.sh`
+- False-positive boundary: lexical matches are discovery only; a finding must
+  prove reachable responsibility or forbidden dependency ownership
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Detect architectural drift against the Canic layering contract, with emphasis

@@ -1,5 +1,21 @@
 # Audit: Token Trust Chain Invariant
 
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-TRUST-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: configured root, issuer proof, canister signature, and token trust
+  chain
+- Kind/profile: security `invariant`
+- Trace mode: `code_trace`; focused invalid-proof execution may use PocketIC
+- Cost/runtime: medium/high; 30-90 minutes excluding PocketIC fixtures
+- Prerequisites: Git, ripgrep, root/issuer/token proof code, trust config,
+  generated interfaces, and invalid/mismatched/expired proof fixtures
+- False-positive boundary: configured trust anchors and verified proof links
+  are authoritative; convenient topology or caller assumptions are not
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Ensure delegated-token acceptance requires a complete verified chain from the

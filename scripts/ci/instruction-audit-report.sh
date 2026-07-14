@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+ORIGINAL_ARGS=("$@")
+
+METHOD_ID="CANIC-INSTRUCTION-001"
+METHOD_VERSION="1"
+DEFINITION_PATH="docs/audits/recurring/system/instruction-footprint.md"
 
 usage() {
   cat <<'EOF'
@@ -138,20 +143,13 @@ REPORT_PATH="$DAY_DIR/$RUN_STEM.md"
 ARTIFACTS_DIR="$DAY_DIR/artifacts/$RUN_STEM"
 mkdir -p "$ARTIFACTS_DIR"
 
-BASELINE_REPORT="$(
-  find docs/audits/reports \
-    -type f \
-    \( -name 'instruction-footprint.md' -o -name 'instruction-footprint-[0-9]*.md' \) \
-    ! -path "${REPORT_PATH#$ROOT/}" \
-    -print \
-    | sort -V \
-    | tail -n 1
-)"
-if [[ -z "$BASELINE_REPORT" ]]; then
+if [[ "$RUN_INDEX" -eq 1 ]]; then
   BASELINE_REPORT="N/A"
+else
+  BASELINE_REPORT="docs/audits/reports/$MONTH_DIR/$DATE_UTC/instruction-footprint.md"
 fi
 
-CODE_SNAPSHOT="$(git rev-parse --short HEAD)"
+CODE_SNAPSHOT="$(git rev-parse HEAD)"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if [[ -n "$(git status --short)" ]]; then
   WORKTREE="dirty"
@@ -159,6 +157,50 @@ else
   WORKTREE="clean"
 fi
 RUN_TIMESTAMP_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+METHOD_FINGERPRINT="$(
+  sha256sum \
+    "$ROOT/$DEFINITION_PATH" \
+    "$ROOT/scripts/ci/instruction-audit-report.sh" \
+    "$ROOT/crates/canic-tests/tests/instruction_audit.rs" \
+    "$ROOT"/crates/canic-tests/tests/instruction_audit_support/*.rs \
+    "$ROOT"/crates/canic-tests/tests/instruction_audit_support/estimates/*.rs \
+  | sort -k2 \
+  | sha256sum \
+  | awk '{print $1}'
+)"
+
+RUN_TMP="$(mktemp -d)"
+mkdir -p "$RUN_TMP/tmp"
+cleanup() {
+  rm -rf "$RUN_TMP"
+}
+trap cleanup EXIT
+
+export CARGO_TARGET_DIR="${CANIC_AUDIT_CARGO_TARGET_DIR:-$RUN_TMP/target}"
+export TMPDIR="$RUN_TMP/tmp"
+
+if [[ "${ICP_ENVIRONMENT:-local}" == "ic" ]]; then
+  echo "error: instruction audit must not run against the ic environment" >&2
+  exit 2
+fi
+
+capture_source_status() {
+  local report_rel="${REPORT_PATH#$ROOT/}"
+  local artifacts_rel="${ARTIFACTS_DIR#$ROOT/}/"
+
+  git status --porcelain=v1 --untracked-files=all \
+    | awk -v report="$report_rel" -v artifacts="$artifacts_rel" '
+        {
+          path = substr($0, 4)
+          if (path == report || index(path, artifacts) == 1) {
+            next
+          }
+          print
+        }
+      '
+}
+
+capture_source_status >"$RUN_TMP/source-before.txt"
 
 export CANIC_INSTRUCTION_AUDIT_REPORT_PATH="$REPORT_PATH"
 export CANIC_INSTRUCTION_AUDIT_ARTIFACTS_DIR="$ARTIFACTS_DIR"
@@ -167,6 +209,9 @@ export CANIC_INSTRUCTION_AUDIT_CODE_SNAPSHOT="$CODE_SNAPSHOT"
 export CANIC_INSTRUCTION_AUDIT_BRANCH="$BRANCH"
 export CANIC_INSTRUCTION_AUDIT_WORKTREE="$WORKTREE"
 export CANIC_INSTRUCTION_AUDIT_TIMESTAMP_UTC="$RUN_TIMESTAMP_UTC"
+export CANIC_INSTRUCTION_AUDIT_METHOD_ID="$METHOD_ID"
+export CANIC_INSTRUCTION_AUDIT_METHOD_VERSION="$METHOD_VERSION"
+export CANIC_INSTRUCTION_AUDIT_METHOD_FINGERPRINT="$METHOD_FINGERPRINT"
 export CANIC_INSTRUCTION_AUDIT_ESTIMATE_EXECUTION_CYCLES="$ESTIMATE_EXECUTION_CYCLES"
 export CANIC_INSTRUCTION_AUDIT_ESTIMATE_NODE_COUNT="$ESTIMATE_NODE_COUNT"
 export CANIC_INSTRUCTION_AUDIT_CYCLES_PER_BILLION_INSTRUCTIONS="$CYCLES_PER_BILLION_INSTRUCTIONS"
@@ -175,5 +220,56 @@ export CANIC_INSTRUCTION_AUDIT_ALLOW_STALE_SUBNET_CATALOG="$ALLOW_STALE_SUBNET_C
 export CANIC_INSTRUCTION_AUDIT_SUBNET_CATALOG_STALE_AFTER="$SUBNET_CATALOG_STALE_AFTER"
 
 echo "Running instruction audit report into $REPORT_PATH"
-cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture
+cargo_status=0
+cargo test --offline --locked -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture || cargo_status=$?
+
+printf -v command_display '%q ' bash scripts/ci/instruction-audit-report.sh "${ORIGINAL_ARGS[@]}"
+command_display="${command_display% }"
+baseline_identity="$BASELINE_REPORT"
+if [[ "$BASELINE_REPORT" != "N/A" && -f "$BASELINE_REPORT" ]]; then
+  baseline_identity="$BASELINE_REPORT@sha256:$(sha256sum "$BASELINE_REPORT" | awk '{print $1}')"
+fi
+completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+retained_hashes="$(
+  {
+    if [[ -f "$REPORT_PATH" ]]; then
+      printf '%s\n' "${REPORT_PATH#$ROOT/}"
+    fi
+    find "${ARTIFACTS_DIR#$ROOT/}" -maxdepth 1 -type f ! -name evidence-manifest.yml -print
+  } | sort | xargs -r sha256sum
+)"
+{
+  printf 'command: "%s"\n' "$command_display"
+  printf 'working_directory: "repository_root"\n'
+  printf 'exit_code: %s\n' "$cargo_status"
+  printf 'stdout_path: "not_retained"\n'
+  printf 'stderr_path: "not_retained"\n'
+  printf 'baseline_identity: "%s"\n' "$baseline_identity"
+  printf 'method_identity: "%s/v%s@sha256:%s"\n' "$METHOD_ID" "$METHOD_VERSION" "$METHOD_FINGERPRINT"
+  printf 'tool_versions:\n'
+  printf '  cargo: "%s"\n' "$(cargo --version)"
+  printf '  rustc: "%s"\n' "$(rustc --version)"
+  printf 'timestamps:\n'
+  printf '  started_at: "%s"\n' "$RUN_TIMESTAMP_UTC"
+  printf '  completed_at: "%s"\n' "$completed_at"
+  printf 'artifact_hashes:\n'
+  if [[ -n "$retained_hashes" ]]; then
+    sed 's/^/  /' <<<"$retained_hashes"
+  else
+    printf '  not_retained\n'
+  fi
+  printf 'retention_class: "primary_markdown_and_compact_supporting_evidence"\n'
+  printf 'redactions_applied: "repository root normalized; no credentials, tokens, or private material retained"\n'
+} >"$ARTIFACTS_DIR/evidence-manifest.yml"
+
+capture_source_status >"$RUN_TMP/source-after.txt"
+if ! diff -u "$RUN_TMP/source-before.txt" "$RUN_TMP/source-after.txt"; then
+  echo "error: instruction audit mutated source outside its report paths" >&2
+  exit 1
+fi
+
+if [[ "$cargo_status" -ne 0 ]]; then
+  exit "$cargo_status"
+fi
+
 echo "Wrote $REPORT_PATH"

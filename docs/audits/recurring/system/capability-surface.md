@@ -1,5 +1,20 @@
 # Audit: Capability Surface
 
+## Method Contract
+
+- Audit ID: `CANIC-CAPABILITY-SURFACE-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: endpoint bundle, generated Candid, and capability exposure surface
+- Kind/profile: hard surface invariant plus comparable `trend`
+- Trace mode: `code_trace`
+- Cost/runtime: medium; 30-60 minutes
+- Prerequisites: Git, ripgrep, current fleet configuration, and generated
+  Candid/interface evidence when surface claims are evaluated
+- False-positive boundary: generated internals and test-only helpers are not
+  public surface unless reachable from a shipped contract
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Track drift in Canic's exposed capability surface across endpoint bundles,
