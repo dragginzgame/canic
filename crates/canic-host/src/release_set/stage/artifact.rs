@@ -50,12 +50,11 @@ pub(in crate::release_set) fn build_release_set_entry(
     })
 }
 
-/// Resolve one manifest artifact path and prove that its canonical target is
-/// contained by the canonical ICP project root.
-pub fn resolve_release_artifact_path(
-    icp_root: &Path,
+/// Validate the lexical path contract shared by manifest admission and
+/// filesystem resolution.
+pub(in crate::release_set) fn validate_release_artifact_relative_path(
     artifact_relative_path: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let relative_path = Path::new(artifact_relative_path);
     if relative_path.as_os_str().is_empty()
         || relative_path
@@ -67,6 +66,18 @@ pub fn resolve_release_artifact_path(
         )
         .into());
     }
+
+    Ok(())
+}
+
+/// Resolve one manifest artifact path and prove that its canonical target is
+/// contained by the canonical ICP project root.
+pub fn resolve_release_artifact_path(
+    icp_root: &Path,
+    artifact_relative_path: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_release_artifact_relative_path(artifact_relative_path)?;
+    let relative_path = Path::new(artifact_relative_path);
 
     let canonical_root = icp_root.canonicalize()?;
     let canonical_artifact = canonical_root.join(relative_path).canonicalize()?;

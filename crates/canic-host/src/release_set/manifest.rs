@@ -5,8 +5,9 @@
 //! Boundary: admits one exact identity and artifact-shape contract for every consumer.
 
 use crate::{
-    canister_build::CurrentCanisterArtifactBuildOutput, durable_io::write_bytes,
-    release_set::build_release_set_entry,
+    canister_build::CurrentCanisterArtifactBuildOutput,
+    durable_io::write_bytes,
+    release_set::{build_release_set_entry, validate_release_artifact_relative_path},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -80,6 +81,8 @@ pub fn validate_root_release_set_manifest(
         if !roles.insert(entry.role.as_str()) {
             return Err(format!("duplicate release-set role: {}", entry.role).into());
         }
+
+        validate_release_artifact_relative_path(&entry.artifact_relative_path)?;
 
         let expected_template_id = format!("embedded:{}", entry.role);
         if entry.template_id != expected_template_id {
@@ -311,6 +314,39 @@ mod tests {
 
         assert!(validate_root_release_set_manifest(&zero_payload).is_err());
         assert!(validate_root_release_set_manifest(&wrong_chunk_size).is_err());
+    }
+
+    #[test]
+    fn release_set_manifest_artifact_shape_rejects_non_relative_paths() {
+        for path in [
+            "",
+            "/tmp/app.wasm.gz",
+            "../app.wasm.gz",
+            "app/../app.wasm.gz",
+            "./app.wasm.gz",
+        ] {
+            let mut manifest = manifest();
+            manifest.entries[0].artifact_relative_path = path.to_string();
+
+            assert!(validate_root_release_set_manifest(&manifest).is_err());
+        }
+    }
+
+    #[test]
+    fn loaded_release_set_manifest_rejects_non_relative_artifact_path() {
+        let root = temp_dir("canic-release-set-manifest-path-admission");
+        let manifest_path = root.join("root.release-set.json");
+        fs::create_dir_all(&root).expect("create temp root");
+        let mut manifest = manifest();
+        manifest.entries[0].artifact_relative_path = "../app.wasm.gz".to_string();
+        fs::write(
+            &manifest_path,
+            serde_json::to_vec_pretty(&manifest).expect("encode manifest"),
+        )
+        .expect("write manifest");
+
+        assert!(load_root_release_set_manifest(&manifest_path).is_err());
+        fs::remove_dir_all(&root).expect("remove temp root");
     }
 
     #[test]

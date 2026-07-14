@@ -31,7 +31,7 @@ pub use paths::{
     root_manifest_path, root_release_set_manifest_path, workspace_manifest_path, workspace_root,
     workspace_root_from,
 };
-use stage::build_release_set_entry;
+use stage::{build_release_set_entry, validate_release_artifact_relative_path};
 pub(crate) use stage::{icp_query_on_network, resolve_release_artifact_path};
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 

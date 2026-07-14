@@ -311,7 +311,7 @@ mod tests {
     };
 
     #[test]
-    fn commit_slot_response_maps_ic_memory_010_variants_exactly() {
+    fn commit_slot_response_maps_ic_memory_011_variants_exactly() {
         assert_eq!(
             commit_slot_response(CommitSlotDiagnostic::Empty),
             MemoryCommitSlotResponse {

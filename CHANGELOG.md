@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.91.md](docs/changelog/0.91.md)
 
+- `0.91.2` is potentially breaking: it updates allocation governance to
+  `ic-memory 0.11.1`, requiring destructive reinstall from 0.10.x state, and
+  rejects unsafe release-set artifact paths during manifest admission.
+
 - `0.91.1` adds a root-only chain-key issuer-readiness facade so application
   roots can install active delegation proofs immediately after issuer
   install/reinstall without restoring retired proof workflows.

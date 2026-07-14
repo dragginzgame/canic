@@ -15,17 +15,27 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.91.0`.
-- `v0.91.0` is published and points to commit `34384263`.
+- The workspace package version is `0.91.1`.
+- `v0.91.1` is published and points to commit `526f4068`.
 - The current line is documented under
   [0.91 role admission and complete-build manifest publication](../design/0.91-role-admission-and-manifest-publication/0.91-design.md).
 
 ## Current Decision
 
-`0.91.0` is live. The accepted 0.91 design is implemented, and the
+`0.91.1` is live. The accepted 0.91 design is implemented, and the
 [0.91 closeout audit](../audits/reports/2026-07/2026-07-13/0.91-closeout.md)
-passes. Keep post-release work on the 0.91 line bounded to concrete defects,
+passes. The patch adds current-path-only root issuer readiness provisioning
+after install/reinstall without restoring retired delegation-proof APIs.
+Keep post-release work on the 0.91 line bounded to concrete defects,
 dependency maintenance, and focused cleanup; no 0.92 line is assigned.
+
+The 0.91.2 changelog is prepared for a maintenance batch that updates
+`ic-memory` from 0.10.0 to 0.11.1 and makes loaded release-set manifests reject
+lexically unsafe artifact paths at admission instead of deferring rejection
+until staging. The dependency update is a persisted-format hard cut: a
+canister with a 0.10.x protected allocation ledger cannot upgrade in place and
+requires the documented destructive-reinstall dependency closure. No decoder,
+migration, or compatibility path is being added.
 
 Toko mint remains the first planned downstream consumer. Toko developers own
 its request, caller-scoped receipt, evidence validation, retry, cancellation,
@@ -57,6 +67,19 @@ release-set manifest. Filesystem existence is not completion evidence.
 
 Multi-step claim orchestration is deferred to a separately accepted future
 design. It is not reserved for 0.91 or any other numbered line.
+
+## 0.91 Outcome
+
+- `0.91.0` added canonical lowercase snake_case role admission and made normal
+  root release-set manifests prove one current complete build's exact outputs.
+- `0.91.1` added
+  `AuthApi::provision_chain_key_delegation_proof_for_issuer_root` so an
+  application root can establish issuer readiness after install/reinstall
+  through the existing chain-key batch and issuer-install authority.
+- The readiness facade accepts no caller-supplied proof material, adds no
+  generated wire endpoint, and restores no retired proof workflow.
+- Named build environments still resolve through `icp.yaml`; only `local` and
+  `ic` are implicit, and no staging/mainnet aliases exist.
 
 ## 0.90 Outcome
 
@@ -102,6 +125,20 @@ design. It is not reserved for 0.91 or any other numbered line.
   installed-CLI proofs pass against the 0.91.0 package surfaces. Their hard-cut
   command probes now use the maintained `--json` and `--help` forms and assert
   Medic's exit code 1 for blocking drift.
+- The 0.91.1 focused PocketIC proof moves a freshly installed issuer from
+  `Missing` to `Valid` active-proof status with the expected root and issuer
+  bindings through the public root facade.
+- Targeted provisioning tests, public-facade signature coverage, package
+  checks, formatting, diff hygiene, and warning-denied Clippy pass for 0.91.1.
+- For the active `ic-memory 0.11.1` batch, targeted package checks,
+  warning-denied library Clippy, all 13 `canic-core` memory unit tests, the
+  stable-memory ABI guard, four memory protocol-surface tests, changelog
+  governance, formatting, and diff hygiene pass. Canic's application memory
+  keys and IDs remain unchanged.
+- For release-set path admission, all ten manifest-admission/loading tests and
+  all three canonical artifact-path resolution and symlink-containment tests
+  pass, together with targeted `canic-host`/`canic-cli` checks and
+  warning-denied `canic-host` library and test-target Clippy.
 - Targeted `canic-core`, `canic-host`, and `canic-cli` check and Clippy pass.
 - The published 0.90.2 PocketIC proof covers local capacity plus receipt
   creation, replay, conflicts, commit, rollback, terminal replay, released
@@ -116,6 +153,8 @@ design. It is not reserved for 0.91 or any other numbered line.
 
 ## Next Action
 
-Continue only the bounded 0.91 post-release batch recorded under `Unreleased`.
-The package version remains 0.91.0; prepare a patch changelog and change package
-versions only when the maintainer explicitly requests release preparation.
+Review the prepared 0.91.2 changelog with `ic-memory 0.11.1` as a
+destructive-reinstall boundary, not an in-place-upgrade-safe patch. The package
+version remains 0.91.1; the maintainer-owned release flow must perform version
+preparation. Do not assign a 0.92 line or begin deferred multi-step claim
+orchestration without a separately accepted design.
