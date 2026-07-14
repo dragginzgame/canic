@@ -23,6 +23,7 @@ canic-backup = { workspace = true }
 canic-core = { workspace = true }
 canic-host = { workspace = true }
 clap = { workspace = true }
+rustix = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

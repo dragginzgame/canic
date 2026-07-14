@@ -2,6 +2,7 @@ mod operation;
 mod options;
 mod pending;
 mod request;
+mod response;
 
 use crate::{
     cycles::{
@@ -22,6 +23,7 @@ use options::ConvertOptions;
 use request::{
     FABRICATE_MODE_MESSAGE, icp_refill_request_arg, json_output_arg, provisional_top_up_arg,
 };
+use response::decode_icp_refill_response;
 use std::{
     ffi::OsString,
     path::{Path, PathBuf},
@@ -90,7 +92,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         &source.canister_id,
         ICP_REFILL_METHOD,
         &request_arg,
-        json_output_arg(options.json),
+        Some("hex"),
         source_candid_path.as_deref(),
     );
 
@@ -114,11 +116,15 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
             &source.canister_id,
             ICP_REFILL_METHOD,
             &request_arg,
-            json_output_arg(options.json),
+            Some("hex"),
             source_candid_path.as_deref(),
         )
         .map_err(CyclesCommandError::from)?;
-    mark_pending_operation_completed(&root, pending_operation_key.as_deref(), operation_id);
+    let response = decode_icp_refill_response(&output, operation_id)?;
+    if !response.is_resumable() {
+        mark_pending_operation_completed(&root, pending_operation_key.as_deref(), operation_id)?;
+    }
+    let output = response.render(options.json);
     if options.json {
         println!(
             "{}",

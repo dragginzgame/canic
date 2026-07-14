@@ -15,8 +15,8 @@ use crate::{
         storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
     },
     workflow::ic::icp_refill::{
-        IcpRefillWorkflow, RateQueryMode, build_network, configured_rate, current_topup_policy,
-        funding_cooldown_retry_after_secs, icp_refill_policy_rules, in_flight_for_request,
+        IcpRefillWorkflow, RateQueryMode, active_for_request, build_network, configured_rate,
+        current_topup_policy, funding_cooldown_retry_after_secs, icp_refill_policy_rules,
         policy_denied, policy_input, refill_canister_overrides,
     },
 };
@@ -39,7 +39,7 @@ impl IcpRefillWorkflow {
             return Err(policy_denied(IcpRefillPolicyViolation::NotConfigured));
         };
         let canisters = IcpRefillOps::resolve_canisters(
-            build_network(),
+            build_network()?,
             refill_canister_overrides(Some(icp_refill)),
         )?;
         let observed_rate = configured_rate(
@@ -73,9 +73,9 @@ impl IcpRefillWorkflow {
                 hub_cycles.to_u128(),
                 &request,
                 observed_rate,
-                in_flight_for_request(&request),
+                active_for_request(&request),
                 AppStateOps::cycles_funding_enabled(),
-                funding_cooldown_retry_after_secs(&request, now_secs),
+                funding_cooldown_retry_after_secs(&request, now_secs)?,
             ),
         )
         .map_err(policy_denied)?;

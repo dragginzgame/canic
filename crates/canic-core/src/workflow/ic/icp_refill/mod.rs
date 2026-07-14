@@ -22,7 +22,7 @@ use crate::{
         evaluate_manual_refill,
     },
     dto::icp_refill::IcpRefillRequest,
-    ids::BuildNetwork,
+    ids::{BuildNetwork, CanisterRole},
     infra::ic::icp_refill::IcpRefillCanisterOverrides,
     ops::{
         config::ConfigOps,
@@ -105,8 +105,8 @@ struct IcpRefillExecutionContext {
 ///
 /// ManualRefillPreflight
 ///
-/// Cached policy preflight input for manual refill requests.
-/// Owned by workflow and evaluated before mutation or IC calls proceed.
+/// Point-in-time policy preflight input for manual refill requests.
+/// Owned by workflow and rebuilt after asynchronous calls before mutation proceeds.
 ///
 
 struct ManualRefillPreflight {
@@ -116,23 +116,26 @@ struct ManualRefillPreflight {
 }
 
 impl ManualRefillPreflight {
-    fn new(policy: Option<&IcpRefillPolicy>, request: &IcpRefillRequest) -> Self {
+    fn new(
+        policy: Option<&IcpRefillPolicy>,
+        request: &IcpRefillRequest,
+    ) -> Result<Self, InternalError> {
         let input = policy_input(
             0,
             request,
             None,
-            in_flight_for_request(request),
+            active_for_request(request),
             AppStateOps::cycles_funding_enabled(),
-            funding_cooldown_retry_after_secs(request, IcOps::now_secs()),
+            funding_cooldown_retry_after_secs(request, IcOps::now_secs())?,
         );
         let rate_gate_configured = policy_requires_rate(policy);
         let policy = policy.map(icp_refill_policy_rules);
 
-        Self {
+        Ok(Self {
             policy,
             input,
             rate_gate_configured,
-        }
+        })
     }
 
     fn evaluate(&self, observed_xdr_permyriad_per_icp: Option<u64>) -> Result<(), InternalError> {
@@ -166,13 +169,13 @@ async fn prepare_context(
     rate_query_mode: RateQueryMode,
 ) -> Result<IcpRefillExecutionContext, InternalError> {
     let policy = current_icp_refill_policy()?;
-    let preflight = ManualRefillPreflight::new(policy.as_ref(), request);
+    let preflight = ManualRefillPreflight::new(policy.as_ref(), request)?;
     if !preflight.rate_gate_configured {
         preflight.evaluate(None)?;
     }
 
     let canisters = IcpRefillOps::resolve_canisters(
-        build_network(),
+        build_network()?,
         refill_canister_overrides(policy.as_ref()),
     )?;
     let fee = IcpRefillOps::icrc1_fee(canisters.ledger_canister_id).await?;
@@ -181,9 +184,7 @@ async fn prepare_context(
     let xdr_permyriad_per_icp =
         configured_rate(policy.as_ref(), canisters.cmc_canister_id, rate_query_mode).await?;
 
-    if preflight.rate_gate_configured {
-        preflight.evaluate(xdr_permyriad_per_icp)?;
-    }
+    ManualRefillPreflight::new(policy.as_ref(), request)?.evaluate(xdr_permyriad_per_icp)?;
 
     Ok(IcpRefillExecutionContext {
         ledger_canister_id: canisters.ledger_canister_id,
@@ -268,7 +269,7 @@ const fn policy_input(
     hub_cycles: u128,
     request: &IcpRefillRequest,
     observed_xdr_permyriad_per_icp: Option<u64>,
-    in_flight_for_key: bool,
+    active_for_key: bool,
     cycles_funding_enabled: bool,
     funding_cooldown_retry_after_secs: Option<u64>,
 ) -> IcpRefillPolicyInput {
@@ -276,29 +277,39 @@ const fn policy_input(
         hub_cycles,
         requested_amount_e8s: request.amount_e8s,
         observed_xdr_permyriad_per_icp,
-        in_flight_for_key,
+        active_for_key,
         cycles_funding_enabled,
         funding_cooldown_retry_after_secs,
     }
 }
 
-fn funding_cooldown_retry_after_secs(request: &IcpRefillRequest, now_secs: u64) -> Option<u64> {
-    let role = direct_child_refill_role(request.target_canister, request.source_canister)?;
+fn funding_cooldown_retry_after_secs(
+    request: &IcpRefillRequest,
+    now_secs: u64,
+) -> Result<Option<u64>, InternalError> {
+    let Some(role) = direct_child_refill_role(request.target_canister, request.source_canister)
+    else {
+        return Ok(None);
+    };
 
-    ConfigOps::cycles_funding_policy_for_child_role(&role)
-        .ok()?
-        .cooldown_retry_after_secs(
-            CyclesFundingLedgerOps::snapshot(request.target_canister),
-            now_secs,
-        )
+    configured_funding_cooldown_retry_after_secs(&role, request.target_canister, now_secs)
+}
+
+fn configured_funding_cooldown_retry_after_secs(
+    role: &CanisterRole,
+    target_canister: Principal,
+    now_secs: u64,
+) -> Result<Option<u64>, InternalError> {
+    Ok(ConfigOps::cycles_funding_policy_for_child_role(role)?
+        .cooldown_retry_after_secs(CyclesFundingLedgerOps::snapshot(target_canister), now_secs))
 }
 
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {
     IcpRefillWorkflowError::PolicyDenied(violation).into()
 }
 
-fn in_flight_for_request(request: &IcpRefillRequest) -> bool {
-    IcpRefillStoreOps::has_in_flight_for_key(
+fn active_for_request(request: &IcpRefillRequest) -> bool {
+    IcpRefillStoreOps::has_active_for_key(
         request.source_canister,
         request.source_subaccount,
         request.target_canister,
@@ -306,8 +317,17 @@ fn in_flight_for_request(request: &IcpRefillRequest) -> bool {
     )
 }
 
-fn build_network() -> BuildNetwork {
-    NetworkWorkflow::build_network().unwrap_or(BuildNetwork::Local)
+fn build_network() -> Result<BuildNetwork, InternalError> {
+    require_build_network(NetworkWorkflow::build_network())
+}
+
+fn require_build_network(network: Option<BuildNetwork>) -> Result<BuildNetwork, InternalError> {
+    network.ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "ICP refill build network unavailable; set ICP_ENVIRONMENT=local|ic at build time",
+        )
+    })
 }
 
 fn checked_nat_u64(field: &'static str, value: Nat) -> Result<u64, InternalError> {

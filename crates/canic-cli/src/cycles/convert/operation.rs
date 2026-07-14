@@ -62,15 +62,17 @@ pub(super) fn mark_pending_operation_completed(
     root: &Path,
     operation_key: Option<&str>,
     operation_id: [u8; 32],
-) {
+) -> Result<(), CyclesCommandError> {
     if let Some(operation_key) = operation_key {
-        let _ = complete_pending_icp_refill_operation(
+        complete_pending_icp_refill_operation(
             root,
             operation_key,
             operation_id,
             current_unix_nanos(),
-        );
+        )
+        .map_err(pending_operation_log_error)?;
     }
+    Ok(())
 }
 
 pub(super) fn resolve_operation_id(
@@ -229,6 +231,21 @@ mod tests {
         assert_eq!(first_key, second_key);
         assert!(notice.contains(&format!("operation_id={}", hex_bytes(second_id))));
         assert!(notice.contains("operation_id_source=pending_log"));
+    }
+
+    #[test]
+    fn pending_completion_failure_is_returned() {
+        let root = temp_dir("canic-cli-convert-pending-completion-error");
+        let pending_input = pending_input(&root);
+        let (operation_id, _, pending_key) =
+            resolve_operation_id(None, &pending_input, false, 10).expect("reserve operation id");
+        let pending_path = root.join(".canic/operations/pending.json");
+        std::fs::write(&pending_path, "not json").expect("corrupt pending log");
+
+        let error = mark_pending_operation_completed(&root, pending_key.as_deref(), operation_id)
+            .expect_err("completion error must propagate");
+
+        assert!(matches!(error, CyclesCommandError::PendingOperationLog(_)));
     }
 
     fn pending_input(root: &Path) -> PendingIcpRefillOperationInput<'_> {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.91.md](docs/changelog/0.91.md)
 
+- `0.91.5` is potentially breaking: it makes ICP refill admission atomic and
+  fail-closed and gives live `cycles convert` one typed, durable recovery
+  boundary with normalized result output.
+
 - `0.91.4` is potentially breaking: it makes cost-guard settlement atomic,
   preserves typed snapshot restart failures, and rejects artifacts when a
   present `ic-wasm` shrink command fails.

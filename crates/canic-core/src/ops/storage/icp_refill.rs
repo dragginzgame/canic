@@ -10,7 +10,9 @@ use crate::{
         candid::Nat,
         types::{Principal, Subaccount},
     },
-    domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
+    domain::icp_refill::{
+        IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus, icp_refill_outcome_is_resumable,
+    },
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ops::storage::StorageOpsError,
     storage::stable::icp_refill::{
@@ -32,6 +34,9 @@ const ERROR_MESSAGE_MAX_CHARS: usize = 512;
 
 #[derive(Debug, ThisError)]
 pub enum IcpRefillRecordOpsError {
+    #[error("ICP refill conflicts with active record {id} for the same source and target")]
+    ConcurrentOperation { id: u64 },
+
     #[error("ICP refill record id space exhausted")]
     IdOverflow,
 
@@ -259,13 +264,13 @@ impl IcpRefillStoreOps {
         Ok(())
     }
 
-    pub fn has_in_flight_for_key(
+    pub fn has_active_for_key(
         source_canister: Principal,
         source_subaccount: Option<Subaccount>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
     ) -> bool {
-        IcpRefillRecordOps::has_in_flight_for_key(
+        IcpRefillRecordOps::has_active_for_key(
             source_canister,
             source_subaccount,
             target_canister,
@@ -278,29 +283,30 @@ impl IcpRefillStoreOps {
     }
 
     #[must_use]
-    pub const fn is_in_flight_status(status: IcpRefillStatus) -> bool {
-        IcpRefillRecordOps::is_in_flight_status(status)
-    }
-
-    #[must_use]
     pub const fn is_resumable(operation: &IcpRefillOperation) -> bool {
-        Self::is_in_flight_status(operation.status)
-            || Self::can_retry_notify(operation)
-            || Self::can_retry_bad_fee(operation)
+        icp_refill_outcome_is_resumable(
+            operation.status,
+            operation.error_code,
+            operation.ledger_block_index.is_some(),
+        )
     }
 
     #[must_use]
     pub const fn can_retry_notify(operation: &IcpRefillOperation) -> bool {
-        operation.ledger_block_index.is_some()
-            && matches!(operation.status, IcpRefillStatus::Failed)
-            && matches!(operation.error_code, Some(IcpRefillErrorCode::NotifyFailed))
+        icp_refill_outcome_is_resumable(
+            operation.status,
+            operation.error_code,
+            operation.ledger_block_index.is_some(),
+        ) && matches!(operation.error_code, Some(IcpRefillErrorCode::NotifyFailed))
     }
 
     #[must_use]
     pub const fn can_retry_bad_fee(operation: &IcpRefillOperation) -> bool {
-        operation.ledger_block_index.is_none()
-            && matches!(operation.status, IcpRefillStatus::Failed)
-            && matches!(operation.error_code, Some(IcpRefillErrorCode::BadFee))
+        icp_refill_outcome_is_resumable(
+            operation.status,
+            operation.error_code,
+            operation.ledger_block_index.is_some(),
+        ) && matches!(operation.error_code, Some(IcpRefillErrorCode::BadFee))
     }
 
     #[must_use]
@@ -329,7 +335,7 @@ impl IcpRefillStoreOps {
 
     pub fn create_or_get(
         input: IcpRefillOperationCreateInput,
-    ) -> Result<IcpRefillOperation, InternalError> {
+    ) -> Result<IcpRefillOperation, IcpRefillRecordOpsError> {
         IcpRefillRecordOps::create_or_get(input.into()).map(record_to_operation)
     }
 
@@ -518,19 +524,19 @@ impl IcpRefillRecordOps {
             .find(|record| record.operation_id == operation_id)
     }
 
-    pub fn has_in_flight_for_key(
+    pub fn has_active_for_key(
         source_canister: Principal,
         source_subaccount: Option<Subaccount>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
     ) -> bool {
-        Self::records().into_iter().any(|record| {
-            record.source_canister == source_canister
-                && record.source_subaccount == source_subaccount
-                && record.target_canister == target_canister
-                && record_status_is_in_flight(record.status)
-                && record.operation_id != except_operation_id
-        })
+        Self::find_active_for_key(
+            source_canister,
+            source_subaccount,
+            target_canister,
+            except_operation_id,
+        )
+        .is_some()
     }
 
     pub fn find_resumable_hub_self_refill(self_pid: Principal) -> Option<IcpRefillRecord> {
@@ -543,45 +549,29 @@ impl IcpRefillRecordOps {
     }
 
     #[must_use]
-    pub const fn is_in_flight_status(status: IcpRefillStatus) -> bool {
-        matches!(
-            status,
-            IcpRefillStatus::Requested
-                | IcpRefillStatus::Transferred
-                | IcpRefillStatus::NotifyProcessing
+    pub fn is_resumable(record: &IcpRefillRecord) -> bool {
+        icp_refill_outcome_is_resumable(
+            record.status.into(),
+            record.error_code.map(Into::into),
+            record.ledger_block_index.is_some(),
         )
-    }
-
-    #[must_use]
-    pub const fn is_resumable(record: &IcpRefillRecord) -> bool {
-        record_status_is_in_flight(record.status)
-            || Self::can_retry_notify(record)
-            || Self::can_retry_bad_fee(record)
-    }
-
-    #[must_use]
-    pub const fn can_retry_notify(record: &IcpRefillRecord) -> bool {
-        record.ledger_block_index.is_some()
-            && matches!(record.status, IcpRefillRecordStatus::Failed)
-            && matches!(
-                record.error_code,
-                Some(IcpRefillRecordErrorCode::NotifyFailed)
-            )
-    }
-
-    #[must_use]
-    pub const fn can_retry_bad_fee(record: &IcpRefillRecord) -> bool {
-        record.ledger_block_index.is_none()
-            && matches!(record.status, IcpRefillRecordStatus::Failed)
-            && matches!(record.error_code, Some(IcpRefillRecordErrorCode::BadFee))
     }
 
     pub fn create_or_get(
         input: IcpRefillRecordCreateInput,
-    ) -> Result<IcpRefillRecord, InternalError> {
+    ) -> Result<IcpRefillRecord, IcpRefillRecordOpsError> {
         if let Some(existing) = Self::find_by_operation_id(input.operation_id) {
             ensure_compatible_operation(&existing, &input)?;
             return Ok(existing);
+        }
+
+        if let Some(existing) = Self::find_active_for_key(
+            input.source_canister,
+            input.source_subaccount,
+            input.target_canister,
+            input.operation_id,
+        ) {
+            return Err(IcpRefillRecordOpsError::ConcurrentOperation { id: existing.id });
         }
 
         let id = next_id()?;
@@ -614,6 +604,21 @@ impl IcpRefillRecordOps {
         Self::insert(record.clone());
 
         Ok(record)
+    }
+
+    fn find_active_for_key(
+        source_canister: Principal,
+        source_subaccount: Option<Subaccount>,
+        target_canister: Principal,
+        except_operation_id: [u8; 32],
+    ) -> Option<IcpRefillRecord> {
+        Self::records().into_iter().find(|record| {
+            record.source_canister == source_canister
+                && record.source_subaccount == source_subaccount
+                && record.target_canister == target_canister
+                && Self::is_resumable(record)
+                && record.operation_id != except_operation_id
+        })
     }
 
     pub fn mark_transferred(
@@ -878,15 +883,6 @@ fn set_error(
 
 fn truncate_error(error: String) -> String {
     error.chars().take(ERROR_MESSAGE_MAX_CHARS).collect()
-}
-
-const fn record_status_is_in_flight(status: IcpRefillRecordStatus) -> bool {
-    matches!(
-        status,
-        IcpRefillRecordStatus::Requested
-            | IcpRefillRecordStatus::Transferred
-            | IcpRefillRecordStatus::NotifyProcessing
-    )
 }
 
 fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {

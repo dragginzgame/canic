@@ -5,17 +5,23 @@ use crate::{
         candid::Nat,
         types::{Principal, TC},
     },
+    config::schema::CanisterKind,
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
     dto::error::ErrorCode,
+    ids::{CanisterRole, SubnetRole},
     infra::ic::icp_refill::{NotifyTopUpError, TransferError},
     model::replay::{ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus},
     ops::{
         cost_guard::CostGuardOps,
-        storage::icp_refill::{IcpRefillRecordOps, IcpRefillStoreOps},
+        storage::icp_refill::{
+            IcpRefillRecordCreateInput, IcpRefillRecordOps, IcpRefillRecordOpsError,
+            IcpRefillStoreOps,
+        },
         storage::replay::ReplayReceiptOps,
     },
     replay_policy::CostClass,
     storage::stable::icp_refill::IcpRefillRecord,
+    test::{config::ConfigTestBuilder, seams::lock, support::import_test_env},
     view::icp_refill::IcpRefillOperation,
 };
 use std::str::FromStr;
@@ -100,26 +106,94 @@ fn stored_record(id: u64, operation_byte: u8, status: IcpRefillStatus) -> IcpRef
     record
 }
 
+fn create_input(operation_byte: u8) -> IcpRefillRecordCreateInput {
+    IcpRefillRecordCreateInput {
+        operation_id: [operation_byte; 32],
+        source_canister: p(201),
+        source_subaccount: Some([202; 32]),
+        target_canister: p(203),
+        ledger_canister_id: p(204),
+        cmc_canister_id: p(205),
+        cmc_to_account_owner: p(205),
+        cmc_to_account_subaccount: Some([206; 32]),
+        amount_e8s: 100_000_000,
+        fee_e8s: 10_000,
+        memo: IcpRefillOps::topup_memo(),
+        created_at_time_ns: 1_000,
+        now_ns: 1_000,
+    }
+}
+
 #[test]
-fn in_flight_statuses_are_narrow() {
-    assert!(IcpRefillRecordOps::is_in_flight_status(
-        IcpRefillStatus::Requested
+fn atomic_create_rejects_distinct_active_operation_for_same_refill_key() {
+    let first = IcpRefillRecordOps::create_or_get(create_input(201)).expect("create first refill");
+    let error = IcpRefillRecordOps::create_or_get(create_input(202))
+        .expect_err("second active refill must conflict");
+
+    assert!(matches!(
+        error,
+        IcpRefillRecordOpsError::ConcurrentOperation { id } if id == first.id
     ));
-    assert!(IcpRefillRecordOps::is_in_flight_status(
-        IcpRefillStatus::Transferred
+    assert!(IcpRefillRecordOps::find_by_operation_id([202; 32]).is_none());
+}
+
+#[test]
+fn atomic_create_allows_next_operation_after_terminal_outcome() {
+    let first = IcpRefillRecordOps::create_or_get(create_input(203)).expect("create first refill");
+    IcpRefillRecordOps::mark_completed(first.id, Nat::from(1_u64), 2_000)
+        .expect("complete first refill");
+
+    let second = IcpRefillRecordOps::create_or_get(create_input(204))
+        .expect("create refill after terminal outcome");
+
+    assert_ne!(first.id, second.id);
+}
+
+#[test]
+fn atomic_create_rejects_distinct_operation_while_failure_is_retryable() {
+    let first = IcpRefillRecordOps::create_or_get(create_input(205)).expect("create first refill");
+    IcpRefillRecordOps::mark_bad_fee(first.id, 20_000, "fee changed".to_string(), 2_000)
+        .expect("record retryable bad fee");
+
+    let error = IcpRefillRecordOps::create_or_get(create_input(206))
+        .expect_err("retryable refill must remain active");
+
+    assert!(matches!(
+        error,
+        IcpRefillRecordOpsError::ConcurrentOperation { id } if id == first.id
     ));
-    assert!(IcpRefillRecordOps::is_in_flight_status(
-        IcpRefillStatus::NotifyProcessing
-    ));
-    assert!(!IcpRefillRecordOps::is_in_flight_status(
-        IcpRefillStatus::Completed
-    ));
-    assert!(!IcpRefillRecordOps::is_in_flight_status(
-        IcpRefillStatus::Failed
-    ));
-    assert!(!IcpRefillRecordOps::is_in_flight_status(
-        IcpRefillStatus::Refunded
-    ));
+}
+
+#[test]
+fn missing_build_network_fails_closed() {
+    let error = require_build_network(None).expect_err("network must be explicit");
+
+    assert_eq!(error.class(), InternalErrorClass::Invariant);
+    assert_eq!(error.origin(), InternalErrorOrigin::Workflow);
+    assert_eq!(
+        require_build_network(Some(BuildNetwork::Ic)).expect("explicit network"),
+        BuildNetwork::Ic
+    );
+}
+
+#[test]
+fn missing_direct_child_funding_policy_preserves_config_failure() {
+    let _guard = lock();
+    let target = p(212);
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister_kind("funding_hub", CanisterKind::Service)
+        .install();
+    import_test_env("funding_hub", SubnetRole::PRIME, p(210));
+
+    let error = configured_funding_cooldown_retry_after_secs(
+        &CanisterRole::new("missing_child"),
+        target,
+        1_000,
+    )
+    .expect_err("missing child config must fail");
+
+    assert_eq!(error.class(), InternalErrorClass::Ops);
+    assert_eq!(error.origin(), InternalErrorOrigin::Ops);
 }
 
 #[test]
@@ -219,13 +293,17 @@ fn notify_retry_only_allows_notify_failed_with_block_index() {
     let mut record = sample_record(IcpRefillStatus::Failed);
     record.error_code = Some(IcpRefillErrorCode::NotifyFailed.into());
     record.ledger_block_index = Some(10);
-    assert!(IcpRefillRecordOps::can_retry_notify(&record));
+    assert!(IcpRefillStoreOps::can_retry_notify(&operation_from_record(
+        &record
+    )));
     assert!(IcpRefillStoreOps::should_notify(&operation_from_record(
         &record
     )));
 
     record.ledger_block_index = None;
-    assert!(!IcpRefillRecordOps::can_retry_notify(&record));
+    assert!(!IcpRefillStoreOps::can_retry_notify(
+        &operation_from_record(&record)
+    ));
     assert!(!IcpRefillStoreOps::should_notify(&operation_from_record(
         &record
     )));
@@ -270,14 +348,20 @@ fn hub_self_refill_resumes_in_flight_and_retryable_records() {
 fn bad_fee_retry_requires_no_block_index() {
     let mut record = sample_record(IcpRefillStatus::Failed);
     record.error_code = Some(IcpRefillErrorCode::BadFee.into());
-    assert!(IcpRefillRecordOps::can_retry_bad_fee(&record));
+    assert!(IcpRefillStoreOps::can_retry_bad_fee(
+        &operation_from_record(&record)
+    ));
 
     record.ledger_block_index = Some(10);
-    assert!(!IcpRefillRecordOps::can_retry_bad_fee(&record));
+    assert!(!IcpRefillStoreOps::can_retry_bad_fee(
+        &operation_from_record(&record)
+    ));
 
     record.ledger_block_index = None;
     record.error_code = Some(IcpRefillErrorCode::LedgerTransferFailed.into());
-    assert!(!IcpRefillRecordOps::can_retry_bad_fee(&record));
+    assert!(!IcpRefillStoreOps::can_retry_bad_fee(
+        &operation_from_record(&record)
+    ));
 }
 
 #[test]
