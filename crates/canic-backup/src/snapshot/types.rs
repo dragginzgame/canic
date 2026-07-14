@@ -128,6 +128,16 @@ pub enum SnapshotDownloadError {
     #[error("snapshot driver failed: {0}")]
     Driver(#[source] SnapshotDriverError),
 
+    #[error("canister restart after snapshot capture failed: {0}")]
+    Restart(#[source] SnapshotDriverError),
+
+    #[error("snapshot capture failed ({capture}) and canister restart also failed ({restart})")]
+    CaptureAndRestart {
+        #[source]
+        capture: Box<Self>,
+        restart: SnapshotDriverError,
+    },
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 

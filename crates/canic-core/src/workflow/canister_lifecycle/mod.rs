@@ -282,7 +282,11 @@ impl CanisterLifecycleWorkflow {
         )
         .await
         {
-            let _ = CostGuardOps::recover(&cost_permit, crate::ops::ic::IcOps::now_secs());
+            let err = CostGuardOps::recover_after_failure(
+                &cost_permit,
+                crate::ops::ic::IcOps::now_secs(),
+                err,
+            );
             record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
             record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
             return Err(err);

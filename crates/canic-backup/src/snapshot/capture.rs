@@ -98,13 +98,16 @@ pub(super) fn capture_snapshot_artifact(
             Ok(artifact) => {
                 driver
                     .start_canister(&target.canister_id)
-                    .map_err(SnapshotDownloadError::Driver)?;
+                    .map_err(SnapshotDownloadError::Restart)?;
                 Ok(artifact)
             }
-            Err(error) => {
-                let _ = driver.start_canister(&target.canister_id);
-                Err(error)
-            }
+            Err(capture) => match driver.start_canister(&target.canister_id) {
+                Ok(()) => Err(capture),
+                Err(restart) => Err(SnapshotDownloadError::CaptureAndRestart {
+                    capture: Box::new(capture),
+                    restart,
+                }),
+            },
         }
     } else {
         result

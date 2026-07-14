@@ -101,14 +101,14 @@ async fn execute_provision(
     let lifecycle_result = match CanisterLifecycleWorkflow::apply(event).await {
         Ok(result) => result,
         Err(err) => {
-            let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+            let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
             mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err);
             return Err(err);
         }
     };
     let Some(new_canister_pid) = lifecycle_result.new_canister_pid else {
         let err: InternalError = RpcWorkflowError::MissingNewCanisterPid.into();
-        let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+        let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
         mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err);
         return Err(err);
     };

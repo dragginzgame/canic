@@ -114,6 +114,14 @@ impl InternalError {
         Self::new(InternalErrorClass::Workflow, origin, message)
     }
 
+    /// Append internal diagnostic context without changing the error's typed
+    /// classification or public projection.
+    #[must_use]
+    pub(crate) fn with_diagnostic_context(mut self, context: impl Into<String>) -> Self {
+        self.message = format!("{}; {}", self.message, context.into());
+        self
+    }
+
     #[must_use]
     pub const fn class(&self) -> InternalErrorClass {
         self.class

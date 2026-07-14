@@ -348,7 +348,7 @@ pub(super) async fn execute_authorized_request_cycles(
         MgmtOps::deposit_cycles_with_permit(&cost_permit, ctx.caller, grant.approved_cycles).await
     {
         CyclesFundingLedgerOps::restore_child_snapshot(ctx.caller, ledger_before_grant);
-        let _ = CostGuardOps::recover(&cost_permit, IcOps::now_secs());
+        let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
         mark_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, &err);
         CyclesFundingMetrics::record_denied(
             ctx.caller,
