@@ -177,10 +177,10 @@ Each runbook uses the same fields:
 
 | Field | Guidance |
 | --- | --- |
-| Symptom | Live `canic cycles convert` was interrupted after a generated operation ID was created, or a later run reports `operation_id_source=pending_log`. |
-| Likely cause | The CLI wrote `.canic/operations/pending.json` before sending the refill request and is reusing a matching `pending_send` operation. |
+| Symptom | Live `canic cycles convert` was interrupted after a generated operation ID was created, returned a resumable outcome, or a later run reports `operation_id_source=pending_log`. |
+| Likely cause | The CLI wrote `.canic/operations/pending.json` before sending the refill request and retained the matching `pending_send` operation because no typed terminal outcome was durably recorded. |
 | Safety invariant | The pending log may help the operator retry the same operation, but the canister-side replay receipt remains authoritative. |
-| Safe operator action | Retry the same CLI refill from the same project root, network, deployment, source canister, target canister, and amount. Preserve the pending log for diagnostics until the operation completes. |
+| Safe operator action | Retry the same CLI refill from the same project root, network, deployment, source canister, target canister, and amount. Preserve the pending log until the CLI verifies the matching typed terminal outcome and durably marks it completed. |
 | Unsafe operator action | Deleting or editing the pending log to hide an uncertain send, or reusing the pending operation ID with a different refill target or amount. |
 | Diagnostic, log, or public error to check | `.canic/operations/pending.json`, `operation_id_source=pending_log`, and the canister-side replay result. |
 | Retry/idempotency rule | The matching `pending_send` entry is safe to reuse for the same refill input. It is not a general operation-ID registry. |

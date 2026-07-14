@@ -2,6 +2,10 @@ pub mod format {
     pub use crate::format::{byte_size, cycles_tc, truncate};
 }
 
+pub mod icp_refill {
+    pub use crate::domain::icp_refill::icp_refill_outcome_is_resumable;
+}
+
 /// Return whether a name uses canonical lowercase ASCII snake_case.
 #[must_use]
 pub const fn is_ascii_snake_case(value: &str) -> bool {

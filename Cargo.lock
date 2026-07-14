@@ -493,6 +493,7 @@ dependencies = [
  "canic-core",
  "canic-host",
  "clap",
+ "rustix",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

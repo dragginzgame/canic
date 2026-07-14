@@ -7,7 +7,10 @@
 use crate::{
     InternalError,
     cdk::{candid::Nat, types::Principal},
-    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+    domain::{
+        icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
+        policy::pure::icp_refill::IcpRefillPolicyViolation,
+    },
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ids::CanisterRole,
     infra::ic::icp_refill::{NotifyTopUpArg, NotifyTopUpError, TransferError},
@@ -18,7 +21,9 @@ use crate::{
         runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{
             children::CanisterChildrenOps,
-            icp_refill::{IcpRefillOperationCreateInput, IcpRefillStoreOps},
+            icp_refill::{
+                IcpRefillOperationCreateInput, IcpRefillRecordOpsError, IcpRefillStoreOps,
+            },
         },
     },
     view::icp_refill::IcpRefillOperation,
@@ -28,7 +33,7 @@ use crate::{
             recover_icp_refill_cost_guard, require_icp_refill_cost_permit,
             reserve_icp_refill_cost_guard_if_needed,
         },
-        prepare_context,
+        policy_denied, prepare_context,
         replay::{
             finish_icp_refill_replay, mark_icp_refill_notify_effect,
             mark_icp_refill_recovery_required, mark_icp_refill_transfer_effect,
@@ -76,7 +81,7 @@ async fn execute_manual_refill_operation(
     let context = prepare_context(&request, RateQueryMode::WhenGateConfigured).await?;
     let cmc_account =
         IcpRefillOps::cmc_topup_account(context.cmc_canister_id, request.target_canister)?;
-    let operation = IcpRefillStoreOps::create_or_get(IcpRefillOperationCreateInput {
+    let operation = create_or_get_operation(IcpRefillOperationCreateInput {
         operation_id,
         source_canister: request.source_canister,
         source_subaccount: request.source_subaccount,
@@ -93,6 +98,18 @@ async fn execute_manual_refill_operation(
     })?;
 
     advance_operation(operation, token, cost_permit).await
+}
+
+fn create_or_get_operation(
+    input: IcpRefillOperationCreateInput,
+) -> Result<IcpRefillOperation, InternalError> {
+    match IcpRefillStoreOps::create_or_get(input) {
+        Ok(operation) => Ok(operation),
+        Err(IcpRefillRecordOpsError::ConcurrentOperation { .. }) => {
+            Err(policy_denied(IcpRefillPolicyViolation::ConcurrentRefill))
+        }
+        Err(err) => Err(err.into()),
+    }
 }
 
 async fn transfer_operation(

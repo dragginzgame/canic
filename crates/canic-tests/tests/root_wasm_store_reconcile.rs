@@ -21,7 +21,7 @@ use canic_testing_internal::canister::APP;
 use canic_testing_internal::pic::CanicPicExt;
 use canic_tests::root::{
     RootSetupProfile, built_root_wasm_path,
-    harness::{RootSetup, setup_cached_root},
+    harness::{RootSetup, setup_cached_root, setup_root},
 };
 use ic_testkit::pic::Pic;
 use std::fs;
@@ -353,7 +353,10 @@ fn root_publication_binding_transitions_mark_active_detached_and_retired_slots()
 
 #[test]
 fn root_retired_store_gc_finalize_and_delete_cleans_up_tracked_store() {
-    let setup = setup_root_with_small_implicit_store();
+    // This test deletes a canister captured by the shared baseline. Use an
+    // isolated topology because a deleted canister cannot accept a snapshot
+    // restore for the next cached test.
+    let setup = setup_root(RootSetupProfile::ReconcileSmallStore);
     let fixture = retire_one_publication_store(&setup.pic, setup.root_id);
 
     run_retired_store_gc(&setup.pic, setup.root_id, &fixture.retired_store);

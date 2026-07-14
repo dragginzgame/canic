@@ -1,4 +1,5 @@
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_bytes};
+use rustix::fs::{FlockOperation, flock};
 use serde::{Deserialize, Serialize};
 use std::{
     fmt, fs, io,
@@ -116,11 +117,57 @@ struct PendingOperationRecord {
     completed_at_unix_nanos: Option<String>,
 }
 
+///
+/// PendingOperationLogLock
+///
+
+struct PendingOperationLogLock {
+    _file: fs::File,
+}
+
+impl PendingOperationLogLock {
+    fn acquire(path: &Path) -> Result<Self, PendingOperationLogError> {
+        let Some(parent) = path.parent() else {
+            return Err(PendingOperationLogError::new(
+                path.to_path_buf(),
+                "pending operation log path has no parent",
+            ));
+        };
+        fs::create_dir_all(parent).map_err(|err| {
+            PendingOperationLogError::new(
+                parent.to_path_buf(),
+                format!("failed to create pending operation log directory: {err}"),
+            )
+        })?;
+        let lock_path = pending_operation_lock_path(path);
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(|err| {
+                PendingOperationLogError::new(
+                    lock_path.clone(),
+                    format!("failed to open pending operation log lock: {err}"),
+                )
+            })?;
+        flock(&file, FlockOperation::LockExclusive).map_err(|err| {
+            PendingOperationLogError::new(
+                lock_path,
+                format!("failed to lock pending operation log: {err}"),
+            )
+        })?;
+        Ok(Self { _file: file })
+    }
+}
+
 pub(super) fn reserve_pending_icp_refill_operation(
     input: &PendingIcpRefillOperationInput<'_>,
     generated_operation_id: [u8; 32],
 ) -> Result<PendingOperationReserveResult, PendingOperationLogError> {
     let path = pending_operation_log_path(input.icp_root);
+    let _lock = PendingOperationLogLock::acquire(&path)?;
     let mut log = read_pending_operation_log(&path)?;
     let operation_key = icp_refill_operation_key(input);
 
@@ -171,6 +218,7 @@ pub(super) fn complete_pending_icp_refill_operation(
     completed_at_unix_nanos: u128,
 ) -> Result<(), PendingOperationLogError> {
     let path = pending_operation_log_path(icp_root);
+    let _lock = PendingOperationLogLock::acquire(&path)?;
     let mut log = read_pending_operation_log(&path)?;
     let operation_id = hex_bytes(operation_id);
     let Some(record) = log.operations.iter_mut().rev().find(|record| {
@@ -190,6 +238,14 @@ fn pending_operation_log_path(icp_root: &Path) -> PathBuf {
         .join(".canic")
         .join("operations")
         .join("pending.json")
+}
+
+fn pending_operation_lock_path(log_path: &Path) -> PathBuf {
+    let file_name = log_path
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .unwrap_or("pending.json");
+    log_path.with_file_name(format!("{file_name}.lock"))
 }
 
 fn read_pending_operation_log(
@@ -360,6 +416,7 @@ fn current_unix_nanos() -> u128 {
 mod tests {
     use super::*;
     use crate::test_support::temp_dir;
+    use std::sync::{Arc, Barrier};
 
     #[test]
     fn pending_log_path_is_project_local() {
@@ -411,6 +468,45 @@ mod tests {
         assert_eq!(second.operation_id, [3; 32]);
 
         let log = read_pending_operation_log(&second.path).expect("read log");
+        assert_eq!(log.operations.len(), 1);
+    }
+
+    #[test]
+    fn concurrent_reservations_share_one_pending_operation() {
+        const WORKERS: usize = 8;
+
+        let root = Arc::new(temp_dir("canic-cli-pending-operation-concurrent"));
+        let barrier = Arc::new(Barrier::new(WORKERS));
+        #[expect(
+            clippy::needless_collect,
+            reason = "all workers must be spawned before any barrier participant is joined"
+        )]
+        let handles = (0..WORKERS)
+            .map(|index| {
+                let root = Arc::clone(&root);
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    let input = sample_input(&root);
+                    barrier.wait();
+                    let operation_byte = u8::try_from(index).expect("worker index fits in u8");
+                    reserve_pending_icp_refill_operation(&input, [operation_byte; 32])
+                        .expect("reserve concurrent operation")
+                })
+            })
+            .collect::<Vec<_>>();
+        let results = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("join reservation worker"))
+            .collect::<Vec<_>>();
+
+        let operation_id = results[0].operation_id;
+        assert!(
+            results
+                .iter()
+                .all(|result| result.operation_id == operation_id)
+        );
+        assert_eq!(results.iter().filter(|result| !result.reused).count(), 1);
+        let log = read_pending_operation_log(&results[0].path).expect("read concurrent log");
         assert_eq!(log.operations.len(), 1);
     }
 

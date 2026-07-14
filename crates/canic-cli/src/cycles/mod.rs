@@ -19,6 +19,7 @@ use crate::{
     version_text,
 };
 use canic_backup::discovery::DiscoveryError;
+use canic_core::{cdk::utils::hash::DecodeHexError, dto::error::ErrorCode};
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, install_root::InstallStateError,
     installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
@@ -75,6 +76,21 @@ pub enum CyclesCommandError {
 
     #[error("failed to update pending operation log: {0}")]
     PendingOperationLog(String),
+
+    #[error("failed to decode ICP refill response Candid: {0}")]
+    IcpRefillResponseCandid(#[source] candid::Error),
+
+    #[error("failed to decode ICP refill response hex: {0}")]
+    IcpRefillResponseHex(#[source] DecodeHexError),
+
+    #[error("ICP refill response operation id mismatch: expected {expected}, got {actual}")]
+    IcpRefillOperationIdMismatch { expected: String, actual: String },
+
+    #[error("ICP refill request rejected: [{code:?}] {message}")]
+    IcpRefillRejected { code: ErrorCode, message: String },
+
+    #[error("live ICP refill returned a dry-run response")]
+    IcpRefillUnexpectedResponse,
 
     #[error(transparent)]
     RegistryTree(#[from] crate::support::registry_tree::RegistryTreeError),

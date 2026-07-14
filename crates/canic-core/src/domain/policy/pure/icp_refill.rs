@@ -9,7 +9,7 @@ pub struct IcpRefillPolicyInput {
     pub hub_cycles: u128,
     pub requested_amount_e8s: u64,
     pub observed_xdr_permyriad_per_icp: Option<u64>,
-    pub in_flight_for_key: bool,
+    pub active_for_key: bool,
     pub cycles_funding_enabled: bool,
     pub funding_cooldown_retry_after_secs: Option<u64>,
 }
@@ -126,7 +126,7 @@ const fn evaluate_common(
             max_e8s: policy.max_refill_e8s_per_call,
         });
     }
-    if input.in_flight_for_key {
+    if input.active_for_key {
         return Err(IcpRefillPolicyViolation::ConcurrentRefill);
     }
     if let Some(retry_after_secs) = input.funding_cooldown_retry_after_secs {
@@ -176,7 +176,7 @@ mod tests {
             hub_cycles: TC,
             requested_amount_e8s: 50_000_000,
             observed_xdr_permyriad_per_icp: Some(45_000),
-            in_flight_for_key: false,
+            active_for_key: false,
             cycles_funding_enabled: true,
             funding_cooldown_retry_after_secs: None,
         }
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn refill_denies_concurrent_key() {
         let mut input = input();
-        input.in_flight_for_key = true;
+        input.active_for_key = true;
 
         let err = evaluate_manual_refill(Some(&policy()), input).expect_err("concurrent refill");
 
