@@ -95,19 +95,6 @@ pub(super) fn checkpoint_coverage_gaps(checkpoint_sites: &[String]) -> Vec<Check
         .collect()
 }
 
-// Write the raw checkpoint scan output expected by the audit definition.
-pub(super) fn write_flow_checkpoint_log(path: &Path, checkpoint_sites: &[String]) {
-    let body = if checkpoint_sites.is_empty() {
-        "No `perf!` checkpoint call sites were found under `crates/`.\n".to_string()
-    } else {
-        let mut lines = checkpoint_sites.join("\n");
-        lines.push('\n');
-        lines
-    };
-
-    fs::write(path, body).expect("write flow checkpoints log");
-}
-
 // Assemble the verification table for one instruction-footprint run.
 pub(super) fn verification_rows(
     paths: &AuditPaths,
@@ -221,29 +208,6 @@ where
     fs::write(path, body).expect("write json artifact");
 }
 
-// Write the normalized endpoint matrix as a simple TSV artifact.
-#[expect(clippy::format_push_string)]
-pub(super) fn write_endpoint_matrix_tsv(path: &Path, results: &[ScenarioResult]) {
-    let mut out = String::from(
-        "canister\tendpoint_or_flow\tscenario_key\tsample_origin\tcount\ttotal_local_instructions\tavg_local_instructions\n",
-    );
-
-    for result in results {
-        out.push_str(&format!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-            result.scenario.canister,
-            result.scenario.endpoint_or_flow,
-            result.scenario.key,
-            result.row.sample_origin,
-            result.row.count,
-            result.row.total_local_instructions,
-            result.row.avg_local_instructions
-        ));
-    }
-
-    fs::write(path, out).expect("write endpoint matrix tsv");
-}
-
 // Render the first dated instruction-footprint report from normalized results.
 #[expect(clippy::format_push_string, clippy::too_many_lines)]
 pub(super) fn write_report(
@@ -351,9 +315,7 @@ pub(super) fn write_report(
         if checkpoint_rows.is_empty() { STATUS_PARTIAL } else { STATUS_PASS }
     ));
     out.push_str("| Fresh topology isolation used | PASS | Each scenario ran under a fresh smallest-profile root harness install instead of reusing one cumulative perf table. |\n");
-    out.push_str(&format!(
-        "| Flow checkpoint coverage scanned | PASS | `artifacts/{artifacts_dir_name}/flow-checkpoints.log` records the current repo scan result. |\n"
-    ));
+    out.push_str("| Flow checkpoint coverage scanned | PASS | The Flow Checkpoints section records the current repo scan result. |\n");
     if checkpoint_sites.is_empty() {
         out.push_str("| `perf!` checkpoints available for critical flows | PARTIAL | Current repo scan found zero `perf!` call sites under `crates/`, so flow-stage attribution is not yet measurable. |\n");
     } else {
@@ -435,15 +397,12 @@ pub(super) fn write_report(
     out.push_str("## Flow Checkpoints\n\n");
     if checkpoint_sites.is_empty() {
         out.push_str("- No current `perf!` checkpoints were found under `crates/`; no per-stage flow deltas are available yet.\n");
-        out.push_str(&format!(
-            "- Flow checkpoint evidence file: `artifacts/{artifacts_dir_name}/flow-checkpoints.log`\n\n"
-        ));
     } else {
         for site in checkpoint_sites {
             out.push_str(&format!("- `{site}`\n"));
         }
-        out.push('\n');
     }
+    out.push('\n');
 
     out.push_str("## Measured Checkpoint Deltas\n\n");
     if checkpoint_rows.is_empty() {
@@ -607,13 +566,7 @@ pub(super) fn write_report(
         "- [perf-rows.json](artifacts/{artifacts_dir_name}/perf-rows.json)\n"
     ));
     out.push_str(&format!(
-        "- [endpoint-matrix.tsv](artifacts/{artifacts_dir_name}/endpoint-matrix.tsv)\n"
-    ));
-    out.push_str(&format!(
         "- [checkpoint-deltas.json](artifacts/{artifacts_dir_name}/checkpoint-deltas.json)\n"
-    ));
-    out.push_str(&format!(
-        "- [flow-checkpoints.log](artifacts/{artifacts_dir_name}/flow-checkpoints.log)\n"
     ));
     out.push_str(&format!(
         "- [checkpoint-coverage-gaps.json](artifacts/{artifacts_dir_name}/checkpoint-coverage-gaps.json)\n"

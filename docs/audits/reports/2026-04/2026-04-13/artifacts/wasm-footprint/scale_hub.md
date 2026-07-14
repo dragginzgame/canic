@@ -29,13 +29,6 @@
 - Retained size: `1060302`
 - Shallow size: `140182`
 
-## Artifacts
+## Retained Evidence
 
-- [scale_hub.size-report.json](scale_hub.size-report.json)
-- [scale_hub.built.ic-wasm-info.txt](scale_hub.built.ic-wasm-info.txt)
-- [scale_hub.shrunk.ic-wasm-info.txt](scale_hub.shrunk.ic-wasm-info.txt)
-- [scale_hub.twiggy-top.txt](scale_hub.twiggy-top.txt)
-- [scale_hub.twiggy-top.csv](scale_hub.twiggy-top.csv)
-- [scale_hub.twiggy-retained.csv](scale_hub.twiggy-retained.csv)
-- [scale_hub.twiggy-dominators.txt](scale_hub.twiggy-dominators.txt)
-- [scale_hub.twiggy-monos.txt](scale_hub.twiggy-monos.txt)
+The summarized metrics above are the retained historical evidence. Raw per-canister tool output was pruned after extraction because it duplicated this detail report and the aggregate run artifacts.

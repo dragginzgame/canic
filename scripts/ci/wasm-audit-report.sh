@@ -442,45 +442,6 @@ validate_cached_debug_artifacts() {
     DEBUG_CAPTURED=1
 }
 
-write_per_canister_json() {
-    local canister="$1"
-    local output="$2"
-
-    cat >"$output" <<EOF
-{
-  "canister": "$canister",
-  "kind": "${CANISTER_KIND[$canister]}",
-  "profile": "$PROFILE_NAME",
-  "built": {
-    "wasm_bytes": ${BUILT_WASM_BYTES[$canister]},
-    "wasm_gz_bytes": ${BUILT_WASM_GZ_BYTES[$canister]},
-    "functions": ${BUILT_FUNCTIONS[$canister]},
-    "data_sections": ${BUILT_DATA_SECTIONS[$canister]},
-    "data_bytes": ${BUILT_DATA_BYTES[$canister]},
-    "exports": ${BUILT_EXPORTS[$canister]}
-  },
-  "shrunk": {
-    "wasm_bytes": ${SHRUNK_WASM_BYTES[$canister]},
-    "wasm_gz_bytes": ${SHRUNK_WASM_GZ_BYTES[$canister]},
-    "functions": ${SHRUNK_FUNCTIONS[$canister]},
-    "data_sections": ${SHRUNK_DATA_SECTIONS[$canister]},
-    "data_bytes": ${SHRUNK_DATA_BYTES[$canister]},
-    "exports": ${SHRUNK_EXPORTS[$canister]}
-  },
-  "wasm_debug_built": {
-    "wasm_bytes": ${DEBUG_BUILT_WASM_BYTES[$canister]},
-    "wasm_gz_bytes": ${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}
-  },
-  "debug_vs_profile_delta_bytes": "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}",
-  "debug_vs_profile_delta_percent": "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}",
-  "shrink_delta_bytes": ${SHRINK_DELTA_BYTES[$canister]},
-  "shrink_delta_percent": ${SHRINK_DELTA_PCT[$canister]},
-  "baseline_delta_bytes": "${BASELINE_DELTA_BYTES[$canister]}",
-  "baseline_delta_percent": "${BASELINE_DELTA_PCT[$canister]}"
-}
-EOF
-}
-
 write_per_canister_markdown() {
     local canister="$1"
     local output="$2"
@@ -521,16 +482,11 @@ write_per_canister_markdown() {
 - Retained size: \`${HOTSPOT_RETAINED[$canister]}\`
 - Shallow size: \`${HOTSPOT_SHALLOW[$canister]}\`
 
-## Artifacts
+## Retained Evidence
 
-- [${canister}.size-report.json](${canister}.size-report.json)
-- [${canister}.built.ic-wasm-info.txt](${canister}.built.ic-wasm-info.txt)
-- [${canister}.shrunk.ic-wasm-info.txt](${canister}.shrunk.ic-wasm-info.txt)
-- [${canister}.twiggy-top.txt](${canister}.twiggy-top.txt)
-- [${canister}.twiggy-top.csv](${canister}.twiggy-top.csv)
-- [${canister}.twiggy-retained.csv](${canister}.twiggy-retained.csv)
-- [${canister}.twiggy-dominators.txt](${canister}.twiggy-dominators.txt)
-- [${canister}.twiggy-monos.txt](${canister}.twiggy-monos.txt)
+The summarized metrics above are the retained evidence. Raw \`ic-wasm info\`
+and \`twiggy\` output is transient analysis input; aggregate data is retained in
+\`size-report.json\` and \`size-metrics.tsv\`.
 EOF
 }
 
@@ -772,10 +728,10 @@ render_report() {
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Wasm artifacts captured for scope | $checklist_artifacts | Cached raw artifacts under \`artifacts/wasm-size/$PROFILE_NAME/raw/\` and shrunk artifacts under \`artifacts/wasm-size/$PROFILE_NAME/shrunk/\` were recorded for $(format_canister_list). |
-| Artifact sizes recorded in machine-readable artifact | $checklist_json | [size-report.json]($ARTIFACT_LINK_PREFIX/size-report.json) plus per-canister \`*.size-report.json\` files. |
-| Twiggy top captured | $checklist_top | \`*.twiggy-top.txt\` and \`*.twiggy-top.csv\` emitted for each canister when \`twiggy\` is available. |
-| Twiggy dominators captured | $checklist_dominators | \`*.twiggy-dominators.txt\` emitted for each canister when \`twiggy\` is available. |
-| Twiggy monos captured | $checklist_monos | \`*.twiggy-monos.txt\` emitted for each canister when \`twiggy\` is available. |
+| Artifact sizes recorded in machine-readable artifact | $checklist_json | [size-report.json]($ARTIFACT_LINK_PREFIX/size-report.json) and [size-metrics.tsv]($ARTIFACT_LINK_PREFIX/size-metrics.tsv) retain aggregate and baseline data. |
+| Twiggy top analyzed | $checklist_top | Offender and retained-size summaries are retained in the per-canister detail reports when \`twiggy\` is available. |
+| Twiggy dominators analyzed | $checklist_dominators | Retained-size ownership is analyzed transiently and summarized in the report. |
+| Twiggy monos analyzed | $checklist_monos | Generic-bloat analysis runs transiently; the report retains the resulting hotspot diagnosis. |
 | Baseline path selected by daily baseline discipline | $checklist_baseline | Current run stem is \`$SCOPE_STEM\`; baseline path resolves to \`$BASELINE_PATH\`. |
 | Size deltas versus baseline recorded when baseline exists | $checklist_delta | $( [ "$BASELINE_PATH" = "N/A" ] && printf 'First run of day; baseline deltas are `N/A`.' || printf 'Baseline deltas were calculated from `%s`.' "$BASELINE_PATH" ) |
 | \`wasm-debug\` built artifacts captured | $checklist_debug | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug raw artifacts under `artifacts/wasm-size/wasm-debug/raw/` were recorded for %s.' "$(format_canister_list)"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
@@ -856,7 +812,7 @@ EOF
 ## Dependency Fan-In Pressure
 
 - \`root\` is always interpreted as a control-plane outlier because it still carries the root runtime plus the bootstrap \`wasm_store.wasm.gz\` artifact during build.
-- Large retained hotspots that repeat across many per-canister Twiggy reports should be treated as shared fan-in pressure in crates such as \`canic-core\`, DTO/serialization glue, logging, metrics, auth, and lifecycle/runtime support.
+- Large retained hotspots that repeat across many per-canister detail reports should be treated as shared fan-in pressure in crates such as \`canic-core\`, DTO/serialization glue, logging, metrics, auth, and lifecycle/runtime support.
 EOF
 
     if has_selected_canister minimal; then
@@ -1071,13 +1027,13 @@ else
 fi
 
 if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then
-    record_verification "ic-wasm <artifact> info" "PASS" "structure snapshots captured for built and shrunk artifacts"
+    record_verification "ic-wasm <artifact> info" "PASS" "built and shrunk structure metrics analyzed and summarized"
 else
     record_verification "ic-wasm <artifact> info" "BLOCKED" "ic-wasm not installed; structure snapshot metrics unavailable"
 fi
 
 if [ "$TWIGGY_AVAILABLE" -eq 1 ]; then
-    record_verification "twiggy top|dominators|monos <analysis.wasm>" "PASS" "twiggy artifacts captured for each canister in scope"
+    record_verification "twiggy top|dominators|monos <analysis.wasm>" "PASS" "hotspot outputs analyzed and summarized for each canister in scope"
 else
     record_verification "twiggy top|dominators|monos <analysis.wasm>" "BLOCKED" "twiggy not installed; hotspot attribution unavailable"
 fi
@@ -1127,8 +1083,8 @@ for canister in "${CANISTERS[@]}"; do
         DEBUG_VS_PROFILE_DELTA_PCT["$canister"]="N/A"
     fi
 
-    built_info_out="$ARTIFACTS_DIR/$canister.built.ic-wasm-info.txt"
-    shrunk_info_out="$ARTIFACTS_DIR/$canister.shrunk.ic-wasm-info.txt"
+    built_info_out="$CACHE_ANALYSIS_DIR/$canister.built.ic-wasm-info.txt"
+    shrunk_info_out="$CACHE_ANALYSIS_DIR/$canister.shrunk.ic-wasm-info.txt"
 
     if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then
         ic-wasm "$raw_wasm" info >"$built_info_out"
@@ -1148,11 +1104,11 @@ for canister in "${CANISTERS[@]}"; do
         SHRUNK_EXPORTS["$canister"]="0"
     fi
 
-    top_txt="$ARTIFACTS_DIR/$canister.twiggy-top.txt"
-    top_csv="$ARTIFACTS_DIR/$canister.twiggy-top.csv"
-    retained_csv="$ARTIFACTS_DIR/$canister.twiggy-retained.csv"
-    dominators_txt="$ARTIFACTS_DIR/$canister.twiggy-dominators.txt"
-    monos_txt="$ARTIFACTS_DIR/$canister.twiggy-monos.txt"
+    top_txt="$CACHE_ANALYSIS_DIR/$canister.twiggy-top.txt"
+    top_csv="$CACHE_ANALYSIS_DIR/$canister.twiggy-top.csv"
+    retained_csv="$CACHE_ANALYSIS_DIR/$canister.twiggy-retained.csv"
+    dominators_txt="$CACHE_ANALYSIS_DIR/$canister.twiggy-dominators.txt"
+    monos_txt="$CACHE_ANALYSIS_DIR/$canister.twiggy-monos.txt"
 
     if [ "$TWIGGY_AVAILABLE" -eq 1 ]; then
         twiggy top -n 40 "$analysis_wasm" >"$top_txt"
@@ -1237,7 +1193,6 @@ write_aggregate_json "$ARTIFACTS_DIR/size-report.json"
 run_top_summary "$ARTIFACTS_DIR/size-summary.md"
 
 for canister in "${CANISTERS[@]}"; do
-    write_per_canister_json "$canister" "$ARTIFACTS_DIR/$canister.size-report.json"
     write_per_canister_markdown "$canister" "$ARTIFACTS_DIR/$canister.md"
 done
 

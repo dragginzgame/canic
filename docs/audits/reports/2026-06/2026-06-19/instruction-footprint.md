@@ -29,7 +29,7 @@
 | Normalized perf rows recorded | PASS | `artifacts/instruction-footprint/perf-rows.json` stores canonical endpoint rows with count and total local instructions. |
 | Checkpoint deltas recorded | PASS | `artifacts/instruction-footprint/checkpoint-deltas.json` stores non-zero per-scenario checkpoint rows. |
 | Fresh topology isolation used | PASS | Each scenario ran under a fresh smallest-profile root harness install instead of reusing one cumulative perf table. |
-| Flow checkpoint coverage scanned | PASS | `artifacts/instruction-footprint/flow-checkpoints.log` records the current repo scan result. |
+| Flow checkpoint coverage scanned | PASS | The Flow Checkpoints section records the current repo scan result. |
 | `perf!` checkpoints available for critical flows | PASS | Current repo scan found at least one `perf!` call site. |
 | Query endpoint perf visibility | PASS | Sampled query scenarios were measured through local-only `QueryPerfSample` probe endpoints because query-side perf rows are not committed. |
 | Baseline path selected | PASS | Latest prior `instruction-footprint` report selected: `docs/audits/reports/2026-06/2026-06-04/instruction-footprint.md`. |
@@ -213,9 +213,7 @@ Interpretation: query visibility and stage attribution are now working for the s
 - [instruction-footprint.md](./instruction-footprint.md)
 - [scenario-manifest.json](artifacts/instruction-footprint/scenario-manifest.json)
 - [perf-rows.json](artifacts/instruction-footprint/perf-rows.json)
-- [endpoint-matrix.tsv](artifacts/instruction-footprint/endpoint-matrix.tsv)
 - [checkpoint-deltas.json](artifacts/instruction-footprint/checkpoint-deltas.json)
-- [flow-checkpoints.log](artifacts/instruction-footprint/flow-checkpoints.log)
 - [checkpoint-coverage-gaps.json](artifacts/instruction-footprint/checkpoint-coverage-gaps.json)
 - [verification-readout.md](artifacts/instruction-footprint/verification-readout.md)
 - [method.json](artifacts/instruction-footprint/method.json)

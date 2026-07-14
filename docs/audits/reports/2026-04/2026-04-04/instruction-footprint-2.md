@@ -24,7 +24,7 @@
 | Scenario manifest recorded | PASS | `artifacts/instruction-footprint-2/scenario-manifest.json` captures the scenario identity tuple for every sampled endpoint. |
 | Normalized perf rows recorded | PASS | `artifacts/instruction-footprint-2/perf-rows.json` stores canonical endpoint rows with count and total local instructions. |
 | Fresh topology isolation used | PASS | Each scenario ran under a fresh `setup_root()` install instead of reusing one cumulative perf table. |
-| Flow checkpoint coverage scanned | PASS | `artifacts/instruction-footprint-2/flow-checkpoints.log` records the current repo scan result. |
+| Flow checkpoint coverage scanned | PASS | The Flow Checkpoints section records the current repo scan result. |
 | `perf!` checkpoints available for critical flows | PASS | Current repo scan found at least one `perf!` call site. |
 | Query endpoint perf visibility | PASS | Sampled query scenarios were measured through same-call local-only perf probe endpoints. |
 | Baseline path selected by daily baseline discipline | PARTIAL | First run of day for `instruction-footprint`; baseline deltas are `N/A`. |
@@ -179,8 +179,6 @@ Interpretation: the main current risk is observability incompleteness rather tha
 - [instruction-footprint-2.md](./instruction-footprint-2.md)
 - [scenario-manifest.json](artifacts/instruction-footprint-2/scenario-manifest.json)
 - [perf-rows.json](artifacts/instruction-footprint-2/perf-rows.json)
-- [endpoint-matrix.tsv](artifacts/instruction-footprint-2/endpoint-matrix.tsv)
-- [flow-checkpoints.log](artifacts/instruction-footprint-2/flow-checkpoints.log)
 - [checkpoint-coverage-gaps.json](artifacts/instruction-footprint-2/checkpoint-coverage-gaps.json)
 - [verification-readout.md](artifacts/instruction-footprint-2/verification-readout.md)
 - [method.json](artifacts/instruction-footprint-2/method.json)

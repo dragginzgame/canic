@@ -59,8 +59,8 @@ use estimates::{
 };
 use execution::run_scenario;
 use report::{
-    checkpoint_coverage_gaps, scan_perf_callsites, verification_rows, write_endpoint_matrix_tsv,
-    write_flow_checkpoint_log, write_json, write_report, write_verification_readout,
+    checkpoint_coverage_gaps, scan_perf_callsites, verification_rows, write_json, write_report,
+    write_verification_readout,
 };
 use scenarios::{audit_metadata, audit_paths, scenarios, workspace_root};
 
@@ -277,11 +277,9 @@ pub fn generate_instruction_footprint_report() {
 
     let scenario_manifest_path = paths.artifacts_dir.join("scenario-manifest.json");
     let perf_rows_path = paths.artifacts_dir.join("perf-rows.json");
-    let flow_checkpoints_path = paths.artifacts_dir.join("flow-checkpoints.log");
     let verification_path = paths.artifacts_dir.join("verification-readout.md");
     let method_path = paths.artifacts_dir.join("method.json");
     let environment_path = paths.artifacts_dir.join("environment.json");
-    let endpoint_matrix_path = paths.artifacts_dir.join("endpoint-matrix.tsv");
     let checkpoint_delta_path = paths.artifacts_dir.join("checkpoint-deltas.json");
     let checkpoint_gap_path = paths.artifacts_dir.join("checkpoint-coverage-gaps.json");
 
@@ -303,11 +301,9 @@ pub fn generate_instruction_footprint_report() {
         .collect::<Vec<_>>();
     write_json(&perf_rows_path, &perf_rows);
     write_json(&checkpoint_delta_path, &checkpoint_rows);
-    write_endpoint_matrix_tsv(&endpoint_matrix_path, &results);
 
     let gaps = checkpoint_coverage_gaps(&checkpoint_sites);
     write_json(&checkpoint_gap_path, &gaps);
-    write_flow_checkpoint_log(&flow_checkpoints_path, &checkpoint_sites);
 
     let query_unobservable_count = results
         .iter()

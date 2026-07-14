@@ -29,13 +29,6 @@
 - Retained size: `1039585`
 - Shallow size: `141794`
 
-## Artifacts
+## Retained Evidence
 
-- [shard.size-report.json](shard.size-report.json)
-- [shard.built.ic-wasm-info.txt](shard.built.ic-wasm-info.txt)
-- [shard.shrunk.ic-wasm-info.txt](shard.shrunk.ic-wasm-info.txt)
-- [shard.twiggy-top.txt](shard.twiggy-top.txt)
-- [shard.twiggy-top.csv](shard.twiggy-top.csv)
-- [shard.twiggy-retained.csv](shard.twiggy-retained.csv)
-- [shard.twiggy-dominators.txt](shard.twiggy-dominators.txt)
-- [shard.twiggy-monos.txt](shard.twiggy-monos.txt)
+The summarized metrics above are the retained historical evidence. Raw per-canister tool output was pruned after extraction because it duplicated this detail report and the aggregate run artifacts.

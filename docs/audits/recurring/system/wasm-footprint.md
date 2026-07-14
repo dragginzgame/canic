@@ -209,9 +209,9 @@ For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence
 
 1. Wasm artifacts were built or loaded from cache for each target canister/profile in scope.
 2. Artifact sizes were recorded in a machine-readable artifact.
-3. `twiggy top` output was captured for offender ranking.
-4. `twiggy dominators` output was captured for retained-size ownership.
-5. `twiggy monos` output was captured for generic bloat signal.
+3. `twiggy top` output was analyzed for offender ranking and summarized.
+4. `twiggy dominators` output was analyzed for retained-size ownership and summarized.
+5. `twiggy monos` output was analyzed for generic bloat signal and summarized.
 6. Baseline path was selected according to Canic daily baseline discipline.
 7. `wasm-debug` artifacts were captured or the run explicitly marked them `BLOCKED`.
 8. Debug-vs-audit size deltas were recorded when comparable debug artifacts exist.
@@ -232,11 +232,6 @@ Optional controls:
 - `WASM_AUDIT_SKIP_BUILD=1` to reuse cached artifacts under `artifacts/wasm-size/`
 - `WASM_CANISTER_NAME=<name>` to scope to a single canister
 - `WASM_PROFILE=release|fast|wasm-debug`
-
-Compatibility note:
-
-- the runner still accepts the older `wasm-release` alias, but new reports
-  should use `release`
 
 Recurring-run rule:
 
@@ -272,17 +267,14 @@ Transient reusable build cache:
 Required artifacts for each run:
 
 - aggregated size report JSON (`size-report.json`)
-- per-canister size report JSON (`<canister>.size-report.json`)
+- compact baseline metrics (`size-metrics.tsv`)
 - aggregated size summary markdown (`size-summary.md`)
 - debug/profile comparison markdown or table artifact when `wasm-debug` is available
 - per-canister detailed markdown (`<canister>.md`)
-- built `ic-wasm info` snapshot (`<canister>.built.ic-wasm-info.txt`)
-- shrunk `ic-wasm info` snapshot (`<canister>.shrunk.ic-wasm-info.txt`)
-- `twiggy top` text (`<canister>.twiggy-top.txt`)
-- `twiggy top` CSV (`<canister>.twiggy-top.csv`)
-- retained-size CSV (`<canister>.twiggy-retained.csv`)
-- `twiggy dominators` text (`<canister>.twiggy-dominators.txt`)
-- `twiggy monos` text (`<canister>.twiggy-monos.txt`)
+
+Raw `ic-wasm info` and `twiggy` output is transient analysis input. Extract its
+structure and hotspot evidence into the aggregate and per-canister reports; do
+not retain parallel text and CSV copies in the report archive.
 
 ## Structural Hotspots (Required)
 
