@@ -25,6 +25,19 @@ Do not retain an old child and inject its principal through `subnet_index`.
 That index contains service discovery entries, not placement ownership,
 pool/slot/capacity records, controller evidence, or an adoption authorization.
 
+## ic-memory 0.11 Format Boundary
+
+Canic binaries built with `ic-memory 0.11.1` cannot open a protected
+allocation ledger written by 0.10.x. The dependency deliberately recognizes
+the old payload as unsupported and provides no legacy decoder or in-place
+migration. Stable application keys and memory IDs are unchanged, but that does
+not make the allocation-governance ledger compatible.
+
+Treat adoption of 0.11.1 by an already deployed fleet as a destructive
+reinstall. Reinstall the full dependency closure above and restore only through
+application-owned export/import paths that are valid for the new installation.
+Restoring the old stable-memory image also restores the incompatible ledger.
+
 ## Preflight
 
 Before mutation, run:

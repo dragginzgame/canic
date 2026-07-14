@@ -16,8 +16,8 @@ use call::icp_call_on_network;
 use entry::stage_release_entry;
 use progress::StageProgress;
 
-pub(super) use artifact::build_release_set_entry;
 pub use artifact::resolve_release_artifact_path;
+pub(super) use artifact::{build_release_set_entry, validate_release_artifact_relative_path};
 
 #[cfg(test)]
 pub(super) use artifact::read_release_artifact;

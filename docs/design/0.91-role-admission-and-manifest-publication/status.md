@@ -17,8 +17,9 @@ exact outputs to the sole crate-private normal manifest writer. The writer
 rejects missing, duplicate, unexpected, or path-mismatched outputs and derives
 entry order from the snapshot.
 
-The 0.91.0 root and detailed changelog entries are prepared. Package versions
-remain unchanged and await the maintainer-owned release bump.
+The accepted implementation was published in 0.91.0. The active post-release
+maintenance batch is recorded under root `Unreleased`; it does not change the
+two accepted design slices.
 
 ## Accepted Scope
 
@@ -96,5 +97,7 @@ compatibility path is proposed.
 
 ## Next Action
 
-The accepted implementation and 0.91.0 changelog are complete and ready for
-maintainer push review. Package version preparation remains maintainer-owned.
+The accepted implementation is published. The 0.91.2 changelog is prepared
+for the independent post-release batch that updates `ic-memory` to 0.11.1 and
+moves the existing lexical release-artifact path rule into canonical manifest
+admission. Package version preparation remains maintainer-owned.
