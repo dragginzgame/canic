@@ -8,12 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Begin 0.92 as a feature-complete holistic audit and hardening line: accept
-  immutable baseline/method and closeout controls, complete the reproducible
-  Phase A audit-system inventory, then prepare one canonical fingerprinted
-  method suite that removes competing/stale audit authority, closes the six
-  audit-system defects, and remains gated on an immutable freeze before the
-  holistic product baseline.
+## [0.92.x] - 2026-07-14 - Holistic Audit-System Validation
+
+Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
+
+- `0.92.0` establishes one fingerprinted audit authority, hard-cuts competing
+  and historical verdict paths, and requires an immutable method freeze
+  before the holistic product baseline.
 
 ## [0.91.x] - 2026-07-13 - Role Admission and Complete-Build Manifests
 
