@@ -1,5 +1,20 @@
 # Audit: DRY Consolidation
 
+## Method Contract
+
+- Audit ID: `CANIC-DUPLICATION-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: duplicated behavior, validation, parsing, projection, and authority
+- Kind/profile: `manual`
+- Trace mode: `code_trace`
+- Cost/runtime: medium; 30-60 minutes
+- Prerequisites: Git, ripgrep, GNU find/coreutils, and exact representative
+  flows for any claimed duplication
+- False-positive boundary: local test setup and small formatting duplication
+  remain local unless they encode a competing behavior decision
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Find avoidable duplication, repeated ownership decisions, and copy/paste

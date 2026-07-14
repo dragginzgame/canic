@@ -116,21 +116,15 @@ jobs:
       - name: Release validation matrix guard
         shell: bash
         run: bash scripts/ci/check-release-validation-matrix.sh
-      - name: Upgrade/state compatibility audit guard
+      - name: Audit method catalog guard
         shell: bash
-        run: bash scripts/ci/check-upgrade-state-audit.sh
+        run: bash scripts/ci/check-audit-method-catalog.sh
       - name: Recovery runbooks guard
         shell: bash
         run: bash scripts/ci/check-recovery-runbooks.sh
-      - name: Diagnostic consistency audit guard
-        shell: bash
-        run: bash scripts/ci/check-diagnostic-consistency-audit.sh
       - name: Release package/install validation guard
         shell: bash
         run: bash scripts/ci/check-release-package-install-validation.sh
-      - name: RC readiness audit guard
-        shell: bash
-        run: bash scripts/ci/check-rc-readiness-audit.sh
       - name: Check runner disk before Rust validation
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks before Rust validation" --min-free-mib 4096

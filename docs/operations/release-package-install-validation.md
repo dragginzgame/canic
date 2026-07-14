@@ -7,9 +7,8 @@ It documents existing repo targets and when they should run. It is
 intentionally not named after a release line; release numbers belong in
 changelogs and status docs, not in the operational validation entry point.
 
-Current release-line context comes from `docs/status/current.md`. This
-checklist originated during the 0.62 release-durability line and remains the
-non-versioned package/install validation reference for current release work.
+Current release-line context comes from `docs/status/current.md`. This file is
+the canonical package/install validation reference for current release work.
 
 ## Scope
 
@@ -32,9 +31,10 @@ snapshots, generated artifacts, package artifacts, or release package contents.
 
 ## Related Evidence
 
-- [RC readiness audit](rc-readiness-audit.md) records whether implementation
-  slicing is closed and which package/install gates remain RC or final-release
-  validation work.
+- [Release validation matrix](release-validation-matrix.md) assigns package
+  and install gates to slice, RC, or final-release validation.
+- Current implementation-closeout state belongs to `docs/status/current.md`;
+  the final verdict belongs to a dated release-line closeout.
 
 ## Existing Package and Install Gates
 

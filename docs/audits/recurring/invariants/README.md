@@ -39,13 +39,18 @@ Each invariant report generated from this suite must include:
 
 ## Invariant Index
 
-1. Subject-Caller Binding Invariant
-2. Canonical Auth Boundary Invariant
-3. Capability Scope Enforcement Invariant
-4. Token Trust Chain Invariant
-5. Expiry / Replay / Single-Use Invariant
-6. Auth Abstraction Equivalence Invariant
-7. Audience / Target Binding Invariant
+1. `CANIC-AUTH-SUBJECT-001` — Subject-Caller Binding Invariant
+2. `CANIC-AUTH-BOUNDARY-001` — Canonical Auth Boundary Invariant
+3. `CANIC-AUTH-CAPABILITY-001` — Capability Scope Enforcement Invariant
+4. `CANIC-AUTH-TRUST-001` — Token Trust Chain Invariant
+5. `CANIC-AUTH-REPLAY-001` — Expiry / Replay / Single-Use Invariant
+6. `CANIC-AUTH-EQUIVALENCE-001` — Auth Abstraction Equivalence Invariant
+7. `CANIC-AUTH-AUDIENCE-001` — Audience / Target Binding Invariant
+
+The canonical [method catalog](../../METHODS.md) owns IDs, triggers, and
+follow-up boundaries. Each definition uses the `invariant` output profile from
+[AUDIT-HOWTO.md](../../AUDIT-HOWTO.md); generic trend sections are optional
+unless they contribute evidence to the invariant verdict.
 
 ## Invariant Map
 

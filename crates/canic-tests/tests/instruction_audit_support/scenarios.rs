@@ -229,6 +229,9 @@ pub(super) fn audit_metadata() -> AuditMetadata {
         worktree: required_env("CANIC_INSTRUCTION_AUDIT_WORKTREE"),
         run_timestamp_utc: required_env("CANIC_INSTRUCTION_AUDIT_TIMESTAMP_UTC"),
         compared_baseline_report: required_env("CANIC_INSTRUCTION_AUDIT_BASELINE_REPORT"),
+        method_id: required_env("CANIC_INSTRUCTION_AUDIT_METHOD_ID"),
+        method_version: required_env("CANIC_INSTRUCTION_AUDIT_METHOD_VERSION"),
+        method_fingerprint: required_env("CANIC_INSTRUCTION_AUDIT_METHOD_FINGERPRINT"),
     }
 }
 

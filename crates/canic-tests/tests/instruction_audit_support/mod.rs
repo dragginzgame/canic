@@ -64,7 +64,7 @@ use report::{
 };
 use scenarios::{audit_metadata, audit_paths, scenarios, workspace_root};
 
-const METHOD_TAG: &str = "Method V2";
+const METHOD_TAG: &str = "CANIC-INSTRUCTION-001/v1";
 const PERF_COUNTER_ID: u8 = 1;
 const PERF_COUNTER_SOURCE: &str = "performance_counter(1)";
 const PERF_PAGE_LIMIT: u64 = 512;
@@ -121,6 +121,9 @@ struct AuditMetadata {
     worktree: String,
     run_timestamp_utc: String,
     compared_baseline_report: String,
+    method_id: String,
+    method_version: String,
+    method_fingerprint: String,
 }
 
 ///
@@ -228,6 +231,9 @@ struct CheckpointCoverageGap {
 #[derive(Serialize)]
 struct MethodArtifact {
     method_tag: String,
+    method_id: String,
+    method_version: String,
+    method_fingerprint: String,
     counter_id: u8,
     counter_source: String,
     measured_unit: String,
@@ -319,7 +325,7 @@ pub fn generate_instruction_footprint_report() {
     );
     write_verification_readout(&verification_path, &verification_rows);
 
-    let method = method_artifact();
+    let method = method_artifact(&metadata);
     write_json(&method_path, &method);
 
     let environment = EnvironmentArtifact {
@@ -357,9 +363,12 @@ pub fn generate_instruction_footprint_report() {
     );
 }
 
-fn method_artifact() -> MethodArtifact {
+fn method_artifact(metadata: &AuditMetadata) -> MethodArtifact {
     MethodArtifact {
         method_tag: METHOD_TAG.to_string(),
+        method_id: metadata.method_id.clone(),
+        method_version: metadata.method_version.clone(),
+        method_fingerprint: metadata.method_fingerprint.clone(),
         counter_id: PERF_COUNTER_ID,
         counter_source: PERF_COUNTER_SOURCE.to_string(),
         measured_unit: "local_instructions".to_string(),
@@ -423,8 +432,22 @@ mod tests {
 
     #[test]
     fn method_artifact_records_counter_one_instruction_semantics() {
-        let artifact = serde_json::to_value(method_artifact()).expect("serialize method artifact");
+        let metadata = AuditMetadata {
+            code_snapshot: "snapshot".to_string(),
+            branch: "main".to_string(),
+            worktree: "clean".to_string(),
+            run_timestamp_utc: "2026-07-14T00:00:00Z".to_string(),
+            compared_baseline_report: "N/A".to_string(),
+            method_id: "CANIC-INSTRUCTION-001".to_string(),
+            method_version: "1".to_string(),
+            method_fingerprint: "test-fingerprint".to_string(),
+        };
+        let artifact =
+            serde_json::to_value(method_artifact(&metadata)).expect("serialize method artifact");
 
+        assert_eq!(artifact["method_id"], "CANIC-INSTRUCTION-001");
+        assert_eq!(artifact["method_version"], "1");
+        assert_eq!(artifact["method_fingerprint"], "test-fingerprint");
         assert_eq!(artifact["counter_id"], PERF_COUNTER_ID);
         assert_eq!(artifact["counter_source"], PERF_COUNTER_SOURCE);
         assert_eq!(artifact["measured_unit"], "local_instructions");

@@ -7,9 +7,8 @@ They document existing behavior after the 0.61 replay-protection line. They
 are intentionally not named after a release line; release numbers belong in
 changelogs and status docs, not in the operational runbook entry point.
 
-Current release-line context comes from `docs/status/current.md`. These
-runbooks originated during the 0.62 release-durability line and remain the
-non-versioned operator recovery reference for current release work.
+Current release-line context comes from `docs/status/current.md`. This file is
+the canonical operator recovery reference for current release work.
 
 ## Scope
 
@@ -34,13 +33,12 @@ generated artifacts.
 
 - [0.61 replay-protection design](../design/0.61-replay-protection/0.61-design.md)
   records the replay, receipt, operation-ID, and cost-guard model.
-- [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
-  records the current stable-state and upgrade evidence.
 - [Release validation matrix](release-validation-matrix.md) records the
   validation gates used for slice close-out, RC promotion, and final release.
-- [Diagnostic consistency audit](diagnostic-consistency-audit.md) records how
-  current public errors, internal logs, metrics, tests, and docs distinguish
-  replay-sensitive failure classes.
+- [Expiry/replay invariant](../audits/recurring/invariants/expiry-replay-single-use.md)
+  owns the current replay and freshness audit method.
+- [Security boundary ordering](../audits/recurring/system/security-boundary-ordering.md)
+  owns current cross-stage replay/auth ordering evidence.
 
 ## Operator Safety Rules
 
@@ -298,8 +296,6 @@ validation environment when too expensive for an ordinary docs slice.
 
 Release blockers: none found in these runbooks.
 
-The runbooks remain sufficient for release-line accounting unless a new change
-touches these recovery surfaces. Diagnostic consistency is covered by
-[Diagnostic consistency audit](diagnostic-consistency-audit.md). Remaining work
-belongs to package/install validation, RC accounting, or focused defect
-handling if a concrete release blocker is found.
+The runbooks remain the operator procedure; they do not issue a release
+verdict. Current diagnostic and recovery sufficiency is established by dated
+audit evidence and the active release-line closeout.

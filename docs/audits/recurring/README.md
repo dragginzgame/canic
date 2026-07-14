@@ -1,41 +1,48 @@
 # Recurring Audits
 
-Canonical layout for new recurring definitions:
-- `docs/audits/recurring/<domain>/<focus>.md`
+Reusable definitions live under one domain:
 
-## Required Report Structure
+- `docs/audits/recurring/system/`
+- `docs/audits/recurring/invariants/`
 
-All recurring audit reports must preserve:
+Select methods and canonical owners through
+[METHODS.md](../METHODS.md). Run and report them through
+[AUDIT-HOWTO.md](../AUDIT-HOWTO.md).
 
-- Report Preamble
-- Method tag/version
-- Comparability status
-- Verification Readout
+## Definition Requirements
 
-All recurring audit templates must require:
+Every definition names:
 
-- `## Structural Hotspots` with concrete file/module evidence
-- `## Hub Module Pressure` with normalized pressure scoring
-- `## Risk Score` using the normalized 0-10 scale
-- `## Amplification Drivers` for change/friction audits that analyze feature slices/commits
-- `## Early Warning Signals` for predictive decay detection (enum shock radius, cross-layer struct spread, hub growth, capability surface growth)
-- `## Dependency Fan-In Pressure` for module/type fan-in hub detection
+- stable audit ID and version;
+- canonical owner and trigger;
+- kind/output profile;
+- mode, cost, runtime, scope, exclusions, and prerequisites;
+- method-specific decision and false-positive rules; and
+- the shared execution, evidence, state, retention, redaction, and comparison
+  contract it follows.
 
-Structural hotspot and hub-pressure sections must be grounded in repository scans
-and include command evidence (for example `rg '^use '`, cross-layer import scans,
-`git log --name-only -n 20`, and symbol discovery scans).
+## Output Profiles
 
-## Recommended Starter Bundle
+- Invariant methods prove the exact positive, rejection, and boundary cases.
+- Trend methods freeze metrics and compare only method-compatible baselines.
+- Measured methods record fixtures, environments, uncertainty, and bounded raw
+  evidence.
+- Manual methods record exact samples, reviewer identity, unreviewed
+  boundaries, and disagreement handling.
 
-For general architecture-health audit rounds, start with:
+Generic hotspot, fan-in, or risk-score sections are required only when the
+selected method says they influence its decision. A large uniform report shape
+is not evidence of coverage.
+
+## General Architecture Bundle
+
+Start broad architecture review with:
 
 - [system/layer-violations.md](system/layer-violations.md)
+- [system/module-structure.md](system/module-structure.md)
+- [system/dependency-hygiene.md](system/dependency-hygiene.md)
 - [system/capability-surface.md](system/capability-surface.md)
-- [system/complexity-accretion.md](system/complexity-accretion.md)
 - [system/dry-consolidation.md](system/dry-consolidation.md)
-- [system/wasm-footprint.md](system/wasm-footprint.md)
 
-See also:
-
-- [system/README.md](system/README.md)
-- [system/instruction-footprint.md](system/instruction-footprint.md)
+Add the build, release, auth, lifecycle, measured, trend, or publish method only
+when its trigger or the accepted line coverage map requires it.

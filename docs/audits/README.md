@@ -9,6 +9,8 @@ artifacts directly.
 - To run or record an audit, read [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 - To review the architecture invariants every audit applies, read
   [META-AUDIT.md](META-AUDIT.md).
+- To select an active method or find its canonical owner, read
+  [METHODS.md](METHODS.md).
 - For repeatable auth and system audits, use [recurring/](recurring/README.md).
 - For module-surface review or an explicitly requested cleanup, use
   [modular/](modular/README.md).
@@ -26,6 +28,9 @@ historical exception. New numbered-line audit material belongs under
 | --- | --- | --- |
 | `AUDIT-HOWTO.md` | Audit execution and storage rules | Maintained governance |
 | `META-AUDIT.md` | Cross-audit architecture contract | Maintained governance |
+| `METHODS.md` | Active method, disposition, trigger, and ownership catalog | One canonical active catalog |
+| `method-fingerprints-v1.md` | Content identities for the prepared/frozen v1 method set | Regenerate deliberately when a method version changes |
+| `retired-methods.md` | Immutable identity and replacement for hard-cut methods | Append-only retirement entries |
 | `recurring/` | Reusable invariant and system definitions | Update deliberately; reports do not belong here |
 | `modular/` | Module-surface policy and cleanup runner | Reusable playbooks only |
 | `release-lines/` | Numbered-line closeout and program-state audits | Append-only primary reports |

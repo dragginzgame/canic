@@ -1,5 +1,19 @@
 # Audit: Module Structure / Visibility Discipline
 
+## Method Contract
+
+- Audit ID: `CANIC-STRUCTURE-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: crate/module topology, visibility, facade containment, and layout
+- Kind/profile: structural invariant plus comparable `trend`
+- Trace mode: `code_trace`
+- Cost/runtime: medium; 45-90 minutes
+- Prerequisites: Git, ripgrep, GNU find/coreutils, and Cargo metadata
+- False-positive boundary: size and visibility counts are pressure only unless
+  they expose an unintended contract or competing owner
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 `canic-core` plus facade/support crates where relevant
 
 ## Purpose

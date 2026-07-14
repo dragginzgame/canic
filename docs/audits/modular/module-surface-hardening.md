@@ -1,5 +1,22 @@
 # MODULAR AUDIT - Module Surface Hardening
 
+## Method Contract
+
+- Audit ID: `CANIC-MODULE-SURFACE-001`
+- Method version: `2.0`
+- Disposition: `manual_only`
+- Owner: requested module-level reachability, exposure, deletion pressure, and
+  runtime-shape review
+- Kind/profile: `manual`
+- Trace mode: `code_trace`; measurement gates may execute only in a disposable
+  environment
+- Cost/runtime: medium; 30-90 minutes per module
+- Prerequisites: named module, source snapshot, reviewer, ripgrep/Cargo
+  evidence, and measurement baseline when runtime shape may change
+- False-positive boundary: syntactic reachability, generated consumers, tests,
+  macros, and runtime registration are classified before deletion pressure
+- Shared contract: [AUDIT-HOWTO.md](../AUDIT-HOWTO.md)
+
 Use this audit for Canic modules whose exposed surface, compatibility residue,
 generated-boundary support, or retained helper layers need current authority
 review.

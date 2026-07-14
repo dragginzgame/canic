@@ -1,6 +1,19 @@
 # Audit: Audience Target Binding Invariant
 
-Method: `audience-target-binding-current`
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-AUDIENCE-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: signed audience, runtime target, and local-role grant binding
+- Kind/profile: security `invariant`
+- Trace mode: `code_trace`; focused rejection execution may use PocketIC
+- Cost/runtime: medium; 30-60 minutes excluding PocketIC fixtures
+- Prerequisites: Git, ripgrep, current auth DTO/ops/access code, generated
+  Candid, and focused audience rejection tests
+- False-positive boundary: transport routing metadata is not a signed audience
+  unless it participates in the authorization decision
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
 ## Purpose
 

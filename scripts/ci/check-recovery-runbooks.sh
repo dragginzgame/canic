@@ -8,19 +8,11 @@ GUARD_LABEL="recovery runbook"
 RUNBOOK="$ROOT/docs/operations/recovery-retry-runbooks.md"
 OPERATIONS_INDEX="$ROOT/docs/operations/README.md"
 MATRIX="$ROOT/docs/operations/release-validation-matrix.md"
-UPGRADE_AUDIT="$ROOT/docs/operations/upgrade-state-compatibility-audit.md"
-OLD_RUNBOOK_NAME="0.62-recovery"
-OLD_RUNBOOK_NAME="$OLD_RUNBOOK_NAME-retry-runbooks.md"
 
-require_files "$GUARD_LABEL" "$RUNBOOK" "$OPERATIONS_INDEX" "$MATRIX" "$UPGRADE_AUDIT"
-
-forbid_operations_file "$OLD_RUNBOOK_NAME" "recovery runbooks must use the non-versioned operations path"
-forbid_git_reference "$OLD_RUNBOOK_NAME" "recovery runbook docs must not point at an old versioned runbook path" docs CHANGELOG.md .github scripts
+require_files "$GUARD_LABEL" "$RUNBOOK" "$OPERATIONS_INDEX" "$MATRIX"
 
 require_texts "$OPERATIONS_INDEX" "$GUARD_LABEL" "recovery-retry-runbooks.md"
 require_texts "$MATRIX" "$GUARD_LABEL" "recovery-retry-runbooks.md"
-require_texts "$UPGRADE_AUDIT" "$GUARD_LABEL" "recovery-retry-runbooks.md"
-
 require_texts "$RUNBOOK" "$GUARD_LABEL" \
     "## Scope" \
     "## Operator Safety Rules" \

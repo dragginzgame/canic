@@ -14,25 +14,30 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.91.5`.
-- `v0.91.5` is published at commit `c2ee1b3a`.
+- The workspace package version is `0.91.6`.
+- `v0.91.6` is published at commit
+  `5f7a89f9b966ebf2755d5630ddcba0cdf968ebb1`.
 - The accepted line design is
-  [0.91 role admission and complete-build manifest publication](../design/0.91-role-admission-and-manifest-publication/0.91-design.md).
-- Detailed release notes are in the [0.91 changelog](../changelog/0.91.md).
+  [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
+- Detailed published release notes remain in the
+  [0.91 changelog](../changelog/0.91.md).
 
 ## Current Decision
 
-`0.91.5` is live. Post-release work remains on the 0.91 line and is limited to
-concrete defects, dependency maintenance, and focused cleanup. No 0.92 line is
-assigned. The 0.91.6 changelog is prepared for the current cleanup batch; the
-workspace package version remains 0.91.5 until maintainer-owned release
-preparation.
+The 0.92 design treats Canic as feature complete for this line, audits and
+improves the audit machinery first, then runs the retained improved suite
+across the actual repository and fixes only accepted findings. It incorporates
+immutable snapshot/method identities, independent result state machines,
+execution safety, a post-freeze defect protocol, deterministic finding
+identity, dual comparisons, constrained P1 waivers, and an executable
+`v0.91.6` contract. This remains an audit/hardening authorization, not a 1.0
+readiness claim.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, or fallback behavior unless the
 maintainer explicitly requests it. Named build environments resolve through
-`icp.yaml`; only `local` and `ic` are implicit, and no staging/mainnet aliases
-exist.
+`icp.yaml`; only `local` and `ic` are implicit, and no staging/mainnet
+aliases exist.
 
 Toko mint remains downstream-owned. Canic provides generic primitives only;
 automated work must not edit the Toko repository or move mint-specific
@@ -45,51 +50,70 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
 - `0.91.1` added the root-only issuer-readiness facade
   `AuthApi::provision_chain_key_delegation_proof_for_issuer_root` without
   restoring retired delegation-proof APIs.
-- `0.91.2` updated allocation governance to `ic-memory 0.11.1` as a destructive
-  reinstall boundary and rejects unsafe release-set artifact paths at
-  admission.
+- `0.91.2` updated allocation governance to `ic-memory 0.11.1` as a
+  destructive reinstall boundary and rejects unsafe release-set artifact
+  paths at admission.
 - `0.91.3` bounded the audit archive and removed redundant generated exports.
 - `0.91.4` made cost-guard settlement atomic, preserved snapshot restart
   causes, and made a failing installed `ic-wasm` shrink command fatal.
 - `0.91.5` made ICP refill admission atomic and fail-closed, added durable CLI
   retry identity, and specified direct verified refill output.
+- `0.91.6` made live conversion JSON match that direct-result contract and
+  consolidated deployment output plus backup persistence support.
 
 The accepted
 [0.91 closeout audit](../audits/reports/2026-07/2026-07-13/0.91-closeout.md)
-remains the release-line baseline.
+remains the published release-line baseline.
 
-## Prepared 0.91.6
+## Active 0.92
 
-- Live `cycles convert --json` now actually emits the verified refill object
-  promised by 0.91.5 instead of wrapping serialized JSON in the removed
-  command-context shape. `cycles_sent` is plain base-10 text.
-- Deployment commands share one internal JSON/text selector and renderer. The
-  distinct deployment-check evidence-envelope format remains separate.
-- Backup and restore share one persistence-owned journal sidecar lock, one
-  timestamp derivation owner, and one artifact path sanitizer. The direct and
-  resumable backup workflows remain intentionally separate.
-- A partially acquired journal lock is removed when its ownership marker
-  cannot be written. Existing public backup and restore lock errors are
-  preserved as typed domain causes.
-- The package version remains `0.91.5`; the changelog is prepared as 0.91.6,
-  but package and lockfile version preparation remains maintainer-owned.
+- Phase A is complete. Its
+  [inventory report](../audits/reports/2026-07/2026-07-14/0.92-audit-system-inventory.md)
+  found six confirmed P1 audit-system defects.
+- Phase B has prepared and targeted-validated every correction. Its
+  [hardening report](../audits/reports/2026-07/2026-07-14/0.92-audit-system-hardening.md)
+  has `run_result: partial` only because the improved method snapshot is not
+  committed and frozen.
+- One canonical [method catalog](../audits/METHODS.md) owns 22 active
+  definitions: 14 system, 7 authentication, and 1 manual-only module-surface
+  method.
+- The three competing access/ops/workflow purity definitions are merged into
+  `CANIC-LAYERING-001/v1`.
+- Standing 0.62 audit verdict docs and their literal CI guards are hard-cut.
+  Current operator gates and dated release-line evidence own validation.
+- Previously missing dependency, build/generated-code/unsafe, CI/security,
+  provenance, reproducibility, and host/target topics now have explicit owners.
+- Instruction and Wasm execution is offline/isolated, detects source mutation,
+  records full method identities, and emits compact hashed/redacted evidence
+  manifests.
+- The prepared method manifest is
+  `fa92c4102efe74391c51f1f829aec7ac9c0b64941da73ee6dad1ebf2b292df07`;
+  it is deliberately marked `prepared_uncommitted`.
+- The `v0.91.6` product-tree baseline is
+  `8fce43e41ce430d9b505e19f8d596ed440b291d4c6ecb19c4a1cfdf71656a9b6`.
+  The committed Phase B product-tree hash is pending.
+- No runtime/public/serialized/stable/package behavior changed. The removal of
+  stale readiness authority is an explicit operator/CI contract change.
+- At least three months of real-world use remains a separate prerequisite for
+  any future 1.0 discussion.
 
 ## Focused Validation
 
-- `cargo check -p canic-cli -p canic-backup` passes.
-- All four typed ICP-refill response tests pass, including the exact maintained
-  JSON projection.
-- All 96 focused deployment command tests pass.
-- Shared journal-lock exclusion/drop, backup lock rejection, restore lock
-  rejection and pending recovery, timestamp, and artifact-path tests pass.
-- `cargo clippy -p canic-cli -p canic-backup --all-targets -- -D warnings`
-  passes.
-- Targeted package formatting and diff-hygiene checks pass.
-- Full workspace, broad PocketIC, deployment, and release suites remain
-  maintainer-owned and were not run for this cleanup.
+- Audit-method catalog/conformance/fingerprint guard passes for all 22 active
+  definitions.
+- Affected Bash syntax, release matrix, recovery, package/install, and
+  `actionlint` guards pass.
+- Both focused instruction method-identity and daily-baseline tests pass.
+- `cargo fmt -p canic-tests -- --check` and `git diff --check` pass.
+- The committed `v0.91.6` product-tree helper reproduces
+  `8fce43e41ce430d9b505e19f8d596ed440b291d4c6ecb19c4a1cfdf71656a9b6`.
+- Full workspace, broad PocketIC, deployment, publish, and release suites remain
+  maintainer-owned and were not run for this audit-system slice.
 
 ## Next Action
 
-Review the prepared 0.91.6 changelog and run the maintainer-owned release flow.
-Do not assign 0.92 or begin deferred multi-step claim orchestration without an
-explicit maintainer request.
+Commit and push the complete prepared Phase A/Phase B slice. Then record the
+full freeze commit, compute and review its committed product-tree delta, mark
+the six findings fixed if that delta matches the declared operator/CI scope,
+and begin Phase C. Do not run instruction/Wasm product baselines before the
+freeze gate.

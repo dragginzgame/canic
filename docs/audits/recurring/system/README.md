@@ -1,67 +1,46 @@
 # System Audit Suite
 
-This directory contains recurring architecture and drift audits for the core
-Canic system.
+This directory contains the active recurring system definitions named by the
+canonical [method catalog](../../METHODS.md).
 
-## Standard Starter Set
+## Architecture And Structure
 
-Use this set for repeatable "code cleanliness / architecture health" audit
-rounds:
+- [Layering and responsibility](layer-violations.md) is the single owner for
+  endpoint, access, workflow, policy, ops, model, DTO, record, view,
+  conversion, and side-effect placement.
+- [Module structure](module-structure.md) owns topology and visibility.
+- [Capability surface](capability-surface.md) owns endpoint/Candid capability
+  surface and growth.
+- [DRY consolidation](dry-consolidation.md) owns duplicated behavior and
+  competing implementation authority.
 
-1. [layer-violations.md](layer-violations.md)
-2. [capability-surface.md](capability-surface.md)
-3. [complexity-accretion.md](complexity-accretion.md)
-4. [wasm-footprint.md](wasm-footprint.md)
-5. [module-structure.md](module-structure.md)
-6. [dependency-hygiene.md](dependency-hygiene.md)
-7. [publish-surface.md](publish-surface.md)
-8. [dry-consolidation.md](dry-consolidation.md)
+The former access-, ops-, and workflow-purity definitions are merged into the
+layering method. They remain recoverable through
+[retired-methods.md](../../retired-methods.md), not through compatibility audit
+paths.
 
-These audits cover:
+## Maintainability And Package Surface
 
-- layering and dependency direction
-- public/internal capability surface growth
-- branch/enum/concept accretion
-- shipped wasm output and retained-size drift
-- crate/module topology, visibility hygiene, and facade containment
-- crate dependency direction, feature hygiene, and publish-surface discipline
-- published package posture, crate-local docs/examples alignment, and downstream contract clarity
-- avoidable behavior duplication, repeated parser/registry ownership, and
-  command-family DRY pressure
+- [Change friction](change-friction.md)
+- [Complexity accretion](complexity-accretion.md)
+- [Dependency hygiene](dependency-hygiene.md)
+- [Publish surface](publish-surface.md)
 
-## Additional System Audits
+## Security And Lifecycle
 
-- [instruction-footprint.md](instruction-footprint.md)
-- [bootstrap-lifecycle-symmetry.md](bootstrap-lifecycle-symmetry.md)
-- [change-friction.md](change-friction.md)
-- [workflow-purity.md](workflow-purity.md)
+- [Security boundary ordering](security-boundary-ordering.md) owns cross-stage
+  order; individual auth properties remain under `recurring/invariants/`.
+- [Bootstrap lifecycle symmetry](bootstrap-lifecycle-symmetry.md)
 
-## Usage Guidance
+## Build, Release, And Measurement
 
-- Use the standard starter set for broad architectural review rounds.
-- Add `instruction-footprint` when the goal is runtime optimization or perf
-  regression detection.
-- Use `bootstrap-lifecycle-symmetry` after lifecycle/bootstrap changes.
-- Use `change-friction` during refactor planning or release-hardening windows.
-- Use `module-structure` when reviewing public surface drift, crate topology,
-  or fleet/test/audit boundary cleanliness.
-- Use `dependency-hygiene` when reviewing Cargo graph drift, feature-flag sprawl,
-  or publish/package surface cleanliness.
-- Use `publish-surface` when reviewing README/docs.rs posture, published binary
-  contracts, or whether crate-local package documentation matches intended downstream use.
-- Use `dry-consolidation` after broad CLI/host/backup changes or when a cleanup
-  pass should distinguish useful local duplication from behavior-bearing drift.
-- Use `workflow-purity` after workflow/replay/cost-guard/intent/recovery
-  changes to verify workflow remains orchestration and lower layers retain
-  records, codecs, policy, and platform-effect ownership.
+- [Build integrity](build-integrity.md)
+- [Release integrity](release-integrity.md)
+- [Instruction footprint](instruction-footprint.md)
+- [Wasm footprint](wasm-footprint.md)
 
-## Reporting Discipline
+## Selection And Reporting
 
-Store outputs under:
-
-- `docs/audits/reports/YYYY-MM/YYYY-MM-DD/<scope>.md`
-
-Follow:
-
-- [../../AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
-- [../../META-AUDIT.md](../../META-AUDIT.md)
+Use [METHODS.md](../../METHODS.md) for triggers, owners, dispositions, and
+holistic coverage. Use [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md) for run identity,
+safety, results, comparison, evidence, retention, and closeout rules.

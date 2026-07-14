@@ -1,5 +1,21 @@
 # Audit: Security Boundary Ordering
 
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-ORDERING-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: cross-stage auth, replay, capability, proof-install, and dispatch order
+- Kind/profile: security `invariant` plus manual end-to-end ordering trace
+- Trace mode: `code_trace`; named rejection paths may use PocketIC execution
+- Cost/runtime: medium/high; 45-90 minutes excluding PocketIC fixtures
+- Prerequisites: Git, ripgrep, current auth invariant definitions, and focused
+  rejection tests where static order is insufficient
+- False-positive boundary: this method owns sequencing only; individual trust,
+  subject, audience, capability, and replay properties remain with their auth
+  invariant owner and are not rescored here
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Audit security-sensitive ordering and invariant sequencing across auth, replay

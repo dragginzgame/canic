@@ -1,8 +1,21 @@
 # Bootstrap Lifecycle Symmetry Audit
 
-## Audit ID
+## Method Contract
 
-`bootstrap-lifecycle-symmetry/current`
+- Audit ID: `CANIC-LIFECYCLE-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: lifecycle restoration and bootstrap boundary
+- Kind/profile: architecture invariant / `invariant` plus named manual review
+- Trace mode: `code_trace`; execution fixtures use PocketIC only
+- Cost/runtime: medium; 30-60 minutes excluding PocketIC fixtures
+- Prerequisites: Git, ripgrep, Rust/Cargo, and PocketIC only when execution
+  proof is required
+- False-positive boundary: synchronous bounded restoration/metrics and timer
+  scheduling are allowed; inline or awaited orchestration is not
+- Shared contract: result, safety, evidence, retention, redaction,
+  comparability, and follow-up follow
+  [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
 ## Objective
 
@@ -141,7 +154,7 @@ Record all of the following in the result file:
 * audited paths
 * baseline report path
 * code snapshot identifier
-* method tag: `bootstrap-lifecycle-symmetry/current`
+* method tag: `CANIC-LIFECYCLE-001/v1`
 * comparability status: `comparable` | `partially comparable` | `not comparable`
 
 ### Comparability Rules

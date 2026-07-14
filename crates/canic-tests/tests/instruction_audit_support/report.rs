@@ -281,6 +281,15 @@ pub(super) fn write_report(
         metadata.code_snapshot
     ));
     out.push_str(&format!("- Method tag/version: `{METHOD_TAG}`\n"));
+    out.push_str(&format!("- Audit method ID: `{}`\n", metadata.method_id));
+    out.push_str(&format!(
+        "- Audit method version: `{}`\n",
+        metadata.method_version
+    ));
+    out.push_str(&format!(
+        "- Audit method fingerprint: `{}`\n",
+        metadata.method_fingerprint
+    ));
     out.push_str(&format!("- Counter source: `{PERF_COUNTER_SOURCE}`\n"));
     out.push_str(&format!("- Counter ID: `{PERF_COUNTER_ID}`\n"));
     out.push_str("- Measured unit: `local_instructions`\n");
@@ -579,6 +588,9 @@ pub(super) fn write_report(
     ));
     out.push_str(&format!(
         "- [environment.json](artifacts/{artifacts_dir_name}/environment.json)\n"
+    ));
+    out.push_str(&format!(
+        "- [evidence-manifest.yml](artifacts/{artifacts_dir_name}/evidence-manifest.yml)\n"
     ));
 
     fs::write(path, out).expect("write instruction audit report");
@@ -885,6 +897,9 @@ mod tests {
             worktree: "clean".to_string(),
             run_timestamp_utc: "2026-06-03T00:00:00Z".to_string(),
             compared_baseline_report: compared_baseline_report.to_string(),
+            method_id: "CANIC-INSTRUCTION-001".to_string(),
+            method_version: "1".to_string(),
+            method_fingerprint: "test-fingerprint".to_string(),
         }
     }
 

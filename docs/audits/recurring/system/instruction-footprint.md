@@ -1,5 +1,21 @@
 # Audit: Instruction Footprint
 
+## Method Contract
+
+- Audit ID: `CANIC-INSTRUCTION-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: local instruction-count measurement and checkpoint coverage
+- Kind/profile: `measured`
+- Trace mode: `execution_trace` in PocketIC or a named disposable local test
+  environment
+- Cost/runtime: high; 60-180 minutes depending on scenario roster
+- Prerequisites: Rust/Cargo, PocketIC or named local test environment, frozen
+  scenario roster, isolated state, and isolated `CARGO_TARGET_DIR`
+- False-positive boundary: measurement noise and fixture/setup work are
+  reported separately from endpoint/flow instructions
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Track runtime instruction drift over time using Canic's endpoint perf counters
@@ -653,8 +669,8 @@ For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence
 7. Flows lacking checkpoints were listed explicitly with proposed insertion
    sites where possible.
 8. Timer samples, if present, were isolated from endpoint scenario groups.
-9. Baseline path was selected from the latest prior retained
-   `instruction-footprint*.md` report, whether same-day or previous-day.
+9. The first run of a UTC day records baseline `N/A`; same-day reruns compare
+   to that day's unnumbered `instruction-footprint.md` baseline.
 10. Deltas versus baseline were recorded when comparable.
 11. Verification readout includes command outcomes with `PASS` / `FAIL` /
     `BLOCKED`.
@@ -687,7 +703,7 @@ Runner command bundle:
 
 - `bash scripts/ci/instruction-audit-report.sh`
 - internally, the script runs:
-  `cargo test -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture`
+  `cargo test --offline --locked -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture`
 
 Optional estimate runner examples:
 
@@ -708,6 +724,11 @@ Required capture artifacts:
 - `verification-readout.md`
 - `method.json`
 - `environment.json`
+- `checkpoint-deltas.json`
+- `checkpoint-coverage-gaps.json`
+- `evidence-manifest.yml`, including run identity, tool versions, retention and
+  redaction declarations, and SHA-256 hashes for the report and every retained
+  supporting artifact
 
 The primary Markdown report embeds the normalized endpoint matrix and current
 checkpoint scan. Do not emit duplicate TSV or log copies of those sections.

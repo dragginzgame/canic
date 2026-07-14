@@ -8,13 +8,8 @@ GUARD_LABEL="release validation"
 MATRIX="$ROOT/docs/operations/release-validation-matrix.md"
 OPERATIONS_INDEX="$ROOT/docs/operations/README.md"
 CI_GOVERNANCE="$ROOT/docs/governance/ci-deployment.md"
-OLD_MATRIX_NAME="0.62-release-validation"
-OLD_MATRIX_NAME="$OLD_MATRIX_NAME-matrix.md"
 
 require_files "$GUARD_LABEL" "$MATRIX" "$OPERATIONS_INDEX" "$CI_GOVERNANCE"
-
-forbid_operations_file "$OLD_MATRIX_NAME" "release validation matrix must use the non-versioned operations path"
-forbid_git_reference "$OLD_MATRIX_NAME" "release validation docs must not point at the old versioned matrix path" docs CHANGELOG.md .github
 
 require_texts "$OPERATIONS_INDEX" "$GUARD_LABEL" "release-validation-matrix.md"
 require_texts "$CI_GOVERNANCE" "$GUARD_LABEL" "release-validation-matrix.md"
@@ -29,6 +24,7 @@ require_texts "$MATRIX" "$GUARD_LABEL" \
     "cargo test --locked -p canic --test changelog_governance -- --nocapture" \
     "git diff --check" \
     "bash scripts/ci/check-release-validation-matrix.sh" \
+    "bash scripts/ci/check-audit-method-catalog.sh" \
     "bash scripts/ci/check-control-plane-feature-matrix.sh" \
     "make fmt-check" \
     "make clippy" \

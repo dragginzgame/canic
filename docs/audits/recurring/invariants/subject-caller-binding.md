@@ -1,5 +1,21 @@
 # Audit: Subject-Caller Binding Invariant
 
+## Method Contract
+
+- Audit ID: `CANIC-AUTH-SUBJECT-001`
+- Method version: `1`
+- Disposition: `revise`
+- Owner: verified subject and transport caller binding
+- Kind/profile: security `invariant`
+- Trace mode: `code_trace`; focused wrong-caller execution may use PocketIC
+- Cost/runtime: medium; 30-60 minutes
+- Prerequisites: Git, ripgrep, caller/subject resolution code, macro paths, and
+  wrong-caller rejection fixtures
+- False-positive boundary: issuer, controller, parent, and delegated subject
+  identities remain distinct unless the active contract explicitly equates
+  them
+- Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
+
 ## Purpose
 
 Ensure delegated tokens cannot become transferable bearer credentials.

@@ -8,23 +8,19 @@ validation notes.
 - [Release validation matrix](release-validation-matrix.md) defines the
   current release-validation inventory. Use it for slice close-out,
   implementation close-out, RC promotion, and final release/tag validation.
-- [Upgrade and state compatibility audit](upgrade-state-compatibility-audit.md)
-  records the current upgrade/state evidence for replay-sensitive release
-  surfaces.
 - [Recovery and retry runbooks](recovery-retry-runbooks.md) document safe
   operator recovery decisions for replay-sensitive failures and uncertain
   operations.
 - [Destructive reinstall recovery](destructive-reinstall-recovery.md) defines
   dependency-closure reinstall rules for placement managers and their children.
-- [Diagnostic consistency audit](diagnostic-consistency-audit.md) records
-  whether current public errors, logs, metrics, tests, and docs distinguish the
-  replay-sensitive failure classes needed for RC operation.
 - [Release package and install validation](release-package-install-validation.md)
   records package, install, artifact, smoke-test, and environment-specific
   release gates.
-- [RC readiness audit](rc-readiness-audit.md) records the implementation
-  close-out verdict and separates remaining RC/final-release validation from
-  additional implementation slicing.
+
+Standing diagnostic, upgrade-state, and RC-readiness audit verdicts were
+hard-cut during 0.92. Current evidence belongs to dated audit reports and the
+active release-line closeout; this directory retains operator contracts and
+validation procedures only.
 
 ## Auth Operations
 
