@@ -117,7 +117,7 @@ main() {
         exit 1
     }
 
-    run_installed_canic blob-storage help > "$TMP_ROOT/blob-storage-help.out"
+    run_installed_canic blob-storage --help > "$TMP_ROOT/blob-storage-help.out"
     if run_installed_canic blob-storage status downstream app --json \
         > "$TMP_ROOT/blob-storage-status-json.out" \
         2> "$TMP_ROOT/blob-storage-status-json.err"

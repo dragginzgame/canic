@@ -670,11 +670,26 @@ fn active_delegation_proof_installer_surface_is_issuer_gated() {
 
 #[test]
 fn root_delegation_proof_batch_surface_is_pinned() {
+    assert_root_provisioning_facade_is_public();
     assert_root_delegation_protocol_constants();
     let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
     let source = read_text(&macro_path);
     assert_root_delegation_macro_guards(&source);
     assert_root_delegation_endpoint_bindings(&source);
+}
+
+fn assert_root_provisioning_facade_is_public() {
+    fn assert_signature<F, Fut>(function: F)
+    where
+        F: FnOnce(Principal) -> Fut,
+        Fut: std::future::Future<Output = Result<(), canic::Error>>,
+    {
+        std::hint::black_box(function);
+    }
+
+    assert_signature(
+        canic::api::auth::AuthApi::provision_chain_key_delegation_proof_for_issuer_root,
+    );
 }
 
 fn assert_root_delegation_protocol_constants() {

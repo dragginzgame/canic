@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-13
+Last updated: 2026-07-14
 
 ## Purpose
 
@@ -15,17 +15,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.90.2`.
-- `v0.90.2` is published and points to commit `4289dcc7`.
+- The workspace package version is `0.91.0`.
+- `v0.91.0` is published and points to commit `34384263`.
 - The current line is documented under
-  [0.90 receipt-backed intent reconciliation](../design/0.90-receipt-backed-intent-reconciliation/0.90-design.md).
+  [0.91 role admission and complete-build manifest publication](../design/0.91-role-admission-and-manifest-publication/0.91-design.md).
 
 ## Current Decision
 
-The Canic-owned 0.90 line is complete. The
-[0.90 closeout audit](../audits/reports/2026-07/2026-07-13/0.90-closeout.md)
-passes without a correction release. Do not add `0.90.3` work unless a new
-concrete defect is found.
+`0.91.0` is live. The accepted 0.91 design is implemented, and the
+[0.91 closeout audit](../audits/reports/2026-07/2026-07-13/0.91-closeout.md)
+passes. Keep post-release work on the 0.91 line bounded to concrete defects,
+dependency maintenance, and focused cleanup; no 0.92 line is assigned.
 
 Toko mint remains the first planned downstream consumer. Toko developers own
 its request, caller-scoped receipt, evidence validation, retry, cancellation,
@@ -98,6 +98,10 @@ design. It is not reserved for 0.91 or any other numbered line.
   [0.91 closeout audit](../audits/reports/2026-07/2026-07-13/0.91-closeout.md)
   passes with one normal writer, exact current-output proof, and no retired
   readiness or optional-manifest surface.
+- The packaged downstream CLI, packaged downstream `wasm_store`, and isolated
+  installed-CLI proofs pass against the 0.91.0 package surfaces. Their hard-cut
+  command probes now use the maintained `--json` and `--help` forms and assert
+  Medic's exit code 1 for blocking drift.
 - Targeted `canic-core`, `canic-host`, and `canic-cli` check and Clippy pass.
 - The published 0.90.2 PocketIC proof covers local capacity plus receipt
   creation, replay, conflicts, commit, rollback, terminal replay, released
@@ -112,6 +116,6 @@ design. It is not reserved for 0.91 or any other numbered line.
 
 ## Next Action
 
-The accepted 0.91 implementation is complete and ready for maintainer push
-review. The 0.91.0 root and detailed changelog entries are prepared. Package
-version preparation remains maintainer-owned; the workspace is still 0.90.2.
+Continue only the bounded 0.91 post-release batch recorded under `Unreleased`.
+The package version remains 0.91.0; prepare a patch changelog and change package
+versions only when the maintainer explicitly requests release preparation.

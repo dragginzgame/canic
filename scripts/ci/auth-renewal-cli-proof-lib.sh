@@ -119,14 +119,22 @@ run_auth_renewal_cli_surface_probe_commands() {
     local runner="$1"
     local proof_root="$2"
     local fake_icp="$3"
+    local medic_exit=0
 
-    "$runner" auth help > "$proof_root/auth-renewal-help.out"
+    "$runner" auth --help > "$proof_root/auth-renewal-help.out"
     "$runner" --network fixture --icp "$fake_icp" \
         auth renewal status downstream --issuer "$AUTH_RENEWAL_PROOF_ISSUER" --json \
         > "$proof_root/auth-renewal-status-drift.json"
+    set +e
     "$runner" --network fixture --icp "$fake_icp" \
         medic deployment downstream --auth-renewal "$AUTH_RENEWAL_PROOF_ISSUER" \
         > "$proof_root/auth-renewal-medic-drift.out"
+    medic_exit=$?
+    set -e
+    if [ "$medic_exit" -ne 1 ]; then
+        echo "expected auth-renewal medic drift to exit 1, got $medic_exit" >&2
+        exit 1
+    fi
 }
 
 assert_auth_renewal_cli_file_contains() {

@@ -186,8 +186,8 @@ run_probe() {
     run_packaged_canic fleet list > "$TMP_ROOT/fleet-list.out"
     run_packaged_canic fleet role list downstream > "$TMP_ROOT/role-list.out"
     run_packaged_canic fleet role inspect downstream app > "$TMP_ROOT/app-inspect.out"
-    run_packaged_canic deploy inspect catalog list --format json --output "$TMP_ROOT/catalog.json"
-    run_packaged_canic blob-storage help > "$TMP_ROOT/blob-storage-help.out"
+    run_packaged_canic deploy inspect catalog list --json --output "$TMP_ROOT/catalog.json"
+    run_packaged_canic blob-storage --help > "$TMP_ROOT/blob-storage-help.out"
     if run_packaged_canic blob-storage status downstream app --json \
         > "$TMP_ROOT/blob-storage-status-json.out" \
         2> "$TMP_ROOT/blob-storage-status-json.err"

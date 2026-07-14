@@ -295,6 +295,12 @@ issuer lazy repair
   -> root canic_get_or_create_chain_key_delegation_proof update
   -> root returns cached proof or singleflight creates one signed batch
   -> issuer verifies and stores active proof
+
+root issuer readiness provisioning
+  -> app root calls AuthApi::provision_chain_key_delegation_proof_for_issuer_root
+  -> root reuses the same cached/singleflight chain-key batch path
+  -> root calls canic_install_active_delegation_proof on the issuer
+  -> root records the issuer install outcome
 ```
 
 Root issuance steps:
@@ -356,9 +362,11 @@ a reject as proof that no signature exists.
 
 The old bridge-backed canister-signature root proof provisioning surfaces are
 not part of the active protocol. In `root_proof_mode = "chain_key_batch"`,
-delegated-token liveness comes from root timer renewal and issuer lazy repair
-through chain-key batch proofs, not from external direct root query or install
-workflows.
+delegated-token liveness comes from root timer renewal, issuer lazy repair, and
+root-triggered issuer readiness provisioning through the same chain-key batch
+authority. The readiness helper does not accept caller-supplied proof material
+and is intended for an application root's install/reinstall workflow, not
+frontend orchestration or an external signer.
 
 The retired single-proof `canic_prepare_delegation_proof` and
 `canic_get_delegation_proof` root endpoints are removed from the active
@@ -731,8 +739,10 @@ Expected failures:
 - delegated-session bootstrap replay conflict
 - role-attestation epoch below configured minimum
 
-These failures are cryptographic, temporal, policy, or config failures. There
-is no "delegation proof miss" correctness failure in current Canic auth.
+These failures are cryptographic, temporal, policy, or config failures. Canic's
+token-prepare path repairs a missing proof lazily. Applications that inspect
+active-proof status before calling token prepare must provision issuer
+readiness from their root install/reinstall workflow first.
 
 ## 14. Developer Checklist
 
@@ -750,8 +760,8 @@ When changing auth code:
 - do not retag root-provided attestation keys
 - do not accept caller-provided arbitrary public keys
 - do not put management-canister threshold signing on the login hot path
-- do not hide bridge/direct-query root proof renewal behind a one-shot update
-  API
+- keep explicit root provisioning on the chain-key batch authority; never
+  accept caller-supplied proof material or revive bridge/direct-query renewal
 - update `docs/contracts/AUTH_DELEGATED_SIGNATURES.md` when wire structs or
   verification rules change
 - update this document when trust boundaries or auth flows change

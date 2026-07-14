@@ -16,7 +16,10 @@ authority or placement state was owned by that target.
   placement-managed children as part of the same recovery closure.
 - Reinstalling an auth issuer removes its active delegation proof. Once the
   issuer is registered in the restored topology, root renewal or issuer lazy
-  repair provisions a fresh proof automatically.
+  repair provisions a fresh proof automatically. An application root that
+  requires readiness before the first login may call
+  `AuthApi::provision_chain_key_delegation_proof_for_issuer_root` after the
+  install/reinstall completes.
 
 Do not retain an old child and inject its principal through `subnet_index`.
 That index contains service discovery entries, not placement ownership,
@@ -44,11 +47,13 @@ canic --network <environment> auth renewal status <deployment> \
 ```
 
 `issuer_unregistered` means topology must be restored before proof renewal can
-succeed. It must not be repaired by a controller-only proof injection endpoint.
+succeed. It must not be repaired by injecting caller-supplied proof material;
+the root readiness facade is valid only after registration and derives the
+proof from Canic-owned policy and renewal state.
 
 ## Unsupported Recovery
 
 Canic does not provide legacy env seeding, upgrade-argument migration,
 registry self-healing, implicit child adoption, stable-layout fallback, or
-manual delegation-proof provisioning. Those paths would conceal incompatible
-or incomplete authoritative state.
+delegation-proof injection. Those paths would conceal incompatible or
+incomplete authoritative state.
