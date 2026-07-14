@@ -17,6 +17,7 @@ mod truth;
 pub use crate::cli::clap::value_arg;
 use command::{DEPLOYMENT_ARG, PROFILE_ARG};
 pub use command::{deploy_command, deploy_truth_leaf_command, usage};
+use output_format::JsonTextOutputFormat;
 
 use crate::{
     cli::{
@@ -140,6 +141,23 @@ where
     let json = serde_json::to_string_pretty(value).map_err(Box::<dyn std::error::Error>::from)?;
     println!("{json}");
     Ok(())
+}
+
+fn print_json_or_text<T>(
+    format: JsonTextOutputFormat,
+    value: &T,
+    render_text: impl FnOnce(&T) -> String,
+) -> Result<(), DeployCommandError>
+where
+    T: serde::Serialize,
+{
+    match format {
+        JsonTextOutputFormat::Json => print_json(value),
+        JsonTextOutputFormat::Text => {
+            println!("{}", render_text(value));
+            Ok(())
+        }
+    }
 }
 
 pub fn read_json_file<T>(path: &PathBuf) -> Result<T, DeployCommandError>

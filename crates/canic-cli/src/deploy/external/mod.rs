@@ -22,10 +22,7 @@ pub(super) use options::{
     DeployExternalVerifyOptions,
 };
 
-use super::{
-    DeployCommandError, load_deployment_check, output_format::ExternalOutputFormat, print_json,
-    read_json_file,
-};
+use super::{DeployCommandError, load_deployment_check, print_json_or_text, read_json_file};
 use crate::{
     cli::{clap::parse_subcommand, help::print_help_or_version},
     version_text,
@@ -175,11 +172,7 @@ where
     let check = load_deployment_check(options.truth)?;
     let report =
         build_critical_fix_report(&check, options.fix_id.as_str(), options.severity.as_str());
-    match options.format {
-        ExternalOutputFormat::Json => print_json(&report)?,
-        ExternalOutputFormat::Text => println!("{}", critical_external_fix_report_text(&report)),
-    }
-    Ok(())
+    print_json_or_text(options.format, &report, critical_external_fix_report_text)
 }
 
 fn run_inspect_consent<I>(args: I) -> Result<(), DeployCommandError>
@@ -194,13 +187,11 @@ where
     let options = DeployExternalInspectOptions::parse(args, consent_command, consent_usage)?;
     let request = read_json_file::<ExternalUpgradeConsentEvidenceRequest>(&options.request)?;
     let evidence = build_upgrade_consent_evidence(request)?;
-    match options.format {
-        ExternalOutputFormat::Json => print_json(&evidence)?,
-        ExternalOutputFormat::Text => {
-            println!("{}", external_upgrade_consent_evidence_text(&evidence));
-        }
-    }
-    Ok(())
+    print_json_or_text(
+        options.format,
+        &evidence,
+        external_upgrade_consent_evidence_text,
+    )
 }
 
 fn run_inspect_verification_policy<I>(args: I) -> Result<(), DeployCommandError>
@@ -219,13 +210,11 @@ where
     )?;
     let request = read_json_file::<ExternalUpgradeVerificationPolicyRequest>(&options.request)?;
     let policy = build_upgrade_verification_policy(request);
-    match options.format {
-        ExternalOutputFormat::Json => print_json(&policy)?,
-        ExternalOutputFormat::Text => {
-            println!("{}", external_upgrade_verification_policy_text(&policy));
-        }
-    }
-    Ok(())
+    print_json_or_text(
+        options.format,
+        &policy,
+        external_upgrade_verification_policy_text,
+    )
 }
 
 fn run_inspect_verification_check<I>(args: I) -> Result<(), DeployCommandError>
@@ -244,13 +233,11 @@ where
     )?;
     let request = read_json_file::<ExternalUpgradeVerificationCheckRequest>(&options.request)?;
     let check = build_upgrade_verification_check(request)?;
-    match options.format {
-        ExternalOutputFormat::Json => print_json(&check)?,
-        ExternalOutputFormat::Text => {
-            println!("{}", external_upgrade_verification_check_text(&check));
-        }
-    }
-    Ok(())
+    print_json_or_text(
+        options.format,
+        &check,
+        external_upgrade_verification_check_text,
+    )
 }
 
 fn run_inspect_completion<I>(args: I) -> Result<(), DeployCommandError>
@@ -265,13 +252,11 @@ where
     let options = DeployExternalInspectOptions::parse(args, completion_command, completion_usage)?;
     let request = read_json_file::<ExternalUpgradeCompletionReportRequest>(&options.request)?;
     let report = build_upgrade_completion_report(request)?;
-    match options.format {
-        ExternalOutputFormat::Json => print_json(&report)?,
-        ExternalOutputFormat::Text => {
-            println!("{}", external_upgrade_completion_report_text(&report));
-        }
-    }
-    Ok(())
+    print_json_or_text(
+        options.format,
+        &report,
+        external_upgrade_completion_report_text,
+    )
 }
 
 fn run_verify<I>(args: I) -> Result<(), DeployCommandError>
@@ -286,13 +271,11 @@ where
     let options = DeployExternalVerifyOptions::parse(args, verify_command, verify_usage)?;
     let request = read_json_file::<ExternalUpgradeVerificationReportRequest>(&options.request)?;
     let report = build_upgrade_verification_report(request)?;
-    match options.format {
-        ExternalOutputFormat::Json => print_json(&report)?,
-        ExternalOutputFormat::Text => {
-            println!("{}", external_upgrade_verification_report_text(&report));
-        }
-    }
-    Ok(())
+    print_json_or_text(
+        options.format,
+        &report,
+        external_upgrade_verification_report_text,
+    )
 }
 
 fn run_output<I, T>(
@@ -314,9 +297,5 @@ where
     let options = DeployExternalOptions::parse(args, command, usage)?;
     let check = load_deployment_check(options.truth)?;
     let output = build(&check);
-    match options.format {
-        ExternalOutputFormat::Json => print_json(&output)?,
-        ExternalOutputFormat::Text => println!("{}", render_text(&output)),
-    }
-    Ok(())
+    print_json_or_text(options.format, &output, render_text)
 }

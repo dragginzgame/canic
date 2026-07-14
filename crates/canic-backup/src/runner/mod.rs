@@ -1,17 +1,16 @@
 mod manifest;
 mod operations;
-mod support;
 mod types;
 
 pub use types::*;
 
 use crate::{
     execution::{BackupExecutionJournal, BackupExecutionOperationState},
-    persistence::BackupLayout,
+    persistence::{BackupLayout, JournalLock},
     plan::BackupPlan,
+    timestamp::{state_updated_at, timestamp_marker, timestamp_seconds},
 };
 use operations::execute_operation_receipt;
-use support::{BackupRunLock, state_updated_at, timestamp_marker, timestamp_seconds};
 
 const PREFLIGHT_TTL_SECONDS: u64 = 300;
 
@@ -21,7 +20,7 @@ pub fn backup_run_execute_with_executor(
     executor: &mut impl BackupRunnerExecutor,
 ) -> Result<BackupRunResponse, BackupRunnerError> {
     let layout = BackupLayout::new(config.out.clone());
-    let _lock = BackupRunLock::acquire(&layout.execution_journal_path())?;
+    let _lock = JournalLock::acquire(&layout.execution_journal_path())?;
     let mut plan = layout.read_backup_plan()?;
     let mut journal = if layout.execution_journal_path().is_file() {
         layout.read_execution_journal()?

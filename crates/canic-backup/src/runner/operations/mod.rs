@@ -16,9 +16,8 @@ use crate::{
     plan::{BackupOperationKind, BackupPlan},
     runner::{
         BackupRunnerCommandError, BackupRunnerConfig, BackupRunnerError, BackupRunnerExecutor,
-        support::state_updated_at,
     },
-    timestamp::current_timestamp_marker,
+    timestamp::{current_timestamp_marker, state_updated_at},
 };
 
 use artifacts::{

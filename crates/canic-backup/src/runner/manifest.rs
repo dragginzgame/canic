@@ -1,4 +1,4 @@
-use super::{BackupRunnerConfig, BackupRunnerError, support::state_updated_at};
+use super::{BackupRunnerConfig, BackupRunnerError};
 use crate::{
     journal::{ArtifactState, DownloadJournal},
     manifest::{
@@ -7,6 +7,7 @@ use crate::{
         VerificationCheck, VerificationPlan,
     },
     plan::{BackupPlan, BackupTarget, ControlAuthoritySource},
+    timestamp::state_updated_at,
 };
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 

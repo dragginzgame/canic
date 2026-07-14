@@ -4,16 +4,18 @@
 //! Does not own: filesystem writes, checksum verification, or backup layout persistence.
 //! Boundary: keeps operation temp paths bound to the configured backup root.
 
-use crate::{persistence::BackupLayout, runner::BackupRunnerError};
+use crate::{
+    artifacts::artifact_path_segment, persistence::BackupLayout, runner::BackupRunnerError,
+};
 
 use std::path::{Path, PathBuf};
 
 pub(super) fn artifact_relative_path(canister_id: &str) -> String {
-    safe_path_segment(canister_id)
+    artifact_path_segment(canister_id)
 }
 
 pub(super) fn artifact_temp_path(root: &Path, canister_id: &str) -> PathBuf {
-    root.join(format!("{}.tmp", safe_path_segment(canister_id)))
+    root.join(format!("{}.tmp", artifact_path_segment(canister_id)))
 }
 
 pub(super) fn ensure_expected_temp_path(
@@ -32,14 +34,4 @@ pub(super) fn ensure_expected_temp_path(
         });
     }
     Ok(())
-}
-
-fn safe_path_segment(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| match ch {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' => ch,
-            _ => '_',
-        })
-        .collect()
 }

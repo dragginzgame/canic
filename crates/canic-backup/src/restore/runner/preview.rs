@@ -6,13 +6,14 @@
 
 use super::{
     RestoreApplyJournalError, RestoreApplyOperationState,
-    io::{RestoreJournalLock, read_apply_journal_file, state_updated_at, write_apply_journal_file},
+    io::{read_apply_journal_file, write_apply_journal_file},
     status::{restore_run_next_action, restore_run_stopped_reason},
     types::{
         RestoreRunOperationReceipt, RestoreRunResponse, RestoreRunResponseMode,
         RestoreRunnerConfig, RestoreRunnerError,
     },
 };
+use crate::{persistence::JournalLock, timestamp::state_updated_at};
 
 /// Build a no-mutation native restore runner preview from a journal file.
 pub fn restore_run_dry_run(
@@ -40,7 +41,7 @@ pub fn restore_run_dry_run(
 pub fn restore_run_retry_failed(
     config: &RestoreRunnerConfig,
 ) -> Result<RestoreRunResponse, RestoreRunnerError> {
-    let _lock = RestoreJournalLock::acquire(&config.journal)?;
+    let _lock = JournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
     let recovered_operation = journal
         .next_transition_operation()
@@ -75,7 +76,7 @@ pub fn restore_run_retry_failed(
 pub fn restore_run_unclaim_pending(
     config: &RestoreRunnerConfig,
 ) -> Result<RestoreRunResponse, RestoreRunnerError> {
-    let _lock = RestoreJournalLock::acquire(&config.journal)?;
+    let _lock = JournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
     let recovered_operation = journal
         .next_transition_operation()

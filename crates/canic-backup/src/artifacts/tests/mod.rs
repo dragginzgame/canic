@@ -4,6 +4,14 @@ use std::fs;
 
 const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
+#[test]
+fn artifact_path_segment_preserves_safe_characters_and_replaces_others() {
+    assert_eq!(
+        artifact_path_segment("abc-XYZ_123:canister"),
+        "abc-XYZ_123_canister"
+    );
+}
+
 // Ensure empty-byte checksums match the standard SHA-256 vector.
 #[test]
 fn byte_checksum_matches_sha256_vector() {

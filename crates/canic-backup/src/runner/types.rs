@@ -6,6 +6,8 @@ use serde::Serialize;
 use std::{error::Error as StdError, fmt, path::Path, path::PathBuf};
 use thiserror::Error as ThisError;
 
+use crate::persistence::JournalLockError;
+
 ///
 /// BackupRunnerConfig
 ///
@@ -168,6 +170,15 @@ pub enum BackupRunnerError {
 
     #[error(transparent)]
     Manifest(#[from] crate::manifest::ManifestValidationError),
+}
+
+impl From<JournalLockError> for BackupRunnerError {
+    fn from(error: JournalLockError) -> Self {
+        match error {
+            JournalLockError::Locked { lock_path } => Self::JournalLocked { lock_path },
+            JournalLockError::Io(error) => Self::Io(error),
+        }
+    }
 }
 
 ///

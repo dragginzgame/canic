@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.91.md](docs/changelog/0.91.md)
 
+- `0.91.6` is potentially breaking: it makes live `cycles convert` JSON match
+  the documented direct-result contract and consolidates duplicate deployment
+  output and backup persistence support without compatibility paths.
+
 - `0.91.5` is potentially breaking: it makes ICP refill admission atomic and
   fail-closed and gives live `cycles convert` one typed, durable recovery
   boundary with normalized result output.

@@ -1,6 +1,6 @@
 use super::super::catalog as deploy_catalog;
 use super::super::inspect as deploy_inspect;
-use super::super::output_format::CatalogOutputFormat;
+use super::super::output_format::JsonTextOutputFormat;
 use super::fixtures::*;
 use super::*;
 
@@ -14,7 +14,7 @@ fn deploy_catalog_options_parse_list_defaults_to_text() {
 
     assert_eq!(options.deployment, None);
     assert_eq!(options.network, "local");
-    assert_eq!(options.format, CatalogOutputFormat::Text);
+    assert_eq!(options.format, JsonTextOutputFormat::Text);
     assert_eq!(options.output, None);
 }
 
@@ -30,7 +30,7 @@ fn deploy_catalog_options_parse_inspect_json_output() {
 
     assert_eq!(options.deployment.as_deref(), Some("demo-local"));
     assert_eq!(options.network, "local");
-    assert_eq!(options.format, CatalogOutputFormat::Json);
+    assert_eq!(options.format, JsonTextOutputFormat::Json);
     assert_eq!(options.output, Some(PathBuf::from("catalog.json")));
 }
 
@@ -61,7 +61,7 @@ fn writes_catalog_json_output_file() {
     let options = deploy_catalog::DeployCatalogOptions {
         deployment: None,
         network: "local".to_string(),
-        format: CatalogOutputFormat::Json,
+        format: JsonTextOutputFormat::Json,
         output: Some(out.clone()),
     };
     let report = sample_catalog_report();

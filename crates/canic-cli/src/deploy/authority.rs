@@ -1,6 +1,6 @@
 use super::{
     DeployCommandError, DeployTruthOptions, current_observed_at, deploy_truth_leaf_command,
-    load_deployment_check, output_format::AuthorityOutputFormat, print_json,
+    load_deployment_check, output_format::JsonTextOutputFormat, print_json_or_text,
 };
 use crate::{
     cli::{
@@ -117,7 +117,7 @@ const TEXT_ARG: &str = "text";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct DeployAuthorityOptions {
     pub(super) truth: DeployTruthOptions,
-    pub(super) format: AuthorityOutputFormat,
+    pub(super) format: JsonTextOutputFormat,
 }
 
 pub(super) fn run<I>(args: I) -> Result<(), DeployCommandError>
@@ -212,11 +212,7 @@ where
     let options = DeployAuthorityOptions::parse(args, command, usage)?;
     let check = load_deployment_check(options.truth)?;
     let output = build(&check)?;
-    match options.format {
-        AuthorityOutputFormat::Json => print_json(&output)?,
-        AuthorityOutputFormat::Text => println!("{}", render_text(&output)),
-    }
-    Ok(())
+    print_json_or_text(options.format, &output, render_text)
 }
 
 pub(super) fn build_dry_run_evidence(
@@ -248,7 +244,7 @@ impl DeployAuthorityOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             truth: DeployTruthOptions::from_matches(&matches),
-            format: authority_output_format(matches.get_flag(TEXT_ARG)),
+            format: JsonTextOutputFormat::from_text_flag(matches.get_flag(TEXT_ARG)),
         })
     }
 }
@@ -286,14 +282,6 @@ fn text_arg() -> clap::Arg {
     flag_arg(TEXT_ARG)
         .long(TEXT_ARG)
         .help("Print human-readable text output")
-}
-
-const fn authority_output_format(text: bool) -> AuthorityOutputFormat {
-    if text {
-        AuthorityOutputFormat::Text
-    } else {
-        AuthorityOutputFormat::Json
-    }
 }
 
 fn authority_passthrough_command(spec: AuthorityCommand) -> ClapCommand {

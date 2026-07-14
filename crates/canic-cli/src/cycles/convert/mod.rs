@@ -88,15 +88,14 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         options.dry_run,
     );
     let source_candid_path = canister_target_candid_path(&root, &options.target.network, &source);
-    let command = icp.canister_call_arg_output_display_with_candid(
-        &source.canister_id,
-        ICP_REFILL_METHOD,
-        &request_arg,
-        Some("hex"),
-        source_candid_path.as_deref(),
-    );
-
     if options.dry_run {
+        let command = icp.canister_call_arg_output_display_with_candid(
+            &source.canister_id,
+            ICP_REFILL_METHOD,
+            &request_arg,
+            Some("hex"),
+            source_candid_path.as_deref(),
+        );
         write_canister_dry_run(
             options,
             &source,
@@ -125,25 +124,7 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         mark_pending_operation_completed(&root, pending_operation_key.as_deref(), operation_id)?;
     }
     let output = response.render(options.json);
-    if options.json {
-        println!(
-            "{}",
-            serde_json::json!({
-                "mode": "canister",
-                "deployment": options.deployment,
-                "source": source.role.as_deref(),
-                "source_canister_id": source.canister_id,
-                "source_subaccount": options.source_subaccount.map(hex_bytes),
-                "target": target.role.as_deref(),
-                "target_canister_id": target.canister_id,
-                "amount_e8s": amount_e8s,
-                "operation_id": hex_bytes(operation_id),
-                "dry_run": false,
-                "command": command,
-                "icp_output": output,
-            })
-        );
-    } else if !output.is_empty() {
+    if !output.is_empty() {
         println!("{output}");
     }
     Ok(())

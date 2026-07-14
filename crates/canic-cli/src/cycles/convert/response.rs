@@ -38,7 +38,7 @@ impl DecodedIcpRefillResponse {
                 "operation_id": hex_bytes(self.response.operation_id),
                 "status": format!("{:?}", self.response.status),
                 "ledger_block_index": self.response.ledger_block_index,
-                "cycles_sent": self.response.cycles_sent.as_ref().map(ToString::to_string),
+                "cycles_sent": self.response.cycles_sent.as_ref().map(|cycles| cycles.0.to_string()),
                 "error_code": self.response.error_code.map(|code| format!("{code:?}")),
                 "error_message": self.response.error_message,
             })
@@ -114,7 +114,18 @@ mod tests {
 
         assert!(!response.is_resumable());
         assert!(response.render(false).contains("status=Completed"));
-        assert!(response.render(true).contains("\"status\":\"Completed\""));
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&response.render(true))
+                .expect("parse JSON response"),
+            serde_json::json!({
+                "operation_id": hex_bytes([7; 32]),
+                "status": "Completed",
+                "ledger_block_index": 42,
+                "cycles_sent": "1000",
+                "error_code": null,
+                "error_message": null,
+            })
+        );
     }
 
     #[test]

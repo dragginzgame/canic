@@ -42,7 +42,7 @@ fn deploy_external_leaf_commands_default_to_json() {
         external_pending,
     ] {
         assert_eq!(options.truth.deployment, "demo");
-        assert_eq!(options.format, output_format::ExternalOutputFormat::Json);
+        assert_eq!(options.format, output_format::JsonTextOutputFormat::Json);
     }
     let critical_fix = deploy_external::DeployExternalCriticalFixOptions::parse(
         [
@@ -59,7 +59,7 @@ fn deploy_external_leaf_commands_default_to_json() {
     assert_eq!(critical_fix.truth.deployment, "demo");
     assert_eq!(
         critical_fix.format,
-        output_format::ExternalOutputFormat::Json
+        output_format::JsonTextOutputFormat::Json
     );
     assert_eq!(critical_fix.fix_id, "fix-2026-05");
     assert_eq!(critical_fix.severity, "critical");
@@ -73,7 +73,7 @@ fn deploy_external_leaf_commands_default_to_json() {
     )
     .expect("parse deploy external verify");
     assert_eq!(verify.request, PathBuf::from("external-verification.json"));
-    assert_eq!(verify.format, output_format::ExternalOutputFormat::Json);
+    assert_eq!(verify.format, output_format::JsonTextOutputFormat::Json);
     let consent = deploy_external::DeployExternalInspectOptions::parse(
         [
             OsString::from("--request"),
@@ -84,7 +84,7 @@ fn deploy_external_leaf_commands_default_to_json() {
     )
     .expect("parse deploy external inspect consent");
     assert_eq!(consent.request, PathBuf::from("external-consent.json"));
-    assert_eq!(consent.format, output_format::ExternalOutputFormat::Json);
+    assert_eq!(consent.format, output_format::JsonTextOutputFormat::Json);
 }
 
 #[test]
@@ -123,27 +123,27 @@ fn deploy_external_leaf_commands_parse_text_flag() {
     assert_eq!(external_plan.truth.deployment, "demo");
     assert_eq!(
         external_plan.format,
-        output_format::ExternalOutputFormat::Text
+        output_format::JsonTextOutputFormat::Text
     );
     assert_eq!(external_check.truth.deployment, "demo");
     assert_eq!(
         external_check.format,
-        output_format::ExternalOutputFormat::Text
+        output_format::JsonTextOutputFormat::Text
     );
     assert_eq!(external_handoff.truth.deployment, "demo");
     assert_eq!(
         external_handoff.format,
-        output_format::ExternalOutputFormat::Text
+        output_format::JsonTextOutputFormat::Text
     );
     assert_eq!(external_proposals.truth.deployment, "demo");
     assert_eq!(
         external_proposals.format,
-        output_format::ExternalOutputFormat::Text
+        output_format::JsonTextOutputFormat::Text
     );
     assert_eq!(external_pending.truth.deployment, "demo");
     assert_eq!(
         external_pending.format,
-        output_format::ExternalOutputFormat::Text
+        output_format::JsonTextOutputFormat::Text
     );
 }
 
@@ -165,7 +165,7 @@ fn deploy_external_request_commands_parse_text_flag() {
     assert_eq!(critical_fix.truth.deployment, "demo");
     assert_eq!(
         critical_fix.format,
-        output_format::ExternalOutputFormat::Text
+        output_format::JsonTextOutputFormat::Text
     );
     assert_eq!(critical_fix.fix_id, "fix-2026-05");
     assert_eq!(critical_fix.severity, "critical");
@@ -180,7 +180,7 @@ fn deploy_external_request_commands_parse_text_flag() {
     )
     .expect("parse deploy external verify text");
     assert_eq!(verify.request, PathBuf::from("external-verification.json"));
-    assert_eq!(verify.format, output_format::ExternalOutputFormat::Text);
+    assert_eq!(verify.format, output_format::JsonTextOutputFormat::Text);
     let consent = deploy_external::DeployExternalInspectOptions::parse(
         [
             OsString::from("--request"),
@@ -192,7 +192,7 @@ fn deploy_external_request_commands_parse_text_flag() {
     )
     .expect("parse deploy external inspect consent text");
     assert_eq!(consent.request, PathBuf::from("external-consent.json"));
-    assert_eq!(consent.format, output_format::ExternalOutputFormat::Text);
+    assert_eq!(consent.format, output_format::JsonTextOutputFormat::Text);
 }
 
 #[test]

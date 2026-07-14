@@ -15,6 +15,8 @@ use serde::Serialize;
 use std::{io, path::PathBuf};
 use thiserror::Error as ThisError;
 
+use crate::persistence::JournalLockError;
+
 ///
 /// RestoreRunnerConfig
 ///
@@ -145,6 +147,15 @@ pub enum RestoreRunnerError {
 
     #[error(transparent)]
     Persistence(#[from] RestorePersistenceError),
+}
+
+impl From<JournalLockError> for RestoreRunnerError {
+    fn from(error: JournalLockError) -> Self {
+        match error {
+            JournalLockError::Locked { lock_path } => Self::JournalLocked { lock_path },
+            JournalLockError::Io(error) => Self::Io(error),
+        }
+    }
 }
 
 ///
