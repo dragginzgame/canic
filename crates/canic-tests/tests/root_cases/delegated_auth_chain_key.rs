@@ -34,6 +34,8 @@ use canic_tests::root::{
 
 const TEST_CHAIN_KEY_ECDSA_PUBLIC_KEY: &str = "test_chain_key_ecdsa_public_key";
 const TEST_CHAIN_KEY_KEY_NAME: &str = "key_1";
+const TEST_PROVISION_CHAIN_KEY_DELEGATION_PROOF: &str =
+    "test_provision_chain_key_delegation_proof_for_issuer";
 const TEST_FLEET_CHAIN_KEY_PUBLIC_KEY_HEX: &str =
     "02f1a0a900c4b9d53ff5ec024c0e37e7a54174c6ae1d0a77312aebea349adc0b7a";
 const SECOND_NS: u64 = 1_000_000_000;
@@ -79,6 +81,34 @@ fn delegated_auth_chain_key_batch_renews_without_external_liveness() {
     assert_eq!(renewed_status.issuer_pid, Some(issuer_pid));
 
     verify_issuer_local_delegated_token(&setup, verifier_pid, issuer_pid, subject, &renewed_status);
+    drop(setup);
+}
+
+#[test]
+fn delegated_auth_root_facade_provisions_new_issuer_before_login() {
+    let setup = setup_root(RootSetupProfile::Sharding);
+    let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
+    let subject = Principal::from_slice(&[79; 29]);
+    let issuer_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+
+    assert_eq!(
+        active_delegation_proof_status(&setup, issuer_pid).status,
+        ActiveDelegationProofStatus::Missing,
+    );
+    upsert_root_issuer_policy(&setup, issuer_pid);
+    upsert_root_issuer_renewal_template(&setup, issuer_pid);
+
+    let provisioned: Result<(), Error> = setup.pic.update_call_or_panic(
+        setup.root_id,
+        TEST_PROVISION_CHAIN_KEY_DELEGATION_PROOF,
+        (issuer_pid,),
+    );
+    provisioned.expect("root issuer-readiness provisioning failed");
+
+    let status = active_delegation_proof_status(&setup, issuer_pid);
+    assert_eq!(status.status, ActiveDelegationProofStatus::Valid);
+    assert_eq!(status.root_pid, Some(setup.root_id));
+    assert_eq!(status.issuer_pid, Some(issuer_pid));
     drop(setup);
 }
 

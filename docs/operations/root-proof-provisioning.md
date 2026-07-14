@@ -53,6 +53,21 @@ Lazy repair must reuse a valid existing chain-key batch when possible and must
 honor signing retry-after state after management-canister failures. It must not
 fall back to per-login signing or to the old bridge-backed proof shape.
 
+An application root may also make a newly installed or reinstalled issuer
+ready before login through the public Rust facade:
+
+```text
+app root               -> AuthApi::provision_chain_key_delegation_proof_for_issuer_root
+Canic root workflow    -> create or reuse issuer proof from chain-key batch state
+Canic root workflow    -> issuer canic_install_active_delegation_proof update
+Canic root workflow    -> record install success or failure
+```
+
+The application endpoint remains responsible for caller authorization and for
+selecting the issuer principal. The Canic facade requires root context, derives
+proof material only from configured issuer policy and renewal state, and does
+not accept caller-supplied proof bytes.
+
 ## Operator Surface
 
 The retained operator command is status-only:
@@ -79,7 +94,8 @@ observational; it does not mutate root or issuer state.
 - Root timer renewal and issuer lazy repair share the same batch state and must
   deduplicate management-canister signing work.
 - Issuers verify root proof material before storing active proof state.
-- Product frontends must not orchestrate root proof renewal.
+- Product frontends must not orchestrate root proof renewal or readiness
+  provisioning.
 - Operator status and medic output must not trigger signing or install work.
 - Legacy bridge-backed root proof provisioning endpoints are not part of the
   active protocol surface.
@@ -143,9 +159,9 @@ chain-key renewal or issuer lazy repair install a fresh active proof.
 | `RejectedBySigner` | Issuer rejected the proof after local verification. |
 | `DriftDetected` | Issuer-observed active proof differs from root-managed renewal state. |
 An unregistered issuer is a topology failure, not missing proof material. Do
-not add a manual proof-provisioning bypass. Follow the destructive reinstall
-recovery rules and then allow root renewal or issuer lazy repair to install the
-proof normally.
+not add a caller-supplied proof bypass. Restore topology first, then use root
+renewal, issuer lazy repair, or the root readiness facade to install proof
+material derived from the registered policy and renewal template.
 
 ## Validation
 

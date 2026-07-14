@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.91.md](docs/changelog/0.91.md)
 
+- `0.91.1` adds a root-only chain-key issuer-readiness facade so application
+  roots can install active delegation proofs immediately after issuer
+  install/reinstall without restoring retired proof workflows.
+
 - `0.91.0` is potentially breaking: it admits only lowercase snake_case
   canister roles and hard-cuts filesystem-readiness manifest publication so a
   root release set can authorize only one complete install build's outputs.

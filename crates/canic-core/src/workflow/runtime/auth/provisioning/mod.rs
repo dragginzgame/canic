@@ -14,7 +14,7 @@ use crate::{
         auth::{
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
             RootDelegationProofBatchInstallRequest, RootDelegationProofBatchProof,
-            RootDelegationProofInstallOutcome,
+            RootDelegationProofInstallOutcome, RootProof,
         },
         error::Error,
     },
@@ -33,6 +33,29 @@ use crate::{
 use std::future::Future;
 
 impl RuntimeAuthWorkflow {
+    /// Create or reuse and install one chain-key root delegation proof.
+    pub async fn provision_chain_key_delegation_proof_for_issuer_root(
+        issuer_pid: Principal,
+    ) -> Result<(), InternalError> {
+        EnvOps::require_root()?;
+        let proof =
+            Self::get_or_create_chain_key_delegation_proof_for_issuer_root(issuer_pid).await?;
+        let RootProof::IcChainKeyBatchSignatureV1(root_proof) = &proof.proof.root_proof;
+        let installed = install_chain_key_delegation_proof_batch(
+            RootDelegationProofBatchInstallRequest {
+                batch_id: root_proof.header.batch_id,
+                proofs: vec![proof],
+            },
+            IcOps::now_nanos(),
+        )
+        .await?;
+        if installed {
+            Ok(())
+        } else {
+            Err(chain_key_provisioning_install_error(issuer_pid))
+        }
+    }
+
     /// Return or create one chain-key root delegation proof for the calling issuer.
     pub async fn get_or_create_chain_key_delegation_proof_for_issuer_root(
         issuer_pid: Principal,
@@ -139,6 +162,12 @@ fn issuer_install_outcome(call: CallResult) -> RootDelegationProofInstallOutcome
         Ok(_) => RootDelegationProofInstallOutcome::Installed,
         Err(_) => RootDelegationProofInstallOutcome::RejectedBySigner,
     }
+}
+
+fn chain_key_provisioning_install_error(issuer_pid: Principal) -> InternalError {
+    InternalError::public(Error::unavailable(format!(
+        "chain-key delegation proof installation for issuer {issuer_pid} did not complete"
+    )))
 }
 
 fn require_chain_key_root_proof_mode(config: &DelegatedTokenConfig) -> Result<(), InternalError> {
@@ -273,5 +302,15 @@ mod tests {
 
         assert_eq!(calls.get(), 1);
         assert!(!installed);
+    }
+
+    #[test]
+    fn explicit_provisioning_failure_is_typed_as_unavailable() {
+        let err = chain_key_provisioning_install_error(p(2));
+
+        assert_eq!(
+            err.public_error().map(|err| err.code),
+            Some(crate::dto::error::ErrorCode::Unavailable)
+        );
     }
 }

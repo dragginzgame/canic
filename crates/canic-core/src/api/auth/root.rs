@@ -6,6 +6,7 @@
 
 use super::AuthApi;
 use crate::{
+    cdk::types::Principal,
     dto::{
         auth::{
             RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
@@ -59,5 +60,18 @@ impl AuthApi {
         )
         .await
         .map_err(Self::map_auth_error)
+    }
+
+    /// Create or reuse and install a chain-key delegation proof for one issuer.
+    ///
+    /// Root applications may call this after installing or reinstalling an
+    /// issuer so delegated-token issuance is ready before the first login.
+    pub async fn provision_chain_key_delegation_proof_for_issuer_root(
+        issuer_pid: Principal,
+    ) -> Result<(), Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        RuntimeAuthWorkflow::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid)
+            .await
+            .map_err(Self::map_auth_error)
     }
 }

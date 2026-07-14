@@ -2,6 +2,7 @@
 
 use canic::{
     Error,
+    api::auth::AuthApi,
     cdk::{
         call::Call,
         candid::{CandidType, Deserialize, Principal},
@@ -62,6 +63,13 @@ async fn test_chain_key_ecdsa_public_key(
         .map_err(|err| Error::internal(format!("ecdsa_public_key response failed: {err}")))?;
 
     Ok(response.public_key)
+}
+
+#[canic_update(requires(caller::is_controller()))]
+async fn test_provision_chain_key_delegation_proof_for_issuer(
+    issuer_pid: Principal,
+) -> Result<(), Error> {
+    AuthApi::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid).await
 }
 
 canic::finish!();
