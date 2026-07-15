@@ -151,8 +151,13 @@
   external Action executions, versions/checksum-binds executable tools,
   removes the npm `ic-wasm` wrapper and remote ICP installer flow, and
   establishes one guarded Ubuntu/Linux/Wasm support matrix. This fixes
-  `CANIC-092-RELEASE-001`, `-002`, and `-004`. Eight findings remain (2 P1,
-  5 P2, one P3); the dedicated scanner gap remains blocked outside D9.
+  `CANIC-092-RELEASE-001`, `-002`, and `-004`. D10 then aligns published
+  feature docs with their manifests, deletes active removed-command negative
+  assertions and the obsolete probe breadcrumb, repairs public core rustdoc,
+  and makes pre-publish packaged CLI/Wasm-store proof resolve only extracted
+  local 0.92.8 packages. This fixes `CANIC-092-PUBLISH-001`,
+  `CANIC-092-RESIDUE-001`, and `CANIC-092-DOCS-002`. Five findings remain
+  (2 P1 and 3 P2); the dedicated scanner gap remains blocked outside D9.
 
 ## Month Status
 
@@ -173,9 +178,13 @@ also pass with typed causes preserved. Mandatory trace v1 is
 cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
-satisfied. Phase D finding review is complete; D1 through D7 are released and
-D8 reproducible-root artifacts pass focused validation. The current trace
-ledger is ten pass and zero fail without rewriting the frozen result. Security
+satisfied. Phase D finding review is complete; D1 through D8 are released, D9
+is committed in the untagged 0.92.8 candidate, and D10 passes focused
+validation. Published package docs and active proof now match the maintained
+surface, warning-as-error core rustdoc passes, and packaged CLI plus both
+generated and canonical Wasm-store proofs pass before registry publication.
+The current trace ledger is ten pass and zero fail without rewriting the
+frozen result. Security
 ordering and lifecycle
 symmetry now have valid frozen-method
 passes with watchpoints. Capability v2 is a valid immutable-baseline pass at
@@ -208,13 +217,12 @@ C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Execute the exact D10 active-documentation/hard-cut-residue contract;
-   remaining layering subsystems stay ordered candidates, not blanket
-   authorization.
+1. Map the 18 remaining `CANIC-092-LAYERING-005` files into separately
+   reviewed subsystem slices; no bulk mechanical move is authorized.
 2. Keep the dedicated scanner limitation proposed until the maintainer records
    every required waiver field; otherwise closeout remains blocked.
-3. Review the three P2 publish-surface findings with the complete baseline;
-   keep product/package/docs fixes deferred until then.
+3. Keep the dependency, complexity, and instruction-checkpoint P2 watchpoints
+   deferred until each has finding-backed evidence for a bounded change.
 4. Keep the D4 root-issuer authority singular; do not reintroduce an ops
    validator or policy-owned persisted state shape.
 5. Review delegated-auth/root-proof concentration after the complete

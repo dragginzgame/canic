@@ -41,6 +41,12 @@ fn read_manifest(path: &Path) -> Value {
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()))
 }
 
+// Reads one checked-in text file for package-surface assertions.
+fn read_text(path: &Path) -> String {
+    fs::read_to_string(path)
+        .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()))
+}
+
 // Reads and parses one Canic config from disk.
 fn read_canic_config(path: &Path) -> Value {
     let source = fs::read_to_string(path)
@@ -750,4 +756,63 @@ fn blob_storage_billing_feature_is_opt_in_and_implies_blob_storage() {
         BTreeSet::from(["blob-storage", "canic-core/blob-storage-billing"]),
         "canic blob-storage-billing feature must imply facade and core blob storage"
     );
+}
+
+// Verifies published package feature tables describe every maintained feature
+// and identify the exact default set from the owning Cargo manifest.
+#[test]
+fn published_package_feature_docs_match_manifests() {
+    let root = workspace_root();
+
+    for package in ["canic", "canic-control-plane"] {
+        let package_root = root.join("crates").join(package);
+        let manifest = read_manifest(&package_root.join("Cargo.toml"));
+        let readme = read_text(&package_root.join("README.md"));
+        let features = manifest["features"]
+            .as_table()
+            .unwrap_or_else(|| panic!("{package} must declare a feature table"));
+        let defaults = feature_entries(&manifest, "default");
+        let expected_features = features
+            .keys()
+            .filter(|feature| feature.as_str() != "default")
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let feature_contract = readme
+            .split_once("## Feature Contract\n")
+            .unwrap_or_else(|| panic!("{package} README must contain a Feature Contract section"))
+            .1
+            .split("\n## ")
+            .next()
+            .expect("feature contract section must be present");
+        let documented_features = feature_contract
+            .lines()
+            .filter_map(|line| line.strip_prefix("| `"))
+            .filter_map(|line| line.split_once("` |"))
+            .map(|(feature, _)| feature)
+            .collect::<BTreeSet<_>>();
+
+        assert_eq!(
+            documented_features,
+            expected_features,
+            "{} must document exactly its maintained feature set",
+            package_root.join("README.md").display()
+        );
+
+        for feature in features
+            .keys()
+            .filter(|feature| feature.as_str() != "default")
+        {
+            let default_label = if defaults.contains(feature.as_str()) {
+                "Yes"
+            } else {
+                "No"
+            };
+            let row_prefix = format!("| `{feature}` | {default_label} |");
+            assert!(
+                readme.lines().any(|line| line.starts_with(&row_prefix)),
+                "{} must document feature {feature} with default={default_label}",
+                package_root.join("README.md").display()
+            );
+        }
+    }
 }

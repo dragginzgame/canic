@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-# Shared CLI surface proofing for the hard-cut auth renewal command family.
-# The retained operator surface is `auth renewal status`; this helper also
-# asserts removed bridge/provisioner commands do not reappear in help output.
+# Shared CLI surface proofing for the maintained auth renewal status command.
 
 AUTH_RENEWAL_PROOF_ISSUER="rrkah-fqaaa-aaaaa-aaaaq-cai"
 
@@ -151,20 +149,6 @@ assert_auth_renewal_cli_file_contains() {
     }
 }
 
-assert_auth_renewal_cli_file_not_contains() {
-    local proof_label="$1"
-    local description="$2"
-    local pattern="$3"
-    local path="$4"
-    local preview_range="$5"
-
-    if grep -Fq -- "$pattern" "$path"; then
-        echo "expected $proof_label $description" >&2
-        sed -n "$preview_range" "$path" >&2
-        exit 1
-    fi
-}
-
 assert_auth_renewal_cli_surface_probe_outputs() {
     local proof_label="$1"
     local proof_root="$2"
@@ -175,24 +159,12 @@ assert_auth_renewal_cli_surface_probe_outputs() {
         'Run delegated-auth operator workflows' \
         "$proof_root/auth-renewal-help.out" \
         '1,160p'
-    assert_auth_renewal_cli_file_not_contains \
-        "$proof_label" \
-        "auth renewal help to omit removed run-once bridge" \
-        'run-once' \
-        "$proof_root/auth-renewal-help.out" \
-        '1,160p'
     assert_auth_renewal_cli_file_contains \
         "$proof_label" \
         "auth renewal help to list status" \
         'status' \
         "$proof_root/auth-renewal-help.out" \
         '1,160p'
-    assert_auth_renewal_cli_file_not_contains \
-        "$proof_label" \
-        "auth renewal help to omit removed provisioner commands" \
-        'provisioner' \
-        "$proof_root/auth-renewal-help.out" \
-        '1,180p'
     assert_auth_renewal_cli_file_contains \
         "$proof_label" \
         "auth renewal status schema v2" \

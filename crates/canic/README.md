@@ -16,27 +16,32 @@ Use the explicit module paths for the larger bundled surfaces:
 - `canic::cdk::*` for curated IC CDK helpers
 - `canic::memory::*` for stable-memory helpers and macros
 
-## Default Surface
+## Feature Contract
 
-The default feature set is intentionally small:
+The default feature set contains only `metrics`. Disable default features when
+you need a narrower facade dependency, then select every runtime capability
+required by the role.
 
-- `metrics` - exports `canic_metrics` in ordinary builds unless you opt out
+| Feature | Default | Enables |
+| --- | --- | --- |
+| `metrics` | Yes | The standard `canic_metrics` endpoint bundle. |
+| `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs; also enables `wasm-store-canister`. |
+| `wasm-store-canister` | No | The canonical `wasm_store` canister API used by generated/bootstrap store packages. Ordinary application roles should not enable it. |
+| `icp-refill` | No | ICP-to-cycles refill runtime APIs and generated endpoint support. |
+| `blob-storage` | No | Non-billing blob-storage status and gateway-administration runtime APIs/endpoints. |
+| `blob-storage-billing` | No | Cashier-backed blob-storage billing, funding, and readiness support; also enables `blob-storage`. |
+| `sharding` | No | Sharding placement, storage, metrics, and lifecycle support from `canic-core`. |
+| `auth-chain-key-ecdsa` | No | Chain-key ECDSA validation and cryptographic support used by delegated-auth proof flows. |
+| `auth-chain-key-root-sign` | No | Root-managed chain-key delegation-batch signing; also enables `auth-chain-key-ecdsa`. |
+| `auth-root-canister-sig-create` | No | Root canister-signature proof creation for role attestation. |
+| `auth-root-canister-sig-verify` | No | Root canister-signature proof verification for role attestation. |
+| `auth-issuer-canister-sig-create` | No | Issuer canister-signature token-proof creation. |
+| `auth-issuer-canister-sig-verify` | No | Issuer canister-signature token-proof verification. |
+| `auth-delegated-token-verify` | No | Delegated-token verification, including required chain-key and issuer-signature verification support. |
 
-Disable default features in `Cargo.toml` when you need an even narrower facade
-dependency.
-
-## Optional Features
-
-These features can also be selected explicitly when default features are off:
-
-- `metrics`
-- `control-plane` - enables root control-plane support
-- `sharding` - enables sharding-oriented runtime support from `canic-core`
-- `auth-root-canister-sig-create` - enables root canister-signature proof creation
-- `auth-root-canister-sig-verify` - enables root canister-signature proof verification for role attestation
-- `auth-issuer-canister-sig-create` - enables issuer canister-signature token proof creation
-- `auth-issuer-canister-sig-verify` - enables issuer canister-signature token proof verification
-- `auth-delegated-token-verify` - enables delegated-token verification, including issuer canister-signature verification
+The `control-plane` feature is the normal root-role selection. The narrower
+`wasm-store-canister` feature exists for the canonical store canister package;
+it is not an alternate root control-plane configuration.
 
 ## Config-Driven Auth Features
 
