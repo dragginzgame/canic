@@ -40,7 +40,7 @@ fn root_capability_command_variant_names() -> BTreeSet<&'static str> {
 }
 
 fn durable_publish_endpoint_names() -> BTreeSet<&'static str> {
-    ["canic_wasm_store_admin"].into_iter().collect()
+    std::iter::once("canic_wasm_store_admin").collect()
 }
 
 fn guarded_publication_effect_endpoint_names() -> BTreeSet<&'static str> {
