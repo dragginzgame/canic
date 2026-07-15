@@ -11,10 +11,11 @@ use canic::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,
             DelegatedToken, DelegatedTokenGetRequest, DelegatedTokenPrepareRequest,
-            DelegatedTokenPrepareResponse, DelegationAudience, RootIssuerPolicyResponse,
-            RootIssuerPolicyUpsertRequest, RootIssuerRenewalStatusRequest,
-            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
-            RootIssuerRenewalTemplateUpsertRequest,
+            DelegatedTokenPrepareResponse, DelegationAudience, InstallActiveDelegationProofRequest,
+            InstallActiveDelegationProofResponse, RootDelegationProofBatchProof,
+            RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
+            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest, RootProof,
         },
         error::ErrorCode,
         metrics::{MetricEntry, MetricValue, MetricsKind},
@@ -109,6 +110,68 @@ fn delegated_auth_root_facade_provisions_new_issuer_before_login() {
     assert_eq!(status.status, ActiveDelegationProofStatus::Valid);
     assert_eq!(status.root_pid, Some(setup.root_id));
     assert_eq!(status.issuer_pid, Some(issuer_pid));
+    drop(setup);
+}
+
+#[test]
+fn delegated_auth_invalid_proof_install_rejects_without_active_state_mutation() {
+    let setup = setup_root(RootSetupProfile::Sharding);
+    let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
+    let subject = Principal::from_slice(&[80; 29]);
+    let issuer_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+
+    upsert_root_issuer_policy(&setup, issuer_pid);
+    upsert_root_issuer_renewal_template(&setup, issuer_pid);
+    let provisioned: Result<(), Error> = setup.pic.update_call_or_panic(
+        setup.root_id,
+        TEST_PROVISION_CHAIN_KEY_DELEGATION_PROOF,
+        (issuer_pid,),
+    );
+    provisioned.expect("root issuer-readiness provisioning failed");
+
+    let before = active_delegation_proof_status(&setup, issuer_pid);
+    let proof: Result<RootDelegationProofBatchProof, Error> = setup.pic.update_call_as_or_panic(
+        setup.root_id,
+        issuer_pid,
+        protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
+        (),
+    );
+    let proof = proof.expect("registered issuer must retrieve its cached root proof");
+
+    let mut wrong_issuer = proof.clone();
+    wrong_issuer.proof.cert.issuer_pid = Principal::from_slice(&[81; 29]);
+    assert_proof_install_rejected_without_state_change(
+        &setup,
+        issuer_pid,
+        wrong_issuer,
+        ErrorCode::InvalidInput,
+        &before,
+    );
+
+    let mut expired = proof.clone();
+    expired.proof.cert.expires_at_ns = setup.pic.current_time_nanos();
+    assert_proof_install_rejected_without_state_change(
+        &setup,
+        issuer_pid,
+        expired,
+        ErrorCode::AuthProofExpired,
+        &before,
+    );
+
+    let mut invalid_signature = proof;
+    let RootProof::IcChainKeyBatchSignatureV1(root_proof) = &mut invalid_signature.proof.root_proof;
+    *root_proof
+        .signature
+        .signature
+        .first_mut()
+        .expect("signed root proof must contain signature bytes") ^= 1;
+    assert_proof_install_rejected_without_state_change(
+        &setup,
+        issuer_pid,
+        invalid_signature,
+        ErrorCode::InvalidInput,
+        &before,
+    );
     drop(setup);
 }
 
@@ -478,6 +541,32 @@ fn active_delegation_proof_status(
         (),
     );
     status.expect("active delegation proof status application failed")
+}
+
+fn assert_proof_install_rejected_without_state_change(
+    setup: &RootSetup,
+    issuer_pid: Principal,
+    proof: RootDelegationProofBatchProof,
+    expected_code: ErrorCode,
+    before: &ActiveDelegationProofStatusResponse,
+) {
+    let result: Result<InstallActiveDelegationProofResponse, Error> =
+        setup.pic.update_call_as_or_panic(
+            issuer_pid,
+            setup.root_id,
+            protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF,
+            (InstallActiveDelegationProofRequest { proof: proof.proof },),
+        );
+    assert_eq!(
+        result
+            .expect_err("invalid active proof installation must reject")
+            .code,
+        expected_code,
+    );
+    assert_eq!(
+        active_delegation_proof_status(setup, issuer_pid),
+        before.clone()
+    );
 }
 
 fn create_distinct_user_shard_issuers(

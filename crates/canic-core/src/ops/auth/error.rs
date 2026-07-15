@@ -206,10 +206,16 @@ impl From<AuthValidationError> for InternalError {
 impl From<AuthSignatureError> for InternalError {
     fn from(err: AuthSignatureError) -> Self {
         match err {
+            err @ AuthSignatureError::ProofUnavailable => {
+                Self::auth_material_stale(err.to_string())
+            }
+            err @ (AuthSignatureError::ProofInvalid(_)
+            | AuthSignatureError::AttestationProofInvalid(_)) => {
+                Self::invalid_input(err.to_string())
+            }
             AuthSignatureError::RootDataCertificateUnavailable => {
                 Self::root_data_certificate_unavailable()
             }
-            _ => AuthOpsError::from(err).into(),
         }
     }
 }
@@ -243,5 +249,21 @@ mod tests {
             .expect("missing root data certificate must be public");
 
         assert_eq!(public.code, ErrorCode::RootDataCertificateUnavailable);
+    }
+
+    #[test]
+    fn proof_availability_and_validation_retain_public_auth_causes() {
+        let unavailable: InternalError = AuthSignatureError::ProofUnavailable.into();
+        let invalid: InternalError =
+            AuthSignatureError::ProofInvalid("bad signature".to_string()).into();
+
+        assert_eq!(
+            unavailable.public_error().map(|err| err.code),
+            Some(ErrorCode::AuthMaterialStale)
+        );
+        assert_eq!(
+            invalid.public_error().map(|err| err.code),
+            Some(ErrorCode::InvalidInput)
+        );
     }
 }

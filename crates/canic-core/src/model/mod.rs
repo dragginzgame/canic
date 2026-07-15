@@ -1,8 +1,8 @@
 //! Module: model
 //!
-//! Responsibility: define pure runtime state models shared across layers.
+//! Responsibility: own authoritative runtime state models and storage invariants.
 //! Does not own: stable storage access, orchestration, or platform side effects.
-//! Boundary: model types are consumed by ops, workflow, storage, and views.
+//! Boundary: ops accesses model state; persisted records and views are passive projections.
 
 #[cfg(feature = "blob-storage")]
 pub mod blob_storage;

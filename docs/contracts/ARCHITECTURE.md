@@ -1,8 +1,9 @@
 # Canic Architecture Contract
 
-This document is the canonical architecture contract for Canic.
+This document mirrors the normative architecture contract in `AGENTS.md`.
 
-If implementation and this contract diverge, implementation must be updated.
+If this document or implementation diverges from `AGENTS.md`, `AGENTS.md`
+wins and both must be corrected.
 
 ## Dependency Direction (Non-Negotiable)
 
@@ -28,7 +29,7 @@ Rules:
 
 ### `endpoints/` and macros
 - Define the IC boundary: auth, guards, argument/response marshaling, dispatch.
-- Delegate immediately to workflow or ops.
+- Delegate immediately to workflow.
 - Must not include policy logic, orchestration, or direct model access.
 
 ### `workflow/`
@@ -50,8 +51,9 @@ Rules:
 - Must not encode business decision logic.
 
 ### `model/`
-- Authoritative domain state and local structural invariants.
-- Stable memory layout and persisted schemas live here.
+- Owns authoritative domain state and storage invariants.
+- Passive stable-memory and persisted-schema representations may live under
+  `storage/**`; their invariants remain model-owned.
 - Must not perform policy decisions, async orchestration, or platform calls.
 
 ## Data Boundary Contracts
@@ -66,7 +68,8 @@ Rules:
 - Not persisted as canonical state.
 
 ### `storage/**` records
-- Persisted schema only.
+- Passive persisted schema and stable-memory representation only.
+- Authoritative state and storage invariants remain owned by model.
 - Record conversions are owned by ops adapters.
 
 ## Lifecycle Contract

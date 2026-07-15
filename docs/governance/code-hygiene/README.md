@@ -11,7 +11,7 @@ The goal is to keep the codebase easy to navigate while preserving Canic's
 layering:
 
 ```text
-endpoints -> workflow -> policy -> ops -> model/storage
+endpoints -> workflow -> policy -> ops -> model
 ```
 
 If this directory conflicts with `AGENTS.md`, `AGENTS.md` wins. Command,

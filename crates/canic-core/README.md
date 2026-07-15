@@ -20,13 +20,16 @@ Canic is intentionally layered to keep the boundary surface small and ownership 
 
 - `access/` – authorization and guard helpers used by endpoint macros.
 - `config/` – parse + validate `canic.toml` into a typed schema.
-- `storage/` – authoritative persisted schemas and stable-memory-backed state helpers.
-- `view/` – internal read-only projections over stored/runtime state.
-- `ops/` – deterministic services over stored/runtime state plus approved single-step platform effects.
-- `domain/` – pure value and decision helpers used by the higher-level runtime.
 - `workflow/` – orchestration, retries, and multi-step behavior over time.
+- `domain/policy/pure/` – pure decisions invoked by workflow.
+- `ops/` – deterministic services over stored/runtime state plus approved
+  single-step platform effects.
+- `model/` – authoritative runtime state and storage invariants.
+- `storage/` – passive persisted schemas and stable-memory representations;
+  model retains invariant ownership and ops owns access/conversion.
+- `view/` – internal read-only projections over stored/runtime state.
 
-The default flow is: endpoints → workflow → domain/decision helpers → ops → storage.
+The dependency flow is: endpoints → workflow → policy → ops → model.
 
 ## Module Map
 

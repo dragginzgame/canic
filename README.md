@@ -152,7 +152,8 @@ The workspace keeps Rust crates under [crates/](crates/) and fleet fixtures unde
 
 Canic follows the layering rules in [AGENTS.md](AGENTS.md): endpoints
 authenticate and delegate, workflow orchestrates, policy decides, ops performs
-approved state or platform actions, and model/storage own invariants.
+approved state or platform actions, and model owns authoritative state and
+storage invariants.
 
 Reference docs:
 

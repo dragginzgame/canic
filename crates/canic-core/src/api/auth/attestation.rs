@@ -2,7 +2,8 @@
 //!
 //! Responsibility: adapt role-attestation endpoint calls.
 //! Does not own: role-attestation signing, cache state, or verifier internals.
-//! Boundary: delegates root preparation/retrieval and local verification to workflow/ops.
+//! Boundary: the canonical downstream boundary is workflow; the direct ops call
+//! below remains a product-code violation tracked by `CANIC-092-LAYERING-001`.
 
 use super::AuthApi;
 use crate::{

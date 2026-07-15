@@ -2,7 +2,7 @@
 //!
 //! Responsibility: expose deterministic state access and approved single-step platform effects.
 //! Does not own: endpoint authentication, workflow orchestration, or pure policy decisions.
-//! Boundary: workflow calls ops after authorization and before model/storage effects.
+//! Boundary: workflow calls ops after authorization; ops accesses model-owned state.
 //!
 //! Ops APIs are exposed via lightweight `*Ops` structs with associated
 //! functions. This is a deliberate namespacing choice to keep imports stable

@@ -2,7 +2,7 @@
 //!
 //! Responsibility: public API facades for macro-generated canister endpoints.
 //! Does not own: orchestration, business logic, policy, or storage invariants.
-//! Boundary: maps endpoint calls into workflow/ops calls and public errors.
+//! Boundary: maps endpoint calls into workflow calls and public errors.
 
 pub mod auth;
 #[cfg(feature = "blob-storage")]
