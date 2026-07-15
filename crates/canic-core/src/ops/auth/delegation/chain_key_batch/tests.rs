@@ -881,7 +881,7 @@ fn chain_key_batch_partial_install_failure_retries_only_remaining_issuer() {
         batch_id,
         failed.issuer_pid,
         failed.cert_hash,
-        RootDelegationProofInstallOutcome::CallFailed,
+        ChainKeyRootDelegationInstallFailure::CallFailed,
     ));
 
     let partially_installed = AuthStateOps::chain_key_root_delegation_batch(batch_id)
@@ -971,7 +971,7 @@ fn chain_key_batch_ignores_stale_install_failure_after_success() {
         batch_id,
         proof.issuer_pid,
         proof.cert_hash,
-        RootDelegationProofInstallOutcome::CallFailed,
+        ChainKeyRootDelegationInstallFailure::CallFailed,
     ));
 
     let installed = AuthStateOps::chain_key_root_delegation_batch(batch_id)

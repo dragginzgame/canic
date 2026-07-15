@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Hard-cuts accidental public proof-install state and the direct core error
+  root while preserving issuer-install diagnostics and maintained Candid and
+  stable-state behavior.
+
 ## [0.92.x] - 2026-07-14 - Holistic Audit-System Validation
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)

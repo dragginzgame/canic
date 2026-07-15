@@ -29,30 +29,6 @@ pub struct RootDelegationProofBatchProof {
 }
 
 //
-// RootDelegationProofBatchInstallRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootDelegationProofBatchInstallRequest {
-    pub batch_id: [u8; 32],
-    pub proofs: Vec<RootDelegationProofBatchProof>,
-}
-
-//
-// RootDelegationProofInstallOutcome
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum RootDelegationProofInstallOutcome {
-    Installed,
-    AlreadyInstalled,
-    RejectedBySigner,
-    CallFailed,
-    ProofMismatch,
-    ExpiredOrSuperseded,
-}
-
-//
 // RootIssuerPolicyUpsertRequest
 //
 

@@ -31,7 +31,7 @@ pub mod control_plane_support;
 pub mod dispatch;
 pub mod dto;
 #[doc(hidden)]
-pub mod error;
+mod error;
 mod format;
 pub mod ids;
 #[doc(hidden)]

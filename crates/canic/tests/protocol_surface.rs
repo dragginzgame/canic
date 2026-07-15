@@ -23,13 +23,12 @@ use canic::{
         ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
         ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant,
         DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
-        IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchInstallRequest,
-        RootDelegationProofBatchProof, RootDelegationProofBatchProofRef, RootIssuerPolicyResponse,
-        RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootIssuerRenewalAttemptStatus,
-        RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
-        RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
-        RootIssuerRenewalTemplateView, RootProof,
+        IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchProof,
+        RootDelegationProofBatchProofRef, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+        RootIssuerPolicyView, RootIssuerRenewalAttemptStatus, RootIssuerRenewalAttemptView,
+        RootIssuerRenewalOutcome, RootIssuerRenewalStateView, RootIssuerRenewalStatusRequest,
+        RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
+        RootIssuerRenewalTemplateUpsertRequest, RootIssuerRenewalTemplateView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
@@ -786,10 +785,10 @@ fn assert_root_delegation_endpoint_bindings(source: &str) {
 }
 
 #[test]
-fn root_delegation_proof_batch_dtos_roundtrip_through_candid() {
+fn root_delegation_proof_dtos_roundtrip_through_candid() {
     assert_root_issuer_policy_dtos_roundtrip();
     assert_root_issuer_renewal_dtos_roundtrip();
-    assert_root_delegation_batch_dtos_roundtrip();
+    assert_root_delegation_proof_dtos_roundtrip();
     assert_active_delegation_proof_status_roundtrip();
 }
 
@@ -869,10 +868,9 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
     assert_candid_roundtrip(renewal_status_response);
 }
 
-fn assert_root_delegation_batch_dtos_roundtrip() {
+fn assert_root_delegation_proof_dtos_roundtrip() {
     let issuer_pid = Principal::from_slice(&[17; 29]);
     let root_pid = Principal::from_slice(&[18; 29]);
-    let batch_id = [19; 32];
     let cert_hash = [20; 32];
     let grant = test_delegated_role_grant();
     let audience = DelegationAudience::Project("test".to_string());
@@ -884,13 +882,8 @@ fn assert_root_delegation_batch_dtos_roundtrip() {
         cert_hash,
         proof,
     };
-    let install_request = RootDelegationProofBatchInstallRequest {
-        batch_id,
-        proofs: vec![batch_proof],
-    };
-
     assert_candid_roundtrip(chain_key_proof);
-    assert_candid_roundtrip(install_request);
+    assert_candid_roundtrip(batch_proof);
 }
 
 fn assert_active_delegation_proof_status_roundtrip() {

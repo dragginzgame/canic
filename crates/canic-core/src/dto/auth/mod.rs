@@ -27,8 +27,7 @@ pub use proof::{
     IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1, RootProof, RootProofMode,
 };
 pub use renewal::{
-    RootDelegationProofBatchInstallRequest, RootDelegationProofBatchProof,
-    RootDelegationProofBatchProofRef, RootDelegationProofInstallOutcome, RootIssuerPolicyResponse,
+    RootDelegationProofBatchProof, RootDelegationProofBatchProofRef, RootIssuerPolicyResponse,
     RootIssuerPolicyUpsertRequest, RootIssuerPolicyView, RootIssuerRenewalAttemptStatus,
     RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
     RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,

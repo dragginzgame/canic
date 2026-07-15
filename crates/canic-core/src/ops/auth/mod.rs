@@ -23,6 +23,7 @@ mod verify;
 pub use boundary::DelegatedSessionExpiryClamp;
 #[cfg(test)]
 pub use delegated::test_fixtures;
+pub use delegation::ChainKeyRootDelegationBatchInstallPlan;
 pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
