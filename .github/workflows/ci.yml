@@ -70,7 +70,9 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks after Rust cache restore" --min-free-mib 3072
       - name: Install Rust helper tools
-        run: cargo install cargo-sort cargo-sort-derives candid-extractor ripgrep --locked
+        run: |
+          cargo install cargo-sort cargo-sort-derives candid-extractor --locked
+          cargo install ripgrep --locked --features pcre2
       - name: Check Rust helper tools
         shell: bash
         run: |
