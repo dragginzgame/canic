@@ -9,17 +9,17 @@ use super::{
     ChainKeyRootDelegationBatchStatus,
 };
 use crate::{
-    domain::policy::pure::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
-        RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
-    },
     dto::auth::{
         ActiveDelegationProof, ChainKeyAlgorithm, ChainKeyBatchHeaderV1,
         ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1,
         ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant, DelegationAudience,
         DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1, IssuerProofAlgorithm,
         IssuerProofBinding, RootProof,
+    },
+    model::auth::{
+        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
+        RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
     },
     storage::stable::auth::{
         ActiveDelegationProofRecord, ChainKeyAlgorithmRecord, ChainKeyBatchHeaderRecord,

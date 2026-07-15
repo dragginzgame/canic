@@ -5,7 +5,7 @@
 
 use crate::{
     cdk::types::Principal,
-    domain::policy::pure::auth::{
+    model::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerRenewalTemplate,
     },
 };

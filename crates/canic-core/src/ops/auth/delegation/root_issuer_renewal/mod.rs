@@ -1,29 +1,24 @@
 //! Module: ops::auth::delegation::root_issuer_renewal
 //!
-//! Responsibility: map and validate root-managed issuer renewal templates.
-//! Does not own: renewal scheduling, signing, proof retrieval, or issuer install calls.
+//! Responsibility: convert and persist root-managed issuer renewal state.
+//! Does not own: admission policy, scheduling, signing, proof retrieval, or issuer install calls.
 
 mod identity;
 #[cfg(test)]
 mod tests;
 mod view;
 
-use super::{
-    errors::map_root_provisioning_policy_error,
-    root_issuer_policy::{audience_policy, grant_policies},
-};
+use super::root_issuer_policy::{audience_policy, grant_policies};
 use crate::{
-    InternalError,
-    domain::policy::pure::auth::{
-        RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
-        RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalTemplate,
-        validate_root_issuer_renewal_template_policy,
-    },
     dto::auth::{
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     },
     log::Topic,
+    model::auth::{
+        RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
+        RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalTemplate,
+    },
     ops::{
         runtime::metrics::delegated_auth::{
             DelegatedAuthMetricOutcome, DelegatedAuthMetricReason, DelegatedAuthMetrics,
@@ -38,17 +33,10 @@ use view::{
     root_issuer_renewal_template_view,
 };
 
-pub(super) fn upsert_root_issuer_renewal_template(
-    request: RootIssuerRenewalTemplateUpsertRequest,
+pub(super) fn commit_root_issuer_renewal_template(
+    template: RootIssuerRenewalTemplate,
     now_ns: u64,
-) -> Result<RootIssuerRenewalTemplateResponse, InternalError> {
-    validate_root_issuer_renewal_template_upsert_request(&request)?;
-
-    let template = root_issuer_renewal_template_from_request(request);
-    let policy = AuthStateOps::root_issuer_policy(template.issuer_pid);
-    validate_root_issuer_renewal_template_policy(policy.as_ref(), &template)
-        .map_err(map_root_provisioning_policy_error)?;
-
+) -> RootIssuerRenewalTemplateResponse {
     AuthStateOps::upsert_root_issuer_renewal_template(template.clone());
     AuthStateOps::advance_delegated_auth_registry_epoch();
     if !template.enabled {
@@ -62,9 +50,9 @@ pub(super) fn upsert_root_issuer_renewal_template(
         template.enabled
     );
 
-    Ok(RootIssuerRenewalTemplateResponse {
+    RootIssuerRenewalTemplateResponse {
         template: root_issuer_renewal_template_view(&template),
-    })
+    }
 }
 
 pub(super) fn root_issuer_renewal_status(
@@ -121,23 +109,7 @@ pub(super) fn has_enabled_root_issuer_renewal_templates() -> bool {
         .any(|template| template.enabled)
 }
 
-fn validate_root_issuer_renewal_template_upsert_request(
-    request: &RootIssuerRenewalTemplateUpsertRequest,
-) -> Result<(), InternalError> {
-    if request.cert_ttl_ns == 0 {
-        return Err(InternalError::invalid_input(
-            "root issuer renewal certificate TTL must be greater than zero",
-        ));
-    }
-    if request.enabled && request.grants.is_empty() {
-        return Err(InternalError::invalid_input(
-            "enabled root issuer renewal template must include at least one grant",
-        ));
-    }
-    Ok(())
-}
-
-fn root_issuer_renewal_template_from_request(
+pub(super) fn root_issuer_renewal_template_from_request(
     request: RootIssuerRenewalTemplateUpsertRequest,
 ) -> RootIssuerRenewalTemplate {
     RootIssuerRenewalTemplate {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.3` gives root-issuer policy and renewal-template admission one
+  workflow/policy owner with model-owned state, without changing public or
+  stable shapes.
+
 - `0.92.2` is potentially breaking: it preserves specific delegated-auth proof
   and issuer-provisioning failures and establishes one canonical layer contract
   without changing public data shapes or stable state.

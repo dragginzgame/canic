@@ -13,12 +13,9 @@ use thiserror::Error as ThisError;
 mod root_provisioning;
 
 pub use root_provisioning::{
-    RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy,
     RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
-    RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus,
-    RootIssuerRenewalOutcome, RootIssuerRenewalProofRef, RootIssuerRenewalState,
-    RootIssuerRenewalTemplate, validate_root_delegation_proof_prepare_policy,
-    validate_root_issuer_renewal_template_policy,
+    validate_root_delegation_proof_prepare_policy, validate_root_issuer_policy_upsert,
+    validate_root_issuer_renewal_template_upsert,
 };
 
 ///
@@ -45,6 +42,9 @@ pub enum AuthPolicyError {
     #[error("root issuer audience is not allowed for issuer {issuer_pid}")]
     RootIssuerAudienceNotAllowed { issuer_pid: Principal },
 
+    #[error("enabled root issuer policy must allow at least one audience")]
+    RootIssuerAudienceRequired,
+
     #[error("root issuer certificate TTL must be greater than zero")]
     RootIssuerCertTtlZero,
 
@@ -61,6 +61,12 @@ pub enum AuthPolicyError {
 
     #[error("root issuer grant scope '{scope}' is not allowed for role {role}")]
     RootIssuerGrantNotAllowed { role: CanisterRole, scope: String },
+
+    #[error("enabled root issuer policy must allow at least one grant")]
+    RootIssuerGrantRequired,
+
+    #[error("root issuer max certificate TTL must be greater than zero")]
+    RootIssuerMaxCertTtlZero,
 
     #[error("root issuer policy is for {expected}, but request named issuer {found}")]
     RootIssuerPolicyMismatch {
@@ -79,6 +85,9 @@ pub enum AuthPolicyError {
 
     #[error("root issuer is not registered")]
     RootIssuerUnregistered,
+
+    #[error("enabled root issuer renewal template must include at least one grant")]
+    RootIssuerRenewalGrantRequired,
 
     #[error("delegated token prepare subject must match caller")]
     SubjectCallerMismatch,

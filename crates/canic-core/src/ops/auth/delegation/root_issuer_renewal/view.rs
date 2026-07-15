@@ -4,15 +4,15 @@
 //! Does not own: storage mutation, scheduling decisions, or install outcome handling.
 
 use crate::{
-    domain::policy::pure::auth::{
-        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
-        RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalState,
-        RootIssuerRenewalTemplate,
-    },
     dto::auth::{
         RootDelegationProofBatchProofRef, RootIssuerRenewalAttemptStatus,
         RootIssuerRenewalAttemptView, RootIssuerRenewalOutcome, RootIssuerRenewalStateView,
         RootIssuerRenewalTemplateView,
+    },
+    model::auth::{
+        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
+        RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalState,
+        RootIssuerRenewalTemplate,
     },
     ops::auth::delegation::root_issuer_policy::{
         delegated_role_grant_views, delegation_audience_view,

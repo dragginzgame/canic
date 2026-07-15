@@ -36,6 +36,7 @@ use crate::{
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     },
     ids::BuildNetwork,
+    model::auth::{RootIssuerPolicy, RootIssuerRenewalTemplate},
     ops::{config::ConfigOps, ic::IcOps},
 };
 
@@ -62,18 +63,31 @@ impl AuthOps {
         active::active_delegation_proof_status(now_ns)
     }
 
-    pub(crate) fn upsert_root_issuer_policy(
+    pub(crate) fn root_issuer_policy_from_request(
         request: RootIssuerPolicyUpsertRequest,
-        now_ns: u64,
-    ) -> Result<RootIssuerPolicyResponse, InternalError> {
-        root_issuer_policy::upsert_root_issuer_policy(request, now_ns)
+    ) -> RootIssuerPolicy {
+        root_issuer_policy::root_issuer_policy_from_request(request)
     }
 
-    pub(crate) fn upsert_root_issuer_renewal_template(
+    pub(crate) fn commit_root_issuer_policy(policy: RootIssuerPolicy) -> RootIssuerPolicyResponse {
+        root_issuer_policy::commit_root_issuer_policy(policy)
+    }
+
+    pub(crate) fn root_issuer_policy(issuer_pid: Principal) -> Option<RootIssuerPolicy> {
+        crate::ops::storage::auth::AuthStateOps::root_issuer_policy(issuer_pid)
+    }
+
+    pub(crate) fn root_issuer_renewal_template_from_request(
         request: RootIssuerRenewalTemplateUpsertRequest,
+    ) -> RootIssuerRenewalTemplate {
+        root_issuer_renewal::root_issuer_renewal_template_from_request(request)
+    }
+
+    pub(crate) fn commit_root_issuer_renewal_template(
+        template: RootIssuerRenewalTemplate,
         now_ns: u64,
-    ) -> Result<RootIssuerRenewalTemplateResponse, InternalError> {
-        root_issuer_renewal::upsert_root_issuer_renewal_template(request, now_ns)
+    ) -> RootIssuerRenewalTemplateResponse {
+        root_issuer_renewal::commit_root_issuer_renewal_template(template, now_ns)
     }
 
     pub(crate) fn root_issuer_renewal_status(

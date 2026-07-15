@@ -115,12 +115,17 @@
   `v0.92.1`. D2 then preserves typed auth proof/provisioning causes through one
   public mapping boundary. All seven auth methods and the current auth trace
   pass, including invalid-proof rejection without active-state mutation. This
-  fixes `CANIC-092-ERROR-001` in the candidate. D3 then resolves the competing
+  fixes `CANIC-092-ERROR-001`; D2/D3 are released together in `v0.92.2`. D3
+  then resolves the competing
   layer authority and public core architecture wording without runtime change:
   active docs now mirror the strict `AGENTS.md` direction and model/storage
   ownership contract. The same 25 product-code violations remain visible. D3
-  fixes `CANIC-092-LAYERING-003` and `CANIC-092-DOCS-001`, leaving 18
-  unresolved findings (5 P1, 12 P2, one P3).
+  fixes `CANIC-092-LAYERING-003` and `CANIC-092-DOCS-001`. D4 then gives
+  root-issuer policy/template admission one workflow/policy owner, moves
+  persisted state shapes to model, and leaves ops with conversion/persistence.
+  Direct rejection and unchanged-state proof fixes `CANIC-092-TEST-001`; the
+  live layering guard drops from 25 to 18 while `CANIC-092-LAYERING-005`
+  remains open. Seventeen findings remain (5 P1, 11 P2, one P3).
 
 ## Month Status
 
@@ -141,9 +146,9 @@ also pass with typed causes preserved. Mandatory trace v1 is
 cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
-satisfied. Phase D finding review is complete; D1 publication safety is
-released and D2 auth typed causes plus D3 canonical layer documentation pass
-focused validation. Security ordering and lifecycle
+satisfied. Phase D finding review is complete; D1 through D3 are released and
+D4 root-issuer admission ownership passes focused validation. Security
+ordering and lifecycle
 symmetry now have valid frozen-method
 passes with watchpoints. Capability v2 is a valid immutable-baseline pass at
 risk 4/10; v1 remains invalid history. Publish surface has a valid first
@@ -175,15 +180,15 @@ are complete; Phase C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Record D2/D3's full fix/validation commit, then review the exact D4
-   root-issuer admission ownership contract; later slices remain ordered
-   candidates, not blanket authorization.
+1. Review the exact D5 blob-billing workflow ownership contract; later slices
+   and remaining layering subsystems remain ordered candidates, not blanket
+   authorization.
 2. Keep the dedicated scanner limitation proposed until the maintainer records
    every required waiver field; otherwise closeout remains blocked.
 3. Review the three P2 publish-surface findings with the complete baseline;
    keep product/package/docs fixes deferred until then.
-4. Carry root-issuer upsert rejection and unchanged-state proof inside the
-   eventual ops/policy authority slice; do not add another validator.
+4. Keep the D4 root-issuer authority singular; do not reintroduce an ops
+   validator or policy-owned persisted state shape.
 5. Review delegated-auth/root-proof concentration after the complete
    baseline; do not infer a generic abstraction from size alone.
 6. Preserve Wasm v2's sole canonical host-builder authority and use only an

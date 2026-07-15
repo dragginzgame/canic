@@ -86,15 +86,24 @@ transport, pending, expired, stale, and invalid causes through one existing
 public error boundary. All seven auth methods and the current auth trace pass.
 A new PocketIC case proves wrong-issuer, expired, and corrupt proof installs
 reject with typed codes without replacing the active proof. Candid, token
-formats, and stable state are unchanged.
+formats, and stable state are unchanged. D2 was released in `v0.92.2`.
 
 [D3 canonical layer contract](0.92-d3-canonical-layer-contract.md) makes
 `AGENTS.md` the sole active architecture authority. Public core docs, module
 headers, and hygiene guidance now agree on
 `endpoints -> workflow -> policy -> ops -> model`, model-owned state/storage
 invariants, and passive storage representations. This is documentation-only;
-the same 25 product-code ops-to-policy violations remain visible for later
-finding-backed slices.
+the immutable baseline's 25 product-code ops-to-policy violations remain
+visible for later finding-backed slices. D3 was released with D2 in `v0.92.2`.
+
+[D4 root-issuer admission ownership](0.92-d4-root-issuer-admission-ownership.md)
+moves persisted issuer policy/renewal shapes from policy to model and gives
+policy/template admission one workflow-to-pure-policy path. Ops now converts
+and persists only. Positive and every request-rejection boundary are proved
+directly with unchanged state/epoch and skipped timer checks. Public DTO,
+Candid, and stable record shapes are unchanged. This fixes
+`CANIC-092-TEST-001`, reduces the live layering guard from 25 to 18 violations,
+and leaves `CANIC-092-LAYERING-005` open for separately reviewed subsystems.
 
 ## Live Ledger
 
@@ -104,9 +113,9 @@ finding-backed slices.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
   0 blocked); D1/D2 move current reruns to 8 pass and 2 fail without rewriting
   the baseline.
-- Unresolved findings: 18 (5 P1, 12 P2, one P3).
-- Phase D fixes: D1 committed/released; D2 and D3 implemented with focused
-  validation passing and immutable commit identity pending.
+- Unresolved findings: 17 (5 P1, 11 P2, one P3).
+- Phase D fixes: D1 released in `v0.92.1`; D2/D3 released in `v0.92.2`; D4
+  implemented with focused validation passing.
 
 ## Validation
 
@@ -145,9 +154,11 @@ finding-backed slices.
   Clippy, and package verification pass. Layering self-tests pass; the full
   guard retains the same expected 25 product-code violations. Core rustdoc
   still fails only on the separately indexed D10 `InternalError` link.
+- D4: 881 all-feature core library tests, four policy/DTO boundary guards, 19
+  protocol tests, strict core Clippy, and two PocketIC proof/renewal regressions
+  pass. Layering fixtures pass and the live violation set is 18.
 
 ## Next
 
-Record D2/D3's immutable fix/validation commit after the maintainer commit. D4
-root-issuer admission ownership is the next ordered candidate; D4 through D10
-remain separately bounded.
+D5 blob-billing workflow ownership is the next ordered candidate. D5 through
+D10 and the remaining layering subsystems remain separately bounded.
