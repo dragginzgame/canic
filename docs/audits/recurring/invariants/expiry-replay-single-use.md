@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-AUTH-REPLAY-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: credential freshness and replay/single-use boundary
 - Kind/profile: security `invariant`
@@ -165,14 +165,19 @@ When applicable, verify skew tolerance does not exceed token TTL.
 Current suggested commands:
 
 ```bash
-cargo test -p canic-core --lib delegated_auth_guard_has_no_verifier_local_use_store -- --nocapture
-cargo test -p canic-core --lib verify_delegated_token_rejects_expired_token_at_boundary -- --nocapture
-cargo test -p canic-core --lib install_active_delegation_proof_rejects_time_bounds -- --nocapture
-cargo test -p canic-core --lib batch_prepare_replays_same_request_id_without_resigning -- --nocapture
-cargo test -p canic-core --lib batch_prepare_rejects_conflicting_request_id_reuse -- --nocapture
-cargo test -p canic-core --lib replay_policy -- --nocapture
-cargo test -p canic-core --lib reserve_root_replay_rejects_caller_capacity_before_global_capacity -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib delegated_auth_guard_has_no_verifier_local_use_store -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib verify_delegated_token_rejects_expired_token_at_boundary -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib install_active_delegation_proof_rejects_time_bounds -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib check_replay_returns_cached_response_for_duplicate_same_payload -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib check_replay_rejects_conflicting_payload_for_same_request_id -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib chain_key_batch_prepare_reuses_in_flight_batch -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib chain_key_batch_signing_signs_prepared_batch_once_and_reuses_signed_state -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib replay_policy -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib reserve_root_replay_rejects_caller_capacity_before_global_capacity -- --nocapture
 ```
+
+The wrapper is part of the method identity. A successful Cargo exit with zero
+executed tests is `BLOCKED`, never passing evidence.
 
 ## Structural Hotspots
 

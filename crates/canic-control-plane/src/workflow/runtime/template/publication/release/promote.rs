@@ -10,7 +10,10 @@ use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
 use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{error::InternalError, ops::ic::IcOps};
+use canic_core::control_plane_support::{
+    error::InternalError,
+    ops::{cost_guard::CostGuardPermit, ic::IcOps},
+};
 
 use super::metrics::{
     WasmStorePublicationError, record_wasm_store_metric, record_wasm_store_publish_failed,
@@ -19,6 +22,7 @@ use super::metrics::{
 impl WasmStorePublicationWorkflow {
     // Promote the manifest into the target store and mirror the approved root state.
     pub(super) async fn promote_manifest_to_store_with_metrics(
+        publication_permit: &CostGuardPermit,
         target_store: &PublicationStoreSnapshot,
         manifest: TemplateManifestResponse,
     ) -> Result<(), InternalError> {
@@ -43,6 +47,7 @@ impl WasmStorePublicationWorkflow {
         };
 
         if let Err(err) = Self::promote_manifest_to_target_store(
+            publication_permit,
             target_store.pid,
             target_store.binding.clone(),
             input,
@@ -72,11 +77,13 @@ impl WasmStorePublicationWorkflow {
 
     // Stage one approved manifest into the target store and mirror it into root-owned state.
     async fn promote_manifest_to_target_store(
+        publication_permit: &CostGuardPermit,
         target_store_pid: Principal,
         target_store_binding: WasmStoreBinding,
         manifest: TemplateManifestInput,
     ) -> Result<(), InternalError> {
         store_stage_manifest(
+            publication_permit,
             target_store_pid,
             TemplateManifestInput {
                 store_binding: target_store_binding.clone(),

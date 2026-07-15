@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-BUILD-INTEGRITY-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `retain`
 - Owner: build scripts, procedural macros, generated code, unsafe inventory,
   and Wasm reproducibility
@@ -11,8 +11,9 @@
 - Trace mode: `code_trace`; reproducibility uses two isolated local
   `execution_trace` builds
 - Cost/runtime: high; 60-180 minutes
-- Prerequisites: Git, ripgrep, Rust/Cargo toolchain, Wasm target, build helpers,
-  two isolated `CARGO_TARGET_DIR` values, and enough disk for duplicate builds
+- Prerequisites: Git, ripgrep, jq, Rust/Cargo toolchain, Wasm target, build
+  helpers, two isolated `CARGO_TARGET_DIR` values, and enough disk for
+  duplicate builds
 - False-positive boundary: generated output and unsafe blocks are classified by
   reachability and justification; presence alone is not failure
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
@@ -78,9 +79,33 @@ same command twice. Do not reuse produced Wasm between runs.
 Record SHA-256 for raw, shrunk, gzip, root bundle, manifest, and provenance
 outputs where present. Deterministic gzip must suppress timestamps.
 
+### Provenance Semantic Comparison
+
+Build provenance is compared as parsed JSON, not raw envelope bytes. Normalize
+both sides with exactly:
+
+```bash
+jq --sort-keys 'del(.generated_at, .payload.generated_at, .payload_sha256)' \
+  <build-provenance.json>
+```
+
+Only these three fields are excluded:
+
+- envelope `generated_at`, which is observational metadata;
+- payload `generated_at`, the same observation in the typed payload; and
+- envelope `payload_sha256`, because it is derived from the unnormalized
+  payload and therefore changes when payload `generated_at` changes.
+
+The normalized nested payload itself remains in the comparison. Every source,
+Cargo, configuration, environment, feature, tool, build-status, artifact path
+classification, size, and artifact hash field must compare exactly. A semantic
+comparison implementation that removes the payload body or any additional
+field is invalid. Reports must retain both raw provenance hashes and the
+normalized comparison result.
+
 - Identical decision-bearing artifacts: `pass` for reproducibility.
-- Differences with a proven, non-shipped nondeterministic wrapper only:
-  `partial` until the method explicitly excludes it.
+- Differences limited to the three normalized provenance fields above:
+  `pass` when the complete normalized envelopes compare equal.
 - Unexplained shipped byte difference: `fail`.
 - Missing tool or insufficient disk: `blocked`.
 

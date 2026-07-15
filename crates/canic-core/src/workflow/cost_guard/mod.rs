@@ -10,6 +10,7 @@ use crate::{
     ops::cost_guard::{CostGuardReserveError, CostGuardReservePublicKind},
 };
 
+#[must_use]
 pub fn map_cost_guard_reserve_error(err: CostGuardReserveError) -> InternalError {
     match err.public_kind() {
         Some(CostGuardReservePublicKind::InvalidInput) => {

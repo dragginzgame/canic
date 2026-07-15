@@ -5,6 +5,8 @@ use crate::{
     ops::storage::template::TemplateChunkedOps,
     workflow::runtime::template::publication::{
         WasmStorePublicationWorkflow,
+        cost_guard::{PUBLICATION_BOOTSTRAP_COMMAND_KIND, PublicationCostGuard},
+        error::PublicationWorkflowError,
         fleet::{
             PublicationPlacement, PublicationPlacementAction, PublicationStoreFleet,
             PublicationStoreSnapshot,
@@ -17,8 +19,8 @@ use canic_core::api::lifecycle::metrics::{
 };
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
-    ops::ic::IcOps,
+    error::InternalError,
+    ops::{cost_guard::CostGuardPermit, ic::IcOps},
 };
 use canic_core::{log, log::Topic};
 
@@ -30,6 +32,7 @@ impl WasmStorePublicationWorkflow {
     async fn resolve_managed_publication_placement(
         fleet: &mut PublicationStoreFleet,
         manifest: &TemplateManifestResponse,
+        publication_permit: &CostGuardPermit,
     ) -> Result<PublicationPlacement, InternalError> {
         if let Some(placement) = fleet.select_existing_store_for_release(manifest)? {
             return Ok(placement);
@@ -37,38 +40,35 @@ impl WasmStorePublicationWorkflow {
 
         let store_config = config::current_subnet_default_wasm_store();
         if manifest.payload_size_bytes > store_config.max_store_bytes() {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "release {} exceeds empty wasm store capacity: bytes {} > {}",
-                    Self::release_label(manifest),
-                    manifest.payload_size_bytes,
-                    store_config.max_store_bytes()
-                ),
-            ));
+            return Err(PublicationWorkflowError::CapacityExceeded {
+                release: Self::release_label(manifest),
+                target: "empty store".to_string(),
+                payload_size_bytes: manifest.payload_size_bytes,
+                remaining_store_bytes: store_config.max_store_bytes(),
+            }
+            .into());
         }
 
-        let created = Self::create_store_for_fleet(fleet).await?;
+        let created = Self::create_store_for_fleet(fleet, publication_permit).await?;
         let created_store = fleet
             .stores
             .iter()
             .find(|store| store.binding == created.binding)
             .ok_or_else(|| {
-                InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!("new ws '{}' missing from fleet snapshot", created.binding),
-                )
+                InternalError::from(PublicationWorkflowError::InvalidState(format!(
+                    "new ws '{}' missing from fleet snapshot",
+                    created.binding
+                )))
             })?;
 
         if !created_store.can_accept_release(manifest) {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "release {} does not fit empty store {}",
-                    Self::release_label(manifest),
-                    created.binding
-                ),
-            ));
+            return Err(PublicationWorkflowError::CapacityExceeded {
+                release: Self::release_label(manifest),
+                target: created.binding.to_string(),
+                payload_size_bytes: manifest.payload_size_bytes,
+                remaining_store_bytes: created_store.status.remaining_store_bytes,
+            }
+            .into());
         }
 
         Ok(created)
@@ -78,9 +78,12 @@ impl WasmStorePublicationWorkflow {
     async fn publish_manifest_to_managed_fleet(
         fleet: &mut PublicationStoreFleet,
         manifest: TemplateManifestResponse,
+        publication_permit: &CostGuardPermit,
     ) -> Result<(), InternalError> {
         let release_label = Self::release_label(&manifest);
-        let placement = Self::resolve_managed_publication_placement(fleet, &manifest).await?;
+        let placement =
+            Self::resolve_managed_publication_placement(fleet, &manifest, publication_permit)
+                .await?;
 
         match placement.action {
             PublicationPlacementAction::Reuse => {
@@ -90,7 +93,11 @@ impl WasmStorePublicationWorkflow {
                     WasmStoreMetricOutcome::Skipped,
                     WasmStoreMetricReason::CacheHit,
                 );
-                Self::mirror_manifest_to_root_state(placement.binding.clone(), &manifest);
+                Self::mirror_manifest_to_root_state(
+                    publication_permit,
+                    placement.binding.clone(),
+                    &manifest,
+                );
                 log!(
                     Topic::Wasm,
                     Info,
@@ -106,6 +113,7 @@ impl WasmStorePublicationWorkflow {
                     &placement,
                     &release_label,
                     manifest.clone(),
+                    publication_permit,
                 )
                 .await?;
             }
@@ -120,6 +128,7 @@ impl WasmStorePublicationWorkflow {
         placement: &PublicationPlacement,
         release_label: &str,
         manifest: TemplateManifestResponse,
+        publication_permit: &CostGuardPermit,
     ) -> Result<(), InternalError> {
         let action_label = if placement.action == PublicationPlacementAction::Create {
             "create"
@@ -132,7 +141,8 @@ impl WasmStorePublicationWorkflow {
 
         let publish_result = {
             let target_store = &mut fleet.stores[store_index];
-            Self::publish_manifest_to_store(target_store, manifest.clone()).await
+            Self::publish_manifest_to_store(target_store, manifest.clone(), publication_permit)
+                .await
         };
 
         match publish_result {
@@ -149,8 +159,15 @@ impl WasmStorePublicationWorkflow {
                 Ok(())
             }
             Err(err) if Self::is_store_capacity_exceeded(&err) => {
-                Self::rollover_and_publish_manifest(fleet, placement, release_label, manifest, err)
-                    .await
+                Self::rollover_and_publish_manifest(
+                    fleet,
+                    placement,
+                    release_label,
+                    manifest,
+                    publication_permit,
+                    err,
+                )
+                .await
             }
             Err(err) => Err(err),
         }
@@ -161,6 +178,7 @@ impl WasmStorePublicationWorkflow {
         placement: &PublicationPlacement,
         release_label: &str,
         manifest: TemplateManifestResponse,
+        publication_permit: &CostGuardPermit,
         err: InternalError,
     ) -> Result<(), InternalError> {
         record_wasm_store_metric(
@@ -173,13 +191,14 @@ impl WasmStorePublicationWorkflow {
             return Err(err);
         }
 
-        let retry = Self::create_store_for_fleet(fleet).await?;
+        let retry = Self::create_store_for_fleet(fleet, publication_permit).await?;
         let retry_index = fleet
             .store_index_for_binding(&retry.binding)
             .ok_or_else(|| missing_store_snapshot(&retry.binding))?;
         {
             let target_store = &mut fleet.stores[retry_index];
-            Self::publish_manifest_to_store(target_store, manifest.clone()).await?;
+            Self::publish_manifest_to_store(target_store, manifest.clone(), publication_permit)
+                .await?;
         }
         record_wasm_store_metric(
             WasmStoreMetricOperation::ReleasePublish,
@@ -201,6 +220,16 @@ impl WasmStorePublicationWorkflow {
 
     // Publish all root-local staged releases into the current subnet's selected wasm store.
     pub async fn publish_staged_release_set_to_current_store() -> Result<(), InternalError> {
+        let cost_guard = PublicationCostGuard::reserve(PUBLICATION_BOOTSTRAP_COMMAND_KIND)?;
+        let result =
+            Self::publish_staged_release_set_to_current_store_with_permit(cost_guard.permit())
+                .await;
+        cost_guard.settle(result)
+    }
+
+    async fn publish_staged_release_set_to_current_store_with_permit(
+        publication_permit: &CostGuardPermit,
+    ) -> Result<(), InternalError> {
         let manifests = Self::managed_release_manifests()?
             .into_iter()
             .filter(|manifest| manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING)
@@ -210,21 +239,23 @@ impl WasmStorePublicationWorkflow {
             TemplateChunkedOps::validate_staged_release(manifest)?;
         }
 
-        let mut fleet = Self::snapshot_publication_store_fleet().await?;
+        let mut fleet = Self::snapshot_publication_store_fleet(publication_permit).await?;
         for manifest in manifests {
-            Self::publish_manifest_to_managed_fleet(&mut fleet, manifest).await?;
+            Self::publish_manifest_to_managed_fleet(&mut fleet, manifest, publication_permit)
+                .await?;
         }
 
         Ok(())
     }
 
     // Publish the current release set from the current default store into one subnet-local wasm store.
-    pub async fn publish_current_release_set_to_store(
+    pub(in crate::workflow::runtime::template::publication) async fn publish_current_release_set_to_store(
+        publication_permit: &CostGuardPermit,
         target_store_pid: Principal,
     ) -> Result<(), InternalError> {
         let target_store_binding = store_binding_for_pid(target_store_pid)?;
         let target_status = store_status(target_store_pid).await?;
-        let target_catalog = store_catalog(target_store_pid).await?;
+        let target_catalog = store_catalog(publication_permit, target_store_pid).await?;
         let mut target_store = PublicationStoreSnapshot {
             binding: target_store_binding.clone(),
             pid: target_store_pid,
@@ -236,22 +267,41 @@ impl WasmStorePublicationWorkflow {
 
         for manifest in Self::managed_release_manifests()? {
             if target_store.has_exact_release(&manifest) {
-                Self::mirror_manifest_to_root_state(target_store_binding.clone(), &manifest);
+                Self::mirror_manifest_to_root_state(
+                    publication_permit,
+                    target_store_binding.clone(),
+                    &manifest,
+                );
                 continue;
             }
 
-            if !target_store.can_accept_release(&manifest) {
-                return Err(InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!(
-                        "target ws '{}' cannot fit {}",
-                        target_store_binding,
-                        Self::release_label(&manifest)
-                    ),
-                ));
+            if let Some(conflict) = target_store.conflicting_release(&manifest) {
+                return Err(PublicationWorkflowError::ReleaseConflict {
+                    template_id: manifest.template_id.clone(),
+                    version: manifest.version.clone(),
+                    binding: target_store_binding.clone(),
+                    existing_payload_hash: conflict.payload_hash.clone(),
+                    existing_payload_size_bytes: conflict.payload_size_bytes,
+                }
+                .into());
             }
 
-            Self::publish_manifest_to_store(&mut target_store, manifest.clone()).await?;
+            if !target_store.can_accept_release(&manifest) {
+                return Err(PublicationWorkflowError::CapacityExceeded {
+                    release: Self::release_label(&manifest),
+                    target: target_store_binding.to_string(),
+                    payload_size_bytes: manifest.payload_size_bytes,
+                    remaining_store_bytes: target_store.status.remaining_store_bytes,
+                }
+                .into());
+            }
+
+            Self::publish_manifest_to_store(
+                &mut target_store,
+                manifest.clone(),
+                publication_permit,
+            )
+            .await?;
             target_store.record_release(&manifest);
         }
 
@@ -259,11 +309,14 @@ impl WasmStorePublicationWorkflow {
     }
 
     /// Publish the current managed release set into the managed subnet-local store fleet.
-    pub async fn publish_current_release_set_to_current_store() -> Result<(), InternalError> {
-        let mut fleet = Self::snapshot_publication_store_fleet().await?;
+    pub(in crate::workflow::runtime::template::publication) async fn publish_current_release_set_to_current_store(
+        publication_permit: &CostGuardPermit,
+    ) -> Result<(), InternalError> {
+        let mut fleet = Self::snapshot_publication_store_fleet(publication_permit).await?;
 
         for manifest in Self::managed_release_manifests()? {
-            Self::publish_manifest_to_managed_fleet(&mut fleet, manifest).await?;
+            Self::publish_manifest_to_managed_fleet(&mut fleet, manifest, publication_permit)
+                .await?;
         }
 
         Ok(())
@@ -271,8 +324,6 @@ impl WasmStorePublicationWorkflow {
 }
 
 fn missing_store_snapshot(binding: &WasmStoreBinding) -> InternalError {
-    InternalError::workflow(
-        InternalErrorOrigin::Workflow,
-        format!("ws '{binding}' missing from fleet snapshot"),
-    )
+    PublicationWorkflowError::InvalidState(format!("ws '{binding}' missing from fleet snapshot"))
+        .into()
 }

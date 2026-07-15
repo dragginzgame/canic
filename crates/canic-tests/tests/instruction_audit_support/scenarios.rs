@@ -1,120 +1,108 @@
 use super::*;
 
-// Build the fixed scenario manifest for the instruction-footprint baseline.
-#[expect(clippy::too_many_lines)]
+// Build the fixed v2 scenario manifest. Every row uses an authoritative
+// root-harness artifact and a fresh PocketIC topology.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the fixed ordered scenario table is clearer as one authoritative roster"
+)]
 pub(super) fn scenarios() -> Vec<AuditScenario> {
-    let mut scenarios = vec![
+    vec![
         AuditScenario {
-            key: "app:canic_time:minimal-valid",
-            canister: "leaf_probe",
-            endpoint_or_flow: "audit_time_probe",
-            transport_mode: "query",
-            subject_kind: "endpoint",
-            subject_label: "time_probe",
-            arg_class: "minimal-valid",
-            caller_class: "anonymous",
-            auth_state: "public",
-            replay_state: "n/a",
-            cache_state: "n/a",
-            topology_state: "standalone-audit-leaf-ready",
-            freshness_model: "fresh-standalone-per-scenario",
-            notes: "Audit-only raw time probe on one standalone internal leaf canister.",
-        },
-        AuditScenario {
-            key: "app:canic_env:minimal-valid",
-            canister: "leaf_probe",
-            endpoint_or_flow: "audit_env_probe",
-            transport_mode: "query",
-            subject_kind: "endpoint",
-            subject_label: "canic_env",
-            arg_class: "minimal-valid",
-            caller_class: "anonymous",
-            auth_state: "public",
-            replay_state: "n/a",
-            cache_state: "n/a",
-            topology_state: "standalone-audit-leaf-ready",
-            freshness_model: "fresh-standalone-per-scenario",
-            notes: "Audit-only env snapshot probe on one standalone internal leaf canister.",
-        },
-        AuditScenario {
-            key: "app:canic_log:empty-page",
-            canister: "leaf_probe",
-            endpoint_or_flow: "audit_log_probe",
-            transport_mode: "query",
-            subject_kind: "endpoint",
-            subject_label: "canic_log",
-            arg_class: "empty-page",
-            caller_class: "anonymous",
-            auth_state: "public",
-            replay_state: "n/a",
-            cache_state: "cold",
-            topology_state: "standalone-audit-leaf-ready",
-            freshness_model: "fresh-standalone-per-scenario",
-            notes: "Audit-only log pagination probe with the smallest page shape on one standalone internal leaf.",
-        },
-        AuditScenario {
-            key: "root:canic_subnet_registry:full-registry",
-            canister: "root_probe",
-            endpoint_or_flow: "audit_subnet_registry_probe",
-            transport_mode: "query",
-            subject_kind: "endpoint",
-            subject_label: "canic_subnet_registry",
-            arg_class: "representative-valid",
-            caller_class: "anonymous",
-            auth_state: "public",
-            replay_state: "n/a",
-            cache_state: "n/a",
-            topology_state: "standalone-audit-root-ready",
-            freshness_model: "fresh-standalone-per-scenario",
-            notes: "Audit-only root registry probe over a standalone internal root canister.",
-        },
-        AuditScenario {
-            key: "root:canic_subnet_state:empty-struct",
-            canister: "root_probe",
-            endpoint_or_flow: "audit_subnet_state_probe",
-            transport_mode: "query",
-            subject_kind: "endpoint",
-            subject_label: "canic_subnet_state",
-            arg_class: "minimal-valid",
-            caller_class: "anonymous",
-            auth_state: "public",
-            replay_state: "n/a",
-            cache_state: "n/a",
-            topology_state: "standalone-audit-root-ready",
-            freshness_model: "fresh-standalone-per-scenario",
-            notes: "Audit-only root state probe on a standalone internal root canister.",
-        },
-        AuditScenario {
-            key: "scale_hub:plan_create_worker:empty-pool",
-            canister: "scaling_probe",
-            endpoint_or_flow: "audit_plan_create_worker_probe",
-            transport_mode: "query",
-            subject_kind: "endpoint",
-            subject_label: "plan_create_worker",
-            arg_class: "empty-pool",
-            caller_class: "anonymous",
-            auth_state: "local-test-only",
-            replay_state: "n/a",
-            cache_state: "n/a",
-            topology_state: "standalone-audit-scaling-ready",
-            freshness_model: "fresh-standalone-per-scenario",
-            notes: "Audit-only scaling dry-run probe before any extra worker exists in one standalone internal scaling canister.",
-        },
-        AuditScenario {
-            key: "test:test:minimal-valid",
-            canister: "test",
-            endpoint_or_flow: "test",
+            key: "scale:request_cycles_from_parent:fresh",
+            canister: "scale",
+            endpoint_or_flow: "request_cycles_from_parent",
             transport_mode: "update",
             subject_kind: "endpoint",
-            subject_label: "test",
-            arg_class: "minimal-valid",
+            subject_label: "request_cycles_from_parent",
+            arg_class: "cycles-999",
             caller_class: "anonymous",
-            auth_state: "local-test-only",
-            replay_state: "n/a",
-            cache_state: "n/a",
-            topology_state: "standalone-test-ready",
+            auth_state: "public-child-endpoint-and-parent-structural-proof",
+            replay_state: "fresh",
+            cache_state: "cold",
+            topology_state: "scaling-profile-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Minimal local/dev update on one standalone test helper canister with no chain-key dependency.",
+            notes: "Scale child update performs a fresh structural capability round trip to its parent.",
+        },
+        AuditScenario {
+            key: "scale_hub:create_worker:empty-pool",
+            canister: "scale_hub",
+            endpoint_or_flow: "create_worker",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "create_worker",
+            arg_class: "empty-pool",
+            caller_class: "local-test",
+            auth_state: "require-local",
+            replay_state: "n/a",
+            cache_state: "empty-pool",
+            topology_state: "scaling-profile-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Scaling worker creation through observe, plan, create, and registration stages.",
+        },
+        AuditScenario {
+            key: "user_hub:create_account:new-principal",
+            canister: "user_hub",
+            endpoint_or_flow: "create_account",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "create_account",
+            arg_class: "new-principal",
+            caller_class: "local-test",
+            auth_state: "require-local",
+            replay_state: "n/a",
+            cache_state: "empty-assignment",
+            topology_state: "sharding-profile-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "User-shard assignment and allocation through the maintained user_hub endpoint.",
+        },
+        AuditScenario {
+            key: "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer",
+            canister: "root",
+            endpoint_or_flow: "test_provision_chain_key_delegation_proof_for_issuer",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "test_provision_chain_key_delegation_proof_for_issuer",
+            arg_class: "registered-new-issuer",
+            caller_class: "controller",
+            auth_state: "issuer-policy-and-template",
+            replay_state: "n/a",
+            cache_state: "proof-missing",
+            topology_state: "sharding-profile-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Root facade creates and installs the first chain-key delegation proof for an issuer.",
+        },
+        AuditScenario {
+            key: "issuer:canic_prepare_delegated_token:active-proof",
+            canister: "issuer",
+            endpoint_or_flow: "canic_prepare_delegated_token",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "canic_prepare_delegated_token",
+            arg_class: "minimal-valid",
+            caller_class: "delegated-subject",
+            auth_state: "active-proof",
+            replay_state: "fresh",
+            cache_state: "proof-warm",
+            topology_state: "sharding-profile-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Issuer-local delegated-token preparation from an explicitly provisioned active proof.",
+        },
+        AuditScenario {
+            key: "test:test_verify_delegated_token:valid-delegated-token",
+            canister: "test",
+            endpoint_or_flow: "test_verify_delegated_token",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "test_verify_delegated_token",
+            arg_class: "valid-delegated-token",
+            caller_class: "delegated-subject",
+            auth_state: "delegated-token",
+            replay_state: "fresh",
+            cache_state: "proof-warm",
+            topology_state: "sharding-profile-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Verifier-side delegated-token confirmation for a freshly issued token.",
         },
         AuditScenario {
             key: "root:canic_response_capability_v1:request-cycles-fresh",
@@ -128,9 +116,25 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             auth_state: "structural-proof",
             replay_state: "fresh",
             cache_state: "cold",
-            topology_state: "root_bootstrapped+local-test-helper-ready",
+            topology_state: "capability-profile-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Fresh root capability cycles request from a registered direct child to exercise replay and dispatcher checkpoints.",
+            notes: "Fresh root capability cycles request through auth, replay, policy, and execution.",
+        },
+        AuditScenario {
+            key: "root:canic_response_capability_v1:request-cycles-replay",
+            canister: "root",
+            endpoint_or_flow: "canic_response_capability_v1",
+            transport_mode: "update",
+            subject_kind: "endpoint",
+            subject_label: "canic_response_capability_v1",
+            arg_class: "cycles-request",
+            caller_class: "registered-direct-child",
+            auth_state: "structural-proof",
+            replay_state: "duplicate-same",
+            cache_state: "warm-response",
+            topology_state: "capability-profile-ready",
+            freshness_model: "fresh-topology-per-scenario",
+            notes: "Second identical cycles request returns the cached replay response.",
         },
         AuditScenario {
             key: "root:canic_template_stage_manifest_admin:single-chunk",
@@ -140,13 +144,13 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             subject_kind: "endpoint",
             subject_label: "canic_template_stage_manifest_admin",
             arg_class: "single-chunk",
-            caller_class: "anonymous-controller",
+            caller_class: "controller",
             auth_state: "controller-only",
             replay_state: "n/a",
             cache_state: "cold",
-            topology_state: "root_bootstrapped+release-staging-ready",
+            topology_state: "capability-profile-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Stages one synthetic approved manifest into the root-local release buffer.",
+            notes: "Stage one synthetic approved manifest in the root-local release buffer.",
         },
         AuditScenario {
             key: "root:canic_template_prepare_admin:single-chunk",
@@ -156,13 +160,13 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             subject_kind: "endpoint",
             subject_label: "canic_template_prepare_admin",
             arg_class: "single-chunk",
-            caller_class: "anonymous-controller",
+            caller_class: "controller",
             auth_state: "controller-only",
             replay_state: "n/a",
             cache_state: "warm-manifest",
-            topology_state: "root_bootstrapped+release-staging-ready",
+            topology_state: "capability-profile-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Prepares one synthetic single-chunk release after its manifest is already staged.",
+            notes: "Prepare one staged single-chunk release.",
         },
         AuditScenario {
             key: "root:canic_template_publish_chunk_admin:single-chunk",
@@ -172,36 +176,31 @@ pub(super) fn scenarios() -> Vec<AuditScenario> {
             subject_kind: "endpoint",
             subject_label: "canic_template_publish_chunk_admin",
             arg_class: "single-chunk",
-            caller_class: "anonymous-controller",
+            caller_class: "controller",
             auth_state: "controller-only",
             replay_state: "n/a",
-            cache_state: "warm-manifest+prepared",
-            topology_state: "root_bootstrapped+release-staging-ready",
+            cache_state: "warm-manifest-and-prepare",
+            topology_state: "capability-profile-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Publishes the only chunk for one synthetic staged release after prepare has completed.",
+            notes: "Publish the only chunk for one prepared release.",
         },
-    ];
-
-    if NetworkApi::build_network() == Some(BuildNetwork::Ic) {
-        scenarios.push(AuditScenario {
-            key: "test:test_verify_delegated_token:valid-delegated-token",
-            canister: "test",
-            endpoint_or_flow: "test_verify_delegated_token",
-            transport_mode: "update",
-            subject_kind: "endpoint",
-            subject_label: "test_verify_delegated_token",
-            arg_class: "valid-delegated-token",
-            caller_class: "delegated-subject",
-            auth_state: "delegated-token",
+        AuditScenario {
+            key: "root:bootstrap:init-checkpoints",
+            canister: "root",
+            endpoint_or_flow: "root_bootstrap_init",
+            transport_mode: "install",
+            subject_kind: "flow",
+            subject_label: "root_bootstrap_init",
+            arg_class: "topology-profile",
+            caller_class: "system",
+            auth_state: "lifecycle",
             replay_state: "n/a",
-            cache_state: "cold",
-            topology_state: "root_bootstrapped+fresh-user-shard+verifier-ready",
+            cache_state: "fresh-install",
+            topology_state: "topology-profile-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "Verifier-side delegated-token confirmation on the shared test canister using a freshly issued token from a newly created issuer canister.",
-        });
-    }
-
-    scenarios
+            notes: "Checkpoint-group observation retained from the completed root init bootstrap flow.",
+        },
+    ]
 }
 
 // Resolve the repo root from this crate's manifest path.
@@ -244,7 +243,43 @@ pub(super) fn current_minor_line() -> String {
     format!("{major}.{minor}")
 }
 
-// Require one environment variable and panic early when the runner forgot it.
 fn required_env(key: &str) -> String {
     env::var(key).unwrap_or_else(|_| panic!("missing required env var: {key}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn v2_roster_is_fixed_complete_and_query_free() {
+        let actual = scenarios();
+        let expected_keys = [
+            "scale:request_cycles_from_parent:fresh",
+            "scale_hub:create_worker:empty-pool",
+            "user_hub:create_account:new-principal",
+            "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer",
+            "issuer:canic_prepare_delegated_token:active-proof",
+            "test:test_verify_delegated_token:valid-delegated-token",
+            "root:canic_response_capability_v1:request-cycles-fresh",
+            "root:canic_response_capability_v1:request-cycles-replay",
+            "root:canic_template_stage_manifest_admin:single-chunk",
+            "root:canic_template_prepare_admin:single-chunk",
+            "root:canic_template_publish_chunk_admin:single-chunk",
+            "root:bootstrap:init-checkpoints",
+        ];
+
+        assert_eq!(actual.len(), expected_keys.len());
+        assert_eq!(
+            actual
+                .iter()
+                .map(|scenario| scenario.key)
+                .collect::<Vec<_>>(),
+            expected_keys
+        );
+        assert!(actual.iter().all(|scenario| {
+            matches!(scenario.transport_mode, "update" | "install")
+                && scenario.freshness_model == "fresh-topology-per-scenario"
+        }));
+    }
 }

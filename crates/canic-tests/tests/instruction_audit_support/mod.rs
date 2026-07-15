@@ -1,26 +1,22 @@
 use canic::{
     Error,
-    api::ic::network::NetworkApi,
     cdk::{types::Principal, utils::hash::wasm_hash},
     dto::{
         auth::{
-            ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, DelegatedToken,
-            DelegationAudience, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+            AuthRequestMetadata, DelegatedToken, DelegatedTokenPrepareRequest,
+            DelegatedTokenPrepareResponse, DelegationAudience, RootIssuerPolicyResponse,
+            RootIssuerPolicyUpsertRequest, RootIssuerRenewalTemplateResponse,
+            RootIssuerRenewalTemplateUpsertRequest,
         },
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
-        env::EnvSnapshotResponse,
-        log::LogEntry,
-        metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
+        metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
         rpc::{CyclesRequest, Request, Response, RootRequestMetadata},
-        state::SubnetStateResponse,
-        topology::SubnetRegistryResponse,
     },
-    ids::{BuildNetwork, cap},
+    ids::cap,
     protocol,
 };
 use canic_control_plane::{
@@ -34,9 +30,7 @@ use canic_control_plane::{
 };
 use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
-    CanicWasmBuildProfile, create_user_shard, install_audit_leaf_probe, install_audit_root_probe,
-    install_audit_scaling_probe, install_standalone_canister,
-    issue_delegated_token_from_active_proof, role_grant,
+    create_user_shard, issue_delegated_token_from_active_proof, role_grant,
 };
 use canic_tests::root::{self, RootSetupProfile, harness::setup_root};
 use ic_testkit::pic::Pic;
@@ -46,7 +40,6 @@ use std::{
     convert::TryFrom,
     env, fs,
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 mod estimates;
@@ -64,32 +57,30 @@ use report::{
 };
 use scenarios::{audit_metadata, audit_paths, scenarios, workspace_root};
 
-const METHOD_TAG: &str = "CANIC-INSTRUCTION-001/v1";
+const METHOD_TAG: &str = "CANIC-INSTRUCTION-001/v2";
 const PERF_COUNTER_ID: u8 = 1;
 const PERF_COUNTER_SOURCE: &str = "performance_counter(1)";
 const PERF_PAGE_LIMIT: u64 = 512;
 const CHECKPOINT_SCAN_ROOTS: &[&str] = &["crates"];
-const AUDIT_TIME_PROBE: &str = "audit_time_probe";
-const AUDIT_ENV_PROBE: &str = "audit_env_probe";
-const AUDIT_LOG_PROBE: &str = "audit_log_probe";
-const AUDIT_SUBNET_REGISTRY_PROBE: &str = "audit_subnet_registry_probe";
-const AUDIT_SUBNET_STATE_PROBE: &str = "audit_subnet_state_probe";
-const AUDIT_PLAN_CREATE_WORKER_PROBE: &str = "audit_plan_create_worker_probe";
 const FLOW_GAPS: &[(&str, &str)] = &[
     (
         "root capability dispatch",
         "crates/canic-core/src/workflow/rpc/request/handler/mod.rs",
     ),
     (
-        "root proof provisioning and issuer delegated-token issuance/verification",
-        "crates/canic-core/src/workflow/runtime/auth",
+        "root proof provisioning",
+        "crates/canic-core/src/workflow/runtime/auth/provisioning",
+    ),
+    (
+        "issuer delegated-token prepare and verification",
+        "crates/canic-core/src/workflow/runtime/auth/prepare",
     ),
     (
         "replay/cached-response path",
         "crates/canic-core/src/workflow/rpc/request/handler/replay.rs",
     ),
     (
-        "sharding assignment/query flow",
+        "sharding assignment flow",
         "crates/canic-core/src/workflow/placement/sharding",
     ),
     (
@@ -184,6 +175,7 @@ struct ScenarioResult {
 struct PreparedScenario {
     target_pid: Principal,
     caller_pid: Option<Principal>,
+    issuer_pid: Option<Principal>,
     delegated_token: Option<DelegatedToken>,
 }
 
@@ -295,6 +287,13 @@ pub fn generate_instruction_footprint_report() {
         .iter()
         .map(run_scenario)
         .collect::<Vec<ScenarioResult>>();
+    for result in &results {
+        assert!(
+            result.row.count > 0,
+            "instruction scenario produced no measured call: {}",
+            result.scenario.key
+        );
+    }
     apply_execution_cycle_estimates(&mut results, estimate_options)
         .unwrap_or_else(|err| panic!("failed to estimate execution cycles: {err}"));
     let perf_rows = results
@@ -311,18 +310,8 @@ pub fn generate_instruction_footprint_report() {
     let gaps = checkpoint_coverage_gaps(&checkpoint_sites);
     write_json(&checkpoint_gap_path, &gaps);
 
-    let query_unobservable_count = results
-        .iter()
-        .filter(|result| execution::query_perf_is_unobservable(&result.scenario, &result.row))
-        .count();
-
-    let verification_rows = verification_rows(
-        &paths,
-        &metadata,
-        &checkpoint_sites,
-        query_unobservable_count,
-        checkpoint_rows.len(),
-    );
+    let verification_rows =
+        verification_rows(&paths, &metadata, &checkpoint_sites, checkpoint_rows.len());
     write_verification_readout(&verification_path, &verification_rows);
 
     let method = method_artifact(&metadata);
@@ -334,13 +323,12 @@ pub fn generate_instruction_footprint_report() {
         worktree: metadata.worktree.clone(),
         run_timestamp_utc: metadata.run_timestamp_utc.clone(),
         execution_environment: "PocketIC".to_string(),
-        target_canisters_in_scope: vec![
-            "leaf_probe".to_string(),
-            "root_probe".to_string(),
-            "scaling_probe".to_string(),
-            "test".to_string(),
-            "root".to_string(),
-        ],
+        target_canisters_in_scope: scenarios
+            .iter()
+            .map(|scenario| scenario.canister.to_string())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect(),
         target_endpoints_in_scope: scenarios
             .iter()
             .map(|scenario| format!("{}::{}", scenario.canister, scenario.endpoint_or_flow))
@@ -373,18 +361,17 @@ fn method_artifact(metadata: &AuditMetadata) -> MethodArtifact {
         counter_source: PERF_COUNTER_SOURCE.to_string(),
         measured_unit: "local_instructions".to_string(),
         counter_semantics: "Local WebAssembly instruction counter for the current call context; excludes other canisters and is not a cycle-charge measurement.".to_string(),
-        normalization: "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update/timer lanes use persisted perf deltas; sampled query lanes use local-only QueryPerfSample probe endpoints because query-side perf rows are not committed, so the probe returns the measured local instruction counter alongside the real query result.".to_string(),
-        freshness_rule: "One fresh smallest-profile root harness per measured scenario (`topology`, `scaling`, or `sharding`); baseline and post-call perf tables were sampled inside that isolated topology.".to_string(),
-        checkpoint_rule: "Checkpoint deltas are diffed from `MetricsKind::Runtime` perf rows before/after sampled update scenarios. Query scenarios remain endpoint-only unless they traverse explicit checkpoint instrumentation.".to_string(),
+        normalization: "MetricsKind::Runtime perf rows are normalized into canonical endpoint rows. Update lanes use persisted before/after perf deltas; a measured endpoint may retain count > 0 with a zero exclusive total when nested/checkpoint scopes own the instruction attribution. The install lane groups retained root-bootstrap checkpoint deltas without inventing an endpoint total.".to_string(),
+        freshness_rule: "One fresh authoritative root harness per scenario (`topology`, `capability`, `scaling`, or `sharding`); no scenario shares mutable PocketIC state.".to_string(),
+        checkpoint_rule: "Update checkpoint deltas are diffed before/after the sampled call. Root bootstrap uses checkpoint rows retained by the completed fresh install and reports their sum as a checkpoint-group flow row.".to_string(),
     }
 }
 
 fn sample_origin_for_transport_mode(transport_mode: &str) -> &'static str {
     match transport_mode {
-        "query" => "query",
-        "composite_query" => "composite_query",
         "update" => "update",
-        _ => "unknown",
+        "install" => "install",
+        other => panic!("unsupported instruction-audit transport mode: {other}"),
     }
 }
 
@@ -396,14 +383,14 @@ mod tests {
     fn sample_row() -> CanonicalPerfRow {
         CanonicalPerfRow {
             subject_kind: "endpoint".to_string(),
-            subject_label: "canic_env".to_string(),
+            subject_label: "request_cycles_from_parent".to_string(),
             count: 1,
             total_local_instructions: 123,
             avg_local_instructions: 123,
-            scenario_key: "app:canic_env:minimal-valid".to_string(),
-            scenario_labels: vec!["transport_mode=query".to_string()],
+            scenario_key: "scale:request_cycles_from_parent:fresh".to_string(),
+            scenario_labels: vec!["transport_mode=update".to_string()],
             principal_scope: Some("anonymous".to_string()),
-            sample_origin: sample_origin_for_transport_mode("query").to_string(),
+            sample_origin: sample_origin_for_transport_mode("update").to_string(),
             execution_cycle_estimate: None,
         }
     }
@@ -439,14 +426,14 @@ mod tests {
             run_timestamp_utc: "2026-07-14T00:00:00Z".to_string(),
             compared_baseline_report: "N/A".to_string(),
             method_id: "CANIC-INSTRUCTION-001".to_string(),
-            method_version: "1".to_string(),
+            method_version: "2".to_string(),
             method_fingerprint: "test-fingerprint".to_string(),
         };
         let artifact =
             serde_json::to_value(method_artifact(&metadata)).expect("serialize method artifact");
 
         assert_eq!(artifact["method_id"], "CANIC-INSTRUCTION-001");
-        assert_eq!(artifact["method_version"], "1");
+        assert_eq!(artifact["method_version"], "2");
         assert_eq!(artifact["method_fingerprint"], "test-fingerprint");
         assert_eq!(artifact["counter_id"], PERF_COUNTER_ID);
         assert_eq!(artifact["counter_source"], PERF_COUNTER_SOURCE);
@@ -456,11 +443,7 @@ mod tests {
     #[test]
     fn sample_origin_preserves_message_kind_scope() {
         assert_eq!(sample_origin_for_transport_mode("update"), "update");
-        assert_eq!(sample_origin_for_transport_mode("query"), "query");
-        assert_eq!(
-            sample_origin_for_transport_mode("composite_query"),
-            "composite_query"
-        );
+        assert_eq!(sample_origin_for_transport_mode("install"), "install");
     }
 
     fn json_key_paths(value: &Value) -> Vec<String> {

@@ -103,3 +103,21 @@ fn durable_publish_entries_are_wasm_store_publication_surfaces() {
         assert_eq!(entry.cycle_reserve_policy, Some(DURABLE_PUBLISH_RESERVE_V1));
     }
 }
+
+#[test]
+fn publication_effect_endpoints_delegate_cost_admission_to_root_workflow() {
+    for endpoint in guarded_publication_effect_endpoint_names() {
+        let entry = ENDPOINT_REPLAY_POLICY_MANIFEST
+            .iter()
+            .find(|entry| entry.endpoint == endpoint)
+            .expect("publication effect endpoint entry");
+
+        assert!(matches!(
+            entry.replay_policy,
+            ReplayPolicy::MonotonicTransition { .. }
+        ));
+        assert_eq!(entry.cost_class, CostClass::None);
+        assert_eq!(entry.quota_policy, None);
+        assert_eq!(entry.cycle_reserve_policy, None);
+    }
+}

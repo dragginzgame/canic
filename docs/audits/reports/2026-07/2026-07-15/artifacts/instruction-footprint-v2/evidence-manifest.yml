@@ -1,0 +1,24 @@
+command: "bash scripts/ci/instruction-audit-report.sh"
+working_directory: "repository_root"
+exit_code: 0
+stdout_path: "not_retained"
+stderr_path: "not_retained"
+baseline_identity: "N/A"
+method_identity: "CANIC-INSTRUCTION-001/v2@sha256:385ea065d337781828a10a9167948309d9bafb9e126434142aeb0104eacfc584"
+tool_versions:
+  cargo: "cargo 1.97.0 (c980f4866 2026-06-30)"
+  rustc: "rustc 1.97.0 (2d8144b78 2026-07-07)"
+timestamps:
+  started_at: "2026-07-15T09:02:02Z"
+  completed_at: "2026-07-15T09:05:08Z"
+artifact_hashes:
+  f4173cf27a90d0b9e8dac216aeb77a9d2494be61059e78c73ee8872c30f31c6b  docs/audits/reports/2026-07/2026-07-15/artifacts/instruction-footprint-v2/checkpoint-coverage-gaps.json
+  23dabcd71df7d35b920e4a1fdcf68fda01065141a075586fabf0d2b9d5b4bf24  docs/audits/reports/2026-07/2026-07-15/artifacts/instruction-footprint-v2/checkpoint-deltas.json
+  b46a54475a616416f5cd3a131250053861e599e6d491427d960aa64ec8c8b426  docs/audits/reports/2026-07/2026-07-15/artifacts/instruction-footprint-v2/environment.json
+  c932fec9a32540808d60d11a50a05abe4999b475da80e5e1696091edd65fc791  docs/audits/reports/2026-07/2026-07-15/artifacts/instruction-footprint-v2/method.json
+  397be321ea02d2101743622c6d2196f4ae1d14a0645935c9d694e0b87feada8d  docs/audits/reports/2026-07/2026-07-15/artifacts/instruction-footprint-v2/perf-rows.json
+  e3a3460d5eef5ca2c3fbf47c7a4614abd0154834965bba805ed24af97ca9f079  docs/audits/reports/2026-07/2026-07-15/artifacts/instruction-footprint-v2/scenario-manifest.json
+  e4cc344125899ffdf4406e0d4d4f2da7b10e39ffd70a6c3d0e9dba2bf14cc666  docs/audits/reports/2026-07/2026-07-15/artifacts/instruction-footprint-v2/verification-readout.md
+  2c68552380dc1eec219e10efbb328b36823841711eee657b3a30ae538090e1e1  docs/audits/reports/2026-07/2026-07-15/instruction-footprint-v2.md
+retention_class: "primary_markdown_and_compact_supporting_evidence"
+redactions_applied: "repository root normalized; no credentials, tokens, or private material retained"

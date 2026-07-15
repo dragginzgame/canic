@@ -1,0 +1,37 @@
+[
+  {
+    "flow_name": "root capability dispatch",
+    "status": "PASS",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/rpc/request/handler/mod.rs"
+  },
+  {
+    "flow_name": "root proof provisioning",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/runtime/auth/provisioning"
+  },
+  {
+    "flow_name": "issuer delegated-token prepare and verification",
+    "status": "PARTIAL",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/runtime/auth/prepare"
+  },
+  {
+    "flow_name": "replay/cached-response path",
+    "status": "PASS",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/rpc/request/handler/replay.rs"
+  },
+  {
+    "flow_name": "sharding assignment flow",
+    "status": "PASS",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/placement/sharding"
+  },
+  {
+    "flow_name": "scaling/provisioning flow",
+    "status": "PASS",
+    "proposed_first_insertion_site": "crates/canic-core/src/workflow/placement/scaling/mod.rs"
+  },
+  {
+    "flow_name": "bootstrap/install/publication flow",
+    "status": "PASS",
+    "proposed_first_insertion_site": "crates/canic-control-plane/src/workflow/bootstrap/root.rs"
+  }
+]

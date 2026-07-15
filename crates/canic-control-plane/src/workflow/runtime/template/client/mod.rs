@@ -8,7 +8,10 @@ use crate::{
 use candid::{CandidType, utils::ArgumentEncoder};
 use canic_core::cdk::types::Principal;
 use canic_core::{
-    control_plane_support::{error::InternalError, ops::ic::call::CallOps},
+    control_plane_support::{
+        error::InternalError,
+        ops::{cost_guard::CostGuardPermit, ic::call::CallOps},
+    },
     dto::error::Error,
     protocol,
 };
@@ -85,6 +88,7 @@ impl WasmStoreInternalClient {
 
     pub(super) async fn prepare_chunk_set(
         &self,
+        _publication_permit: &CostGuardPermit,
         request: TemplateChunkSetPrepareInput,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
         self.call_result(Self::PREPARE, (request,)).await
@@ -92,6 +96,7 @@ impl WasmStoreInternalClient {
 
     pub(super) async fn stage_manifest(
         &self,
+        _publication_permit: &CostGuardPermit,
         request: TemplateManifestInput,
     ) -> Result<(), InternalError> {
         self.call_result(Self::STAGE_MANIFEST, (request,)).await
@@ -99,6 +104,7 @@ impl WasmStoreInternalClient {
 
     pub(super) async fn publish_chunk(
         &self,
+        _publication_permit: &CostGuardPermit,
         template_id: &TemplateId,
         version: &TemplateVersion,
         chunk_index: u32,
@@ -167,10 +173,14 @@ impl WasmStoreInternalClient {
     {
         debug_assert!(!endpoint.requires_internal_proof());
         let call = CallOps::bounded_wait(self.store_pid, endpoint.method)
-            .with_args(arg)?
+            .with_args(arg)
+            .map_err(|err| InternalError::public(Error::invariant(err.to_string())))?
             .execute()
-            .await?;
-        let call_res: Result<T, Error> = call.candid::<Result<T, Error>>()?;
+            .await
+            .map_err(|err| InternalError::public(Error::unavailable(err.to_string())))?;
+        let call_res: Result<T, Error> = call
+            .candid::<Result<T, Error>>()
+            .map_err(|err| InternalError::public(Error::invariant(err.to_string())))?;
 
         call_res.map_err(InternalError::public)
     }

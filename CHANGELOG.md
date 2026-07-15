@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.1` is potentially breaking: it completes the frozen holistic product
+  baseline and makes durable Wasm-store publication fail closed on quota and
+  cycle admission while preserving specific typed rejection outcomes.
+
 - `0.92.0` establishes one fingerprinted audit authority, hard-cuts competing
   and historical verdict paths, and requires an immutable method freeze
   before the holistic product baseline.

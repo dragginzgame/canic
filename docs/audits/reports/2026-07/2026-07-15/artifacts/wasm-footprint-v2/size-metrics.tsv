@@ -1,0 +1,7 @@
+canister	kind	release_wasm_bytes	release_gzip_bytes	debug_wasm_bytes	debug_gzip_bytes	debug_delta_bytes	debug_delta_percent	baseline_delta_bytes	baseline_delta_percent	functions	data_sections	data_bytes	exports	top_name	top_bytes	retained_name	retained_bytes
+app	leaf-canister	2251324	747279	4816015	1219145	+2564691	113.92	N/A	N/A	4411	3	189240	21	data[0]	188666	table[0]	1381904
+user_hub	leaf-canister	2369688	789228	5094882	1291598	+2725194	115.00	N/A	N/A	4674	3	194456	25	data[0]	193858	table[0]	1481564
+user_shard	leaf-canister	2368860	789006	5079760	1287649	+2710900	114.44	N/A	N/A	4657	3	194136	26	data[0]	193554	table[0]	1484243
+scale_hub	leaf-canister	2290404	759760	4902642	1237989	+2612238	114.05	N/A	N/A	4486	3	191796	24	data[0]	191218	table[0]	1408624
+scale_replica	leaf-canister	2260688	752095	4835444	1225414	+2574756	113.89	N/A	N/A	4438	3	189372	22	data[0]	188794	table[0]	1389740
+root	bundle-canister	3845263	1742162	7858899	2772940	+4013636	104.38	N/A	N/A	6030	3	890540	44	data[0]	889806	table[0]	2129488

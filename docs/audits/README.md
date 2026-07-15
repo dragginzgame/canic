@@ -11,6 +11,8 @@ artifacts directly.
   [META-AUDIT.md](META-AUDIT.md).
 - To select an active method or find its canonical owner, read
   [METHODS.md](METHODS.md).
+- To execute a required release-line end-to-end trace, use the fingerprinted
+  [mandatory trace protocol](mandatory-trace-protocol.md).
 - For repeatable auth and system audits, use [recurring/](recurring/README.md).
 - For module-surface review or an explicitly requested cleanup, use
   [modular/](modular/README.md).
@@ -29,6 +31,7 @@ historical exception. New numbered-line audit material belongs under
 | `AUDIT-HOWTO.md` | Audit execution and storage rules | Maintained governance |
 | `META-AUDIT.md` | Cross-audit architecture contract | Maintained governance |
 | `METHODS.md` | Active method, disposition, trigger, and ownership catalog | One canonical active catalog |
+| `mandatory-trace-protocol.md` | Cross-cutting completion and evidence method for mandatory end-to-end traces | Versioned and fingerprinted; does not replace retained property owners |
 | `method-fingerprints-v1.md` | Content identities for the prepared/frozen v1 method set | Regenerate deliberately when a method version changes |
 | `retired-methods.md` | Immutable identity and replacement for hard-cut methods | Append-only retirement entries |
 | `recurring/` | Reusable invariant and system definitions | Update deliberately; reports do not belong here |

@@ -102,15 +102,15 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
     query_read_only("canic_health"),
     query_read_only("canic_readiness"),
     query_read_only("canic_runtime_status"),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_template_prepare_admin",
         command_kind("wasm_store.template_prepare_admin.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_template_publish_chunk_admin",
         command_kind("wasm_store.template_publish_chunk_admin.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_template_stage_manifest_admin",
         command_kind("wasm_store.template_stage_manifest_admin.v1"),
     ),
@@ -122,32 +122,32 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         "canic_wasm_store_admin",
         command_kind("wasm_store.admin.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_wasm_store_begin_gc",
         command_kind("wasm_store.begin_gc.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_wasm_store_chunk",
         command_kind("wasm_store.chunk.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_wasm_store_complete_gc",
         command_kind("wasm_store.complete_gc.v1"),
     ),
-    update_monotonic_publish("canic_wasm_store_info", command_kind("wasm_store.info.v1")),
-    update_monotonic_publish(
+    update_monotonic_transition("canic_wasm_store_info", command_kind("wasm_store.info.v1")),
+    update_monotonic_transition(
         "canic_wasm_store_prepare",
         command_kind("wasm_store.prepare.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_wasm_store_prepare_gc",
         command_kind("wasm_store.prepare_gc.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_wasm_store_publish_chunk",
         command_kind("wasm_store.publish_chunk.v1"),
     ),
-    update_monotonic_publish(
+    update_monotonic_transition(
         "canic_wasm_store_stage_manifest",
         command_kind("wasm_store.stage_manifest.v1"),
     ),
@@ -258,6 +258,21 @@ const fn update_monotonic_publish(
         cost_class: CostClass::DurablePublish,
         quota_policy: Some(DURABLE_PUBLISH_QUOTA_V1),
         cycle_reserve_policy: Some(DURABLE_PUBLISH_RESERVE_V1),
+    }
+}
+
+const fn update_monotonic_transition(
+    endpoint: &'static str,
+    command_kind: ReplayCommandKindLabel,
+) -> EndpointReplayPolicy {
+    EndpointReplayPolicy {
+        endpoint,
+        endpoint_kind: EndpointKind::Update,
+        replay_policy: ReplayPolicy::MonotonicTransition { command_kind },
+        implementation_status: ReplayImplementationStatus::Implemented,
+        cost_class: CostClass::None,
+        quota_policy: None,
+        cycle_reserve_policy: None,
     }
 }
 

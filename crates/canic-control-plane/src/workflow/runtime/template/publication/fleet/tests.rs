@@ -14,6 +14,7 @@ use crate::{
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
 };
 use candid::Principal;
+use canic_core::dto::error::ErrorCode;
 
 fn manifest(
     role: &'static str,
@@ -231,9 +232,14 @@ fn conflicting_duplicate_release_is_rejected() {
         )],
     };
 
-    fleet
+    let err = fleet
         .select_existing_store_for_release(&manifest)
         .expect_err("conflicting duplicate release must fail");
+
+    assert_eq!(
+        err.public_error().map(|public| public.code),
+        Some(ErrorCode::Conflict)
+    );
 }
 
 #[test]
@@ -384,6 +390,11 @@ fn reconcile_binding_rejects_missing_exact_release() {
         )],
     };
 
-    WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
+    let err = WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
         .expect_err("reconcile must fail when the exact approved release disappeared");
+
+    assert_eq!(
+        err.public_error().map(|public| public.code),
+        Some(ErrorCode::WasmStoreManifestMissing)
+    );
 }

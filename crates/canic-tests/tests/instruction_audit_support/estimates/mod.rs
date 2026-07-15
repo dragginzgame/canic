@@ -1006,20 +1006,20 @@ mod tests {
 
     fn scenario(transport_mode: &'static str) -> AuditScenario {
         AuditScenario {
-            key: "test:test:minimal-valid",
-            canister: "test",
-            endpoint_or_flow: "test",
+            key: "scale:request_cycles_from_parent:fresh",
+            canister: "scale",
+            endpoint_or_flow: "request_cycles_from_parent",
             transport_mode,
             subject_kind: "endpoint",
-            subject_label: "test",
-            arg_class: "minimal-valid",
+            subject_label: "request_cycles_from_parent",
+            arg_class: "cycles-999",
             caller_class: "anonymous",
-            auth_state: "local-test-only",
-            replay_state: "n/a",
+            auth_state: "public-child-endpoint-and-parent-structural-proof",
+            replay_state: "fresh",
             cache_state: "n/a",
-            topology_state: "standalone-test-ready",
+            topology_state: "scaling-profile-ready",
             freshness_model: "fresh-topology-per-scenario",
-            notes: "test row",
+            notes: "scale capability row",
         }
     }
 
@@ -1028,11 +1028,11 @@ mod tests {
             scenario: scenario(transport_mode),
             row: CanonicalPerfRow {
                 subject_kind: "endpoint".to_string(),
-                subject_label: "test".to_string(),
+                subject_label: "request_cycles_from_parent".to_string(),
                 count: 1,
                 total_local_instructions: 1_000_000,
                 avg_local_instructions: 1_000_000,
-                scenario_key: "test:test:minimal-valid".to_string(),
+                scenario_key: "scale:request_cycles_from_parent:fresh".to_string(),
                 scenario_labels: vec![format!("transport_mode={transport_mode}")],
                 principal_scope: Some("anonymous".to_string()),
                 sample_origin: sample_origin.to_string(),

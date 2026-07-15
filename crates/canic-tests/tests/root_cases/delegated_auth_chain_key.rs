@@ -113,6 +113,92 @@ fn delegated_auth_root_facade_provisions_new_issuer_before_login() {
 }
 
 #[test]
+fn delegated_auth_session_bootstrap_is_subject_bound_and_replay_safe() {
+    let setup = setup_root(RootSetupProfile::Sharding);
+    let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
+    let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
+    let subject = Principal::from_slice(&[91; 29]);
+    let wallet = Principal::from_slice(&[92; 29]);
+    let conflicting_wallet = Principal::from_slice(&[93; 29]);
+    let issuer_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+
+    upsert_root_issuer_policy(&setup, issuer_pid);
+    upsert_root_issuer_renewal_template(&setup, issuer_pid);
+    let provisioned: Result<(), Error> = setup.pic.update_call_or_panic(
+        setup.root_id,
+        TEST_PROVISION_CHAIN_KEY_DELEGATION_PROOF,
+        (issuer_pid,),
+    );
+    provisioned.expect("root issuer-readiness provisioning failed");
+
+    let token = issue_delegated_token_once(
+        &setup,
+        issuer_pid,
+        subject,
+        30 * SECOND_NS,
+        setup.pic.current_time_nanos(),
+    )
+    .expect("delegated-token issue application failed");
+
+    let rejected: Result<(), Error> = setup.pic.update_call_as_or_panic(
+        verifier_pid,
+        wallet,
+        "test_verify_delegated_token",
+        (token.clone(),),
+    );
+    assert_eq!(
+        rejected
+            .expect_err("a wallet without a delegated session must fail subject binding")
+            .code,
+        ErrorCode::Unauthorized,
+    );
+
+    set_delegated_session_subject(&setup, verifier_pid, wallet, subject, token.clone())
+        .expect("delegated-session bootstrap failed");
+    assert_eq!(
+        delegated_session_subject(&setup, verifier_pid, wallet),
+        Some(subject),
+    );
+
+    verify_delegated_token(&setup, verifier_pid, wallet, token.clone());
+
+    set_delegated_session_subject(&setup, verifier_pid, wallet, subject, token.clone())
+        .expect("same-session bootstrap replay must be idempotent");
+    assert_eq!(
+        delegated_session_subject(&setup, verifier_pid, wallet),
+        Some(subject),
+    );
+
+    let conflict = set_delegated_session_subject(
+        &setup,
+        verifier_pid,
+        conflicting_wallet,
+        subject,
+        token.clone(),
+    )
+    .expect_err("a bootstrap token bound to another wallet must reject replay");
+    assert_eq!(conflict.code, ErrorCode::Forbidden);
+    assert_eq!(
+        delegated_session_subject(&setup, verifier_pid, conflicting_wallet),
+        None,
+    );
+
+    let rejected: Result<(), Error> = setup.pic.update_call_as_or_panic(
+        verifier_pid,
+        conflicting_wallet,
+        "test_verify_delegated_token",
+        (token,),
+    );
+    drop(setup);
+    assert_eq!(
+        rejected
+            .expect_err("a rejected replay must not create delegated-session authority")
+            .code,
+        ErrorCode::Unauthorized,
+    );
+}
+
+#[test]
 fn delegated_auth_lazy_repair_uses_cached_batch_and_does_not_sign_per_login() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
@@ -637,6 +723,35 @@ fn verify_delegated_token(
         (token,),
     );
     verified.expect("delegated token verifier application failed");
+}
+
+fn set_delegated_session_subject(
+    setup: &RootSetup,
+    verifier_pid: Principal,
+    wallet: Principal,
+    subject: Principal,
+    token: DelegatedToken,
+) -> Result<(), Error> {
+    setup.pic.update_call_as_or_panic(
+        verifier_pid,
+        wallet,
+        "test_set_delegated_session_subject",
+        (subject, token, Some(20_u64)),
+    )
+}
+
+fn delegated_session_subject(
+    setup: &RootSetup,
+    verifier_pid: Principal,
+    wallet: Principal,
+) -> Option<Principal> {
+    let subject: Result<Option<Principal>, Error> = setup.pic.query_call_as_or_panic(
+        verifier_pid,
+        wallet,
+        "test_delegated_session_subject",
+        (),
+    );
+    subject.expect("delegated-session subject query application failed")
 }
 
 fn root_management_update_completed_count(setup: &RootSetup) -> u64 {

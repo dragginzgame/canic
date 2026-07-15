@@ -6,13 +6,15 @@ use super::super::{
 use crate::{config, ops::storage::state::subnet::SubnetStateOps, workflow::deployment};
 use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
-    ops::{ic::IcOps, storage::registry::subnet::SubnetRegistryOps},
+    ops::{cost_guard::CostGuardPermit, ic::IcOps, storage::registry::subnet::SubnetRegistryOps},
 };
 use canic_core::{log, log::Topic};
 
 impl WasmStorePublicationWorkflow {
     // Create one new wasm store canister and register its runtime-managed binding.
-    async fn create_publication_store() -> Result<crate::ids::WasmStoreBinding, InternalError> {
+    async fn create_publication_store(
+        _publication_permit: &CostGuardPermit,
+    ) -> Result<crate::ids::WasmStoreBinding, InternalError> {
         let result = deployment::create_canister_with_deployment_guard(
             deployment::PUBLICATION_WASM_STORE_CREATE_COMMAND_KIND,
             WASM_STORE_ROLE,
@@ -39,10 +41,11 @@ impl WasmStorePublicationWorkflow {
     // Allocate one additional empty store and add it to the managed publication fleet.
     pub(in crate::workflow::runtime::template::publication) async fn create_store_for_fleet(
         fleet: &mut PublicationStoreFleet,
+        publication_permit: &CostGuardPermit,
     ) -> Result<PublicationPlacement, InternalError> {
         let binding = match fleet.preferred_binding.clone() {
-            Some(_) => Self::create_publication_store().await?,
-            None => Self::create_and_activate_first_publication_store().await?,
+            Some(_) => Self::create_publication_store(publication_permit).await?,
+            None => Self::create_and_activate_first_publication_store(publication_permit).await?,
         };
         let store_pid = store_pid_for_binding(&binding)?;
         let record = SubnetStateOps::wasm_stores()
@@ -69,9 +72,10 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Create the first runtime-managed store and promote it into the active publication slot.
-    async fn create_and_activate_first_publication_store()
-    -> Result<crate::ids::WasmStoreBinding, InternalError> {
-        let binding = Self::create_publication_store().await?;
+    async fn create_and_activate_first_publication_store(
+        publication_permit: &CostGuardPermit,
+    ) -> Result<crate::ids::WasmStoreBinding, InternalError> {
+        let binding = Self::create_publication_store(publication_permit).await?;
         Self::ensure_retired_binding_slot_available_for_promotion()?;
         let changed_at = IcOps::now_secs();
         let previous = SubnetStateOps::publication_store_state();

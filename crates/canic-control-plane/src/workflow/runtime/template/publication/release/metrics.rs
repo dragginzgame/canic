@@ -46,6 +46,9 @@ impl WasmStorePublicationError for WasmStoreMetricReason {
             Some(ErrorCode::WasmStoreChunkMissing) => Self::MissingChunk,
             Some(ErrorCode::WasmStoreHashMismatch) => Self::HashMismatch,
             Some(ErrorCode::WasmStoreManifestMissing) => Self::MissingManifest,
+            Some(ErrorCode::Conflict | ErrorCode::InvariantViolation | ErrorCode::NotFound) => {
+                Self::InvalidState
+            }
             Some(_) => Self::StoreCall,
             None => Self::InvalidState,
         }
@@ -76,6 +79,13 @@ mod tests {
                 ErrorCode::WasmStoreManifestMissing,
                 WasmStoreMetricReason::MissingManifest,
             ),
+            (ErrorCode::Conflict, WasmStoreMetricReason::InvalidState),
+            (
+                ErrorCode::InvariantViolation,
+                WasmStoreMetricReason::InvalidState,
+            ),
+            (ErrorCode::NotFound, WasmStoreMetricReason::InvalidState),
+            (ErrorCode::Unavailable, WasmStoreMetricReason::StoreCall),
         ];
 
         for (code, expected) in cases {
