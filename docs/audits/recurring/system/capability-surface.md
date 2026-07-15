@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-CAPABILITY-SURFACE-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: endpoint bundle, generated Candid, and capability exposure surface
 - Kind/profile: hard surface invariant plus comparable `trend`
@@ -583,8 +583,14 @@ rg -n '^pub const ' crates/canic-core/src/protocol.rs
 rg -n '^pub const ' crates/canic/src/protocol.rs
 rg -n '^  canic_' .icp/local/canisters -g '*.did'
 rg -n 'canic_response_capability_v1|canic_upsert_root_issuer_policy|canic_upsert_root_issuer_renewal_template|canic_root_issuer_renewal_status|canic_get_or_create_chain_key_delegation_proof|canic_prepare_delegated_token|canic_get_delegated_token|canic_install_active_delegation_proof|canic_active_delegation_proof_status|canic_prepare_role_attestation|canic_get_role_attestation|canic_wasm_store_|canic_sync_' crates/canic-core/src crates/canic/src -g '*.rs'
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic --test protocol_surface -- --nocapture
+cargo clippy --locked -p canic --test protocol_surface -- -D warnings
 ```
+
+The focused test and Clippy target own the generated endpoint/protocol contract
+covered by this method. A broad workspace release Clippy gate may be run by the
+maintainer under repository policy, but it is not part of this recurring method
+and cannot make this result partial or blocked.
 
 ## Follow-up Actions
 

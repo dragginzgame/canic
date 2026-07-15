@@ -1,0 +1,18 @@
+command: "bash scripts/ci/instruction-audit-report.sh"
+working_directory: "repository_root"
+exit_code: 101
+stdout_path: "not_retained"
+stderr_path: "not_retained"
+baseline_identity: "N/A"
+method_identity: "CANIC-INSTRUCTION-001/v1@sha256:a5fa45efe6b9582a53a52fc7ed37500c7ba5d1388f3c5a0b498343f31d7d13fb"
+tool_versions:
+  cargo: "cargo 1.97.0 (c980f4866 2026-06-30)"
+  rustc: "rustc 1.97.0 (2d8144b78 2026-07-07)"
+timestamps:
+  started_at: "2026-07-14T17:49:17Z"
+  completed_at: "2026-07-14T17:50:43Z"
+artifact_hashes:
+  9dac2512afda2875f28bf8b67ee6e3a78f6d1718af63e408a8914177b60d6f6f  docs/audits/reports/2026-07/2026-07-14/instruction-footprint.md
+  ddab275742beefed8c973c90529db2b290319875a7fab870b5124ab38b315e3a  docs/audits/reports/2026-07/2026-07-14/artifacts/instruction-footprint/scenario-manifest.json
+retention_class: "primary_markdown_and_compact_supporting_evidence"
+redactions_applied: "repository root normalized; no credentials, tokens, or private material retained"

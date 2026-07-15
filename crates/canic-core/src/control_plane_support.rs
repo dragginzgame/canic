@@ -106,6 +106,10 @@ pub mod workflow {
         };
     }
 
+    pub mod cost_guard {
+        pub use crate::workflow::cost_guard::map_cost_guard_reserve_error;
+    }
+
     pub mod ic {
         pub use crate::workflow::ic::IcWorkflow;
 

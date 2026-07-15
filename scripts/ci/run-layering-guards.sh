@@ -1,7 +1,65 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+
+ops_policy_pattern='crate\s*::\s*domain\s*::\s*policy|use\s+crate\s*::\s*\{[^;]*\bdomain\s*::\s*(?:policy|\{[^;]*\bpolicy\b)'
+
+scan_ops_to_policy() {
+    local root="$1"
+    local name_pattern="$2"
+    local file
+
+    while IFS= read -r -d '' file; do
+        if awk '
+                /^#\[cfg\(test\)\]$/ { cfg_test = 1; next }
+                cfg_test && /^mod tests;$/ { cfg_test = 0; next }
+                cfg_test && /^mod tests[[:space:]]*\{/ { exit }
+                cfg_test { cfg_test = 0 }
+                { print }
+            ' "$file" \
+            | rg --pcre2 --multiline --quiet "$ops_policy_pattern"; then
+            printf '%s\n' "$file"
+        fi
+    done < <(find "$root" -type f -name "$name_pattern" ! -name tests.rs -print0)
+}
+
+fixture_root="docs/audits/fixtures/layering"
+expected_fixture_matches="$fixture_root/forbidden-direct-import.txt
+$fixture_root/forbidden-grouped-import.txt
+$fixture_root/forbidden-nested-grouped-import.txt"
+actual_fixture_matches="$(scan_ops_to_policy "$fixture_root" '*.txt' | sort)"
+
+if [[ "$actual_fixture_matches" != "$expected_fixture_matches" ]]; then
+    echo "ops-to-policy detector fixture mismatch" >&2
+    printf 'expected:\n%s\nactual:\n%s\n' \
+        "$expected_fixture_matches" "$actual_fixture_matches" >&2
+    exit 2
+fi
+
+if [[ "${1:-}" == "--self-test" ]]; then
+    if [[ $# -ne 1 ]]; then
+        echo "usage: scripts/ci/run-layering-guards.sh [--self-test]" >&2
+        exit 2
+    fi
+    echo "layering guard detector fixtures passed"
+    exit 0
+fi
+
+if [[ $# -ne 0 ]]; then
+    echo "usage: scripts/ci/run-layering-guards.sh [--self-test]" >&2
+    exit 2
+fi
+
 failed=0
+
+ops_policy_matches="$(scan_ops_to_policy crates/canic-core/src/ops '*.rs' | sort)"
+if [[ -n "$ops_policy_matches" ]]; then
+    printf '%s\n' "$ops_policy_matches"
+    echo "ops must not depend upward on the policy layer" >&2
+    failed=1
+fi
 
 if rg "storage::.*Record|storage::stable" \
     crates/canic-core/src/workflow \

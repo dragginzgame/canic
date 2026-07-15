@@ -3,374 +3,217 @@
 ## Method Contract
 
 - Audit ID: `CANIC-WASM-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
-- Owner: built, shrunk, gzip, and retained-size Wasm measurements
-- Kind/profile: `measured`
+- Owner: canonical Canic-produced Wasm size and retained-size attribution
+- Kind/profile: `measured` and `trend`
 - Trace mode: `execution_trace` in an isolated local build environment
-- Cost/runtime: high; 60-180 minutes depending on roster/profile
-- Prerequisites: Rust/Cargo Wasm target, ICP CLI helpers required by the build,
-  `ic-wasm` where configured, frozen canister roster, isolated `.icp` state,
-  and isolated `CARGO_TARGET_DIR`
-- False-positive boundary: profile/tool/roster drift makes results
-  non-comparable; size change alone is pressure until attributed
+- Cost/runtime: high; normally 60-180 minutes
+- Prerequisites: a clean disposable product worktree, Rust/Cargo with the Wasm
+  target, pinned ICP CLI helpers, `ic-wasm`, `twiggy`, isolated `.icp` state,
+  and an isolated `CARGO_TARGET_DIR`
+- False-positive boundary: method, roster, toolchain, profile, or execution-path
+  drift makes results non-comparable; size pressure is not a correctness defect
+  until attributed to an owned invariant
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
 ## Purpose
 
-Track wasm footprint drift over time and identify size drivers in Canic canister
-artifacts.
+Measure the Wasm artifacts Canic actually produces for installation, compare
+the release and debug profiles, and attribute retained-size pressure without
+creating a competing build path.
 
-This is a build-artifact audit.
+This audit does not prove runtime correctness, authorize feature removal, or
+replace `CANIC-BUILD-INTEGRITY-001` reproducibility evidence.
 
-It is NOT:
+## Canonical Artifact Authority
 
-- a correctness audit
-- a feature-design audit
-- a runtime performance audit
+The host `build_artifact` example is the single executable authority used by
+this audit. It enters `build_workspace_canister_artifact`, applies Canic's
+profile, shrink, metadata, Candid, provenance, and gzip rules, and copies the
+result to the ICP-visible artifact path.
 
-The job of this audit is to measure shipped wasm output, explain where the
-bytes live, and identify the largest retained-size drivers with artifact tools
-such as `ic-wasm` and `twiggy`.
+V2 deliberately removes v1's direct Cargo Wasm build and its inferred
+"pre-shrink" artifact. The supported builder does not expose that intermediate
+as a public audit artifact. The runner must not recreate it with direct
+`cargo build --target wasm32-unknown-unknown`, copy a target-directory Wasm,
+or bypass the build guard.
 
-This audit is not permission to delete intended behavior to make the numbers
-look better.
+The authoritative measured classes are therefore:
 
-## Why This Audit Is Canic-Specific
+- canonical release `.wasm` and builder-produced `.wasm.gz`;
+- canonical debug `.wasm` and builder-produced `.wasm.gz`; and
+- `ic-wasm`/`twiggy` analysis of the canonical release `.wasm`.
 
-Canic is not a single-canister product.
+No alias, fallback, reconstructed pre-transform path, or duplicate gzip path is
+part of v2.
 
-The workspace ships a family of fleet and fixture canisters with two structural
-properties that change how a wasm audit must work:
+## Fixed Scope
 
-1. ICP CLI plus Canic build scripts own the supported canister build path.
-2. `root` remains a special control-plane outlier because it embeds the
-   bootstrap `wasm_store.wasm.gz` artifact and carries the thin-root install
-   boundary, so it must still be evaluated separately from normal leaf
-   canisters.
+The default and release-baseline roster is the attached role set returned by:
 
-An audit copied directly from another repo will miss both of these facts and
-will produce misleading comparisons.
+```text
+bash scripts/ci/list-config-canisters.sh \
+  --config <product-root>/fleets/test/canic.toml --ci-order
+```
 
-## Risk Model / Invariant
+At method admission the ordered roster is:
 
-This is a drift audit, not a correctness invariant audit.
+```text
+app
+user_hub
+user_shard
+scale_hub
+scale_replica
+root
+```
 
-Risk model:
+`root` is always classified as `bundle-canister`; all other roles are
+`leaf-canister`. There is no dedicated minimal role in this roster. Repeated
+retained hotspots across at least three leaves are the shared fan-in signal.
 
-- growing shared runtime cost silently taxes every canister artifact
-- `root` bundle growth can hide child-canister regressions and can become a
-  deployment/install bottleneck on its own
-- large retained-size hotspots are expensive to optimize unless attribution is
-  specific and repeatable
+V2 always captures both profiles:
 
-Optimization constraint:
+- `release`, the shipping/install authority; and
+- `debug`, a diagnostic comparison built through the same authority.
 
-- reduce wasm without removing intended runtime capabilities or operator-facing signal
-- do not count feature removal as a normal wasm optimization win
-- any feature-removal proposal requires a separate explicit design decision outside this recurring audit
-- when a shipped wire type derives `CandidType`, prefer `//` comments over `///` because Rust doc attributes are retained in Candid runtime metadata and can silently grow every canister artifact
-
-## Run This Audit After
-
-- release hardening windows
-- major auth/runtime/macro feature lines
-- dependency bumps affecting `candid`, crypto, or IC/CDK crates
-- changes to `icp.yaml`, the host `build_artifact` builder, or workspace
-  release profile
-- any PR explicitly claiming wasm-size reduction
-
-## Report Preamble (Required)
-
-Every report generated from this audit must include:
-
-- Scope
-- Definition path
-- Compared baseline report path
-- Code snapshot identifier
-- Method tag/version
-- Comparability status
-- Auditor
-- Run timestamp (UTC)
-- Branch
-- Worktree
-- Profile
-- Target canisters in scope
-
-## Scope
-
-Measure and report:
-
-- raw built wasm size (`built .wasm`) from direct Cargo canister builds
-- deterministic gzip of the raw built wasm (`built .wasm.gz`) as secondary context
-- canonical shrunk wasm size (`shrunk .wasm`) from the supported ICP CLI/Canic build flow
-- deterministic gzip of the shrunk wasm (`shrunk .wasm.gz`) as secondary context
-- raw debug/dev wasm size (`wasm-debug built .wasm`) for comparison against the audit profile
-- optional debug/dev deterministic gzip (`wasm-debug built .wasm.gz`) when captured by the runner
-- shrink deltas between built and shrunk artifacts
-- current shrunk-wasm bytes per canister in the audited scope
-- debug-vs-audit deltas between `wasm-debug` and the audited profile
-- `ic-wasm info` structure snapshots for built and shrunk artifacts
-- `twiggy` breakdowns (`top`, retained `top`, `dominators`, `monos`) for hotspot attribution
-
-### Default Canister Scope
-
-Default scope is the attached role set returned by
-`scripts/ci/list-config-canisters.sh --config fleets/test/canic.toml --ci-order`.
-As of this audit definition, that is:
-
-- `app`
-- `user_hub`
-- `user_shard`
-- `scale_hub`
-- `scale_replica`
-- `root`
-
-The audit runner must resolve each role through `[roles.<role>].package` and
-then read the actual Cargo package name from that package manifest. It must not
-guess `canister_<role>` or infer package identity from role names.
-
-### Default Profile
-
-- profile: `release`
-
-The recurring audit must still compare the audited profile against `wasm-debug`
-artifacts for the same canisters.
-
-Reason:
-
-- `release` remains the shipping/install authority
-- `fast` is the middle shrunk local/test/demo lane and is worth auditing when
-  local/operator cost is the question rather than shipping cost
-- `wasm-debug` is the fastest way to see whether a regression is coming from
-  optimization-sensitive codegen/linking or from real surface-area growth
-- large debug-vs-release gaps are diagnostic signals and must be tracked, not ignored
-
-Profile mapping:
-
-- `release` -> Cargo `--release`
-- `fast` -> Cargo `--profile fast`
-- `wasm-debug` -> Cargo debug build
-
-## Canic Artifact Model (Mandatory)
-
-Use these artifact classes consistently:
-
-### Shared Baseline Rule
-
-If an explicit attached minimal/baseline role exists in the audited scope, use
-it as the shared Canic runtime floor. If no such role is attached, the audit
-must say so and use repeated retained hotspots across leaf canisters as the
-shared fan-in signal.
-
-The audit must not print `minimal = N/A` as if that were a valid baseline.
-Missing baseline evidence is a report condition, not a size signal.
-
-### Built Artifact
-
-The built artifact is the direct Cargo output before post-processing:
-
-- `target/wasm32-unknown-unknown/<profile>/<cargo-package-name>.wasm`
-
-This is the primary baseline for "what the Rust build emitted before canister
-post-processing".
-
-### Canonical Shrunk Artifact
-
-The canonical shrunk artifact is the ICP CLI-visible Canic build output:
-
-- `.icp/local/canisters/<name>/<name>.wasm`
-
-This is the primary baseline for "what Canic would actually ship/install via
-its normal canister build flow".
-
-### Deterministic Gzip Artifact
-
-For both built and shrunk artifacts, record deterministic gzip output using:
-
-- `gzip -n`
-
-These `.wasm.gz` values are secondary continuity metrics.
-They do NOT decide optimization success on their own.
-
-### Root Bundle Rule
-
-`root` must always be called out separately because it embeds the bootstrap
-`wasm_store.wasm.gz` artifact and carries the control-plane/install boundary, so
-it is still not comparable one-to-one with leaf canisters.
-
-Required:
-
-- identify `root` as `bundle-canister`
-- compare `root` against its own prior baselines first
-- avoid using `root` alone to judge shared-runtime regressions in leaf canisters
-- use an explicit attached baseline role as the shared-runtime floor when one
-  exists, and `root` as the bundle ceiling
-
-## Decision Rule
-
-- raw non-gzipped wasm is the optimization authority
-- use built `.wasm` and shrunk `.wasm` as the primary pass/fail and drift metrics
-- compare the audited profile against `wasm-debug` on the same day as a
-  secondary diagnostic, not as the release decision metric
-- record deterministic gzip artifacts for transport continuity only
-- run `twiggy` on a name-preserving analysis artifact when possible so hotspot
-  attribution remains readable
-
-## Required Checklist
-
-For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence.
-
-1. Wasm artifacts were built or loaded from cache for each target canister/profile in scope.
-2. Artifact sizes were recorded in a machine-readable artifact.
-3. `twiggy top` output was analyzed for offender ranking and summarized.
-4. `twiggy dominators` output was analyzed for retained-size ownership and summarized.
-5. `twiggy monos` output was analyzed for generic bloat signal and summarized.
-6. Baseline path was selected according to Canic daily baseline discipline.
-7. `wasm-debug` artifacts were captured or the run explicitly marked them `BLOCKED`.
-8. Debug-vs-audit size deltas were recorded when comparable debug artifacts exist.
-9. Current per-canister size snapshots were recorded in the top-level report and machine-readable artifact.
-10. Size deltas versus baseline were recorded when comparable baseline artifacts exist.
-11. Verification readout includes command outcomes with `PASS` / `FAIL` / `BLOCKED`.
-12. New `CandidType` wire types were checked for `///` / `//!` doc-comment regressions when shared data-section growth is under review.
+Fast or role-scoped investigations are development measurements, not a run of
+this retained method.
 
 ## Execution Contract
 
 Preferred command:
 
-- `bash scripts/ci/wasm-audit-report.sh`
+```text
+WASM_AUDIT_PRODUCT_ROOT=/tmp/canic-wasm-audit-product \
+  bash scripts/ci/wasm-audit-report.sh
+```
 
-Optional controls:
+The named product root must be a clean disposable linked Git worktree at the
+snapshot being audited. The method checkout may be a separate maintainer
+checkout so a corrected method can rerun an immutable historical product.
 
-- `WASM_AUDIT_DATE=YYYY-MM-DD` to pin the report day path
-- `WASM_AUDIT_SKIP_BUILD=1` to reuse artifacts from the explicitly supplied
-  `WASM_AUDIT_CACHE_ROOT`; the default temporary cache cannot be reused
-- `WASM_AUDIT_CACHE_ROOT=<path>` to provide an isolated disposable cache root
-- `WASM_CANISTER_NAME=<name>` to scope to a single canister
-- `WASM_PROFILE=release|fast|wasm-debug`
+Optional control:
 
-Recurring-run rule:
+- `WASM_AUDIT_DATE=YYYY-MM-DD` pins the UTC report date.
 
-- a normal dated audit run must audit `release`
-- the same dated run must also capture `wasm-debug` built artifacts for profile
-  comparison; `scripts/ci/wasm-audit-report.sh` reports this as
-  `CANIC-WASM-001/v1`
-- a report that lacks `wasm-debug` comparison must call that out explicitly as `PARTIAL` or `BLOCKED`
+There is no skip-build or cache-reuse mode. Every retained v2 run builds fresh
+artifacts through the canonical builder with network access disabled. Build
+output may create `.icp/` in the disposable product worktree and an external
+temporary Cargo target. Any tracked product mutation or unexpected untracked
+path fails the run.
 
-Optional scope note:
+The runner rejects `ICP_ENVIRONMENT=ic`, uses `local`, never contacts a replica,
+never uses production credentials, and performs no deployment or destructive
+authoritative operation.
 
-- If `WASM_CANISTER_NAME=root`, the audit runner may still build child bundles
-  required to compile `root`.
+## Immutable Identity And Comparability
 
-## Output Contract
+Each run records the immutable fields required by `AUDIT-HOWTO.md`, plus:
 
-Canic follows the repository-wide audit history rules in
-`docs/audits/AUDIT-HOWTO.md`.
+- ordered roster key;
+- release/debug profile key;
+- product execution-path key;
+- exact external-tool key; and
+- root-independent executable composite.
 
-That means:
+The executable composite hashes the content of the definition and named audit
+scripts while labeling each digest with its repository-relative path. Absolute
+checkout paths must not enter the composite.
 
-- first run of day uses `docs/audits/reports/YYYY-MM/YYYY-MM-DD/wasm-footprint.md`
-- same-day reruns use numbered variants such as `wasm-footprint-2.md`
-- per-run artifacts live under a matching per-run artifact directory
+A predecessor is compatible only when all of these match exactly:
 
-Per-run artifact directory:
+- audit ID, version, and executable composite;
+- roster and profile keys;
+- execution-path key; and
+- external-tool key.
 
-- `docs/audits/reports/YYYY-MM/YYYY-MM-DD/artifacts/<scope-stem>/`
+The first valid v2 run records `N/A` deltas. Later runs compare causally to the
+immediate compatible predecessor and retain the original v2 baseline identity
+for cumulative release-line comparison. A missing or zero denominator is
+`N/A`, never an invented percentage.
 
-Transient build cache:
+The execution-path key matters because `CANIC-092-BUILD-001` confirms that
+absolute build paths currently enter root output. Raw byte size is still a
+valid snapshot, but gzip or byte-for-byte comparisons across different paths
+would be misleading.
 
-- a temporary directory outside the source tree by default
-- an explicitly supplied disposable `WASM_AUDIT_CACHE_ROOT` when cache reuse is
-  required
+## Required Measurements
 
-Required artifacts for each run:
+For every role record:
 
-- canonical compact baseline metrics (`size-metrics.tsv`)
-- aggregated size summary markdown (`size-summary.md`)
-- debug/profile comparison markdown or table artifact when `wasm-debug` is available
-- per-canister detailed markdown (`<canister>.md`)
-- evidence manifest recording the run contract and SHA-256 hashes for every
-  retained run artifact (`evidence-manifest.yml`)
+- release Wasm and gzip bytes;
+- debug Wasm and gzip bytes;
+- debug-minus-release byte and percentage delta;
+- compatible-predecessor release byte and percentage delta, when available;
+- release function count, data-section count/bytes, and exported-method count;
+- largest shallow and retained `twiggy top` entries;
+- bounded `twiggy dominators` evidence; and
+- bounded `twiggy monos` evidence.
 
-Raw `ic-wasm info` and `twiggy` output is transient analysis input. Extract its
-structure and hotspot evidence into the aggregate and per-canister reports; do
-not retain parallel text and CSV copies in the report archive.
+Retain one canonical TSV, one aggregate summary, one detail file per role, one
+method identity JSON file, and one evidence manifest. Raw Wasm, Cargo output,
+and complete tool dumps are transient and must not enter the report archive.
+All retained snippets redact repository, home, cache, credential, principal,
+token, and private-material paths or values.
 
-## Structural Hotspots (Required)
+## Exact Result And Risk Rules
 
-Every report generated from this audit must include:
+Required tools, builds, artifacts, and analyses are fail-closed. A missing
+role, failed canonical build, missing release/debug artifact, failed
+`ic-wasm`/`twiggy` command, source mutation, or unverifiable evidence hash makes
+the run `blocked`; such a run cannot support a baseline.
 
-- concrete artifact outliers by canister
-- at least one retained-size hotspot table grounded in `twiggy`
-- explicit note when `root` growth is dominated by embedded child bundles
-- explicit note when feature canisters remain close to an attached baseline
-  role, or when no dedicated baseline role is attached
-- explicit comparison between `wasm-debug` and the audited profile, or an
-  explicit `BLOCKED` note explaining why that comparison is absent
+For a complete run, add these disjoint inputs and cap at 10:
 
-## Risk Score (Required)
+| Input | Score |
+| --- | ---: |
+| no compatible v2 predecessor | 2 |
+| largest/smallest leaf release ratio is 1.10-1.2499 | 1 |
+| largest/smallest leaf release ratio is at least 1.25 | 2 |
+| root/max-leaf release ratio is 2.0-2.9999 | 1 |
+| root/max-leaf release ratio is at least 3.0 | 2 |
+| largest compatible release growth is 5.0-9.9999% | 1 |
+| largest compatible release growth is at least 10.0% | 2 |
+| largest retained item is 10.0-24.9999% of its release Wasm | 1 |
+| largest retained item is at least 25.0% of its release Wasm | 2 |
 
-Use the normalized `0-10` scale.
+The ratio alternatives in each pair are mutually exclusive. Negative or
+missing predecessor growth adds zero.
 
-Suggested interpretation for this audit:
+- `pass`: complete evidence and risk 0-6;
+- `fail`: complete evidence and risk 7-10;
+- `partial`: not used for a missing required measurement; required gaps are
+  fail-closed as `blocked`; and
+- `not_applicable`: not valid for the fixed release roster.
 
-- `0-2`: stable, no meaningful drift
-- `3-4`: minor drift, mostly attributable and low-risk
-- `5-6`: moderate drift, shared baseline or bundle pressure rising
-- `7-8`: high drift, large unowned hotspots or root/install risk emerging
-- `9-10`: severe drift, artifact growth is blocking release posture
+A high first-baseline score is trend pressure, not automatically a product
+finding. Create a finding only when evidence identifies a violated canonical
+authority, unexplained comparable regression, or operational limit. Preserve
+typed build/tool causes in blocked evidence.
 
-Default multi-canister scope is normal for Canic and must not raise the risk
-score by itself. Raise risk for observed drift signals such as leaf spread,
-same-day growth, missing required evidence, or root bundle growth that crosses
-the configured outlier threshold.
+## Required Report Sections
 
-## Early Warning Signals (Required)
+Every report contains:
 
-Reports must watch for:
+1. verdict, validity, comparability, and exact score;
+2. scope, immutable product/method/tool identity, timestamps, and safety state;
+3. canonical artifact size matrix and compatible deltas;
+4. release/debug comparison;
+5. `ic-wasm` structure evidence;
+6. `twiggy` shallow, retained, dominator, and monomorphization evidence;
+7. leaf spread, repeated fan-in signals, and separate root interpretation;
+8. findings or an explicit no-new-finding statement;
+9. checklist and command verification; and
+10. retained artifact links and hashed evidence manifest.
 
-- an attached baseline role approaching the same size class as more
-  feature-heavy canisters, or missing baseline evidence when no baseline role is
-  attached
-- `root` growing faster than the sum of child bundle changes
-- shrink delta collapsing unexpectedly, which can mean dead code is becoming live
-- `twiggy monos` showing repeated generic expansion in shared crates
-- `ic-wasm info` function-count growth without corresponding feature growth
+Exact diagnostic text is asserted only where it is a documented
+operator-facing contract. Internal failure evidence preserves the typed tool or
+build cause instead of treating display strings as the authority.
 
-## Dependency Fan-In Pressure (Required)
+## Method-Change Rule
 
-This audit must call out shared crates or subsystems when retained-size evidence
-suggests they tax most or all canisters, for example:
-
-- `canic-core`
-- `candid` and DTO glue
-- auth / crypto support
-- logging / metrics runtime
-- lifecycle / macro runtime
-
-## Verification Readout (Required)
-
-Every report must include command outcomes with:
-
-- `PASS`
-- `FAIL`
-- `BLOCKED`
-
-`BLOCKED` must include a concrete reason, such as:
-
-- missing `icp`
-- missing `ic-wasm`
-- missing `twiggy`
-- missing cached artifacts for `WASM_AUDIT_SKIP_BUILD=1`
-
-## Method Notes
-
-Method anchors for this audit:
-
-1. built and shrunk raw wasm bytes are the primary trend metrics
-2. deterministic gzip bytes are secondary transport context
-3. `twiggy` attribution should prefer a name-preserving analysis artifact
-4. `root` is always interpreted as a bundle canister, not as a normal leaf peer
-
-If any of these rules change, bump the method tag and mark affected deltas as
-`N/A (method change)`.
+V1 is preserved as invalid history. If v2's artifact authority, fixed roster,
+profile pair, metric derivation, comparison key, or score changes, increment
+the method version and apply the post-freeze method-defect protocol. Compare
+only results produced by the corrected method.

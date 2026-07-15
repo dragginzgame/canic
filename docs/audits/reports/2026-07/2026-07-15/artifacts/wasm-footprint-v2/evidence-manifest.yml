@@ -1,0 +1,31 @@
+command: "WASM_AUDIT_PRODUCT_ROOT=<disposable-product-root> bash scripts/ci/wasm-audit-report.sh"
+working_directory: "method_repository_root"
+exit_code: 0
+stdout_path: "not_retained"
+stderr_path: "not_retained"
+baseline_identity: "N/A"
+original_baseline_identity: "docs/audits/reports/2026-07/2026-07-15/wasm-footprint-v2.md"
+method_identity: "CANIC-WASM-001/v2@sha256:c88cdf0ef4e79b3c1702ef9c00777f5a7940c4771ab51dbf8442fabd71396bc5"
+product_identity: "91736337fc1cfeb891f17d7d62affb5e671348e2@product-sha256:c2b932cfda4cd3060d8fb171a6005595c8c9e6c8b65d8bfd8ae34a4516e0802e"
+tool_versions:
+  rustc: "rustc 1.97.0 (2d8144b78 2026-07-07)"
+  cargo: "cargo 1.97.0 (c980f4866 2026-06-30)"
+  icp: "icp 1.0.2"
+  ic-wasm: "ic-wasm 0.9.11"
+  twiggy: "twiggy-opt 0.8.0"
+timestamps:
+  started_at: "2026-07-15T09:16:20Z"
+  completed_at: "2026-07-15T09:25:08Z"
+artifact_hashes:
+  3a3f6172ef9a38c60bd0cb05ab8ce39299ebf8c019a850e878af605b507bb755  docs/audits/reports/2026-07/2026-07-15/wasm-footprint-v2.md
+  bc2877c25dfdf201588c7ad3e16e28089802994fbceb951457162acc83aa5632  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/size-summary.md
+  303abe342243f269cca97d32f0b788f081513dda1e58542108338ce0398a5975  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/size-metrics.tsv
+  adbb7610f14230bc9acbb17d8b132b60f71f04bffce07bc4e7f8d25ab2e92e6a  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/method.json
+  edb94ec211d500a5ab98b47af01b853b227bd5ff812143c5fdd8b8b89e004b70  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/app.md
+  75ba0a060450ac3907981e2d725c06868a3c68bace624cdf3614eb8f624925c5  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/user_hub.md
+  2978cfd47f7dee2c94b7d1c27816c1940c4e46f38a64c6e8a225944a8958df6b  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/user_shard.md
+  81051356f5c838624c30f786315e980c0fd51e797282a1b240066392454bcdeb  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/scale_hub.md
+  0b7376d597b79a764bdeec4ae693f13b027a535df2ef2939f61eec0f0cc85ff2  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/scale_replica.md
+  41430d790680403424e8ce8e85a21e97d6e41a03ccedee5ac1cde8dfd13ba0ab  docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/root.md
+retention_class: "primary_markdown_and_compact_supporting_evidence"
+redactions_applied: "product/method/cache/home paths normalized or omitted; no credentials, tokens, principals, or private material retained"

@@ -9,7 +9,7 @@ use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
         TemplateManifestInput, WasmStoreAdminCommand, WasmStoreAdminResponse,
-        WasmStoreOverviewResponse, WasmStoreOverviewStoreResponse,
+        WasmStoreCatalogEntryResponse, WasmStoreOverviewResponse, WasmStoreOverviewStoreResponse,
         WasmStorePublicationSlotResponse, WasmStoreStatusResponse,
     },
     ids::{
@@ -117,6 +117,95 @@ fn root_post_upgrade_preserves_multi_store_current_release_binding() {
 }
 
 #[test]
+fn root_post_upgrade_recovers_target_promotion_before_root_manifest_mirror() {
+    let setup = setup_root_with_small_implicit_store();
+    let before = publication_overview(&setup.pic, setup.root_id);
+    let before_store_count = tracked_store_count(&before);
+    let target_store = before
+        .stores
+        .first()
+        .expect("small-store setup must produce at least one managed wasm_store")
+        .clone();
+    let template_id = TemplateId::from("canary:interrupted-promotion".to_string());
+    let fixture = release_fixture(&template_id, "99.0.0-interrupted-promotion", 128);
+
+    stage_manifest(&setup.pic, setup.root_id, &fixture.manifest);
+    prepare_chunk_set(&setup.pic, setup.root_id, &fixture.prepare);
+    for chunk in &fixture.chunks {
+        publish_chunk(&setup.pic, setup.root_id, chunk);
+    }
+
+    direct_store_prepare(
+        &setup.pic,
+        setup.root_id,
+        target_store.pid,
+        &fixture.prepare,
+    );
+    for chunk in &fixture.chunks {
+        direct_store_publish_chunk(&setup.pic, setup.root_id, target_store.pid, chunk);
+    }
+    direct_store_stage_manifest(
+        &setup.pic,
+        setup.root_id,
+        target_store.pid,
+        &TemplateManifestInput {
+            store_binding: target_store.binding.clone(),
+            ..fixture.manifest.clone()
+        },
+    );
+
+    let target_catalog = live_store_catalog(&setup.pic, setup.root_id, target_store.pid);
+    assert!(
+        target_catalog.iter().any(|entry| {
+            entry.template_id == template_id
+                && entry.version == fixture.manifest.version
+                && entry.payload_hash == fixture.manifest.payload_hash
+        }),
+        "the interruption fixture must commit the exact release to the target store",
+    );
+    let interrupted = publication_overview(&setup.pic, setup.root_id);
+    assert_eq!(
+        approved_template_store_count(&interrupted, &template_id),
+        0,
+        "the interrupted state must leave the root-owned manifest mirror uncommitted",
+    );
+
+    let root_wasm = fs::read(built_root_wasm_path()).expect("read root wasm");
+    setup
+        .pic
+        .upgrade_canister(
+            setup.root_id,
+            root_wasm,
+            encode_one(()).expect("encode root post_upgrade args"),
+            None,
+        )
+        .expect("upgrade root canister");
+    setup.pic.wait_for_ready(
+        setup.root_id,
+        UPGRADE_READY_TICK_LIMIT,
+        "root interrupted-promotion reconcile",
+    );
+
+    let reconciled = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
+    assert_eq!(
+        tracked_store_count(&reconciled),
+        before_store_count,
+        "recovery must reuse the committed target instead of allocating another store",
+    );
+    assert_eq!(
+        approved_template_store_count(&reconciled, &template_id),
+        1,
+        "recovery must converge on one authoritative owner for the exact release",
+    );
+    assert_eq!(
+        store_with_approved_template(&reconciled, &template_id).binding,
+        target_store.binding,
+        "post-upgrade recovery must mirror the already committed target binding into root state",
+    );
+}
+
+#[test]
 fn root_republish_reuses_exact_release_without_allocating_another_store() {
     let setup = setup_root_with_small_implicit_store();
     let template_id = managed_app_template_id();
@@ -152,6 +241,33 @@ fn root_republish_reuses_exact_release_without_allocating_another_store() {
 }
 
 #[test]
+fn root_publication_quota_rejects_before_fleet_mutation() {
+    let setup = setup_root_with_small_implicit_store();
+    let before = publication_overview(&setup.pic, setup.root_id);
+
+    for _ in 0..10 {
+        publish_current_release_set_to_current_store(&setup.pic, setup.root_id);
+    }
+
+    let before_rejection = publication_overview(&setup.pic, setup.root_id);
+    assert_eq!(
+        before_rejection, before,
+        "allowed exact-release publication must retain the managed fleet view"
+    );
+
+    let err = publish_current_release_set_to_current_store_err(&setup.pic, setup.root_id)
+        .expect_err("the next same-window publication must exhaust its quota");
+    assert_eq!(err.code, ErrorCode::ResourceExhausted);
+
+    let after = publication_overview(&setup.pic, setup.root_id);
+    drop(setup);
+    assert_eq!(
+        after, before_rejection,
+        "quota rejection must happen before publication mutates the managed fleet view"
+    );
+}
+
+#[test]
 fn root_conflicting_duplicate_release_is_rejected_without_fleet_mutation() {
     let setup = setup_root_with_small_implicit_store();
     let template_id = managed_app_template_id();
@@ -163,7 +279,7 @@ fn root_conflicting_duplicate_release_is_rejected_without_fleet_mutation() {
     let err = publish_current_release_set_to_current_store_err(&setup.pic, setup.root_id)
         .expect_err("conflicting duplicate release must fail");
 
-    assert_eq!(err.code, ErrorCode::Internal);
+    assert_eq!(err.code, ErrorCode::Conflict);
 
     let after = publication_overview(&setup.pic, setup.root_id);
     drop(setup);
@@ -187,7 +303,7 @@ fn root_fixed_target_conflicting_duplicate_is_rejected_without_fleet_mutation() 
     let err = publish_current_release_set_to_store_err(&setup.pic, setup.root_id, target_store.pid)
         .expect_err("fixed-target conflicting duplicate release must fail");
 
-    assert_eq!(err.code, ErrorCode::Internal);
+    assert_eq!(err.code, ErrorCode::Conflict);
 
     let after = publication_overview(&setup.pic, setup.root_id);
     drop(setup);
@@ -220,7 +336,7 @@ fn root_fixed_target_capacity_failure_is_rejected_without_fleet_mutation() {
     let err = publish_current_release_set_to_store_err(&setup.pic, setup.root_id, target_store.pid)
         .expect_err("fixed-target publication should fail when the chosen store cannot fit the full managed release set");
 
-    assert_eq!(err.code, ErrorCode::Internal);
+    assert_eq!(err.code, ErrorCode::WasmStoreCapacityExceeded);
 
     let after = publication_overview(&setup.pic, setup.root_id);
     drop(setup);
@@ -814,6 +930,76 @@ fn live_store_status(
         .expect("wasm_store status transport failed");
 
     response.expect("wasm_store status application failed")
+}
+
+// Query one live wasm_store's approved release catalog as its root controller.
+fn live_store_catalog(
+    pic: &Pic,
+    root_id: candid::Principal,
+    store_pid: candid::Principal,
+) -> Vec<WasmStoreCatalogEntryResponse> {
+    let response: Result<Vec<WasmStoreCatalogEntryResponse>, Error> = pic
+        .query_call_as(store_pid, root_id, protocol::CANIC_WASM_STORE_CATALOG, ())
+        .expect("wasm_store catalog transport failed");
+
+    response.expect("wasm_store catalog application failed")
+}
+
+// Prepare one release directly on a target wasm_store as its root controller.
+fn direct_store_prepare(
+    pic: &Pic,
+    root_id: candid::Principal,
+    store_pid: candid::Principal,
+    prepare: &TemplateChunkSetPrepareInput,
+) {
+    let response: Result<TemplateChunkSetInfoResponse, Error> = pic
+        .update_call_as(
+            store_pid,
+            root_id,
+            protocol::CANIC_WASM_STORE_PREPARE,
+            (prepare.clone(),),
+        )
+        .expect("direct wasm_store prepare transport failed");
+
+    let _ = response.expect("direct wasm_store prepare application failed");
+}
+
+// Publish one prepared chunk directly on a target wasm_store as its root controller.
+fn direct_store_publish_chunk(
+    pic: &Pic,
+    root_id: candid::Principal,
+    store_pid: candid::Principal,
+    chunk: &TemplateChunkInput,
+) {
+    let response: Result<(), Error> = pic
+        .update_call_as(
+            store_pid,
+            root_id,
+            protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+            (chunk.clone(),),
+        )
+        .expect("direct wasm_store chunk publish transport failed");
+
+    response.expect("direct wasm_store chunk publish application failed");
+}
+
+// Commit one manifest directly on a target wasm_store before the root mirror step.
+fn direct_store_stage_manifest(
+    pic: &Pic,
+    root_id: candid::Principal,
+    store_pid: candid::Principal,
+    manifest: &TemplateManifestInput,
+) {
+    let response: Result<(), Error> = pic
+        .update_call_as(
+            store_pid,
+            root_id,
+            protocol::CANIC_WASM_STORE_STAGE_MANIFEST,
+            (manifest.clone(),),
+        )
+        .expect("direct wasm_store manifest staging transport failed");
+
+    response.expect("direct wasm_store manifest staging application failed");
 }
 
 // Choose one payload size that must overflow the current store but still fit an empty fresh store.

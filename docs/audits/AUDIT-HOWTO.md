@@ -21,6 +21,9 @@ docs/audits/
 ```
 
 - `METHODS.md` is the active method and ownership catalog.
+- `mandatory-trace-protocol.md` is the fingerprinted cross-cutting method for
+  release-line mandatory end-to-end traces; it does not add a product-property
+  owner to the retained definition count.
 - `recurring/` contains reusable definitions, never run results.
 - `modular/` contains the manual module-surface method and its explicitly
   finding-backed implementation workflow.
@@ -183,6 +186,11 @@ For every run:
 5. write one new primary report under the dated layout;
 6. update that day's and month's summaries; and
 7. never overwrite an earlier report.
+
+Mandatory end-to-end trace runs additionally follow
+[mandatory-trace-protocol.md](mandatory-trace-protocol.md). A retained method
+still owns each property; the trace protocol owns only cross-path completion
+and evidence consistency.
 
 ### Same-day measurement reruns
 

@@ -7,12 +7,14 @@ use crate::{
     ops::storage::{state::subnet::SubnetStateOps, template::TemplateChunkedOps},
 };
 use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::error::{InternalError, InternalErrorOrigin};
+use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
 
 use super::super::WasmStoreInternalClient;
+use super::error::PublicationWorkflowError;
 
 // Fetch the approved embedded catalog from one wasm store.
 pub(super) async fn store_catalog(
+    _publication_permit: &CostGuardPermit,
     store_pid: Principal,
 ) -> Result<Vec<WasmStoreCatalogEntryResponse>, InternalError> {
     WasmStoreInternalClient::new(store_pid).catalog().await
@@ -20,6 +22,7 @@ pub(super) async fn store_catalog(
 
 // Fetch deterministic chunk-set metadata for one release from one wasm store.
 pub(super) async fn store_chunk_set_info(
+    _publication_permit: &CostGuardPermit,
     store_pid: Principal,
     template_id: &TemplateId,
     version: &TemplateVersion,
@@ -38,11 +41,12 @@ pub(super) async fn store_status(
 
 // Stage one approved manifest into one live wasm store.
 pub(super) async fn store_stage_manifest(
+    publication_permit: &CostGuardPermit,
     store_pid: Principal,
     request: TemplateManifestInput,
 ) -> Result<(), InternalError> {
     WasmStoreInternalClient::new(store_pid)
-        .stage_manifest(request)
+        .stage_manifest(publication_permit, request)
         .await
 }
 
@@ -63,6 +67,7 @@ pub(super) async fn store_complete_gc(store_pid: Principal) -> Result<(), Intern
 
 // Fetch one deterministic chunk for one release from one wasm store.
 pub(super) async fn store_chunk(
+    _publication_permit: &CostGuardPermit,
     store_pid: Principal,
     template_id: &TemplateId,
     version: &TemplateVersion,
@@ -77,12 +82,8 @@ pub(super) async fn store_chunk(
 pub(super) fn store_binding_for_pid(
     store_pid: Principal,
 ) -> Result<WasmStoreBinding, InternalError> {
-    SubnetStateOps::wasm_store_binding_for_pid(store_pid).ok_or_else(|| {
-        InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("wasm store {store_pid} is not registered"),
-        )
-    })
+    SubnetStateOps::wasm_store_binding_for_pid(store_pid)
+        .ok_or_else(|| PublicationWorkflowError::StoreNotRegistered(store_pid).into())
 }
 
 // Return deterministic chunk bytes from the current canister's local bootstrap source.

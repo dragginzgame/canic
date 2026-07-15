@@ -6,7 +6,7 @@ cd "$ROOT"
 ORIGINAL_ARGS=("$@")
 
 METHOD_ID="CANIC-INSTRUCTION-001"
-METHOD_VERSION="1"
+METHOD_VERSION="2"
 DEFINITION_PATH="docs/audits/recurring/system/instruction-footprint.md"
 
 usage() {
@@ -132,23 +132,6 @@ DAY_DIR="$ROOT/docs/audits/reports/$MONTH_DIR/$DATE_UTC"
 
 mkdir -p "$DAY_DIR/artifacts"
 
-RUN_STEM="instruction-footprint"
-RUN_INDEX=1
-while [[ -e "$DAY_DIR/$RUN_STEM.md" ]]; do
-  ((RUN_INDEX+=1))
-  RUN_STEM="instruction-footprint-$RUN_INDEX"
-done
-
-REPORT_PATH="$DAY_DIR/$RUN_STEM.md"
-ARTIFACTS_DIR="$DAY_DIR/artifacts/$RUN_STEM"
-mkdir -p "$ARTIFACTS_DIR"
-
-if [[ "$RUN_INDEX" -eq 1 ]]; then
-  BASELINE_REPORT="N/A"
-else
-  BASELINE_REPORT="docs/audits/reports/$MONTH_DIR/$DATE_UTC/instruction-footprint.md"
-fi
-
 CODE_SNAPSHOT="$(git rev-parse HEAD)"
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if [[ -n "$(git status --short)" ]]; then
@@ -157,17 +140,70 @@ else
   WORKTREE="clean"
 fi
 RUN_TIMESTAMP_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+mapfile -t METHOD_INPUTS < <(
+  {
+    printf '%s\n' \
+      "$DEFINITION_PATH" \
+      "scripts/ci/instruction-audit-report.sh" \
+      "crates/canic-tests/tests/instruction_audit.rs"
+    find crates/canic-tests/tests/instruction_audit_support -type f -name '*.rs' -print
+  } | sort -u
+)
 METHOD_FINGERPRINT="$(
-  sha256sum \
-    "$ROOT/$DEFINITION_PATH" \
-    "$ROOT/scripts/ci/instruction-audit-report.sh" \
-    "$ROOT/crates/canic-tests/tests/instruction_audit.rs" \
-    "$ROOT"/crates/canic-tests/tests/instruction_audit_support/*.rs \
-    "$ROOT"/crates/canic-tests/tests/instruction_audit_support/estimates/*.rs \
-  | sort -k2 \
-  | sha256sum \
-  | awk '{print $1}'
+  {
+    for path in "${METHOD_INPUTS[@]}"; do
+      printf '%s  %s\n' "$(sha256sum "$path" | awk '{print $1}')" "$path"
+    done
+  } | sha256sum | awk '{print $1}'
 )"
+
+BASELINE_REPORT="N/A"
+while IFS= read -r candidate_method_path; do
+  candidate_method_id="$(sed -n 's/.*"method_id": "\([^"]*\)".*/\1/p' "$candidate_method_path")"
+  candidate_method_version="$(sed -n 's/.*"method_version": "\([^"]*\)".*/\1/p' "$candidate_method_path")"
+  candidate_method_fingerprint="$(sed -n 's/.*"method_fingerprint": "\([^"]*\)".*/\1/p' "$candidate_method_path")"
+  if [[ "$candidate_method_id" != "$METHOD_ID" || "$candidate_method_version" != "$METHOD_VERSION" || "$candidate_method_fingerprint" != "$METHOD_FINGERPRINT" ]]; then
+    continue
+  fi
+
+  candidate_artifacts_dir="${candidate_method_path%/method.json}"
+  candidate_stem="$(basename "$candidate_artifacts_dir")"
+  candidate_day_dir="${candidate_artifacts_dir%/artifacts/*}"
+  candidate_report="$candidate_day_dir/$candidate_stem.md"
+  if [[ -f "$candidate_report" ]]; then
+    BASELINE_REPORT="${candidate_report#$ROOT/}"
+  fi
+done < <(
+  find "$ROOT/docs/audits/reports" -type f \
+    -path '*/artifacts/instruction-footprint-v2*/method.json' -print \
+    | sort -V
+)
+
+RUN_STEM="instruction-footprint-v2"
+RUN_INDEX=1
+while [[ -e "$DAY_DIR/$RUN_STEM.md" ]]; do
+  ((RUN_INDEX+=1))
+  RUN_STEM="instruction-footprint-v2-$RUN_INDEX"
+done
+
+REPORT_PATH="$DAY_DIR/$RUN_STEM.md"
+ARTIFACTS_DIR="$DAY_DIR/artifacts/$RUN_STEM"
+mkdir -p "$ARTIFACTS_DIR"
+
+if [[ -z "${POCKET_IC_BIN:-}" ]]; then
+  for candidate in \
+    "$ROOT/.tmp/test-runtime/pocket-ic-server-14.0.0/pocket-ic" \
+    "/tmp/pocket-ic-server-14.0.0/pocket-ic"; do
+    if [[ -x "$candidate" ]]; then
+      export POCKET_IC_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "${POCKET_IC_BIN:-}" || ! -x "$POCKET_IC_BIN" ]]; then
+  echo "error: pinned PocketIC 14.0.0 executable is unavailable; set POCKET_IC_BIN" >&2
+  exit 2
+fi
 
 RUN_TMP="$(mktemp -d)"
 mkdir -p "$RUN_TMP/tmp"

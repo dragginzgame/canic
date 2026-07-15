@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-LAYERING-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`; absorbs the retired access-, ops-, and workflow-purity
   definitions
 - Owner: endpoint, access, workflow, policy, ops, model, DTO, record, view,
@@ -234,10 +234,16 @@ rg -n 'use crate::api|crate::api::' crates/canic-core/src/{workflow,ops,storage,
 rg -n '(^|[^A-Za-z0-9_])api::|crate::api::' crates/canic-core/src/{workflow,ops,storage,domain} -g '*.rs'
 rg -n 'use crate::workflow|crate::workflow::' crates/canic-core/src/{ops,storage,domain} -g '*.rs'
 rg -n '(^|[^A-Za-z0-9_])workflow::|crate::workflow::' crates/canic-core/src/{ops,storage,domain} -g '*.rs'
-rg -n 'use crate::domain::policy|crate::domain::policy::' crates/canic-core/src/{ops,storage} -g '*.rs'
-rg -n 'use crate::ops|crate::ops::' crates/canic-core/src/storage -g '*.rs'
+bash scripts/ci/run-layering-guards.sh --self-test
 bash scripts/ci/run-layering-guards.sh
+rg -n 'use crate::ops|crate::ops::' crates/canic-core/src/storage -g '*.rs'
 ```
+
+The executable guard owns the ops-to-policy scan because it normalizes direct,
+grouped, multiline, and nested-grouped `use crate` forms while excluding the
+canonical test module. Its static fixtures are part of the method identity. A
+guard exit caused by listed product violations is valid failing evidence; a
+fixture mismatch exits 2 and blocks the audit method.
 
 - [ ] No upward imports detected
 - [ ] Executable layering guard passes
@@ -315,6 +321,7 @@ matching audit concern.
 
 The guard currently covers:
 
+- ops imports from policy, including grouped and nested-grouped forms
 - workflow storage-record access
 - workflow imports from API
 - API shared replay orchestration
@@ -328,8 +335,9 @@ The guard currently covers:
 
 Result:
 
-- [ ] `bash scripts/ci/run-layering-guards.sh` passes
-- [ ] Any failure is classified in the result file with file/line evidence
+- [ ] `bash scripts/ci/run-layering-guards.sh --self-test` passes
+- [ ] `bash scripts/ci/run-layering-guards.sh` result is recorded
+- [ ] Every listed product failure is classified with file evidence
 
 ## 2. Layer Responsibility Checks (Behavioral)
 
@@ -342,7 +350,7 @@ Check:
 - [ ] API does not embed business policy logic
 - [ ] API does not orchestrate multi-step workflows
 - [ ] API does not directly mutate model/storage internals
-- [ ] API delegates root issuer policy upsert validation and mutation to auth ops
+- [ ] API delegates root issuer policy upsert orchestration to workflow
 
 Suggested scan:
 
@@ -358,16 +366,16 @@ Findings:
 
 - (file, line, why)
 
-API `ops` references are not automatically violations because endpoint
-adapters may need caller/time/environment material before delegating. They must
-be reviewed as drift signals. Flag as `Medium` when API owns multi-step
-security/business orchestration, proof verification, replay projection,
-metrics/logging branches, or direct workflow sequencing that should live behind
-a workflow/access seam.
+Under the canonical dependency matrix, a production API-to-ops dependency is a
+violation. Endpoint/API adapters may decode boundary data and authenticate, but
+must delegate immediately to workflow. Runtime caller/time/environment material
+needed after admission is acquired through workflow-owned ops calls; it is not
+an exception permitting a competing API-to-ops path.
 
 Root issuer policy upsert handling is a hard guard: API modules may decode
-boundary DTOs and delegate, but must not own root issuer policy validation,
-storage mutation, or `AuthStateOps::upsert_root_issuer_policy` orchestration.
+boundary DTOs and delegate to workflow, but must not own root issuer policy
+validation, storage mutation, or `AuthStateOps::upsert_root_issuer_policy`
+orchestration.
 
 ### 2.2 Workflow Ownership
 

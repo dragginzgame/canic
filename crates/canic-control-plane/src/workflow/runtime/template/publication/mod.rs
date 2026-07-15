@@ -1,3 +1,5 @@
+mod cost_guard;
+mod error;
 mod fleet;
 mod lifecycle;
 mod release;
@@ -10,6 +12,8 @@ use crate::{
     ids::CanisterRole,
 };
 use canic_core::control_plane_support::error::InternalError;
+
+use self::cost_guard::{PUBLICATION_ADMIN_COMMAND_KIND, PublicationCostGuard};
 
 const WASM_STORE_ROLE: CanisterRole = CanisterRole::WASM_STORE;
 
@@ -26,12 +30,24 @@ impl WasmStorePublicationWorkflow {
     ) -> Result<WasmStoreAdminResponse, InternalError> {
         match cmd {
             WasmStoreAdminCommand::PublishCurrentReleaseToStore { store_pid } => {
-                Self::publish_current_release_set_to_store(store_pid).await?;
-                Ok(WasmStoreAdminResponse::PublishedCurrentReleaseToStore { store_pid })
+                let cost_guard = PublicationCostGuard::reserve(PUBLICATION_ADMIN_COMMAND_KIND)?;
+                let result =
+                    Self::publish_current_release_set_to_store(cost_guard.permit(), store_pid)
+                        .await
+                        .map(
+                            |()| WasmStoreAdminResponse::PublishedCurrentReleaseToStore {
+                                store_pid,
+                            },
+                        );
+                cost_guard.settle(result)
             }
             WasmStoreAdminCommand::PublishCurrentReleaseToCurrentStore => {
-                Self::publish_current_release_set_to_current_store().await?;
-                Ok(WasmStoreAdminResponse::PublishedCurrentReleaseToCurrentStore)
+                let cost_guard = PublicationCostGuard::reserve(PUBLICATION_ADMIN_COMMAND_KIND)?;
+                let result =
+                    Self::publish_current_release_set_to_current_store(cost_guard.permit())
+                        .await
+                        .map(|()| WasmStoreAdminResponse::PublishedCurrentReleaseToCurrentStore);
+                cost_guard.settle(result)
             }
             WasmStoreAdminCommand::SetPublicationBinding { binding } => {
                 Self::set_current_publication_store_binding(binding.clone())?;

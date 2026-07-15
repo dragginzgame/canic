@@ -4,13 +4,12 @@ use crate::{
     ids::WasmStoreBinding,
     schema::WasmStoreConfig,
     view::state::{PublicationStoreStateView, WasmStoreView},
-    workflow::runtime::template::publication::WasmStorePublicationWorkflow,
+    workflow::runtime::template::publication::{
+        WasmStorePublicationWorkflow, error::PublicationWorkflowError,
+    },
 };
 use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
-    format::byte_size,
-};
+use canic_core::control_plane_support::{error::InternalError, format::byte_size};
 use std::collections::BTreeSet;
 
 ///
@@ -87,17 +86,14 @@ impl PublicationStoreFleet {
             let store = &self.stores[index];
 
             if let Some(conflict) = store.conflicting_release(manifest) {
-                return Err(InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!(
-                        "ws conflict for {}@{} on {}: existing hash/size differ ({:?}, {})",
-                        manifest.template_id,
-                        manifest.version,
-                        store.binding,
-                        conflict.payload_hash,
-                        conflict.payload_size_bytes
-                    ),
-                ));
+                return Err(PublicationWorkflowError::ReleaseConflict {
+                    template_id: manifest.template_id.clone(),
+                    version: manifest.version.clone(),
+                    binding: store.binding.clone(),
+                    existing_payload_hash: conflict.payload_hash.clone(),
+                    existing_payload_size_bytes: conflict.payload_size_bytes,
+                }
+                .into());
             }
 
             if store.has_exact_release(manifest) {

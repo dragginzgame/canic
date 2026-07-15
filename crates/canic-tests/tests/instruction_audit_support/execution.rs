@@ -1,203 +1,60 @@
 use super::*;
 
-// Query rows only count as unobservable if the same-call probe path failed.
-// Query calls do not commit shared perf-table state, so they cannot rely on
-// post-call `canic_metrics(MetricsKind::Runtime, ...)` reads the way updates do.
-pub(super) fn query_perf_is_unobservable(scenario: &AuditScenario, row: &CanonicalPerfRow) -> bool {
-    scenario.transport_mode == "query" && row.count == 0
-}
-
-// Choose the fresh root topology shape required for one scenario.
 fn setup_for_scenario(scenario: &AuditScenario) -> root::harness::RootSetup {
     match scenario.key {
-        "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
-            setup_root(RootSetupProfile::Topology)
+        "root:bootstrap:init-checkpoints" => setup_root(RootSetupProfile::Topology),
+        "scale:request_cycles_from_parent:fresh" | "scale_hub:create_worker:empty-pool" => {
+            setup_root(RootSetupProfile::Scaling)
         }
-        "test:test_verify_delegated_token:valid-delegated-token" => {
+        "user_hub:create_account:new-principal"
+        | "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer"
+        | "issuer:canic_prepare_delegated_token:active-proof"
+        | "test:test_verify_delegated_token:valid-delegated-token" => {
             setup_root(RootSetupProfile::Sharding)
         }
         _ => setup_root(RootSetupProfile::Capability),
     }
 }
 
-// Execute one scenario in an isolated fresh topology and derive the endpoint delta.
+// Execute one v2 scenario in a fresh authoritative root-harness topology.
 pub(super) fn run_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    if let Some(result) = run_standalone_scenario(scenario) {
-        return result;
+    let setup = setup_for_scenario(scenario);
+    if scenario.transport_mode == "install" {
+        return observe_bootstrap_scenario(setup, scenario);
     }
 
-    let setup = setup_for_scenario(scenario);
     let prepared = prepare_scenario(&setup, scenario);
     let target_pid = prepared.target_pid;
-    let (count, total_instructions, sample_origin, checkpoint_rows) =
-        if scenario.transport_mode == "query" {
-            let total = execute_query_perf_probe(&setup.pic, scenario, target_pid);
-            let (count, total) = query_perf_counts(total);
-            (
-                count,
-                total,
-                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
-                Vec::new(),
-            )
-        } else {
-            let before = perf_entries(&setup.pic, target_pid);
-            execute_scenario(&setup, scenario, &prepared);
-            let after = perf_entries(&setup.pic, target_pid);
-            let (count, total_instructions) = perf_delta(
-                &before,
-                &after,
-                scenario.subject_kind,
-                scenario.subject_label,
-            );
-            let checkpoint_rows = checkpoint_deltas(scenario, &before, &after);
-            (
-                count,
-                total_instructions,
-                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
-                checkpoint_rows,
-            )
-        };
+    let before = perf_entries(&setup.pic, target_pid);
+    execute_scenario(&setup, scenario, &prepared);
+    let after = perf_entries(&setup.pic, target_pid);
+    let (count, total_instructions) = perf_delta(
+        &before,
+        &after,
+        scenario.subject_kind,
+        scenario.transport_mode,
+        scenario.subject_label,
+    );
+    let checkpoint_rows = checkpoint_deltas(scenario, &before, &after);
     drop(setup);
-    let avg_local_instructions = total_instructions.checked_div(count).unwrap_or(0);
 
-    ScenarioResult {
-        scenario: *scenario,
-        row: CanonicalPerfRow {
-            subject_kind: scenario.subject_kind.to_string(),
-            subject_label: scenario.subject_label.to_string(),
-            count,
-            total_local_instructions: total_instructions,
-            avg_local_instructions,
-            scenario_key: scenario.key.to_string(),
-            scenario_labels: vec![
-                format!("canister={}", scenario.canister),
-                format!("endpoint_or_flow={}", scenario.endpoint_or_flow),
-                format!("transport_mode={}", scenario.transport_mode),
-                format!("arg_class={}", scenario.arg_class),
-                format!("caller_class={}", scenario.caller_class),
-                format!("auth_state={}", scenario.auth_state),
-                format!("replay_state={}", scenario.replay_state),
-                format!("cache_state={}", scenario.cache_state),
-                format!("topology_state={}", scenario.topology_state),
-                format!("freshness_model={}", scenario.freshness_model),
-                format!("method_tag={METHOD_TAG}"),
-            ],
-            principal_scope: Some(scenario.caller_class.to_string()),
-            sample_origin,
-            execution_cycle_estimate: None,
-        },
-        checkpoint_rows,
-    }
+    scenario_result(scenario, count, total_instructions, checkpoint_rows)
 }
 
-fn run_standalone_scenario(scenario: &AuditScenario) -> Option<ScenarioResult> {
-    let (crate_name, role) = match scenario.key {
-        "app:canic_time:minimal-valid"
-        | "app:canic_env:minimal-valid"
-        | "app:canic_log:empty-page" => return Some(run_audit_leaf_probe_scenario(scenario)),
-        "root:canic_subnet_registry:full-registry" | "root:canic_subnet_state:empty-struct" => {
-            return Some(run_audit_root_probe_scenario(scenario));
-        }
-        "scale_hub:plan_create_worker:empty-pool" => {
-            return Some(run_audit_scaling_probe_scenario(scenario));
-        }
-        "test:test:minimal-valid" => ("runtime_probe", TEST),
-        _ => return None,
-    };
-
-    let fixture = install_standalone_canister(crate_name, role, CanicWasmBuildProfile::Fast);
-    let target_pid = fixture.canister_id();
-    let (count, total_instructions, sample_origin, checkpoint_rows) =
-        if scenario.transport_mode == "query" {
-            let total = execute_query_perf_probe(fixture.pic(), scenario, target_pid);
-            let (count, total) = query_perf_counts(total);
-            (
-                count,
-                total,
-                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
-                Vec::new(),
-            )
-        } else {
-            let before = perf_entries(fixture.pic(), target_pid);
-            execute_standalone_scenario(fixture.pic(), scenario, target_pid);
-            let after = perf_entries(fixture.pic(), target_pid);
-            let (count, total_instructions) = perf_delta(
-                &before,
-                &after,
-                scenario.subject_kind,
-                scenario.subject_label,
-            );
-            let checkpoint_rows = checkpoint_deltas(scenario, &before, &after);
-            (
-                count,
-                total_instructions,
-                sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
-                checkpoint_rows,
-            )
-        };
-    let avg_local_instructions = total_instructions.checked_div(count).unwrap_or(0);
-
-    Some(ScenarioResult {
-        scenario: *scenario,
-        row: CanonicalPerfRow {
-            subject_kind: scenario.subject_kind.to_string(),
-            subject_label: scenario.subject_label.to_string(),
-            count,
-            total_local_instructions: total_instructions,
-            avg_local_instructions,
-            scenario_key: scenario.key.to_string(),
-            scenario_labels: vec![
-                format!("canister={}", scenario.canister),
-                format!("endpoint_or_flow={}", scenario.endpoint_or_flow),
-                format!("transport_mode={}", scenario.transport_mode),
-                format!("arg_class={}", scenario.arg_class),
-                format!("caller_class={}", scenario.caller_class),
-                format!("auth_state={}", scenario.auth_state),
-                format!("replay_state={}", scenario.replay_state),
-                format!("cache_state={}", scenario.cache_state),
-                format!("topology_state={}", scenario.topology_state),
-                format!("freshness_model={}", scenario.freshness_model),
-                format!("method_tag={METHOD_TAG}"),
-            ],
-            principal_scope: Some(scenario.caller_class.to_string()),
-            sample_origin,
-            execution_cycle_estimate: None,
-        },
-        checkpoint_rows,
-    })
-}
-
-fn run_audit_leaf_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    let fixture = install_audit_leaf_probe(CanicWasmBuildProfile::Fast);
-    run_query_only_standalone_result(scenario, fixture.pic(), fixture.canister_id())
-}
-
-fn run_audit_root_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    let fixture = install_audit_root_probe(CanicWasmBuildProfile::Fast);
-    run_query_only_standalone_result(scenario, &fixture.pic, fixture.canister_id)
-}
-
-fn run_audit_scaling_probe_scenario(scenario: &AuditScenario) -> ScenarioResult {
-    let fixture = install_audit_scaling_probe(CanicWasmBuildProfile::Fast);
-    run_query_only_standalone_result(scenario, fixture.pic(), fixture.canister_id())
-}
-
-fn run_query_only_standalone_result(
+fn scenario_result(
     scenario: &AuditScenario,
-    pic: &Pic,
-    target_pid: Principal,
+    count: u64,
+    total_instructions: u64,
+    checkpoint_rows: Vec<CheckpointDeltaRow>,
 ) -> ScenarioResult {
-    let total = execute_query_perf_probe(pic, scenario, target_pid);
-    let (count, total) = query_perf_counts(total);
-
     ScenarioResult {
         scenario: *scenario,
         row: CanonicalPerfRow {
             subject_kind: scenario.subject_kind.to_string(),
             subject_label: scenario.subject_label.to_string(),
             count,
-            total_local_instructions: total,
-            avg_local_instructions: total,
+            total_local_instructions: total_instructions,
+            avg_local_instructions: total_instructions.checked_div(count).unwrap_or(0),
             scenario_key: scenario.key.to_string(),
             scenario_labels: vec![
                 format!("canister={}", scenario.canister),
@@ -216,30 +73,34 @@ fn run_query_only_standalone_result(
             sample_origin: sample_origin_for_transport_mode(scenario.transport_mode).to_string(),
             execution_cycle_estimate: None,
         },
-        checkpoint_rows: Vec::new(),
+        checkpoint_rows,
     }
 }
 
-// Convert a same-call query counter into the canonical row counts used by the
-// report; zero means the probe path did not return a usable measurement.
-const fn query_perf_counts(local_instructions: u64) -> (u64, u64) {
-    if local_instructions == 0 {
-        (0, 0)
-    } else {
-        (1, local_instructions)
-    }
-}
+fn observe_bootstrap_scenario(
+    setup: root::harness::RootSetup,
+    scenario: &AuditScenario,
+) -> ScenarioResult {
+    let entries = perf_entries(&setup.pic, setup.root_id);
+    let checkpoint_rows = checkpoint_deltas(scenario, &[], &entries)
+        .into_iter()
+        .filter(|row| row.label.starts_with("bootstrap_"))
+        .collect::<Vec<_>>();
+    assert!(
+        !checkpoint_rows.is_empty(),
+        "root bootstrap scenario produced no bootstrap checkpoints"
+    );
+    let total_instructions = checkpoint_rows
+        .iter()
+        .map(|row| row.total_local_instructions)
+        .sum();
+    assert!(
+        total_instructions > 0,
+        "root bootstrap scenario produced a zero checkpoint total"
+    );
+    drop(setup);
 
-fn execute_standalone_scenario(pic: &Pic, scenario: &AuditScenario, target_pid: Principal) {
-    match scenario.key {
-        "test:test:minimal-valid" => {
-            let response: Result<(), Error> = pic
-                .update_call(target_pid, "test", ())
-                .expect("standalone test transport failed");
-            response.expect("standalone test application failed");
-        }
-        other => panic!("unsupported standalone audit scenario: {other}"),
-    }
+    scenario_result(scenario, 1, total_instructions, checkpoint_rows)
 }
 
 // Resolve the principal of the canister that owns the measured endpoint.
@@ -271,15 +132,36 @@ fn prepare_scenario(
     setup: &root::harness::RootSetup,
     scenario: &AuditScenario,
 ) -> PreparedScenario {
-    let target_pid = scenario_target_pid(setup.root_id, scenario, &setup.subnet_index);
+    let target_pid = match scenario.key {
+        "scale:request_cycles_from_parent:fresh" => {
+            let scale_hub_pid = *setup
+                .subnet_index
+                .get(&SCALE_HUB)
+                .expect("scale_hub must exist for scale child scenario");
+            root::workers::create_worker(&setup.pic, scale_hub_pid)
+                .expect("scale_hub must create a scale child for instruction audit")
+        }
+        _ if scenario.canister == "issuer" => setup.root_id,
+        _ => scenario_target_pid(setup.root_id, scenario, &setup.subnet_index),
+    };
 
     match scenario.key {
+        "root:canic_response_capability_v1:request-cycles-replay" => {
+            execute_root_cycles_scenario(setup, target_pid);
+            PreparedScenario {
+                target_pid,
+                caller_pid: None,
+                issuer_pid: None,
+                delegated_token: None,
+            }
+        }
         "root:canic_template_prepare_admin:single-chunk" => {
             let fixture = audit_template_fixture(scenario);
             stage_manifest(&setup.pic, target_pid, &fixture.manifest);
             PreparedScenario {
                 target_pid,
                 caller_pid: None,
+                issuer_pid: None,
                 delegated_token: None,
             }
         }
@@ -290,20 +172,32 @@ fn prepare_scenario(
             PreparedScenario {
                 target_pid,
                 caller_pid: None,
+                issuer_pid: None,
+                delegated_token: None,
+            }
+        }
+        "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer" => {
+            let (issuer_pid, _) = prepare_issuer(setup, 44);
+            PreparedScenario {
+                target_pid,
+                caller_pid: None,
+                issuer_pid: Some(issuer_pid),
+                delegated_token: None,
+            }
+        }
+        "issuer:canic_prepare_delegated_token:active-proof" => {
+            let (issuer_pid, subject) = prepare_issuer(setup, 46);
+            provision_delegation_proof(setup, issuer_pid);
+            PreparedScenario {
+                target_pid: issuer_pid,
+                caller_pid: Some(subject),
+                issuer_pid: Some(issuer_pid),
                 delegated_token: None,
             }
         }
         "test:test_verify_delegated_token:valid-delegated-token" => {
-            let user_hub_pid = *setup
-                .subnet_index
-                .get(&USER_HUB)
-                .expect("user_hub must exist for verifier auth audit scenario");
-            let issuer_pid =
-                create_user_shard(&setup.pic, user_hub_pid, Principal::from_slice(&[44; 29]));
-            let subject = Principal::from_slice(&[45; 29]);
-            upsert_delegation_issuer(setup, issuer_pid);
-            upsert_delegation_renewal_template(setup, issuer_pid);
-            wait_for_active_delegation_proof(setup, issuer_pid);
+            let (issuer_pid, subject) = prepare_issuer(setup, 45);
+            provision_delegation_proof(setup, issuer_pid);
             let token = issue_delegated_token_from_active_proof(
                 &setup.pic,
                 issuer_pid,
@@ -315,12 +209,14 @@ fn prepare_scenario(
             PreparedScenario {
                 target_pid,
                 caller_pid: Some(subject),
+                issuer_pid: Some(issuer_pid),
                 delegated_token: Some(token),
             }
         }
         _ => PreparedScenario {
             target_pid,
             caller_pid: None,
+            issuer_pid: None,
             delegated_token: None,
         },
     }
@@ -334,18 +230,51 @@ fn execute_scenario(
 ) {
     let target_pid = prepared.target_pid;
     match scenario.key {
-        "test:test:minimal-valid" => {
-            let response: Result<(), Error> = setup
+        "scale:request_cycles_from_parent:fresh" => {
+            let response: Result<u128, Error> = setup
                 .pic
-                .update_call(target_pid, "test", ())
-                .expect("test transport failed");
-            response.expect("test application failed");
+                .update_call(target_pid, "request_cycles_from_parent", (999u128,))
+                .expect("scale request_cycles_from_parent transport failed");
+            assert_eq!(
+                response.expect("scale request_cycles_from_parent application failed"),
+                999
+            );
         }
         "test:test_verify_delegated_token:valid-delegated-token" => {
             execute_verifier_auth_scenario(setup, target_pid, prepared);
         }
-        "root:canic_response_capability_v1:request-cycles-fresh" => {
+        "root:canic_response_capability_v1:request-cycles-fresh"
+        | "root:canic_response_capability_v1:request-cycles-replay" => {
             execute_root_cycles_scenario(setup, target_pid);
+        }
+        "user_hub:create_account:new-principal" => {
+            let created: Result<Principal, Error> = setup
+                .pic
+                .update_call(
+                    target_pid,
+                    "create_account",
+                    (Principal::from_slice(&[51; 29]),),
+                )
+                .expect("create_account transport failed");
+            created.expect("create_account application failed");
+        }
+        "scale_hub:create_worker:empty-pool" => {
+            let created: Result<Principal, Error> = setup
+                .pic
+                .update_call(target_pid, "create_worker", ())
+                .expect("create_worker transport failed");
+            created.expect("create_worker application failed");
+        }
+        "root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer" => {
+            provision_delegation_proof(
+                setup,
+                prepared
+                    .issuer_pid
+                    .expect("root proof scenario must prepare an issuer"),
+            );
+        }
+        "issuer:canic_prepare_delegated_token:active-proof" => {
+            execute_delegated_token_prepare(setup, prepared);
         }
         "root:canic_template_stage_manifest_admin:single-chunk" => {
             let fixture = audit_template_fixture(scenario);
@@ -361,6 +290,59 @@ fn execute_scenario(
         }
         other => panic!("unsupported audit scenario: {other}"),
     }
+}
+
+fn prepare_issuer(setup: &root::harness::RootSetup, subject_byte: u8) -> (Principal, Principal) {
+    let user_hub_pid = *setup
+        .subnet_index
+        .get(&USER_HUB)
+        .expect("user_hub must exist for delegated auth audit scenarios");
+    let subject = Principal::from_slice(&[subject_byte; 29]);
+    let issuer_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+    upsert_delegation_issuer(setup, issuer_pid);
+    upsert_delegation_renewal_template(setup, issuer_pid);
+    (issuer_pid, subject)
+}
+
+fn provision_delegation_proof(setup: &root::harness::RootSetup, issuer_pid: Principal) {
+    let provisioned: Result<(), Error> = setup
+        .pic
+        .update_call(
+            setup.root_id,
+            "test_provision_chain_key_delegation_proof_for_issuer",
+            (issuer_pid,),
+        )
+        .expect("root proof provisioning transport failed");
+    provisioned.expect("root proof provisioning application failed");
+}
+
+fn execute_delegated_token_prepare(setup: &root::harness::RootSetup, prepared: &PreparedScenario) {
+    let subject = prepared
+        .caller_pid
+        .expect("delegated prepare scenario must have a subject");
+    let _issuer_pid = prepared
+        .issuer_pid
+        .expect("delegated prepare scenario must have an issuer");
+    let response: Result<DelegatedTokenPrepareResponse, Error> = setup
+        .pic
+        .update_call_as(
+            prepared.target_pid,
+            subject,
+            protocol::CANIC_PREPARE_DELEGATED_TOKEN,
+            (DelegatedTokenPrepareRequest {
+                metadata: Some(AuthRequestMetadata {
+                    request_id: [92; 32],
+                    ttl_ns: 60_000_000_000,
+                }),
+                subject,
+                aud: DelegationAudience::Project("test".to_string()),
+                grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
+                ttl_ns: 10_000_000_000,
+                ext: None,
+            },),
+        )
+        .expect("delegated token prepare transport failed");
+    response.expect("delegated token prepare application failed");
 }
 
 // Execute the verifier-side delegated token confirmation scenario.
@@ -424,25 +406,6 @@ fn upsert_delegation_renewal_template(setup: &root::harness::RootSetup, issuer_p
     assert_eq!(response.template.issuer_pid, issuer_pid);
 }
 
-fn wait_for_active_delegation_proof(setup: &root::harness::RootSetup, issuer_pid: Principal) {
-    for _ in 0..20 {
-        setup.pic.tick();
-        let status: Result<Result<ActiveDelegationProofStatusResponse, Error>, _> =
-            setup.pic.query_call(
-                issuer_pid,
-                protocol::CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
-                (),
-            );
-        if let Ok(Ok(status)) = status
-            && status.status == ActiveDelegationProofStatus::Valid
-        {
-            return;
-        }
-        setup.pic.advance_time(Duration::from_secs(5));
-    }
-    panic!("chain-key renewal did not install active proof for issuer {issuer_pid}");
-}
-
 // Execute the fresh root cycles request scenario through the root dispatcher.
 fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Principal) {
     let caller = *setup
@@ -460,74 +423,6 @@ fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Pr
             assert_eq!(response.cycles_transferred, 999);
         }
         other => panic!("expected cycles response, got: {other:?}"),
-    }
-}
-
-// Execute the query path inside a same-call perf probe endpoint and return the
-// measured local instruction counter from that call context.
-fn execute_query_perf_probe(pic: &Pic, scenario: &AuditScenario, target_pid: Principal) -> u64 {
-    match scenario.key {
-        "app:canic_time:minimal-valid" => {
-            let response: Result<QueryPerfSample<u64>, Error> = pic
-                .query_call(target_pid, AUDIT_TIME_PROBE, ())
-                .expect("audit_time_probe transport query failed");
-            response
-                .expect("audit_time_probe application query failed")
-                .local_instructions
-        }
-        "app:canic_env:minimal-valid" => {
-            let response: Result<QueryPerfSample<EnvSnapshotResponse>, Error> = pic
-                .query_call(target_pid, AUDIT_ENV_PROBE, ())
-                .expect("audit_env_probe transport query failed");
-            response
-                .expect("audit_env_probe application query failed")
-                .local_instructions
-        }
-        "app:canic_log:empty-page" => {
-            let response: Result<QueryPerfSample<Page<LogEntry>>, Error> = pic
-                .query_call(
-                    target_pid,
-                    AUDIT_LOG_PROBE,
-                    (
-                        Option::<String>::None,
-                        Option::<String>::None,
-                        Option::<canic::__internal::core::log::Level>::None,
-                        PageRequest {
-                            limit: 10,
-                            offset: 0,
-                        },
-                    ),
-                )
-                .expect("audit_log_probe transport query failed");
-            response
-                .expect("audit_log_probe application query failed")
-                .local_instructions
-        }
-        "root:canic_subnet_registry:full-registry" => {
-            let response: Result<QueryPerfSample<SubnetRegistryResponse>, Error> = pic
-                .query_call(target_pid, AUDIT_SUBNET_REGISTRY_PROBE, ())
-                .expect("audit_subnet_registry_probe transport query failed");
-            response
-                .expect("audit_subnet_registry_probe application query failed")
-                .local_instructions
-        }
-        "root:canic_subnet_state:empty-struct" => {
-            let response: Result<QueryPerfSample<SubnetStateResponse>, Error> = pic
-                .query_call(target_pid, AUDIT_SUBNET_STATE_PROBE, ())
-                .expect("audit_subnet_state_probe transport query failed");
-            response
-                .expect("audit_subnet_state_probe application query failed")
-                .local_instructions
-        }
-        "scale_hub:plan_create_worker:empty-pool" => {
-            let response: Result<QueryPerfSample<bool>, Error> = pic
-                .query_call(target_pid, AUDIT_PLAN_CREATE_WORKER_PROBE, ())
-                .expect("audit_plan_create_worker_probe transport query failed");
-            response
-                .expect("audit_plan_create_worker_probe application query failed")
-                .local_instructions
-        }
-        other => panic!("unsupported query perf probe scenario: {other}"),
     }
 }
 
@@ -631,10 +526,11 @@ fn perf_delta(
     before: &[MetricEntry],
     after: &[MetricEntry],
     subject_kind: &str,
+    transport_mode: &str,
     subject_label: &str,
 ) -> (u64, u64) {
-    let before_slot = perf_slot(before, subject_kind, subject_label);
-    let after_slot = perf_slot(after, subject_kind, subject_label);
+    let before_slot = perf_slot(before, subject_kind, transport_mode, subject_label);
+    let after_slot = perf_slot(after, subject_kind, transport_mode, subject_label);
 
     (
         after_slot.0.saturating_sub(before_slot.0),
@@ -643,19 +539,22 @@ fn perf_delta(
 }
 
 // Project one perf row into `(count, total_instructions)`.
-fn perf_slot(entries: &[MetricEntry], subject_kind: &str, subject_label: &str) -> (u64, u64) {
+fn perf_slot(
+    entries: &[MetricEntry],
+    subject_kind: &str,
+    transport_mode: &str,
+    subject_label: &str,
+) -> (u64, u64) {
     entries
         .iter()
         .find_map(|entry| {
-            if entry.labels.first().is_some_and(|label| label == "perf")
-                && entry
-                    .labels
-                    .get(1)
-                    .is_some_and(|label| label == subject_kind)
-                && entry
-                    .labels
-                    .get(2)
-                    .is_some_and(|label| label == subject_label)
+            let [family, kind, origin, label] = entry.labels.as_slice() else {
+                return None;
+            };
+            if family == "perf"
+                && kind == subject_kind
+                && origin == transport_mode
+                && label == subject_label
             {
                 Some(match entry.value {
                     MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
@@ -806,17 +705,31 @@ const fn metadata(request_id: [u8; 32], ttl_ns: u64) -> RootRequestMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::query_perf_counts;
+    use super::*;
 
-    // Preserve non-zero same-call query counters as one observed sample.
     #[test]
-    fn query_perf_counts_accepts_non_zero_sample() {
-        assert_eq!(query_perf_counts(42), (1, 42));
-    }
+    fn endpoint_perf_slot_binds_call_kind_before_endpoint_name() {
+        let entries = vec![MetricEntry {
+            labels: vec![
+                "perf".to_string(),
+                "endpoint".to_string(),
+                "update".to_string(),
+                "request_cycles_from_parent".to_string(),
+            ],
+            principal: None,
+            value: MetricValue::CountAndU64 {
+                count: 1,
+                value_u64: 123,
+            },
+        }];
 
-    // Treat zero same-call query counters as unobservable instead of success.
-    #[test]
-    fn query_perf_counts_rejects_zero_sample() {
-        assert_eq!(query_perf_counts(0), (0, 0));
+        assert_eq!(
+            perf_slot(&entries, "endpoint", "update", "request_cycles_from_parent"),
+            (1, 123)
+        );
+        assert_eq!(
+            perf_slot(&entries, "endpoint", "query", "request_cycles_from_parent"),
+            (0, 0)
+        );
     }
 }

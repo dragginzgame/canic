@@ -3,789 +3,184 @@
 ## Method Contract
 
 - Audit ID: `CANIC-INSTRUCTION-001`
-- Method version: `1`
-- Disposition: `revise`
-- Owner: local instruction-count measurement and checkpoint coverage
-- Kind/profile: `measured`
-- Trace mode: `execution_trace` in PocketIC or a named disposable local test
-  environment
-- Cost/runtime: high; 60-180 minutes depending on scenario roster
-- Prerequisites: Rust/Cargo, PocketIC or named local test environment, frozen
-  scenario roster, isolated state, and isolated `CARGO_TARGET_DIR`
-- False-positive boundary: measurement noise and fixture/setup work are
-  reported separately from endpoint/flow instructions
+- Method version: `2`
+- Disposition: `retain`
+- Owner: local WebAssembly instruction measurement and critical-flow checkpoint coverage
+- Kind/profile: `measured` plus observability invariant
+- Trace mode: `execution_trace` in isolated PocketIC and `code_trace` for checkpoint ownership
+- Cost/runtime: high; 30-90 minutes depending on artifact cache state
+- Prerequisites: pinned PocketIC, the `canic-tests` root harness, the Canic-validated artifact builder, Rust/Cargo, Git, and GNU coreutils
+- False-positive boundary: local instruction totals are pressure evidence, not correctness failures; install checkpoint groups are not endpoint totals; missing required rows or invalid build authority is a method failure
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
 
-## Purpose
+## Purpose And Authority
+
+This method measures local canister WebAssembly instructions for a fixed set
+of maintained update and installation flows. It also proves whether important
+multi-stage flows have stable `perf!` checkpoints. It does not measure remote
+canister execution, message fees, payload/storage charges, management-call
+fees, garbage collection, or total cycle billing.
+
+Authority is singular:
+
+- `scripts/ci/instruction-audit-report.sh` owns run identity, isolation,
+  evidence manifests, and the executable composite fingerprint;
+- `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` owns the
+  exact scenario roster;
+- `execution.rs` owns fixture setup, measured calls, and perf deltas;
+- `report.rs` owns checkpoint discovery, normalized output, comparison, and
+  the deterministic score; and
+- Canic's root test harness and `build_artifact` path own artifact creation and
+  role validation. This audit may not build role Wasm directly with Cargo.
+
+Changing any of those inputs changes the method fingerprint. Changing scope,
+scenario meaning, counter semantics, checkpoint parsing, comparison, score,
+or artifact authority requires a method-version increment.
+
+## Fixed V2 Scenario Roster
+
+Every scenario gets a fresh smallest applicable root-harness topology. Setup
+and prerequisites happen before the measured call. No mutable PocketIC state
+is shared between scenario rows.
+
+| Scenario key | Origin | Required behavior |
+| --- | --- | --- |
+| `scale:request_cycles_from_parent:fresh` | update | child-to-parent structural capability round trip |
+| `scale_hub:create_worker:empty-pool` | update | scaling observation, planning, creation, and registration |
+| `user_hub:create_account:new-principal` | update | sharding assignment and shard allocation |
+| `root:test_provision_chain_key_delegation_proof_for_issuer:new-issuer` | update | explicit first delegation-proof provisioning |
+| `issuer:canic_prepare_delegated_token:active-proof` | update | issuer token preparation from an active proof |
+| `test:test_verify_delegated_token:valid-delegated-token` | update | verifier confirmation of a freshly issued delegated token |
+| `root:canic_response_capability_v1:request-cycles-fresh` | update | fresh capability, policy, and execution path |
+| `root:canic_response_capability_v1:request-cycles-replay` | update | identical second request returns the cached replay response |
+| `root:canic_template_stage_manifest_admin:single-chunk` | update | stage one approved manifest |
+| `root:canic_template_prepare_admin:single-chunk` | update | prepare one staged single-chunk release |
+| `root:canic_template_publish_chunk_admin:single-chunk` | update | publish the prepared chunk |
+| `root:bootstrap:init-checkpoints` | install | observe retained root-bootstrap checkpoints after a fresh install |
+
+Query and composite-query instruction totals are outside v2. Adding either
+requires an authoritative same-call measurement fixture and a new method
+version. The runner must not substitute a post-query shared-metrics read.
+
+## Measurement Semantics
+
+The measured source is `performance_counter(1)`. Canonical rows record:
+
+- `subject_kind` and `subject_label`;
+- call count;
+- total and average local instructions;
+- exact scenario key and dimensions;
+- caller/principal scope;
+- `sample_origin` (`update` or `install`); and
+- optional instruction-only cycle estimates, clearly separated from measured
+  values.
+
+Update rows are the matching persisted
+`[perf, endpoint, update, endpoint_name]` row delta between immediately before
+and immediately after the sampled call. Every required update row must have
+`count > 0`. A zero exclusive endpoint total remains valid when the call's
+work is attributed to nested/checkpoint scopes; the report retains that zero
+and its checkpoint deltas instead of treating it as a missing call.
+
+The installation row is the sum of non-zero retained root checkpoint rows
+whose labels start with `bootstrap_`. It has count one, origin `install`, and
+is a checkpoint-group observation rather than an endpoint total. At least one
+matching checkpoint is required. Missing or zero required measurement aborts
+the run without a primary result.
+
+Instruction-only cycle estimates are optional decoration. They never replace
+the measured local-instruction fields and do not affect the result or score.
+
+## Checkpoint Coverage
+
+The executable scanner visits current Rust files under `crates/`, recognizes
+literal and namespaced single-line `perf!(` invocations, and ignores quoted
+examples and line comments. Multiline invocation syntax is outside v2 and
+requires a method-version change. Search commands in reports or reviews are
+navigation aids, not alternative counters.
+
+Coverage is evaluated for these seven exact flow classes and source owners:
+
+| Flow class | Required source owner |
+| --- | --- |
+| root capability dispatch | `crates/canic-core/src/workflow/rpc/request/handler/mod.rs` |
+| root proof provisioning | `crates/canic-core/src/workflow/runtime/auth/provisioning` |
+| issuer delegated-token prepare and verification | `crates/canic-core/src/workflow/runtime/auth/prepare` |
+| replay/cached response | `crates/canic-core/src/workflow/rpc/request/handler/replay.rs` |
+| sharding assignment | `crates/canic-core/src/workflow/placement/sharding` |
+| scaling/provisioning | `crates/canic-core/src/workflow/placement/scaling/mod.rs` |
+| bootstrap/install/publication | `crates/canic-control-plane/src/workflow/bootstrap/root.rs` |
+
+A flow class passes coverage when at least one scanned checkpoint starts with
+its required source owner. A missing class is `partial` evidence, not zero
+cost and not an inferred correctness defect. Measured checkpoint deltas are
+retained separately from static coverage.
 
-Track runtime instruction drift over time using Canic's endpoint perf counters
-and `perf!` checkpoints.
+## Deterministic Risk Score
 
-This is a runtime execution audit.
+The score uses three disjoint inputs:
 
-It is NOT:
+| Input | Score |
+| --- | ---: |
+| no comparable v2 predecessor | 2 |
+| one missing critical-flow checkpoint class | 1 |
+| two or more missing critical-flow checkpoint classes | 2 |
+| highest average local instruction row exceeds 2,000,000 | 2 |
 
-- a cycle-cost audit
-- a wasm-size audit
-- a correctness audit
+Otherwise each input contributes zero. Sum and cap at 10. No reviewer
+modifier, estimate, absolute Wasm size, or correctness finding changes this
+score.
 
-The job of this audit is to measure how many local instructions Canic endpoints
-and multi-step flows actually execute, explain where the hot paths live, and
-catch regressions before they become permanent shared runtime cost.
+Result rules:
 
-This audit is not permission to remove intended behavior to make the numbers
-look better.
+- `blocked`: authoritative fixtures, PocketIC, or required prerequisites
+  cannot execute;
+- `partial`: the run completes but any critical checkpoint class or measured
+  checkpoint evidence is absent;
+- `fail`: complete evidence and risk score 7-10;
+- `pass`: complete evidence and risk score 0-6; and
+- `invalid`: the method identity is wrong, source mutates, a required call row
+  is missing, the bootstrap checkpoint sum is zero, or output is presented
+  after the runner failed.
 
-## Why This Audit Is Canic-Specific
+The first valid v2 run is a non-comparable baseline; that fact adds risk but
+does not by itself make the result partial or blocked.
 
-Canic already has two instruction-observability mechanisms:
+## Required Evidence
 
-1. endpoint/timer aggregation in `canic-core::perf`, surfaced through
-   `canic_metrics(MetricsKind::Runtime, ...)` `perf` rows
-2. manual `perf!` checkpoints that now both record structured checkpoint rows
-   and log `Topic::Perf` entries inside a single call context
+Run:
 
-That means this audit must do more than "time a request":
-
-- endpoint totals need to be captured from the metrics surface
-- long-running flows need checkpoint coverage, not only end-of-call totals
-- replay/auth/bootstrap paths must be sampled with multiple argument classes
-- fresh setup boundaries matter because perf counters are cumulative inside a
-  canister instance
-
-An audit copied from a generic HTTP service or a single-canister project will
-miss these properties and will not be comparable.
-
-## Risk Model / Invariant
-
-This is a drift audit, not a functional correctness invariant audit.
-
-Risk model:
-
-- silent instruction growth taxes every shared endpoint and background path
-- argument-sensitive regressions hide behind "happy path" spot checks
-- multi-step flows without checkpoints are hard to optimize safely
-- auth/replay/admin rejection paths can become more expensive than the
-  authorized path without anyone noticing
-
-Optimization constraint:
-
-- reduce instruction use without removing intended behavior or operator-facing
-  signal
-- do not treat feature removal as a normal perf win
-- do not confuse instruction count with cycle charges from management calls
-
-Invariant:
-
-- important endpoints and flows should remain measurable, comparable, and
-  explainable across runs
-- critical multi-step flows should either have named `perf!` checkpoints or be
-  explicitly listed as coverage gaps
-
-## Run This Audit After
-
-- endpoint bundle changes
-- root proof provisioning, delegated-token auth, replay, or capability pipeline
-  refactors
-- sharding, scaling, or pool orchestration changes
-- lifecycle/bootstrap changes
-- changes to `perf!`, `canic_metrics`, or `canic-core::perf`
-- any PR claiming "performance improvement" or "no perf impact"
-
-## Report Preamble (Required)
-
-Every report generated from this audit must include:
-
-- Scope
-- Definition path
-- Compared baseline report path
-- Code snapshot identifier
-- Method tag/version
-- Comparability status
-- Auditor
-- Run timestamp (UTC)
-- Branch
-- Worktree
-- Execution environment (`PocketIC`, local ICP CLI replica, mixed)
-- Target canisters in scope
-- Target endpoints/flows in scope
-
-## Measurement Model (Mandatory)
-
-Use these terms consistently.
-
-### Canonical Row Model
-
-The audit authority is a normalized row model, not the exact public metrics DTO
-shape of the current release.
-
-Every captured perf sample must normalize into rows with these semantic fields:
-
-- `subject_kind`
-- `subject_label`
-- `count`
-- `total_local_instructions`
-- `avg_local_instructions`
-- `scenario_key`
-- `scenario_labels`
-- `principal_scope` when relevant
-- `sample_origin` (`update`, `query`, or `composite_query`)
-
-Minimum expectations:
-
-- endpoint samples normalize to `subject_kind = endpoint`
-- timer samples normalize to `subject_kind = timer`
-- checkpoint samples normalize to `subject_kind = checkpoint`
-- report metadata records `counter_id = 1`
-
-The transport may change.
-
-Current likely source transport is:
-
-- `canic_metrics(MetricsKind::Runtime, PageRequest { ... })`
-
-But reports must compare canonical row fields, not concrete response enum names,
-DTO variants, or label vector layout.
-
-If the transport changes but the normalized semantics stay the same, the method
-tag may remain stable.
-
-If the normalized semantics change, the method tag must change.
-
-### Endpoint Perf Counters
-
-The authoritative machine-readable signal is the canister perf table exposed
-through the public metrics surface and normalized into the canonical row model.
-
-Current interpretation:
-
-- `count` = number of recorded executions
-- `total_local_instructions` = accumulated local instructions for that subject
-- `avg_local_instructions = total_local_instructions / count`
-- `sample_origin` = message-kind scope of the sample, so update, ordinary
-  query, and composite-query samples are not compared as if they had identical
-  counter semantics
-
-### Query Sampling Rule
-
-Query calls must not be sampled by reading back shared perf rows after the
-fact.
-
-Reason:
-
-- query-side state is not committed
-- shared-memory-backed perf rows do not persist from query calls the way they
-  do for update calls
-
-So sampled query lanes must use dedicated same-call probe endpoints that:
-
-- execute the real query path
-- read `performance_counter(1)` inside that same query call context
-- return both the real query result and the measured local instruction counter
-
-Those probe-backed rows are the authoritative query samples for this audit.
-
-### `perf!` Checkpoints
-
-`perf!` is a checkpoint mechanism for within-flow attribution.
-
-It:
-
-- reads `performance_counter(1)`
-- computes delta since the last checkpoint in the current thread/call
-- records a structured checkpoint row in the shared perf table
-- emits a `Topic::Perf` log line
-
-Checkpoint consequences:
-
-- checkpoint order matters
-- comparisons require the same checkpoint names and placement
-- reports should prefer structured checkpoint rows when they exist
-- raw `Topic::Perf` lines remain useful supporting evidence when log context
-  matters
-- flows without checkpoint callsites must still be reported as coverage gaps
-
-### Accounting Rule: Endpoint Totals vs Checkpoint Deltas
-
-Endpoint perf totals and `perf!` checkpoint deltas are both useful, but they
-are not interchangeable.
-
-Current accounting model:
-
-- endpoint perf rows are recorded from the perf stack as exclusive endpoint
-  totals
-- `perf!` checkpoint rows/logs are inclusive call-context deltas from
-  `performance_counter(1)` between two named checkpoints
-
-Audit rule:
-
-- do not subtract checkpoint deltas from endpoint totals as if they were the
-  same accounting layer
-- do not compare a checkpoint delta directly to an endpoint total unless the
-  report explicitly states why that comparison is valid
-- use endpoint rows for stable regression tracking
-- use checkpoints for within-flow attribution and hotspot localization
-
-### Counter Semantics
-
-These counts come from `performance_counter(1)`.
-
-That means:
-
-- they count local canister instructions in the current call context
-- they accumulate across `await` points inside that call context
-- they do not count instructions executed in other canisters
-- they do not represent total cycle cost
-
-Do not compare instruction counts directly to management-call cycle charges.
-
-### Optional Execution-Cycle Estimates
-
-The default audit remains instruction-only, network-free, and catalog-free.
-
-Reports may add offline estimate decoration only when the runner is called
-with:
-
-```text
-bash scripts/ci/instruction-audit-report.sh \
-  --estimate-execution-cycles \
-  --estimate-node-count 13
+```bash
+bash scripts/ci/instruction-audit-report.sh
 ```
 
-or with an explicit rate:
-
-```text
-bash scripts/ci/instruction-audit-report.sh \
-  --estimate-execution-cycles \
-  --cycles-per-billion-instructions <cycles>
-```
-
-0.60.3 also permits a cached mainnet subnet catalog source after the operator
-has refreshed the catalog explicitly:
-
-```text
-canic nns subnet refresh
-
-bash scripts/ci/instruction-audit-report.sh \
-  --estimate-execution-cycles \
-  --estimate-canister-principal <canister-principal>
-```
-
-Stale cached catalog data is omitted by default. Use this only when a report
-intentionally accepts stale mainnet metadata:
-
-```text
-bash scripts/ci/instruction-audit-report.sh \
-  --estimate-execution-cycles \
-  --estimate-canister-principal <canister-principal> \
-  --allow-stale-subnet-catalog
-```
-
-Estimate mode is opt-in. `--estimate-execution-cycles` must fail unless an
-estimate source is supplied, and estimate source flags must fail without
-`--estimate-execution-cycles`. Catalog stale controls must also fail unless a
-catalog canister principal is supplied.
-
-When estimates are enabled, update rows may include an
-`execution_cycle_estimate` sibling object. The measured instruction fields stay
-present and unchanged. Query and composite-query rows must not be decorated as
-charged query costs.
-
-The explicit node-count source supports only these table-backed assumptions:
-
-- `13` -> `1_000_000_000` cycles per billion instructions
-- `34` -> `2_615_384_615` cycles per billion instructions
-
-Unsupported node counts are rejected unless
-`--cycles-per-billion-instructions` is also supplied. An explicit rate wins
-over the node-count table and must be recorded with
-`rate_source = operator-explicit-rate`.
-
-Catalog-derived estimates accept any positive cached application-subnet
-`node_count` and use:
-
-```text
-catalog_cycles_per_billion_instructions = ceil(1_000_000_000 * node_count / 13)
-```
-
-Catalog-derived estimates are omitted when the cache is missing, stale by
-default, unresolved, missing a positive node count, or resolved to a
-non-application subnet. The report itself must still complete.
-
-Estimate artifacts must record:
-
-- `estimate_schema_version = 1`
-- `kind = per_instruction_component_only`
-- `charge_model = hypothetical_update_execution_component`
-- `counter_id = 1`
-- `cycles_per_billion_instructions`
-- `estimated_instruction_cycles`
-- `formula_version`
-- `rate_source`
-- `omitted_costs`
-
-Cycle estimate values and rates serialize as decimal strings.
-
-Explicit-rate and explicit-node-count estimate artifacts must not include
-NNS/catalog-derived fields such as `subnet_principal`, `registry_version`,
-`catalog_schema_version`, `resolver_backend`, `routing_range`, or
-`geographic_scope`.
-
-Catalog-derived estimate artifacts must record the catalog provenance used to
-select the rate:
-
-- `subnet_source = nns-registry-cache`
-- `registry_canister_id`
-- `registry_version`
-- `subnet_principal`
-- `subnet_node_count`
-- `subnet_kind`
-- `subnet_kind_source`
-- `subnet_specialization`
-- `subnet_specialization_source`
-- `geographic_scope`
-- `geographic_scope_source`
-- `catalog_schema_version`
-- `catalog_stale`
-- `resolver_backend`
-- `matched_canister_principal`
-- `matched_routing_range`
-
-### Freshness Rule
-
-Perf counters are cumulative within the running canister instance.
-
-So comparable samples require one of these:
-
-- a fresh PocketIC topology or fresh canister install per scenario group
-- a documented single-scenario-per-instance run
-- an explicit report note that multiple scenarios intentionally share the same
-  counter table
-
-If this freshness rule is violated, deltas are non-comparable.
-
-## Scope
-
-Measure and report:
-
-- shared query/update endpoint instruction totals
-- root-only admin and capability paths
-- root proof provisioning and issuer-local delegated-token auth paths
-- representative non-root endpoints
-- timer rows when relevant
-- available `perf!` checkpoints inside multi-step flows
-- explicit checkpoint-coverage gaps where `perf!` is absent
-
-### Default Runtime Scope
-
-Default measurement is the maintained PocketIC instruction-audit scenario
-matrix, not the full installed fleet and not the host CLI surface.
-
-Current runtime canisters in the scenario matrix:
-
-- `leaf_probe`
-- `root_probe`
-- `scaling_probe`
-- `test`
-- `root`
-
-These probe canisters are intentional. Query-side perf rows are not committed,
-so shared query paths must be sampled through local-only probe endpoints that
-return `QueryPerfSample` from the same call context.
-
-The recurring audit must not infer runtime scope from `icp.yaml`, from fleet
-role declarations, or from packaged/downstream proof scripts. Those files
-answer different questions.
-
-### Host-Side Surface Exclusion
-
-Post-0.51 Canic has important host-side evidence and report commands:
-
-- `canic build <fleet> <role> --provenance <path>`
-- `canic deploy check <deployment> --format envelope-json`
-- `canic evidence gate --policy <path> --envelope <path>`
-- `canic evidence gate --policy <path> --manifest <path>`
-- `canic deploy catalog list`
-- `canic deploy catalog inspect <deployment>`
-
-These are not canister runtime endpoints and must not be folded into endpoint
-instruction rows. If their behavior is relevant to a performance discussion,
-that belongs in a separate host-process timing/profiling audit, not this
-runtime instruction audit.
-
-This audit may mention them only as explicit non-scope evidence so future runs
-do not accidentally turn host evidence-envelope work into canister instruction
-drift.
-
-### Default Endpoint Classes
-
-For each canister in scope, sample what exists:
-
-- observability endpoints (`canic_metrics`, `canic_log_page`, directory/state)
-- role-specific business endpoints
-- root proof, delegated-token auth, and capability endpoints
-- scaling/sharding endpoints
-- store/template publication endpoints
-- lifecycle-adjacent admin endpoints where callable in tests
-
-### Timer Isolation Rule
-
-Timer rows must never be mixed into endpoint scenario groups.
-
-Timer samples must document:
-
-- trigger mode (`once` or `interval`)
-- expected firing count
-- whether the canister instance was otherwise idle
-- whether the timer sample shared a counter table with endpoint scenarios
-
-If timer activity cannot be isolated cleanly, mark timer comparability
-`PARTIAL`.
-
-### Default Flow Classes
-
-For recurring runs, include at least one representative flow from each active
-subsystem:
-
-- root capability dispatch (`create`, `upgrade`, `cycles`)
-- root proof provisioning prepare/install and direct-query retrieval, where
-  measurable in the maintained runner
-- issuer-local delegated-token prepare/get/verification
-- replay/cached-response path
-- sharding assignment/query flow
-- scaling/provisioning flow
-- bootstrap/install/publication flow
-
-The maintained runner currently samples these through a fixed scenario manifest
-under `crates/canic-tests/tests/instruction_audit_support/`. If this manifest
-changes, the report must treat the run as a method change unless at least one
-unchanged anchor scenario remains comparable.
-
-## Argument Matrix (Mandatory)
-
-For each endpoint sampled, cover as many of these as the endpoint supports:
-
-1. minimal valid input
-2. representative valid input
-3. boundary or high-cardinality valid input
-4. rejection/failure path
-5. repeated-call path where caching/replay/paging matters
-
-Examples:
-
-- page endpoints: small page, larger page, empty page
-- capability endpoints: authorized, unauthorized, proof-rejected, replayed
-- create/upgrade flows: cheap/no-op path and real execution path
-- sharding/scaling queries: empty registry and non-empty registry
-
-If a class is not applicable, state that explicitly.
-
-### Scenario Identity Tuple
-
-Every measured scenario must have a stable identity tuple.
-
-Minimum tuple:
-
-- `canister`
-- `endpoint_or_flow`
-- `arg_class`
-- `caller_class`
-- `auth_state`
-- `replay_state`
-- `cache_state`
-- `topology_state`
-- `freshness_model`
-- `method_tag`
-
-Why this matters:
-
-- "same endpoint" is not enough for auth, replay, and capability paths
-- caller identity and prior replay/cache state can materially change instruction
-  cost
-- comparability must be anchored to scenario identity, not human memory
-
-## Coverage Scan (Mandatory)
-
-Before capturing perf data:
-
-1. enumerate endpoints in scope
-2. scan current checkpoint coverage with
-   `rg -n '^[[:space:]]*perf!\\(' crates`
-3. list critical flows that have zero checkpoints today
-4. mark missing checkpoint coverage as `PARTIAL`, not as silently omitted
-
-Important:
-
-- if there are no current `perf!` call sites, that is a real audit result
-- endpoint perf coverage can still pass while flow-checkpoint coverage remains
-  partial
-
-### Checkpoint Naming Contract
-
-Checkpoint labels should be short, stage-like, and stable.
-
-Preferred examples:
-
-- `load_cfg`
-- `verify_token`
-- `read_registry`
-- `select_target`
-- `assemble_response`
-
-Avoid:
-
-- prose sentences
-- unstable wording
-- labels that encode transient values
-
-If checkpoint names or order change for a flow, that flow becomes
-`N/A (method change)` for cross-run checkpoint deltas.
-
-## Decision Rule
-
-- primary regression authority: isolated instruction totals from comparable
-  endpoint or flow runs
-- secondary diagnostic: average instructions per execution
-- compare only same scenario identity tuple
-- if checkpoint names or placement changed, mark the affected delta as
-  `N/A (method change)`
-
-Do not claim improvement from:
-
-- comparing authorized vs rejected paths as if they were the same scenario
-- comparing fresh-instance results against accumulated counter tables
-- comparing instruction counts against wasm-size changes without separate evidence
-
-## Required Report Sections
-
-Every report generated from this definition must include:
-
-- `## Endpoint Matrix`
-- `## Flow Checkpoints`
-- `## Checkpoint Coverage Gaps`
-- `## Structural Hotspots`
-- `## Hub Module Pressure`
-- `## Dependency Fan-In Pressure`
-- `## Early Warning Signals`
-- `## Risk Score`
-- `## Verification Readout`
-
-### Endpoint Matrix
-
-Must include:
-
-- canister
-- endpoint or timer label
-- scenario label
-- count
-- total instructions
-- average instructions per execution
-- baseline delta or `N/A`
-
-### Flow Checkpoints
-
-Must include:
-
-- flow name
-- checkpoint names in order
-- per-checkpoint instruction deltas from `Topic::Perf` logs
-- missing-checkpoint gaps, if any
-
-### Checkpoint Coverage Gaps
-
-Must include:
-
-- critical flows with checkpoints
-- critical flows without checkpoints
-- proposed first checkpoint insertion sites for uncovered critical flows
-
-### Structural Hotspots
-
-For the highest-cost endpoints/flows, map the cost back to concrete modules and
-files with command evidence.
-
-Examples:
-
-- `rg -n '<endpoint-name>|<flow function>' crates`
-- `rg -n '^use ' <hot module directory>`
-- direct references to likely hot modules such as:
-  - `crates/canic-core/src/workflow/rpc/`
-  - `crates/canic-core/src/ops/storage/`
-  - `crates/canic-core/src/workflow/ic/`
-
-### Hub Module Pressure
-
-For the hottest instruction paths, normalize pressure on the modules they pass
-through:
-
-- number of subsystems imported
-- number of sibling module dependencies
-- whether the hotspot crosses multiple layers for one request
-
-### Dependency Fan-In Pressure
-
-For each hotspot module, report whether the module is a fan-in hub that raises
-regression risk even when the current numbers look acceptable.
-
-### Early Warning Signals
-
-Must call out signals such as:
-
-- new endpoints entering the perf table
-- high-growth endpoints with unchanged behavior claims
-- rejection paths approaching or exceeding happy-path cost
-- critical flows still missing `perf!` checkpoints
-- perf growth concentrated in shared hubs rather than role-specific leaves
-
-### Risk Score
-
-Use a normalized `0-10` score.
-
-Rubric:
-
-- `0-2`: shared-runtime regression severity
-- `0-2`: hotspot concentration in hub modules
-- `0-2`: checkpoint coverage gaps on critical flows
-- `0-2`: comparability loss or method drift
-- `0-2`: rejection-path inflation / replay-cache-state sensitivity
-
-Report both:
-
-- total score
-- one short line per rubric component
-
-## Required Checklist
-
-For each run, explicitly mark `PASS` / `PARTIAL` / `FAIL` with concrete evidence.
-
-1. Endpoints in scope were enumerated before measurement.
-2. Checkpoint coverage was scanned with
-   `rg -n '^[[:space:]]*perf!\\(' crates`.
-3. Comparable scenario identity tuples were defined for each sampled endpoint or
-   flow.
-4. The current metrics transport was normalized into the canonical row model.
-5. Counter freshness/isolation strategy was documented.
-6. `Topic::Perf` logs were captured for flows with checkpoints.
-7. Flows lacking checkpoints were listed explicitly with proposed insertion
-   sites where possible.
-8. Timer samples, if present, were isolated from endpoint scenario groups.
-9. The first run of a UTC day records baseline `N/A`; same-day reruns compare
-   to that day's unnumbered `instruction-footprint.md` baseline.
-10. Deltas versus baseline were recorded when comparable.
-11. Verification readout includes command outcomes with `PASS` / `FAIL` /
-    `BLOCKED`.
-
-## Execution Contract
-
-Canonical runner:
-
-- `bash scripts/ci/instruction-audit-report.sh`
-
-The runner writes the dated report and normalized artifacts under:
-
-- `docs/audits/reports/<YYYY-MM>/<YYYY-MM-DD>/instruction-footprint*.md`
-- `docs/audits/reports/<YYYY-MM>/<YYYY-MM-DD>/artifacts/instruction-footprint*/`
-
-Preferred execution environment:
-
-- PocketIC integration tests for repeatable endpoint and flow measurement
-
-Use the local ICP CLI replica only when a scenario cannot be represented in
-PocketIC and the report explains why.
-
-Each report must:
-
-- list the exact commands used
-- emit the required normalized artifacts
-- state any manual steps explicitly
-
-Runner command bundle:
-
-- `bash scripts/ci/instruction-audit-report.sh`
-- internally, the script runs:
-  `cargo test --offline --locked -p canic-tests --test instruction_audit generate_instruction_footprint_report -- --ignored --nocapture`
-
-Optional estimate runner examples:
-
-- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-node-count 13`
-- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --cycles-per-billion-instructions 1000000000`
-- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal>`
-- `bash scripts/ci/instruction-audit-report.sh --estimate-execution-cycles --estimate-canister-principal <canister-principal> --allow-stale-subnet-catalog`
-
-The report generator also scans checkpoint call sites under `crates/`. The
-definition still accepts additional targeted flow tests, but they must be
-recorded as extra verification rows and must not replace the canonical runner
-unless the method tag changes.
-
-Required capture artifacts:
-
-- `scenario-manifest.json`
-- `perf-rows.tsv` or `perf-rows.json`
-- `verification-readout.md`
-- `method.json`
-- `environment.json`
-- `checkpoint-deltas.json`
-- `checkpoint-coverage-gaps.json`
-- `evidence-manifest.yml`, including run identity, tool versions, retention and
-  redaction declarations, and SHA-256 hashes for the report and every retained
-  supporting artifact
-
-The primary Markdown report embeds the normalized endpoint matrix and current
-checkpoint scan. Do not emit duplicate TSV or log copies of those sections.
-
-The report may additionally attach raw current-transport metrics responses, but
-those are supporting artifacts, not the audit authority.
-
-## Comparability Rules
-
-Two runs are comparable only if all of these hold:
-
-- same method tag
-- same scenario identity tuple
-- same checkpoint names and placement for `perf!` flows
-
-If any item changes, mark the delta `N/A (method change)`.
-
-### Method Change Triggers
-
-The method tag must change when any of these change:
-
-- metrics transport shape changed in a way that affects normalization
-- canonical subject labels changed
-- checkpoint names or placement changed
-- scenario harness changed
-- freshness/isolation model changed
-- topology or default canister scope changed
-- replay/cache preconditions changed
-- risk-score rubric changed
-
-When the method tag changes:
-
-- add a `Method Changes` section to the report
-- mark affected deltas as `N/A (method change)`
-- keep at least one unchanged anchor metric where possible
-
-## Failure Classification
-
-Use these classifications when results move:
-
-- `PASS`: stable or improved, with coverage intact
-- `PARTIAL`: data captured but checkpoint coverage or comparability is incomplete
-- `FAIL`: material regression, missing required evidence, or hotspot growth
-  without explanation
-
-## Follow-Up Expectations
-
-If the report identifies a hotspot or regression:
-
-- name the endpoint/flow
-- name the owning module(s)
-- state whether the issue is shared-runtime or role-specific
-- propose the next investigation target
-
-Examples of acceptable follow-up actions:
-
-- add `perf!` checkpoints to an uncheckpointed critical flow
-- split a hotspot module so perf attribution is less ambiguous
-- reduce repeated storage scans or repeated DTO assembly in one request path
-- narrow a scenario matrix where a boundary case is dominating regressions
+Retain the primary report and compact support artifacts:
+
+- scenario manifest;
+- canonical perf rows;
+- measured checkpoint deltas;
+- checkpoint coverage gaps;
+- verification readout;
+- method and environment identities; and
+- evidence manifest with command, exit code, timestamps, tool versions, and
+  SHA-256 artifact hashes.
+
+The runner uses an isolated temporary `CARGO_TARGET_DIR`, forbids the `ic`
+environment, records pre/post source status, and fails if anything outside its
+report paths changes. Retained evidence must contain no credentials, tokens,
+private material, or machine-specific repository root.
+
+## Comparison And Findings
+
+Compare only reports with the same method ID, version, fingerprint, scenario
+key, and sample origin. The first valid v2 report has `N/A` deltas. Later runs
+show causal comparison to their immediate compatible predecessor; release
+closeout also compares cumulatively to the original v2 baseline. A missing or
+zero denominator is `N/A`, never an invented percentage.
+
+A high instruction count is trend evidence. Create a product finding only for
+a distinct active-authority violation, an observed regression with a traced
+cause, or a required observability gap. Deduplicate checkpoint gaps into the
+canonical flow owner. Remediation must be finding-backed and may not introduce
+aliases, compatibility layers, duplicate instrumentation, or unrelated
+redesign.

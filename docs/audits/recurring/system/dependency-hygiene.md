@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-DEPENDENCY-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: Cargo dependency/feature graph, advisories, licenses, and lockfile
   integrity; `CANIC-PUBLISH-001` owns shipped package contract
@@ -11,8 +11,8 @@
 - Trace mode: `code_trace`; advisory execution may use an explicitly
   authorized network or recorded current advisory database
 - Cost/runtime: medium; 30-60 minutes excluding dependency downloads
-- Prerequisites: Cargo metadata/tree, lockfile, package metadata, and advisory
-  tooling when the required advisory check runs
+- Prerequisites: Cargo metadata/tree, lockfile, package metadata, `jq`, and
+  advisory tooling when the required advisory check runs
 - False-positive boundary: dev/build/target-specific edges are classified by
   their real compile and publish reach before becoming findings
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
@@ -433,19 +433,42 @@ cargo tree --workspace --locked
 git diff --name-status <baseline-commit> -- Cargo.toml Cargo.lock crates canisters fleets
 ```
 
-Run an approved advisory database check and an approved transitive license
-check. Record tool version, database/rule identity, network mode, exit status,
-and findings. Network is disabled by default; refreshing an advisory database
-requires named authorization. A stale cached database is reported as stale,
-not current.
+Run an approved advisory database check and the following deterministic license
+declaration check. Record tool version, database/rule identity, network mode,
+exit status, and findings. Network is disabled by default; refreshing an
+advisory database requires named authorization. A stale cached database is
+reported as stale, not current.
+
+License checking in this method is dependency-metadata hygiene, not legal
+review. Every resolved external package (`source != null` in Cargo metadata)
+must provide either a non-empty Cargo `license` value or a non-empty
+`license_file` value. Workspace-member package metadata belongs to
+`CANIC-PUBLISH-001` and is excluded from this transitive-graph decision. The
+report records the distinct declared expressions and any file-based
+declarations. It does not maintain an allowed/prohibited license-family list,
+reject a declared license family, or make a legal-compliance claim.
+
+Use locked, offline metadata for the decision:
+
+```bash
+cargo metadata --locked --offline --format-version 1 \
+  | jq -e '[.packages[] | select(.source != null)] | all(.[]; (((.license // "") | length) > 0) or (((.license_file // "") | length) > 0))'
+cargo metadata --locked --offline --format-version 1 \
+  | jq -r '.packages[] | select((.source != null) and (((.license // "") | length) == 0) and (((.license_file // "") | length) == 0)) | "\(.name) \(.version)"'
+cargo metadata --locked --offline --format-version 1 \
+  | jq -r '.packages[] | select(.source != null) | if (((.license // "") | length) > 0) then .license else "license-file" end' \
+  | sort -u
+```
 
 Required result rules:
 
 * unexplained lockfile or resolved-graph drift: `FAIL`
 * known vulnerable reachable dependency without an accepted finding/waiver:
   `FAIL`
-* prohibited or unknown transitive license: `FAIL`
-* unavailable advisory/license tool or database: `BLOCKED`
+* a resolved external package with neither a declared license nor a declared
+  license file: `FAIL`
+* a declared license family is inventory evidence, not a pass/fail decision
+* unavailable advisory tooling/database, Cargo metadata, or `jq`: `BLOCKED`
 * conditional target-only findings: classify their supported-target reach
   before severity, but retain them in evidence
 

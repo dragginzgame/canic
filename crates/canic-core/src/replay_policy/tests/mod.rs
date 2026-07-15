@@ -40,11 +40,14 @@ fn root_capability_command_variant_names() -> BTreeSet<&'static str> {
 }
 
 fn durable_publish_endpoint_names() -> BTreeSet<&'static str> {
+    ["canic_wasm_store_admin"].into_iter().collect()
+}
+
+fn guarded_publication_effect_endpoint_names() -> BTreeSet<&'static str> {
     [
         CANIC_TEMPLATE_PREPARE_ADMIN,
         CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,
         CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
-        "canic_wasm_store_admin",
     ]
     .into_iter()
     .chain(CANIC_WASM_STORE_ROOT_UPDATE_METHODS.iter().copied())

@@ -3,7 +3,10 @@ use crate::dto::template::{
 };
 use crate::ids::{TemplateReleaseKey, WasmStoreBinding};
 use canic_core::cdk::types::Principal;
-use canic_core::control_plane_support::{error::InternalError, ops::ic::mgmt::MgmtOps};
+use canic_core::control_plane_support::{
+    error::InternalError,
+    ops::{cost_guard::CostGuardPermit, ic::mgmt::MgmtOps},
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 ///
@@ -105,11 +108,18 @@ impl PublicationStoreSnapshot {
     // Load the current management-canister chunk hashes once for this store.
     pub(in crate::workflow::runtime::template::publication) async fn ensure_stored_chunk_hashes(
         &mut self,
+        _publication_permit: &CostGuardPermit,
     ) -> Result<(), InternalError> {
         if self.stored_chunk_hashes.is_none() {
             self.stored_chunk_hashes = Some(
                 MgmtOps::stored_chunks(self.pid)
-                    .await?
+                    .await
+                    .map_err(|cause| {
+                        super::super::error::PublicationWorkflowError::TransportUnavailable {
+                            surface: "management stored_chunks",
+                            cause,
+                        }
+                    })?
                     .into_iter()
                     .collect::<BTreeSet<_>>(),
             );

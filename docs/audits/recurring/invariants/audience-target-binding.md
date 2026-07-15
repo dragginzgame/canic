@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-AUTH-AUDIENCE-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: signed audience, runtime target, and local-role grant binding
 - Kind/profile: security `invariant`
@@ -258,20 +258,23 @@ If no predictive signals are detected, state: No predictive architectural signal
 Use current targeted tests rather than historical test names from older reports.
 
 ```bash
-cargo test --locked -p canic-core --lib audience -- --nocapture
-cargo test --locked -p canic-core --lib local_role -- --nocapture
-cargo test --locked -p canic-core --lib prepare_delegated_token_rejects_audience_expansion -- --nocapture
-cargo test --locked -p canic-core --lib install_active_delegation_proof_rejects_wrong_issuer -- --nocapture
-cargo test --locked -p canic-core --lib install_active_delegation_proof_rejects_root_proof_failure -- --nocapture
-cargo test --locked -p canic-core --lib root_prepare_policy_rejects_audience_or_grant_outside_policy -- --nocapture
-cargo test --locked -p canic-core --lib batch_prepare_preflight_rejects_grant_outside_issuer_policy -- --nocapture
-cargo test --locked -p canic-core --lib batch_install_preflight_rejects_proof_mismatch -- --nocapture
-cargo test --locked -p canic-core --lib role_attestation_claims_reject -- --nocapture
-cargo test --locked -p canic-core --lib root_capability_hash_binds_target_canister -- --nocapture
-cargo test --locked -p canic-core --lib verify_capability_hash_binding -- --nocapture
-cargo test --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
-cargo test --locked -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --test-threads=1 --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib audience -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib local_role -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib prepare_delegated_token_rejects_audience_expansion -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib install_active_delegation_proof_rejects_wrong_issuer -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib install_active_delegation_proof_rejects_root_proof_failure -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib root_prepare_policy_rejects_audience_or_grant_outside_policy -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib chain_key_batch_root_proof_rejects_wrong_audience -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib chain_key_batch_root_proof_rejects_wrong_grants -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib role_attestation_claims_reject -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib root_capability_hash_binds_target_canister -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-core --lib verify_capability_hash_binding -- --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-tests --test pic_role_attestation role_attestation_verification_paths -- --test-threads=1 --nocapture
+bash docs/audits/scripts/run-nonempty-cargo-test.sh --locked -p canic-tests --test pic_role_attestation capability_endpoint_policy_and_structural_paths -- --test-threads=1 --nocapture
 ```
+
+The wrapper is part of the method identity. A successful Cargo exit with zero
+executed tests is `BLOCKED`, never passing evidence.
 
 ## Dependency Fan-In Pressure
 

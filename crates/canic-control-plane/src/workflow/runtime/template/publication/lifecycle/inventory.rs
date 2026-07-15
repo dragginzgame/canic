@@ -6,7 +6,8 @@ use super::super::{
 };
 use crate::{ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps};
 use canic_core::control_plane_support::{
-    error::InternalError, ops::storage::registry::subnet::SubnetRegistryOps,
+    error::InternalError,
+    ops::{cost_guard::CostGuardPermit, storage::registry::subnet::SubnetRegistryOps},
 };
 
 impl WasmStorePublicationWorkflow {
@@ -25,8 +26,9 @@ impl WasmStorePublicationWorkflow {
     }
 
     // Snapshot the current writable store fleet and the current preferred write hint.
-    pub(in crate::workflow::runtime::template::publication) async fn snapshot_publication_store_fleet()
-    -> Result<PublicationStoreFleet, InternalError> {
+    pub(in crate::workflow::runtime::template::publication) async fn snapshot_publication_store_fleet(
+        publication_permit: &CostGuardPermit,
+    ) -> Result<PublicationStoreFleet, InternalError> {
         Self::sync_registered_wasm_store_inventory()?;
 
         let preferred_binding = match SubnetStateOps::publication_store_binding() {
@@ -39,7 +41,7 @@ impl WasmStorePublicationWorkflow {
 
         for record in SubnetStateOps::wasm_stores() {
             let status = store_status(record.pid).await?;
-            let releases = store_catalog(record.pid).await?;
+            let releases = store_catalog(publication_permit, record.pid).await?;
             stores.push(PublicationStoreSnapshot {
                 binding: record.binding,
                 pid: record.pid,

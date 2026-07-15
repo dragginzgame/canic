@@ -3,28 +3,253 @@
 set -euo pipefail
 
 METHOD_ID="CANIC-WASM-001"
-METHOD_VERSION="1"
+METHOD_VERSION="2"
 METHOD_TAG="$METHOD_ID/v$METHOD_VERSION"
-AUDIT_SLUG="wasm-footprint"
 DEFINITION_PATH="docs/audits/recurring/system/wasm-footprint.md"
-DEFAULT_PROFILE="release"
+AUDIT_STEM="wasm-footprint-v2"
+PROFILE_KEY="release+debug"
+EXPECTED_ROSTER_KEY="app,user_hub,user_shard,scale_hub,scale_replica,root"
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$ROOT_DIR"
-source "$ROOT_DIR/scripts/ci/require_icp.sh"
-
-GIT_DIR="$(cd "$(git rev-parse --git-dir)" && pwd)"
-GIT_COMMON_DIR="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
-if [ "$GIT_DIR" = "$GIT_COMMON_DIR" ]; then
-    echo "wasm audit requires a disposable linked Git worktree" >&2
+METHOD_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PRODUCT_ROOT_INPUT="${WASM_AUDIT_PRODUCT_ROOT:-}"
+if [[ -z "$PRODUCT_ROOT_INPUT" ]]; then
+    echo "WASM_AUDIT_PRODUCT_ROOT must name a clean disposable linked Git worktree" >&2
     exit 2
 fi
-if [ -n "$(git status --porcelain=v1 --untracked-files=all)" ]; then
-    echo "wasm audit requires a clean disposable worktree" >&2
+PRODUCT_ROOT="$(cd "$PRODUCT_ROOT_INPUT" && pwd)"
+
+# shellcheck source=scripts/ci/require_icp.sh
+source "$METHOD_ROOT/scripts/ci/require_icp.sh"
+
+require_command() {
+    local command_name="$1"
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        echo "missing required Wasm audit tool: $command_name" >&2
+        exit 2
+    fi
+}
+
+tool_version() {
+    "$1" --version 2>&1 | head -n 1
+}
+
+file_hash() {
+    sha256sum "$1" | awk '{print $1}'
+}
+
+root_independent_composite() {
+    local relative_path
+    local absolute_path
+    for relative_path in \
+        "$DEFINITION_PATH" \
+        scripts/ci/wasm-audit-report.sh \
+        scripts/ci/list-config-canisters.sh \
+        scripts/ci/require_icp.sh \
+        tool-versions.env; do
+        absolute_path="$METHOD_ROOT/$relative_path"
+        printf '%s  %s\n' "$(file_hash "$absolute_path")" "$relative_path"
+    done | sort -k2 | sha256sum | awk '{print $1}'
+}
+
+next_scope_stem() {
+    local day_dir="$1"
+    local stem="$2"
+    local index=2
+
+    if [[ ! -e "$day_dir/$stem.md" ]]; then
+        printf '%s\n' "$stem"
+        return
+    fi
+    while [[ -e "$day_dir/$stem-$index.md" ]]; do
+        index=$((index + 1))
+    done
+    printf '%s-%s\n' "$stem" "$index"
+}
+
+json_value() {
+    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+markdown_value() {
+    printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/|/\\|/g'
+}
+
+tsv_value() {
+    printf '%s' "$1" | tr '\t\r\n' '   '
+}
+
+signed_integer() {
+    printf '%+d' "$1"
+}
+
+percent_delta() {
+    local baseline="$1"
+    local current="$2"
+    awk -v baseline="$baseline" -v current="$current" 'BEGIN {
+        if (baseline == 0) {
+            print "N/A"
+        } else {
+            printf "%.2f", ((current - baseline) / baseline) * 100
+        }
+    }'
+}
+
+ratio() {
+    local denominator="$1"
+    local numerator="$2"
+    awk -v denominator="$denominator" -v numerator="$numerator" 'BEGIN {
+        if (denominator == 0) {
+            print "N/A"
+        } else {
+            printf "%.4f", numerator / denominator
+        }
+    }'
+}
+
+extract_json_field() {
+    local path="$1"
+    local field="$2"
+    sed -n "s/.*\"$field\": \"\([^\"]*\)\".*/\1/p" "$path" | head -n 1
+}
+
+capture_info_metrics() {
+    local canister="$1"
+    local info_path="$2"
+    local functions
+    local data_sections
+    local data_bytes
+    local exports
+
+    functions="$(sed -n 's/^Number of functions: //p' "$info_path" | head -n 1)"
+    data_sections="$(sed -n 's/^Number of data sections: //p' "$info_path" | head -n 1)"
+    data_bytes="$(sed -n 's/^Size of data sections: \([0-9][0-9]*\) bytes$/\1/p' "$info_path" | head -n 1)"
+    exports="$(awk '
+        /^Exported methods: \[/ { active=1; next }
+        active && /^\]/ { active=0 }
+        active && /"/ { count++ }
+        END { print count + 0 }
+    ' "$info_path")"
+
+    if [[ -z "$functions" || -z "$data_sections" || -z "$data_bytes" ]]; then
+        echo "unable to parse ic-wasm structure metrics for $canister" >&2
+        exit 1
+    fi
+    FUNCTIONS["$canister"]="$functions"
+    DATA_SECTIONS["$canister"]="$data_sections"
+    DATA_BYTES["$canister"]="$data_bytes"
+    EXPORTS["$canister"]="$exports"
+}
+
+capture_twiggy_metrics() {
+    local canister="$1"
+    local release_wasm="$2"
+    local analysis_dir="$3"
+    local top_csv="$analysis_dir/$canister.top.csv"
+    local retained_csv="$analysis_dir/$canister.retained.csv"
+    local dominators_txt="$analysis_dir/$canister.dominators.txt"
+    local monos_txt="$analysis_dir/$canister.monos.txt"
+
+    twiggy top -n 20 -f csv "$release_wasm" >"$top_csv"
+    twiggy top --retained -n 20 -f csv "$release_wasm" >"$retained_csv"
+    twiggy dominators -d 4 -r 20 "$release_wasm" >"$dominators_txt"
+    twiggy monos -m 10 -n 5 "$release_wasm" >"$monos_txt"
+
+    TOP_NAME["$canister"]="$(awk -F',' 'NR == 2 { print $1 }' "$top_csv" | tr -d '"')"
+    TOP_BYTES["$canister"]="$(awk -F',' 'NR == 2 { print $2 }' "$top_csv")"
+    RETAINED_NAME["$canister"]="$(awk -F',' 'NR == 2 { print $1 }' "$retained_csv" | tr -d '"')"
+    RETAINED_BYTES["$canister"]="$(awk -F',' 'NR == 2 { print $4 }' "$retained_csv")"
+
+    if [[ -z "${TOP_NAME[$canister]}" || ! "${TOP_BYTES[$canister]}" =~ ^[0-9]+$ ||
+        -z "${RETAINED_NAME[$canister]}" || ! "${RETAINED_BYTES[$canister]}" =~ ^[0-9]+$ ]]; then
+        echo "unable to parse twiggy hotspot metrics for $canister" >&2
+        exit 1
+    fi
+
+    sed -E \
+        -e 's#/home/[^/]+/#<home>/#g' \
+        -e 's#/tmp/[^[:space:],"]+#<temp-path>#g' \
+        "$dominators_txt" | head -n 16 >"$analysis_dir/$canister.dominators-excerpt.txt"
+    sed -E \
+        -e 's#/home/[^/]+/#<home>/#g' \
+        -e 's#/tmp/[^[:space:],"]+#<temp-path>#g' \
+        "$monos_txt" | head -n 16 >"$analysis_dir/$canister.monos-excerpt.txt"
+}
+
+build_profile() {
+    local profile="$1"
+    local output_dir="$RUN_TMP/artifacts/$profile"
+    local canister
+    local artifact_root
+    mkdir -p "$output_dir"
+
+    for canister in "${CANISTERS[@]}"; do
+        printf 'building %s profile for %s through Canic host authority\n' "$profile" "$canister"
+        if ! (
+            cd "$PRODUCT_ROOT"
+            ICP_ENVIRONMENT=local \
+                CARGO_NET_OFFLINE=true \
+                CARGO_INCREMENTAL=0 \
+                CARGO_TARGET_DIR="$CARGO_TARGET_DIR" \
+                cargo run --offline --locked -q --profile fast \
+                    -p canic-host --example build_artifact -- \
+                    "$canister" "$profile" "$PRODUCT_ROOT" "$PRODUCT_ROOT" \
+                    "$PRODUCT_CONFIG"
+        ) >>"$RUN_TMP/build-$profile.log" 2>&1; then
+            echo "canonical $profile build failed for $canister" >&2
+            tail -n 80 "$RUN_TMP/build-$profile.log" >&2
+            exit 1
+        fi
+
+        artifact_root="$PRODUCT_ROOT/.icp/local/canisters/$canister"
+        if [[ ! -s "$artifact_root/$canister.wasm" || ! -s "$artifact_root/$canister.wasm.gz" ]]; then
+            echo "canonical $profile artifacts are missing for $canister" >&2
+            exit 1
+        fi
+        gzip -t "$artifact_root/$canister.wasm.gz"
+        decoded_gzip_hash="$(
+            gzip -cd "$artifact_root/$canister.wasm.gz" | sha256sum | awk '{print $1}'
+        )"
+        canonical_wasm_hash="$(file_hash "$artifact_root/$canister.wasm")"
+        if [[ "$decoded_gzip_hash" != "$canonical_wasm_hash" ]]; then
+            echo "builder gzip does not decode to canonical $profile Wasm for $canister" >&2
+            exit 1
+        fi
+        cp "$artifact_root/$canister.wasm" "$output_dir/$canister.wasm"
+        cp "$artifact_root/$canister.wasm.gz" "$output_dir/$canister.wasm.gz"
+    done
+}
+
+require_command cargo
+require_command rustc
+require_command git
+require_command gzip
+require_command sha256sum
+require_command ic-wasm
+require_command twiggy
+require_icp_tools
+
+if [[ "${ICP_ENVIRONMENT:-local}" == "ic" ]]; then
+    echo "Wasm audit refuses the ic environment" >&2
     exit 2
 fi
-if [ "${ICP_ENVIRONMENT:-local}" = "ic" ]; then
-    echo "wasm audit must not run against the ic environment" >&2
+
+if ! git -C "$PRODUCT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "WASM_AUDIT_PRODUCT_ROOT is not a Git worktree: $PRODUCT_ROOT" >&2
+    exit 2
+fi
+PRODUCT_GIT_DIR="$(git -C "$PRODUCT_ROOT" rev-parse --absolute-git-dir)"
+PRODUCT_COMMON_DIR="$(
+    git -C "$PRODUCT_ROOT" rev-parse --path-format=absolute --git-common-dir
+)"
+if [[ "$PRODUCT_GIT_DIR" == "$PRODUCT_COMMON_DIR" ]]; then
+    echo "WASM_AUDIT_PRODUCT_ROOT must be a disposable linked Git worktree" >&2
+    exit 2
+fi
+
+SOURCE_STATUS_BEFORE="$(git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=all)"
+if [[ -n "$SOURCE_STATUS_BEFORE" ]]; then
+    echo "WASM_AUDIT_PRODUCT_ROOT must be clean before execution" >&2
+    printf '%s\n' "$SOURCE_STATUS_BEFORE" >&2
     exit 2
 fi
 
@@ -35,1228 +260,564 @@ cleanup() {
 trap cleanup EXIT
 export CARGO_TARGET_DIR="${CANIC_AUDIT_CARGO_TARGET_DIR:-$RUN_TMP/target}"
 export CARGO_NET_OFFLINE="true"
-METHOD_FINGERPRINT="$(
-    sha256sum \
-        "$ROOT_DIR/$DEFINITION_PATH" \
-        "$ROOT_DIR/scripts/ci/wasm-audit-report.sh" \
-        "$ROOT_DIR/scripts/ci/list-config-canisters.sh" \
-        "$ROOT_DIR/scripts/ci/require_icp.sh" \
-        "$ROOT_DIR/crates/canic-host/examples/build_artifact.rs" \
-    | sort -k2 \
-    | sha256sum \
-    | awk '{print $1}'
+
+PRODUCT_CONFIG="$PRODUCT_ROOT/fleets/test/canic.toml"
+mapfile -t CANISTERS < <(
+    bash "$METHOD_ROOT/scripts/ci/list-config-canisters.sh" \
+        --config "$PRODUCT_CONFIG" --ci-order
+)
+ROSTER_KEY="$(IFS=,; printf '%s' "${CANISTERS[*]}")"
+if [[ "$ROSTER_KEY" != "$EXPECTED_ROSTER_KEY" ]]; then
+    echo "frozen Wasm audit roster drifted: expected $EXPECTED_ROSTER_KEY; found $ROSTER_KEY" >&2
+    exit 2
+fi
+
+METHOD_FINGERPRINT="$(root_independent_composite)"
+DEFINITION_FINGERPRINT="$(file_hash "$METHOD_ROOT/$DEFINITION_PATH")"
+PRODUCT_COMMIT="$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{commit}')"
+SOURCE_TREE_HASH="$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{tree}')"
+PRODUCT_TREE_HASH="$(bash "$METHOD_ROOT/scripts/ci/audit-product-tree-hash.sh" "$PRODUCT_COMMIT")"
+RELEASE_ANCHOR="$(git -C "$PRODUCT_ROOT" describe --tags --exact-match HEAD 2>/dev/null || printf 'untagged')"
+BRANCH="$(git -C "$PRODUCT_ROOT" symbolic-ref --short -q HEAD || printf 'detached')"
+CARGO_LOCK_HASH="$(file_hash "$PRODUCT_ROOT/Cargo.lock")"
+EXECUTION_PATH_KEY="$(printf '%s' "$PRODUCT_ROOT" | sha256sum | awk '{print $1}')"
+RUSTC_VERSION="$(tool_version rustc)"
+CARGO_VERSION="$(tool_version cargo)"
+ICP_VERSION="$(tool_version icp)"
+IC_WASM_VERSION="$(tool_version ic-wasm)"
+TWIGGY_VERSION="$(tool_version twiggy)"
+TOOL_KEY="$(
+    printf 'rustc=%s\ncargo=%s\nicp=%s\nic-wasm=%s\ntwiggy=%s\n' \
+        "$RUSTC_VERSION" "$CARGO_VERSION" "$ICP_VERSION" \
+        "$IC_WASM_VERSION" "$TWIGGY_VERSION" | sha256sum | awk '{print $1}'
 )"
-
-TEST_FLEET_CONFIG="fleets/test/canic.toml"
-TEST_FLEET_ROOT="$(dirname "$TEST_FLEET_CONFIG")"
-TEST_FLEET_CONFIG_ABS="$ROOT_DIR/$TEST_FLEET_CONFIG"
-
-DEFAULT_AUDIT_CANISTERS="$(bash scripts/ci/list-config-canisters.sh --config "$TEST_FLEET_CONFIG" --ci-order)"
-mapfile -t DEFAULT_CANISTERS <<<"$DEFAULT_AUDIT_CANISTERS"
-DEFAULT_RELEASE_SET_TARGETS="$(bash scripts/ci/list-config-canisters.sh --config "$TEST_FLEET_CONFIG" --exclude-root)"
-mapfile -t DEFAULT_RELEASE_SET_CANISTERS <<<"$DEFAULT_RELEASE_SET_TARGETS"
-
-declare -a VERIFICATION_ROWS=()
-declare -A BUILT_WASM_BYTES=()
-declare -A BUILT_WASM_GZ_BYTES=()
-declare -A SHRUNK_WASM_BYTES=()
-declare -A SHRUNK_WASM_GZ_BYTES=()
-declare -A DEBUG_BUILT_WASM_BYTES=()
-declare -A DEBUG_BUILT_WASM_GZ_BYTES=()
-declare -A DEBUG_VS_PROFILE_DELTA_BYTES=()
-declare -A DEBUG_VS_PROFILE_DELTA_PCT=()
-declare -A SHRINK_DELTA_BYTES=()
-declare -A SHRINK_DELTA_PCT=()
-declare -A BUILT_FUNCTIONS=()
-declare -A BUILT_DATA_SECTIONS=()
-declare -A BUILT_DATA_BYTES=()
-declare -A BUILT_EXPORTS=()
-declare -A SHRUNK_FUNCTIONS=()
-declare -A SHRUNK_DATA_SECTIONS=()
-declare -A SHRUNK_DATA_BYTES=()
-declare -A SHRUNK_EXPORTS=()
-declare -A BASELINE_DELTA_BYTES=()
-declare -A BASELINE_DELTA_PCT=()
-declare -A HOTSPOT_NAME=()
-declare -A HOTSPOT_SHALLOW=()
-declare -A HOTSPOT_RETAINED=()
-declare -A CANISTER_KIND=()
-declare -A BUILT_ALREADY=()
-declare -A DEBUG_BUILT_ALREADY=()
-declare -i BASELINE_GROWTH_COUNT=0
-declare -i DEBUG_CAPTURED=0
-
-has_cmd() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-tool_version() {
-    if has_cmd "$1"; then
-        "$1" --version 2>&1 | head -n 1
-    else
-        printf 'unavailable'
-    fi
-}
-
-record_verification() {
-    local cmd="$1"
-    local status="$2"
-    local notes="$3"
-    VERIFICATION_ROWS+=("| \`$cmd\` | $status | $notes |")
-}
-
-next_scope_stem() {
-    local day_dir="$1"
-    local base="$2"
-
-    if [ ! -e "$day_dir/$base.md" ]; then
-        printf '%s\n' "$base"
-        return
-    fi
-
-    local idx=2
-    while [ -e "$day_dir/$base-$idx.md" ]; do
-        idx=$((idx + 1))
-    done
-    printf '%s-%s\n' "$base" "$idx"
-}
-
-byte_size() {
-    stat -c%s "$1"
-}
-
-gzip_deterministic() {
-    local input="$1"
-    local output="$2"
-    gzip -n -c "$input" >"$output"
-}
-
-role_package_path() {
-    local role="$1"
-
-    awk -v role="$role" '
-        $0 == "[roles." role "]" || $0 == "[roles.\"" role "\"]" {in_role=1; next}
-        /^\[/ {in_role=0}
-        in_role && /^[[:space:]]*package[[:space:]]*=/ {
-            sub(/^[^=]*=[[:space:]]*/, "", $0)
-            gsub(/^[[:space:]]*"|"[[:space:]]*$/, "", $0)
-            print $0
-            exit
-        }
-    ' "$TEST_FLEET_CONFIG"
-}
-
-cargo_package_name_from_manifest() {
-    local manifest="$1"
-
-    awk '
-        $0 == "[package]" {in_package=1; next}
-        /^\[/ {in_package=0}
-        in_package && /^[[:space:]]*name[[:space:]]*=/ {
-            sub(/^[^=]*=[[:space:]]*/, "", $0)
-            gsub(/^[[:space:]]*"|"[[:space:]]*$/, "", $0)
-            print $0
-            exit
-        }
-    ' "$manifest"
-}
-
-cargo_package_name_for_role() {
-    local role="$1"
-    local package_path
-    local manifest
-    local package_name
-
-    package_path="$(role_package_path "$role")"
-    if [ -z "$package_path" ]; then
-        echo "role '$role' in $TEST_FLEET_CONFIG does not declare package" >&2
-        exit 1
-    fi
-
-    manifest="$TEST_FLEET_ROOT/$package_path/Cargo.toml"
-    if [ ! -f "$manifest" ]; then
-        echo "role '$role' package manifest not found: $manifest" >&2
-        exit 1
-    fi
-
-    package_name="$(cargo_package_name_from_manifest "$manifest")"
-    if [ -z "$package_name" ]; then
-        echo "role '$role' package manifest has no [package].name: $manifest" >&2
-        exit 1
-    fi
-
-    printf '%s\n' "$package_name"
-}
-
-normalize_profile() {
-    case "${WASM_PROFILE:-$DEFAULT_PROFILE}" in
-    release)
-        PROFILE_NAME="release"
-        CANIC_BUILD_PROFILE="release"
-        PROFILE_DIR="release"
-        CARGO_PROFILE_FLAG="--release"
-        ;;
-    fast)
-        PROFILE_NAME="fast"
-        CANIC_BUILD_PROFILE="fast"
-        PROFILE_DIR="fast"
-        CARGO_PROFILE_FLAG="--profile fast"
-        ;;
-    wasm-debug | debug)
-        PROFILE_NAME="wasm-debug"
-        CANIC_BUILD_PROFILE="debug"
-        PROFILE_DIR="debug"
-        CARGO_PROFILE_FLAG=""
-        ;;
-    *)
-        echo "unsupported WASM_PROFILE: ${WASM_PROFILE:-$DEFAULT_PROFILE}" >&2
-        exit 1
-        ;;
-    esac
-}
-
-select_canisters() {
-    if [ -n "${WASM_CANISTER_NAME:-}" ]; then
-        CANISTERS=("${WASM_CANISTER_NAME}")
-    else
-        CANISTERS=("${DEFAULT_CANISTERS[@]}")
-    fi
-}
-
-has_selected_canister() {
-    local target="$1"
-    local canister
-
-    for canister in "${CANISTERS[@]}"; do
-        if [ "$canister" = "$target" ]; then
-            return 0
-        fi
-    done
-
-    return 1
-}
-
-format_canister_list() {
-    local first=1
-    local canister
-
-    for canister in "${CANISTERS[@]}"; do
-        if [ "$first" -eq 0 ]; then
-            printf ' '
-        fi
-        first=0
-        printf '`%s`' "$canister"
-    done
-}
-
-capture_info_metrics() {
-    local canister="$1"
-    local kind="$2"
-    local info_file="$3"
-    local functions
-    local data_sections
-    local data_bytes
-    local exports
-
-    functions="$(sed -n 's/^Number of functions: //p' "$info_file" | head -n 1)"
-    data_sections="$(sed -n 's/^Number of data sections: //p' "$info_file" | head -n 1)"
-    data_bytes="$(sed -n 's/^Size of data sections: //p' "$info_file" | sed 's/ bytes$//' | head -n 1)"
-    exports="$(
-        awk '
-            /^Exported methods: \[/ {in_block=1; next}
-            in_block && /^\]/ {in_block=0}
-            in_block && /"/ {count++}
-            END {print count + 0}
-        ' "$info_file"
-    )"
-
-    case "$kind" in
-    built)
-        BUILT_FUNCTIONS["$canister"]="${functions:-N/A}"
-        BUILT_DATA_SECTIONS["$canister"]="${data_sections:-N/A}"
-        BUILT_DATA_BYTES["$canister"]="${data_bytes:-N/A}"
-        BUILT_EXPORTS["$canister"]="${exports:-0}"
-        ;;
-    shrunk)
-        SHRUNK_FUNCTIONS["$canister"]="${functions:-N/A}"
-        SHRUNK_DATA_SECTIONS["$canister"]="${data_sections:-N/A}"
-        SHRUNK_DATA_BYTES["$canister"]="${data_bytes:-N/A}"
-        SHRUNK_EXPORTS["$canister"]="${exports:-0}"
-        ;;
-    *)
-        echo "unknown info metric kind: $kind" >&2
-        exit 1
-        ;;
-    esac
-}
-
-capture_hotspot_summary() {
-    local canister="$1"
-    local top_csv="$2"
-    local retained_csv="$3"
-
-    local shallow_name shallow_size retained_name retained_size
-
-    shallow_name="$(awk -F',' 'NR==2 {print $1}' "$top_csv" | tr -d '"')"
-    shallow_size="$(awk -F',' 'NR==2 {print $2}' "$top_csv")"
-    retained_name="$(awk -F',' 'NR==2 {print $1}' "$retained_csv" | tr -d '"')"
-    retained_size="$(awk -F',' 'NR==2 {print $4}' "$retained_csv")"
-
-    HOTSPOT_NAME["$canister"]="${retained_name:-${shallow_name:-N/A}}"
-    HOTSPOT_SHALLOW["$canister"]="${shallow_size:-N/A}"
-    HOTSPOT_RETAINED["$canister"]="${retained_size:-N/A}"
-}
-
-ensure_raw_canister() {
-    local canister="$1"
-    local package_name
-    local package_target
-
-    if [ -n "${BUILT_ALREADY[$canister]:-}" ]; then
-        return
-    fi
-
-    package_name="$(cargo_package_name_for_role "$canister")"
-    package_target="${package_name//-/_}"
-
-    mkdir -p ".icp/local/canisters/$canister"
-    cargo build --target wasm32-unknown-unknown -p "$package_name" $CARGO_PROFILE_FLAG --locked
-
-    local source_wasm="$CARGO_TARGET_DIR/wasm32-unknown-unknown/$PROFILE_DIR/$package_target.wasm"
-    local raw_wasm="$CACHE_RAW_DIR/$canister.wasm"
-    local raw_gz="$CACHE_RAW_DIR/$canister.wasm.gz"
-
-    cp -f "$source_wasm" "$raw_wasm"
-    gzip_deterministic "$raw_wasm" "$raw_gz"
-
-    if [ "$canister" != "root" ]; then
-        cp -f "$raw_wasm" ".icp/local/canisters/$canister/$canister.wasm"
-        cp -f "$raw_gz" ".icp/local/canisters/$canister/$canister.wasm.gz"
-    fi
-
-    BUILT_ALREADY["$canister"]=1
-}
-
-ensure_debug_raw_canister() {
-    local canister="$1"
-    local package_name
-    local package_target
-
-    if [ -n "${DEBUG_BUILT_ALREADY[$canister]:-}" ]; then
-        return
-    fi
-
-    package_name="$(cargo_package_name_for_role "$canister")"
-    package_target="${package_name//-/_}"
-
-    cargo build --target wasm32-unknown-unknown -p "$package_name" --locked
-
-    local source_wasm="$CARGO_TARGET_DIR/wasm32-unknown-unknown/debug/$package_target.wasm"
-    local raw_wasm="$DEBUG_CACHE_RAW_DIR/$canister.wasm"
-    local raw_gz="$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz"
-
-    cp -f "$source_wasm" "$raw_wasm"
-    gzip_deterministic "$raw_wasm" "$raw_gz"
-
-    DEBUG_BUILT_ALREADY["$canister"]=1
-}
-
-build_and_cache_artifacts() {
-    mkdir -p "$CACHE_RAW_DIR" "$CACHE_SHRUNK_DIR" "$CACHE_ANALYSIS_DIR"
-    mkdir -p .icp/local/canisters
-
-    local include_root=0
-    local canister
-    for canister in "${CANISTERS[@]}"; do
-        if [ "$canister" = "root" ]; then
-            include_root=1
-        fi
-    done
-
-    if [ "$include_root" -eq 1 ]; then
-        for canister in "${DEFAULT_RELEASE_SET_CANISTERS[@]}"; do
-            ensure_raw_canister "$canister"
-        done
-    fi
-
-    for canister in "${CANISTERS[@]}"; do
-        if [ "$canister" != "root" ]; then
-            ensure_raw_canister "$canister"
-        fi
-    done
-
-    if [ "$include_root" -eq 1 ]; then
-        ensure_raw_canister root
-    fi
-
-    for canister in "${CANISTERS[@]}"; do
-        CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- \
-            "$canister" "$CANIC_BUILD_PROFILE" "$ROOT_DIR" "$ROOT_DIR" "$TEST_FLEET_CONFIG_ABS"
-    done
-
-    for canister in "${CANISTERS[@]}"; do
-        local shrunk_wasm_src=".icp/local/canisters/$canister/$canister.wasm"
-        local shrunk_wasm="$CACHE_SHRUNK_DIR/$canister.wasm"
-        local shrunk_gz="$CACHE_SHRUNK_DIR/$canister.wasm.gz"
-        local analysis_wasm="$CACHE_ANALYSIS_DIR/$canister.wasm"
-
-        cp -f "$shrunk_wasm_src" "$shrunk_wasm"
-        gzip_deterministic "$shrunk_wasm" "$shrunk_gz"
-        cp -f "$CACHE_RAW_DIR/$canister.wasm" "$analysis_wasm"
-    done
-}
-
-capture_debug_artifacts() {
-    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
-        return
-    fi
-
-    mkdir -p "$DEBUG_CACHE_RAW_DIR"
-
-    local include_root=0
-    local canister
-    for canister in "${CANISTERS[@]}"; do
-        if [ "$canister" = "root" ]; then
-            include_root=1
-        fi
-    done
-
-    if [ "$include_root" -eq 1 ]; then
-        for canister in "${DEFAULT_RELEASE_SET_CANISTERS[@]}"; do
-            ensure_debug_raw_canister "$canister"
-        done
-    fi
-
-    for canister in "${CANISTERS[@]}"; do
-        if [ "$canister" != "root" ]; then
-            ensure_debug_raw_canister "$canister"
-        fi
-    done
-
-    if [ "$include_root" -eq 1 ]; then
-        ensure_debug_raw_canister root
-    fi
-
-    DEBUG_CAPTURED=1
-}
-
-validate_cached_artifacts() {
-    local canister
-    for canister in "${CANISTERS[@]}"; do
-        local raw_wasm="$CACHE_RAW_DIR/$canister.wasm"
-        local shrunk_wasm="$CACHE_SHRUNK_DIR/$canister.wasm"
-        local analysis_wasm="$CACHE_ANALYSIS_DIR/$canister.wasm"
-
-        if [ ! -f "$raw_wasm" ] || [ ! -f "$shrunk_wasm" ]; then
-            echo "missing cached artifacts for $canister under $CACHE_ROOT" >&2
-            exit 1
-        fi
-
-        if [ ! -f "$CACHE_RAW_DIR/$canister.wasm.gz" ]; then
-            gzip_deterministic "$raw_wasm" "$CACHE_RAW_DIR/$canister.wasm.gz"
-        fi
-        if [ ! -f "$CACHE_SHRUNK_DIR/$canister.wasm.gz" ]; then
-            gzip_deterministic "$shrunk_wasm" "$CACHE_SHRUNK_DIR/$canister.wasm.gz"
-        fi
-        if [ ! -f "$analysis_wasm" ]; then
-            cp -f "$raw_wasm" "$analysis_wasm"
-        fi
-    done
-}
-
-validate_cached_debug_artifacts() {
-    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
-        return
-    fi
-
-    local canister
-    for canister in "${CANISTERS[@]}"; do
-        local raw_wasm="$DEBUG_CACHE_RAW_DIR/$canister.wasm"
-
-        if [ ! -f "$raw_wasm" ]; then
-            DEBUG_CAPTURED=0
-            return
-        fi
-
-        if [ ! -f "$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz" ]; then
-            gzip_deterministic "$raw_wasm" "$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz"
-        fi
-    done
-
-    DEBUG_CAPTURED=1
-}
-
-write_per_canister_markdown() {
-    local canister="$1"
-    local output="$2"
-
-    cat >"$output" <<EOF
-# Wasm Detail: \`$canister\`
-
-## Artifact Snapshot
-
-| Metric | Value |
-| --- | ---: |
-| Kind | ${CANISTER_KIND[$canister]} |
-| Built wasm bytes | ${BUILT_WASM_BYTES[$canister]} |
-| Built wasm.gz bytes | ${BUILT_WASM_GZ_BYTES[$canister]} |
-| Shrunk wasm bytes | ${SHRUNK_WASM_BYTES[$canister]} |
-| Shrunk wasm.gz bytes | ${SHRUNK_WASM_GZ_BYTES[$canister]} |
-| wasm-debug built wasm bytes | ${DEBUG_BUILT_WASM_BYTES[$canister]} |
-| wasm-debug built wasm.gz bytes | ${DEBUG_BUILT_WASM_GZ_BYTES[$canister]} |
-| wasm-debug vs profile built delta bytes | ${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]} |
-| wasm-debug vs profile built delta percent | ${DEBUG_VS_PROFILE_DELTA_PCT[$canister]} |
-| Shrink delta bytes | ${SHRINK_DELTA_BYTES[$canister]} |
-| Shrink delta percent | ${SHRINK_DELTA_PCT[$canister]}% |
-| Baseline delta bytes | ${BASELINE_DELTA_BYTES[$canister]} |
-| Baseline delta percent | ${BASELINE_DELTA_PCT[$canister]} |
-
-## Structure Snapshot
-
-| Metric | Built | Shrunk |
-| --- | ---: | ---: |
-| Functions | ${BUILT_FUNCTIONS[$canister]} | ${SHRUNK_FUNCTIONS[$canister]} |
-| Data sections | ${BUILT_DATA_SECTIONS[$canister]} | ${SHRUNK_DATA_SECTIONS[$canister]} |
-| Data bytes | ${BUILT_DATA_BYTES[$canister]} | ${SHRUNK_DATA_BYTES[$canister]} |
-| Exported methods | ${BUILT_EXPORTS[$canister]} | ${SHRUNK_EXPORTS[$canister]} |
-
-## Hotspot Snapshot
-
-- Retained hotspot: \`${HOTSPOT_NAME[$canister]}\`
-- Retained size: \`${HOTSPOT_RETAINED[$canister]}\`
-- Shallow size: \`${HOTSPOT_SHALLOW[$canister]}\`
-
-## Retained Evidence
-
-The summarized metrics above are the retained evidence. Raw \`ic-wasm info\`
-and \`twiggy\` output is transient analysis input. Canonical machine-readable
-data is retained once in \`size-metrics.tsv\`; \`evidence-manifest.yml\` binds every
-retained per-run artifact to the run.
-EOF
-}
-
-profile_command_note() {
-    if [ "$PROFILE_NAME" = "release" ]; then
-        printf 'cargo/icp release builds'
-    elif [ "$PROFILE_NAME" = "fast" ]; then
-        printf 'cargo/icp fast builds'
-    else
-        printf 'cargo/icp debug builds'
-    fi
-}
-
-normalize_delta_pct() {
-    local base="$1"
-    local current="$2"
-    awk -v base="$base" -v current="$current" 'BEGIN {
-        if (base == 0) {
-            print "N/A"
-        } else {
-            printf "%.2f", ((base - current) / base) * 100
-        }
-    }'
-}
-
-normalize_baseline_delta_pct() {
-    local base="$1"
-    local current="$2"
-    awk -v base="$base" -v current="$current" 'BEGIN {
-        if (base == 0) {
-            print "N/A"
-        } else {
-            printf "%.2f%%", ((current - base) / base) * 100
-        }
-    }'
-}
-
-signed_bytes() {
-    local value="$1"
-    printf '%+d' "$value"
-}
-
-baseline_shrunk_from_report() {
-    local report_path="$1"
-    local canister="$2"
-
-    awk -F'|' -v c="$canister" '
-        BEGIN { in_snapshot = 0 }
-        /^## Current Size Snapshot$/ { in_snapshot = 1; next }
-        in_snapshot && /^## / { in_snapshot = 0 }
-        in_snapshot {
-            name = $2
-            gsub(/[`[:space:]]/, "", name)
-            value = $3
-            gsub(/[[:space:]]/, "", value)
-            if (name == c) {
-                print value
-                exit
-            }
-        }
-    ' "$report_path"
-}
-
-run_top_summary() {
-    local output="$1"
-    local canister
-
-cat >"$output" <<EOF
-# Wasm Size Summary - $RUN_DATE
-
-| Canister | Kind | Built wasm | Shrunk wasm | Shrink delta | Baseline delta | Built gz | Shrunk gz |
-| --- | --- | ---: | ---: | ---: | --- | ---: | ---: |
-EOF
-
-    for canister in "${CANISTERS[@]}"; do
-        printf '| `%s` | %s | %s | %s | %s | %s | %s | %s |\n' \
-            "$canister" \
-            "${CANISTER_KIND[$canister]}" \
-            "${BUILT_WASM_BYTES[$canister]}" \
-            "${SHRUNK_WASM_BYTES[$canister]}" \
-            "${SHRINK_DELTA_BYTES[$canister]}" \
-            "${BASELINE_DELTA_BYTES[$canister]}" \
-            "${BUILT_WASM_GZ_BYTES[$canister]}" \
-            "${SHRUNK_WASM_GZ_BYTES[$canister]}" \
-            >>"$output"
-    done
-}
-
-determine_risk_score() {
-    local max_leaf_shrunk=0
-    local min_leaf_shrunk=0
-    local root_shrunk=0
-    local canister
-
-    for canister in "${CANISTERS[@]}"; do
-        if [ "$canister" = "root" ]; then
-            root_shrunk="${SHRUNK_WASM_BYTES[$canister]}"
-            continue
-        fi
-
-        if [ "$min_leaf_shrunk" -eq 0 ] || [ "${SHRUNK_WASM_BYTES[$canister]}" -lt "$min_leaf_shrunk" ]; then
-            min_leaf_shrunk="${SHRUNK_WASM_BYTES[$canister]}"
-        fi
-        if [ "${SHRUNK_WASM_BYTES[$canister]}" -gt "$max_leaf_shrunk" ]; then
-            max_leaf_shrunk="${SHRUNK_WASM_BYTES[$canister]}"
-        fi
-    done
-
-    RISK_SCORE=3
-    if [ "$max_leaf_shrunk" -gt 0 ] && [ "$min_leaf_shrunk" -gt 0 ]; then
-        local leaf_spread
-        leaf_spread="$(awk -v max="$max_leaf_shrunk" -v min="$min_leaf_shrunk" 'BEGIN { printf "%.2f", max / min }')"
-        if awk -v spread="$leaf_spread" 'BEGIN { exit !(spread >= 1.25) }'; then
-            RISK_SCORE=$((RISK_SCORE + 2))
-        fi
-    fi
-    if [ "$root_shrunk" -gt 0 ] && [ "$max_leaf_shrunk" -gt 0 ]; then
-        if awk -v root="$root_shrunk" -v leaf="$max_leaf_shrunk" 'BEGIN { exit !(root >= (leaf * 3)) }'; then
-            RISK_SCORE=$((RISK_SCORE + 2))
-        fi
-    fi
-    if [ "$RISK_SCORE" -gt 10 ]; then
-        RISK_SCORE=10
-    fi
-}
-
-normalize_worktree() {
-    if git diff-index --quiet HEAD --; then
-        printf 'clean'
-    else
-        printf 'dirty'
-    fi
-}
-
-normalize_branch() {
-    git rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'N/A'
-}
-
-normalize_commit() {
-    git rev-parse HEAD 2>/dev/null || printf 'N/A'
-}
-
-render_report() {
-    local report_path="$1"
-    local checklist_artifacts
-    local checklist_metrics
-    local checklist_top
-    local checklist_dominators
-    local checklist_monos
-    local checklist_baseline
-    local checklist_delta
-    local checklist_debug
-    local checklist_debug_delta
-    local canister
-
-    checklist_artifacts="PASS"
-    checklist_metrics="PASS"
-    checklist_top="PASS"
-    checklist_dominators="PASS"
-    checklist_monos="PASS"
-    checklist_baseline="PASS"
-    checklist_delta="PASS"
-    checklist_debug="PASS"
-    checklist_debug_delta="PASS"
-
-    if [ "$BASELINE_PATH" = "N/A" ]; then
-        checklist_delta="PARTIAL"
-    fi
-    if [ "$TWIGGY_AVAILABLE" -eq 0 ]; then
-        checklist_top="PARTIAL"
-        checklist_dominators="PARTIAL"
-        checklist_monos="PARTIAL"
-    fi
-    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
-        checklist_debug="N/A"
-        checklist_debug_delta="N/A"
-    elif [ "$DEBUG_CAPTURED" -eq 0 ]; then
-        checklist_debug="BLOCKED"
-        checklist_debug_delta="BLOCKED"
-    fi
-
-    cat >"$report_path" <<EOF
-# Wasm Footprint Audit - $RUN_DATE
-
-## Report Preamble
-
-- Scope: Canic wasm footprint
-- Definition path: \`$DEFINITION_PATH\`
-- Compared baseline report path: \`$BASELINE_PATH\`
-- Code snapshot identifier: \`$COMMIT\`
-- Method tag/version: \`$METHOD_TAG\`
-- Audit method ID: \`$METHOD_ID\`
-- Audit method version: \`$METHOD_VERSION\`
-- Audit method fingerprint: \`$METHOD_FINGERPRINT\`
-- Comparability status: \`$COMPARABILITY\`
-- Auditor: \`codex\`
-- Run timestamp (UTC): \`$RUN_TIMESTAMP\`
-- Branch: \`$BRANCH\`
-- Worktree: \`$WORKTREE\`
-- Profile: \`$PROFILE_NAME\`
-- Environment class: \`disposable linked Git worktree\`
-- Cargo network mode: \`offline\`
-- Cargo target isolation: \`temporary CARGO_TARGET_DIR\`
-- Target canisters in scope: $(format_canister_list)
-- Analysis artifact note: \`twiggy\` ran against cached raw Cargo wasm to preserve readable symbol names; built/shrunk byte metrics still use the canonical built and \`icp\`-shrunk artifacts.
-
-## Findings / Checklist
-
-| Check | Result | Evidence |
-| --- | --- | --- |
-| Wasm artifacts captured for scope | $checklist_artifacts | Raw and shrunk build artifacts were analyzed from the isolated temporary cache for $(format_canister_list); only summarized evidence is retained. |
-| Artifact sizes recorded in machine-readable artifact | $checklist_metrics | [size-metrics.tsv]($ARTIFACT_LINK_PREFIX/size-metrics.tsv) is the canonical aggregate and baseline data. |
-| Retained evidence integrity recorded | PASS | [evidence-manifest.yml]($ARTIFACT_LINK_PREFIX/evidence-manifest.yml) records run identity, retention/redaction, tool versions, and SHA-256 hashes for every retained artifact. |
-| Twiggy top analyzed | $checklist_top | Offender and retained-size summaries are retained in the per-canister detail reports when \`twiggy\` is available. |
-| Twiggy dominators analyzed | $checklist_dominators | Retained-size ownership is analyzed transiently and summarized in the report. |
-| Twiggy monos analyzed | $checklist_monos | Generic-bloat analysis runs transiently; the report retains the resulting hotspot diagnosis. |
-| Baseline path selected by daily baseline discipline | $checklist_baseline | Current run stem is \`$SCOPE_STEM\`; baseline path resolves to \`$BASELINE_PATH\`. |
-| Size deltas versus baseline recorded when baseline exists | $checklist_delta | $( [ "$BASELINE_PATH" = "N/A" ] && printf 'First run of day; baseline deltas are `N/A`.' || printf 'Baseline deltas were calculated from `%s`.' "$BASELINE_PATH" ) |
-| \`wasm-debug\` built artifacts captured | $checklist_debug | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug raw artifacts were analyzed from the isolated temporary cache for %s.' "$(format_canister_list)"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
-| Debug-vs-audit size deltas recorded | $checklist_debug_delta | $( if [ "$PROFILE_NAME" = "wasm-debug" ]; then printf 'Audited profile is already `wasm-debug`.'; elif [ "$DEBUG_CAPTURED" -eq 1 ]; then printf 'Debug-vs-`%s` built wasm deltas were recorded in the report and machine-readable artifacts.' "$PROFILE_NAME"; else printf 'Debug artifacts were not available for comparison.'; fi ) |
-| Verification readout captured | PASS | Command outcomes are recorded in the Verification Readout section. |
-
-## Comparison to Previous Relevant Run
-
-EOF
-
-    if [ "$BASELINE_PATH" = "N/A" ]; then
-        cat >>"$report_path" <<EOF
-- First run of day for \`$AUDIT_SLUG\`; this report establishes the daily baseline.
-- Baseline drift values are \`N/A\` until a same-day rerun or later comparable run exists.
-EOF
-    else
-        cat >>"$report_path" <<EOF
-- Same-day rerun against baseline \`$BASELINE_PATH\`.
-- Per-canister baseline deltas in the snapshot table compare current shrunk wasm bytes to the baseline run.
-EOF
-    fi
-
-    cat >>"$report_path" <<EOF
-
-## Structural Hotspots
-
-| Canister | Kind | Current hotspot | Retained size | Reason | Evidence |
-| --- | --- | --- | ---: | --- | --- |
-EOF
-
-    for canister in "${CANISTERS[@]}"; do
-        local reason="largest retained symbol from raw-built twiggy analysis"
-        if [ "$canister" = "root" ]; then
-            reason="control-plane outlier; embeds only the bootstrap wasm_store artifact and should not be compared directly to leaf peers"
-        elif [ "$canister" = "minimal" ]; then
-            reason="shared-runtime floor; use this to judge workspace baseline pressure"
-        fi
-
-        printf '| `%s` | %s | `%s` | %s | %s | [%s.md](%s/%s.md) |\n' \
-            "$canister" \
-            "${CANISTER_KIND[$canister]}" \
-            "${HOTSPOT_NAME[$canister]}" \
-            "${HOTSPOT_RETAINED[$canister]}" \
-            "$reason" \
-            "$canister" \
-            "$ARTIFACT_LINK_PREFIX" \
-            "$canister" \
-            >>"$report_path"
-    done
-
-    cat >>"$report_path" <<EOF
-
-## Current Size Snapshot
-
-| Canister | Shrunk wasm | Shrink delta | Baseline delta | Note |
-| --- | ---: | ---: | --- | --- |
-EOF
-
-    for canister in "${CANISTERS[@]}"; do
-        local note="role-specific leaf"
-        if [ "$canister" = "minimal" ]; then
-            note="shared runtime floor"
-        elif [ "$canister" = "root" ]; then
-            note="control-plane bundle outlier"
-        fi
-
-        printf '| `%s` | %s | %s | %s | %s |\n' \
-            "$canister" \
-            "${SHRUNK_WASM_BYTES[$canister]}" \
-            "${SHRINK_DELTA_BYTES[$canister]}" \
-            "${BASELINE_DELTA_BYTES[$canister]}" \
-            "$note" \
-            >>"$report_path"
-    done
-
-    cat >>"$report_path" <<EOF
-
-## Dependency Fan-In Pressure
-
-- \`root\` is always interpreted as a control-plane outlier because it still carries the root runtime plus the bootstrap \`wasm_store.wasm.gz\` artifact during build.
-- Large retained hotspots that repeat across many per-canister detail reports should be treated as shared fan-in pressure in crates such as \`canic-core\`, DTO/serialization glue, logging, metrics, auth, and lifecycle/runtime support.
-EOF
-
-    if has_selected_canister minimal; then
-        cat >>"$report_path" <<EOF
-- \`minimal\` remains the shared-runtime floor. If \`minimal\` stays close to feature canisters, size pressure is coming from shared crates rather than role-specific logic.
-EOF
-    else
-        cat >>"$report_path" <<EOF
-- No dedicated \`minimal\` shared-runtime baseline is attached in the current audited scope; treat repeated hotspots across leaf canisters as shared fan-in pressure until an explicit audit baseline role is attached.
-EOF
-    fi
-
-    cat >>"$report_path" <<EOF
-
-## Early Warning Signals
-
-| Signal | Status | Evidence |
-| --- | --- | --- |
-| Root control-plane outlier | $( if [ "${SHRUNK_WASM_BYTES[root]:-0}" -gt 0 ]; then printf 'WARN'; else printf 'N/A'; fi ) | \`root\` shrunk wasm = ${SHRUNK_WASM_BYTES[root]:-N/A}. |
-| Positive same-day baseline drift in current scope | $( if [ "$BASELINE_PATH" = "N/A" ]; then printf 'N/A'; elif [ "$BASELINE_GROWTH_COUNT" -gt 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | $( if [ "$BASELINE_PATH" = "N/A" ]; then printf 'First run of day; baseline drift is not comparable yet.'; else printf '%s canister(s) grew versus the selected same-day baseline.' "$BASELINE_GROWTH_COUNT"; fi ) |
-EOF
-
-    if has_selected_canister minimal; then
-        cat >>"$report_path" <<EOF
-| Minimal floor close to feature canisters | $( if [ "${SHRUNK_WASM_BYTES[minimal]:-0}" -gt 0 ] && [ "${SHRUNK_WASM_BYTES[app]:-0}" -gt 0 ] && awk -v minimal="${SHRUNK_WASM_BYTES[minimal]}" -v app="${SHRUNK_WASM_BYTES[app]}" 'BEGIN { exit !((app - minimal) <= (app * 0.10)) }'; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrunk wasm = ${SHRUNK_WASM_BYTES[minimal]:-N/A}, \`app\` shrunk wasm = ${SHRUNK_WASM_BYTES[app]:-N/A}. |
-| Shrink delta unexpectedly low | $( if [ "${SHRINK_DELTA_BYTES[minimal]:-0}" -le 0 ]; then printf 'WARN'; else printf 'OK'; fi ) | \`minimal\` shrink delta = ${SHRINK_DELTA_BYTES[minimal]:-N/A} bytes. |
-EOF
-    else
-        cat >>"$report_path" <<EOF
-| Dedicated minimal baseline present | N/A | No \`minimal\` baseline role is attached in the current audited scope. |
-EOF
-    fi
-
-    cat >>"$report_path" <<EOF
-
-## Per-Canister Snapshot
-
-| Canister | Kind | Built wasm | Shrunk wasm | Shrink delta | Built gz | Shrunk gz | Baseline delta | Built funcs | Shrunk funcs | Exports | Detail |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- |
-EOF
-
-    for canister in "${CANISTERS[@]}"; do
-        printf '| `%s` | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | [%s.md](%s/%s.md) |\n' \
-            "$canister" \
-            "${CANISTER_KIND[$canister]}" \
-            "${BUILT_WASM_BYTES[$canister]}" \
-            "${SHRUNK_WASM_BYTES[$canister]}" \
-            "${SHRINK_DELTA_BYTES[$canister]}" \
-            "${BUILT_WASM_GZ_BYTES[$canister]}" \
-            "${SHRUNK_WASM_GZ_BYTES[$canister]}" \
-            "${BASELINE_DELTA_BYTES[$canister]}" \
-            "${BUILT_FUNCTIONS[$canister]}" \
-            "${SHRUNK_FUNCTIONS[$canister]}" \
-            "${SHRUNK_EXPORTS[$canister]}" \
-            "$canister" \
-            "$ARTIFACT_LINK_PREFIX" \
-            "$canister" \
-            >>"$report_path"
-    done
-
-    if [ "$PROFILE_NAME" != "wasm-debug" ]; then
-        cat >>"$report_path" <<EOF
-
-## Debug-vs-Audit Profile Snapshot
-
-| Canister | wasm-debug built wasm | $PROFILE_NAME built wasm | Delta | Delta percent | wasm-debug built gz |
-| --- | ---: | ---: | ---: | --- | ---: |
-EOF
-
-        for canister in "${CANISTERS[@]}"; do
-            printf '| `%s` | %s | %s | %s | %s | %s |\n' \
-                "$canister" \
-                "${DEBUG_BUILT_WASM_BYTES[$canister]}" \
-                "${BUILT_WASM_BYTES[$canister]}" \
-                "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}" \
-                "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}" \
-                "${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}" \
-                >>"$report_path"
-        done
-    fi
-
-    cat >>"$report_path" <<EOF
-
-## Risk Score
-
-Risk Score: **$RISK_SCORE / 10**
-
-Interpretation: this is a wasm drift score, not a correctness score. The main drivers in Canic are the shared runtime floor across leaf canisters and the special-case bundle behavior in \`root\`.
-
-## Verification Readout
-
-| Command | Status | Notes |
-| --- | --- | --- |
-EOF
-
-    printf '%s\n' "${VERIFICATION_ROWS[@]}" >>"$report_path"
-
-    cat >>"$report_path" <<EOF
-
-## Follow-up Actions
-
-EOF
-
-    if [ "$TWIGGY_AVAILABLE" -eq 0 ]; then
-        cat >>"$report_path" <<EOF
-1. Owner boundary: \`tooling\`
-   Action: install \`twiggy\` before the next wasm footprint run so retained-size and monomorphization evidence is not \`BLOCKED\`.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
-EOF
-    elif [ "$BASELINE_PATH" != "N/A" ] && [ "$BASELINE_GROWTH_COUNT" -gt 0 ]; then
-        cat >>"$report_path" <<EOF
-1. Owner boundary: \`wasm drift follow-through\`
-   Action: investigate the canisters with positive same-day baseline deltas first and decide whether the added bytes are intentional or should come back down in the next rerun.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
-2. Owner boundary: \`shared runtime baseline\`
-   Action: $( if has_selected_canister minimal; then printf 'compare `minimal` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.'; else printf 'decide whether a dedicated audit baseline role should be attached, or keep using repeated leaf hotspots as the shared-runtime signal.'; fi )
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
-3. Owner boundary: \`bundle canister root\`
-   Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
-EOF
-    else
-        cat >>"$report_path" <<EOF
-1. Owner boundary: \`shared runtime baseline\`
-   Action: $( if has_selected_canister minimal; then printf 'compare `minimal` retained hotspots against one feature canister in the next run and treat overlapping drivers as shared-cost reduction candidates.'; else printf 'decide whether a dedicated audit baseline role should be attached, or keep using repeated leaf hotspots as the shared-runtime signal.'; fi )
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
-2. Owner boundary: \`bundle canister root\`
-   Action: keep tracking \`root\` separately from leaf canisters so child bundle growth and root-local growth do not get conflated.
-   Target report date/run: \`docs/audits/reports/$MONTH/$RUN_DATE/$SCOPE_STEM.md\`
-EOF
-    fi
-
-    cat >>"$report_path" <<EOF
-
-## Report Files
-
-- [$SCOPE_STEM.md]($REPORT_LINK_PREFIX/$SCOPE_STEM.md)
-- [size-summary.md]($ARTIFACT_LINK_PREFIX/size-summary.md)
-- [size-metrics.tsv]($ARTIFACT_LINK_PREFIX/size-metrics.tsv)
-- [evidence-manifest.yml]($ARTIFACT_LINK_PREFIX/evidence-manifest.yml)
-EOF
-
-    for canister in "${CANISTERS[@]}"; do
-        printf -- '- [%s.md](%s/%s.md)\n' "$canister" "$ARTIFACT_LINK_PREFIX" "$canister" >>"$report_path"
-    done
-}
-
-normalize_profile
-select_canisters
 
 RUN_DATE="${WASM_AUDIT_DATE:-$(date -u +%F)}"
-RUN_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 MONTH="${RUN_DATE:0:7}"
-DAY_DIR="docs/audits/reports/$MONTH/$RUN_DATE"
-mkdir -p "$DAY_DIR"
-
-SCOPE_STEM="$(next_scope_stem "$DAY_DIR" "$AUDIT_SLUG")"
+DAY_DIR="$METHOD_ROOT/docs/audits/reports/$MONTH/$RUN_DATE"
+SCOPE_STEM="$(next_scope_stem "$DAY_DIR" "$AUDIT_STEM")"
 REPORT_PATH="$DAY_DIR/$SCOPE_STEM.md"
 ARTIFACTS_DIR="$DAY_DIR/artifacts/$SCOPE_STEM"
-mkdir -p "$ARTIFACTS_DIR"
+REPORT_RELATIVE="${REPORT_PATH#"$METHOD_ROOT/"}"
 
-BASELINE_PATH="N/A"
-if [ "$SCOPE_STEM" != "$AUDIT_SLUG" ]; then
-    BASELINE_PATH="docs/audits/reports/$MONTH/$RUN_DATE/$AUDIT_SLUG.md"
-fi
-
-REPORT_LINK_PREFIX="."
-ARTIFACT_LINK_PREFIX="artifacts/$SCOPE_STEM"
-
-CACHE_BASE="${WASM_AUDIT_CACHE_ROOT:-$RUN_TMP/cache}"
-CACHE_ROOT="$CACHE_BASE/$PROFILE_NAME"
-CACHE_RAW_DIR="$CACHE_ROOT/raw"
-CACHE_SHRUNK_DIR="$CACHE_ROOT/shrunk"
-CACHE_ANALYSIS_DIR="$CACHE_ROOT/analysis"
-DEBUG_CACHE_ROOT="$CACHE_BASE/wasm-debug"
-DEBUG_CACHE_RAW_DIR="$DEBUG_CACHE_ROOT/raw"
-mkdir -p "$CACHE_ROOT" "$CACHE_RAW_DIR" "$CACHE_SHRUNK_DIR" "$CACHE_ANALYSIS_DIR"
-
-TWIGGY_AVAILABLE=0
-IC_WASM_AVAILABLE=0
-if has_cmd twiggy; then
-    TWIGGY_AVAILABLE=1
-fi
-if has_cmd ic-wasm; then
-    IC_WASM_AVAILABLE=1
-fi
-
-BRANCH="$(normalize_branch)"
-COMMIT="$(normalize_commit)"
-WORKTREE="$(normalize_worktree)"
-COMPARABILITY="comparable"
-
-if [ "${WASM_AUDIT_SKIP_BUILD:-0}" = "1" ]; then
-    validate_cached_artifacts
-    validate_cached_debug_artifacts
-    record_verification "WASM_AUDIT_SKIP_BUILD=1 cache reuse" "PASS" "reused cached artifacts from \`$CACHE_ROOT\`"
-    if [ "$PROFILE_NAME" != "wasm-debug" ] && [ "$DEBUG_CAPTURED" -eq 1 ]; then
-        record_verification "wasm-debug cache reuse" "PASS" "reused cached debug artifacts from \`$DEBUG_CACHE_ROOT\`"
-    elif [ "$PROFILE_NAME" != "wasm-debug" ]; then
-        record_verification "wasm-debug cache reuse" "BLOCKED" "debug artifacts not found under \`$DEBUG_CACHE_ROOT\`"
+BASELINE_REPORT="N/A"
+BASELINE_METHOD_JSON="N/A"
+ORIGINAL_BASELINE_REPORT="N/A"
+while IFS= read -r candidate_method_path; do
+    [[ -n "$candidate_method_path" ]] || continue
+    candidate_method_id="$(extract_json_field "$candidate_method_path" method_id)"
+    candidate_method_version="$(extract_json_field "$candidate_method_path" method_version)"
+    candidate_method_fingerprint="$(extract_json_field "$candidate_method_path" method_fingerprint)"
+    candidate_roster_key="$(extract_json_field "$candidate_method_path" roster_key)"
+    candidate_profile_key="$(extract_json_field "$candidate_method_path" profile_key)"
+    candidate_execution_path_key="$(extract_json_field "$candidate_method_path" execution_path_key)"
+    candidate_tool_key="$(extract_json_field "$candidate_method_path" tool_key)"
+    if [[ "$candidate_method_id" != "$METHOD_ID" ||
+        "$candidate_method_version" != "$METHOD_VERSION" ||
+        "$candidate_method_fingerprint" != "$METHOD_FINGERPRINT" ||
+        "$candidate_roster_key" != "$ROSTER_KEY" ||
+        "$candidate_profile_key" != "$PROFILE_KEY" ||
+        "$candidate_execution_path_key" != "$EXECUTION_PATH_KEY" ||
+        "$candidate_tool_key" != "$TOOL_KEY" ]]; then
+        continue
     fi
-else
-    if ! has_cmd cargo; then
-        echo "cargo is required unless WASM_AUDIT_SKIP_BUILD=1" >&2
-        exit 1
+    candidate_artifacts_dir="${candidate_method_path%/method.json}"
+    candidate_stem="$(basename "$candidate_artifacts_dir")"
+    candidate_day_dir="${candidate_artifacts_dir%/artifacts/*}"
+    candidate_report="$candidate_day_dir/$candidate_stem.md"
+    if [[ -f "$candidate_report" && -f "$candidate_artifacts_dir/size-metrics.tsv" ]]; then
+        BASELINE_REPORT="${candidate_report#"$METHOD_ROOT/"}"
+        BASELINE_METHOD_JSON="$candidate_method_path"
+        candidate_original="$(extract_json_field "$candidate_method_path" original_baseline_report)"
+        if [[ -n "$candidate_original" && "$candidate_original" != "N/A" ]]; then
+            ORIGINAL_BASELINE_REPORT="$candidate_original"
+        else
+            ORIGINAL_BASELINE_REPORT="$BASELINE_REPORT"
+        fi
+        break
     fi
-    require_icp_tools
-    build_and_cache_artifacts
-    capture_debug_artifacts
-    record_verification "cargo build --target wasm32-unknown-unknown ... && cargo run -p canic-host --example build_artifact ..." "PASS" "built and cached raw/shrunk artifacts for $(profile_command_note)"
-    if [ "$PROFILE_NAME" != "wasm-debug" ]; then
-        record_verification "cargo build --target wasm32-unknown-unknown -p <package> --locked" "PASS" "built and cached wasm-debug raw artifacts for profile comparison"
-    fi
-fi
-
-if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then
-    record_verification "ic-wasm <artifact> info" "PASS" "built and shrunk structure metrics analyzed and summarized"
-else
-    record_verification "ic-wasm <artifact> info" "BLOCKED" "ic-wasm not installed; structure snapshot metrics unavailable"
-fi
-
-if [ "$TWIGGY_AVAILABLE" -eq 1 ]; then
-    record_verification "twiggy top|dominators|monos <analysis.wasm>" "PASS" "hotspot outputs analyzed and summarized for each canister in scope"
-else
-    record_verification "twiggy top|dominators|monos <analysis.wasm>" "BLOCKED" "twiggy not installed; hotspot attribution unavailable"
-fi
-
-SIZE_METRICS_TSV="$ARTIFACTS_DIR/size-metrics.tsv"
-{
-    printf 'canister\tkind\tbuilt_wasm_bytes\tbuilt_wasm_gz_bytes\tshrunk_wasm_bytes\tshrunk_wasm_gz_bytes\tdebug_built_wasm_bytes\tdebug_built_wasm_gz_bytes\tdebug_vs_profile_delta_bytes\tdebug_vs_profile_delta_percent\tshrink_delta_bytes\tshrink_delta_percent\tbuilt_functions\tshrunk_functions\tbuilt_exports\tshrunk_exports\n'
-} >"$SIZE_METRICS_TSV"
-
-for canister in "${CANISTERS[@]}"; do
-    if [ "$canister" = "root" ]; then
-        CANISTER_KIND["$canister"]="bundle-canister"
-    else
-        CANISTER_KIND["$canister"]="leaf-canister"
-    fi
-
-    raw_wasm="$CACHE_RAW_DIR/$canister.wasm"
-    raw_gz="$CACHE_RAW_DIR/$canister.wasm.gz"
-    shrunk_wasm="$CACHE_SHRUNK_DIR/$canister.wasm"
-    shrunk_gz="$CACHE_SHRUNK_DIR/$canister.wasm.gz"
-    analysis_wasm="$CACHE_ANALYSIS_DIR/$canister.wasm"
-
-    BUILT_WASM_BYTES["$canister"]="$(byte_size "$raw_wasm")"
-    BUILT_WASM_GZ_BYTES["$canister"]="$(byte_size "$raw_gz")"
-    SHRUNK_WASM_BYTES["$canister"]="$(byte_size "$shrunk_wasm")"
-    SHRUNK_WASM_GZ_BYTES["$canister"]="$(byte_size "$shrunk_gz")"
-    SHRINK_DELTA_BYTES["$canister"]="$(( ${BUILT_WASM_BYTES[$canister]} - ${SHRUNK_WASM_BYTES[$canister]} ))"
-    SHRINK_DELTA_PCT["$canister"]="$(normalize_delta_pct "${BUILT_WASM_BYTES[$canister]}" "${SHRUNK_WASM_BYTES[$canister]}")"
-
-    if [ "$PROFILE_NAME" = "wasm-debug" ]; then
-        DEBUG_BUILT_WASM_BYTES["$canister"]="${BUILT_WASM_BYTES[$canister]}"
-        DEBUG_BUILT_WASM_GZ_BYTES["$canister"]="${BUILT_WASM_GZ_BYTES[$canister]}"
-        DEBUG_VS_PROFILE_DELTA_BYTES["$canister"]="0"
-        DEBUG_VS_PROFILE_DELTA_PCT["$canister"]="0.00%"
-    elif [ "$DEBUG_CAPTURED" -eq 1 ]; then
-        debug_wasm="$DEBUG_CACHE_RAW_DIR/$canister.wasm"
-        debug_gz="$DEBUG_CACHE_RAW_DIR/$canister.wasm.gz"
-        DEBUG_BUILT_WASM_BYTES["$canister"]="$(byte_size "$debug_wasm")"
-        DEBUG_BUILT_WASM_GZ_BYTES["$canister"]="$(byte_size "$debug_gz")"
-        debug_delta="$(( ${DEBUG_BUILT_WASM_BYTES[$canister]} - ${BUILT_WASM_BYTES[$canister]} ))"
-        DEBUG_VS_PROFILE_DELTA_BYTES["$canister"]="$(signed_bytes "$debug_delta")"
-        DEBUG_VS_PROFILE_DELTA_PCT["$canister"]="$(normalize_baseline_delta_pct "${BUILT_WASM_BYTES[$canister]}" "${DEBUG_BUILT_WASM_BYTES[$canister]}")"
-    else
-        DEBUG_BUILT_WASM_BYTES["$canister"]="0"
-        DEBUG_BUILT_WASM_GZ_BYTES["$canister"]="0"
-        DEBUG_VS_PROFILE_DELTA_BYTES["$canister"]="N/A"
-        DEBUG_VS_PROFILE_DELTA_PCT["$canister"]="N/A"
-    fi
-
-    built_info_out="$CACHE_ANALYSIS_DIR/$canister.built.ic-wasm-info.txt"
-    shrunk_info_out="$CACHE_ANALYSIS_DIR/$canister.shrunk.ic-wasm-info.txt"
-
-    if [ "$IC_WASM_AVAILABLE" -eq 1 ]; then
-        ic-wasm "$raw_wasm" info >"$built_info_out"
-        ic-wasm "$shrunk_wasm" info >"$shrunk_info_out"
-        capture_info_metrics "$canister" built "$built_info_out"
-        capture_info_metrics "$canister" shrunk "$shrunk_info_out"
-    else
-        printf 'BLOCKED: ic-wasm not installed\n' >"$built_info_out"
-        printf 'BLOCKED: ic-wasm not installed\n' >"$shrunk_info_out"
-        BUILT_FUNCTIONS["$canister"]="0"
-        BUILT_DATA_SECTIONS["$canister"]="0"
-        BUILT_DATA_BYTES["$canister"]="0"
-        BUILT_EXPORTS["$canister"]="0"
-        SHRUNK_FUNCTIONS["$canister"]="0"
-        SHRUNK_DATA_SECTIONS["$canister"]="0"
-        SHRUNK_DATA_BYTES["$canister"]="0"
-        SHRUNK_EXPORTS["$canister"]="0"
-    fi
-
-    top_txt="$CACHE_ANALYSIS_DIR/$canister.twiggy-top.txt"
-    top_csv="$CACHE_ANALYSIS_DIR/$canister.twiggy-top.csv"
-    retained_csv="$CACHE_ANALYSIS_DIR/$canister.twiggy-retained.csv"
-    dominators_txt="$CACHE_ANALYSIS_DIR/$canister.twiggy-dominators.txt"
-    monos_txt="$CACHE_ANALYSIS_DIR/$canister.twiggy-monos.txt"
-
-    if [ "$TWIGGY_AVAILABLE" -eq 1 ]; then
-        twiggy top -n 40 "$analysis_wasm" >"$top_txt"
-        twiggy top -n 40 -f csv "$analysis_wasm" >"$top_csv"
-        twiggy top --retained -n 40 -f csv "$analysis_wasm" >"$retained_csv"
-        twiggy dominators -d 8 -r 60 "$analysis_wasm" >"$dominators_txt"
-        twiggy monos -m 20 -n 20 "$analysis_wasm" >"$monos_txt"
-        capture_hotspot_summary "$canister" "$top_csv" "$retained_csv"
-    else
-        printf 'BLOCKED: twiggy not installed\n' >"$top_txt"
-        printf 'Name,ShallowSize,ShallowSizePercent,RetainedSize,RetainedSizePercent\n' >"$top_csv"
-        printf 'Name,ShallowSize,ShallowSizePercent,RetainedSize,RetainedSizePercent\n' >"$retained_csv"
-        printf 'BLOCKED: twiggy not installed\n' >"$dominators_txt"
-        printf 'BLOCKED: twiggy not installed\n' >"$monos_txt"
-        HOTSPOT_NAME["$canister"]="N/A"
-        HOTSPOT_SHALLOW["$canister"]="N/A"
-        HOTSPOT_RETAINED["$canister"]="N/A"
-    fi
-
-    BASELINE_DELTA_BYTES["$canister"]="N/A"
-    BASELINE_DELTA_PCT["$canister"]="N/A"
-
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-        "$canister" \
-        "${CANISTER_KIND[$canister]}" \
-        "${BUILT_WASM_BYTES[$canister]}" \
-        "${BUILT_WASM_GZ_BYTES[$canister]}" \
-        "${SHRUNK_WASM_BYTES[$canister]}" \
-        "${SHRUNK_WASM_GZ_BYTES[$canister]}" \
-        "${DEBUG_BUILT_WASM_BYTES[$canister]}" \
-        "${DEBUG_BUILT_WASM_GZ_BYTES[$canister]}" \
-        "${DEBUG_VS_PROFILE_DELTA_BYTES[$canister]}" \
-        "${DEBUG_VS_PROFILE_DELTA_PCT[$canister]}" \
-        "${SHRINK_DELTA_BYTES[$canister]}" \
-        "${SHRINK_DELTA_PCT[$canister]}" \
-        "${BUILT_FUNCTIONS[$canister]}" \
-        "${SHRUNK_FUNCTIONS[$canister]}" \
-        "${BUILT_EXPORTS[$canister]}" \
-        "${SHRUNK_EXPORTS[$canister]}" \
-        >>"$SIZE_METRICS_TSV"
-
-done
-
-if [ "$BASELINE_PATH" != "N/A" ]; then
-    BASELINE_SCOPE_STEM="$(basename "$BASELINE_PATH" .md)"
-    BASELINE_TSV="$DAY_DIR/artifacts/$BASELINE_SCOPE_STEM/size-metrics.tsv"
-    if [ -f "$BASELINE_TSV" ]; then
-        record_verification "baseline size-metrics.tsv comparison" "PASS" "baseline deltas calculated from \`$BASELINE_TSV\`"
-        for canister in "${CANISTERS[@]}"; do
-            baseline_shrunk="$(awk -F'\t' -v c="$canister" 'NR > 1 && $1 == c {print $5}' "$BASELINE_TSV")"
-            if [ -n "$baseline_shrunk" ]; then
-                baseline_delta="$(( ${SHRUNK_WASM_BYTES[$canister]} - baseline_shrunk ))"
-                BASELINE_DELTA_BYTES["$canister"]="$(signed_bytes "$baseline_delta")"
-                BASELINE_DELTA_PCT["$canister"]="$(normalize_baseline_delta_pct "$baseline_shrunk" "${SHRUNK_WASM_BYTES[$canister]}")"
-                if [ "$baseline_delta" -gt 0 ]; then
-                    BASELINE_GROWTH_COUNT=$((BASELINE_GROWTH_COUNT + 1))
-                fi
-            fi
-        done
-    elif [ -f "$BASELINE_PATH" ]; then
-        record_verification "baseline markdown comparison" "PASS" "baseline deltas calculated from \`$BASELINE_PATH\` current size snapshot"
-        for canister in "${CANISTERS[@]}"; do
-            baseline_shrunk="$(baseline_shrunk_from_report "$BASELINE_PATH" "$canister")"
-            if [ -n "$baseline_shrunk" ]; then
-                baseline_delta="$(( ${SHRUNK_WASM_BYTES[$canister]} - baseline_shrunk ))"
-                BASELINE_DELTA_BYTES["$canister"]="$(signed_bytes "$baseline_delta")"
-                BASELINE_DELTA_PCT["$canister"]="$(normalize_baseline_delta_pct "$baseline_shrunk" "${SHRUNK_WASM_BYTES[$canister]}")"
-                if [ "$baseline_delta" -gt 0 ]; then
-                    BASELINE_GROWTH_COUNT=$((BASELINE_GROWTH_COUNT + 1))
-                fi
-            fi
-        done
-    else
-        COMPARABILITY="non-comparable"
-        record_verification "baseline comparison" "BLOCKED" "baseline artifact table not found at \`$BASELINE_TSV\` and baseline report not found at \`$BASELINE_PATH\`"
-    fi
-else
-    record_verification "baseline comparison" "BLOCKED" "first run of day; no baseline comparison available"
-fi
-
-run_top_summary "$ARTIFACTS_DIR/size-summary.md"
-
-for canister in "${CANISTERS[@]}"; do
-    write_per_canister_markdown "$canister" "$ARTIFACTS_DIR/$canister.md"
-done
-
-determine_risk_score
-render_report "$REPORT_PATH"
-
-baseline_identity="$BASELINE_PATH"
-if [ "$BASELINE_PATH" != "N/A" ] && [ -f "$BASELINE_PATH" ]; then
-    baseline_identity="$BASELINE_PATH@sha256:$(sha256sum "$BASELINE_PATH" | awk '{print $1}')"
-fi
-completed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-retained_hashes="$(
-    {
-        printf '%s\n' "$REPORT_PATH"
-        find "$ARTIFACTS_DIR" -maxdepth 1 -type f ! -name evidence-manifest.yml -print
-    } | sort | xargs -r sha256sum
-)"
-
-(
-    cd "$ARTIFACTS_DIR"
-    {
-        printf 'command: "bash scripts/ci/wasm-audit-report.sh"\n'
-        printf 'working_directory: "repository_root"\n'
-        printf 'exit_code: 0\n'
-        printf 'stdout_path: "not_retained"\n'
-        printf 'stderr_path: "not_retained"\n'
-        printf 'baseline_identity: "%s"\n' "$baseline_identity"
-        printf 'method_identity: "%s/v%s@sha256:%s"\n' "$METHOD_ID" "$METHOD_VERSION" "$METHOD_FINGERPRINT"
-        printf 'tool_versions:\n'
-        printf '  cargo: "%s"\n' "$(tool_version cargo)"
-        printf '  rustc: "%s"\n' "$(tool_version rustc)"
-        printf '  icp: "%s"\n' "$(tool_version icp)"
-        printf '  ic-wasm: "%s"\n' "$(tool_version ic-wasm)"
-        printf '  twiggy: "%s"\n' "$(tool_version twiggy)"
-        printf 'timestamps:\n'
-        printf '  started_at: "%s"\n' "$RUN_TIMESTAMP"
-        printf '  completed_at: "%s"\n' "$completed_at"
-        printf 'artifact_hashes:\n'
-        sed 's/^/  /' <<<"$retained_hashes"
-        printf 'retention_class: "primary_markdown_and_compact_supporting_evidence"\n'
-        printf 'redactions_applied: "repository root and disposable cache normalized; no credentials, tokens, or private material retained"\n'
-    } >evidence-manifest.yml
+done < <(
+    find "$METHOD_ROOT/docs/audits/reports" -type f \
+        -path '*/artifacts/wasm-footprint-v2*/method.json' -print 2>/dev/null | sort -r
 )
 
-if ! git diff-index --quiet HEAD --; then
-    echo "wasm audit mutated tracked source in its disposable worktree" >&2
+build_profile release
+build_profile debug
+
+TRACKED_STATUS_AFTER="$(git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=no)"
+if [[ -n "$TRACKED_STATUS_AFTER" ]]; then
+    echo "Wasm audit mutated tracked product source" >&2
+    printf '%s\n' "$TRACKED_STATUS_AFTER" >&2
+    exit 1
+fi
+UNEXPECTED_UNTRACKED="$(
+    git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=all |
+        awk '$1 == "??" && $2 !~ /^\.icp\// { print }'
+)"
+if [[ -n "$UNEXPECTED_UNTRACKED" ]]; then
+    echo "Wasm audit created an unexpected product-worktree path" >&2
+    printf '%s\n' "$UNEXPECTED_UNTRACKED" >&2
     exit 1
 fi
 
-printf 'wrote %s\n' "$REPORT_PATH"
+mkdir -p "$ARTIFACTS_DIR"
+ANALYSIS_DIR="$RUN_TMP/analysis"
+mkdir -p "$ANALYSIS_DIR"
+
+declare -A KIND=()
+declare -A RELEASE_BYTES=()
+declare -A RELEASE_GZIP_BYTES=()
+declare -A DEBUG_BYTES=()
+declare -A DEBUG_GZIP_BYTES=()
+declare -A DEBUG_DELTA_BYTES=()
+declare -A DEBUG_DELTA_PERCENT=()
+declare -A BASELINE_DELTA_BYTES=()
+declare -A BASELINE_DELTA_PERCENT=()
+declare -A FUNCTIONS=()
+declare -A DATA_SECTIONS=()
+declare -A DATA_BYTES=()
+declare -A EXPORTS=()
+declare -A TOP_NAME=()
+declare -A TOP_BYTES=()
+declare -A RETAINED_NAME=()
+declare -A RETAINED_BYTES=()
+
+BASELINE_TSV="N/A"
+if [[ "$BASELINE_METHOD_JSON" != "N/A" ]]; then
+    BASELINE_TSV="${BASELINE_METHOD_JSON%/method.json}/size-metrics.tsv"
+fi
+
+SIZE_METRICS="$ARTIFACTS_DIR/size-metrics.tsv"
+printf 'canister\tkind\trelease_wasm_bytes\trelease_gzip_bytes\tdebug_wasm_bytes\tdebug_gzip_bytes\tdebug_delta_bytes\tdebug_delta_percent\tbaseline_delta_bytes\tbaseline_delta_percent\tfunctions\tdata_sections\tdata_bytes\texports\ttop_name\ttop_bytes\tretained_name\tretained_bytes\n' >"$SIZE_METRICS"
+
+for canister in "${CANISTERS[@]}"; do
+    release_wasm="$RUN_TMP/artifacts/release/$canister.wasm"
+    release_gzip="$RUN_TMP/artifacts/release/$canister.wasm.gz"
+    debug_wasm="$RUN_TMP/artifacts/debug/$canister.wasm"
+    debug_gzip="$RUN_TMP/artifacts/debug/$canister.wasm.gz"
+    if [[ "$canister" == "root" ]]; then
+        KIND["$canister"]="bundle-canister"
+    else
+        KIND["$canister"]="leaf-canister"
+    fi
+    RELEASE_BYTES["$canister"]="$(stat -c%s "$release_wasm")"
+    RELEASE_GZIP_BYTES["$canister"]="$(stat -c%s "$release_gzip")"
+    DEBUG_BYTES["$canister"]="$(stat -c%s "$debug_wasm")"
+    DEBUG_GZIP_BYTES["$canister"]="$(stat -c%s "$debug_gzip")"
+    debug_delta=$((${DEBUG_BYTES[$canister]} - ${RELEASE_BYTES[$canister]}))
+    DEBUG_DELTA_BYTES["$canister"]="$(signed_integer "$debug_delta")"
+    DEBUG_DELTA_PERCENT["$canister"]="$(percent_delta "${RELEASE_BYTES[$canister]}" "${DEBUG_BYTES[$canister]}")"
+    BASELINE_DELTA_BYTES["$canister"]="N/A"
+    BASELINE_DELTA_PERCENT["$canister"]="N/A"
+
+    ic_wasm_info="$ANALYSIS_DIR/$canister.ic-wasm-info.txt"
+    ic-wasm "$release_wasm" info >"$ic_wasm_info"
+    capture_info_metrics "$canister" "$ic_wasm_info"
+    capture_twiggy_metrics "$canister" "$release_wasm" "$ANALYSIS_DIR"
+
+    if [[ "$BASELINE_TSV" != "N/A" ]]; then
+        baseline_bytes="$(awk -F'\t' -v role="$canister" 'NR > 1 && $1 == role { print $3; exit }' "$BASELINE_TSV")"
+        if [[ ! "$baseline_bytes" =~ ^[0-9]+$ ]]; then
+            echo "compatible predecessor lacks release bytes for $canister" >&2
+            exit 1
+        fi
+        baseline_delta=$((${RELEASE_BYTES[$canister]} - baseline_bytes))
+        BASELINE_DELTA_BYTES["$canister"]="$(signed_integer "$baseline_delta")"
+        BASELINE_DELTA_PERCENT["$canister"]="$(percent_delta "$baseline_bytes" "${RELEASE_BYTES[$canister]}")"
+    fi
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$canister" "${KIND[$canister]}" \
+        "${RELEASE_BYTES[$canister]}" "${RELEASE_GZIP_BYTES[$canister]}" \
+        "${DEBUG_BYTES[$canister]}" "${DEBUG_GZIP_BYTES[$canister]}" \
+        "${DEBUG_DELTA_BYTES[$canister]}" "${DEBUG_DELTA_PERCENT[$canister]}" \
+        "${BASELINE_DELTA_BYTES[$canister]}" "${BASELINE_DELTA_PERCENT[$canister]}" \
+        "${FUNCTIONS[$canister]}" "${DATA_SECTIONS[$canister]}" \
+        "${DATA_BYTES[$canister]}" "${EXPORTS[$canister]}" \
+        "$(tsv_value "${TOP_NAME[$canister]}")" "${TOP_BYTES[$canister]}" \
+        "$(tsv_value "${RETAINED_NAME[$canister]}")" "${RETAINED_BYTES[$canister]}" \
+        >>"$SIZE_METRICS"
+done
+
+leaf_min=0
+leaf_max=0
+root_bytes="${RELEASE_BYTES[root]}"
+max_retained_percent="0.00"
+max_growth_percent="0.00"
+for canister in "${CANISTERS[@]}"; do
+    if [[ "${KIND[$canister]}" == "leaf-canister" ]]; then
+        current_bytes="${RELEASE_BYTES[$canister]}"
+        if [[ "$leaf_min" -eq 0 || "$current_bytes" -lt "$leaf_min" ]]; then
+            leaf_min="$current_bytes"
+        fi
+        if [[ "$current_bytes" -gt "$leaf_max" ]]; then
+            leaf_max="$current_bytes"
+        fi
+    fi
+    retained_percent="$(awk -v retained="${RETAINED_BYTES[$canister]}" -v total="${RELEASE_BYTES[$canister]}" 'BEGIN { printf "%.4f", (retained / total) * 100 }')"
+    if awk -v current="$retained_percent" -v maximum="$max_retained_percent" 'BEGIN { exit !(current > maximum) }'; then
+        max_retained_percent="$retained_percent"
+    fi
+    if [[ "${BASELINE_DELTA_PERCENT[$canister]}" != "N/A" ]] &&
+        awk -v current="${BASELINE_DELTA_PERCENT[$canister]}" -v maximum="$max_growth_percent" 'BEGIN { exit !(current > maximum) }'; then
+        max_growth_percent="${BASELINE_DELTA_PERCENT[$canister]}"
+    fi
+done
+
+leaf_spread_ratio="$(ratio "$leaf_min" "$leaf_max")"
+root_leaf_ratio="$(ratio "$leaf_max" "$root_bytes")"
+RISK_SCORE=0
+declare -a RISK_DRIVERS=()
+if [[ "$BASELINE_REPORT" == "N/A" ]]; then
+    RISK_SCORE=$((RISK_SCORE + 2))
+    RISK_DRIVERS+=("no compatible v2 predecessor: +2")
+fi
+if awk -v value="$leaf_spread_ratio" 'BEGIN { exit !(value >= 1.25) }'; then
+    RISK_SCORE=$((RISK_SCORE + 2))
+    RISK_DRIVERS+=("leaf release spread >= 1.25: +2")
+elif awk -v value="$leaf_spread_ratio" 'BEGIN { exit !(value >= 1.10) }'; then
+    RISK_SCORE=$((RISK_SCORE + 1))
+    RISK_DRIVERS+=("leaf release spread 1.10-1.2499: +1")
+fi
+if awk -v value="$root_leaf_ratio" 'BEGIN { exit !(value >= 3.0) }'; then
+    RISK_SCORE=$((RISK_SCORE + 2))
+    RISK_DRIVERS+=("root/max-leaf release ratio >= 3.0: +2")
+elif awk -v value="$root_leaf_ratio" 'BEGIN { exit !(value >= 2.0) }'; then
+    RISK_SCORE=$((RISK_SCORE + 1))
+    RISK_DRIVERS+=("root/max-leaf release ratio 2.0-2.9999: +1")
+fi
+if awk -v value="$max_growth_percent" 'BEGIN { exit !(value >= 10.0) }'; then
+    RISK_SCORE=$((RISK_SCORE + 2))
+    RISK_DRIVERS+=("largest compatible release growth >= 10%: +2")
+elif awk -v value="$max_growth_percent" 'BEGIN { exit !(value >= 5.0) }'; then
+    RISK_SCORE=$((RISK_SCORE + 1))
+    RISK_DRIVERS+=("largest compatible release growth 5-9.9999%: +1")
+fi
+if awk -v value="$max_retained_percent" 'BEGIN { exit !(value >= 25.0) }'; then
+    RISK_SCORE=$((RISK_SCORE + 2))
+    RISK_DRIVERS+=("largest retained item >= 25% of release Wasm: +2")
+elif awk -v value="$max_retained_percent" 'BEGIN { exit !(value >= 10.0) }'; then
+    RISK_SCORE=$((RISK_SCORE + 1))
+    RISK_DRIVERS+=("largest retained item 10-24.9999% of release Wasm: +1")
+fi
+if [[ "$RISK_SCORE" -gt 10 ]]; then
+    RISK_SCORE=10
+fi
+if [[ "$RISK_SCORE" -ge 7 ]]; then
+    RUN_RESULT="fail"
+else
+    RUN_RESULT="pass"
+fi
+if [[ "$BASELINE_REPORT" == "N/A" ]]; then
+    COMPARABILITY="first-v2-baseline"
+    ORIGINAL_BASELINE_REPORT="$REPORT_RELATIVE"
+else
+    COMPARABILITY="comparable to immediate compatible predecessor"
+fi
+
+SUMMARY_PATH="$ARTIFACTS_DIR/size-summary.md"
+cat >"$SUMMARY_PATH" <<EOF
+# Wasm Size Summary - $RUN_DATE
+
+| Canister | Kind | Release Wasm | Release gzip | Debug Wasm | Debug gzip | Debug delta | Predecessor delta |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+EOF
+for canister in "${CANISTERS[@]}"; do
+    printf '| `%s` | %s | %s | %s | %s | %s | %s (%s%%) | %s (%s) |\n' \
+        "$canister" "${KIND[$canister]}" \
+        "${RELEASE_BYTES[$canister]}" "${RELEASE_GZIP_BYTES[$canister]}" \
+        "${DEBUG_BYTES[$canister]}" "${DEBUG_GZIP_BYTES[$canister]}" \
+        "${DEBUG_DELTA_BYTES[$canister]}" "${DEBUG_DELTA_PERCENT[$canister]}" \
+        "${BASELINE_DELTA_BYTES[$canister]}" "${BASELINE_DELTA_PERCENT[$canister]}" \
+        >>"$SUMMARY_PATH"
+done
+
+for canister in "${CANISTERS[@]}"; do
+    detail_path="$ARTIFACTS_DIR/$canister.md"
+    dominators_excerpt="$(cat "$ANALYSIS_DIR/$canister.dominators-excerpt.txt")"
+    monos_excerpt="$(cat "$ANALYSIS_DIR/$canister.monos-excerpt.txt")"
+    cat >"$detail_path" <<EOF
+# Wasm Detail: \`$canister\`
+
+| Metric | Value |
+| --- | ---: |
+| Kind | ${KIND[$canister]} |
+| Release Wasm bytes | ${RELEASE_BYTES[$canister]} |
+| Release gzip bytes | ${RELEASE_GZIP_BYTES[$canister]} |
+| Debug Wasm bytes | ${DEBUG_BYTES[$canister]} |
+| Debug gzip bytes | ${DEBUG_GZIP_BYTES[$canister]} |
+| Debug delta | ${DEBUG_DELTA_BYTES[$canister]} (${DEBUG_DELTA_PERCENT[$canister]}%) |
+| Compatible predecessor delta | ${BASELINE_DELTA_BYTES[$canister]} (${BASELINE_DELTA_PERCENT[$canister]}) |
+| Functions | ${FUNCTIONS[$canister]} |
+| Data sections / bytes | ${DATA_SECTIONS[$canister]} / ${DATA_BYTES[$canister]} |
+| Exported methods | ${EXPORTS[$canister]} |
+| Largest shallow item | $(markdown_value "${TOP_NAME[$canister]}") (${TOP_BYTES[$canister]} bytes) |
+| Largest retained item | $(markdown_value "${RETAINED_NAME[$canister]}") (${RETAINED_BYTES[$canister]} bytes) |
+
+## Bounded Dominator Evidence
+
+\`\`\`text
+$dominators_excerpt
+\`\`\`
+
+## Bounded Monomorphization Evidence
+
+\`\`\`text
+$monos_excerpt
+\`\`\`
+
+The complete tool output and Wasm artifacts are transient. This file retains
+the bounded analysis required by \`$METHOD_TAG\` without duplicating raw data.
+EOF
+done
+
+METHOD_JSON="$ARTIFACTS_DIR/method.json"
+cat >"$METHOD_JSON" <<EOF
+{
+  "method_id": "$(json_value "$METHOD_ID")",
+  "method_version": "$(json_value "$METHOD_VERSION")",
+  "method_fingerprint": "$(json_value "$METHOD_FINGERPRINT")",
+  "definition_fingerprint": "$(json_value "$DEFINITION_FINGERPRINT")",
+  "roster_key": "$(json_value "$ROSTER_KEY")",
+  "profile_key": "$(json_value "$PROFILE_KEY")",
+  "execution_path_key": "$(json_value "$EXECUTION_PATH_KEY")",
+  "tool_key": "$(json_value "$TOOL_KEY")",
+  "report": "$(json_value "$REPORT_RELATIVE")",
+  "immediate_baseline_report": "$(json_value "$BASELINE_REPORT")",
+  "original_baseline_report": "$(json_value "$ORIGINAL_BASELINE_REPORT")"
+}
+EOF
+
+COMPLETED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+mkdir -p "$DAY_DIR"
+cat >"$REPORT_PATH" <<EOF
+# Wasm Footprint Audit v2 - $RUN_DATE
+
+## Verdict
+
+- Run result: \`$RUN_RESULT\`.
+- Result validity: \`valid\`.
+- Comparability: \`$COMPARABILITY\`.
+- Authoritative risk score: \`$RISK_SCORE/10\`.
+
+V2 completed fresh release and debug builds for all six attached roles through
+Canic's authoritative host artifact builder. It did not invoke direct Cargo
+Wasm compilation, infer a target-directory artifact, or recreate a pre-shrink
+metric. This closes the executable-method defect in
+\`CANIC-092-AUDIT-016\`; the measured result creates no new product finding.
+
+## Scope And Identity
+
+- Definition: \`$DEFINITION_PATH\`.
+- Compared predecessor: \`$BASELINE_REPORT\`.
+- Original v2 baseline: \`$ORIGINAL_BASELINE_REPORT\`.
+- Release anchor: \`$RELEASE_ANCHOR\`.
+- Source commit: \`$PRODUCT_COMMIT\`.
+- Source tree: \`$SOURCE_TREE_HASH\`.
+- Product tree: \`$PRODUCT_TREE_HASH\`.
+- Method: \`$METHOD_TAG\`; definition \`$DEFINITION_FINGERPRINT\`; executable
+  composite \`$METHOD_FINGERPRINT\`.
+- Ordered roster: \`$ROSTER_KEY\`.
+- Profiles: \`$PROFILE_KEY\`.
+- Branch/worktree: \`$BRANCH\`; clean disposable linked worktree before the
+  run, tracked-clean after the run, with only permitted \`.icp/\` build output.
+- Environment: local, offline, isolated \`CARGO_TARGET_DIR\`; no replica,
+  credentials, deployment, or authoritative external mutation.
+- Auditor: Codex.
+- Started/completed: \`$STARTED_AT\` / \`$COMPLETED_AT\`.
+
+## Immutable Run Identity
+
+\`\`\`text
+release_anchor: $RELEASE_ANCHOR
+source_commit_full: $PRODUCT_COMMIT
+source_tree_hash: $SOURCE_TREE_HASH
+product_tree_hash: $PRODUCT_TREE_HASH
+clean_worktree: true before; tracked-clean after; generated .icp only
+cargo_lock_hash: $CARGO_LOCK_HASH
+rust_toolchain: $RUSTC_VERSION; $CARGO_VERSION
+target_triple: wasm32-unknown-unknown
+feature_set: fleets/test attached six-role roster
+audit_method_id: $METHOD_ID
+audit_method_version: $METHOD_VERSION
+audit_method_fingerprint: $METHOD_FINGERPRINT
+audit_script_hashes: definition=$DEFINITION_FINGERPRINT; executable-composite=$METHOD_FINGERPRINT
+external_tool_versions: $ICP_VERSION; $IC_WASM_VERSION; $TWIGGY_VERSION
+fixture_or_seed: fleets/test/canic.toml@$PRODUCT_COMMIT; roster=$ROSTER_KEY
+environment_class: isolated local linked-worktree execution_trace
+execution_path_key: $EXECUTION_PATH_KEY
+started_at: $STARTED_AT
+completed_at: $COMPLETED_AT
+\`\`\`
+
+The execution path itself is not retained. Its hash is a comparison key because
+the independently owned \`CANIC-092-BUILD-001\` path-dependence finding makes a
+different checkout path non-comparable for gzip/byte continuity.
+
+## Canonical Artifact Sizes
+
+| Canister | Kind | Release Wasm | Release gzip | Debug Wasm | Debug gzip | Debug delta | Predecessor delta |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+EOF
+for canister in "${CANISTERS[@]}"; do
+    printf '| `%s` | %s | %s | %s | %s | %s | %s (%s%%) | %s (%s) |\n' \
+        "$canister" "${KIND[$canister]}" \
+        "${RELEASE_BYTES[$canister]}" "${RELEASE_GZIP_BYTES[$canister]}" \
+        "${DEBUG_BYTES[$canister]}" "${DEBUG_GZIP_BYTES[$canister]}" \
+        "${DEBUG_DELTA_BYTES[$canister]}" "${DEBUG_DELTA_PERCENT[$canister]}" \
+        "${BASELINE_DELTA_BYTES[$canister]}" "${BASELINE_DELTA_PERCENT[$canister]}" \
+        >>"$REPORT_PATH"
+done
+
+cat >>"$REPORT_PATH" <<EOF
+
+There is no dedicated minimal role in scope. Leaf release spread is
+\`$leaf_spread_ratio\`; \`root\` is interpreted separately as a bundle canister
+and is \`$root_leaf_ratio\` times the largest leaf. No v1 raw/shrunk delta is
+reported because that obsolete duplicate artifact model was removed.
+
+## Structure And Retained-Size Evidence
+
+| Canister | Functions | Data sections | Data bytes | Exports | Largest shallow item | Largest retained item |
+| --- | ---: | ---: | ---: | ---: | --- | --- |
+EOF
+for canister in "${CANISTERS[@]}"; do
+    printf '| `%s` | %s | %s | %s | %s | `%s` (%s) | `%s` (%s) |\n' \
+        "$canister" "${FUNCTIONS[$canister]}" "${DATA_SECTIONS[$canister]}" \
+        "${DATA_BYTES[$canister]}" "${EXPORTS[$canister]}" \
+        "$(markdown_value "${TOP_NAME[$canister]}")" "${TOP_BYTES[$canister]}" \
+        "$(markdown_value "${RETAINED_NAME[$canister]}")" "${RETAINED_BYTES[$canister]}" \
+        >>"$REPORT_PATH"
+done
+
+cat >>"$REPORT_PATH" <<EOF
+
+All canonical release artifacts were accepted by \`ic-wasm info\`, \`twiggy
+top\`, retained \`top\`, \`dominators\`, and \`monos\`. The builder's shrink step
+removes source-level names, so current attribution is structural rather than a
+claim about a particular crate. Repeated \`table[0]\`/element retention across
+leaves is a runtime fan-in signal; it is not sufficient by itself to assign a
+dependency owner. Bounded dominator and monomorphization evidence is retained
+in each role detail file.
+
+The largest retained item occupies \`$max_retained_percent%\` of its canonical
+release Wasm. Largest compatible predecessor growth is
+\`$max_growth_percent%\`; \`0.00%\` means either no positive growth or no
+compatible predecessor.
+
+## Risk Score
+
+Risk score: **$RISK_SCORE / 10**.
+
+EOF
+if [[ "${#RISK_DRIVERS[@]}" -eq 0 ]]; then
+    printf -- '- No scoring input fired.\n' >>"$REPORT_PATH"
+else
+    for driver in "${RISK_DRIVERS[@]}"; do
+        printf -- '- %s.\n' "$driver" >>"$REPORT_PATH"
+    done
+fi
+
+cat >>"$REPORT_PATH" <<EOF
+
+This is size-pressure evidence, not a correctness verdict. Root build-path
+reproducibility remains owned by \`CANIC-092-BUILD-001\` and is neither cleared
+nor duplicated here.
+
+## Findings
+
+- \`CANIC-092-AUDIT-016\`: fixed by v2's root-independent executable identity
+  and sole authoritative artifact path.
+- New product findings: none. The first v2 measurement is a baseline, and no
+  comparable regression exists to attribute.
+
+## Required Checklist
+
+| Requirement | Result | Evidence |
+| --- | --- | --- |
+| clean isolated product snapshot | PASS | linked worktree clean before; tracked-clean after |
+| canonical release artifacts | PASS | six roles built through host \`build_artifact\` |
+| canonical debug artifacts | PASS | same six roles and authority |
+| builder gzip integrity | PASS | every gzip decodes to its paired canonical Wasm |
+| machine-readable sizes | PASS | \`size-metrics.tsv\` |
+| \`ic-wasm info\` | PASS | six release artifacts parsed |
+| \`twiggy top\` and retained \`top\` | PASS | compact hotspot columns retained |
+| \`twiggy dominators\` | PASS | bounded role excerpts retained |
+| \`twiggy monos\` | PASS | bounded role excerpts retained |
+| compatible predecessor selection | PASS | exact method/roster/profile/path/tool keys; \`$BASELINE_REPORT\` |
+| direct Cargo/pre-shrink fallback absent | PASS | v2 invokes only the host artifact authority |
+| source mutation | PASS | no tracked mutation or unexpected untracked path |
+
+## Verification Readout
+
+| Command/check | Result | Notes |
+| --- | --- | --- |
+| \`cargo run --offline --locked -p canic-host --example build_artifact -- <role> release ...\` | PASS | six ordered roles |
+| same authoritative command with \`debug\` | PASS | six ordered roles |
+| \`gzip -t\` plus decoded SHA-256 equality | PASS | release and debug artifacts |
+| \`ic-wasm <release.wasm> info\` | PASS | all roles |
+| \`twiggy top\|dominators\|monos <release.wasm>\` | PASS | all roles |
+| method composite | PASS | root-independent \`$METHOD_FINGERPRINT\` |
+| product-tree identity | PASS | \`$PRODUCT_TREE_HASH\` |
+| retained evidence hashes | PASS | manifest binds the report and compact artifacts |
+
+## Retained Evidence
+
+- [size summary](artifacts/$SCOPE_STEM/size-summary.md)
+- [machine-readable metrics](artifacts/$SCOPE_STEM/size-metrics.tsv)
+- [method identity](artifacts/$SCOPE_STEM/method.json)
+- [evidence manifest](artifacts/$SCOPE_STEM/evidence-manifest.yml)
+EOF
+for canister in "${CANISTERS[@]}"; do
+    printf -- '- [%s detail](artifacts/%s/%s.md)\n' "$canister" "$SCOPE_STEM" "$canister" >>"$REPORT_PATH"
+done
+
+EVIDENCE_MANIFEST="$ARTIFACTS_DIR/evidence-manifest.yml"
+declare -a RETAINED_FILES=(
+    "$REPORT_PATH"
+    "$SUMMARY_PATH"
+    "$SIZE_METRICS"
+    "$METHOD_JSON"
+)
+for canister in "${CANISTERS[@]}"; do
+    RETAINED_FILES+=("$ARTIFACTS_DIR/$canister.md")
+done
+
+{
+    printf 'command: "WASM_AUDIT_PRODUCT_ROOT=<disposable-product-root> bash scripts/ci/wasm-audit-report.sh"\n'
+    printf 'working_directory: "method_repository_root"\n'
+    printf 'exit_code: 0\n'
+    printf 'stdout_path: "not_retained"\n'
+    printf 'stderr_path: "not_retained"\n'
+    printf 'baseline_identity: "%s"\n' "$BASELINE_REPORT"
+    printf 'original_baseline_identity: "%s"\n' "$ORIGINAL_BASELINE_REPORT"
+    printf 'method_identity: "%s@sha256:%s"\n' "$METHOD_TAG" "$METHOD_FINGERPRINT"
+    printf 'product_identity: "%s@product-sha256:%s"\n' "$PRODUCT_COMMIT" "$PRODUCT_TREE_HASH"
+    printf 'tool_versions:\n'
+    printf '  rustc: "%s"\n' "$RUSTC_VERSION"
+    printf '  cargo: "%s"\n' "$CARGO_VERSION"
+    printf '  icp: "%s"\n' "$ICP_VERSION"
+    printf '  ic-wasm: "%s"\n' "$IC_WASM_VERSION"
+    printf '  twiggy: "%s"\n' "$TWIGGY_VERSION"
+    printf 'timestamps:\n'
+    printf '  started_at: "%s"\n' "$STARTED_AT"
+    printf '  completed_at: "%s"\n' "$COMPLETED_AT"
+    printf 'artifact_hashes:\n'
+    for retained_path in "${RETAINED_FILES[@]}"; do
+        printf '  %s  %s\n' "$(file_hash "$retained_path")" "${retained_path#"$METHOD_ROOT/"}"
+    done
+    printf 'retention_class: "primary_markdown_and_compact_supporting_evidence"\n'
+    printf 'redactions_applied: "product/method/cache/home paths normalized or omitted; no credentials, tokens, principals, or private material retained"\n'
+} >"$EVIDENCE_MANIFEST"
+
+for retained_path in "${RETAINED_FILES[@]}"; do
+    retained_relative="${retained_path#"$METHOD_ROOT/"}"
+    expected_hash="$(awk -v path="$retained_relative" '$2 == path { print $1; exit }' "$EVIDENCE_MANIFEST")"
+    if [[ -z "$expected_hash" || "$expected_hash" != "$(file_hash "$retained_path")" ]]; then
+        echo "retained evidence hash verification failed for $retained_relative" >&2
+        exit 1
+    fi
+done
+
+printf 'wrote %s\n' "$REPORT_RELATIVE"

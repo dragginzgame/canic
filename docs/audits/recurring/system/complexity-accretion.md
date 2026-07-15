@@ -3,13 +3,14 @@
 ## Method Contract
 
 - Audit ID: `CANIC-COMPLEXITY-001`
-- Method version: `1`
-- Disposition: `revise`
+- Method version: `2`
+- Disposition: `retain`
 - Owner: structural branching, decision-axis, and hub complexity trends
 - Kind/profile: `trend` plus manual attribution
 - Trace mode: `code_trace`
 - Cost/runtime: high; 60-120 minutes
-- Prerequisites: Git, ripgrep, GNU find/coreutils, and a method-compatible
+- Prerequisites: Git, ripgrep, GNU awk/coreutils,
+  `docs/audits/scripts/measure-complexity-v2.sh`, and a method-compatible
   baseline
 - False-positive boundary: size or fan-in alone is pressure, not a defect;
   findings require a concrete ownership, correctness, or change-risk link
@@ -126,6 +127,7 @@ Subsystem ownership for this audit:
 | model | `model/**` |
 | ops | `ops/**` |
 | replay-policy | `replay_policy/**` |
+| role-contract | `role_contract/**` |
 | root | root-level `*.rs` files under `crates/canic-core/src/` |
 | storage | `storage/**` |
 | test-support | `test/**`, `tests/**`, `test.rs`, `tests.rs`, `test_support.rs` |
@@ -136,8 +138,8 @@ Rules:
 
 * Each file must be assigned to exactly one subsystem.
 * If a file spans domains, classify by primary responsibility.
-* If a new top-level scope appears, either add it here as a methodology update
-  or report it as an unmapped scope in the run.
+* A new top-level scope makes the run `partial`; add it only through a
+  method-version update and rerun the original product baseline.
 
 ---
 
@@ -150,7 +152,43 @@ Module counts are file-level counts.
 
 ### LOC Counting Rule
 
-`LOC` means logical Rust lines excluding comments and blank lines.
+`LOC` is the count of lines whose whitespace-trimmed form is nonempty and does
+not start with `//`. This intentionally does not parse block comments or Rust
+syntax. The exact counter is owned by
+`docs/audits/scripts/measure-complexity-v2.sh`; changing that implementation is
+a method-version change.
+
+### Mechanical Measurement Identity
+
+The v2 script is the canonical owner of file scope, test classification,
+subsystem assignment, logical LOC, large-file counts, capability-mention file
+count, fixed enum reference-file counts, fixed fan-in reference-file counts,
+and lexical branch density.
+
+Run it as:
+
+```bash
+bash docs/audits/scripts/measure-complexity-v2.sh <full-source-commit>
+```
+
+The report records the script fingerprint and retains its complete normalized
+stdout. Search commands elsewhere in this definition are navigation aids, not
+alternative counters.
+
+V2 scope is the sorted Git tree at the named full commit under
+`crates/canic-core/src/**/*.rs`. A file is test support when any relative path
+component is `test` or `tests`, or its basename is `test.rs`, `tests.rs`, or
+`test_support.rs`. Test classification takes precedence over subsystem
+assignment. Every other file maps by its first path component using the table
+above; a root-level file maps to `root`. Any unmapped file makes the run
+`partial` and requires a method-version update.
+
+Manual classifications remain necessary for switch sites, decision axes,
+domain spread, decision owners, execution consumers, plumbing, effective-flow
+constraints, and call depth. For each manual count, the report must retain the
+exact file/function set and cardinality rationale. A bare count is invalid
+evidence. Two reviewers or an explicit single-review waiver are required when
+a manual classification creates or changes a P0/P1 finding.
 
 ---
 
@@ -472,7 +510,7 @@ Optional hotspot metric:
 
 ---
 
-### STEP 7 — Complexity Risk Index (Semi-Mechanical)
+### STEP 7 — Complexity Risk Index (Deterministic)
 
 Score each bucket 1-10, then compute weighted aggregate:
 
@@ -486,6 +524,37 @@ Score each bucket 1-10, then compute weighted aggregate:
 | ---- | ----: | ----: | ----: |
 
 `overall_index = weighted_sum / weight_sum`
+
+Each bucket starts at 1 and adds only its owned signals below, clamped to 10.
+A signal may be discussed elsewhere but contributes to exactly one bucket.
+
+- Variant explosion: `+2` when any listed enum has more than 8 variants;
+  `+2` when any branch multiplier is at least 40; `+2` when any listed enum is
+  referenced by at least 10 non-test files; `+1` when any listed enum is mixed
+  domain; `+2` when a comparable run has positive variant velocity.
+- Branching pressure: `+2` when any ACI is above 8; `+2` when at least three
+  hotspots have ACI above 8; `+2` when any non-test hotspot has branch density
+  above 3.0; `+1` when match depth is above 3; `+2` when a comparable run has
+  positive branch-layer growth.
+- Flow multiplicity: `+2` when any effective-flow count is above 4; `+2` when
+  at least five operations exceed 4; `+2` when any operation exceeds 12;
+  `+1` when at least five operations use four or more axes; `+2` when a
+  comparable run has positive effective-flow growth.
+- Cross-layer spread: `+2` when any concept spans at least three semantic
+  layers; `+2` when any concept fragmentation is at least 15; `+2` when any
+  decision concentration is below 0.40; `+1` when any concept spans all three
+  transport layers; `+2` when a fixed fan-in surface is referenced by at least
+  12 non-test files across multiple subsystems; `+2` when a comparable run has
+  positive fragmentation growth.
+- Hub pressure and call depth: `+2` when any strict hub exists; `+2` when at
+  least three strict hubs exist; `+2` when any selected operation has call
+  depth above 6; `+1` when any non-test file has at least 1,000 logical LOC;
+  `+2` when a comparable run meets the hub-escalation condition. CAF is
+  informational and never changes this score.
+
+Round the weighted result to the nearest integer, with exact `.5` rounding
+up. That rounded value is the report risk score; v2 permits no additive
+override or duplicate modifier.
 
 Interpretation:
 
@@ -567,7 +636,7 @@ This audit measures structural entropy, not code quality.
 
 List concrete files/modules/structs that contribute to complexity pressure.
 
-Detection commands (run and record output references):
+Navigation commands (do not use as alternative counters):
 
 ```bash
 rg '^use ' crates/ -g '*.rs'
@@ -660,11 +729,21 @@ Pressure score guidance:
 
 When complexity pressure increases due to recent feature slices, record the largest amplifiers.
 
+For v2, CAF is informational and uses the fixed formula
+`max(subsystem_count, architecture_layer_count) * flow_axis_count`.
+`subsystem_count` uses the canonical subsystem map above.
+`architecture_layer_count` uses the exact set `endpoints`, `api`, `workflow`,
+`policy`, `ops`, `model/storage`, `dto`, and `other`, derived from the first
+matching relative path component; `flow_axis_count` is the count of explicitly
+listed runtime decision axes from the allowed axis families. The report must
+name the exact commit range, touched file set, subsystem set, layer set, and
+axis set. CAF does not alter the v2 risk score.
+
 | Commit | Feature Slice | Files Touched | Subsystems | CAF | Risk |
 | --- | --- | ---: | --- | ---: | --- |
 | `<commit>` | `<feature>` | `<n>` | `<subsystems>` | `<caf>` | `<risk>` |
 
-Detection commands (run and record output references):
+Navigation commands (do not use as alternative counters):
 
 ```bash
 git log --name-only -n 20 -- crates/
@@ -795,21 +874,10 @@ Interpretation scale:
 - 7-8 = high risk
 - 9-10 = critical architectural risk
 
-Use the computed `overall_index` as the default risk score and justify any override.
-
-Derivation guidance (deterministic):
-
-- start from rounded `overall_index`
-- add `+1` if any hub module pressure score is `>= 7`
-- add `+1` if amplification drivers show `CAF >= 12` on any routine feature slice
-- add `+1` if enum shock radius is detected (`> 6` reference files)
-- add `+1` if cross-layer struct spread is detected (`>= 3` architecture layers)
-- add `+2` if growing hub module signal is detected
-- add `+1` if capability public surface is `> 20` items
-- add `+1` for fan-in `6-8` across multiple subsystems
-- add `+2` for fan-in `9-12` across multiple subsystems
-- add `+3` for fan-in `12+` across multiple subsystems
-- clamp to `0..10`
+Use the rounded `overall_index` from Step 7 as the risk score. No override,
+post-hoc modifier, or second scoring algorithm is permitted. Hub, enum,
+cross-layer, capability-surface, and fan-in signals contribute only through
+their single owning Step 7 bucket.
 
 If no confirmed findings and no hotspot/hub/amplification signals are present, score must remain `0-2`.
 

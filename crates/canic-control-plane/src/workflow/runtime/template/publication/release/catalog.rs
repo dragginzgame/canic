@@ -5,12 +5,13 @@ use crate::{
     ops::storage::template::TemplateManifestOps,
     workflow::runtime::template::publication::{
         WasmStorePublicationWorkflow,
+        cost_guard::{PUBLICATION_RECOVERY_COMMAND_KIND, PublicationCostGuard},
         fleet::{PublicationStoreFleet, PublicationStoreSnapshot},
     },
 };
 use canic_core::control_plane_support::{
-    error::{InternalError, InternalErrorOrigin},
-    ops::ic::IcOps,
+    error::InternalError,
+    ops::{cost_guard::CostGuardPermit, ic::IcOps},
 };
 
 impl WasmStorePublicationWorkflow {
@@ -61,13 +62,13 @@ impl WasmStorePublicationWorkflow {
         let candidates = Self::exact_release_candidates(fleet, manifest);
 
         if candidates.is_empty() {
-            return Err(InternalError::workflow(
-                InternalErrorOrigin::Workflow,
-                format!(
-                    "fleet import missing exact release for role '{}': expected {}@{} on {}",
-                    manifest.role, manifest.template_id, manifest.version, manifest.store_binding
-                ),
-            ));
+            return Err(crate::workflow::runtime::template::publication::error::PublicationWorkflowError::ExactReleaseMissing {
+                role: manifest.role.clone(),
+                template_id: manifest.template_id.clone(),
+                version: manifest.version.clone(),
+                expected_binding: manifest.store_binding.clone(),
+            }
+            .into());
         }
 
         if candidates
@@ -93,6 +94,7 @@ impl WasmStorePublicationWorkflow {
 
     // Mirror one approved manifest into root-owned state without mutating a live store.
     pub(super) fn mirror_manifest_to_root_state(
+        _publication_permit: &CostGuardPermit,
         target_store_binding: WasmStoreBinding,
         manifest: &TemplateManifestResponse,
     ) {
@@ -112,7 +114,15 @@ impl WasmStorePublicationWorkflow {
 
     // Reconcile root-owned approved manifest bindings against exact releases present in the fleet.
     pub async fn import_current_store_catalog() -> Result<(), InternalError> {
-        let fleet = Self::snapshot_publication_store_fleet().await?;
+        let cost_guard = PublicationCostGuard::reserve(PUBLICATION_RECOVERY_COMMAND_KIND)?;
+        let result = Self::import_current_store_catalog_with_permit(cost_guard.permit()).await;
+        cost_guard.settle(result)
+    }
+
+    async fn import_current_store_catalog_with_permit(
+        publication_permit: &CostGuardPermit,
+    ) -> Result<(), InternalError> {
+        let fleet = Self::snapshot_publication_store_fleet(publication_permit).await?;
         for manifest in Self::managed_release_manifests()? {
             let binding = Self::reconciled_binding_for_manifest(&fleet, &manifest)?;
             TemplateManifestOps::replace_approved_from_input(TemplateManifestInput {

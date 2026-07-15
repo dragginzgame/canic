@@ -1,0 +1,21 @@
+command: "bash scripts/ci/wasm-audit-report.sh"
+working_directory: "disposable_linked_worktree"
+exit_code: 101
+stdout_path: "not_retained"
+stderr_path: "not_retained"
+baseline_identity: "N/A"
+method_identity: "CANIC-WASM-001/v1@sha256:8c8e2248cf96ce00e3b4eccceeb542e5eed92db6e40a815779517dfb3aa1caf5"
+expected_method_identity: "CANIC-WASM-001/v1@sha256:e8c58213d9301d66d4adac4bd92e4aa702fd887b8adb55e2e602a70f29e9c505"
+tool_versions:
+  cargo: "cargo 1.97.0 (c980f4866 2026-06-30)"
+  rustc: "rustc 1.97.0 (2d8144b78 2026-07-07)"
+  icp: "icp 1.0.2"
+  ic-wasm: "ic-wasm 0.9.11"
+  twiggy: "twiggy-opt 0.8.0"
+timestamps:
+  started_at: "2026-07-14T17:54:43Z"
+  completed_at: "2026-07-14T17:55:48Z"
+artifact_hashes:
+  633ce653f8fd9d3cf6cf34ed7450c622a8c490a1198bc6d3cbd701185a5e7946  docs/audits/reports/2026-07/2026-07-14/wasm-footprint.md
+retention_class: "primary_markdown_and_compact_supporting_evidence"
+redactions_applied: "linked-worktree path normalized in report; no credentials, tokens, or private material retained"
