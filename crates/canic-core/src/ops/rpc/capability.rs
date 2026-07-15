@@ -7,6 +7,7 @@
 use crate::{
     cdk::types::Principal,
     dto::{capability::CapabilityService, error::Error, rpc::Request},
+    ops::rpc::request::RequestConversionOps,
 };
 use candid::encode_one;
 use sha2::{Digest, Sha256};
@@ -19,7 +20,7 @@ pub fn root_capability_hash(
     capability_version: u16,
     capability: &Request,
 ) -> Result<[u8; 32], Error> {
-    let canonical = capability.clone().canonical_capability_payload();
+    let canonical = RequestConversionOps::canonical_capability_payload(capability);
     let payload = encode_one(&(
         target_canister,
         CapabilityService::Root,

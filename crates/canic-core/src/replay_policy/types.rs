@@ -204,7 +204,7 @@ pub struct PoolAdminCommandReplayPolicy {
 ///
 /// RootCapabilityCommandReplayPolicy
 ///
-/// Replay manifest row for a `RootCapabilityCommand` variant.
+/// Replay manifest row for an internal root-capability command variant.
 /// Owned by replay policy and stored in the root-capability command manifest.
 ///
 

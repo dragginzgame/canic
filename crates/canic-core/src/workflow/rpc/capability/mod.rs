@@ -23,14 +23,13 @@ use crate::{
             NonrootCyclesCapabilityEnvelopeV1, NonrootCyclesCapabilityResponseV1,
         },
         error::Error,
-        rpc::{Request, RequestFamily, RootRequestMetadata},
+        rpc::{Request, RootRequestMetadata},
     },
     ops::{
         rpc::capability::root_capability_hash as compute_root_capability_hash,
-        runtime::metrics::root_capability::{
-            RootCapabilityMetricKey, RootCapabilityMetricProofMode,
-        },
+        runtime::metrics::root_capability::RootCapabilityMetricProofMode,
     },
+    workflow::rpc::request::handler::capability::RootCapability,
 };
 
 const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
@@ -140,7 +139,7 @@ fn validate_nonroot_cycles_envelope(
 }
 
 async fn verify_root_capability_proof(
-    capability: &Request,
+    capability: &RootCapability,
     capability_version: u16,
     proof: RootCapabilityProof,
 ) -> Result<(), Error> {
@@ -168,19 +167,6 @@ fn verify_capability_hash_binding(
     )
 }
 
-const fn root_capability_metric_key(capability: &Request) -> RootCapabilityMetricKey {
-    match capability.family() {
-        RequestFamily::Provision => RootCapabilityMetricKey::Provision,
-        RequestFamily::Upgrade => RootCapabilityMetricKey::Upgrade,
-        RequestFamily::RecycleCanister => RootCapabilityMetricKey::RecycleCanister,
-        RequestFamily::RequestCycles => RootCapabilityMetricKey::RequestCycles,
-    }
-}
-
-const fn root_capability_family(capability: &Request) -> &'static str {
-    capability.family().label()
-}
-
 /// Compute the canonical root capability hash for proof binding.
 pub fn root_capability_hash(
     target_canister: Principal,
@@ -190,7 +176,10 @@ pub fn root_capability_hash(
     compute_root_capability_hash(target_canister, capability_version, capability)
 }
 
-const fn with_root_request_metadata(request: Request, metadata: RootRequestMetadata) -> Request {
+const fn with_root_request_metadata(
+    request: RootCapability,
+    metadata: RootRequestMetadata,
+) -> RootCapability {
     replay::with_root_request_metadata(request, metadata)
 }
 

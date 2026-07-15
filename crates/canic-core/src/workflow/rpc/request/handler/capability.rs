@@ -1,8 +1,8 @@
 //! Module: workflow::rpc::request::handler::capability
 //!
-//! Responsibility: map root RPC requests into executable capability envelopes.
+//! Responsibility: own internal root-capability families, payloads, and replay identity.
 //! Does not own: authorization, replay storage, or capability side effects.
-//! Boundary: produces deterministic descriptors and payload hashes for handler workflow.
+//! Boundary: maps passive request DTOs once for capability and handler workflows.
 
 use crate::{
     dto::rpc::{
@@ -18,9 +18,9 @@ use crate::{
 /// Internal workflow envelope for root-bound RPC capabilities.
 ///
 #[derive(Clone, Debug)]
-pub(super) enum RootCapability {
-    Provision(CreateCanisterRequest),
-    Upgrade(UpgradeCanisterRequest),
+pub(in crate::workflow::rpc) enum RootCapability {
+    ProvisionCanister(CreateCanisterRequest),
+    UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
     RequestCycles(CyclesRequest),
 }
@@ -31,10 +31,10 @@ pub(super) enum RootCapability {
 /// Stable capability metadata used by replay, metrics, and logs.
 ///
 #[derive(Clone, Copy)]
-pub(super) struct RootCapabilityDescriptor {
-    pub(super) name: &'static str,
-    pub(super) command_kind: &'static str,
-    pub(super) key: RootCapabilityMetricKey,
+pub(in crate::workflow::rpc) struct RootCapabilityDescriptor {
+    pub(in crate::workflow::rpc) name: &'static str,
+    pub(in crate::workflow::rpc) command_kind: &'static str,
+    pub(in crate::workflow::rpc) key: RootCapabilityMetricKey,
 }
 
 ///
@@ -50,14 +50,40 @@ pub(super) struct RootReplayInput {
 }
 
 impl RootCapability {
-    pub(super) const fn descriptor(&self) -> RootCapabilityDescriptor {
+    /// Map the passive boundary request into its canonical workflow family.
+    #[must_use]
+    pub(in crate::workflow::rpc) fn from_request(request: Request) -> Self {
+        match request {
+            Request::CreateCanister(request) => Self::ProvisionCanister(request),
+            Request::UpgradeCanister(request) => Self::UpgradeCanister(request),
+            Request::RecycleCanister(request) => Self::RecycleCanister(request),
+            Request::Cycles(request) => Self::RequestCycles(request),
+        }
+    }
+
+    /// Attach admitted replay metadata before request execution.
+    #[must_use]
+    pub(in crate::workflow::rpc) const fn with_metadata(
+        mut self,
+        metadata: RootRequestMetadata,
+    ) -> Self {
+        match &mut self {
+            Self::ProvisionCanister(request) => request.metadata = Some(metadata),
+            Self::UpgradeCanister(request) => request.metadata = Some(metadata),
+            Self::RecycleCanister(request) => request.metadata = Some(metadata),
+            Self::RequestCycles(request) => request.metadata = Some(metadata),
+        }
+        self
+    }
+
+    pub(in crate::workflow::rpc) const fn descriptor(&self) -> RootCapabilityDescriptor {
         match self {
-            Self::Provision(_) => RootCapabilityDescriptor {
+            Self::ProvisionCanister(_) => RootCapabilityDescriptor {
                 name: "Provision",
                 command_kind: "root.provision.v1",
                 key: RootCapabilityMetricKey::Provision,
             },
-            Self::Upgrade(_) => RootCapabilityDescriptor {
+            Self::UpgradeCanister(_) => RootCapabilityDescriptor {
                 name: "Upgrade",
                 command_kind: "root.upgrade.v1",
                 key: RootCapabilityMetricKey::Upgrade,
@@ -81,12 +107,12 @@ impl RootCapability {
 
     pub(super) fn replay_input(&self) -> Option<RootReplayInput> {
         match self {
-            Self::Provision(req) => req.metadata.map(|metadata| RootReplayInput {
+            Self::ProvisionCanister(req) => req.metadata.map(|metadata| RootReplayInput {
                 descriptor: self.descriptor(),
                 metadata,
                 payload_hash: hash_provision_payload(req),
             }),
-            Self::Upgrade(req) => req.metadata.map(|metadata| RootReplayInput {
+            Self::UpgradeCanister(req) => req.metadata.map(|metadata| RootReplayInput {
                 descriptor: self.descriptor(),
                 metadata,
                 payload_hash: hash_upgrade_payload(req),
@@ -107,8 +133,8 @@ impl RootCapability {
     #[cfg(test)]
     pub(super) fn payload_hash(&self) -> [u8; 32] {
         match self {
-            Self::Provision(req) => hash_provision_payload(req),
-            Self::Upgrade(req) => hash_upgrade_payload(req),
+            Self::ProvisionCanister(req) => hash_provision_payload(req),
+            Self::UpgradeCanister(req) => hash_upgrade_payload(req),
             Self::RecycleCanister(req) => hash_recycle_payload(req),
             Self::RequestCycles(req) => hash_request_cycles_payload(req),
         }
@@ -160,16 +186,4 @@ fn hash_request_cycles_payload(req: &CyclesRequest) -> [u8; 32] {
     super::replay::hash_str(&mut hasher, "RequestCycles");
     super::replay::hash_u128(&mut hasher, req.cycles);
     super::replay::finish_payload_hash(hasher)
-}
-
-/// map_request
-///
-/// Convert the boundary RPC request into the internal root-capability envelope.
-pub(super) fn map_request(req: Request) -> RootCapability {
-    match req {
-        Request::CreateCanister(req) => RootCapability::Provision(req),
-        Request::UpgradeCanister(req) => RootCapability::Upgrade(req),
-        Request::RecycleCanister(req) => RootCapability::RecycleCanister(req),
-        Request::Cycles(req) => RootCapability::RequestCycles(req),
-    }
 }

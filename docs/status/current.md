@@ -14,9 +14,9 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.3`.
-- `v0.92.3` is published at
-  `b7f9aad9265e43def97362457148541f8e787d35`.
+- The workspace package version is `0.92.4`.
+- `v0.92.4` is published at
+  `35bb2659b62b70c376e006a3aadd6af0d7d9b9b7`.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -35,12 +35,13 @@ now a valid `fail` with six pass and four fail results, zero partial, and zero
 blocked. The Phase C product baseline gate is complete; product fixes still
 require explicit finding review and bounded slice acceptance. Phase D D1 is
 released in `v0.92.1`; D2/D3 are released in `v0.92.2`; D4 is released in
-`v0.92.3`. D5 is implemented and validated in the current worktree: blob
-billing has one workflow-owned Cashier, reserve, recovery, sync, and readiness
-path over pure policy and single-step ops. This fixes
-`CANIC-092-LAYERING-001` without changing protocol, prices, public shapes, or
-stable state. The live layering guard remains at 18 separately owned
-ops-to-policy violations under `CANIC-092-LAYERING-005`.
+`v0.92.3`; and D5 is released in `v0.92.4`. D6 is implemented and validated in
+the current worktree: root RPC DTOs are passive, one workflow command owns
+capability family and replay identity, and ops owns mechanical signed-payload
+conversion. This fixes `CANIC-092-LAYERING-002` without changing protocol,
+public shapes, replay behavior, or stable state. The live layering guard
+remains at 18 separately owned ops-to-policy violations under
+`CANIC-092-LAYERING-005`.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -86,9 +87,9 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
   `91736337fc1cfeb891f17d7d62affb5e671348e2`.
 - Phase D changes only accepted finding-backed slices and compares them to the
   immediate parent and frozen baseline.
-- D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 in `v0.92.3`. D5 is
-  implemented with focused validation passing. D6 through D10 remain ordered
-  candidates rather than blanket authorization.
+- D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in `v0.92.3`, and D5 in
+  `v0.92.4`. D6 is implemented with focused validation passing. D7 through
+  D10 remain ordered candidates rather than blanket authorization.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -179,6 +180,11 @@ First primary results:
   reserve/recovery, gateway sync, and readiness to one workflow over pure
   policy and single-step ops. Public DTOs, Candid, billing prices/protocol, and
   stable records are unchanged; the current blob trace passes.
+- [D6 passive RPC DTO ownership](../audits/reports/2026-07/2026-07-15/0.92-d6-passive-rpc-dto-ownership.md)
+  fixes `CANIC-092-LAYERING-002`. Request DTOs retain only boundary data and
+  neutral constructors; one workflow command owns capability family, replay
+  identity, and metadata attachment, while ops owns signed-payload projection.
+  Public protocol, replay behavior, and stable state are unchanged.
 - [security boundary ordering](../audits/reports/2026-07/2026-07-14/0.92-security-boundary-ordering.md)
   is a valid pass with watchpoints: generated endpoint, trust proof,
   subject/scope, capability, replay, and recovery-required paths retain their
@@ -267,8 +273,8 @@ First primary results:
   The final mandatory trace result is valid and complete at aggregate `fail`.
   D1 fixes two non-waivable publication P1 findings, D2 fixes the auth cause
   P1, and D3 fixes one P1 authority conflict plus one P2 documentation drift.
-  Sixteen findings remain unresolved (5 P1, 10 P2, one P3). Current control,
-  auth, and blob trace reruns pass; the frozen Phase C aggregate remains
+  Fifteen findings remain unresolved (5 P1, 9 P2, one P3). Current control,
+  auth, blob, and capability trace reruns pass; the frozen Phase C aggregate remains
   historical.
 
 ## Focused Validation
@@ -319,6 +325,11 @@ First primary results:
   Reserve refusal performs no partial top-up, transient Cashier failure
   releases the guard for retry, status boundaries remain distinct, and billing
   configuration survives upgrade.
+- D6 validation passes 51 workflow RPC tests, eight RPC ops tests, four replay
+  manifest tests, four policy/DTO guards, 19 protocol tests, strict
+  all-feature/all-target core Clippy, and exact PocketIC identical-replay and
+  cross-family-conflict cases. The capability trace remains pass and the live
+  layering set remains 18.
 - Focused D1 publication validation passes 18 all-feature publication tests,
   30 replay/capability policy tests, four core and one publication-owned
   cost-permit structural checks, strict targeted Clippy, and five root/store
@@ -373,7 +384,7 @@ First primary results:
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 through
-D4 are released and D5 is implemented and validated, leaving 16 unresolved
-findings. The next ordered candidate is D6 passive RPC DTO ownership. D6
+D5 are released and D6 is implemented and validated, leaving 15 unresolved
+findings. The next ordered candidate is D7 internal surface hard cuts. D7
 through D10 and the remaining layering subsystems remain separately bounded;
 the proposed scanner limitation is not yet a waiver.

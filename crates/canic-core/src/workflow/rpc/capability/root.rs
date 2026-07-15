@@ -17,11 +17,10 @@ use crate::{
     },
     workflow::rpc::{
         capability::{
-            RootCapabilityProofMode, project_replay_metadata, root_capability_family,
-            root_capability_metric_key, validate_root_capability_envelope,
+            RootCapabilityProofMode, project_replay_metadata, validate_root_capability_envelope,
             verify_root_capability_proof, with_root_request_metadata,
         },
-        request::handler::RootResponseWorkflow,
+        request::handler::{RootResponseWorkflow, capability::RootCapability},
     },
 };
 
@@ -39,7 +38,9 @@ pub(super) async fn response_capability_v1_root(
         metadata,
     } = envelope;
 
-    let capability_key = root_capability_metric_key(&capability);
+    let capability = RootCapability::from_request(capability);
+    let descriptor = capability.descriptor();
+    let capability_key = descriptor.key;
     let proof_mode = RootCapabilityProofMode::from_proof(&proof);
     let validated_proof = match validate_root_capability_envelope(
         service,
@@ -57,7 +58,7 @@ pub(super) async fn response_capability_v1_root(
                 Topic::Rpc,
                 Warn,
                 "root capability envelope rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-                root_capability_family(&capability),
+                descriptor.name,
                 IcOps::msg_caller(),
                 service,
                 capability_version,
@@ -86,7 +87,7 @@ pub(super) async fn response_capability_v1_root(
             Topic::Rpc,
             Warn,
             "root capability proof rejected (capability={}, caller={}, service={:?}, capability_version={}, proof_mode={}): {}",
-            root_capability_family(&capability),
+            descriptor.name,
             IcOps::msg_caller(),
             service,
             capability_version,
@@ -103,7 +104,7 @@ pub(super) async fn response_capability_v1_root(
 
     let replay_metadata = project_replay_metadata(metadata, IcOps::now_nanos())?;
     let capability = with_root_request_metadata(capability, replay_metadata);
-    let response = RootResponseWorkflow::response_replay_first(capability)
+    let response = RootResponseWorkflow::response_capability_replay_first(capability)
         .await
         .map_err(Error::from)?;
 

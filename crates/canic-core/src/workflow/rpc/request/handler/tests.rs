@@ -6,7 +6,7 @@ use crate::{
         error::ErrorCode,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
-            RecycleCanisterRequest, RootRequestMetadata, UpgradeCanisterRequest,
+            RecycleCanisterRequest, Request, RootRequestMetadata, UpgradeCanisterRequest,
             UpgradeCanisterResponse,
         },
     },
@@ -125,7 +125,7 @@ fn cycles_funding_snapshot_map() -> HashMap<
 }
 
 #[test]
-fn map_request_maps_provision() {
+fn root_capability_from_request_maps_provision() {
     let req = Request::CreateCanister(CreateCanisterRequest {
         canister_role: CanisterRole::new("app"),
         parent: CreateCanisterParent::Root,
@@ -133,41 +133,74 @@ fn map_request_maps_provision() {
         metadata: None,
     });
 
-    let mapped = RootResponseWorkflow::map_request(req);
+    let mapped = RootCapability::from_request(req);
     assert_eq!(mapped.capability_name(), "Provision");
 }
 
 #[test]
-fn map_request_maps_upgrade() {
+fn root_capability_from_request_maps_upgrade() {
     let req = Request::UpgradeCanister(UpgradeCanisterRequest {
         canister_pid: p(1),
         metadata: None,
     });
 
-    let mapped = RootResponseWorkflow::map_request(req);
+    let mapped = RootCapability::from_request(req);
     assert_eq!(mapped.capability_name(), "Upgrade");
 }
 
 #[test]
-fn map_request_maps_recycle_canister() {
+fn root_capability_from_request_maps_recycle_canister() {
     let req = Request::RecycleCanister(RecycleCanisterRequest {
         canister_pid: p(4),
         metadata: None,
     });
 
-    let mapped = RootResponseWorkflow::map_request(req);
+    let mapped = RootCapability::from_request(req);
     assert_eq!(mapped.capability_name(), "RecycleCanister");
 }
 
 #[test]
-fn map_request_maps_cycles() {
+fn root_capability_from_request_maps_cycles() {
     let req = Request::Cycles(CyclesRequest {
         cycles: 42,
         metadata: None,
     });
 
-    let mapped = RootResponseWorkflow::map_request(req);
+    let mapped = RootCapability::from_request(req);
     assert_eq!(mapped.capability_name(), "RequestCycles");
+}
+
+#[test]
+fn root_capability_metadata_projection_covers_every_family() {
+    let expected = meta(7, secs_to_ns(60));
+    let requests = [
+        Request::CreateCanister(CreateCanisterRequest {
+            canister_role: CanisterRole::new("app"),
+            parent: CreateCanisterParent::Root,
+            extra_arg: None,
+            metadata: None,
+        }),
+        Request::UpgradeCanister(UpgradeCanisterRequest {
+            canister_pid: p(2),
+            metadata: None,
+        }),
+        Request::RecycleCanister(RecycleCanisterRequest {
+            canister_pid: p(3),
+            metadata: None,
+        }),
+        Request::Cycles(CyclesRequest {
+            cycles: 100,
+            metadata: None,
+        }),
+    ];
+
+    for request in requests {
+        let capability = RootCapability::from_request(request).with_metadata(expected);
+        let replay = capability
+            .replay_input()
+            .expect("projected metadata must produce replay input");
+        assert_eq!(replay.metadata, expected);
+    }
 }
 
 #[test]
@@ -262,7 +295,7 @@ fn authorize_denies_non_root_context() {
         subnet_id: p(2),
         now: 5,
     };
-    let capability = RootCapability::Provision(CreateCanisterRequest {
+    let capability = RootCapability::ProvisionCanister(CreateCanisterRequest {
         canister_role: CanisterRole::new("app"),
         parent: CreateCanisterParent::Root,
         extra_arg: None,
@@ -283,7 +316,7 @@ fn authorize_allows_provision_in_root_context() {
         subnet_id: p(2),
         now: 5,
     };
-    let capability = RootCapability::Provision(CreateCanisterRequest {
+    let capability = RootCapability::ProvisionCanister(CreateCanisterRequest {
         canister_role: CanisterRole::new("app"),
         parent: CreateCanisterParent::Root,
         extra_arg: None,
@@ -314,7 +347,7 @@ fn authorize_allows_structural_child_provision_for_registered_caller() {
         subnet_id: root_pid,
         now: 5,
     };
-    let capability = RootCapability::Provision(CreateCanisterRequest {
+    let capability = RootCapability::ProvisionCanister(CreateCanisterRequest {
         canister_role: CanisterRole::new("user_shard"),
         parent: CreateCanisterParent::ThisCanister,
         extra_arg: None,
@@ -345,7 +378,7 @@ fn authorize_rejects_structural_child_provision_with_root_parent() {
         subnet_id: root_pid,
         now: 5,
     };
-    let capability = RootCapability::Provision(CreateCanisterRequest {
+    let capability = RootCapability::ProvisionCanister(CreateCanisterRequest {
         canister_role: CanisterRole::new("user_shard"),
         parent: CreateCanisterParent::Root,
         extra_arg: None,
@@ -400,7 +433,7 @@ fn root_provision_marks_create_external_effect() {
         extra_arg: None,
         metadata: Some(meta(31, secs_to_ns(60))),
     };
-    let capability = RootCapability::Provision(req.clone());
+    let capability = RootCapability::ProvisionCanister(req.clone());
     let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect("first replay should reserve")
     {
@@ -1027,7 +1060,7 @@ fn check_replay_rejects_cross_variant_same_request_id() {
         subnet_id: p(4),
         now: 2_000,
     };
-    let upgrade = RootCapability::Upgrade(UpgradeCanisterRequest {
+    let upgrade = RootCapability::UpgradeCanister(UpgradeCanisterRequest {
         canister_pid: p(9),
         metadata: Some(meta(8, secs_to_ns(60))),
     });
@@ -1060,7 +1093,7 @@ fn preflight_authorize_then_replay_reports_existing_cross_variant_conflict_befor
         subnet_id: p(4),
         now: 2_000,
     };
-    let upgrade = RootCapability::Upgrade(UpgradeCanisterRequest {
+    let upgrade = RootCapability::UpgradeCanister(UpgradeCanisterRequest {
         canister_pid: p(9),
         metadata: Some(meta(8, secs_to_ns(60))),
     });

@@ -8,7 +8,7 @@
 mod tests;
 
 mod authorize;
-mod capability;
+pub(in crate::workflow::rpc) mod capability;
 mod execute;
 mod nonroot_cycles;
 mod replay;
@@ -16,7 +16,7 @@ mod replay;
 use crate::{
     InternalError,
     cdk::types::Principal,
-    dto::rpc::{Request, Response},
+    dto::rpc::Response,
     log,
     log::Topic,
     ops::{
@@ -100,26 +100,25 @@ enum AuthorizationPipelineOrder {
 pub(in crate::workflow::rpc) struct RootResponseWorkflow;
 
 impl RootResponseWorkflow {
-    /// Handle a root-bound orchestration request using replay-before-policy
-    /// ordering for capability-envelope execution.
-    pub(in crate::workflow::rpc) async fn response_replay_first(
-        req: Request,
+    /// Handle a capability already mapped by the envelope workflow.
+    pub(in crate::workflow::rpc) async fn response_capability_replay_first(
+        capability: RootCapability,
     ) -> Result<Response, InternalError> {
-        if let Request::Cycles(req) = req {
+        if let RootCapability::RequestCycles(req) = capability {
             let response = nonroot_cycles::response_replay_first_root(req).await?;
             return Ok(Response::Cycles(response));
         }
 
-        Self::response_with_pipeline(req, AuthorizationPipelineOrder::ReplayThenAuthorize).await
+        Self::response_with_pipeline(capability, AuthorizationPipelineOrder::ReplayThenAuthorize)
+            .await
     }
 
     async fn response_with_pipeline(
-        req: Request,
+        capability: RootCapability,
         order: AuthorizationPipelineOrder,
     ) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
         crate::perf!("extract_context");
-        let capability = Self::map_request(req);
         let descriptor = capability.descriptor();
         crate::perf!("map_request");
 
@@ -294,10 +293,6 @@ impl RootResponseWorkflow {
             subnet_id: EnvOps::subnet_pid()?,
             now: IcOps::now_secs(),
         })
-    }
-
-    fn map_request(req: Request) -> RootCapability {
-        capability::map_request(req)
     }
 }
 

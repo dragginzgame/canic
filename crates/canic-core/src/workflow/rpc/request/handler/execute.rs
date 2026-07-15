@@ -51,8 +51,8 @@ pub(super) async fn execute_root_capability(
     let capability_name = capability.capability_name();
 
     let result = match capability {
-        RootCapability::Provision(req) => execute_provision(ctx, pending, &req).await,
-        RootCapability::Upgrade(req) => execute_upgrade(ctx, &req).await,
+        RootCapability::ProvisionCanister(req) => execute_provision(ctx, pending, &req).await,
+        RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, &req).await,
         RootCapability::RecycleCanister(req) => execute_recycle(&req).await,
         RootCapability::RequestCycles(req) => {
             let response = if let Some(grant) = authorized_cycles {

@@ -16,7 +16,7 @@ use crate::replay_policy::{
     },
 };
 
-/// Canonical replay-policy rows for `RootCapabilityCommand` variants.
+/// Canonical replay-policy rows for internal root-capability command variants.
 pub const ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST: &[RootCapabilityCommandReplayPolicy] = &[
     root_capability_replay_protected(
         "ProvisionCanister",
