@@ -147,7 +147,12 @@
   and requires explicit transform identity/outcome in stable provenance. Two
   isolated offline root/bootstrap lanes reproduce raw, gzip, and semantic
   provenance exactly, fixing `CANIC-092-BUILD-001` and
-  `CANIC-092-BUILD-002`. Eleven findings remain (4 P1, 6 P2, one P3).
+  `CANIC-092-BUILD-002`. D8 is released in `v0.92.7`. D9 then pins all 13
+  external Action executions, versions/checksum-binds executable tools,
+  removes the npm `ic-wasm` wrapper and remote ICP installer flow, and
+  establishes one guarded Ubuntu/Linux/Wasm support matrix. This fixes
+  `CANIC-092-RELEASE-001`, `-002`, and `-004`. Eight findings remain (2 P1,
+  5 P2, one P3); the dedicated scanner gap remains blocked outside D9.
 
 ## Month Status
 
@@ -203,8 +208,9 @@ C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Execute the exact D9 release-integrity contract; D10 and remaining layering
-   subsystems remain ordered candidates, not blanket authorization.
+1. Execute the exact D10 active-documentation/hard-cut-residue contract;
+   remaining layering subsystems stay ordered candidates, not blanket
+   authorization.
 2. Keep the dedicated scanner limitation proposed until the maintainer records
    every required waiver field; otherwise closeout remains blocked.
 3. Review the three P2 publish-surface findings with the complete baseline;

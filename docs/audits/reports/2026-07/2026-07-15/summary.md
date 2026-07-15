@@ -146,6 +146,16 @@ the role, transform, optional mode, tool, version, and outcome, fixing
 `CANIC-092-BUILD-001` and `CANIC-092-BUILD-002` without a compatibility
 decoder or alternate build path.
 
+[D9 release execution integrity](0.92-d9-release-execution-integrity.md)
+pins all 13 external Action executions to full commits, versions every CI and
+maintainer package tool, checksum-verifies each downloaded executable before
+extraction, and hard-cuts the npm `ic-wasm` wrapper and remote ICP installer
+script. One guarded governance matrix now owns the Ubuntu 24.04 x86_64 native
+and `wasm32-unknown-unknown` support cell. This fixes
+`CANIC-092-RELEASE-001`, `CANIC-092-RELEASE-002`, and
+`CANIC-092-RELEASE-004`; the dedicated scanner gap remains blocked outside
+D9.
+
 ## Live Ledger
 
 - Retained methods attempted: 22 of 22.
@@ -154,10 +164,10 @@ decoder or alternate build path.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
   0 blocked); D1/D2/D5/D6/D7/D8 leave current reruns at 10 pass and 0 fail
   without rewriting the baseline.
-- Unresolved findings: 11 (4 P1, 6 P2, one P3).
+- Unresolved findings: 8 (2 P1, 5 P2, one P3).
 - Phase D fixes: D1 released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
-  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8
-  implemented with focused validation passing.
+  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, D8 in
+  `v0.92.7`, and D9 implemented with focused validation passing.
 
 ## Validation
 
@@ -221,8 +231,13 @@ decoder or alternate build path.
   isolated offline root builds pass. Root/bootstrap hashes and semantic
   provenance match across lanes, root paths are absent, and all four local
   transforms record `ic-wasm 0.9.11`.
+- D9: the 13-action immutable-pin guard, all five checksum-bound executable
+  install/version probes, checksum rejection, canonical IC version authority,
+  data-driven pin discovery, deterministic local tool synchronization,
+  workflow/shell lint, 22 focused Rust tests, strict targeted Clippy, host
+  package, matrix, changelog, and diff proofs pass.
 
 ## Next
 
-D9 release execution integrity is the next ordered candidate. D9, D10, and the
-remaining layering subsystems remain separately bounded.
+D10 active documentation and hard-cut residue is the next ordered candidate.
+The remaining layering subsystems stay separately bounded.

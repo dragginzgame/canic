@@ -49,6 +49,10 @@ promotion, and final release/tag validation. The matrix interprets this
 governance policy for the active release line; it does not override the git,
 versioning, or release boundaries in this document.
 
+The sole supported host and Rust target authority is the
+[supported host and target matrix](supported-platforms.md). Installer branches
+outside a declared and validated cell do not create support claims.
+
 ## Git Boundary
 
 Automated agents must never run:

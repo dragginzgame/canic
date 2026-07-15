@@ -3,40 +3,23 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if {
-    [ -z "${CANIC_ACTIONLINT_VERSION:-${ACTIONLINT_VERSION:-}}" ] ||
-        [ -z "${CANIC_SHELLCHECK_VERSION:-}" ] ||
-        [ -z "${CANIC_ICP_CLI_VERSION:-}" ]
-} &&
-    [ -f "$ROOT_DIR/tool-versions.env" ]; then
-    # shellcheck source=tool-versions.env
-    source "$ROOT_DIR/tool-versions.env"
-fi
+# shellcheck source=/dev/null
+source "$ROOT_DIR/tool-versions.env"
 CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.92.7}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.96.0}"
-CANIC_ACTIONLINT_VERSION="${CANIC_ACTIONLINT_VERSION:-${ACTIONLINT_VERSION:-}}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
-CANIC_SHELLCHECK_VERSION="${CANIC_SHELLCHECK_VERSION:-}"
 SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
-CANIC_ICP_CLI_VERSION="${CANIC_ICP_CLI_VERSION:-}"
-CANIC_NPM_PREFIX="${CANIC_NPM_PREFIX:-$HOME/.local}"
-if [ -z "$CANIC_ACTIONLINT_VERSION" ] ||
-    [ -z "$CANIC_SHELLCHECK_VERSION" ] ||
-    [ -z "$CANIC_ICP_CLI_VERSION" ]; then
-    echo "missing external tool version pin; expected tool-versions.env or explicit environment overrides" >&2
-    exit 1
-fi
-RUSTUP_INIT_URL="https://sh.rustup.rs"
+IC_WASM_INSTALL_DIR="${IC_WASM_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_DEV_TOOLS=(
-    cargo-watch
-    cargo-edit
-    cargo-get
-    cargo-sort
-    cargo-sort-derives
-    ripgrep
+    "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
+    "cargo-edit@$CANIC_CARGO_EDIT_VERSION"
+    "cargo-get@$CANIC_CARGO_GET_VERSION"
+    "cargo-sort@$CANIC_CARGO_SORT_VERSION"
+    "cargo-sort-derives@$CANIC_CARGO_SORT_DERIVES_VERSION"
+    "ripgrep@$CANIC_RIPGREP_VERSION"
 )
 CANIC_WASM_TOOLS=(
-    candid-extractor
+    "candid-extractor@$CANIC_CANDID_EXTRACTOR_VERSION"
 )
 
 blue() {
@@ -101,12 +84,11 @@ install_or_update_actionlint() {
     local bin
 
     yellow "actionlint:"
-    cyan_command "CANIC_ACTIONLINT_VERSION=$CANIC_ACTIONLINT_VERSION ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-actionlint.sh"
+    cyan_command "ACTIONLINT_INSTALL_DIR=$ACTIONLINT_INSTALL_DIR bash scripts/ci/install-actionlint.sh"
     require_command curl
     require_command tar
     bin="$(
-        CANIC_ACTIONLINT_VERSION="$CANIC_ACTIONLINT_VERSION" \
-            ACTIONLINT_INSTALL_DIR="$ACTIONLINT_INSTALL_DIR" \
+        ACTIONLINT_INSTALL_DIR="$ACTIONLINT_INSTALL_DIR" \
             bash "$ROOT_DIR/scripts/ci/install-actionlint.sh"
     )"
 
@@ -122,12 +104,11 @@ install_or_update_shellcheck() {
     local bin
 
     yellow "ShellCheck:"
-    cyan_command "CANIC_SHELLCHECK_VERSION=$CANIC_SHELLCHECK_VERSION SHELLCHECK_INSTALL_DIR=$SHELLCHECK_INSTALL_DIR bash scripts/ci/install-shellcheck.sh"
+    cyan_command "SHELLCHECK_INSTALL_DIR=$SHELLCHECK_INSTALL_DIR bash scripts/ci/install-shellcheck.sh"
     require_command curl
     require_command tar
     bin="$(
-        CANIC_SHELLCHECK_VERSION="$CANIC_SHELLCHECK_VERSION" \
-            SHELLCHECK_INSTALL_DIR="$SHELLCHECK_INSTALL_DIR" \
+        SHELLCHECK_INSTALL_DIR="$SHELLCHECK_INSTALL_DIR" \
             bash "$ROOT_DIR/scripts/ci/install-shellcheck.sh"
     )"
 
@@ -137,33 +118,6 @@ install_or_update_shellcheck() {
     else
         yellow "shellcheck installed at $SHELLCHECK_INSTALL_DIR/shellcheck; add $SHELLCHECK_INSTALL_DIR to PATH to run it directly."
     fi
-}
-
-clean_icp_npm_staging_dirs() {
-    local npm_scope_dir="$CANIC_NPM_PREFIX/lib/node_modules/@icp-sdk"
-    local staging_dirs=()
-    local staging_dir
-
-    if [ ! -d "$npm_scope_dir" ]; then
-        return 0
-    fi
-
-    shopt -s nullglob
-    staging_dirs=(
-        "$npm_scope_dir/.icp-cli-"*
-        "$npm_scope_dir/.ic-wasm-"*
-    )
-    shopt -u nullglob
-
-    if [ "${#staging_dirs[@]}" -eq 0 ]; then
-        return 0
-    fi
-
-    yellow "Cleaning stale ICP npm staging directories:"
-    for staging_dir in "${staging_dirs[@]}"; do
-        cyan_command "rm -rf $staging_dir"
-        rm -rf "$staging_dir"
-    done
 }
 
 install_or_update_icp_cli() {
@@ -187,26 +141,28 @@ install_or_update_icp_cli() {
 }
 
 install_or_update_ic_wasm() {
-    local npm_bin_dir="$CANIC_NPM_PREFIX/bin"
-    local path_had_npm_bin=0
+    local bin
+    local path_had_install_dir=0
 
-    if [[ ":$PATH:" == *":$npm_bin_dir:"* ]]; then
-        path_had_npm_bin=1
+    if [[ ":$PATH:" == *":$IC_WASM_INSTALL_DIR:"* ]]; then
+        path_had_install_dir=1
     fi
 
     yellow "ic-wasm:"
-    require_command npm
-    mkdir -p "$npm_bin_dir"
-    clean_icp_npm_staging_dirs
-    PATH="$(resolved_cargo_bin_dir):$npm_bin_dir:$PATH"
+    require_command curl
+    require_command tar
+    mkdir -p "$IC_WASM_INSTALL_DIR"
+    PATH="$(resolved_cargo_bin_dir):$IC_WASM_INSTALL_DIR:$PATH"
     export PATH
     hash -r 2>/dev/null || true
-    cyan_command "npm install -g --prefix $CANIC_NPM_PREFIX @icp-sdk/ic-wasm"
-    npm install -g --prefix "$CANIC_NPM_PREFIX" @icp-sdk/ic-wasm
-    require_command ic-wasm
-    green "ic-wasm ready: $(ic-wasm --version 2>&1)"
-    if [ "$path_had_npm_bin" -eq 0 ]; then
-        yellow "ic-wasm installed under $npm_bin_dir; add it to PATH to run it directly."
+    cyan_command "IC_WASM_INSTALL_DIR=$IC_WASM_INSTALL_DIR bash scripts/ci/install-ic-wasm.sh"
+    bin="$(
+        IC_WASM_INSTALL_DIR="$IC_WASM_INSTALL_DIR" \
+            bash "$ROOT_DIR/scripts/ci/install-ic-wasm.sh"
+    )"
+    green "ic-wasm ready: $("$bin" --version 2>&1)"
+    if [ "$path_had_install_dir" -eq 0 ]; then
+        yellow "ic-wasm installed under $IC_WASM_INSTALL_DIR; add it to PATH to run it directly."
     fi
 }
 
@@ -238,14 +194,6 @@ main() {
     fi
 
     blue "Installing Canic prerequisites"
-
-    if ! command -v rustup >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; then
-        require_command curl
-        yellow "Rust bootstrap:"
-        cyan_command "curl -fsSL $RUSTUP_INIT_URL | sh -s -- -y --profile minimal --default-toolchain $CANIC_RUST_TOOLCHAIN"
-        curl -fsSL "$RUSTUP_INIT_URL" | sh -s -- -y --profile minimal --default-toolchain "$CANIC_RUST_TOOLCHAIN"
-        export PATH="$HOME/.cargo/bin:$PATH"
-    fi
 
     require_command rustup
     require_command cargo

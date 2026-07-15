@@ -2,19 +2,22 @@
 
 _CANIC_REQUIRE_ICP_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _CANIC_REQUIRE_ICP_ROOT_DIR="$(cd "$_CANIC_REQUIRE_ICP_SCRIPT_DIR/../.." && pwd)"
-if [ -z "${CANIC_ICP_CLI_VERSION:-}" ] &&
-    [ -f "$_CANIC_REQUIRE_ICP_ROOT_DIR/tool-versions.env" ]; then
-    # shellcheck source=tool-versions.env
-    source "$_CANIC_REQUIRE_ICP_ROOT_DIR/tool-versions.env"
-fi
+# shellcheck source=/dev/null
+source "$_CANIC_REQUIRE_ICP_ROOT_DIR/tool-versions.env"
 
 require_icp_tools() {
     local icp_version_output=""
     local ic_wasm_version_output=""
     local required_icp_version="${CANIC_ICP_CLI_VERSION:-}"
+    local required_ic_wasm_version="${CANIC_IC_WASM_VERSION:-}"
 
     if [ -z "$required_icp_version" ]; then
-        echo "missing CANIC_ICP_CLI_VERSION; set it or update tool-versions.env" >&2
+        echo "missing CANIC_ICP_CLI_VERSION in tool-versions.env" >&2
+        exit 1
+    fi
+
+    if [ -z "$required_ic_wasm_version" ]; then
+        echo "missing CANIC_IC_WASM_VERSION in tool-versions.env" >&2
         exit 1
     fi
 
@@ -53,4 +56,16 @@ require_icp_tools() {
         echo "$ic_wasm_version_output" >&2
         exit 1
     fi
+
+    case "$ic_wasm_version_output" in
+        *" $required_ic_wasm_version"|*" $required_ic_wasm_version "*)
+            ;;
+        *)
+            echo "unsupported ic-wasm version for Canic CI" >&2
+            echo "found: $ic_wasm_version_output" >&2
+            echo "required: ic-wasm $required_ic_wasm_version" >&2
+            echo "Install it with: make install-dev" >&2
+            exit 1
+            ;;
+    esac
 }

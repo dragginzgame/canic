@@ -24,6 +24,7 @@ require_texts "$MATRIX" "$GUARD_LABEL" \
     "cargo test --locked -p canic --test changelog_governance -- --nocapture" \
     "git diff --check" \
     "bash scripts/ci/check-release-validation-matrix.sh" \
+    "bash scripts/ci/check-release-integrity-contract.sh" \
     "bash scripts/ci/check-audit-method-catalog.sh" \
     "bash scripts/ci/check-control-plane-feature-matrix.sh" \
     "make fmt-check" \

@@ -1,43 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if [ -z "${CANIC_SHELLCHECK_VERSION:-}" ] && [ -f "$ROOT_DIR/tool-versions.env" ]; then
-    # shellcheck source=tool-versions.env
-    source "$ROOT_DIR/tool-versions.env"
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=/dev/null
+source "$ROOT_DIR/tool-versions.env"
 
-VERSION="${1:-${CANIC_SHELLCHECK_VERSION:-}}"
+VERSION="$CANIC_SHELLCHECK_VERSION"
 INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
+TMP_DIR=""
 
-if [ -z "$VERSION" ]; then
-    echo "missing ShellCheck version; set CANIC_SHELLCHECK_VERSION or update tool-versions.env" >&2
+if [ "$#" -ne 0 ]; then
+    echo "usage: install-shellcheck.sh" >&2
     exit 1
 fi
 
-platform() {
-    local os
-    local arch
-
-    case "$(uname -s)" in
-    Linux) os="linux" ;;
-    Darwin) os="darwin" ;;
+resolve_platform() {
+    case "$(uname -s):$(uname -m)" in
+    Darwin:arm64 | Darwin:aarch64)
+        platform="darwin.aarch64"
+        checksum="$CANIC_SHELLCHECK_SHA256_DARWIN_AARCH64"
+        ;;
+    Darwin:x86_64 | Darwin:amd64)
+        platform="darwin.x86_64"
+        checksum="$CANIC_SHELLCHECK_SHA256_DARWIN_X86_64"
+        ;;
+    Linux:arm64 | Linux:aarch64)
+        platform="linux.aarch64"
+        checksum="$CANIC_SHELLCHECK_SHA256_LINUX_AARCH64"
+        ;;
+    Linux:x86_64 | Linux:amd64)
+        platform="linux.x86_64"
+        checksum="$CANIC_SHELLCHECK_SHA256_LINUX_X86_64"
+        ;;
     *)
-        echo "unsupported ShellCheck platform: $(uname -s)" >&2
+        echo "unsupported ShellCheck platform: $(uname -s) $(uname -m)" >&2
         exit 1
         ;;
     esac
-
-    case "$(uname -m)" in
-    x86_64 | amd64) arch="x86_64" ;;
-    arm64 | aarch64) arch="aarch64" ;;
-    *)
-        echo "unsupported ShellCheck architecture: $(uname -m)" >&2
-        exit 1
-        ;;
-    esac
-
-    printf '%s.%s\n' "$os" "$arch"
 }
 
 main() {
@@ -45,19 +45,37 @@ main() {
     local release_dir="shellcheck-v${version_no_v}"
     local archive
     local url
-    local tmp_dir
+    local installed
+    local candidate
+    local version_output
 
-    archive="${release_dir}.$(platform).tar.gz"
+    archive="${release_dir}.${platform}.tar.xz"
     url="https://github.com/koalaman/shellcheck/releases/download/v${version_no_v}/${archive}"
 
-    tmp_dir="$(mktemp -d)"
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
     mkdir -p "$INSTALL_DIR"
-    curl -fsSL "$url" | tar -xz -C "$tmp_dir"
-    mv "$tmp_dir/$release_dir/shellcheck" "$INSTALL_DIR/shellcheck"
-    chmod +x "$INSTALL_DIR/shellcheck"
-    rm -rf "$tmp_dir"
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
+        -o "$TMP_DIR/$archive" "$url"
+    bash "$SCRIPT_DIR/verify-file-checksum.sh" sha256 "$checksum" "$TMP_DIR/$archive"
+    tar -xJf "$TMP_DIR/$archive" -C "$TMP_DIR"
+    candidate="$TMP_DIR/$release_dir/shellcheck"
+    chmod +x "$candidate"
+    version_output="$("$candidate" --version 2>&1)"
+    case "$version_output" in
+    *"version: $VERSION"*) ;;
+    *)
+        echo "installed ShellCheck does not report the pinned version" >&2
+        echo "expected: $VERSION" >&2
+        echo "actual:   $version_output" >&2
+        exit 1
+        ;;
+    esac
 
-    printf '%s/shellcheck\n' "$INSTALL_DIR"
+    installed="$INSTALL_DIR/shellcheck"
+    mv "$candidate" "$installed"
+    printf '%s\n' "$installed"
 }
 
-main "$@"
+resolve_platform
+main

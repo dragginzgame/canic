@@ -95,7 +95,7 @@ impl fmt::Display for IcpCommandError {
 
 fn icp_cli_install_hint() -> String {
     format!(
-        "next: install icp-cli {REQUIRED_ICP_CLI_VERSION} and ensure it is first on PATH\n  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/dfinity/icp-cli/releases/download/v{REQUIRED_ICP_CLI_VERSION}/icp-cli-installer.sh | sh\nnote: `icp network update` updates the local network launcher, not the `icp` CLI binary; pass top-level --icp <path> to use a non-PATH install"
+        "next: install checksum-verified icp-cli {REQUIRED_ICP_CLI_VERSION} or newer and ensure it is first on PATH\n  from a Canic checkout: make install-dev\nnote: `icp network update` updates the local network launcher, not the `icp` CLI binary; pass top-level --icp <path> to use a non-PATH install"
     )
 }
 

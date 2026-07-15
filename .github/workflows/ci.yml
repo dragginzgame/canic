@@ -4,7 +4,6 @@ env:
   CANIC_MSRV: 1.91.0
   CANIC_INTERNAL_TOOLCHAIN: 1.96.0
   CARGO_INCREMENTAL: 0
-  POCKET_IC_VERSION: 14.0.0
 
 permissions:
   contents: read
@@ -24,10 +23,10 @@ on:
 jobs:
   msrv:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.CANIC_MSRV }}
       - name: Install wasm target
@@ -35,7 +34,7 @@ jobs:
         run: |
           echo "RUSTUP_TOOLCHAIN=$CANIC_MSRV" >> "$GITHUB_ENV"
           rustup target add --toolchain "$CANIC_MSRV" wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
       - name: Check runner disk after Rust cache restore
@@ -50,29 +49,30 @@ jobs:
 
   checks:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
           clean: true
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
           components: rustfmt, clippy
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 'lts/*'
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
       - name: Check runner disk after Rust cache restore
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks after Rust cache restore" --min-free-mib 3072
       - name: Install Rust helper tools
+        shell: bash
         run: |
-          cargo install cargo-sort cargo-sort-derives candid-extractor --locked
-          cargo install ripgrep --locked --features pcre2
+          source tool-versions.env
+          cargo install cargo-sort --version "$CANIC_CARGO_SORT_VERSION" --locked
+          cargo install cargo-sort-derives --version "$CANIC_CARGO_SORT_DERIVES_VERSION" --locked
+          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
+          cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
       - name: Check Rust helper tools
         shell: bash
         run: |
@@ -97,7 +97,7 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/install-icp-cli.sh
-          npm install -g @icp-sdk/ic-wasm
+          bash scripts/ci/install-ic-wasm.sh
       - name: Check IC CLI tools
         run: |
           icp --version
@@ -118,6 +118,9 @@ jobs:
       - name: Release validation matrix guard
         shell: bash
         run: bash scripts/ci/check-release-validation-matrix.sh
+      - name: Release execution integrity guard
+        shell: bash
+        run: bash scripts/ci/check-release-integrity-contract.sh
       - name: Audit method catalog guard
         shell: bash
         run: bash scripts/ci/check-audit-method-catalog.sh
@@ -139,26 +142,26 @@ jobs:
 
   test-unit:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
           clean: true
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 'lts/*'
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
       - name: Check runner disk after Rust cache restore
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "test-unit after Rust cache restore" --min-free-mib 3072
       - name: Install Rust test helper tools
-        run: cargo install candid-extractor --locked
+        shell: bash
+        run: |
+          source tool-versions.env
+          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
       - name: Install wasm target
         shell: bash
         run: |
@@ -168,21 +171,21 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/install-icp-cli.sh
-          npm install -g @icp-sdk/ic-wasm
+          bash scripts/ci/install-ic-wasm.sh
       - name: Check IC CLI tools
         run: |
           candid-extractor --version
           icp --version
           ic-wasm --version
       - name: Cache PocketIC server
-        uses: actions/cache@v5
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: ${{ runner.temp }}/pocket-ic-server-${{ env.POCKET_IC_VERSION }}
-          key: pocket-ic-${{ env.POCKET_IC_VERSION }}-${{ runner.os }}
+          path: ${{ runner.temp }}/pocket-ic-server-*
+          key: pocket-ic-${{ hashFiles('tool-versions.env') }}-${{ runner.os }}-${{ runner.arch }}
       - name: Install PocketIC server
         shell: bash
         run: |
-          BIN="$(bash scripts/ci/install-pocketic.sh "$POCKET_IC_VERSION")"
+          BIN="$(bash scripts/ci/install-pocketic.sh)"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Check runner disk before test-unit
         shell: bash
@@ -195,26 +198,26 @@ jobs:
 
   build:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
           clean: true
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 'lts/*'
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
       - name: Check runner disk after Rust cache restore
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "build after Rust cache restore" --min-free-mib 3072
       - name: Install Rust build helper tools
-        run: cargo install candid-extractor --locked
+        shell: bash
+        run: |
+          source tool-versions.env
+          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
       - name: Install wasm target
         shell: bash
         run: |
@@ -224,7 +227,7 @@ jobs:
         shell: bash
         run: |
           bash scripts/ci/install-icp-cli.sh
-          npm install -g @icp-sdk/ic-wasm
+          bash scripts/ci/install-ic-wasm.sh
       - name: Check IC CLI tools
         run: |
           candid-extractor --version

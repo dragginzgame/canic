@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+CI="$ROOT/.github/workflows/ci.yml"
+TOOLS="$ROOT/tool-versions.env"
+MATRIX="$ROOT/docs/governance/supported-platforms.md"
+VERIFY="$ROOT/scripts/ci/verify-file-checksum.sh"
+ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
+installers=(
+    "$ROOT/scripts/ci/install-actionlint.sh"
+    "$ROOT/scripts/ci/install-shellcheck.sh"
+    "$ROOT/scripts/ci/install-pocketic.sh"
+    "$ROOT/scripts/ci/install-icp-cli.sh"
+    "$ROOT/scripts/ci/install-ic-wasm.sh"
+)
+
+fail() {
+    echo "release integrity guard failed: $1" >&2
+    exit 1
+}
+
+for file in "$CI" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE"; do
+    [ -f "$file" ] || fail "missing required file: $file"
+done
+
+external_action_count=0
+while IFS= read -r uses_entry; do
+    action="${uses_entry#uses:}"
+    action="${action#"${action%%[![:space:]]*}"}"
+    case "$action" in
+    ./*) continue ;;
+    esac
+    external_action_count=$((external_action_count + 1))
+    if [[ ! "$action" =~ @[0-9a-f]{40}$ ]]; then
+        fail "external Action is not pinned to a full commit: $action"
+    fi
+done < <(rg -o --no-filename 'uses:[[:space:]]*[^[:space:]#]+' "$ROOT/.github/workflows" -g '*.yml' -g '*.yaml')
+
+[ "$external_action_count" -gt 0 ] || fail "no external Actions were inspected"
+
+runner_count="$(rg -c '^[[:space:]]+runs-on: ubuntu-24\.04$' "$CI")"
+all_runner_count="$(rg -c '^[[:space:]]+runs-on:' "$CI")"
+[ "$runner_count" -eq 4 ] && [ "$all_runner_count" -eq 4 ] ||
+    fail "all four jobs must select the canonical ubuntu-24.04 host"
+ic_wasm_install_count="$(rg -c 'bash scripts/ci/install-ic-wasm\.sh' "$CI")"
+[ "$ic_wasm_install_count" -eq 3 ] ||
+    fail "all three IC tool jobs must use the checksum-bound ic-wasm installer"
+rg -F 'run: bash scripts/ci/check-release-integrity-contract.sh' "$CI" >/dev/null ||
+    fail "release integrity guard is not active in CI"
+
+while IFS= read -r install_command; do
+    if [[ "$install_command" != *"--version"* ]]; then
+        fail "CI Cargo helper install lacks an exact version: $install_command"
+    fi
+done < <(rg '^[[:space:]]*cargo install ' "$CI")
+
+# shellcheck source=/dev/null
+source "$TOOLS"
+
+mapfile -t version_vars < <(
+    sed -n 's/^export \(CANIC_[A-Z0-9_]*_VERSION\)=.*/\1/p' "$TOOLS"
+)
+[ "${#version_vars[@]}" -gt 0 ] || fail "no exact tool-version pins were found"
+declare -A validated_version_vars=()
+for variable in "${version_vars[@]}"; do
+    value="${!variable:-}"
+    [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] ||
+        fail "$variable is not an exact semantic version"
+    validated_version_vars["$variable"]=1
+done
+
+sha256_count=0
+sha512_count=0
+declare -A validated_checksum_vars=()
+while IFS='=' read -r variable digest; do
+    case "$variable" in
+    export\ CANIC_*_SHA256*)
+        [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || fail "invalid SHA-256 pin: $variable"
+        validated_checksum_vars["${variable#export }"]=1
+        sha256_count=$((sha256_count + 1))
+        ;;
+    export\ CANIC_*_SHA512*)
+        [[ "$digest" =~ ^[0-9a-f]{128}$ ]] || fail "invalid SHA-512 pin: $variable"
+        validated_checksum_vars["${variable#export }"]=1
+        sha512_count=$((sha512_count + 1))
+        ;;
+    esac
+done <"$TOOLS"
+
+[ "$sha256_count" -gt 0 ] || fail "no SHA-256 pins were found"
+[ "$sha512_count" -gt 0 ] || fail "no SHA-512 pins were found"
+
+for installer in "${installers[@]}"; do
+    rg -F 'verify-file-checksum.sh' "$installer" >/dev/null ||
+        fail "installer does not verify downloaded content: $installer"
+    rg -F -- "--proto-redir '=https'" "$installer" >/dev/null ||
+        fail "installer does not constrain redirect protocols: $installer"
+    rg '\$CANIC_[A-Z0-9_]*_VERSION' "$installer" >/dev/null ||
+        fail "installer does not use a repository version pin: $installer"
+    rg '\$CANIC_[A-Z0-9_]+_SHA(256|512)_[A-Z0-9_]+' "$installer" >/dev/null ||
+        fail "installer does not use a repository checksum pin: $installer"
+done
+
+mapfile -t referenced_version_vars < <(
+    rg -o --no-filename '\$CANIC_[A-Z0-9_]*_VERSION' \
+        "${installers[@]}" "$ICP_REQUIRE" | sed 's/^\$//' | sort -u
+)
+[ "${#referenced_version_vars[@]}" -gt 0 ] ||
+    fail "tool consumers do not reference repository version pins"
+for variable in "${referenced_version_vars[@]}"; do
+    [ -n "${validated_version_vars[$variable]:-}" ] ||
+        fail "tool consumer references an unvalidated version pin: $variable"
+done
+
+mapfile -t referenced_checksum_vars < <(
+    rg -o --no-filename '\$CANIC_[A-Z0-9_]+_SHA(256|512)_[A-Z0-9_]+' \
+        "${installers[@]}" | sed 's/^\$//' | sort -u
+)
+[ "${#referenced_checksum_vars[@]}" -gt 0 ] ||
+    fail "installers do not reference repository checksum pins"
+for variable in "${referenced_checksum_vars[@]}"; do
+    [ -n "${validated_checksum_vars[$variable]:-}" ] ||
+        fail "installer references an unvalidated checksum pin: $variable"
+done
+
+caller_override_result="$(
+    CANIC_ICP_CLI_VERSION=0.0.0 CANIC_IC_WASM_VERSION=0.0.0 \
+        bash -c 'source "$1"; printf "%s %s\n" "$CANIC_ICP_CLI_VERSION" "$CANIC_IC_WASM_VERSION"' \
+        _ "$ICP_REQUIRE"
+)"
+[ "$caller_override_result" = "$CANIC_ICP_CLI_VERSION $CANIC_IC_WASM_VERSION" ] ||
+    fail "caller values can override the canonical IC tool pins"
+
+if wrong_ic_wasm_output="$(
+    bash -c '
+        source "$1"
+        icp() { printf "icp-cli %s\n" "$CANIC_ICP_CLI_VERSION"; }
+        ic-wasm() { printf "ic-wasm 0.0.0\n"; }
+        require_icp_tools
+    ' _ "$ICP_REQUIRE" 2>&1
+)"; then
+    fail "the IC prerequisite check accepted an unpinned ic-wasm version"
+fi
+[[ "$wrong_ic_wasm_output" == *"unsupported ic-wasm version for Canic CI"* ]] ||
+    fail "the IC prerequisite check did not preserve its version-mismatch cause"
+
+if rg -n 'curl[^|]*\|' "${installers[@]}" "$ROOT/scripts/dev/install_dev.sh" >/dev/null; then
+    fail "active installer pipes an unverified download into execution"
+fi
+
+rg -F 'runs-on: ubuntu-24.04' "$CI" >/dev/null ||
+    fail "CI does not select the canonical supported host"
+rg -F 'Ubuntu 24.04, x86_64' "$MATRIX" >/dev/null ||
+    fail "supported host matrix is missing the CI host"
+rg -F '`x86_64-unknown-linux-gnu`' "$MATRIX" >/dev/null ||
+    fail "supported host matrix is missing the native target"
+rg -F '`wasm32-unknown-unknown`' "$MATRIX" >/dev/null ||
+    fail "supported host matrix is missing the canister target"
+rg -F 'Install-Capable But Not Release-Supported' "$MATRIX" >/dev/null ||
+    fail "supported host matrix does not distinguish installer branches"
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+printf 'canic-release-integrity\n' >"$tmp_dir/input"
+bash "$VERIFY" sha256 \
+    ef57c7341ccbad50924ce5ffe7d2069b1106acac606f1f8ebd92b5b0a47067df \
+    "$tmp_dir/input"
+if bash "$VERIFY" sha256 \
+    0000000000000000000000000000000000000000000000000000000000000000 \
+    "$tmp_dir/input" >"$tmp_dir/rejection.stdout" 2>"$tmp_dir/rejection.stderr"; then
+    fail "checksum mismatch was accepted"
+fi
+rg -F 'sha256 checksum mismatch' "$tmp_dir/rejection.stderr" >/dev/null ||
+    fail "checksum mismatch did not preserve its deterministic cause"
+
+bash -n "$VERIFY" "${installers[@]}" "$ROOT/scripts/dev/install_dev.sh"
+
+echo "release integrity contract guard passed ($external_action_count immutable Actions)"

@@ -36,15 +36,7 @@ fn workspace_version() -> String {
         .to_string()
 }
 
-// Returns the canonical tagged raw install-script URL for the current release.
-fn tagged_install_script_url() -> String {
-    let workspace_version = workspace_version();
-    format!(
-        "https://raw.githubusercontent.com/dragginzgame/canic/v{workspace_version}/scripts/dev/install_dev.sh"
-    )
-}
-
-// Keeps the curlable setup script pinned to the same CLI version as the workspace release.
+// Keeps the setup script pinned to the same CLI version as the workspace release.
 #[test]
 fn install_script_default_cli_version_matches_workspace_version() {
     let install_script_path = workspace_root().join("scripts/dev/install_dev.sh");
@@ -56,19 +48,5 @@ fn install_script_default_cli_version_matches_workspace_version() {
         install_script.contains(&expected),
         "expected {} to contain `{expected}`",
         install_script_path.display()
-    );
-}
-
-// Keeps the host crate README setup curl command aligned with the current release tag.
-#[test]
-fn host_readme_install_url_matches_workspace_version() {
-    let readme_path = workspace_root().join("crates/canic-host/README.md");
-    let readme = read_text(&readme_path);
-    let expected = tagged_install_script_url();
-
-    assert!(
-        readme.contains(&expected),
-        "expected {} to contain `{expected}`",
-        readme_path.display()
     );
 }

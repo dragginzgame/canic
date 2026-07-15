@@ -28,6 +28,7 @@ Documentation/audit-governance slices use applicable guards plus:
 
 ```text
 bash scripts/ci/check-release-validation-matrix.sh
+bash scripts/ci/check-release-integrity-contract.sh
 bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-release-package-install-validation.sh
@@ -78,6 +79,7 @@ bash scripts/ci/check-control-plane-feature-matrix.sh
 bash scripts/ci/check-blob-storage-inventory-gate.sh
 bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
 bash scripts/ci/check-release-validation-matrix.sh
+bash scripts/ci/check-release-integrity-contract.sh
 bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-release-package-install-validation.sh
@@ -91,6 +93,10 @@ cargo build --release --workspace --locked
 CI also validates workflow syntax and installs declared ICP/Wasm helpers. Audit
 definitions must not claim a guard runs in CI unless the current workflow
 contains it.
+
+The sole support declaration is the
+[supported host and target matrix](../governance/supported-platforms.md). A
+successful helper install on another platform is not release-support evidence.
 
 ## Focused Replay, Auth, And Cost Gates
 

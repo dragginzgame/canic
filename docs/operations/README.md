@@ -8,6 +8,9 @@ validation notes.
 - [Release validation matrix](release-validation-matrix.md) defines the
   current release-validation inventory. Use it for slice close-out,
   implementation close-out, RC promotion, and final release/tag validation.
+- [Supported host and target matrix](../governance/supported-platforms.md)
+  defines the sole release-supported host/native/Wasm cell and distinguishes
+  unvalidated installer branches.
 - [Recovery and retry runbooks](recovery-retry-runbooks.md) document safe
   operator recovery decisions for replay-sensitive failures and uncertain
   operations.

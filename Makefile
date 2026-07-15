@@ -34,7 +34,7 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Canic toolchain"
-	@echo "  update-dev       Update the local Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI development environment"
+	@echo "  update-dev       Synchronize development tools to the repository pins"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
 	@echo "Version Management:"
@@ -95,21 +95,26 @@ install:
 install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
-# Update the local Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI development environment.
+# Synchronize local development tools to the repository-owned versions.
 update-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
-	rustup update
 	cargo install --quiet \
-		cargo-audit cargo-bloat cargo-deny cargo-expand cargo-machete \
-		cargo-llvm-lines cargo-sort cargo-tarpaulin cargo-sort-derives \
-		ripgrep \
-		candid-extractor
+		"cargo-audit@$(CANIC_CARGO_AUDIT_VERSION)" \
+		"cargo-bloat@$(CANIC_CARGO_BLOAT_VERSION)" \
+		"cargo-deny@$(CANIC_CARGO_DENY_VERSION)" \
+		"cargo-expand@$(CANIC_CARGO_EXPAND_VERSION)" \
+		"cargo-machete@$(CANIC_CARGO_MACHETE_VERSION)" \
+		"cargo-llvm-lines@$(CANIC_CARGO_LLVM_LINES_VERSION)" \
+		"cargo-sort@$(CANIC_CARGO_SORT_VERSION)" \
+		"cargo-tarpaulin@$(CANIC_CARGO_TARPAULIN_VERSION)" \
+		"cargo-sort-derives@$(CANIC_CARGO_SORT_DERIVES_VERSION)" \
+		"ripgrep@$(CANIC_RIPGREP_VERSION)" \
+		"candid-extractor@$(CANIC_CANDID_EXTRACTOR_VERSION)" \
+		--locked
 	rg --version
 	icp --version
 	ic-wasm --version
 	cargo audit
-	cargo update --quiet
-
 
 # Optional explicit install target (idempotent)
 ensure-hooks:
