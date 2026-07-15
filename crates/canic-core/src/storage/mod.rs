@@ -1,11 +1,11 @@
-//! Persistent state model.
+//! Persisted record and stable-memory representation.
 //!
-//! This module owns the authoritative and cached data structures stored in
-//! stable memory. It is platform-aware (IC principals, cycles) and
-//! intentionally does NOT represent a pure domain model in the DDD sense.
+//! This module contains passive persisted and cached representations. Model
+//! owns authoritative state and storage invariants; ops owns access and
+//! conversion at this boundary.
 //!
 //! Multi-step orchestration lives in `workflow`; pure decision helpers live in
-//! `domain`.
+//! `domain::policy::pure`.
 
 pub mod canister;
 pub mod stable;

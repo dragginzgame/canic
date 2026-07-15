@@ -378,8 +378,8 @@ mod tests {
                 required_scopes: &required_scopes,
                 now_ns: 130,
             },
-            |_, _, _| Ok(()),
-            |_, _, _| Ok(()),
+            |_, _, _| Ok::<(), String>(()),
+            |_, _, _| Ok::<(), String>(()),
         )
         .unwrap();
     }
@@ -418,7 +418,7 @@ mod tests {
                     required_scopes: &[],
                     now_ns: 130,
                 },
-                |_, _, _| Ok(()),
+                |_, _, _| Ok::<(), String>(()),
                 verify_issuer_proof_hash,
             )
             .unwrap();
@@ -450,7 +450,7 @@ mod tests {
                     required_scopes: &[],
                     now_ns: 130,
                 },
-                |_, _, _| Ok(()),
+                |_, _, _| Ok::<(), String>(()),
                 verify_issuer_proof_hash,
             ),
             Err(
@@ -488,7 +488,7 @@ mod tests {
                     required_scopes: &[],
                     now_ns: 130,
                 },
-                |_, _, _| Ok(()),
+                |_, _, _| Ok::<(), String>(()),
                 verify_issuer_proof_hash,
             ),
             Err(

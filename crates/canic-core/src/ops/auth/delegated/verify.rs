@@ -58,15 +58,15 @@ pub struct VerifiedDelegatedToken {
 ///
 
 #[derive(Debug, Eq, Error, PartialEq)]
-pub enum VerifyDelegatedTokenError {
+pub enum VerifyDelegatedTokenError<RootProofError = String, IssuerProofError = String> {
     #[error("delegated auth cert hash mismatch")]
     CertHashMismatch,
     #[error("delegated auth issuer proof unavailable")]
     IssuerProofUnavailable,
     #[error("delegated auth root proof invalid: {0}")]
-    RootProofInvalid(String),
+    RootProofInvalid(RootProofError),
     #[error("delegated auth issuer proof invalid: {0}")]
-    IssuerProofInvalid(String),
+    IssuerProofInvalid(IssuerProofError),
     #[error("delegated auth token issuer pid mismatch")]
     IssuerPidMismatch,
     #[error("delegated auth token expiry must be greater than issued_at")]
@@ -107,14 +107,14 @@ pub enum VerifyDelegatedTokenError {
     Audience(#[from] AudienceError),
 }
 
-pub fn verify_delegated_token<R, S>(
+pub fn verify_delegated_token<R, S, RootProofError, IssuerProofError>(
     input: VerifyDelegatedTokenInput<'_>,
     mut verify_root_proof: R,
     mut verify_issuer_proof: S,
-) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError>
+) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError<RootProofError, IssuerProofError>>
 where
-    R: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), String>,
-    S: FnMut([u8; 32], &IssuerProof, Principal) -> Result<(), String>,
+    R: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), RootProofError>,
+    S: FnMut([u8; 32], &IssuerProof, Principal) -> Result<(), IssuerProofError>,
 {
     let material = verify_delegated_token_material(&input, true)?;
 
@@ -147,10 +147,13 @@ struct VerifiedDelegatedTokenMaterial {
     claims_hash: [u8; 32],
 }
 
-fn verify_delegated_token_material(
+fn verify_delegated_token_material<RootProofError, IssuerProofError>(
     input: &VerifyDelegatedTokenInput<'_>,
     require_issuer_proof_bytes: bool,
-) -> Result<VerifiedDelegatedTokenMaterial, VerifyDelegatedTokenError> {
+) -> Result<
+    VerifiedDelegatedTokenMaterial,
+    VerifyDelegatedTokenError<RootProofError, IssuerProofError>,
+> {
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
 
@@ -183,11 +186,11 @@ fn verify_delegated_token_material(
     })
 }
 
-const fn verify_cert_time(
+const fn verify_cert_time<RootProofError, IssuerProofError>(
     not_before_ns: u64,
     expires_at_ns: u64,
     now_ns: u64,
-) -> Result<(), VerifyDelegatedTokenError> {
+) -> Result<(), VerifyDelegatedTokenError<RootProofError, IssuerProofError>> {
     if not_before_ns > now_ns.saturating_add(AUTH_TIME_SKEW_ALLOWANCE_NS) {
         return Err(VerifyDelegatedTokenError::CertNotYetValid);
     }
@@ -197,10 +200,10 @@ const fn verify_cert_time(
     Ok(())
 }
 
-fn verify_claims(
+fn verify_claims<RootProofError, IssuerProofError>(
     input: &VerifyDelegatedTokenInput<'_>,
     actual_cert_hash: [u8; 32],
-) -> Result<Vec<String>, VerifyDelegatedTokenError> {
+) -> Result<Vec<String>, VerifyDelegatedTokenError<RootProofError, IssuerProofError>> {
     let cert = &input.token.proof.cert;
     let claims = &input.token.claims;
 
@@ -242,9 +245,9 @@ fn verify_claims(
     Ok(local_scopes)
 }
 
-fn verify_audience_and_grants(
+fn verify_audience_and_grants<RootProofError, IssuerProofError>(
     input: &VerifyDelegatedTokenInput<'_>,
-) -> Result<Vec<String>, VerifyDelegatedTokenError> {
+) -> Result<Vec<String>, VerifyDelegatedTokenError<RootProofError, IssuerProofError>> {
     let cert_aud = &input.token.proof.cert.aud;
     let claims_aud = &input.token.claims.aud;
     let local_role = input
@@ -274,7 +277,10 @@ fn verify_audience_and_grants(
         .ok_or(VerifyDelegatedTokenError::TokenGrantRejected)
 }
 
-fn verify_scopes(subset: &[String], superset: &[String]) -> Result<(), VerifyDelegatedTokenError> {
+fn verify_scopes<RootProofError, IssuerProofError>(
+    subset: &[String],
+    superset: &[String],
+) -> Result<(), VerifyDelegatedTokenError<RootProofError, IssuerProofError>> {
     for scope in subset {
         if !superset.contains(scope) {
             return Err(VerifyDelegatedTokenError::ScopeRejected {
@@ -624,7 +630,7 @@ mod tests {
         assert_eq!(
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
-                |_, _, _| Ok(()),
+                |_, _, _| Ok::<(), String>(()),
                 verify_issuer_ok
             ),
             Err(VerifyDelegatedTokenError::CertRules(

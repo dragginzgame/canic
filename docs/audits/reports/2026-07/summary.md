@@ -111,9 +111,16 @@
   permit and typed failure contract. Focused unit, policy, Clippy, and PocketIC
   validation passes, including quota rejection before mutation, exact
   conflict/capacity codes, authorization, and interrupted recovery. This fixes
-  `CANIC-092-COST-001` and `CANIC-092-ERROR-002` in the candidate and leaves 21
-  unresolved findings; immutable fix/validation identity awaits the maintainer
-  commit.
+  `CANIC-092-COST-001` and `CANIC-092-ERROR-002`, committed and released in
+  `v0.92.1`. D2 then preserves typed auth proof/provisioning causes through one
+  public mapping boundary. All seven auth methods and the current auth trace
+  pass, including invalid-proof rejection without active-state mutation. This
+  fixes `CANIC-092-ERROR-001` in the candidate. D3 then resolves the competing
+  layer authority and public core architecture wording without runtime change:
+  active docs now mirror the strict `AGENTS.md` direction and model/storage
+  ownership contract. The same 25 product-code violations remain visible. D3
+  fixes `CANIC-092-LAYERING-003` and `CANIC-092-DOCS-001`, leaving 18
+  unresolved findings (5 P1, 12 P2, one P3).
 
 ## Month Status
 
@@ -129,12 +136,14 @@ a valid failure: app and bootstrap artifacts plus app semantic provenance
 reproduce, while final root raw/gzip and semantic artifact hashes remain
 path-dependent. All seven authentication results are valid: audience and
 replay v2 pass with current nonempty filters, while their v1 attempts remain
-invalid history. No authentication bypass was found. Mandatory trace v1 is
+invalid history. No authentication bypass was found; current D2 auth reruns
+also pass with typed causes preserved. Mandatory trace v1 is
 cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
-satisfied. Phase D finding review is complete, and accepted D1 publication
-safety/typed failures pass focused validation. Security ordering and lifecycle
+satisfied. Phase D finding review is complete; D1 publication safety is
+released and D2 auth typed causes plus D3 canonical layer documentation pass
+focused validation. Security ordering and lifecycle
 symmetry now have valid frozen-method
 passes with watchpoints. Capability v2 is a valid immutable-baseline pass at
 risk 4/10; v1 remains invalid history. Publish surface has a valid first
@@ -166,9 +175,9 @@ are complete; Phase C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Record D1's full fix/validation commit and canonical product-tree hash, then
-   review the exact D2 typed auth/provisioning contract; later slices remain
-   ordered candidates, not blanket authorization.
+1. Record D2/D3's full fix/validation commit, then review the exact D4
+   root-issuer admission ownership contract; later slices remain ordered
+   candidates, not blanket authorization.
 2. Keep the dedicated scanner limitation proposed until the maintainer records
    every required waiver field; otherwise closeout remains blocked.
 3. Review the three P2 publish-surface findings with the complete baseline;

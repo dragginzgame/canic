@@ -10,14 +10,14 @@
 //! Canic is organized to keep endpoint code thin and coordination centralized:
 //! - `access/` contains access expressions, predicates, and metrics for boundary enforcement.
 //! - `workflow/` implements orchestration and lifecycle workflows.
-//! - `domain/` contains pure value and decision helpers.
-//! - `model/` contains pure runtime state models shared by ops and storage.
-//! - `ops/` provides mechanical, reusable side-effecting operations.
-//! - `storage/` owns stable-memory-backed schemas and helpers.
+//! - `domain/policy/pure/` contains pure policy decisions invoked by workflow.
+//! - `ops/` provides deterministic state access, conversion, and approved single-step effects.
+//! - `model/` owns authoritative runtime state and storage invariants.
+//! - `storage/` contains passive persisted schemas and stable-memory representations.
 //! - `view/` exposes internal read-only projections over stored/runtime state.
 //! - macro entrypoints live in the `canic` facade crate.
 //!
-//! The default flow is: endpoints → workflow → domain/decision helpers → ops → storage/model.
+//! The dependency flow is: endpoints → workflow → policy → ops → model.
 
 #[doc(hidden)]
 pub mod access;

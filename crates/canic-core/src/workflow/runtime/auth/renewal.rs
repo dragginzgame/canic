@@ -115,7 +115,9 @@ impl RootDelegationRenewalWorkflow {
             };
         let installed = match AuthOps::start_next_chain_key_root_delegation_batch_install(now_ns)? {
             Some(request) => {
-                provisioning::install_chain_key_delegation_proof_batch(request, now_ns).await?
+                provisioning::install_chain_key_delegation_proof_batch(request, now_ns)
+                    .await
+                    .installed_any
             }
             None => false,
         };

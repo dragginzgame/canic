@@ -77,8 +77,24 @@ rejects the eleventh with `ResourceExhausted` before fleet mutation. Exact
 conflict and capacity cases reject with distinct codes and unchanged fleet
 state, direct store authorization remains root-only, and a target-committed
 release still converges after root upgrade. `CANIC-092-COST-001` and
-`CANIC-092-ERROR-002` are fixed in the candidate; exact fix and validation
-commit identity remains pending the maintainer-owned commit.
+`CANIC-092-ERROR-002` are fixed in implementation commit `daa67913...`, with
+focused lint validation in `d9dc6304...` and release in `v0.92.1`.
+
+[D2 auth typed-cause preservation](0.92-d2-auth-typed-causes.md) removes
+string flattening from proof callbacks and preserves exact issuer-application,
+transport, pending, expired, stale, and invalid causes through one existing
+public error boundary. All seven auth methods and the current auth trace pass.
+A new PocketIC case proves wrong-issuer, expired, and corrupt proof installs
+reject with typed codes without replacing the active proof. Candid, token
+formats, and stable state are unchanged.
+
+[D3 canonical layer contract](0.92-d3-canonical-layer-contract.md) makes
+`AGENTS.md` the sole active architecture authority. Public core docs, module
+headers, and hygiene guidance now agree on
+`endpoints -> workflow -> policy -> ops -> model`, model-owned state/storage
+invariants, and passive storage representations. This is documentation-only;
+the same 25 product-code ops-to-policy violations remain visible for later
+finding-backed slices.
 
 ## Live Ledger
 
@@ -86,11 +102,11 @@ commit identity remains pending the maintainer-owned commit.
 - Valid active results: 22.
 - Invalid active results: 0; v1 failures remain preserved as invalid history.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
-  0 blocked); D1 moves the current rerun state to 7 pass and 3 fail without
-  rewriting the baseline.
-- Unresolved findings: 21 (7 P1, 13 P2, one P3).
-- Product fixes: D1 implemented and focused validation passes; immutable commit
-  and product-tree identities remain pending.
+  0 blocked); D1/D2 move current reruns to 8 pass and 2 fail without rewriting
+  the baseline.
+- Unresolved findings: 18 (5 P1, 12 P2, one P3).
+- Phase D fixes: D1 committed/released; D2 and D3 implemented with focused
+  validation passing and immutable commit identity pending.
 
 ## Validation
 
@@ -121,10 +137,17 @@ commit identity remains pending the maintainer-owned commit.
   passed; root/non-root store authorization 1 passed.
 - Layering v2 rerun: expected valid failure with the same 25 ops-to-policy
   files and no new D1 path.
+- D2 auth library selection: 263 passed; exact trust, capability, audience, and
+  replay method selections pass; targeted warning-as-error Clippy passes.
+- D2 PocketIC: role attestation, capability, root facade, session bootstrap,
+  renewal, and invalid-proof/no-mutation selections each pass.
+- D3 active-contract scans, changed-file Rust formatting, strict `canic-core`
+  Clippy, and package verification pass. Layering self-tests pass; the full
+  guard retains the same expected 25 product-code violations. Core rustdoc
+  still fails only on the separately indexed D10 `InternalError` link.
 
 ## Next
 
-Record the immutable D1 fix/validation commit and canonical product-tree hash
-after the maintainer commit. D2 typed auth/provisioning causes is the next
-ordered candidate; D2 through D10 remain bounded rather than blanket
-authorization.
+Record D2/D3's immutable fix/validation commit after the maintainer commit. D4
+root-issuer admission ownership is the next ordered candidate; D4 through D10
+remain separately bounded.

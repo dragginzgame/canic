@@ -35,7 +35,7 @@ impl HttpApi {
     }
 
     /// Perform a raw HTTP request with metrics, returning the response verbatim.
-    /// Prefer workflow/ops label-aware helpers when exposing dynamic URLs.
+    /// Prefer workflow label-aware helpers when exposing dynamic URLs.
     pub async fn get_raw(args: HttpRequestArgs) -> Result<HttpRequestResult, Error> {
         HttpWorkflow::get_raw(args).await.map_err(Error::from)
     }

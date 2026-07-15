@@ -19,7 +19,7 @@ use super::{
         },
         cert_rules::DelegatedAuthTtlLimits,
         chain_key::{
-            ChainKeyRootVerifierPolicy, VerifyChainKeyBatchRootProofInput,
+            ChainKeyRootProofError, ChainKeyRootVerifierPolicy, VerifyChainKeyBatchRootProofInput,
             verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_public_key_shape,
             verify_chain_key_ecdsa_signature,
         },
@@ -179,7 +179,7 @@ impl AuthOps {
         let cache_key = match delegated_token_cache_key(input.token, input.caller) {
             Ok(key) => key,
             Err(err) => {
-                let err = VerifyDelegatedTokenError::Canonical(err);
+                let err: VerifyDelegatedTokenError = VerifyDelegatedTokenError::Canonical(err);
                 DelegatedAuthMetrics::record_verify_failed(
                     delegated_auth_reason_from_verify_error(&err),
                 );
@@ -359,7 +359,6 @@ fn verify_with_embedded_proofs<'a>(
                 issuer_pid,
                 &verifier_cfg.ic_root_public_key_raw,
             )
-            .map_err(|err| err.to_string())
         },
     )
     .map_err(|err| {
@@ -375,21 +374,28 @@ impl AuthOps {
         root_proof: &RootProof,
         verifier_cfg: &AuthProofVerifierConfig,
         now_ns: u64,
-    ) -> Result<(), String> {
+    ) -> Result<(), InternalError> {
         let root_pid = cert.root_pid;
         if root_pid != verifier_cfg.root_canister_id {
-            return Err(AuthValidationError::InvalidRootAuthority {
-                expected: verifier_cfg.root_canister_id,
-                found: root_pid,
-            }
-            .to_string());
+            return Err(InternalError::invalid_input(
+                AuthValidationError::InvalidRootAuthority {
+                    expected: verifier_cfg.root_canister_id,
+                    found: root_pid,
+                }
+                .to_string(),
+            ));
         }
 
         if verifier_cfg.root_proof_mode != RootProofMode::ChainKeyBatch {
-            return Err("delegated auth requires chain_key_batch root proofs".to_string());
+            return Err(InternalError::invariant(
+                crate::InternalErrorOrigin::Ops,
+                "delegated auth requires chain_key_batch root proofs",
+            ));
         }
         let Some(chain_key_root) = verifier_cfg.chain_key_root.as_ref() else {
-            return Err("chain-key root verifier policy is not configured".to_string());
+            return Err(InternalError::auth_material_stale(
+                "chain-key root verifier policy is not configured",
+            ));
         };
         let policy = chain_key_policy_from_config(chain_key_root);
         verify_chain_key_batch_root_proof(
@@ -401,7 +407,28 @@ impl AuthOps {
             },
             verify_chain_key_ecdsa_signature,
         )
-        .map_err(|err| err.to_string())
+        .map_err(map_chain_key_root_proof_error)
+    }
+}
+
+fn map_chain_key_root_proof_error(err: ChainKeyRootProofError) -> InternalError {
+    match err {
+        err @ (ChainKeyRootProofError::Expired {
+            target: "root_key_policy",
+        }
+        | ChainKeyRootProofError::PolicyMismatch { .. }
+        | ChainKeyRootProofError::ProofEpochTooOld { .. }
+        | ChainKeyRootProofError::KeyVersionTooOld { .. }
+        | ChainKeyRootProofError::RegistryEpochTooOld { .. }) => {
+            InternalError::auth_material_stale(err.to_string())
+        }
+        err @ ChainKeyRootProofError::Expired { .. } => {
+            InternalError::auth_proof_expired(err.to_string())
+        }
+        err @ ChainKeyRootProofError::NotYetValid { .. } => {
+            InternalError::auth_proof_pending(err.to_string())
+        }
+        err => InternalError::invalid_input(err.to_string()),
     }
 }
 
@@ -731,21 +758,51 @@ fn map_prepare_delegated_token_error(err: PrepareDelegatedTokenError) -> Interna
     }
 }
 
-fn map_verify_delegated_token_error(err: VerifyDelegatedTokenError) -> InternalError {
+trait AuthProofCause: std::fmt::Display {
+    fn into_internal_error(self) -> InternalError;
+}
+
+impl AuthProofCause for InternalError {
+    fn into_internal_error(self) -> InternalError {
+        self
+    }
+}
+
+impl AuthProofCause for String {
+    fn into_internal_error(self) -> InternalError {
+        InternalError::invalid_input(self)
+    }
+}
+
+fn map_verify_delegated_token_error<RootProofError, IssuerProofError>(
+    err: VerifyDelegatedTokenError<RootProofError, IssuerProofError>,
+) -> InternalError
+where
+    RootProofError: AuthProofCause,
+    IssuerProofError: AuthProofCause,
+{
     match err {
         err @ VerifyDelegatedTokenError::CertExpired => {
             InternalError::auth_proof_expired(err.to_string())
         }
+        err @ VerifyDelegatedTokenError::CertNotYetValid => {
+            InternalError::auth_proof_pending(err.to_string())
+        }
         err @ VerifyDelegatedTokenError::TokenExpired => {
             InternalError::auth_token_expired(err.to_string())
         }
-        err => AuthValidationError::Auth(err.to_string()).into(),
+        VerifyDelegatedTokenError::IssuerProofUnavailable => {
+            InternalError::auth_material_stale("delegated auth issuer proof unavailable")
+        }
+        VerifyDelegatedTokenError::RootProofInvalid(cause) => cause.into_internal_error(),
+        VerifyDelegatedTokenError::IssuerProofInvalid(cause) => cause.into_internal_error(),
+        err => InternalError::invalid_input(err.to_string()),
     }
 }
 
 // Convert typed verifier failures into bounded metric reasons.
-const fn delegated_auth_reason_from_verify_error(
-    err: &VerifyDelegatedTokenError,
+const fn delegated_auth_reason_from_verify_error<RootProofError, IssuerProofError>(
+    err: &VerifyDelegatedTokenError<RootProofError, IssuerProofError>,
 ) -> DelegatedAuthMetricReason {
     match err {
         VerifyDelegatedTokenError::Audience(_) => DelegatedAuthMetricReason::Audience,
@@ -969,7 +1026,7 @@ mod tests {
 
     #[test]
     fn delegated_token_verify_expiry_preserves_machine_readable_codes() {
-        let cases = [
+        let cases: [(VerifyDelegatedTokenError, ErrorCode); 2] = [
             (
                 VerifyDelegatedTokenError::TokenExpired,
                 ErrorCode::AuthTokenExpired,
@@ -986,6 +1043,64 @@ mod tests {
                 .public_error()
                 .expect("expiry verification failures must be public");
             assert_eq!(public.code, expected);
+        }
+    }
+
+    #[test]
+    fn delegated_token_verify_preserves_typed_proof_callback_causes() {
+        let root = map_verify_delegated_token_error(VerifyDelegatedTokenError::<
+            InternalError,
+            InternalError,
+        >::RootProofInvalid(
+            InternalError::auth_material_stale("root policy changed"),
+        ));
+        let issuer = map_verify_delegated_token_error(VerifyDelegatedTokenError::<
+            InternalError,
+            InternalError,
+        >::IssuerProofInvalid(
+            InternalError::invalid_input("issuer signature invalid"),
+        ));
+
+        assert_eq!(
+            root.public_error().map(|err| err.code),
+            Some(ErrorCode::AuthMaterialStale)
+        );
+        assert_eq!(
+            issuer.public_error().map(|err| err.code),
+            Some(ErrorCode::InvalidInput)
+        );
+    }
+
+    #[test]
+    fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
+        let cases = [
+            (
+                ChainKeyRootProofError::Expired { target: "batch" },
+                ErrorCode::AuthProofExpired,
+            ),
+            (
+                ChainKeyRootProofError::NotYetValid { target: "batch" },
+                ErrorCode::AuthProofPending,
+            ),
+            (
+                ChainKeyRootProofError::Expired {
+                    target: "root_key_policy",
+                },
+                ErrorCode::AuthMaterialStale,
+            ),
+            (
+                ChainKeyRootProofError::ProofEpochTooOld { min: 8, found: 7 },
+                ErrorCode::AuthMaterialStale,
+            ),
+            (
+                ChainKeyRootProofError::InvalidSignatureLength { len: 3 },
+                ErrorCode::InvalidInput,
+            ),
+        ];
+
+        for (err, expected) in cases {
+            let mapped = map_chain_key_root_proof_error(err);
+            assert_eq!(mapped.public_error().map(|err| err.code), Some(expected));
         }
     }
 

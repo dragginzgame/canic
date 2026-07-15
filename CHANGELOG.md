@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.2` is potentially breaking: it preserves specific delegated-auth proof
+  and issuer-provisioning failures and establishes one canonical layer contract
+  without changing public data shapes or stable state.
+
 - `0.92.1` is potentially breaking: it completes the frozen holistic product
   baseline and makes durable Wasm-store publication fail closed on quota and
   cycle admission while preserving specific typed rejection outcomes.

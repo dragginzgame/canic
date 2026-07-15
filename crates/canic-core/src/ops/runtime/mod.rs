@@ -1,6 +1,6 @@
 //! Module: ops::runtime
 //!
-//! Responsibility: group runtime operations used by workflow and API layers.
+//! Responsibility: group runtime operations used by workflow.
 //! Does not own: domain policy, endpoint authorization, or stable schemas.
 //! Boundary: exposes ops-layer runtime facades and their typed error surface.
 

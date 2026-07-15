@@ -31,7 +31,7 @@ pub struct InstallActiveDelegationProofInput {
 ///
 
 #[derive(Debug, Eq, Error, PartialEq)]
-pub enum InstallActiveDelegationProofError {
+pub enum InstallActiveDelegationProofError<ProofError = String> {
     #[error("active delegation proof is for another issuer")]
     IssuerMismatch,
     #[error("active delegation proof cert is not yet valid")]
@@ -39,17 +39,17 @@ pub enum InstallActiveDelegationProofError {
     #[error("active delegation proof cert expired")]
     CertExpired,
     #[error("active delegation proof root proof invalid: {0}")]
-    RootProofInvalid(String),
+    RootProofInvalid(ProofError),
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
 }
 
-pub fn install_active_delegation_proof<V>(
+pub fn install_active_delegation_proof<V, ProofError>(
     input: InstallActiveDelegationProofInput,
     mut verify_root_proof: V,
-) -> Result<ActiveDelegationProof, InstallActiveDelegationProofError>
+) -> Result<ActiveDelegationProof, InstallActiveDelegationProofError<ProofError>>
 where
-    V: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), String>,
+    V: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), ProofError>,
 {
     let cert = &input.proof.cert;
     if cert.issuer_pid != input.this_canister {
@@ -148,7 +148,9 @@ mod tests {
 
     #[test]
     fn install_active_delegation_proof_builds_active_state_after_root_verify() {
-        let active = install_active_delegation_proof(input(proof()), |_, _, _| Ok(())).unwrap();
+        let active =
+            install_active_delegation_proof(input(proof()), |_, _, _| Ok::<(), String>(()))
+                .unwrap();
 
         assert_eq!(active.proof.cert.issuer_pid, p(2));
         assert_eq!(active.not_before_ns, 20);
@@ -164,7 +166,7 @@ mod tests {
         input.this_canister = p(9);
 
         assert_eq!(
-            install_active_delegation_proof(input, |_, _, _| Ok(())),
+            install_active_delegation_proof(input, |_, _, _| Ok::<(), String>(())),
             Err(InstallActiveDelegationProofError::IssuerMismatch)
         );
     }
@@ -174,14 +176,14 @@ mod tests {
         let mut early = input(proof());
         early.now_ns = 19;
         assert_eq!(
-            install_active_delegation_proof(early, |_, _, _| Ok(())),
+            install_active_delegation_proof(early, |_, _, _| Ok::<(), String>(())),
             Err(InstallActiveDelegationProofError::CertNotYetValid)
         );
 
         let mut expired = input(proof());
         expired.now_ns = 120;
         assert_eq!(
-            install_active_delegation_proof(expired, |_, _, _| Ok(())),
+            install_active_delegation_proof(expired, |_, _, _| Ok::<(), String>(())),
             Err(InstallActiveDelegationProofError::CertExpired)
         );
     }

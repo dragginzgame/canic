@@ -14,9 +14,9 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.0`.
-- `v0.92.0` is published at
-  `91736337fc1cfeb891f17d7d62affb5e671348e2`.
+- The workspace package version is `0.92.1`.
+- `v0.92.1` is published at
+  `9d81ee8c229dddad5681e4144a87b827886b8d3a`.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -34,9 +34,15 @@ coverage completes the two formerly partial mandatory traces. The aggregate is
 now a valid `fail` with six pass and four fail results, zero partial, and zero
 blocked. The Phase C product baseline gate is complete; product fixes still
 require explicit finding review and bounded slice acceptance. Phase D D1 is
-the first accepted and validated product slice: durable publication now owns
-one fail-closed quota/cycle permit and typed publication failures. Its exact
-fix/validation commit identity remains pending the maintainer-owned commit.
+committed in `v0.92.1`: durable publication owns one fail-closed quota/cycle
+permit and typed failures. D2 is implemented and validated in the current
+worktree: auth proof/provisioning paths preserve exact typed causes through one
+public mapping boundary; its commit identity remains pending.
+D3 is also implemented and validated in the current worktree. It makes
+`AGENTS.md` the sole active layer authority and aligns public core docs and
+module headers with endpoint-to-workflow delegation, model-owned state/storage
+invariants, and passive storage representations. D3 is documentation-only; its
+commit identity remains pending with D2.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -82,8 +88,8 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
   `91736337fc1cfeb891f17d7d62affb5e671348e2`.
 - Phase D changes only accepted finding-backed slices and compares them to the
   immediate parent and frozen baseline.
-- D1 is implemented and focused validation passes. D2 through D10 remain
-  ordered candidates rather than blanket authorization.
+- D1 is committed and D2/D3 are implemented with focused validation passing.
+  D4 through D10 remain ordered candidates rather than blanket authorization.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -131,10 +137,10 @@ First primary results:
   audience/replay v1 attempts remain invalid history. Corrected
   [audience/replay v2](../audits/reports/2026-07/2026-07-14/0.92-auth-invariants-v2.md)
   methods use current exact filters through a zero-test-refusing runner and
-  validly pass at risk 3/10, fixing `CANIC-092-AUDIT-009`. Findings
-  `CANIC-092-ERROR-001` and `CANIC-092-LAYERING-004` remain for lost typed
-  causes and accidental public install DTO surface. The generated/session
-  integration gap is fixed by the July 15 evidence slice.
+  validly pass at risk 3/10, fixing `CANIC-092-AUDIT-009`. D2 fixes
+  `CANIC-092-ERROR-001` by preserving typed proof/provisioning causes;
+  `CANIC-092-LAYERING-004` remains for accidental public install DTO surface.
+  The generated/session integration gap is fixed by the July 15 evidence slice.
 - [mandatory trace admission](../audits/reports/2026-07/2026-07-14/0.92-mandatory-trace-admission.md)
   is `blocked` and `invalid`: the accepted design names ten mandatory trace
   IDs and requires a trace method ID/version/fingerprint, but no trace method
@@ -155,6 +161,15 @@ First primary results:
   quota/cycle permit and typed publication causes. Quota, conflict, capacity,
   authorization, and interrupted-recovery PocketIC cases pass; store-GC
   behavior and public Candid shapes are unchanged.
+- [D2 auth typed-cause preservation](../audits/reports/2026-07/2026-07-15/0.92-d2-auth-typed-causes.md)
+  fixes `CANIC-092-ERROR-001`. All seven auth methods and the current auth
+  trace pass; wrong-issuer, expired, and corrupted proofs reject without
+  changing the installed active proof. Candid and stable state are unchanged.
+- [D3 canonical layer contract](../audits/reports/2026-07/2026-07-15/0.92-d3-canonical-layer-contract.md)
+  fixes `CANIC-092-LAYERING-003` and `CANIC-092-DOCS-001`. `AGENTS.md` is the
+  sole active authority; public core docs, module headers, and hygiene guidance
+  agree on the strict direction and model/storage ownership. No runtime,
+  public, serialized, or stable behavior changes.
 - [security boundary ordering](../audits/reports/2026-07/2026-07-14/0.92-security-boundary-ordering.md)
   is a valid pass with watchpoints: generated endpoint, trust proof,
   subject/scope, capability, replay, and recovery-required paths retain their
@@ -174,11 +189,10 @@ First primary results:
   risk 4/10, fixing `CANIC-092-AUDIT-011`.
 - [publish surface v1](../audits/reports/2026-07/2026-07-14/0.92-publish-surface.md)
   is a valid pass and first frozen-method baseline at risk 4/10. All eight
-  public packages verify from isolated offline archives. Findings
-  `CANIC-092-PUBLISH-001`, `CANIC-092-DOCS-001`, and
-  `CANIC-092-RESIDUE-001` record incomplete package feature guidance,
-  conflicting public `canic-core` layer wording, and forbidden old-command
-  anti-resurrection checks in the active CLI proof path.
+  public packages verify from isolated offline archives. D3 fixes
+  `CANIC-092-DOCS-001`; `CANIC-092-PUBLISH-001` and
+  `CANIC-092-RESIDUE-001` still record incomplete package feature guidance and
+  forbidden old-command anti-resurrection checks in the active CLI proof path.
 - [module structure v1](../audits/reports/2026-07/2026-07-14/0.92-module-structure-v1.md)
   is a valid fail and first frozen-method baseline at risk 7/10. It confirms 25
   production ops-to-policy imports, direct policy decisions in ops, and
@@ -242,9 +256,10 @@ First primary results:
   remains the original blocked synthesis. The live ledger now has 22 valid
   and zero invalid active results after the instruction and Wasm corrections.
   The final mandatory trace result is valid and complete at aggregate `fail`.
-  D1 fixes two non-waivable publication P1 findings, leaving 21 unresolved
-  findings (7 P1, 13 P2, one P3). Its current trace rerun passes; the frozen
-  Phase C aggregate remains historical evidence.
+  D1 fixes two non-waivable publication P1 findings, D2 fixes the auth cause
+  P1, and D3 fixes one P1 authority conflict plus one P2 documentation drift.
+  Eighteen findings remain unresolved (5 P1, 12 P2, one P3). Current control
+  and auth trace reruns pass; the frozen Phase C aggregate remains historical.
 
 ## Focused Validation
 
@@ -273,6 +288,16 @@ First primary results:
 - The exact delegated-session PocketIC case passes pre-bootstrap rejection,
   successful bootstrap and guarded-call parity, idempotent replay,
   conflicting-wallet rejection, and unchanged authority after rejection.
+- D2 focused validation passes 263 all-feature auth library tests, every
+  nonempty audience/replay v2 selection, trust/capability selections, strict
+  targeted Clippy, and PocketIC facade/session/renewal/attestation/capability
+  cases. Wrong-issuer, expired, and corrupt proof installs return typed codes
+  without active-state mutation.
+- D3 active-contract scans, changed-file Rust formatting, strict `canic-core`
+  Clippy, and package verification pass. Layering self-tests pass; the full
+  guard retains the same 25 known product-code violations. Warning-as-error
+  core rustdoc still fails only on the separately indexed D10 `InternalError`
+  link.
 - Focused D1 publication validation passes 18 all-feature publication tests,
   30 replay/capability policy tests, four core and one publication-owned
   cost-permit structural checks, strict targeted Clippy, and five root/store
@@ -327,7 +352,8 @@ First primary results:
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 is
-implemented and validated, leaving 21 unresolved findings; record its full
-commit/product-tree identity after the maintainer commit. The next candidate
-is D2 typed auth/provisioning failures. D2 through D10 still require their
-exact accepted scope, and the proposed scanner limitation is not yet a waiver.
+committed and D2/D3 are implemented and validated, leaving 18 unresolved
+findings; record their full commit identity after the maintainer commit. The
+next ordered candidate is D4 root-issuer admission ownership. D4 through D10
+remain separately bounded, and the proposed scanner limitation is not yet a
+waiver.
