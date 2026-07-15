@@ -9,10 +9,10 @@ pub mod mapper;
 use crate::{
     InternalError,
     cdk::api::canister_self,
-    domain::policy::pure::env::ValidatedEnv,
     dto::env::EnvSnapshotResponse,
     ids::SubnetRole,
     memory::runtime::is_memory_bootstrap_ready,
+    model::env::ValidatedEnv,
     ops::runtime::env::mapper::EnvRecordMapper,
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvData, EnvRecord},

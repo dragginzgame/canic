@@ -166,6 +166,15 @@ This fixes `CANIC-092-PUBLISH-001`, `CANIC-092-RESIDUE-001`, and
 `CANIC-092-DOCS-002` without runtime, public, serialized, stable-state, or
 package-manifest behavior changes.
 
+[D11 canonical layering closure](0.92-d11-canonical-layering-closure.md)
+removes the remaining 18 production ops-to-policy dependencies through five
+bounded subsystem corrections. Environment, funding, topology, index,
+scaling, and sharding shared values now have model owners; workflow owns pool
+metric classification and root-proof policy admission; ops retains conversion,
+single-step state access, cryptography, and persistence. The layering guard
+passes with zero violations, fixing `CANIC-092-LAYERING-005` without public,
+serialized, stable-state, configuration, or dependency changes.
+
 ## Live Ledger
 
 - Retained methods attempted: 22 of 22.
@@ -174,11 +183,11 @@ package-manifest behavior changes.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
   0 blocked); D1/D2/D5/D6/D7/D8 leave current reruns at 10 pass and 0 fail
   without rewriting the baseline.
-- Unresolved findings: 5 (2 P1 and 3 P2).
+- Unresolved findings: 4 (1 P1 and 3 P2).
 - Phase D fixes: D1 released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
   `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, D8 in
-  `v0.92.7`, D9 committed in the untagged 0.92.8 candidate, and D10
-  implemented with focused validation passing.
+  `v0.92.7`, D9 in `v0.92.8`, D10 in `v0.92.9`, and D11 implemented with
+  focused validation passing.
 
 ## Validation
 
@@ -251,10 +260,14 @@ package-manifest behavior changes.
   warning-as-error core rustdoc, strict targeted Clippy, installed CLI proof,
   packaged CLI proof, generated plus canonical packaged Wasm-store builds,
   Bash syntax, ShellCheck, targeted formatting, and diff hygiene pass.
+- D11: the executable layering guard passes with zero violations; targeted
+  environment, funding, topology, registry, scaling, sharding, pool,
+  chain-key, issuer-policy, and provisioning selections pass; all-feature
+  `canic-core` Clippy passes with warnings denied.
 
 ## Next
 
-D10 active documentation and hard-cut residue is implemented and validated.
-The next product step is to map the 18 remaining ops-to-policy files into
-separately reviewed `CANIC-092-LAYERING-005` subsystem slices. The scanner
-limitation remains unaccepted and the three P2 watchpoints remain deferred.
+D11 canonical layering closure is implemented and validated, and
+`CANIC-092-LAYERING-005` is fixed in the current candidate. The remaining
+closeout decision is the blocked dedicated-scanner evidence gap; the three P2
+watchpoints remain deliberately deferred.

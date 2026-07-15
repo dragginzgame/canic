@@ -59,6 +59,7 @@ pub struct PrepareChainKeyRootDelegationBatchInput {
     pub build_network: BuildNetwork,
     pub max_cert_ttl_ns: u64,
     pub min_accepted_proof_epoch: u64,
+    pub required_issuer_pid: Option<Principal>,
     pub now_ns: u64,
 }
 

@@ -6,24 +6,22 @@
 
 use crate::{
     cdk::types::Principal,
-    domain::policy::pure::placement::sharding::{
-        ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState,
-    },
     dto::placement::sharding::{ShardEntry, ShardingPlanStateResponse},
+    model::placement::sharding::{ShardPartitionKeyAssignment, ShardPlacement, ShardingPlanState},
     storage::stable::sharding::{ShardEntryRecord, ShardKey},
 };
 
 ///
-/// ShardPlacementPolicyInputMapper
+/// ShardPlacementMapper
 ///
 /// Operations-layer mapper for shard entries and placement policy inputs.
 ///
 
-pub struct ShardPlacementPolicyInputMapper;
+pub struct ShardPlacementMapper;
 
-impl ShardPlacementPolicyInputMapper {
+impl ShardPlacementMapper {
     #[must_use]
-    pub fn record_to_policy_input(
+    pub fn record_to_observation(
         pid: Principal,
         entry: &ShardEntryRecord,
     ) -> (Principal, ShardPlacement) {
@@ -40,16 +38,16 @@ impl ShardPlacementPolicyInputMapper {
 }
 
 ///
-/// ShardPartitionKeyAssignmentPolicyInputMapper
+/// ShardPartitionKeyAssignmentMapper
 ///
 /// Operations-layer mapper for shard assignment records and policy inputs.
 ///
 
-pub struct ShardPartitionKeyAssignmentPolicyInputMapper;
+pub struct ShardPartitionKeyAssignmentMapper;
 
-impl ShardPartitionKeyAssignmentPolicyInputMapper {
+impl ShardPartitionKeyAssignmentMapper {
     #[must_use]
-    pub fn record_to_policy_input(key: &ShardKey, pid: Principal) -> ShardPartitionKeyAssignment {
+    pub fn record_to_assignment(key: &ShardKey, pid: Principal) -> ShardPartitionKeyAssignment {
         ShardPartitionKeyAssignment {
             partition_key: key.partition_key.to_string(),
             pid,
@@ -89,7 +87,7 @@ pub struct ShardingPlanStateResponseMapper;
 
 impl ShardingPlanStateResponseMapper {
     #[must_use]
-    pub fn record_to_view(state: ShardingPlanState) -> ShardingPlanStateResponse {
+    pub fn plan_to_response(state: ShardingPlanState) -> ShardingPlanStateResponse {
         match state {
             ShardingPlanState::AlreadyAssigned { pid } => {
                 ShardingPlanStateResponse::AlreadyAssigned { pid }

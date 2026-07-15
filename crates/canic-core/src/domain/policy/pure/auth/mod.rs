@@ -13,9 +13,8 @@ use thiserror::Error as ThisError;
 mod root_provisioning;
 
 pub use root_provisioning::{
-    RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
-    validate_root_delegation_proof_prepare_policy, validate_root_issuer_policy_upsert,
-    validate_root_issuer_renewal_template_upsert,
+    RootDelegationProofPreparePolicyInput, validate_root_delegation_proof_prepare_policy,
+    validate_root_issuer_policy_upsert, validate_root_issuer_renewal_template_upsert,
 };
 
 ///

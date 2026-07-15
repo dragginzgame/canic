@@ -5,8 +5,8 @@
 //! Boundary: ops mapper used by scaling workflows and storage facades.
 
 use crate::{
-    domain::policy::pure::placement::scaling::ScalingWorkerPlanEntry,
-    dto::placement::scaling::WorkerEntry, storage::stable::scaling::WorkerEntryRecord,
+    dto::placement::scaling::WorkerEntry, model::placement::scaling::ScalingWorkerEntry,
+    storage::stable::scaling::WorkerEntryRecord,
 };
 
 ///
@@ -20,12 +20,12 @@ pub struct WorkerEntryRecordMapper;
 impl WorkerEntryRecordMapper {
     #[must_use]
     pub fn validated_to_record(
-        plan: ScalingWorkerPlanEntry,
+        entry: ScalingWorkerEntry,
         created_at_secs: u64,
     ) -> WorkerEntryRecord {
         WorkerEntryRecord {
-            pool: plan.pool,
-            canister_role: plan.canister_role,
+            pool: entry.pool,
+            canister_role: entry.canister_role,
             created_at_secs,
         }
     }

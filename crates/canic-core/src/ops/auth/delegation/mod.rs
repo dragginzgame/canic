@@ -15,6 +15,10 @@ mod root_issuer_policy;
 mod root_issuer_renewal;
 
 pub use chain_key_batch::ChainKeyRootDelegationBatchInstallPlan;
+pub use chain_key_batch::{
+    ChainKeyRootDelegationBatchPreparation, ChainKeyRootDelegationBatchPreparePlan,
+    ChainKeyRootDelegationIssuerApproval,
+};
 
 use super::{
     AuthOps, AuthValidationError,
@@ -103,9 +107,9 @@ impl AuthOps {
         root_issuer_renewal::has_enabled_root_issuer_renewal_templates()
     }
 
-    pub(crate) fn prepare_due_chain_key_root_delegation_batch(
+    pub(crate) fn plan_due_chain_key_root_delegation_batch(
         input: PrepareChainKeyRootDelegationBatchInput,
-    ) -> Result<ChainKeyRootDelegationBatchSweepResult, InternalError> {
+    ) -> Result<ChainKeyRootDelegationBatchPreparation, InternalError> {
         let config = ConfigOps::delegated_tokens_config()?;
         let signing_policy = chain_key_signing_policy_from_config(
             &config,
@@ -124,7 +128,7 @@ impl AuthOps {
         let registry =
             chain_key_registry::current_chain_key_delegated_auth_registry(&root_key_policy)?;
         let max_revocation_latency_ns = required_chain_key_max_revocation_latency_ns(&config)?;
-        let result = chain_key_batch::prepare_due_chain_key_root_delegation_batch(
+        chain_key_batch::plan_due_chain_key_root_delegation_batch(
             chain_key_batch::PrepareDueChainKeyRootDelegationBatchInput {
                 signing_policy: &signing_policy,
                 max_cert_ttl_ns: input.max_cert_ttl_ns,
@@ -132,17 +136,18 @@ impl AuthOps {
                 min_accepted_proof_epoch: input.min_accepted_proof_epoch,
                 registry_epoch: registry.snapshot.registry_epoch,
                 registry_hash: registry.hash,
-                required_issuer_pid: None,
+                required_issuer_pid: input.required_issuer_pid,
                 now_ns: input.now_ns,
             },
-        )?;
+        )
+    }
 
-        Ok(ChainKeyRootDelegationBatchSweepResult {
-            batch_id: result.batch_id,
-            prepared_issuers: result.prepared_issuers,
-            skipped_templates: result.skipped_templates,
-            reused_in_flight: result.reused_in_flight,
-        })
+    pub(crate) fn commit_chain_key_root_delegation_batch(
+        plan: ChainKeyRootDelegationBatchPreparePlan,
+        approvals: Vec<ChainKeyRootDelegationIssuerApproval>,
+    ) -> Result<ChainKeyRootDelegationBatchSweepResult, InternalError> {
+        let result = chain_key_batch::commit_chain_key_root_delegation_batch(plan, approvals)?;
+        Ok(chain_key_batch_sweep_result(result))
     }
 
     pub(crate) async fn sign_next_chain_key_root_delegation_batch(
@@ -168,22 +173,41 @@ impl AuthOps {
         })
     }
 
+    pub(crate) async fn sign_chain_key_root_delegation_batch(
+        build_network: BuildNetwork,
+        batch_id: [u8; 32],
+        now_ns: u64,
+    ) -> Result<ChainKeyRootDelegationBatchSigningResult, InternalError> {
+        let config = ConfigOps::delegated_tokens_config()?;
+        let signing_policy =
+            chain_key_signing_policy_from_config(&config, IcOps::canister_self(), build_network)?;
+        let mut signer = ManagementCanisterChainKeySigner;
+        let result = chain_key_batch::sign_chain_key_root_delegation_batch(
+            &signing_policy,
+            batch_id,
+            now_ns,
+            &mut signer,
+        )
+        .await?;
+
+        Ok(ChainKeyRootDelegationBatchSigningResult {
+            batch_id: result.batch_id,
+            signed: result.signed,
+            reused_signed: result.reused_signed,
+            signing_in_flight: result.signing_in_flight,
+        })
+    }
+
     pub(crate) fn start_next_chain_key_root_delegation_batch_install(
         now_ns: u64,
     ) -> Result<Option<ChainKeyRootDelegationBatchInstallPlan>, InternalError> {
         chain_key_batch::start_next_chain_key_root_delegation_batch_install(now_ns)
     }
 
-    pub(crate) async fn get_or_create_chain_key_delegation_proof_for_issuer(
+    pub(crate) fn signed_chain_key_delegation_proof_for_issuer(
         issuer_pid: Principal,
-        build_network: BuildNetwork,
-        max_cert_ttl_ns: u64,
-        min_accepted_proof_epoch: u64,
         now_ns: u64,
     ) -> Result<Option<RootDelegationProofBatchProof>, InternalError> {
-        let config = ConfigOps::delegated_tokens_config()?;
-        let signing_policy =
-            chain_key_signing_policy_from_config(&config, IcOps::canister_self(), build_network)?;
         let root_key_policy = Self::auth_proof_verifier_config()?
             .chain_key_root
             .ok_or_else(|| {
@@ -195,24 +219,14 @@ impl AuthOps {
             .policy;
         let registry =
             chain_key_registry::current_chain_key_delegated_auth_registry(&root_key_policy)?;
-        let max_revocation_latency_ns = required_chain_key_max_revocation_latency_ns(&config)?;
-        let mut signer = ManagementCanisterChainKeySigner;
-
-        chain_key_batch::get_or_create_chain_key_delegation_proof_for_issuer(
-            chain_key_batch::PrepareDueChainKeyRootDelegationBatchInput {
-                signing_policy: &signing_policy,
-                max_cert_ttl_ns,
-                max_revocation_latency_ns,
-                min_accepted_proof_epoch,
-                registry_epoch: registry.snapshot.registry_epoch,
-                registry_hash: registry.hash,
-                required_issuer_pid: Some(issuer_pid),
+        Ok(
+            chain_key_batch::signed_chain_key_delegation_proof_for_issuer(
+                issuer_pid,
                 now_ns,
-            },
-            issuer_pid,
-            &mut signer,
+                registry.snapshot.registry_epoch,
+                registry.hash,
+            ),
         )
-        .await
     }
 
     pub(crate) fn record_chain_key_root_delegation_install_success(
@@ -243,6 +257,17 @@ impl AuthOps {
 
     pub(crate) const fn chain_key_root_sign_enabled() -> bool {
         cfg!(feature = "auth-chain-key-root-sign")
+    }
+}
+
+const fn chain_key_batch_sweep_result(
+    result: chain_key_batch::PrepareDueChainKeyRootDelegationBatchResult,
+) -> ChainKeyRootDelegationBatchSweepResult {
+    ChainKeyRootDelegationBatchSweepResult {
+        batch_id: result.batch_id,
+        prepared_issuers: result.prepared_issuers,
+        skipped_templates: result.skipped_templates,
+        reused_in_flight: result.reused_in_flight,
     }
 }
 

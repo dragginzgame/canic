@@ -11,7 +11,7 @@ use super::{
 use crate::{
     InternalError,
     cdk::types::Principal,
-    domain::policy::pure::cycles_funding::FundingPolicyViolation,
+    domain::policy::pure::cycles_funding::{FundingPolicyViolation, evaluate},
     dto::rpc::{CyclesRequest, CyclesResponse},
     ids::CanisterRole,
     log,
@@ -274,9 +274,9 @@ pub(super) fn authorize_request_cycles_inner(
         return Err(RpcWorkflowError::CyclesFundingDisabled.into());
     }
 
-    let policy = ConfigOps::cycles_funding_policy_for_child_role(&child.role)?;
+    let limits = ConfigOps::cycles_funding_limits_for_child_role(&child.role)?;
     let ledger = CyclesFundingLedgerOps::snapshot(ctx.caller);
-    let decision = match policy.evaluate(ledger, req.cycles, ctx.now) {
+    let decision = match evaluate(limits, ledger, req.cycles, ctx.now) {
         Ok(decision) => decision,
         Err(violation) => return Err(map_funding_policy_violation(ctx, req.cycles, violation)),
     };

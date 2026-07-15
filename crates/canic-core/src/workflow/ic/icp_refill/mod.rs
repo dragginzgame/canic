@@ -17,6 +17,7 @@ use crate::{
         types::{Cycles, Principal},
     },
     config::schema::{IcpRefillPolicy, TopupPolicy},
+    domain::policy::pure::cycles_funding::cooldown_retry_after_secs,
     domain::policy::pure::icp_refill::{
         IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
         evaluate_manual_refill,
@@ -300,8 +301,11 @@ fn configured_funding_cooldown_retry_after_secs(
     target_canister: Principal,
     now_secs: u64,
 ) -> Result<Option<u64>, InternalError> {
-    Ok(ConfigOps::cycles_funding_policy_for_child_role(role)?
-        .cooldown_retry_after_secs(CyclesFundingLedgerOps::snapshot(target_canister), now_secs))
+    Ok(cooldown_retry_after_secs(
+        ConfigOps::cycles_funding_limits_for_child_role(role)?,
+        CyclesFundingLedgerOps::snapshot(target_canister),
+        now_secs,
+    ))
 }
 
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {

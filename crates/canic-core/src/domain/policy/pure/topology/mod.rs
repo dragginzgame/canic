@@ -1,36 +1,13 @@
 pub mod registry;
 
-use crate::{InternalError, domain::value::Principal, ids::CanisterRole};
+use crate::{
+    InternalError,
+    domain::value::Principal,
+    ids::CanisterRole,
+    model::topology::{TopologyEntry, TopologyIndexEntry, TopologyRegistry},
+};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
-
-///
-/// TopologyPolicyInput
-///
-
-pub struct TopologyPolicyInput {
-    pub pid: Principal,
-    pub role: CanisterRole,
-    pub parent_pid: Option<Principal>,
-    pub module_hash: Option<Vec<u8>>,
-}
-
-///
-/// RegistryPolicyInput
-///
-
-pub struct RegistryPolicyInput {
-    pub entries: Vec<TopologyPolicyInput>,
-}
-
-///
-/// IndexPolicyInput
-///
-
-pub struct IndexPolicyInput {
-    pub role: CanisterRole,
-    pub pid: Principal,
-}
 
 ///
 /// TopologyPolicyError
@@ -80,9 +57,9 @@ impl TopologyPolicy {
     // -------------------------------------------------------------
 
     fn registry_record(
-        registry: &'_ RegistryPolicyInput,
+        registry: &'_ TopologyRegistry,
         pid: Principal,
-    ) -> Result<&'_ TopologyPolicyInput, TopologyPolicyError> {
+    ) -> Result<&'_ TopologyEntry, TopologyPolicyError> {
         registry
             .entries
             .iter()
@@ -95,7 +72,7 @@ impl TopologyPolicy {
     // -------------------------------------------------------------
 
     pub(crate) fn assert_parent_exists(
-        registry: &RegistryPolicyInput,
+        registry: &TopologyRegistry,
         parent_pid: Principal,
     ) -> Result<(), InternalError> {
         if registry.entries.iter().any(|entry| entry.pid == parent_pid) {
@@ -106,7 +83,7 @@ impl TopologyPolicy {
     }
 
     pub(crate) fn assert_module_hash(
-        registry: &RegistryPolicyInput,
+        registry: &TopologyRegistry,
         pid: Principal,
         expected_hash: &[u8],
     ) -> Result<(), InternalError> {
@@ -120,7 +97,7 @@ impl TopologyPolicy {
     }
 
     pub(crate) fn assert_immediate_parent(
-        registry: &RegistryPolicyInput,
+        registry: &TopologyRegistry,
         pid: Principal,
         expected_parent: Principal,
     ) -> Result<(), InternalError> {
@@ -138,8 +115,8 @@ impl TopologyPolicy {
     }
 
     pub fn assert_index_consistent_with_registry(
-        registry: &RegistryPolicyInput,
-        entries: &[IndexPolicyInput],
+        registry: &TopologyRegistry,
+        entries: &[TopologyIndexEntry],
     ) -> Result<(), TopologyPolicyError> {
         let mut seen_roles = BTreeSet::new();
 

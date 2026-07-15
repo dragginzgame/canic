@@ -6,8 +6,8 @@
 
 use crate::{
     InternalError,
-    domain::policy::pure::topology::IndexPolicyInput,
     dto::topology::SubnetIndexArgs,
+    model::topology::TopologyIndexEntry,
     ops::{
         config::ConfigOps,
         prelude::*,
@@ -58,8 +58,8 @@ impl SubnetIndexOps {
     }
 
     #[must_use]
-    pub(crate) fn policy_input() -> Vec<IndexPolicyInput> {
-        IndexEntryMapper::records_to_policy_input(&SubnetIndex::export().entries)
+    pub(crate) fn topology_entries() -> Vec<TopologyIndexEntry> {
+        IndexEntryMapper::records_to_topology_entries(&SubnetIndex::export().entries)
     }
 
     #[must_use]

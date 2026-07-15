@@ -18,7 +18,10 @@ use crate::{
     },
     workflow::{
         config::{WORKFLOW_AUTH_RENEWAL_INTERVAL, WORKFLOW_INIT_DELAY},
-        runtime::{auth::provisioning, timer::TimerWorkflow},
+        runtime::{
+            auth::{provisioning, root_delegation_batch},
+            timer::TimerWorkflow,
+        },
     },
 };
 use std::{cell::RefCell, time::Duration};
@@ -91,11 +94,12 @@ impl RootDelegationRenewalWorkflow {
         let max_cert_ttl_ns = delegated_token_max_ttl_ns()?;
         let now_ns = IcOps::now_nanos();
         DelegatedAuthMetrics::record_renewal_sweep_started();
-        let prepared = match AuthOps::prepare_due_chain_key_root_delegation_batch(
+        let prepared = match root_delegation_batch::prepare_due_chain_key_root_delegation_batch(
             PrepareChainKeyRootDelegationBatchInput {
                 build_network,
                 max_cert_ttl_ns,
                 min_accepted_proof_epoch,
+                required_issuer_pid: None,
                 now_ns,
             },
         ) {

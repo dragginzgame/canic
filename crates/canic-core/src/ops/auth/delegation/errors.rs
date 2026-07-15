@@ -6,7 +6,7 @@
 use super::super::delegated::{
     active_proof::InstallActiveDelegationProofError, delegation_cert::PrepareDelegationCertError,
 };
-use crate::{InternalError, domain::policy::pure::auth::AuthPolicyError};
+use crate::InternalError;
 
 pub(super) fn map_prepare_delegation_cert_error(err: PrepareDelegationCertError) -> InternalError {
     InternalError::invalid_input(err.to_string())
@@ -28,10 +28,6 @@ pub(super) fn map_install_active_delegation_proof_error(
         }
         InstallActiveDelegationProofError::RootProofInvalid(cause) => cause,
     }
-}
-
-pub(super) fn map_root_provisioning_policy_error(err: AuthPolicyError) -> InternalError {
-    InternalError::forbidden(err.to_string())
 }
 
 // -----------------------------------------------------------------------------

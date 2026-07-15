@@ -9,15 +9,14 @@ use crate::{
         RandomnessConfig, ScalePool, ScalePoolPolicy, ScalingConfig, ShardingConfig,
         StandardsCanisterConfig,
     },
+    domain::policy::pure::topology::TopologyPolicyError,
     domain::policy::pure::topology::registry::{
         RegistryCanisterKind, RegistryCanisterShape, RegistryPolicy, RegistryPolicyError,
         RegistryRegistrationObservation,
     },
-    domain::policy::pure::topology::{
-        RegistryPolicyInput, TopologyPolicyError, TopologyPolicyInput,
-    },
     dto::error::{Error, ErrorCode},
     ids::CanisterRole,
+    model::topology::{TopologyEntry, TopologyRegistry},
     ops::storage::registry::subnet::SubnetRegistryOps,
     test::seams::{lock, p},
 };
@@ -248,8 +247,8 @@ fn registry_kind_policy_blocks_but_ops_allows() {
     let existing_pid = p(1);
     let root_pid = p(2);
 
-    let data = RegistryPolicyInput {
-        entries: vec![TopologyPolicyInput {
+    let data = TopologyRegistry {
+        entries: vec![TopologyEntry {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(root_pid),
@@ -310,8 +309,8 @@ fn registry_service_policy_blocks_duplicate_role() {
     let existing_pid = p(11);
     let root_pid = p(12);
 
-    let data = RegistryPolicyInput {
-        entries: vec![TopologyPolicyInput {
+    let data = TopologyRegistry {
+        entries: vec![TopologyEntry {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(root_pid),
@@ -356,7 +355,7 @@ fn registry_service_policy_requires_root_parent() {
     let err = RegistryPolicy::can_register_role(
         &role,
         parent_pid,
-        &RegistryPolicyInput { entries: vec![] },
+        &TopologyRegistry { entries: vec![] },
         registry_shape(&service_canister_config()),
         &parent_role,
         registry_shape(&singleton_canister_config()),
@@ -388,8 +387,8 @@ fn registry_singleton_policy_blocks_under_parent() {
     let parent_pid = p(4);
     let existing_pid = p(5);
 
-    let data = RegistryPolicyInput {
-        entries: vec![TopologyPolicyInput {
+    let data = TopologyRegistry {
+        entries: vec![TopologyEntry {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(parent_pid),
@@ -440,8 +439,8 @@ fn registry_wasm_store_policy_allows_multiple_under_same_parent() {
     let parent_pid = p(6);
     let existing_pid = p(7);
 
-    let data = RegistryPolicyInput {
-        entries: vec![TopologyPolicyInput {
+    let data = TopologyRegistry {
+        entries: vec![TopologyEntry {
             pid: existing_pid,
             role: role.clone(),
             parent_pid: Some(parent_pid),
@@ -465,7 +464,7 @@ fn instance_creation_requires_service_directory_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("plain_parent");
     let parent_pid = p(7);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     let err = RegistryPolicy::can_register_role(
         &role,
@@ -500,7 +499,7 @@ fn instance_creation_requires_directory_config_on_service_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(9);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     let err = RegistryPolicy::can_register_role(
         &role,
@@ -529,7 +528,7 @@ fn instance_creation_rejects_singleton_directory_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(10);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     let err = RegistryPolicy::can_register_role(
         &role,
@@ -558,7 +557,7 @@ fn instance_creation_succeeds_under_service_directory_parent() {
     let role = CanisterRole::new("instance_child");
     let parent_role = CanisterRole::new("project_hub");
     let parent_pid = p(10);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     RegistryPolicy::can_register_role(
         &role,
@@ -576,7 +575,7 @@ fn replica_creation_rejects_singleton_scaling_parent() {
     let role = CanisterRole::new("replica_child");
     let parent_role = CanisterRole::new("scale_hub");
     let parent_pid = p(8);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     let err = RegistryPolicy::can_register_role(
         &role,
@@ -605,7 +604,7 @@ fn replica_creation_succeeds_under_service_scaling_parent() {
     let role = CanisterRole::new("replica_child");
     let parent_role = CanisterRole::new("scale_hub");
     let parent_pid = p(8);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     RegistryPolicy::can_register_role(
         &role,
@@ -623,7 +622,7 @@ fn shard_creation_rejects_singleton_sharding_parent() {
     let role = CanisterRole::new("shard_child");
     let parent_role = CanisterRole::new("shard_hub");
     let parent_pid = p(9);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     let err = RegistryPolicy::can_register_role(
         &role,
@@ -652,7 +651,7 @@ fn shard_creation_succeeds_under_service_sharding_parent() {
     let role = CanisterRole::new("shard_child");
     let parent_role = CanisterRole::new("shard_hub");
     let parent_pid = p(9);
-    let data = RegistryPolicyInput { entries: vec![] };
+    let data = TopologyRegistry { entries: vec![] };
 
     RegistryPolicy::can_register_role(
         &role,

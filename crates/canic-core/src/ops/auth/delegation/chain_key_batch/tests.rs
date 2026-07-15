@@ -13,7 +13,7 @@ use crate::{
         verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_signature,
     },
     ops::{
-        auth::delegated::chain_key_signing::ChainKeySignerFuture,
+        auth::delegated::chain_key_signing::{ChainKeySigner, ChainKeySignerFuture},
         ic::mgmt::{
             EcdsaPublicKeyArgs, EcdsaPublicKeyResult, SignWithEcdsaArgs, SignWithEcdsaResult,
         },
@@ -89,6 +89,100 @@ fn input(signing_policy: &ChainKeySigningPolicy) -> PrepareDueChainKeyRootDelega
         required_issuer_pid: None,
         now_ns: 1_000,
     }
+}
+
+fn prepare_due_batch_with_test_approvals(
+    input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
+) -> Result<PrepareDueChainKeyRootDelegationBatchResult, InternalError> {
+    match plan_due_chain_key_root_delegation_batch(input)? {
+        ChainKeyRootDelegationBatchPreparation::Complete(result) => Ok(result),
+        ChainKeyRootDelegationBatchPreparation::RequiresPolicy(plan) => {
+            let approvals = issuer_approvals_for_test(&plan);
+            commit_chain_key_root_delegation_batch(plan, approvals)
+        }
+    }
+}
+
+fn build_test_chain_key_root_delegation_batch(
+    input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
+    due_templates: &[DueChainKeyTemplate],
+    proof_epoch: u64,
+) -> Result<ChainKeyRootDelegationBatch, InternalError> {
+    let cert_ttl_ns = shared_batch_cert_ttl_ns(
+        due_templates,
+        input.max_cert_ttl_ns,
+        input.max_revocation_latency_ns,
+    )?;
+    let expires_at_ns = input
+        .now_ns
+        .checked_add(cert_ttl_ns)
+        .expect("test batch expiry should fit");
+    let plan = ChainKeyRootDelegationBatchPreparePlan {
+        signing_policy: input.signing_policy.clone(),
+        max_cert_ttl_ns: input.max_cert_ttl_ns,
+        max_revocation_latency_ns: input.max_revocation_latency_ns,
+        min_accepted_proof_epoch: input.min_accepted_proof_epoch,
+        registry_epoch: input.registry_epoch,
+        registry_hash: input.registry_hash,
+        now_ns: input.now_ns,
+        cert_ttl_ns,
+        expires_at_ns,
+        enabled_templates: due_templates.len(),
+        due_templates: due_templates.to_vec(),
+    };
+    let approvals = issuer_approvals_for_test(&plan);
+    build_chain_key_root_delegation_batch(&plan, &approvals, proof_epoch)
+}
+
+fn issuer_approvals_for_test(
+    plan: &ChainKeyRootDelegationBatchPreparePlan,
+) -> Vec<ChainKeyRootDelegationIssuerApproval> {
+    let refresh_offset = u128::from(plan.cert_ttl_ns())
+        .saturating_mul(8_000)
+        .checked_div(10_000)
+        .and_then(|value| u64::try_from(value).ok())
+        .expect("test refresh offset should fit");
+    let refresh_after_ns = plan
+        .issued_at_ns()
+        .checked_add(refresh_offset)
+        .expect("test refresh timestamp should fit");
+    plan.issuer_templates()
+        .map(|template| ChainKeyRootDelegationIssuerApproval {
+            issuer_pid: template.issuer_pid,
+            expires_at_ns: plan.expires_at_ns,
+            refresh_after_ns,
+        })
+        .collect()
+}
+
+async fn prepare_sign_and_find_test_issuer_proof<S>(
+    mut input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
+    issuer_pid: Principal,
+    signer: &mut S,
+) -> Result<Option<RootDelegationProofBatchProof>, InternalError>
+where
+    S: ChainKeySigner,
+{
+    let signing_policy = input.signing_policy;
+    let now_ns = input.now_ns;
+    let registry_epoch = input.registry_epoch;
+    let registry_hash = input.registry_hash;
+    input.required_issuer_pid = Some(issuer_pid);
+    let prepared = prepare_due_batch_with_test_approvals(input)?;
+    let Some(batch_id) = prepared.batch_id else {
+        return Ok(None);
+    };
+    let signing =
+        sign_chain_key_root_delegation_batch(signing_policy, batch_id, now_ns, signer).await?;
+    if signing.signing_in_flight {
+        return Ok(None);
+    }
+    Ok(signed_chain_key_delegation_proof_for_issuer(
+        issuer_pid,
+        now_ns,
+        registry_epoch,
+        registry_hash,
+    ))
 }
 
 fn verifier_policy(signing_policy: &ChainKeySigningPolicy) -> ChainKeyRootVerifierPolicy {
@@ -256,7 +350,7 @@ fn chain_key_batch_builder_prepares_merkle_batch_that_verifier_accepts() {
     AuthStateOps::upsert_root_issuer_policy(policy(issuer_a));
     AuthStateOps::upsert_root_issuer_policy(policy(issuer_b));
 
-    let batch = build_chain_key_root_delegation_batch(
+    let batch = build_test_chain_key_root_delegation_batch(
         input(&signing_policy),
         &[
             DueChainKeyTemplate {
@@ -311,7 +405,7 @@ fn chain_key_batch_builder_rejects_duplicate_issuer_leaves() {
     let issuer = p(43);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
 
-    build_chain_key_root_delegation_batch(
+    build_test_chain_key_root_delegation_batch(
         input(&signing_policy),
         &[
             DueChainKeyTemplate {
@@ -365,7 +459,7 @@ fn chain_key_batch_prepare_rejects_new_batch_when_pending_quota_is_full() {
 
     let mut stale_input = input(&signing_policy);
     stale_input.registry_hash = [99; 32];
-    let base_batch = build_chain_key_root_delegation_batch(
+    let base_batch = build_test_chain_key_root_delegation_batch(
         stale_input,
         &[DueChainKeyTemplate {
             template: template(issuer, 60_000_000_000),
@@ -384,7 +478,7 @@ fn chain_key_batch_prepare_rejects_new_batch_when_pending_quota_is_full() {
         AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
     }
 
-    let err = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let err = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect_err("full pending state must reject a new chain-key batch");
 
     assert!(err.is_public_resource_exhausted());
@@ -398,9 +492,9 @@ fn chain_key_batch_prepare_reuses_in_flight_batch() {
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
 
-    let first = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let first = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("first prepare should build");
-    let second = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let second = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("second prepare should reuse");
 
     assert!(first.batch_id.is_some());
@@ -414,12 +508,41 @@ fn chain_key_batch_prepare_reuses_in_flight_batch() {
 }
 
 #[test]
+fn chain_key_batch_commit_rejects_mismatched_approval_without_state_mutation() {
+    AuthStateOps::prune_chain_key_root_delegation_batches(u64::MAX);
+    let signing_policy = signing_policy();
+    let issuer = p(191);
+    AuthStateOps::upsert_root_issuer_policy(policy(issuer));
+    AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
+
+    let ChainKeyRootDelegationBatchPreparation::RequiresPolicy(plan) =
+        plan_due_chain_key_root_delegation_batch(input(&signing_policy))
+            .expect("due issuer should require policy approval")
+    else {
+        panic!("due issuer should not complete before policy approval");
+    };
+    let epoch_before = AuthStateOps::delegated_auth_proof_epoch();
+    let batches_before = AuthStateOps::chain_key_root_delegation_batches();
+    let mut approvals = issuer_approvals_for_test(&plan);
+    approvals[0].issuer_pid = p(192);
+
+    commit_chain_key_root_delegation_batch(plan, approvals)
+        .expect_err("mismatched policy approval must reject");
+
+    assert_eq!(AuthStateOps::delegated_auth_proof_epoch(), epoch_before);
+    assert_eq!(
+        AuthStateOps::chain_key_root_delegation_batches(),
+        batches_before
+    );
+}
+
+#[test]
 fn chain_key_batch_signing_signs_prepared_batch_once_and_reuses_signed_state() {
     let signing_policy = signing_policy();
     let issuer = p(51);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build a batch");
     let batch = AuthStateOps::chain_key_root_delegation_batch(prepared.batch_id.unwrap())
         .expect("prepared batch should be stored");
@@ -469,7 +592,7 @@ fn chain_key_batch_signing_covers_multiple_issuers_with_one_signature() {
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer_a, 60_000_000_000));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer_b, 60_000_000_000));
 
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build one multi-issuer batch");
     let batch_id = prepared.batch_id.expect("prepare should return a batch id");
     assert_eq!(prepared.prepared_issuers, 2);
@@ -536,7 +659,7 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
     let issuer = p(52);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build a batch");
     let batch = AuthStateOps::chain_key_root_delegation_batch(prepared.batch_id.unwrap())
         .expect("prepared batch should be stored");
@@ -605,7 +728,7 @@ fn chain_key_batch_duplicate_signing_tick_observes_in_flight_without_management_
     let issuer = p(58);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build a batch");
     let batch_id = prepared.batch_id.expect("prepare should return a batch id");
     let mut batch = AuthStateOps::chain_key_root_delegation_batch(batch_id)
@@ -641,7 +764,7 @@ fn chain_key_batch_discards_signature_returning_after_batch_became_stale() {
     let issuer = p(66);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build a batch");
     let batch_id = prepared.batch_id.expect("prepare should return a batch id");
     let mut signer = StaleDuringSignSigner {
@@ -683,7 +806,7 @@ fn chain_key_batch_registry_change_discards_stale_preinstall_batch() {
     let issuer = p(59);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build the original batch");
     let stale_batch_id = prepared.batch_id.expect("original batch id");
     let mut stale_batch = AuthStateOps::chain_key_root_delegation_batch(stale_batch_id)
@@ -694,7 +817,7 @@ fn chain_key_batch_registry_change_discards_stale_preinstall_batch() {
     let mut changed_registry = input(&signing_policy);
     changed_registry.registry_epoch = 12;
     changed_registry.registry_hash = [33; 32];
-    let refreshed = prepare_due_chain_key_root_delegation_batch(changed_registry)
+    let refreshed = prepare_due_batch_with_test_approvals(changed_registry)
         .expect("registry change should prepare a fresh batch");
     let refreshed_batch_id = refreshed.batch_id.expect("fresh batch id");
 
@@ -738,7 +861,7 @@ fn chain_key_batch_expired_preinstall_batch_is_pruned_before_signing() {
     let issuer = p(63);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build a batch");
     let batch_id = prepared.batch_id.expect("prepared batch id");
     let batch = AuthStateOps::chain_key_root_delegation_batch(batch_id)
@@ -767,7 +890,7 @@ fn chain_key_batch_install_plan_materializes_signed_proof_and_records_success() 
     let issuer = p(53);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let mut batch = build_chain_key_root_delegation_batch(
+    let mut batch = build_test_chain_key_root_delegation_batch(
         input(&signing_policy),
         &[DueChainKeyTemplate {
             template: template(issuer, 60_000_000_000),
@@ -845,7 +968,7 @@ fn chain_key_batch_partial_install_failure_retries_only_remaining_issuer() {
     AuthStateOps::upsert_root_issuer_policy(policy(issuer_b));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer_a, 60_000_000_000));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer_b, 60_000_000_000));
-    let mut batch = build_chain_key_root_delegation_batch(
+    let mut batch = build_test_chain_key_root_delegation_batch(
         input(&signing_policy),
         &[
             DueChainKeyTemplate {
@@ -942,7 +1065,7 @@ fn chain_key_batch_ignores_stale_install_failure_after_success() {
     let issuer = p(66);
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let mut batch = build_chain_key_root_delegation_batch(
+    let mut batch = build_test_chain_key_root_delegation_batch(
         input(&signing_policy),
         &[DueChainKeyTemplate {
             template: template(issuer, 60_000_000_000),
@@ -997,7 +1120,7 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
         sign_calls: 0,
     };
 
-    let proof = block_on(get_or_create_chain_key_delegation_proof_for_issuer(
+    let proof = block_on(prepare_sign_and_find_test_issuer_proof(
         input(&signing_policy),
         issuer,
         &mut signer,
@@ -1023,7 +1146,7 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
         public_key_calls: 0,
         sign_calls: 0,
     };
-    let cached = block_on(get_or_create_chain_key_delegation_proof_for_issuer(
+    let cached = block_on(prepare_sign_and_find_test_issuer_proof(
         input(&signing_policy),
         issuer,
         &mut cached_signer,
@@ -1043,7 +1166,7 @@ fn chain_key_lazy_repair_reuses_in_flight_batch_without_extra_signing() {
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
 
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build a batch");
     let batch_id = prepared.batch_id.expect("prepare should return a batch id");
     let mut batch = AuthStateOps::chain_key_root_delegation_batch(batch_id)
@@ -1056,7 +1179,7 @@ fn chain_key_lazy_repair_reuses_in_flight_batch_without_extra_signing() {
             public_key_calls: 0,
             sign_calls: 0,
         };
-        let proof = block_on(get_or_create_chain_key_delegation_proof_for_issuer(
+        let proof = block_on(prepare_sign_and_find_test_issuer_proof(
             input(&signing_policy),
             issuer,
             &mut signer,
@@ -1082,7 +1205,7 @@ fn chain_key_lazy_repair_respects_retry_after_before_resigning() {
     AuthStateOps::upsert_root_issuer_policy(policy(issuer));
     AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
 
-    let prepared = prepare_due_chain_key_root_delegation_batch(input(&signing_policy))
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
         .expect("prepare should build a batch");
     let batch_id = prepared.batch_id.expect("prepare should return a batch id");
     let retry_after_ns = 60_000;
@@ -1099,7 +1222,7 @@ fn chain_key_lazy_repair_respects_retry_after_before_resigning() {
         public_key_calls: 0,
         sign_calls: 0,
     };
-    let early = block_on(get_or_create_chain_key_delegation_proof_for_issuer(
+    let early = block_on(prepare_sign_and_find_test_issuer_proof(
         early_input,
         issuer,
         &mut early_signer,
@@ -1116,7 +1239,7 @@ fn chain_key_lazy_repair_respects_retry_after_before_resigning() {
         public_key_calls: 0,
         sign_calls: 0,
     };
-    let retried = block_on(get_or_create_chain_key_delegation_proof_for_issuer(
+    let retried = block_on(prepare_sign_and_find_test_issuer_proof(
         retry_input,
         issuer,
         &mut retry_signer,

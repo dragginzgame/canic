@@ -2,11 +2,9 @@
 
 use crate::{
     config::schema::CanisterKind,
-    domain::policy::pure::topology::{
-        IndexPolicyInput, RegistryPolicyInput, TopologyPolicy, TopologyPolicyError,
-        TopologyPolicyInput,
-    },
+    domain::policy::pure::topology::{TopologyPolicy, TopologyPolicyError},
     ids::CanisterRole,
+    model::topology::{TopologyEntry, TopologyIndexEntry, TopologyRegistry},
     test::{
         config::ConfigTestBuilder,
         seams::{lock, p},
@@ -23,8 +21,8 @@ fn topology_invariants_live_in_policy() {
         .install();
 
     let role = CanisterRole::new("alpha");
-    let registry_data = RegistryPolicyInput {
-        entries: vec![TopologyPolicyInput {
+    let registry_data = TopologyRegistry {
+        entries: vec![TopologyEntry {
             pid: p(30),
             role,
             parent_pid: None,
@@ -32,7 +30,7 @@ fn topology_invariants_live_in_policy() {
         }],
     };
 
-    let mismatched = vec![IndexPolicyInput {
+    let mismatched = vec![TopologyIndexEntry {
         role: CanisterRole::new("beta"),
         pid: p(30),
     }];

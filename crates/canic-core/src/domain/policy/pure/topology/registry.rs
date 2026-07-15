@@ -2,7 +2,7 @@ use crate::{domain::value::Principal, ids::CanisterRole};
 use thiserror::Error as ThisError;
 
 #[cfg(test)]
-use super::RegistryPolicyInput;
+use crate::model::topology::TopologyRegistry;
 
 ///
 /// RegistryPolicyError
@@ -121,7 +121,7 @@ impl RegistryPolicy {
     pub fn can_register_role(
         role: &CanisterRole,
         parent_pid: Principal,
-        data: &RegistryPolicyInput,
+        data: &TopologyRegistry,
         canister_shape: RegistryCanisterShape,
         parent_role: &CanisterRole,
         parent_shape: RegistryCanisterShape,

@@ -5,8 +5,7 @@
 //! Boundary: keeps env record and DTO projections explicit for ops callers.
 
 use crate::{
-    domain::policy::pure::env::ValidatedEnv, dto::env::EnvSnapshotResponse,
-    storage::stable::env::EnvRecord,
+    dto::env::EnvSnapshotResponse, model::env::ValidatedEnv, storage::stable::env::EnvRecord,
 };
 
 ///

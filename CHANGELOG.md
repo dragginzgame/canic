@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.10` completes canonical layer ownership for shared models and root
+  delegation-proof admission, eliminating all remaining ops-to-policy
+  dependencies without changing public or stable-state contracts.
+
 - `0.92.9` aligns published feature and rustdoc contracts with maintained
   surfaces, removes obsolete command-proof residue, and repairs pre-publication
   packaged CLI and Wasm-store proof.
