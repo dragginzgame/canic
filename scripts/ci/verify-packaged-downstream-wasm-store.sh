@@ -44,7 +44,15 @@ ensure_packaged_crate() {
             ;;
         canic-host)
             cargo package -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
+            ;;
+        canic-wasm-store)
+            cargo package -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic.path=\"$ROOT/crates/canic\"" \
+                --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
+                --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" \
+                --config "patch.crates-io.canic-macros.path=\"$ROOT/crates/canic-macros\"" >/dev/null
             ;;
         *)
             cargo package -p "$crate_name" --allow-dirty --no-verify >/dev/null
@@ -105,6 +113,21 @@ canic-macros = { path = "package-root/canic-macros-$VERSION" }
 EOF
 }
 
+prepare_packaged_canic_patch_config() {
+    local config_root="$1"
+    local package_root="$2"
+
+    mkdir -p "$config_root/.cargo"
+
+    cat > "$config_root/.cargo/config.toml" <<EOF
+[patch.crates-io]
+canic = { path = "$package_root/canic-$VERSION" }
+canic-control-plane = { path = "$package_root/canic-control-plane-$VERSION" }
+canic-core = { path = "$package_root/canic-core-$VERSION" }
+canic-macros = { path = "$package_root/canic-macros-$VERSION" }
+EOF
+}
+
 assert_packaged_tool_root() {
     local tool_root="$1"
     local package_root="$2"
@@ -125,6 +148,7 @@ prepare_downstream_root() {
     local package_root="$2"
 
     mkdir -p "$downstream_root/src" "$downstream_root/fleets"
+    prepare_packaged_canic_patch_config "$downstream_root" "$package_root"
 
     cp "$ROOT/fleets/test/canic.toml" "$downstream_root/fleets/canic.toml"
 
@@ -137,11 +161,6 @@ publish = false
 
 [dependencies]
 canic = { path = "$package_root/canic-$VERSION" }
-
-[patch.crates-io]
-canic-control-plane = { path = "$package_root/canic-control-plane-$VERSION" }
-canic-core = { path = "$package_root/canic-core-$VERSION" }
-canic-macros = { path = "$package_root/canic-macros-$VERSION" }
 EOF
 
     cat > "$downstream_root/src/lib.rs" <<'EOF'
@@ -286,6 +305,7 @@ main() {
     assert_generated_probe_outputs "$GENERATED_PACKAGE_ROOT" "$GENERATED_DOWNSTREAM_ROOT"
 
     populate_isolated_package_root "$CANONICAL_PACKAGE_ROOT" yes
+    prepare_packaged_canic_patch_config "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_PACKAGE_ROOT"
     prepare_tool_root "$CANONICAL_TOOL_ROOT"
     prepare_downstream_root "$CANONICAL_DOWNSTREAM_ROOT" "$CANONICAL_PACKAGE_ROOT"
     run_probe "$CANONICAL_TOOL_ROOT" "$CANONICAL_PACKAGE_ROOT" "$CANONICAL_DOWNSTREAM_ROOT" "$CANONICAL_TARGET_DIR"

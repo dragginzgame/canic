@@ -156,6 +156,16 @@ and `wasm32-unknown-unknown` support cell. This fixes
 `CANIC-092-RELEASE-004`; the dedicated scanner gap remains blocked outside
 D9.
 
+[D10 active documentation and hard-cut residue](0.92-d10-active-documentation-and-hard-cut-residue.md)
+documents every maintained facade/control-plane feature and exact default set,
+deletes active negative assertions for removed renewal commands and the
+obsolete probe breadcrumb, and repairs the public core rustdoc boundary. A
+manifest-derived docs test, installed and packaged CLI proof, and generated
+plus canonical packaged Wasm-store proof pass before registry publication.
+This fixes `CANIC-092-PUBLISH-001`, `CANIC-092-RESIDUE-001`, and
+`CANIC-092-DOCS-002` without runtime, public, serialized, stable-state, or
+package-manifest behavior changes.
+
 ## Live Ledger
 
 - Retained methods attempted: 22 of 22.
@@ -164,10 +174,11 @@ D9.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
   0 blocked); D1/D2/D5/D6/D7/D8 leave current reruns at 10 pass and 0 fail
   without rewriting the baseline.
-- Unresolved findings: 8 (2 P1, 5 P2, one P3).
+- Unresolved findings: 5 (2 P1 and 3 P2).
 - Phase D fixes: D1 released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
   `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, D8 in
-  `v0.92.7`, and D9 implemented with focused validation passing.
+  `v0.92.7`, D9 committed in the untagged 0.92.8 candidate, and D10
+  implemented with focused validation passing.
 
 ## Validation
 
@@ -224,8 +235,8 @@ D9.
   tests, all-feature facade check, strict core/control-plane Clippy, offline
   core/facade package verification, the control-plane facade test, and exact
   PocketIC new-issuer provisioning pass. Layering fixtures retain the same 18
-  known upward edges. Core rustdoc still fails only on the separately indexed
-  D10 broken link.
+  known upward edges. D10's later current-tree rerun fixes the separately
+  indexed rustdoc link.
 - D8: 7 artifact-transform tests, 15 build-provenance/policy tests, 12
   release-set manifest tests, targeted checks and strict Clippy, and two fresh
   isolated offline root builds pass. Root/bootstrap hashes and semantic
@@ -236,8 +247,14 @@ D9.
   data-driven pin discovery, deterministic local tool synchronization,
   workflow/shell lint, 22 focused Rust tests, strict targeted Clippy, host
   package, matrix, changelog, and diff proofs pass.
+- D10: seven manifest-derived package tests, positive CLI unit proof,
+  warning-as-error core rustdoc, strict targeted Clippy, installed CLI proof,
+  packaged CLI proof, generated plus canonical packaged Wasm-store builds,
+  Bash syntax, ShellCheck, targeted formatting, and diff hygiene pass.
 
 ## Next
 
-D10 active documentation and hard-cut residue is the next ordered candidate.
-The remaining layering subsystems stay separately bounded.
+D10 active documentation and hard-cut residue is implemented and validated.
+The next product step is to map the 18 remaining ops-to-policy files into
+separately reviewed `CANIC-092-LAYERING-005` subsystem slices. The scanner
+limitation remains unaccepted and the three P2 watchpoints remain deferred.

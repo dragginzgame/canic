@@ -29,8 +29,8 @@ use crate::{
 ///
 ///   user canister -> api -> workflow -> ops -> infra
 ///
-/// Workflow returns internal [`InternalError`]; conversion to [`Error`]
-/// happens exclusively at this API boundary.
+/// Workflow preserves typed internal failures; conversion to [`Error`] happens
+/// exclusively at this API boundary.
 ///
 
 pub struct RpcApi;

@@ -40,8 +40,6 @@ fn renewal_help_names_chain_key_status_surface() {
 
     assert!(text.contains("Inspect root-managed chain-key delegation proof renewal"));
     assert!(text.contains("status"));
-    assert!(!text.contains("run-once"));
-    assert!(!text.contains("provisioner"));
 }
 
 #[test]

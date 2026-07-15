@@ -14,9 +14,11 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.7`.
+- The workspace package version is `0.92.8` in the untagged local candidate at
+  `68b9ab2158865bce0d88a25bbc9d20d9704d4062`.
 - `v0.92.7` is published at
   `8c8e5db9d782c4c66bfb39bb31be17b00b52f269`.
+- No local `v0.92.8` tag exists; do not describe 0.92.8 as published yet.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -41,12 +43,18 @@ diagnostics no longer contain
 absolute build paths, isolated root/bootstrap artifacts reproduce byte for
 byte, and build provenance requires explicit optional-transform identity and
 outcome. This fixes `CANIC-092-BUILD-001` and `CANIC-092-BUILD-002`; the
-current mandatory-trace ledger is ten pass and zero fail. D9 is implemented
-and focused validation passes in the current candidate: 13 external Action
+current mandatory-trace ledger is ten pass and zero fail. D9 is committed in
+the untagged 0.92.8 candidate: 13 external Action
 executions use immutable commits, downloaded tools are version/checksum bound,
 and one governance matrix owns the Ubuntu 24.04 x86_64 native/Wasm support
 cell. This fixes `CANIC-092-RELEASE-001`, `-002`, and `-004`; the dedicated
-scanner gap remains blocked outside D9. The live layering
+scanner gap remains blocked outside D9. D10 is implemented and focused
+validation passes: published feature documentation matches the owning
+manifests, active CLI proof asserts only maintained commands, warning-as-error
+core rustdoc passes, and installed plus packaged downstream artifact proofs
+pass before registry publication. This fixes `CANIC-092-PUBLISH-001`,
+`CANIC-092-RESIDUE-001`, and `CANIC-092-DOCS-002`, leaving five unresolved
+findings (2 P1 and 3 P2). The live layering
 guard remains at 18 separately owned ops-to-policy violations under
 `CANIC-092-LAYERING-005`.
 
@@ -96,8 +104,9 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
   immediate parent and frozen baseline.
 - D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in `v0.92.3`, D5 in
   `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in `v0.92.7`. D9 is
-  implemented with focused validation passing. D10 and the remaining layering
-  subsystems remain separately bounded rather than blanket authorization.
+  committed in the untagged 0.92.8 candidate. D10 is implemented and
+  validated. The remaining layering subsystems remain separately bounded
+  rather than blanket authorization.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -124,6 +133,11 @@ First primary results:
   fixes the action, executable-tool, and support-matrix findings. Its affected
   subchecks pass, but the retained release-integrity method remains blocked by
   the unchanged dedicated-scanner gap under `CANIC-092-RELEASE-003`.
+- [D10 active documentation and hard-cut residue](../audits/reports/2026-07/2026-07-15/0.92-d10-active-documentation-and-hard-cut-residue.md)
+  fixes the package-feature, active legacy-proof residue, and public-rustdoc
+  findings. Manifest-derived docs proof, installed/packaged CLI proof, and
+  generated/canonical packaged Wasm-store proof pass without product behavior
+  or serialized-surface changes.
 - Findings `CANIC-092-AUDIT-007`, `CANIC-092-DEPENDENCY-001`, and
   `CANIC-092-RELEASE-001` through `-004` are indexed in the 0.92 tracker.
 - [layer boundary](../audits/reports/2026-07/2026-07-14/0.92-layer-boundary.md)
@@ -230,15 +244,16 @@ First primary results:
 - [publish surface v1](../audits/reports/2026-07/2026-07-14/0.92-publish-surface.md)
   is a valid pass and first frozen-method baseline at risk 4/10. All eight
   public packages verify from isolated offline archives. D3 fixes
-  `CANIC-092-DOCS-001`; `CANIC-092-PUBLISH-001` and
-  `CANIC-092-RESIDUE-001` still record incomplete package feature guidance and
-  forbidden old-command anti-resurrection checks in the active CLI proof path.
+  `CANIC-092-DOCS-001`; D10's current-tree rerun fixes
+  `CANIC-092-PUBLISH-001` and `CANIC-092-RESIDUE-001` with complete
+  manifest-derived feature docs and maintained-command-only proof.
 - [module structure v1](../audits/reports/2026-07/2026-07-14/0.92-module-structure-v1.md)
   is a valid fail and first frozen-method baseline at risk 7/10. It confirms 25
   production ops-to-policy imports, direct policy decisions in ops, and
   policy-owned values used by stable mappers (`CANIC-092-LAYERING-005`). It
   finds no cycle, public record leak, test/fleet seam breach, or module-layout
-  escape. Warning-as-error core rustdoc also confirms `CANIC-092-DOCS-002`.
+  escape. D10's current-tree warning-as-error rustdoc rerun fixes the separate
+  `CANIC-092-DOCS-002` link without changing the frozen result.
 - [DRY consolidation v1](../audits/reports/2026-07/2026-07-14/0.92-dry-consolidation-v1.md)
   is a valid fail and first frozen-method baseline at risk 6/10. Operator,
   evidence, backup, and release-proof responsibilities retain clear owners,
@@ -301,7 +316,8 @@ First primary results:
   P1, D3 fixes one P1 authority conflict plus one P2 documentation drift, D7
   fixes two P2 accidental public surfaces, and D8 fixes the root-build P1 plus
   transform-provenance P2. D9 fixes the two release-execution P1s plus the
-  support-matrix P2. Eight findings remain unresolved (2 P1, 5 P2, one P3).
+  support-matrix P2. D10 fixes two P2 active package/proof findings and the P3
+  rustdoc drift. Five findings remain unresolved (2 P1 and 3 P2).
   All current trace reruns pass; the frozen Phase C aggregate remains
   historical.
 
@@ -340,9 +356,8 @@ First primary results:
   without active-state mutation.
 - D3 active-contract scans, changed-file Rust formatting, strict `canic-core`
   Clippy, and package verification pass. Layering self-tests pass; the full
-  guard retains the same 25 known product-code violations. Warning-as-error
-  core rustdoc still fails only on the separately indexed D10 `InternalError`
-  link.
+  guard retains the same 25 known product-code violations. D10 later fixes the
+  separately indexed public rustdoc link.
 - D4 validation passes 881 all-feature `canic-core` library tests, four pure
   policy/passive DTO guards, 19 public protocol tests, strict targeted Clippy,
   and two root proof/renewal PocketIC regressions. Direct workflow tests prove
@@ -364,8 +379,8 @@ First primary results:
   guards, 19 protocol tests, all-feature facade check, strict
   core/control-plane Clippy, offline core/facade package verification, the
   feature-owned control-plane facade test, and exact PocketIC new-issuer
-  provisioning. The live layering set remains 18. Core rustdoc still fails
-  only on the separately indexed D10 `InternalError` link.
+  provisioning. The live layering set remains 18. D10's later current-tree
+  rustdoc rerun passes with warnings denied.
 - Focused D1 publication validation passes 18 all-feature publication tests,
   30 replay/capability policy tests, four core and one publication-owned
   cost-permit structural checks, strict targeted Clippy, and five root/store
@@ -383,12 +398,12 @@ First primary results:
 - Capability validation rebuilds six retained artifacts, passes 19 protocol
   tests and targeted Clippy, and confirms intended root/non-root/issuer
   placement. Required workspace Clippy is blocked by policy and not fabricated.
-- Publish validation passes locked/offline metadata, 6 workspace-manifest
-  tests, the release package/install definition guard, and isolated offline
-  `cargo package` verification for all 8 public crates.
+- Publish validation passes locked/offline metadata, seven workspace-manifest
+  tests, the release package/install definition guard, installed and packaged
+  CLI proof, and generated plus canonical packaged Wasm-store builds.
 - Structure validation passes isolated public-surface mapping, module layout,
-  crate-cycle, test/fleet seam, and 5 focused DTO/policy boundary tests. Core
-  rustdoc with warnings denied fails on one unresolved internal link.
+  crate-cycle, test/fleet seam, and five focused DTO/policy boundary tests.
+  D10's current-tree core rustdoc passes with warnings denied.
 - DRY validation passes 8 core root-policy, 19 host registry-related, 2 host
   response-parser, 30 CLI output-filtered, and 19 backup persistence tests.
   Direct ownership traces find no competing registry, output, evidence,
@@ -430,13 +445,20 @@ First primary results:
   workspace dependencies. Release mutation is transactional on failure,
   one-shot phases are sequential under parallel Make, and push rejects unless
   the clean release commit and annotated tag match before an atomic ref update.
+- D10 validation passes seven manifest-derived package tests, positive CLI
+  unit proof, warning-as-error core rustdoc, strict targeted Clippy, installed
+  CLI proof, packaged CLI proof, and generated plus canonical packaged
+  Wasm-store builds. Bash syntax, ShellCheck, targeted formatting, and diff
+  hygiene pass.
 
 ## Next Action
 
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 through
-D8 are released and D9 is implemented and validated, leaving 8 unresolved
-findings (2 P1, 5 P2, one P3). The next ordered candidate is D10 active
-documentation and hard-cut residue. Remaining layering subsystems stay
-separately bounded; the proposed scanner limitation is not yet a waiver.
+D8 are released, D9 is committed in the untagged 0.92.8 candidate, and D10 is
+implemented and validated, leaving five unresolved findings (2 P1 and 3 P2).
+The next product step is to map the 18 remaining
+`CANIC-092-LAYERING-005` files into separately reviewed subsystem slices.
+The proposed scanner limitation is not yet a waiver; the three P2 watchpoints
+remain deferred.

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.9` aligns published feature and rustdoc contracts with maintained
+  surfaces, removes obsolete command-proof residue, and repairs pre-publication
+  packaged CLI and Wasm-store proof.
+
 - `0.92.8` is potentially breaking: it makes CI, maintainer-tool, and release
   publication execution verified and fail-closed, hard-cuts remote/npm and
   caller-controlled version paths, and establishes one guarded

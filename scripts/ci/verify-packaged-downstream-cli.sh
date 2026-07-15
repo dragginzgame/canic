@@ -45,6 +45,7 @@ ensure_packaged_crate() {
             ;;
         canic-host)
             cargo package -p "$crate_name" --allow-dirty --no-verify \
+                --config "patch.crates-io.canic-control-plane.path=\"$ROOT/crates/canic-control-plane\"" \
                 --config "patch.crates-io.canic-core.path=\"$ROOT/crates/canic-core\"" >/dev/null
             ;;
         canic-cli)
