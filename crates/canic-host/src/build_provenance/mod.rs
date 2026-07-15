@@ -9,9 +9,11 @@ mod source;
 
 pub use envelope::{build_provenance_envelope, build_provenance_schema};
 pub use model::{
-    ArtifactProvenanceKindV1, ArtifactProvenanceV1, BUILD_PROVENANCE_SCHEMA_ID,
-    BuildProvenanceRequest, BuildProvenanceStatusV1, BuildProvenanceV1, BuildScriptInputStateV1,
-    CargoProvenanceV1, SourceDirtyPolicyV1, SourceProvenanceV1, SourceVcsV1,
+    ArtifactProvenanceKindV1, ArtifactProvenanceV1, ArtifactTransformKindV1,
+    ArtifactTransformModeV1, ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1,
+    BUILD_PROVENANCE_SCHEMA_ID, BuildProvenanceRequest, BuildProvenanceStatusV1, BuildProvenanceV1,
+    BuildScriptInputStateV1, CargoProvenanceV1, SourceDirtyPolicyV1, SourceProvenanceV1,
+    SourceVcsV1,
 };
 
 #[cfg(test)]

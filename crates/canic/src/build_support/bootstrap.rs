@@ -97,11 +97,8 @@ pub fn emit_root_wasm_store_bootstrap_release_set(config_path: &Path) -> bool {
         metadata.artifact_sha256_hex,
     );
 
-    let generated = render_root_wasm_store_bootstrap_release_set_source(
-        &artifact_path,
-        &embedded_asset_path,
-        &metadata,
-    );
+    let generated =
+        render_root_wasm_store_bootstrap_release_set_source(&embedded_asset_path, &metadata);
     fs::write(&generated_path, generated)
         .expect("write embedded wasm_store bootstrap release set source");
 
@@ -178,11 +175,9 @@ fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
 }
 
 fn render_root_wasm_store_bootstrap_release_set_source(
-    source_artifact_path: &Path,
     embedded_artifact_path: &Path,
     metadata: &EmbeddedArtifactMetadata,
 ) -> String {
-    let source_path = source_artifact_path.to_string_lossy();
     let embedded_path = embedded_artifact_path.to_string_lossy();
     let mut rendered = String::from("&[\n");
 
@@ -194,11 +189,6 @@ fn render_root_wasm_store_bootstrap_release_set_source(
     let _ = writeln!(
         rendered,
         "        wasm_module: include_bytes!({embedded_path:?}),"
-    );
-    let _ = writeln!(rendered, "        artifact_path: {source_path:?},");
-    let _ = writeln!(
-        rendered,
-        "        embedded_artifact_path: {embedded_path:?},"
     );
     let _ = writeln!(
         rendered,

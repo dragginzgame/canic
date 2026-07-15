@@ -1,7 +1,8 @@
 use crate::{
     artifact_io::{embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact},
     canister_build::{
-        CanisterBuildProfile, WorkspaceBuildContext,
+        ArtifactTransformKind, ArtifactTransformOutput, CanisterBuildProfile,
+        WorkspaceBuildContext,
         cache::{canister_build_target_root, configure_canister_cargo_command},
     },
     cargo_command,
@@ -67,6 +68,7 @@ pub struct BootstrapWasmStoreBuildOutput {
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
     pub did_path: PathBuf,
+    pub transforms: Vec<ArtifactTransformOutput>,
 }
 
 #[derive(Clone, Debug)]
@@ -98,13 +100,21 @@ pub fn build_bootstrap_wasm_store_artifact(
     let did_path = artifact_root.join(format!("{WASM_STORE_ROLE}.did"));
     let profile_path = artifact_root.join(".build-profile");
     fs::copy(&built_wasm_path, &wasm_path)?;
-    maybe_shrink_wasm_artifact(&wasm_path)?;
+    let mut transforms = vec![maybe_shrink_wasm_artifact(WASM_STORE_ROLE, &wasm_path)?];
     fs::write(profile_path, context.profile.target_dir_name())?;
     if should_export_candid_artifacts(&context.build_network) {
         ensure_wasm_store_did(context, &source, &did_path)?;
-        embed_candid_metadata(&wasm_path, &did_path)?;
+        transforms.push(embed_candid_metadata(
+            WASM_STORE_ROLE,
+            &wasm_path,
+            &did_path,
+        )?);
     } else {
         remove_optional_file(&did_path)?;
+        transforms.push(ArtifactTransformOutput::not_requested(
+            WASM_STORE_ROLE,
+            ArtifactTransformKind::CandidMetadata,
+        ));
     }
     write_gzip_artifact(&wasm_path, &wasm_gz_path)?;
 
@@ -113,6 +123,7 @@ pub fn build_bootstrap_wasm_store_artifact(
         wasm_path,
         wasm_gz_path,
         did_path,
+        transforms,
     })
 }
 

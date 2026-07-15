@@ -14,9 +14,9 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.5`.
-- `v0.92.5` is published at
-  `6644c287a7205ec39cd93c4a9f02ff1fe15e71f4`.
+- The workspace package version is `0.92.6`.
+- `v0.92.6` is published at
+  `69644a8533117de58e9d2c415c33fffbc6e3c20a`.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -35,13 +35,15 @@ now a valid `fail` with six pass and four fail results, zero partial, and zero
 blocked. The Phase C product baseline gate is complete; product fixes still
 require explicit finding review and bounded slice acceptance. Phase D D1 is
 released in `v0.92.1`; D2/D3 are released in `v0.92.2`; D4 is released in
-`v0.92.3`; D5 is released in `v0.92.4`; and D6 is released in `v0.92.5`. D7 is
-implemented and validated in the current worktree: accidental public
-proof-install state and the direct core error root are hard-cut, while the
-maintained issuer wire protocol, typed causes, stored diagnostics, and stable
-state remain unchanged. This fixes `CANIC-092-LAYERING-004` and
-`CANIC-092-SURFACE-001`. The live layering guard remains at 18 separately
-owned ops-to-policy violations under `CANIC-092-LAYERING-005`.
+`v0.92.3`; D5 is released in `v0.92.4`; D6 in `v0.92.5`; and D7 in
+`v0.92.6`. D8 is implemented and focused validation passes in the current
+candidate. Root runtime records and lifecycle diagnostics no longer contain
+absolute build paths, isolated root/bootstrap artifacts reproduce byte for
+byte, and build provenance requires explicit optional-transform identity and
+outcome. This fixes `CANIC-092-BUILD-001` and `CANIC-092-BUILD-002`; the
+current mandatory-trace ledger is ten pass and zero fail. The live layering
+guard remains at 18 separately owned ops-to-policy violations under
+`CANIC-092-LAYERING-005`.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -88,9 +90,9 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
 - Phase D changes only accepted finding-backed slices and compares them to the
   immediate parent and frozen baseline.
 - D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in `v0.92.3`, D5 in
-  `v0.92.4`, and D6 in `v0.92.5`. D7 is implemented with focused validation
-  passing. D8 through D10 remain ordered candidates rather than blanket
-  authorization.
+  `v0.92.4`, D6 in `v0.92.5`, and D7 in `v0.92.6`. D8 is implemented with
+  focused validation passing. D9 and D10 remain ordered candidates rather
+  than blanket authorization.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -130,8 +132,14 @@ First primary results:
   bootstrap-store raw/gzip bytes and app semantic provenance; final root
   Wasm/gzip bytes and semantic provenance still differ because absolute build
   paths enter generated runtime records and lifecycle logs. The valid result
-  fails, fixes `CANIC-092-AUDIT-008`, and leaves `CANIC-092-BUILD-001` and
-  `CANIC-092-BUILD-002` open.
+  fails, fixes `CANIC-092-AUDIT-008`, and left `CANIC-092-BUILD-001` and
+  `CANIC-092-BUILD-002` open at the frozen baseline.
+- [D8 reproducible root artifacts](../audits/reports/2026-07/2026-07-15/0.92-d8-reproducible-root-artifacts.md)
+  fixes both build findings. Two isolated offline lanes now produce identical
+  root/bootstrap raw and gzip artifacts plus identical semantic provenance;
+  final root Wasm contains neither temporary root. The host builder records
+  transform role, kind, optional mode, tool, version, and applied, unavailable,
+  or unrequested outcome through the required hard-cut provenance shape.
 - [authentication invariants](../audits/reports/2026-07/2026-07-14/0.92-auth-invariants.md)
   found no accepting bypass: invalid trust, audience, subject, scope, replay,
   and attestation inputs reject in focused unit/PocketIC evidence. The original
@@ -281,10 +289,11 @@ First primary results:
   and zero invalid active results after the instruction and Wasm corrections.
   The final mandatory trace result is valid and complete at aggregate `fail`.
   D1 fixes two non-waivable publication P1 findings, D2 fixes the auth cause
-  P1, D3 fixes one P1 authority conflict plus one P2 documentation drift, and
-  D7 fixes two P2 accidental public surfaces. Thirteen findings remain
-  unresolved (5 P1, 7 P2, one P3). Current control, auth, blob, and capability
-  trace reruns pass; the frozen Phase C aggregate remains historical.
+  P1, D3 fixes one P1 authority conflict plus one P2 documentation drift, D7
+  fixes two P2 accidental public surfaces, and D8 fixes the root-build P1 plus
+  transform-provenance P2. Eleven findings remain unresolved (4 P1, 6
+  P2, one P3). All current trace reruns pass; the frozen Phase C aggregate
+  remains historical.
 
 ## Focused Validation
 
@@ -302,10 +311,11 @@ First primary results:
   25 production ops-to-policy dependencies; D4's affected-scope rerun reduces
   the live set to 18. Policy purity, passive DTO, and root-issuer ownership
   checks pass.
-- Build-integrity v2 executes two isolated lanes. Ordinary app and bootstrap
-  artifacts reproduce exactly, semantic app provenance matches, and root
-  artifacts validly retain the absolute-path reproducibility failure.
-  Wasm measurements and broad product suites have not yet run under Phase C.
+- Build-integrity v2's frozen baseline retains the root-path failure. D8's
+  affected-scope rerun executes two new isolated root lanes: root/bootstrap
+  raw and gzip artifacts plus semantic provenance reproduce exactly, neither
+  final root contains a temporary lane path, and all four local transforms
+  record `ic-wasm 0.9.11`.
 - Focused authentication tests pass across macro/access, proof-chain, audience,
   scope, replay, role-attestation, chain-key batch, root facade, and capability
   rejection paths. Audience/replay v2 selections are all nonempty and passing;
@@ -395,13 +405,18 @@ First primary results:
   and direct consumer scans. The duplicate serialized batch request/outcome
   and direct core-error root are removed; the maintained control-plane support
   bridge remains.
+- D8 validation passes 7 artifact-transform tests, 15 build-provenance/policy
+  tests, 12 release-set manifest tests, targeted checks and strict Clippy, and
+  two isolated offline root builds. The current deploy trace now passes; the
+  full clean-worktree Wasm v2 retained rerun waits for the immutable
+  maintainer commit rather than fabricating a dirty-tree result.
 
 ## Next Action
 
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 through
-D6 are released and D7 is implemented and validated, leaving 13 unresolved
-findings. The next ordered candidate is D8 reproducible root artifacts. D8
-through D10 and the remaining layering subsystems remain separately bounded;
-the proposed scanner limitation is not yet a waiver.
+D7 are released and D8 is implemented and validated, leaving 11 unresolved
+findings. The next ordered candidate is D9 release execution integrity. D9,
+D10, and the remaining layering subsystems remain separately bounded; the
+proposed scanner limitation is not yet a waiver.

@@ -5,7 +5,7 @@ use crate::evidence_envelope::{
 };
 
 use super::{
-    artifacts::artifact_provenance,
+    artifacts::{artifact_provenance, artifact_transform_provenance},
     cargo::cargo_provenance,
     inputs::build_input_fingerprints,
     model::{
@@ -97,6 +97,7 @@ fn build_provenance_payload(
         source,
         cargo: cargo_provenance(request)?,
         artifacts: artifact_provenance(request)?,
+        transforms: artifact_transform_provenance(request)?,
         warnings,
     })
 }

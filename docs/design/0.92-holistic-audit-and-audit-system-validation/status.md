@@ -14,12 +14,13 @@ complete the auth and control mandatory traces: the aggregate is a valid
 `fail` with six passing and four failing traces, zero partial, and zero
 blocked. The product baseline gate and finding review are complete, and Phase D
 is underway. D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 in
-`v0.92.3`; D5 is released in `v0.92.4`; and D6 is released in `v0.92.5`. D7 is
-implemented and focused validation passes in the current candidate. The
-duplicate public proof-install request/outcome and direct core error root are
-hard-cut, while the maintained issuer protocol, stored failure diagnostics,
-and stable state remain unchanged. `CANIC-092-LAYERING-004` and
-`CANIC-092-SURFACE-001` are fixed. The layering guard remains at 18 separately
+`v0.92.3`; D5 is released in `v0.92.4`; D6 in `v0.92.5`; and D7 in
+`v0.92.6`. D8 is implemented and focused validation passes in the current
+candidate. Absolute build paths are removed from root runtime records and
+diagnostics, isolated root/bootstrap artifacts reproduce byte for byte, and
+stable build provenance requires explicit transform identity and outcome.
+`CANIC-092-BUILD-001` and `CANIC-092-BUILD-002` are fixed. The current trace
+ledger is ten pass and zero fail; the layering guard remains at 18 separately
 owned ops-to-policy violations under `CANIC-092-LAYERING-005`.
 
 No runtime product code, public contract, stable state, dependency, or
@@ -49,11 +50,11 @@ maintainer prerequisite for any future 1.0 discussion.
   `ab47f96a4ca388d0c61f01280e2a47bb37930b1ce863d675ea8427bf08b229e6`.
 - Freeze admission method fingerprint:
   `8188a7e08d9551efbad79e56c20cdd2213ed54758fc07b0bd0120b61e0dba82b`.
-- Committed Phase D parent: `v0.92.5` at
-  `6644c287a7205ec39cd93c4a9f02ff1fe15e71f4`, source tree
-  `005b36cf2da0dd719aa52356a15099273e53a946`, product-tree hash
-  `144782615ce264336b91a6d6764809734e8ea4da0f9faed378ea0e34afe9b3b6`.
-- Package version: `0.92.5`.
+- Committed Phase D parent: `v0.92.6` at
+  `69644a8533117de58e9d2c415c33fffbc6e3c20a`, source tree
+  `ff8cd66d451cd8c9bc13d9dec8a47f565a009ab9`, product-tree hash
+  `2388ad8bdca17776721508a6c28081c413b54a1cdd64b4be151016395194ae3b`.
+- Package version: `0.92.6`.
 
 ## Slices
 
@@ -275,6 +276,11 @@ Primary evidence:
       public proof-install request/outcome and direct core error root are
       removed without aliases; the internal plan, model failure classification,
       and control-plane support bridge retain their canonical owners.
+- [x] Record D7's fix and validation identity in released `v0.92.6`.
+- [x] Implement and validate D8 reproducible root artifacts. Runtime bootstrap
+      evidence contains no build paths, two isolated root/bootstrap lanes are
+      byte-identical, semantic provenance matches, and optional transform
+      identity/outcome is required and fail-closed.
 
 ### Slice E - Closeout
 
@@ -307,8 +313,8 @@ Primary evidence:
 | `CANIC-092-LAYERING-002` | product defect | P2 | confirmed | fixed | D6 makes the DTO passive; one workflow command owns capability/replay identity and ops owns mechanical wire projection, with protocol and stable state unchanged. |
 | `CANIC-092-LAYERING-003` | governance conflict | P1 | high | fixed | D3 makes `AGENTS.md` the sole active authority and removes wording that permits endpoint-to-ops delegation; released in `v0.92.2`. |
 | `CANIC-092-AUDIT-008` | audit method defect | P1 | confirmed | fixed | Build v2 applies the exact semantic exclusion and preserves the root artifact drift; commit pending. |
-| `CANIC-092-BUILD-001` | product defect | P1 | confirmed | open | Root Wasm embeds absolute build paths and is not byte-reproducible across isolated roots. |
-| `CANIC-092-BUILD-002` | operational risk | P2 | confirmed | open | Optional artifact transform identity/status is absent from build provenance. |
+| `CANIC-092-BUILD-001` | product defect | P1 | confirmed | fixed | D8 removes runtime build paths; two isolated root/bootstrap raw and gzip lanes plus semantic provenance reproduce exactly. |
+| `CANIC-092-BUILD-002` | operational risk | P2 | confirmed | fixed | D8 requires role/kind/mode/tool/version/outcome transform evidence and rejects inconsistent provenance. |
 | `CANIC-092-AUDIT-009` | audit method defect | P1 | confirmed | fixed | Audience/replay v2 use current exact filters through a zero-test-refusing runner; both immutable-baseline reruns pass; commit pending. |
 | `CANIC-092-AUTH-001` | evidence gap | P1 | confirmed | fixed | Exact PocketIC evidence proves pre-session rejection, bootstrap, generated-guard parity, replay conflict/idempotence, and unchanged authority; commit pending. |
 | `CANIC-092-ERROR-001` | product defect | P1 | confirmed | fixed | D2 preserves proof/provisioning causes through one existing public-code boundary; all seven auth methods and no-mutation PocketIC proof pass; released in `v0.92.2`. |
@@ -429,6 +435,11 @@ assigns identity by canonical owner/invariant rather than discovery order.
   nine pass and one fail.
   Warning-as-error core rustdoc still fails only on the separately indexed D10
   broken link.
+- D8 reproducible-root validation passes seven transform tests, 15 provenance
+  and policy tests, 12 release-set manifest tests, targeted checks and strict
+  Clippy, and two fresh isolated offline root builds. Root/bootstrap raw and
+  gzip artifacts plus semantic provenance match, no lane path reaches final
+  Wasm, and the current deploy trace passes.
 - Complexity v1 remains invalid history. Corrected v2 is a valid first
   baseline failure at risk 8/10. It maps all 546 files, reproduces its runner
   digest, retains exact manual evidence, applies one score, and passes 178
@@ -454,24 +465,24 @@ assigns identity by canonical owner/invariant rather than discovery order.
   rewriting the frozen result.
 - Improved holistic suite: all 22 retained definitions have valid active
   results. Mandatory traces are complete with a frozen aggregate `fail`: six
-  pass and four fail. Current D1/D2/D5/D6/D7 control/auth/blob/capability reruns
-  pass, so current trace state is nine pass and one fail without rewriting the
-  Phase C baseline.
+  pass and four fail. Current D1/D2/D5/D6/D7/D8 affected-trace reruns pass, so
+  current trace state is ten pass and zero fail without rewriting the Phase C
+  baseline.
 - Phase C technical baseline: complete. The original review remains preserved
   as the pre-correction blocked synthesis; the live index contains 23
   unresolved findings (9 P1, 13 P2, one P3) at that snapshot.
 - Product fix slices: D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
-  `v0.92.3`, D5 in `v0.92.4`, and D6 in `v0.92.5`. D7 fixes the two P2
-  accidental-public-surface defects. The live unresolved index is 13 (5 P1,
-  7 P2, one P3).
+  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, and D7 in `v0.92.6`. D8 fixes
+  the root-build P1 and transform-provenance P2. The live unresolved index is
+  11 (4 P1, 6 P2, one P3).
 - Broad workspace, deployment, publish, and release gates: not run as Phase C
   audit evidence unless a frozen method specifically requires them.
 
 ## Next Action
 
-The next ordered candidate is D8 reproducible root artifacts. D8 through D10
-remain separately bounded; remaining `CANIC-092-LAYERING-005` subsystems
-also require explicit review. The scanner limitation remains unaccepted.
+The next ordered candidate is D9 release execution integrity. D9 and D10
+remain separately bounded; remaining `CANIC-092-LAYERING-005` subsystems also
+require explicit review. The scanner limitation remains unaccepted.
 
 Primary review evidence:
 [0.92 Phase C baseline review](../../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md).
@@ -512,3 +523,6 @@ D6 implementation evidence:
 
 D7 implementation evidence:
 [internal surface hard cuts](../../audits/reports/2026-07/2026-07-15/0.92-d7-internal-surface-hard-cuts.md).
+
+D8 implementation evidence:
+[reproducible root artifacts](../../audits/reports/2026-07/2026-07-15/0.92-d8-reproducible-root-artifacts.md).

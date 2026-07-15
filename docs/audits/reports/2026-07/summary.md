@@ -142,8 +142,12 @@
   bridge retain one owner; issuer Candid, typed causes, stored diagnostics, and
   stable state are unchanged. Focused core/control-plane, protocol, package,
   Clippy, and PocketIC provisioning checks pass. This fixes
-  `CANIC-092-LAYERING-004` and `CANIC-092-SURFACE-001`; thirteen findings
-  remain (5 P1, 7 P2, one P3).
+  `CANIC-092-LAYERING-004` and `CANIC-092-SURFACE-001`; D7 is released in
+  `v0.92.6`. D8 then removes absolute build paths from root runtime evidence
+  and requires explicit transform identity/outcome in stable provenance. Two
+  isolated offline root/bootstrap lanes reproduce raw, gzip, and semantic
+  provenance exactly, fixing `CANIC-092-BUILD-001` and
+  `CANIC-092-BUILD-002`. Eleven findings remain (4 P1, 6 P2, one P3).
 
 ## Month Status
 
@@ -164,8 +168,9 @@ also pass with typed causes preserved. Mandatory trace v1 is
 cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
-satisfied. Phase D finding review is complete; D1 through D6 are released and
-D7 internal surface hard cuts pass focused validation. Security
+satisfied. Phase D finding review is complete; D1 through D7 are released and
+D8 reproducible-root artifacts pass focused validation. The current trace
+ledger is ten pass and zero fail without rewriting the frozen result. Security
 ordering and lifecycle
 symmetry now have valid frozen-method
 passes with watchpoints. Capability v2 is a valid immutable-baseline pass at
@@ -198,9 +203,8 @@ C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Execute the exact D8 reproducible-root-artifact contract; later slices and
-   remaining layering subsystems remain ordered candidates, not blanket
-   authorization.
+1. Execute the exact D9 release-integrity contract; D10 and remaining layering
+   subsystems remain ordered candidates, not blanket authorization.
 2. Keep the dedicated scanner limitation proposed until the maintainer records
    every required waiver field; otherwise closeout remains blocked.
 3. Review the three P2 publish-surface findings with the complete baseline;
@@ -215,3 +219,5 @@ C is closeable at a failing product baseline.
    control-plane support bridge; do not restore public mirrors or aliases.
 8. Carry the instruction auth-flow checkpoint gap as `CANIC-092-PERF-001`;
    do not add instrumentation until a finding-backed product slice is accepted.
+9. Preserve D8's stable-only root runtime evidence and required transform
+   provenance; do not add a legacy payload decoder or alternate build path.

@@ -22,8 +22,9 @@ use super::{
     cache::{canister_build_target_root, configure_canister_cargo_command},
     candid::{extract_candid, remove_stale_icp_candid_sidecars},
     model::{
-        CanisterArtifactBuildOutput, CanisterArtifactBuildSpec, LOCAL_ARTIFACT_ROOT_RELATIVE,
-        ROOT_ROLE, WASM_STORE_ROLE, WASM_TARGET,
+        ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
+        CanisterArtifactBuildSpec, LOCAL_ARTIFACT_ROOT_RELATIVE, ROOT_ROLE, WASM_STORE_ROLE,
+        WASM_TARGET,
     },
     wasm_store::build_hidden_wasm_store_artifact,
 };
@@ -85,9 +86,11 @@ pub fn build_workspace_canister_artifact_from_spec(
     let canister_name = spec.role.as_str();
     let require_embedded_release_artifacts = canister_name == ROOT_ROLE;
 
-    if require_embedded_release_artifacts {
-        build_bootstrap_wasm_store_artifact(context)?;
-    }
+    let mut transforms = if require_embedded_release_artifacts {
+        build_bootstrap_wasm_store_artifact(context)?.transforms
+    } else {
+        Vec::new()
+    };
 
     fs::create_dir_all(&spec.artifact_root)?;
     remove_stale_icp_candid_sidecars(&spec.artifact_root)?;
@@ -99,7 +102,7 @@ pub fn build_workspace_canister_artifact_from_spec(
         require_embedded_release_artifacts,
     )?;
     write_wasm_artifact(&release_wasm_path, &spec.wasm_path)?;
-    maybe_shrink_wasm_artifact(&spec.wasm_path)?;
+    transforms.push(maybe_shrink_wasm_artifact(canister_name, &spec.wasm_path)?);
 
     let network = &context.build_network;
     if should_export_candid_artifacts(network) {
@@ -111,9 +114,17 @@ pub fn build_workspace_canister_artifact_from_spec(
             require_embedded_release_artifacts,
         )?;
         extract_candid(&debug_wasm_path, &spec.did_path)?;
-        embed_candid_metadata(&spec.wasm_path, &spec.did_path)?;
+        transforms.push(embed_candid_metadata(
+            canister_name,
+            &spec.wasm_path,
+            &spec.did_path,
+        )?);
     } else {
         remove_optional_file(&spec.did_path)?;
+        transforms.push(ArtifactTransformOutput::not_requested(
+            canister_name,
+            ArtifactTransformKind::CandidMetadata,
+        ));
     }
     write_gzip_artifact(&spec.wasm_path, &spec.wasm_gz_path)?;
 
@@ -122,6 +133,7 @@ pub fn build_workspace_canister_artifact_from_spec(
         wasm_path: spec.wasm_path.clone(),
         wasm_gz_path: spec.wasm_gz_path.clone(),
         did_path: spec.did_path.clone(),
+        transforms,
     })
 }
 

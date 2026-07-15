@@ -26,6 +26,7 @@ pub struct BuildProvenanceV1 {
     pub source: SourceProvenanceV1,
     pub cargo: CargoProvenanceV1,
     pub artifacts: Vec<ArtifactProvenanceV1>,
+    pub transforms: Vec<ArtifactTransformProvenanceV1>,
     pub warnings: Vec<EvidenceMessageV1>,
 }
 
@@ -137,6 +138,43 @@ pub enum ArtifactProvenanceKindV1 {
     Candid,
     Metadata,
     Other,
+}
+
+///
+/// ArtifactTransformProvenanceV1
+///
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ArtifactTransformProvenanceV1 {
+    pub role: String,
+    pub transform: ArtifactTransformKindV1,
+    pub mode: ArtifactTransformModeV1,
+    pub tool: String,
+    pub tool_version: Option<String>,
+    pub outcome: ArtifactTransformOutcomeV1,
+}
+
+/// Artifact-changing operation selected by the host builder.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactTransformKindV1 {
+    Shrink,
+    CandidMetadata,
+}
+
+/// Admission mode for an artifact transform.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactTransformModeV1 {
+    Optional,
+}
+
+/// Recorded outcome of one artifact transform decision.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactTransformOutcomeV1 {
+    Applied,
+    ToolUnavailable,
+    NotRequested,
 }
 
 ///
