@@ -1,33 +1,24 @@
 //! Module: ops::auth::delegation::root_issuer_policy
 //!
-//! Responsibility: map and validate root issuer policy boundary DTOs.
-//! Does not own: persisted record layout or batch proof preparation.
+//! Responsibility: convert and persist root issuer policy values.
+//! Does not own: policy admission, persisted record layout, or batch proof preparation.
 
 use crate::{
-    InternalError,
-    domain::policy::pure::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-    },
     dto::auth::{
         DelegatedRoleGrant, DelegationAudience, RootIssuerPolicyResponse,
         RootIssuerPolicyUpsertRequest, RootIssuerPolicyView,
     },
+    model::auth::{RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy},
     ops::storage::auth::AuthStateOps,
 };
 
-pub(super) fn upsert_root_issuer_policy(
-    request: RootIssuerPolicyUpsertRequest,
-    _now_ns: u64,
-) -> Result<RootIssuerPolicyResponse, InternalError> {
-    validate_root_issuer_policy_upsert_request(&request)?;
-
-    let policy = root_issuer_policy_from_request(request);
+pub(super) fn commit_root_issuer_policy(policy: RootIssuerPolicy) -> RootIssuerPolicyResponse {
     AuthStateOps::upsert_root_issuer_policy(policy.clone());
     AuthStateOps::advance_delegated_auth_registry_epoch();
 
-    Ok(RootIssuerPolicyResponse {
+    RootIssuerPolicyResponse {
         issuer: root_issuer_policy_view(&policy),
-    })
+    }
 }
 
 pub(super) fn audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolicy {
@@ -66,33 +57,9 @@ pub(super) fn delegated_role_grant_views(
     grants.iter().map(delegated_role_grant_view).collect()
 }
 
-fn validate_root_issuer_policy_upsert_request(
-    request: &RootIssuerPolicyUpsertRequest,
-) -> Result<(), InternalError> {
-    if request.max_cert_ttl_ns == 0 {
-        return Err(InternalError::invalid_input(
-            "root issuer max certificate TTL must be greater than zero",
-        ));
-    }
-    if request.refresh_after_ratio_bps == 0 || request.refresh_after_ratio_bps >= 10_000 {
-        return Err(InternalError::invalid_input(
-            "root issuer refresh ratio must be between 1 and 9999 basis points",
-        ));
-    }
-    if request.enabled && request.allowed_audiences.is_empty() {
-        return Err(InternalError::invalid_input(
-            "enabled root issuer policy must allow at least one audience",
-        ));
-    }
-    if request.enabled && request.allowed_grants.is_empty() {
-        return Err(InternalError::invalid_input(
-            "enabled root issuer policy must allow at least one grant",
-        ));
-    }
-    Ok(())
-}
-
-fn root_issuer_policy_from_request(request: RootIssuerPolicyUpsertRequest) -> RootIssuerPolicy {
+pub(super) fn root_issuer_policy_from_request(
+    request: RootIssuerPolicyUpsertRequest,
+) -> RootIssuerPolicy {
     RootIssuerPolicy {
         issuer_pid: request.issuer_pid,
         enabled: request.enabled,

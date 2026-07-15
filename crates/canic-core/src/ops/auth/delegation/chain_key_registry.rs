@@ -172,12 +172,12 @@ mod tests {
     use super::*;
     use crate::{
         cdk::types::Principal,
-        domain::policy::pure::auth::{
+        dto::auth::{ChainKeyAlgorithm, ChainKeyKeyId},
+        ids::{BuildNetwork, CanisterRole},
+        model::auth::{
             RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
             RootIssuerRenewalTemplate,
         },
-        dto::auth::{ChainKeyAlgorithm, ChainKeyKeyId},
-        ids::{BuildNetwork, CanisterRole},
     };
 
     fn p(id: u8) -> Principal {

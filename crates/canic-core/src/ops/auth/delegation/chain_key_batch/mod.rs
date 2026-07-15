@@ -20,13 +20,13 @@ use crate::{
     cdk::types::Principal,
     domain::policy::pure::auth::{
         RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
-        RootIssuerRenewalOutcome, RootIssuerRenewalState,
         validate_root_delegation_proof_prepare_policy,
     },
     dto::auth::{
         ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, IssuerProofAlgorithm, IssuerProofBinding,
         RootDelegationProofBatchProof, RootDelegationProofInstallOutcome,
     },
+    model::auth::{RootIssuerRenewalOutcome, RootIssuerRenewalState},
     ops::{
         auth::{
             delegated::{

@@ -12,13 +12,13 @@ pub mod mapper;
 
 use crate::{
     cdk::types::Principal,
-    domain::policy::pure::auth::{
-        RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalState,
-        RootIssuerRenewalTemplate,
-    },
     dto::auth::{
         ActiveDelegationProof, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessV1,
         ChainKeyDelegationCertV1, ChainKeyRootSignatureV1, DelegationCert,
+    },
+    model::auth::{
+        RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalState,
+        RootIssuerRenewalTemplate,
     },
     ops::storage::auth::mapper::{
         ActiveDelegationProofRecordMapper, ChainKeyRootDelegationBatchRecordMapper,
@@ -376,11 +376,6 @@ const fn delegated_session_bootstrap_binding_view_to_record(
 mod tests {
     use super::*;
     use crate::{
-        domain::policy::pure::auth::{
-            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-            RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
-            RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
-        },
         dto::auth::{
             ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1,
             ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1, ChainKeyKeyId,
@@ -389,6 +384,11 @@ mod tests {
             IssuerProofBinding, RootProof,
         },
         ids::CanisterRole,
+        model::auth::{
+            RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
+            RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
+            RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
+        },
     };
 
     fn p(id: u8) -> Principal {

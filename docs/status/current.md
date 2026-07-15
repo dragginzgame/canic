@@ -14,9 +14,9 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.1`.
-- `v0.92.1` is published at
-  `9d81ee8c229dddad5681e4144a87b827886b8d3a`.
+- The workspace package version is `0.92.2`.
+- `v0.92.2` is published at
+  `7e9c12785675781fa935b35ee78735bf2168280d`.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -34,15 +34,13 @@ coverage completes the two formerly partial mandatory traces. The aggregate is
 now a valid `fail` with six pass and four fail results, zero partial, and zero
 blocked. The Phase C product baseline gate is complete; product fixes still
 require explicit finding review and bounded slice acceptance. Phase D D1 is
-committed in `v0.92.1`: durable publication owns one fail-closed quota/cycle
-permit and typed failures. D2 is implemented and validated in the current
-worktree: auth proof/provisioning paths preserve exact typed causes through one
-public mapping boundary; its commit identity remains pending.
-D3 is also implemented and validated in the current worktree. It makes
-`AGENTS.md` the sole active layer authority and aligns public core docs and
-module headers with endpoint-to-workflow delegation, model-owned state/storage
-invariants, and passive storage representations. D3 is documentation-only; its
-commit identity remains pending with D2.
+released in `v0.92.1`; D2/D3 are released in `v0.92.2`. D4 is implemented and
+validated in the current worktree: root-issuer policy and renewal-template
+admission has one workflow/policy owner, persisted state-shaped values live in
+model, and ops owns conversion/persistence only. Direct rejection and
+unchanged-state proof fixes `CANIC-092-TEST-001`. The live layering guard drops
+from 25 to 18 violations, but `CANIC-092-LAYERING-005` remains open for the
+other separately reviewed subsystems.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -88,8 +86,9 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
   `91736337fc1cfeb891f17d7d62affb5e671348e2`.
 - Phase D changes only accepted finding-backed slices and compares them to the
   immediate parent and frozen baseline.
-- D1 is committed and D2/D3 are implemented with focused validation passing.
-  D4 through D10 remain ordered candidates rather than blanket authorization.
+- D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 is implemented with
+  focused validation passing. D5 through D10 remain ordered candidates rather
+  than blanket authorization.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -170,6 +169,11 @@ First primary results:
   sole active authority; public core docs, module headers, and hygiene guidance
   agree on the strict direction and model/storage ownership. No runtime,
   public, serialized, or stable behavior changes.
+- [D4 root-issuer admission ownership](../audits/reports/2026-07/2026-07-15/0.92-d4-root-issuer-admission-ownership.md)
+  fixes `CANIC-092-TEST-001` and removes seven root-issuer/model violations
+  from `CANIC-092-LAYERING-005`. Workflow invokes pure policy before ops
+  mutation; model owns state-shaped values. Public and stable shapes are
+  unchanged, and the canonical layering finding remains open.
 - [security boundary ordering](../audits/reports/2026-07/2026-07-14/0.92-security-boundary-ordering.md)
   is a valid pass with watchpoints: generated endpoint, trust proof,
   subject/scope, capability, replay, and recovery-required paths retain their
@@ -258,7 +262,7 @@ First primary results:
   The final mandatory trace result is valid and complete at aggregate `fail`.
   D1 fixes two non-waivable publication P1 findings, D2 fixes the auth cause
   P1, and D3 fixes one P1 authority conflict plus one P2 documentation drift.
-  Eighteen findings remain unresolved (5 P1, 12 P2, one P3). Current control
+  Seventeen findings remain unresolved (5 P1, 11 P2, one P3). Current control
   and auth trace reruns pass; the frozen Phase C aggregate remains historical.
 
 ## Focused Validation
@@ -273,10 +277,10 @@ First primary results:
   commit `9f3e1380...` from 2026-07-13.
 - The repository credential-pattern scan found no match; this does not replace
   the blocked dedicated secret scan.
-- Layering v2 detector fixtures pass and its full guard validly fails on 25
-  production ops-to-policy dependencies. Policy purity, model/storage
-  reverse-reference, public-record, view-name, lifecycle, and macro checks
-  otherwise pass.
+- Layering v2 detector fixtures pass. Its immutable baseline validly fails on
+  25 production ops-to-policy dependencies; D4's affected-scope rerun reduces
+  the live set to 18. Policy purity, passive DTO, and root-issuer ownership
+  checks pass.
 - Build-integrity v2 executes two isolated lanes. Ordinary app and bootstrap
   artifacts reproduce exactly, semantic app provenance matches, and root
   artifacts validly retain the absolute-path reproducibility failure.
@@ -298,6 +302,11 @@ First primary results:
   guard retains the same 25 known product-code violations. Warning-as-error
   core rustdoc still fails only on the separately indexed D10 `InternalError`
   link.
+- D4 validation passes 881 all-feature `canic-core` library tests, four pure
+  policy/passive DTO guards, 19 public protocol tests, strict targeted Clippy,
+  and two root proof/renewal PocketIC regressions. Direct workflow tests prove
+  positive policy/template admission, every request rejection boundary,
+  unchanged state/epoch, and skipped timer start.
 - Focused D1 publication validation passes 18 all-feature publication tests,
   30 replay/capability policy tests, four core and one publication-owned
   cost-permit structural checks, strict targeted Clippy, and five root/store
@@ -351,9 +360,8 @@ First primary results:
 
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
-maps the original 23 unresolved findings to bounded dispositions. D1 is
-committed and D2/D3 are implemented and validated, leaving 18 unresolved
-findings; record their full commit identity after the maintainer commit. The
-next ordered candidate is D4 root-issuer admission ownership. D4 through D10
-remain separately bounded, and the proposed scanner limitation is not yet a
-waiver.
+maps the original 23 unresolved findings to bounded dispositions. D1 through
+D3 are released and D4 is implemented and validated, leaving 17 unresolved
+findings. The next ordered candidate is D5 blob-billing workflow ownership.
+D5 through D10 and the remaining layering subsystems remain separately
+bounded; the proposed scanner limitation is not yet a waiver.

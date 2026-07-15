@@ -2,12 +2,12 @@ use super::merkle::chain_key_batch_node_hash;
 use super::selection::chain_key_template_due;
 use super::*;
 use crate::{
-    domain::policy::pure::auth::{
+    dto::auth::{ChainKeyAlgorithm, ChainKeyBatchWitnessStepV1, ChainKeyKeyId},
+    ids::{BuildNetwork, CanisterRole},
+    model::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
         RootIssuerRenewalOutcome, RootIssuerRenewalTemplate,
     },
-    dto::auth::{ChainKeyAlgorithm, ChainKeyBatchWitnessStepV1, ChainKeyKeyId},
-    ids::{BuildNetwork, CanisterRole},
     ops::auth::delegated::chain_key::{
         ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,
         verify_chain_key_batch_root_proof, verify_chain_key_ecdsa_signature,

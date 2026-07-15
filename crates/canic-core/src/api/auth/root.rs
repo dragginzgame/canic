@@ -2,7 +2,7 @@
 //!
 //! Responsibility: adapt root-only issuer policy, renewal, and chain-key proof calls.
 //! Does not own: root timer execution, batch signing, or proof install state.
-//! Boundary: verifies root context and delegates to auth ops/workflow.
+//! Boundary: verifies root context and delegates to auth workflow.
 
 use super::AuthApi;
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
         },
         error::Error,
     },
-    ops::{auth::AuthOps, ic::IcOps, runtime::env::EnvOps},
+    ops::{ic::IcOps, runtime::env::EnvOps},
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
 
@@ -25,8 +25,7 @@ impl AuthApi {
         request: RootIssuerPolicyUpsertRequest,
     ) -> Result<RootIssuerPolicyResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        AuthOps::upsert_root_issuer_policy(request, IcOps::now_nanos())
-            .map_err(Self::map_auth_error)
+        RuntimeAuthWorkflow::upsert_root_issuer_policy(request).map_err(Self::map_auth_error)
     }
 
     /// Upsert root-managed renewal template from the local root controller path.
@@ -34,13 +33,8 @@ impl AuthApi {
         request: RootIssuerRenewalTemplateUpsertRequest,
     ) -> Result<RootIssuerRenewalTemplateResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        let response = AuthOps::upsert_root_issuer_renewal_template(request, IcOps::now_nanos())
-            .map_err(Self::map_auth_error)?;
-        if response.template.enabled {
-            RuntimeAuthWorkflow::start_root_delegation_renewal_timer_soon_if_configured()
-                .map_err(Self::map_auth_error)?;
-        }
-        Ok(response)
+        RuntimeAuthWorkflow::upsert_root_issuer_renewal_template(request)
+            .map_err(Self::map_auth_error)
     }
 
     /// Report root-managed renewal template/state for one issuer.
@@ -48,7 +42,7 @@ impl AuthApi {
         request: RootIssuerRenewalStatusRequest,
     ) -> Result<RootIssuerRenewalStatusResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        Ok(AuthOps::root_issuer_renewal_status(request))
+        Ok(RuntimeAuthWorkflow::root_issuer_renewal_status(request))
     }
 
     /// Return or create a chain-key root delegation proof for the registered issuer caller.

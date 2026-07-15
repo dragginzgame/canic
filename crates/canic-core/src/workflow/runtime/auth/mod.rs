@@ -7,6 +7,7 @@
 mod prepare;
 mod provisioning;
 mod renewal;
+mod root_issuer;
 
 use crate::{
     InternalError, InternalErrorOrigin,
