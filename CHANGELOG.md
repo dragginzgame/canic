@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.8` is potentially breaking: it makes CI and maintainer tool execution
+  immutable and verified, hard-cuts remote/npm and caller-controlled version
+  paths, and establishes one guarded Ubuntu/Linux/Wasm support authority.
+
 - `0.92.7` is potentially breaking: it makes root artifacts reproducible by
   removing builder paths and hard-cuts build provenance to require explicit
   optional-transform identity and outcome evidence.

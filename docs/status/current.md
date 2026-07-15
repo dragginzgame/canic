@@ -14,9 +14,9 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.6`.
-- `v0.92.6` is published at
-  `69644a8533117de58e9d2c415c33fffbc6e3c20a`.
+- The workspace package version is `0.92.7`.
+- `v0.92.7` is published at
+  `8c8e5db9d782c4c66bfb39bb31be17b00b52f269`.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -36,12 +36,17 @@ blocked. The Phase C product baseline gate is complete; product fixes still
 require explicit finding review and bounded slice acceptance. Phase D D1 is
 released in `v0.92.1`; D2/D3 are released in `v0.92.2`; D4 is released in
 `v0.92.3`; D5 is released in `v0.92.4`; D6 in `v0.92.5`; and D7 in
-`v0.92.6`. D8 is implemented and focused validation passes in the current
-candidate. Root runtime records and lifecycle diagnostics no longer contain
+`v0.92.6`. D8 is released in `v0.92.7`. Root runtime records and lifecycle
+diagnostics no longer contain
 absolute build paths, isolated root/bootstrap artifacts reproduce byte for
 byte, and build provenance requires explicit optional-transform identity and
 outcome. This fixes `CANIC-092-BUILD-001` and `CANIC-092-BUILD-002`; the
-current mandatory-trace ledger is ten pass and zero fail. The live layering
+current mandatory-trace ledger is ten pass and zero fail. D9 is implemented
+and focused validation passes in the current candidate: 13 external Action
+executions use immutable commits, downloaded tools are version/checksum bound,
+and one governance matrix owns the Ubuntu 24.04 x86_64 native/Wasm support
+cell. This fixes `CANIC-092-RELEASE-001`, `-002`, and `-004`; the dedicated
+scanner gap remains blocked outside D9. The live layering
 guard remains at 18 separately owned ops-to-policy violations under
 `CANIC-092-LAYERING-005`.
 
@@ -90,9 +95,9 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
 - Phase D changes only accepted finding-backed slices and compares them to the
   immediate parent and frozen baseline.
 - D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in `v0.92.3`, D5 in
-  `v0.92.4`, D6 in `v0.92.5`, and D7 in `v0.92.6`. D8 is implemented with
-  focused validation passing. D9 and D10 remain ordered candidates rather
-  than blanket authorization.
+  `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in `v0.92.7`. D9 is
+  implemented with focused validation passing. D10 and the remaining layering
+  subsystems remain separately bounded rather than blanket authorization.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -115,6 +120,10 @@ First primary results:
   Actions use mutable tags, executable tool downloads/installations lack
   immutable verified identities, the required dedicated secret scanner is
   absent, and no canonical supported host/target matrix exists.
+- [D9 release execution integrity](../audits/reports/2026-07/2026-07-15/0.92-d9-release-execution-integrity.md)
+  fixes the action, executable-tool, and support-matrix findings. Its affected
+  subchecks pass, but the retained release-integrity method remains blocked by
+  the unchanged dedicated-scanner gap under `CANIC-092-RELEASE-003`.
 - Findings `CANIC-092-AUDIT-007`, `CANIC-092-DEPENDENCY-001`, and
   `CANIC-092-RELEASE-001` through `-004` are indexed in the 0.92 tracker.
 - [layer boundary](../audits/reports/2026-07/2026-07-14/0.92-layer-boundary.md)
@@ -291,9 +300,10 @@ First primary results:
   D1 fixes two non-waivable publication P1 findings, D2 fixes the auth cause
   P1, D3 fixes one P1 authority conflict plus one P2 documentation drift, D7
   fixes two P2 accidental public surfaces, and D8 fixes the root-build P1 plus
-  transform-provenance P2. Eleven findings remain unresolved (4 P1, 6
-  P2, one P3). All current trace reruns pass; the frozen Phase C aggregate
-  remains historical.
+  transform-provenance P2. D9 fixes the two release-execution P1s plus the
+  support-matrix P2. Eight findings remain unresolved (2 P1, 5 P2, one P3).
+  All current trace reruns pass; the frozen Phase C aggregate remains
+  historical.
 
 ## Focused Validation
 
@@ -410,13 +420,21 @@ First primary results:
   two isolated offline root builds. The current deploy trace now passes; the
   full clean-worktree Wasm v2 retained rerun waits for the immutable
   maintainer commit rather than fabricating a dirty-tree result.
+- D9 validation passes the 13-action immutable-pin guard, positive and
+  rejection checksum proof, all five external executable install/version
+  probes, canonical caller-override rejection and exact IC tool checks,
+  workflow and shell lint, 22 focused Rust tests, targeted strict Clippy, the
+  host package probe, and matrix/changelog/diff guards. The integrity guard
+  discovers the maintained version/checksum surface instead of duplicating a
+  variable ledger, and `update-dev` no longer updates unrelated toolchains or
+  workspace dependencies.
 
 ## Next Action
 
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 through
-D7 are released and D8 is implemented and validated, leaving 11 unresolved
-findings. The next ordered candidate is D9 release execution integrity. D9,
-D10, and the remaining layering subsystems remain separately bounded; the
-proposed scanner limitation is not yet a waiver.
+D8 are released and D9 is implemented and validated, leaving 8 unresolved
+findings (2 P1, 5 P2, one P3). The next ordered candidate is D10 active
+documentation and hard-cut residue. Remaining layering subsystems stay
+separately bounded; the proposed scanner limitation is not yet a waiver.

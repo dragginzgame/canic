@@ -15,13 +15,17 @@ complete the auth and control mandatory traces: the aggregate is a valid
 blocked. The product baseline gate and finding review are complete, and Phase D
 is underway. D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 in
 `v0.92.3`; D5 is released in `v0.92.4`; D6 in `v0.92.5`; and D7 in
-`v0.92.6`. D8 is implemented and focused validation passes in the current
-candidate. Absolute build paths are removed from root runtime records and
+`v0.92.6`. D8 is released in `v0.92.7`. Absolute build paths are removed from
+root runtime records and
 diagnostics, isolated root/bootstrap artifacts reproduce byte for byte, and
 stable build provenance requires explicit transform identity and outcome.
-`CANIC-092-BUILD-001` and `CANIC-092-BUILD-002` are fixed. The current trace
-ledger is ten pass and zero fail; the layering guard remains at 18 separately
-owned ops-to-policy violations under `CANIC-092-LAYERING-005`.
+`CANIC-092-BUILD-001` and `CANIC-092-BUILD-002` are fixed. D9 is implemented
+and focused validation passes: 13 external Action executions are immutable,
+downloaded executable tools are version/checksum bound, and one matrix owns
+the release-supported host/target cell. `CANIC-092-RELEASE-001`, `-002`, and
+`-004` are fixed; the dedicated scanner gap remains blocked outside D9. The
+current trace ledger is ten pass and zero fail; the layering guard remains at
+18 separately owned ops-to-policy violations under `CANIC-092-LAYERING-005`.
 
 No runtime product code, public contract, stable state, dependency, or
 generated product behavior changed during method hardening. The reviewed
@@ -50,11 +54,11 @@ maintainer prerequisite for any future 1.0 discussion.
   `ab47f96a4ca388d0c61f01280e2a47bb37930b1ce863d675ea8427bf08b229e6`.
 - Freeze admission method fingerprint:
   `8188a7e08d9551efbad79e56c20cdd2213ed54758fc07b0bd0120b61e0dba82b`.
-- Committed Phase D parent: `v0.92.6` at
-  `69644a8533117de58e9d2c415c33fffbc6e3c20a`, source tree
-  `ff8cd66d451cd8c9bc13d9dec8a47f565a009ab9`, product-tree hash
-  `2388ad8bdca17776721508a6c28081c413b54a1cdd64b4be151016395194ae3b`.
-- Package version: `0.92.6`.
+- Committed Phase D parent: `v0.92.7` at
+  `8c8e5db9d782c4c66bfb39bb31be17b00b52f269`, source tree
+  `777e8cca82746e1461f208941ee251920088c3ed`, product-tree hash
+  `29acda521c40322d41035088653256e9b833679fe5df81f51e5c0166ddd9f208`.
+- Package version: `0.92.7`.
 
 ## Slices
 
@@ -281,6 +285,13 @@ Primary evidence:
       evidence contains no build paths, two isolated root/bootstrap lanes are
       byte-identical, semantic provenance matches, and optional transform
       identity/outcome is required and fail-closed.
+- [x] Record D8's fix and validation identity in released `v0.92.7`.
+- [x] Implement and validate D9 release execution integrity. External Actions
+      use full commit identities, executable archives are exact and verified
+      before extraction, package tools and IC prerequisite checks consume one
+      repository pin authority, the guard discovers that maintained surface,
+      deterministic local synchronization cannot mutate unrelated dependencies,
+      and one guarded matrix owns the supported Ubuntu/Linux/Wasm cell.
 
 ### Slice E - Closeout
 
@@ -305,10 +316,10 @@ Primary evidence:
 | `CANIC-092-AUDIT-006` | operational risk | P1 | confirmed | fixed | `cdcd1487...` / `91736337...` |
 | `CANIC-092-AUDIT-007` | audit method defect | P1 | confirmed | fixed | Dependency v2 defines and passes a deterministic declaration-integrity rule; commit pending. |
 | `CANIC-092-DEPENDENCY-001` | operational risk | P2 | confirmed | open | Four reachable transitive packages are unmaintained; no known vulnerability found. |
-| `CANIC-092-RELEASE-001` | operational risk | P1 | confirmed | open | All external Actions use mutable tags. |
-| `CANIC-092-RELEASE-002` | operational risk | P1 | confirmed | open | CI executable/tool identities are mutable or unverified. |
+| `CANIC-092-RELEASE-001` | operational risk | P1 | confirmed | fixed | D9 pins all 13 active external Action executions to reviewed full commits and guards future references. |
+| `CANIC-092-RELEASE-002` | operational risk | P1 | confirmed | fixed | D9 versions package tools and checksum-verifies all downloaded executable archives before extraction/execution. |
 | `CANIC-092-RELEASE-003` | evidence gap | P1 | confirmed | blocked | No approved dedicated secret scanner is available. |
-| `CANIC-092-RELEASE-004` | evidence gap | P2 | confirmed | open | Supported host/target cells have no canonical matrix. |
+| `CANIC-092-RELEASE-004` | evidence gap | P2 | confirmed | fixed | D9 establishes one guarded Ubuntu 24.04 x86_64/native/Wasm support matrix and classifies other installer branches as unvalidated. |
 | `CANIC-092-LAYERING-001` | product defect | P2 | confirmed | fixed | D5 moves blob Cashier, reserve/recovery, sync, and readiness orchestration behind one workflow; API delegates and public/stable shapes are unchanged. |
 | `CANIC-092-LAYERING-002` | product defect | P2 | confirmed | fixed | D6 makes the DTO passive; one workflow command owns capability/replay identity and ops owns mechanical wire projection, with protocol and stable state unchanged. |
 | `CANIC-092-LAYERING-003` | governance conflict | P1 | high | fixed | D3 makes `AGENTS.md` the sole active authority and removes wording that permits endpoint-to-ops delegation; released in `v0.92.2`. |
@@ -358,9 +369,10 @@ assigns identity by canonical owner/invariant rather than discovery order.
   pass at risk 3/10: all 484 external packages identify license metadata, zero
   known vulnerabilities are present, and four unmaintained packages remain
   bounded watchpoints. No legal-family policy is claimed.
-- Release integrity: fail; `actionlint`, permissions, triggers, and local secret
-  regex pass, while immutable action/tool identity and required dedicated
-  secret evidence do not.
+- Release integrity: D9's action identity, executable integrity, matrix,
+  `actionlint`, permissions, triggers, and local secret regex subchecks pass.
+  The retained method remains blocked because required dedicated secret
+  evidence is still unavailable outside D9.
 - Layering v2: the immutable baseline remains a valid fail at risk 7/10 with
   25 production ops-to-policy files. D4's affected-scope rerun passes detector
   fixtures and reduces the live violation set to 18; D5 and D6 add no upward
@@ -472,17 +484,17 @@ assigns identity by canonical owner/invariant rather than discovery order.
   as the pre-correction blocked synthesis; the live index contains 23
   unresolved findings (9 P1, 13 P2, one P3) at that snapshot.
 - Product fix slices: D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
-  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, and D7 in `v0.92.6`. D8 fixes
-  the root-build P1 and transform-provenance P2. The live unresolved index is
-  11 (4 P1, 6 P2, one P3).
+  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in
+  `v0.92.7`. D9 fixes the action/tool P1s and support-matrix P2. The live
+  unresolved index is 8 (2 P1, 5 P2, one P3).
 - Broad workspace, deployment, publish, and release gates: not run as Phase C
   audit evidence unless a frozen method specifically requires them.
 
 ## Next Action
 
-The next ordered candidate is D9 release execution integrity. D9 and D10
-remain separately bounded; remaining `CANIC-092-LAYERING-005` subsystems also
-require explicit review. The scanner limitation remains unaccepted.
+The next ordered candidate is D10 active documentation and hard-cut residue.
+Remaining `CANIC-092-LAYERING-005` subsystems also require explicit review.
+The scanner limitation remains unaccepted.
 
 Primary review evidence:
 [0.92 Phase C baseline review](../../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md).

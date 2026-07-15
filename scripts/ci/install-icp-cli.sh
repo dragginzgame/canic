@@ -3,101 +3,79 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if [ -z "${CANIC_ICP_CLI_VERSION:-}" ] && [ -f "$ROOT_DIR/tool-versions.env" ]; then
-    # shellcheck source=tool-versions.env
-    source "$ROOT_DIR/tool-versions.env"
+# shellcheck source=/dev/null
+source "$ROOT_DIR/tool-versions.env"
+
+INSTALL_DIR="${ICP_CLI_INSTALL_DIR:-${CARGO_HOME:-$HOME/.cargo}/bin}"
+TMP_DIR=""
+
+if [ "$#" -ne 0 ]; then
+    echo "usage: install-icp-cli.sh" >&2
+    exit 1
 fi
 
-version="${1:-${CANIC_ICP_CLI_VERSION:-}}"
-cargo_bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
-installer_url="https://github.com/dfinity/icp-cli/releases/download/v$version/icp-cli-installer.sh"
-
-icp_version_matches() {
-    local output="$1"
-    local required_version="$2"
-
-    case "$output" in
-        *" $required_version"|*" $required_version "*)
-            return 0
-            ;;
-        *)
-            return 1
-            ;;
+resolve_platform() {
+    case "$(uname -s):$(uname -m)" in
+    Darwin:arm64 | Darwin:aarch64)
+        target="aarch64-apple-darwin"
+        checksum="$CANIC_ICP_CLI_SHA256_AARCH64_APPLE_DARWIN"
+        ;;
+    Darwin:x86_64 | Darwin:amd64)
+        target="x86_64-apple-darwin"
+        checksum="$CANIC_ICP_CLI_SHA256_X86_64_APPLE_DARWIN"
+        ;;
+    Linux:arm64 | Linux:aarch64)
+        target="aarch64-unknown-linux-gnu"
+        checksum="$CANIC_ICP_CLI_SHA256_AARCH64_UNKNOWN_LINUX_GNU"
+        ;;
+    Linux:x86_64 | Linux:amd64)
+        target="x86_64-unknown-linux-gnu"
+        checksum="$CANIC_ICP_CLI_SHA256_X86_64_UNKNOWN_LINUX_GNU"
+        ;;
+    *)
+        echo "unsupported ICP CLI platform: $(uname -s) $(uname -m)" >&2
+        exit 1
+        ;;
     esac
 }
 
-latest_icp_cli_version() {
-    local latest_url=""
-    local latest_tag=""
+main() {
+    local release_dir="icp-cli-$target"
+    local archive="${release_dir}.tar.xz"
+    local url="https://github.com/dfinity/icp-cli/releases/download/v${CANIC_ICP_CLI_VERSION}/${archive}"
+    local installed
+    local candidate
+    local version_output
 
-    latest_url="$(
-        curl -fsSIL -o /dev/null -w '%{url_effective}' \
-            https://github.com/dfinity/icp-cli/releases/latest 2>/dev/null
-    )" || return 1
-    latest_tag="${latest_url##*/}"
-    latest_tag="${latest_tag#v}"
-    if [[ "$latest_tag" =~ ^[0-9]+(\.[0-9]+){1,2}([-+][0-9A-Za-z.-]+)?$ ]]; then
-        printf '%s\n' "$latest_tag"
-        return 0
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
+        -o "$TMP_DIR/$archive" "$url"
+    bash "$SCRIPT_DIR/verify-file-checksum.sh" sha256 "$checksum" "$TMP_DIR/$archive"
+    tar -xJf "$TMP_DIR/$archive" -C "$TMP_DIR" "$release_dir/icp"
+
+    candidate="$TMP_DIR/$release_dir/icp"
+    chmod +x "$candidate"
+    version_output="$("$candidate" --version 2>&1)"
+    case "$version_output" in
+    *" $CANIC_ICP_CLI_VERSION" | *" $CANIC_ICP_CLI_VERSION "*) ;;
+    *)
+        echo "installed ICP CLI does not report the pinned version" >&2
+        echo "expected: $CANIC_ICP_CLI_VERSION" >&2
+        echo "actual:   $version_output" >&2
+        exit 1
+        ;;
+    esac
+
+    mkdir -p "$INSTALL_DIR"
+    installed="$INSTALL_DIR/icp"
+    mv "$candidate" "$installed"
+    if [ -n "${GITHUB_PATH:-}" ]; then
+        printf '%s\n' "$INSTALL_DIR" >>"$GITHUB_PATH"
     fi
-    return 1
+    printf '%s\n' "$installed"
 }
 
-warn_if_newer_icp_cli_exists() {
-    local pinned_version="$1"
-    local latest_version=""
-
-    if [ "${CANIC_ICP_CLI_LATEST_CHECK:-1}" = "0" ]; then
-        return 0
-    fi
-    latest_version="$(latest_icp_cli_version)" || return 0
-    if [ "$latest_version" != "$pinned_version" ]; then
-        echo "warning: GitHub latest dfinity/icp-cli release is v$latest_version; Canic remains pinned to v$pinned_version in tool-versions.env" >&2
-    fi
-}
-
-if [ -z "$version" ]; then
-    echo "missing ICP CLI version; set CANIC_ICP_CLI_VERSION or update tool-versions.env" >&2
-    exit 1
-fi
-
-if ! command -v curl >/dev/null 2>&1; then
-    echo "curl is required to install icp-cli" >&2
-    exit 1
-fi
-
-mkdir -p "$cargo_bin_dir"
-export PATH="$cargo_bin_dir:$PATH"
-hash -r 2>/dev/null || true
-
-if [ -n "${GITHUB_PATH:-}" ]; then
-    printf '%s\n' "$cargo_bin_dir" >>"$GITHUB_PATH"
-fi
-
-curl --proto '=https' --tlsv1.2 -LsSf "$installer_url" | sh
-hash -r 2>/dev/null || true
-
-if ! command -v icp >/dev/null 2>&1; then
-    echo "icp-cli installer completed, but icp is not on PATH" >&2
-    echo "expected $cargo_bin_dir to contain icp" >&2
-    exit 1
-fi
-
-icp_path="$(command -v icp)"
-if ! icp_version_output="$(icp --version 2>&1)"; then
-    echo "icp-cli installer completed, but icp is not working" >&2
-    echo "$icp_version_output" >&2
-    echo "resolved path: $icp_path" >&2
-    exit 1
-fi
-
-if ! icp_version_matches "$icp_version_output" "$version"; then
-    echo "icp-cli installer completed, but icp is not the requested version" >&2
-    echo "found: $icp_version_output ($icp_path)" >&2
-    echo "required: icp $version" >&2
-    echo "expected install directory: $cargo_bin_dir" >&2
-    exit 1
-fi
-
-echo "icp ready: $icp_version_output ($icp_path)" >&2
-warn_if_newer_icp_cli_exists "$version"
+resolve_platform
+main

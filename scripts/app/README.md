@@ -7,7 +7,7 @@ These scripts support the reference canisters under `fleets/test/` and the local
 - Canic/Rust tooling installed:
   - `make install-dev`
   - or `bash scripts/dev/install_dev.sh`
-  - the shared setup script bootstraps Rust when needed, checks Python 3, installs the pinned internal Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic` CLI, and `icp` if it is missing
+  - the shared setup script requires Rustup/Cargo, checks Python 3, installs the pinned internal Rust toolchain, `rustfmt`, `clippy`, `wasm32-unknown-unknown`, `candid-extractor`, `ic-wasm`, common cargo helper tools, the matching `canic` CLI, and `icp`
   - the same script also configures `.githooks/` automatically when run from a Canic checkout
 
 ## Local Replica Contract

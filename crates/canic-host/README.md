@@ -11,15 +11,16 @@ Use this crate directly when you need:
 - the lower-level host library surface without cloning the full repo
 
 For normal local setup, prefer the root
-[`INSTALLING.md`](../../INSTALLING.md) guide or use the tagged repo installer
-script directly:
+[`INSTALLING.md`](../../INSTALLING.md) guide. From a Canic checkout, use the
+maintainer setup target:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dragginzgame/canic/v0.92.7/scripts/dev/install_dev.sh | bash
+make install-dev
 ```
 
-That script bootstraps Rust when needed and installs the pinned internal
-toolchain, the `canic` CLI, wasm/Candid utilities, and `icp` when missing.
+That path requires Rustup and Cargo, then installs the pinned internal
+toolchain, the `canic` CLI, wasm/Candid utilities, and checksum-bound external
+executables.
 This README documents the lower-level host library surface.
 
 ## What this crate is not
