@@ -125,7 +125,13 @@
   persisted state shapes to model, and leaves ops with conversion/persistence.
   Direct rejection and unchanged-state proof fixes `CANIC-092-TEST-001`; the
   live layering guard drops from 25 to 18 while `CANIC-092-LAYERING-005`
-  remains open. Seventeen findings remain (5 P1, 11 P2, one P3).
+  remains open. D4 is released in `v0.92.3`. D5 then moves blob-billing
+  Cashier sequencing, reserve/recovery, gateway sync, and readiness out of API
+  into one workflow over pure policy and single-step ops. Focused core and
+  PocketIC reserve, transient-failure/retry, status, and upgrade proof passes
+  without protocol, price, public-shape, or stable-state change. This fixes
+  `CANIC-092-LAYERING-001`; the current blob trace passes. Sixteen findings
+  remain (5 P1, 10 P2, one P3).
 
 ## Month Status
 
@@ -146,8 +152,8 @@ also pass with typed causes preserved. Mandatory trace v1 is
 cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
-satisfied. Phase D finding review is complete; D1 through D3 are released and
-D4 root-issuer admission ownership passes focused validation. Security
+satisfied. Phase D finding review is complete; D1 through D4 are released and
+D5 blob-billing workflow ownership passes focused validation. Security
 ordering and lifecycle
 symmetry now have valid frozen-method
 passes with watchpoints. Capability v2 is a valid immutable-baseline pass at
@@ -180,8 +186,8 @@ are complete; Phase C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Review the exact D5 blob-billing workflow ownership contract; later slices
-   and remaining layering subsystems remain ordered candidates, not blanket
+1. Review the exact D6 passive RPC DTO ownership contract; later slices and
+   remaining layering subsystems remain ordered candidates, not blanket
    authorization.
 2. Keep the dedicated scanner limitation proposed until the maintainer records
    every required waiver field; otherwise closeout remains blocked.

@@ -2,7 +2,7 @@
 //!
 //! Responsibility: enforce blob-storage lifecycle invariants over stable records.
 //! Does not own: endpoint guards, async gateway calls, or external principal synchronization.
-//! Boundary: API/workflow pass validated root hashes here before stable mutation.
+//! Boundary: workflow passes admitted inputs here before stable mutation.
 
 use std::{error::Error, fmt};
 

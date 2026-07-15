@@ -2,7 +2,7 @@
 //!
 //! Responsibility: manage transient blob-storage funding execution state.
 //! Does not own: Cashier calls, cycle math, stable storage, or endpoint authorization.
-//! Boundary: API/workflow acquires the guard before awaiting external funding effects.
+//! Boundary: workflow acquires the guard before awaiting external funding effects.
 //! The guard relies on `Drop` to clear the transient lock on every return path.
 
 use std::{cell::Cell, error::Error, fmt};

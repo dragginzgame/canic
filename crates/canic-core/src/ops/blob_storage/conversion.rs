@@ -11,6 +11,9 @@ use crate::{
     model::blob_storage::{BLOB_ROOT_HASH_BYTE_LENGTH, BlobRootHash, BlobRootHashError},
 };
 
+#[cfg(feature = "blob-storage-billing")]
+use crate::cdk::candid::Nat;
+
 ///
 /// BlobStorageConversionOps
 ///
@@ -20,6 +23,32 @@ use crate::{
 pub struct BlobStorageConversionOps;
 
 impl BlobStorageConversionOps {
+    /// Convert one Candid nat billing field into its bounded internal value.
+    #[cfg(feature = "blob-storage-billing")]
+    pub fn billing_nat_to_u128(
+        field: &'static str,
+        value: &Nat,
+    ) -> Result<u128, BlobStorageConversionError> {
+        u128::try_from(value.0.clone())
+            .map_err(|_| BlobStorageConversionError::BillingNatExceedsU128 { field })
+    }
+
+    /// Convert a bounded internal cycle value into its public Candid nat form.
+    #[cfg(feature = "blob-storage-billing")]
+    #[must_use]
+    pub fn billing_nat_from_u128(value: u128) -> Nat {
+        Nat::parse(value.to_string().as_bytes()).expect("u128 must encode as Candid nat")
+    }
+
+    /// Convert the persisted gateway limit into the local collection bound.
+    #[cfg(feature = "blob-storage-billing")]
+    pub fn gateway_principal_limit_to_usize(
+        value: u64,
+    ) -> Result<usize, BlobStorageConversionError> {
+        usize::try_from(value)
+            .map_err(|_| BlobStorageConversionError::GatewayPrincipalLimitExceedsUsize)
+    }
+
     /// Parse a Toko/Caffeine root hash string into canonical model form.
     pub fn root_hash_from_text(value: &str) -> Result<BlobRootHash, BlobStorageConversionError> {
         BlobRootHash::try_from(value).map_err(BlobStorageConversionError::InvalidRootHash)
@@ -57,12 +86,26 @@ impl BlobStorageConversionOps {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BlobStorageConversionError {
     InvalidRootHash(BlobRootHashError),
-    InvalidRootHashByteLength { actual: usize },
+    InvalidRootHashByteLength {
+        actual: usize,
+    },
+    #[cfg(feature = "blob-storage-billing")]
+    BillingNatExceedsU128 {
+        field: &'static str,
+    },
+    #[cfg(feature = "blob-storage-billing")]
+    GatewayPrincipalLimitExceedsUsize,
 }
 
 impl fmt::Display for BlobStorageConversionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            #[cfg(feature = "blob-storage-billing")]
+            Self::BillingNatExceedsU128 { field } => write!(formatter, "{field} exceeds u128"),
+            #[cfg(feature = "blob-storage-billing")]
+            Self::GatewayPrincipalLimitExceedsUsize => {
+                formatter.write_str("gateway_principal_limit exceeds usize")
+            }
             Self::InvalidRootHash(err) => write!(formatter, "{err}"),
             Self::InvalidRootHashByteLength { actual } => {
                 write!(

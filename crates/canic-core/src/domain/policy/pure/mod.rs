@@ -5,6 +5,8 @@
 //! or mutate state.
 
 pub mod auth;
+#[cfg(feature = "blob-storage-billing")]
+pub mod blob_storage;
 pub mod cycles;
 pub mod cycles_funding;
 pub mod env;
