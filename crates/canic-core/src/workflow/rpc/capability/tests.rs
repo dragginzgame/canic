@@ -2,8 +2,12 @@ use super::*;
 use crate::dto::{
     capability::{CAPABILITY_VERSION_V1, CapabilityProof},
     error::ErrorCode,
-    rpc::{CyclesRequest, RootRequestMetadata},
+    rpc::{
+        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest,
+        Request, RootRequestMetadata, UpgradeCanisterRequest,
+    },
 };
+use crate::ids::CanisterRole;
 
 const NS_PER_SEC: u64 = 1_000_000_000;
 
@@ -59,24 +63,66 @@ fn root_capability_hash_binds_capability_version() {
 
 #[test]
 fn root_capability_hash_ignores_request_metadata() {
-    let req_a = Request::Cycles(CyclesRequest {
-        cycles: 10,
-        metadata: Some(RootRequestMetadata {
-            request_id: [1u8; 32],
-            ttl_ns: 60 * NS_PER_SEC,
-        }),
-    });
-    let req_b = Request::Cycles(CyclesRequest {
-        cycles: 10,
-        metadata: Some(RootRequestMetadata {
-            request_id: [2u8; 32],
-            ttl_ns: 120 * NS_PER_SEC,
-        }),
-    });
+    let metadata_a = RootRequestMetadata {
+        request_id: [1u8; 32],
+        ttl_ns: 60 * NS_PER_SEC,
+    };
+    let metadata_b = RootRequestMetadata {
+        request_id: [2u8; 32],
+        ttl_ns: 120 * NS_PER_SEC,
+    };
+    let pairs = [
+        (
+            Request::CreateCanister(CreateCanisterRequest {
+                canister_role: CanisterRole::new("app"),
+                parent: CreateCanisterParent::Root,
+                extra_arg: Some(vec![1, 2, 3]),
+                metadata: Some(metadata_a),
+            }),
+            Request::CreateCanister(CreateCanisterRequest {
+                canister_role: CanisterRole::new("app"),
+                parent: CreateCanisterParent::Root,
+                extra_arg: Some(vec![1, 2, 3]),
+                metadata: Some(metadata_b),
+            }),
+        ),
+        (
+            Request::UpgradeCanister(UpgradeCanisterRequest {
+                canister_pid: p(2),
+                metadata: Some(metadata_a),
+            }),
+            Request::UpgradeCanister(UpgradeCanisterRequest {
+                canister_pid: p(2),
+                metadata: Some(metadata_b),
+            }),
+        ),
+        (
+            Request::RecycleCanister(RecycleCanisterRequest {
+                canister_pid: p(3),
+                metadata: Some(metadata_a),
+            }),
+            Request::RecycleCanister(RecycleCanisterRequest {
+                canister_pid: p(3),
+                metadata: Some(metadata_b),
+            }),
+        ),
+        (
+            Request::Cycles(CyclesRequest {
+                cycles: 10,
+                metadata: Some(metadata_a),
+            }),
+            Request::Cycles(CyclesRequest {
+                cycles: 10,
+                metadata: Some(metadata_b),
+            }),
+        ),
+    ];
 
-    let hash_a = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &req_a).expect("hash a");
-    let hash_b = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &req_b).expect("hash b");
-    assert_eq!(hash_a, hash_b);
+    for (request_a, request_b) in pairs {
+        let hash_a = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &request_a).expect("hash a");
+        let hash_b = root_capability_hash(p(1), CAPABILITY_VERSION_V1, &request_b).expect("hash b");
+        assert_eq!(hash_a, hash_b);
+    }
 }
 
 #[test]
@@ -138,9 +184,9 @@ fn with_root_request_metadata_overrides_existing_metadata() {
         ttl_ns: 60 * NS_PER_SEC,
     };
 
-    let updated = with_root_request_metadata(request, metadata);
+    let updated = with_root_request_metadata(RootCapability::from_request(request), metadata);
     match updated {
-        Request::Cycles(req) => assert_eq!(req.metadata, Some(metadata)),
+        RootCapability::RequestCycles(req) => assert_eq!(req.metadata, Some(metadata)),
         _ => panic!("expected cycles request"),
     }
 }

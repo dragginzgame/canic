@@ -114,7 +114,17 @@ conversion, single calls, guards, and state access. Reserve refusal performs
 no partial top-up, transient Cashier failure releases the guard for retry, and
 configured/missing-config state survives upgrade in PocketIC. Public DTOs,
 Candid, prices/protocol, and stable records are unchanged. This fixes
-`CANIC-092-LAYERING-001`; the current blob trace passes.
+`CANIC-092-LAYERING-001`; the current blob trace passes. D5 is released in
+`v0.92.4`.
+
+[D6 passive RPC DTO ownership](0.92-d6-passive-rpc-dto-ownership.md) removes
+capability-family, replay-metadata, canonical-payload, and duplicate-command
+behavior from the root RPC DTO. One workflow command now owns family,
+descriptor, replay identity, and admitted metadata; ops owns the mechanical
+signed-payload projection. Exact identical-replay and cross-family-conflict
+PocketIC cases pass. Public protocol, replay behavior, and stable state are
+unchanged. This fixes `CANIC-092-LAYERING-002`; the capability trace remains
+pass.
 
 ## Live Ledger
 
@@ -122,11 +132,12 @@ Candid, prices/protocol, and stable records are unchanged. This fixes
 - Valid active results: 22.
 - Invalid active results: 0; v1 failures remain preserved as invalid history.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
-  0 blocked); D1/D2/D5 move current reruns to 9 pass and 1 fail without
+  0 blocked); D1/D2/D5/D6 leave current reruns at 9 pass and 1 fail without
   rewriting the baseline.
-- Unresolved findings: 16 (5 P1, 10 P2, one P3).
+- Unresolved findings: 15 (5 P1, 9 P2, one P3).
 - Phase D fixes: D1 released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
-  `v0.92.3`, and D5 implemented with focused validation passing.
+  `v0.92.3`, D5 in `v0.92.4`, and D6 implemented with focused validation
+  passing.
 
 ## Validation
 
@@ -173,8 +184,13 @@ Candid, prices/protocol, and stable records are unchanged. This fixes
   core Clippy, and four PocketIC billing selections pass. Layering fixtures,
   targeted formatting, and diff hygiene pass; the live violation set remains
   18 with no new upward edge.
+- D6: 51 workflow RPC tests, eight RPC ops tests, four replay-manifest tests,
+  four policy/DTO guards, 19 protocol tests, strict all-feature/all-target core
+  Clippy, and exact PocketIC identical-replay and cross-family-conflict cases
+  pass. Layering fixtures and diff hygiene pass; the live violation set remains
+  18.
 
 ## Next
 
-D6 passive RPC DTO ownership is the next ordered candidate. D6 through D10 and
+D7 internal surface hard cuts are the next ordered candidate. D7 through D10 and
 the remaining layering subsystems remain separately bounded.

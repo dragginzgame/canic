@@ -34,8 +34,8 @@ fn pool_admin_command_variant_names() -> BTreeSet<&'static str> {
 
 fn root_capability_command_variant_names() -> BTreeSet<&'static str> {
     enum_variant_names_from_source(
-        include_str!("../../dto/rpc.rs"),
-        "pub enum RootCapabilityCommand",
+        include_str!("../../workflow/rpc/request/handler/capability.rs"),
+        "pub(in crate::workflow::rpc) enum RootCapability",
     )
 }
 

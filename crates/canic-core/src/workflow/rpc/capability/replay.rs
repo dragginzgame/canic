@@ -5,19 +5,18 @@
 //! Boundary: validates metadata freshness and derives replay request identifiers.
 
 use crate::{
-    dto::{
-        capability::CapabilityRequestMetadata,
-        error::Error,
-        rpc::{Request, RootRequestMetadata},
+    dto::{capability::CapabilityRequestMetadata, error::Error, rpc::RootRequestMetadata},
+    workflow::rpc::{
+        capability::{MAX_CAPABILITY_CLOCK_SKEW_NS, REPLAY_REQUEST_ID_DOMAIN_V1},
+        request::handler::capability::RootCapability,
     },
-    workflow::rpc::capability::{MAX_CAPABILITY_CLOCK_SKEW_NS, REPLAY_REQUEST_ID_DOMAIN_V1},
 };
 use sha2::{Digest, Sha256};
 
 pub(super) const fn with_root_request_metadata(
-    request: Request,
+    request: RootCapability,
     metadata: RootRequestMetadata,
-) -> Request {
+) -> RootCapability {
     request.with_metadata(metadata)
 }
 

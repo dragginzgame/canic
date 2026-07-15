@@ -5,8 +5,11 @@
 //! Boundary: applies proof-mode-specific checks against immutable request context.
 
 use crate::{
-    dto::{error::Error, rpc::Request},
-    workflow::rpc::capability::{RootCapabilityProof, proof::verify_root_structural_proof},
+    dto::error::Error,
+    workflow::rpc::{
+        capability::{RootCapabilityProof, proof::verify_root_structural_proof},
+        request::handler::capability::RootCapability,
+    },
 };
 use async_trait::async_trait;
 
@@ -25,7 +28,7 @@ pub(super) struct VerifiedCapability;
 ///
 
 pub(super) struct VerificationInput<'a> {
-    pub(super) capability: &'a Request,
+    pub(super) capability: &'a RootCapability,
 }
 
 ///
@@ -63,7 +66,7 @@ impl CapabilityProofVerifier for StructuralVerifier {
 /// Route proof verification through the mode-specific verifier implementation.
 ///
 pub(super) async fn verify_root_capability_proof(
-    capability: &Request,
+    capability: &RootCapability,
     _capability_version: u16,
     proof: RootCapabilityProof,
 ) -> Result<VerifiedCapability, Error> {

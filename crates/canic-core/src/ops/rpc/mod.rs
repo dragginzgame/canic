@@ -25,7 +25,7 @@ use crate::{
             call::{CallOps, CallResult},
         },
         prelude::*,
-        rpc::request::RequestOpsError,
+        rpc::request::{RequestConversionOps, RequestOpsError},
         runtime::env::EnvOps,
     },
     protocol,
@@ -192,13 +192,13 @@ fn non_structural_capability_proof_error(request: &Request) -> InternalError {
         InternalErrorOrigin::Ops,
         format!(
             "non-structural root capability proof is not supported for {}; use a structural capability path or delegated-token endpoint",
-            request.family().label()
+            RequestConversionOps::diagnostic_variant_label(request)
         ),
     )
 }
 
 fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetadata {
-    let metadata = request_metadata(request);
+    let metadata = RequestConversionOps::source_metadata(request);
     let request_id = metadata.map_or([0u8; 16], |m| {
         let mut out = [0u8; 16];
         out.copy_from_slice(&m.request_id[..16]);
@@ -212,25 +212,6 @@ fn capability_metadata_from_request(request: &Request) -> CapabilityRequestMetad
         issued_at_ns: IcOps::now_nanos(),
         ttl_ns,
     }
-}
-
-///
-/// CapabilitySourceMetadata
-///
-/// Replay metadata extracted from a request before capability projection.
-///
-
-#[derive(Clone, Copy)]
-struct CapabilitySourceMetadata {
-    request_id: [u8; 32],
-    ttl_ns: u64,
-}
-
-fn request_metadata(request: &Request) -> Option<CapabilitySourceMetadata> {
-    request.metadata().map(|m| CapabilitySourceMetadata {
-        request_id: m.request_id,
-        ttl_ns: m.ttl_ns,
-    })
 }
 
 fn generate_capability_nonce() -> [u8; 16] {

@@ -43,8 +43,8 @@ pub(super) fn authorize(
 
     let descriptor = capability.descriptor();
     let decision = match capability {
-        RootCapability::Provision(req) => authorize_provision(ctx, req),
-        RootCapability::Upgrade(req) => {
+        RootCapability::ProvisionCanister(req) => authorize_provision(ctx, req),
+        RootCapability::UpgradeCanister(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req))
         }
         RootCapability::RecycleCanister(req) => {

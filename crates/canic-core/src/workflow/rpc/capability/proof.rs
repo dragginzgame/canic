@@ -6,20 +6,21 @@
 
 use crate::{
     cdk::types::Principal,
-    dto::{
-        error::Error,
-        rpc::{CreateCanisterParent, Request},
-    },
+    dto::{error::Error, rpc::CreateCanisterParent},
     ops::{
         ic::IcOps, storage::children::CanisterChildrenOps,
         storage::registry::subnet::SubnetRegistryOps,
     },
+    workflow::rpc::request::handler::capability::RootCapability,
 };
+
+#[cfg(test)]
+use crate::dto::rpc::Request;
 
 /// verify_root_structural_proof
 ///
 /// Verify structural proof constraints for capability families that allow it.
-pub(super) fn verify_root_structural_proof(capability: &Request) -> Result<(), Error> {
+pub(super) fn verify_root_structural_proof(capability: &RootCapability) -> Result<(), Error> {
     let caller = IcOps::msg_caller();
 
     if !SubnetRegistryOps::is_registered(caller) {
@@ -29,12 +30,12 @@ pub(super) fn verify_root_structural_proof(capability: &Request) -> Result<(), E
     }
 
     match capability {
-        Request::Cycles(_) => Ok(()),
-        Request::CreateCanister(request) => verify_root_structural_create(request),
-        Request::UpgradeCanister(request) => {
+        RootCapability::RequestCycles(_) => Ok(()),
+        RootCapability::ProvisionCanister(request) => verify_root_structural_create(request),
+        RootCapability::UpgradeCanister(request) => {
             verify_root_structural_child_target(caller, request.canister_pid, "upgrade")
         }
-        Request::RecycleCanister(request) => {
+        RootCapability::RecycleCanister(request) => {
             verify_root_structural_child_target(caller, request.canister_pid, "recycle")
         }
     }
