@@ -14,6 +14,8 @@ mod errors;
 mod root_issuer_policy;
 mod root_issuer_renewal;
 
+pub use chain_key_batch::ChainKeyRootDelegationBatchInstallPlan;
+
 use super::{
     AuthOps, AuthValidationError,
     delegated::chain_key_signing::{
@@ -30,13 +32,14 @@ use crate::{
     config::schema::DelegatedTokenConfig,
     dto::auth::{
         ActiveDelegationProof, ActiveDelegationProofStatusResponse, DelegationProof,
-        RootDelegationProofBatchInstallRequest, RootDelegationProofBatchProof,
-        RootDelegationProofInstallOutcome, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+        RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     },
     ids::BuildNetwork,
-    model::auth::{RootIssuerPolicy, RootIssuerRenewalTemplate},
+    model::auth::{
+        ChainKeyRootDelegationInstallFailure, RootIssuerPolicy, RootIssuerRenewalTemplate,
+    },
     ops::{config::ConfigOps, ic::IcOps},
 };
 
@@ -167,13 +170,8 @@ impl AuthOps {
 
     pub(crate) fn start_next_chain_key_root_delegation_batch_install(
         now_ns: u64,
-    ) -> Result<Option<RootDelegationProofBatchInstallRequest>, InternalError> {
-        chain_key_batch::start_next_chain_key_root_delegation_batch_install(now_ns).map(|plan| {
-            plan.map(|plan| RootDelegationProofBatchInstallRequest {
-                batch_id: plan.batch_id,
-                proofs: plan.proofs,
-            })
-        })
+    ) -> Result<Option<ChainKeyRootDelegationBatchInstallPlan>, InternalError> {
+        chain_key_batch::start_next_chain_key_root_delegation_batch_install(now_ns)
     }
 
     pub(crate) async fn get_or_create_chain_key_delegation_proof_for_issuer(
@@ -232,10 +230,10 @@ impl AuthOps {
         batch_id: [u8; 32],
         issuer_pid: Principal,
         cert_hash: [u8; 32],
-        outcome: RootDelegationProofInstallOutcome,
+        failure: ChainKeyRootDelegationInstallFailure,
     ) -> bool {
         chain_key_batch::record_chain_key_root_delegation_install_failure(
-            batch_id, issuer_pid, cert_hash, outcome,
+            batch_id, issuer_pid, cert_hash, failure,
         )
     }
 

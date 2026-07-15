@@ -13,14 +13,14 @@ use crate::{
     dto::{
         auth::{
             InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse,
-            RootDelegationProofBatchInstallRequest, RootDelegationProofBatchProof,
-            RootDelegationProofInstallOutcome, RootProof,
+            RootDelegationProofBatchProof, RootProof,
         },
         error::{Error, ErrorCode},
     },
     ids::BuildNetwork,
+    model::auth::ChainKeyRootDelegationInstallFailure,
     ops::{
-        auth::AuthOps,
+        auth::{AuthOps, ChainKeyRootDelegationBatchInstallPlan},
         ic::{
             IcOps,
             call::{CallOps, CallResult},
@@ -41,12 +41,11 @@ impl RuntimeAuthWorkflow {
         let proof =
             Self::get_or_create_chain_key_delegation_proof_for_issuer_root(issuer_pid).await?;
         let RootProof::IcChainKeyBatchSignatureV1(root_proof) = &proof.proof.root_proof;
-        let result = install_chain_key_delegation_proof_batch(
-            RootDelegationProofBatchInstallRequest {
-                batch_id: root_proof.header.batch_id,
-                proofs: vec![proof],
-            },
+        let result = install_chain_key_delegation_proofs(
+            root_proof.header.batch_id,
+            vec![proof],
             IcOps::now_nanos(),
+            install_delegation_proof_on_issuer,
         )
         .await;
         result.into_explicit_result(issuer_pid)
@@ -81,29 +80,31 @@ impl RuntimeAuthWorkflow {
 }
 
 pub(super) async fn install_chain_key_delegation_proof_batch(
-    request: RootDelegationProofBatchInstallRequest,
+    plan: ChainKeyRootDelegationBatchInstallPlan,
     now_ns: u64,
 ) -> ChainKeyDelegationProofBatchInstallResult {
-    install_chain_key_delegation_proof_batch_with_issuer_install(
-        request,
+    install_chain_key_delegation_proofs(
+        plan.batch_id,
+        plan.proofs,
         now_ns,
         install_delegation_proof_on_issuer,
     )
     .await
 }
 
-async fn install_chain_key_delegation_proof_batch_with_issuer_install<F, Fut>(
-    request: RootDelegationProofBatchInstallRequest,
+async fn install_chain_key_delegation_proofs<F, Fut>(
+    batch_id: [u8; 32],
+    proofs: Vec<RootDelegationProofBatchProof>,
     now_ns: u64,
     mut install_issuer: F,
 ) -> ChainKeyDelegationProofBatchInstallResult
 where
     F: FnMut(Principal, InstallActiveDelegationProofRequest) -> Fut,
-    Fut: Future<Output = Result<RootDelegationProofInstallOutcome, IssuerProofInstallError>>,
+    Fut: Future<Output = Result<(), IssuerProofInstallError>>,
 {
     let mut installed_any = false;
     let mut first_failure = None;
-    for proof in request.proofs {
+    for proof in proofs {
         let issuer_pid = proof.issuer_pid;
         let cert_hash = proof.cert_hash;
         let result = install_issuer(
@@ -112,31 +113,17 @@ where
         )
         .await;
         match result {
-            Ok(
-                RootDelegationProofInstallOutcome::Installed
-                | RootDelegationProofInstallOutcome::AlreadyInstalled,
-            ) => {
+            Ok(()) => {
                 installed_any = AuthOps::record_chain_key_root_delegation_install_success(
-                    request.batch_id,
-                    issuer_pid,
-                    cert_hash,
-                    now_ns,
+                    batch_id, issuer_pid, cert_hash, now_ns,
                 ) || installed_any;
-            }
-            Ok(outcome) => {
-                AuthOps::record_chain_key_root_delegation_install_failure(
-                    request.batch_id,
-                    issuer_pid,
-                    cert_hash,
-                    outcome,
-                );
             }
             Err(failure) => {
                 AuthOps::record_chain_key_root_delegation_install_failure(
-                    request.batch_id,
+                    batch_id,
                     issuer_pid,
                     cert_hash,
-                    failure.record_outcome(),
+                    failure.record_failure(),
                 );
                 if first_failure.is_none() {
                     first_failure = Some(failure);
@@ -153,7 +140,7 @@ where
 async fn install_delegation_proof_on_issuer(
     issuer_pid: Principal,
     request: InstallActiveDelegationProofRequest,
-) -> Result<RootDelegationProofInstallOutcome, IssuerProofInstallError> {
+) -> Result<(), IssuerProofInstallError> {
     let builder =
         CallOps::unbounded_wait(issuer_pid, protocol::CANIC_INSTALL_ACTIVE_DELEGATION_PROOF)
             .with_arg(request)
@@ -165,9 +152,7 @@ async fn install_delegation_proof_on_issuer(
     issuer_install_outcome(call)
 }
 
-fn issuer_install_outcome(
-    call: CallResult,
-) -> Result<RootDelegationProofInstallOutcome, IssuerProofInstallError> {
+fn issuer_install_outcome(call: CallResult) -> Result<(), IssuerProofInstallError> {
     let result: Result<InstallActiveDelegationProofResponse, Error> = call
         .candid()
         .map_err(IssuerProofInstallError::InvalidResponse)?;
@@ -176,9 +161,9 @@ fn issuer_install_outcome(
 
 fn issuer_install_response(
     result: Result<InstallActiveDelegationProofResponse, Error>,
-) -> Result<RootDelegationProofInstallOutcome, IssuerProofInstallError> {
+) -> Result<(), IssuerProofInstallError> {
     match result {
-        Ok(_) => Ok(RootDelegationProofInstallOutcome::Installed),
+        Ok(_) => Ok(()),
         Err(err) => Err(IssuerProofInstallError::RejectedByIssuer(err)),
     }
 }
@@ -210,19 +195,19 @@ enum IssuerProofInstallError {
 }
 
 impl IssuerProofInstallError {
-    const fn record_outcome(&self) -> RootDelegationProofInstallOutcome {
+    const fn record_failure(&self) -> ChainKeyRootDelegationInstallFailure {
         match self {
             Self::RequestEncoding(_) | Self::Transport(_) | Self::InvalidResponse(_) => {
-                RootDelegationProofInstallOutcome::CallFailed
+                ChainKeyRootDelegationInstallFailure::CallFailed
             }
             Self::RejectedByIssuer(err) => match err.code {
                 ErrorCode::AuthProofExpired => {
-                    RootDelegationProofInstallOutcome::ExpiredOrSuperseded
+                    ChainKeyRootDelegationInstallFailure::ExpiredOrSuperseded
                 }
                 ErrorCode::AuthMaterialStale
                 | ErrorCode::AuthProofPending
-                | ErrorCode::InvalidInput => RootDelegationProofInstallOutcome::ProofMismatch,
-                _ => RootDelegationProofInstallOutcome::RejectedBySigner,
+                | ErrorCode::InvalidInput => ChainKeyRootDelegationInstallFailure::ProofMismatch,
+                _ => ChainKeyRootDelegationInstallFailure::RejectedBySigner,
             },
         }
     }
@@ -342,16 +327,12 @@ mod tests {
 
     #[test]
     fn install_chain_key_batch_empty_request_is_noop() {
-        let result = block_on(
-            install_chain_key_delegation_proof_batch_with_issuer_install(
-                RootDelegationProofBatchInstallRequest {
-                    batch_id: [1; 32],
-                    proofs: vec![],
-                },
-                20,
-                |_issuer_pid, _request| async { Ok(RootDelegationProofInstallOutcome::Installed) },
-            ),
-        );
+        let result = block_on(install_chain_key_delegation_proofs(
+            [1; 32],
+            vec![],
+            20,
+            |_issuer_pid, _request| async { Ok(()) },
+        ));
 
         assert!(!result.installed_any);
         assert!(result.first_failure.is_none());
@@ -360,23 +341,25 @@ mod tests {
     #[test]
     fn install_chain_key_batch_broadcasts_proofs_to_issuers() {
         let calls = Cell::new(0);
-        let result = block_on(
-            install_chain_key_delegation_proof_batch_with_issuer_install(
-                RootDelegationProofBatchInstallRequest {
-                    batch_id: [2; 32],
-                    proofs: vec![proof()],
-                },
-                20,
-                |issuer_pid, _request| {
-                    assert_eq!(issuer_pid, p(2));
-                    calls.set(calls.get() + 1);
-                    async { Ok(RootDelegationProofInstallOutcome::CallFailed) }
-                },
-            ),
-        );
+        let result = block_on(install_chain_key_delegation_proofs(
+            [2; 32],
+            vec![proof()],
+            20,
+            |issuer_pid, _request| {
+                assert_eq!(issuer_pid, p(2));
+                calls.set(calls.get() + 1);
+                async {
+                    Err(IssuerProofInstallError::Transport(InternalError::infra(
+                        InternalErrorOrigin::Infra,
+                        "transport failed",
+                    )))
+                }
+            },
+        ));
 
         assert_eq!(calls.get(), 1);
         assert!(!result.installed_any);
+        assert!(result.first_failure.is_some());
     }
 
     #[test]
@@ -407,8 +390,8 @@ mod tests {
         let failure = issuer_install_response(Err(rejected.clone()))
             .expect_err("issuer application rejection must remain an error");
         assert_eq!(
-            failure.record_outcome(),
-            RootDelegationProofInstallOutcome::ExpiredOrSuperseded
+            failure.record_failure(),
+            ChainKeyRootDelegationInstallFailure::ExpiredOrSuperseded
         );
 
         let result = ChainKeyDelegationProofBatchInstallResult {

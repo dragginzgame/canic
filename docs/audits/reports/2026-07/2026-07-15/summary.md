@@ -124,7 +124,17 @@ descriptor, replay identity, and admitted metadata; ops owns the mechanical
 signed-payload projection. Exact identical-replay and cross-family-conflict
 PocketIC cases pass. Public protocol, replay behavior, and stable state are
 unchanged. This fixes `CANIC-092-LAYERING-002`; the capability trace remains
-pass.
+pass. D6 is released in `v0.92.5`.
+
+[D7 internal surface hard cuts](0.92-d7-internal-surface-hard-cuts.md) delete
+the duplicate public proof-install request/outcome and the unnecessary direct
+core error root. Scheduled renewal consumes the existing internal ops plan,
+the explicit root facade enters the private workflow directly, and the model
+owns the four persisted failure classifications. The deliberate control-plane
+support bridge remains the sole sibling error surface. Maintained issuer
+Candid, stable state, typed causes, and exact stored diagnostic labels are
+unchanged. This fixes `CANIC-092-LAYERING-004` and
+`CANIC-092-SURFACE-001` without aliases or compatibility paths.
 
 ## Live Ledger
 
@@ -132,12 +142,12 @@ pass.
 - Valid active results: 22.
 - Invalid active results: 0; v1 failures remain preserved as invalid history.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
-  0 blocked); D1/D2/D5/D6 leave current reruns at 9 pass and 1 fail without
+  0 blocked); D1/D2/D5/D6/D7 leave current reruns at 9 pass and 1 fail without
   rewriting the baseline.
-- Unresolved findings: 15 (5 P1, 9 P2, one P3).
+- Unresolved findings: 13 (5 P1, 7 P2, one P3).
 - Phase D fixes: D1 released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
-  `v0.92.3`, D5 in `v0.92.4`, and D6 implemented with focused validation
-  passing.
+  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, and D7 implemented with
+  focused validation passing.
 
 ## Validation
 
@@ -189,8 +199,15 @@ pass.
   Clippy, and exact PocketIC identical-replay and cross-family-conflict cases
   pass. Layering fixtures and diff hygiene pass; the live violation set remains
   18.
+- D7: all-feature/all-target core and control-plane checks, four provisioning
+  tests, 20 chain-key batch tests, three DTO/serialization guards, 19 protocol
+  tests, all-feature facade check, strict core/control-plane Clippy, offline
+  core/facade package verification, the control-plane facade test, and exact
+  PocketIC new-issuer provisioning pass. Layering fixtures retain the same 18
+  known upward edges. Core rustdoc still fails only on the separately indexed
+  D10 broken link.
 
 ## Next
 
-D7 internal surface hard cuts are the next ordered candidate. D7 through D10 and
+D8 reproducible root artifacts are the next ordered candidate. D8 through D10 and
 the remaining layering subsystems remain separately bounded.

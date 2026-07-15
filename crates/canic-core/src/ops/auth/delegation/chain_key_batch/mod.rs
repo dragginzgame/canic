@@ -24,9 +24,11 @@ use crate::{
     },
     dto::auth::{
         ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, IssuerProofAlgorithm, IssuerProofBinding,
-        RootDelegationProofBatchProof, RootDelegationProofInstallOutcome,
+        RootDelegationProofBatchProof,
     },
-    model::auth::{RootIssuerRenewalOutcome, RootIssuerRenewalState},
+    model::auth::{
+        ChainKeyRootDelegationInstallFailure, RootIssuerRenewalOutcome, RootIssuerRenewalState,
+    },
     ops::{
         auth::{
             delegated::{
@@ -117,7 +119,7 @@ pub(in crate::ops::auth) struct SignNextChainKeyRootDelegationBatchResult {
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(in crate::ops::auth) struct ChainKeyRootDelegationBatchInstallPlan {
+pub struct ChainKeyRootDelegationBatchInstallPlan {
     pub batch_id: [u8; 32],
     pub proofs: Vec<RootDelegationProofBatchProof>,
 }
@@ -340,7 +342,7 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_failure(
     batch_id: [u8; 32],
     issuer_pid: Principal,
     cert_hash: [u8; 32],
-    outcome: RootDelegationProofInstallOutcome,
+    failure: ChainKeyRootDelegationInstallFailure,
 ) -> bool {
     let Some(mut batch) = AuthStateOps::chain_key_root_delegation_batch(batch_id) else {
         return false;
@@ -362,7 +364,7 @@ pub(in crate::ops::auth) fn record_chain_key_root_delegation_install_failure(
         return false;
     }
 
-    let reason = format!("{outcome:?}");
+    let reason = format!("{failure:?}");
     batch.issuers[index].last_failure = Some(reason.clone());
     batch.failure = Some(reason);
     AuthStateOps::upsert_chain_key_root_delegation_batch(batch);

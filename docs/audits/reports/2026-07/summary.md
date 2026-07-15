@@ -135,8 +135,15 @@
   capability-family and replay-identity authority, and leaves mechanical
   signed-payload projection in ops. Focused unit, protocol, Clippy, and exact
   PocketIC identical/conflicting replay proof passes without protocol or
-  stable-state change. This fixes `CANIC-092-LAYERING-002`; fifteen findings
-  remain (5 P1, 9 P2, one P3).
+  stable-state change. This fixes `CANIC-092-LAYERING-002` and is released in
+  `v0.92.5`. D7 then hard-cuts the duplicate public proof-install
+  request/outcome and direct core error root. The internal ops plan, private
+  workflow, model failure classification, and deliberate control-plane support
+  bridge retain one owner; issuer Candid, typed causes, stored diagnostics, and
+  stable state are unchanged. Focused core/control-plane, protocol, package,
+  Clippy, and PocketIC provisioning checks pass. This fixes
+  `CANIC-092-LAYERING-004` and `CANIC-092-SURFACE-001`; thirteen findings
+  remain (5 P1, 7 P2, one P3).
 
 ## Month Status
 
@@ -157,8 +164,8 @@ also pass with typed causes preserved. Mandatory trace v1 is
 cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
-satisfied. Phase D finding review is complete; D1 through D5 are released and
-D6 passive RPC DTO ownership passes focused validation. Security
+satisfied. Phase D finding review is complete; D1 through D6 are released and
+D7 internal surface hard cuts pass focused validation. Security
 ordering and lifecycle
 symmetry now have valid frozen-method
 passes with watchpoints. Capability v2 is a valid immutable-baseline pass at
@@ -185,13 +192,13 @@ a valid first baseline pass at risk 4/10. No optimization or product defect is
 inferred without a compatible predecessor.
 Module Surface Hardening is a valid first frozen-method failure at risk 4/10.
 Its generated, replay, state, sibling-support, and test-only surfaces retain
-current owners; the proof DTO and direct error root remain bounded hard-cut
-candidates. All 22 retained-method results are valid and the mandatory traces
-are complete; Phase C is closeable at a failing product baseline.
+current owners; D7 fixes its proof DTO and direct error-root findings. All 22
+retained-method results are valid and the mandatory traces are complete; Phase
+C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Review the exact D7 internal surface hard-cut contract; later slices and
+1. Execute the exact D8 reproducible-root-artifact contract; later slices and
    remaining layering subsystems remain ordered candidates, not blanket
    authorization.
 2. Keep the dedicated scanner limitation proposed until the maintainer records
@@ -204,7 +211,7 @@ are complete; Phase C is closeable at a failing product baseline.
    baseline; do not infer a generic abstraction from size alone.
 6. Preserve Wasm v2's sole canonical host-builder authority and use only an
    exactly compatible v2 predecessor for future size deltas.
-7. Keep the proof-install DTO and direct core-error visibility hard cuts
-   within a separately accepted surface slice.
+7. Preserve D7's single internal proof-install path and deliberate
+   control-plane support bridge; do not restore public mirrors or aliases.
 8. Carry the instruction auth-flow checkpoint gap as `CANIC-092-PERF-001`;
    do not add instrumentation until a finding-backed product slice is accepted.
