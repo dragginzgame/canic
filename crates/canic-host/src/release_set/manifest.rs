@@ -464,6 +464,7 @@ mod tests {
                 wasm_gz_path: artifact_root.join(format!("{role}.wasm.gz")),
                 did_path: artifact_root.join(format!("{role}.did")),
                 artifact_root,
+                transforms: Vec::new(),
             },
         }
     }

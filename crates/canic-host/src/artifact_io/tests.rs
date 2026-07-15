@@ -13,13 +13,23 @@ fn missing_ic_wasm_shrink_tool_is_nonfatal() {
     fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
 
     let missing_tool = root.join("missing-ic-wasm");
-    maybe_shrink_wasm_artifact_with_command(&missing_tool.display().to_string(), &wasm_path)
-        .expect("missing ic-wasm should not fail artifact shrinking");
+    let transform = maybe_shrink_wasm_artifact_with_command(
+        &missing_tool.display().to_string(),
+        "app",
+        &wasm_path,
+    )
+    .expect("missing ic-wasm should not fail artifact shrinking");
 
     assert_eq!(
         fs::read(&wasm_path).expect("read original wasm"),
         b"original wasm"
     );
+    assert_eq!(transform.role, "app");
+    assert_eq!(transform.transform, ArtifactTransformKind::Shrink);
+    assert_eq!(transform.mode, ArtifactTransformMode::Optional);
+    assert_eq!(transform.tool, "ic-wasm");
+    assert_eq!(transform.tool_version, None);
+    assert_eq!(transform.outcome, ArtifactTransformOutcome::ToolUnavailable);
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -32,15 +42,25 @@ fn successful_ic_wasm_shrink_replaces_artifact() {
     let wasm_path = root.join("test.wasm");
     let command_path = root.join("ic-wasm");
     fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
-    write_executable(&command_path, "#!/bin/sh\nprintf 'shrunk wasm' > \"$3\"\n");
+    write_executable(
+        &command_path,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.test\\n'; exit 0; fi\nprintf 'shrunk wasm' > \"$3\"\n",
+    );
 
-    maybe_shrink_wasm_artifact_with_command(&command_path.display().to_string(), &wasm_path)
-        .expect("successful shrink should replace artifact");
+    let transform = maybe_shrink_wasm_artifact_with_command(
+        &command_path.display().to_string(),
+        "root",
+        &wasm_path,
+    )
+    .expect("successful shrink should replace artifact");
 
     assert_eq!(
         fs::read(&wasm_path).expect("read shrunk wasm"),
         b"shrunk wasm"
     );
+    assert_eq!(transform.role, "root");
+    assert_eq!(transform.tool_version.as_deref(), Some("ic-wasm 0.test"));
+    assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
@@ -56,10 +76,10 @@ fn failed_ic_wasm_shrink_preserves_original_and_removes_partial_output() {
     fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
     write_executable(
         &command_path,
-        "#!/bin/sh\nprintf 'partial wasm' > \"$3\"\nprintf 'shrink failed' >&2\nexit 23\n",
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.test\\n'; exit 0; fi\nprintf 'partial wasm' > \"$3\"\nprintf 'shrink failed' >&2\nexit 23\n",
     );
 
-    maybe_shrink_wasm_artifact_with_command(&command_path.display().to_string(), &wasm_path)
+    maybe_shrink_wasm_artifact_with_command(&command_path.display().to_string(), "app", &wasm_path)
         .expect_err("non-zero shrink command must fail");
 
     assert_eq!(
@@ -80,10 +100,95 @@ fn missing_ic_wasm_metadata_tool_is_nonfatal() {
     fs::write(&did_path, b"service : {}").expect("write did placeholder");
 
     let missing_tool = root.join("missing-ic-wasm");
-    embed_candid_metadata_with_command(&missing_tool.display().to_string(), &wasm_path, &did_path)
-        .expect("missing ic-wasm should not fail metadata embedding");
+    let transform = embed_candid_metadata_with_command(
+        &missing_tool.display().to_string(),
+        "app",
+        &wasm_path,
+        &did_path,
+    )
+    .expect("missing ic-wasm should not fail metadata embedding");
+
+    assert_eq!(transform.transform, ArtifactTransformKind::CandidMetadata);
+    assert_eq!(transform.outcome, ArtifactTransformOutcome::ToolUnavailable);
 
     fs::remove_dir_all(root).expect("remove temp dir");
+}
+
+#[cfg(unix)]
+#[test]
+fn successful_ic_wasm_metadata_records_tool_identity() {
+    let root = unique_temp_dir("canic-successful-ic-wasm-metadata");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let wasm_path = root.join("test.wasm");
+    let did_path = root.join("test.did");
+    let command_path = root.join("ic-wasm");
+    fs::write(&wasm_path, b"\0asm").expect("write wasm placeholder");
+    fs::write(&did_path, b"service : {}").expect("write did placeholder");
+    write_executable(
+        &command_path,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.test\\n'; fi\n",
+    );
+
+    let transform = embed_candid_metadata_with_command(
+        &command_path.display().to_string(),
+        "app",
+        &wasm_path,
+        &did_path,
+    )
+    .expect("successful metadata transform");
+
+    assert_eq!(transform.role, "app");
+    assert_eq!(transform.transform, ArtifactTransformKind::CandidMetadata);
+    assert_eq!(transform.tool_version.as_deref(), Some("ic-wasm 0.test"));
+    assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
+
+    fs::remove_dir_all(root).expect("remove temp dir");
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_ic_wasm_metadata_is_rejected() {
+    let root = unique_temp_dir("canic-failed-ic-wasm-metadata");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let wasm_path = root.join("test.wasm");
+    let did_path = root.join("test.did");
+    let command_path = root.join("ic-wasm");
+    fs::write(&wasm_path, b"\0asm").expect("write wasm placeholder");
+    fs::write(&did_path, b"service : {}").expect("write did placeholder");
+    write_executable(
+        &command_path,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.test\\n'; exit 0; fi\nexit 23\n",
+    );
+
+    embed_candid_metadata_with_command(
+        &command_path.display().to_string(),
+        "app",
+        &wasm_path,
+        &did_path,
+    )
+    .expect_err("non-zero metadata command must fail");
+
+    fs::remove_dir_all(root).expect("remove temp dir");
+}
+
+#[cfg(unix)]
+#[test]
+fn unreportable_ic_wasm_version_rejects_before_transform() {
+    let root = unique_temp_dir("canic-unreportable-ic-wasm-version");
+    fs::create_dir_all(&root).expect("create temp dir");
+    let wasm_path = root.join("test.wasm");
+    let command_path = root.join("ic-wasm");
+    fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
+    write_executable(&command_path, "#!/bin/sh\nexit 23\n");
+
+    maybe_shrink_wasm_artifact_with_command(&command_path.display().to_string(), "app", &wasm_path)
+        .expect_err("present tool without a version identity must fail");
+
+    assert_eq!(
+        fs::read(&wasm_path).expect("read original wasm"),
+        b"original wasm"
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 fn unique_temp_dir(label: &str) -> std::path::PathBuf {

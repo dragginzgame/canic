@@ -52,6 +52,7 @@ CI policy should branch on the stable envelope plus the stable
 - `summary.warnings[].code`;
 - `payload.source`;
 - `payload.cargo`;
+- `payload.transforms`;
 - `payload.artifacts`.
 
 The envelope target records the selected ICP environment name. Its inputs also
@@ -150,6 +151,28 @@ Recommended CI policy:
 
 Build provenance does not import, register, pin, or garbage-collect artifacts.
 It only records the bytes produced by the build path.
+
+## Artifact Transform Identity
+
+`payload.transforms` records each optional `ic-wasm` transform considered by
+the build. Every record includes the canister role, transform kind, optional
+mode, tool identity, tool version, and outcome.
+
+Recommended CI policy:
+
+- accept `applied` only when `tool_version` is non-empty;
+- accept `tool_unavailable` or `not_requested` only when `tool_version` is
+  absent;
+- compare transform outcomes and tool versions before comparing artifact
+  hashes from separate builds;
+- treat a missing `transforms` field or an inconsistent record as invalid
+  provenance.
+
+The optional-tool contract is explicit: an unavailable `ic-wasm` does not fail
+the build, while a present tool that cannot report its version or complete an
+invoked transform does fail. `canic.build_provenance.v1` uses the current
+pre-1.0 hard-cut shape; Canic does not accept an older path without transform
+evidence through a fallback or compatibility alias.
 
 ## Report Linkage
 

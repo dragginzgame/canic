@@ -41,9 +41,13 @@ canic build <fleet> <role> --provenance <path>
 
 The provenance file is an `EvidenceEnvelopeV1` containing stable
 `canic.build_provenance.v1` payload. It records source, Cargo, package
-metadata, build-profile, and artifact hash evidence after a successful build.
-It does not change deployment truth, install state, controllers, topology, or
-artifact registry state.
+metadata, build-profile, artifact hash, and optional artifact-transform
+evidence after a successful build. Each transform record identifies the role,
+transform, mode, tool, reported tool version, and outcome. An applied transform
+requires a non-empty tool version; unavailable or unrequested transforms cannot
+claim one. Missing or inconsistent transform evidence makes the payload
+invalid. It does not change deployment truth, install state, controllers,
+topology, or artifact registry state.
 
 Saved build provenance can be supplied back to passive evidence envelopes:
 
@@ -85,6 +89,12 @@ the generated `.did` sidecar path, and does not embed `candid:service`
 metadata. This keeps production Wasm artifacts from carrying local interface
 metadata bloat. Running `candid-extractor` directly against an `ic` release
 Wasm is not the supported path; use the local/debug extraction path instead.
+
+`ic-wasm` remains optional. When it is present, Canic records its version and
+whether shrink or local Candid metadata embedding was applied. When it is
+absent, the build remains valid and records `tool_unavailable`. Production
+Candid metadata embedding records `not_requested`. A present tool that cannot
+report a version or complete the requested transform fails the build.
 
 ## Audit Usage
 

@@ -27,6 +27,52 @@ pub struct CanisterArtifactBuildOutput {
     pub wasm_path: PathBuf,
     pub wasm_gz_path: PathBuf,
     pub did_path: PathBuf,
+    pub transforms: Vec<ArtifactTransformOutput>,
+}
+
+/// One optional artifact-changing tool invocation owned by the host builder.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ArtifactTransformOutput {
+    pub role: String,
+    pub transform: ArtifactTransformKind,
+    pub mode: ArtifactTransformMode,
+    pub tool: String,
+    pub tool_version: Option<String>,
+    pub outcome: ArtifactTransformOutcome,
+}
+
+impl ArtifactTransformOutput {
+    pub(crate) fn not_requested(role: &str, transform: ArtifactTransformKind) -> Self {
+        Self {
+            role: role.to_string(),
+            transform,
+            mode: ArtifactTransformMode::Optional,
+            tool: "ic-wasm".to_string(),
+            tool_version: None,
+            outcome: ArtifactTransformOutcome::NotRequested,
+        }
+    }
+}
+
+/// Optional `ic-wasm` operation that can change one emitted Wasm artifact.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArtifactTransformKind {
+    Shrink,
+    CandidMetadata,
+}
+
+/// Admission mode for an artifact transform.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArtifactTransformMode {
+    Optional,
+}
+
+/// Result of one optional artifact transform decision.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArtifactTransformOutcome {
+    Applied,
+    ToolUnavailable,
+    NotRequested,
 }
 
 /// One successful role output from the current complete-build invocation.

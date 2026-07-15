@@ -134,7 +134,17 @@ owns the four persisted failure classifications. The deliberate control-plane
 support bridge remains the sole sibling error surface. Maintained issuer
 Candid, stable state, typed causes, and exact stored diagnostic labels are
 unchanged. This fixes `CANIC-092-LAYERING-004` and
-`CANIC-092-SURFACE-001` without aliases or compatibility paths.
+`CANIC-092-SURFACE-001` without aliases or compatibility paths. D7 is released
+in `v0.92.6`.
+
+[D8 reproducible root artifacts](0.92-d8-reproducible-root-artifacts.md)
+remove absolute source/asset paths from shipped root runtime records and
+lifecycle diagnostics. Two fresh isolated offline lanes produce identical
+root/bootstrap raw and gzip artifacts plus identical semantic provenance, and
+neither final root contains a lane path. Stable build provenance now requires
+the role, transform, optional mode, tool, version, and outcome, fixing
+`CANIC-092-BUILD-001` and `CANIC-092-BUILD-002` without a compatibility
+decoder or alternate build path.
 
 ## Live Ledger
 
@@ -142,12 +152,12 @@ unchanged. This fixes `CANIC-092-LAYERING-004` and
 - Valid active results: 22.
 - Invalid active results: 0; v1 failures remain preserved as invalid history.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
-  0 blocked); D1/D2/D5/D6/D7 leave current reruns at 9 pass and 1 fail without
-  rewriting the baseline.
-- Unresolved findings: 13 (5 P1, 7 P2, one P3).
+  0 blocked); D1/D2/D5/D6/D7/D8 leave current reruns at 10 pass and 0 fail
+  without rewriting the baseline.
+- Unresolved findings: 11 (4 P1, 6 P2, one P3).
 - Phase D fixes: D1 released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
-  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, and D7 implemented with
-  focused validation passing.
+  `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8
+  implemented with focused validation passing.
 
 ## Validation
 
@@ -206,8 +216,13 @@ unchanged. This fixes `CANIC-092-LAYERING-004` and
   PocketIC new-issuer provisioning pass. Layering fixtures retain the same 18
   known upward edges. Core rustdoc still fails only on the separately indexed
   D10 broken link.
+- D8: 7 artifact-transform tests, 15 build-provenance/policy tests, 12
+  release-set manifest tests, targeted checks and strict Clippy, and two fresh
+  isolated offline root builds pass. Root/bootstrap hashes and semantic
+  provenance match across lanes, root paths are absent, and all four local
+  transforms record `ic-wasm 0.9.11`.
 
 ## Next
 
-D8 reproducible root artifacts are the next ordered candidate. D8 through D10 and
-the remaining layering subsystems remain separately bounded.
+D9 release execution integrity is the next ordered candidate. D9, D10, and the
+remaining layering subsystems remain separately bounded.

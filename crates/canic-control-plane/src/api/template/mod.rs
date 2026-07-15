@@ -67,7 +67,7 @@ impl WasmStoreBootstrapApi {
         );
     }
 
-    // Log the exact embedded bootstrap artifact provenance captured during root build.
+    // Log the stable embedded bootstrap artifact provenance captured during root build.
     pub fn log_embedded_root_wasm_store_release_set(
         entries: &'static [EmbeddedRootBootstrapEntry],
     ) {
@@ -81,9 +81,8 @@ impl WasmStoreBootstrapApi {
         log!(
             Topic::Init,
             Info,
-            "ws bootstrap artifact: source_path={} embedded_path={} kind={} bytes={} sha256={} decompressed_bytes={:?} decompressed_sha256={:?}",
-            entry.artifact_path,
-            entry.embedded_artifact_path,
+            "ws bootstrap artifact: role={} kind={} bytes={} sha256={} decompressed_bytes={:?} decompressed_sha256={:?}",
+            entry.role,
             entry.artifact_kind,
             entry.artifact_size_bytes,
             entry.artifact_sha256_hex,

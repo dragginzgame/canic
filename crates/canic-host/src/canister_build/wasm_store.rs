@@ -16,5 +16,6 @@ fn map_bootstrap_output(output: BootstrapWasmStoreBuildOutput) -> CanisterArtifa
         wasm_path: output.wasm_path,
         wasm_gz_path: output.wasm_gz_path,
         did_path: output.did_path,
+        transforms: output.transforms,
     }
 }

@@ -1,4 +1,10 @@
-use crate::durable_io::write_bytes;
+use crate::{
+    canister_build::{
+        ArtifactTransformKind, ArtifactTransformMode, ArtifactTransformOutcome,
+        ArtifactTransformOutput,
+    },
+    durable_io::write_bytes,
+};
 use std::{
     fs,
     io::{Read, Write},
@@ -10,14 +16,26 @@ use flate2::{Compression, GzBuilder};
 
 // Apply `ic-wasm shrink` when available; absence of the optional tool is not
 // fatal, but execution failures are surfaced because they usually mean bad IO.
-pub fn maybe_shrink_wasm_artifact(wasm_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    maybe_shrink_wasm_artifact_with_command("ic-wasm", wasm_path)
+pub fn maybe_shrink_wasm_artifact(
+    role: &str,
+    wasm_path: &Path,
+) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
+    maybe_shrink_wasm_artifact_with_command("ic-wasm", role, wasm_path)
 }
 
 fn maybe_shrink_wasm_artifact_with_command(
     command_name: &str,
+    role: &str,
     wasm_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
+    let Some(tool_version) = optional_ic_wasm_version(command_name)? else {
+        return Ok(transform_output(
+            role,
+            ArtifactTransformKind::Shrink,
+            None,
+            ArtifactTransformOutcome::ToolUnavailable,
+        ));
+    };
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
     match Command::new(command_name)
         .arg(wasm_path)
@@ -28,24 +46,28 @@ fn maybe_shrink_wasm_artifact_with_command(
     {
         Ok(output) if output.status.success() => {
             fs::rename(shrunk_path, wasm_path)?;
+            Ok(transform_output(
+                role,
+                ArtifactTransformKind::Shrink,
+                Some(tool_version),
+                ArtifactTransformOutcome::Applied,
+            ))
         }
         Ok(output) => {
             let _ = fs::remove_file(shrunk_path);
-            return Err(format!(
+            Err(format!(
                 "ic-wasm shrink failed for {} with status {}: {}",
                 wasm_path.display(),
                 output.status,
                 String::from_utf8_lossy(&output.stderr).trim()
             )
-            .into());
+            .into())
         }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => {
-            return Err(format!("failed to run ic-wasm for {}: {err}", wasm_path.display()).into());
+            let _ = fs::remove_file(shrunk_path);
+            Err(format!("failed to run ic-wasm for {}: {err}", wasm_path.display()).into())
         }
     }
-
-    Ok(())
 }
 
 // Copy one `.wasm` artifact atomically into the local ICP artifact tree.
@@ -79,17 +101,27 @@ pub fn write_gzip_artifact(
 // `icp canister metadata <canister> candid:service` introspection works during
 // development. Production `ic` builds skip this path.
 pub fn embed_candid_metadata(
+    role: &str,
     wasm_path: &Path,
     did_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    embed_candid_metadata_with_command("ic-wasm", wasm_path, did_path)
+) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
+    embed_candid_metadata_with_command("ic-wasm", role, wasm_path, did_path)
 }
 
 fn embed_candid_metadata_with_command(
     command_name: &str,
+    role: &str,
     wasm_path: &Path,
     did_path: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
+    let Some(tool_version) = optional_ic_wasm_version(command_name)? else {
+        return Ok(transform_output(
+            role,
+            ArtifactTransformKind::CandidMetadata,
+            None,
+            ArtifactTransformOutcome::ToolUnavailable,
+        ));
+    };
     let output = Command::new(command_name)
         .arg(wasm_path)
         .args(["-o"])
@@ -99,17 +131,12 @@ fn embed_candid_metadata_with_command(
         .args(["-v", "public"])
         .output();
 
-    let output = match output {
-        Ok(output) => output,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(err) => {
-            return Err(format!(
-                "failed to run ic-wasm metadata for {}: {err}",
-                wasm_path.display()
-            )
-            .into());
-        }
-    };
+    let output = output.map_err(|err| {
+        format!(
+            "failed to run ic-wasm metadata for {}: {err}",
+            wasm_path.display()
+        )
+    })?;
 
     if !output.status.success() {
         return Err(format!(
@@ -120,7 +147,57 @@ fn embed_candid_metadata_with_command(
         .into());
     }
 
-    Ok(())
+    Ok(transform_output(
+        role,
+        ArtifactTransformKind::CandidMetadata,
+        Some(tool_version),
+        ArtifactTransformOutcome::Applied,
+    ))
+}
+
+fn optional_ic_wasm_version(
+    command_name: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let output = match Command::new(command_name).arg("--version").output() {
+        Ok(output) => output,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(format!("failed to inspect ic-wasm version: {err}").into()),
+    };
+    if !output.status.success() {
+        return Err(format!(
+            "ic-wasm --version failed with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let version = if stdout.trim().is_empty() {
+        stderr.trim()
+    } else {
+        stdout.trim()
+    };
+    if version.is_empty() {
+        return Err("ic-wasm --version returned no version identity".into());
+    }
+    Ok(Some(version.to_string()))
+}
+
+fn transform_output(
+    role: &str,
+    transform: ArtifactTransformKind,
+    tool_version: Option<String>,
+    outcome: ArtifactTransformOutcome,
+) -> ArtifactTransformOutput {
+    ArtifactTransformOutput {
+        role: role.to_string(),
+        transform,
+        mode: ArtifactTransformMode::Optional,
+        tool: "ic-wasm".to_string(),
+        tool_version,
+        outcome,
+    }
 }
 
 #[cfg(test)]

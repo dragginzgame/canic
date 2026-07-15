@@ -5,7 +5,10 @@ use std::{
 };
 
 use crate::{
-    canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile},
+    canister_build::{
+        ArtifactTransformKind, ArtifactTransformMode, ArtifactTransformOutcome,
+        ArtifactTransformOutput, CanisterArtifactBuildOutput, CanisterBuildProfile,
+    },
     evidence_envelope::{CommandProvenanceV1, EvidenceTargetKindV1, PayloadSchemaRefV1},
     test_support::temp_dir,
 };
@@ -63,6 +66,7 @@ fn artifact_provenance_records_wasm_and_gzip_separately() {
             wasm_path,
             wasm_gz_path,
             did_path,
+            transforms: Vec::new(),
         },
     );
     let artifacts = artifact_provenance(&request).expect("artifact provenance");
@@ -114,6 +118,39 @@ fn build_provenance_envelope_wraps_stable_payload() {
     assert_eq!(payload.cargo.package_metadata_role, "app");
     assert!(payload.cargo.cargo_lock_sha256.is_some());
     assert_eq!(payload.artifacts.len(), 2);
+    assert_eq!(payload.transforms.len(), 2);
+    assert_eq!(payload.transforms[0].role, "app");
+    assert_eq!(
+        payload.transforms[0].transform,
+        ArtifactTransformKindV1::Shrink
+    );
+    assert_eq!(
+        payload.transforms[0].outcome,
+        ArtifactTransformOutcomeV1::Applied
+    );
+    assert_eq!(
+        payload.transforms[0].tool_version.as_deref(),
+        Some("ic-wasm 0.test")
+    );
+    assert_eq!(
+        payload.transforms[1].outcome,
+        ArtifactTransformOutcomeV1::NotRequested
+    );
+    assert_eq!(payload.transforms[1].tool_version, None);
+}
+
+#[test]
+fn build_provenance_rejects_transform_outcome_without_matching_tool_version() {
+    let root = temp_dir("canic-build-provenance-transform-version");
+    write_sample_workspace(&root, "demo", "app");
+    let mut output = write_sample_artifacts(&root, "app");
+    output.transforms[0].tool_version = None;
+    let request = sample_request(&root, output);
+
+    build_provenance_envelope(&request)
+        .expect_err("applied transform without tool version must reject");
+
+    fs::remove_dir_all(&root).expect("remove root");
 }
 
 fn sample_request(root: &Path, output: CanisterArtifactBuildOutput) -> BuildProvenanceRequest {
@@ -210,6 +247,17 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
         wasm_path,
         wasm_gz_path,
         did_path,
+        transforms: vec![
+            ArtifactTransformOutput {
+                role: role.to_string(),
+                transform: ArtifactTransformKind::Shrink,
+                mode: ArtifactTransformMode::Optional,
+                tool: "ic-wasm".to_string(),
+                tool_version: Some("ic-wasm 0.test".to_string()),
+                outcome: ArtifactTransformOutcome::Applied,
+            },
+            ArtifactTransformOutput::not_requested(role, ArtifactTransformKind::CandidMetadata),
+        ],
     }
 }
 

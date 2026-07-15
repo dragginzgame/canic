@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.7` is potentially breaking: it makes root artifacts reproducible by
+  removing builder paths and hard-cuts build provenance to require explicit
+  optional-transform identity and outcome evidence.
+
 - `0.92.6` is potentially breaking: it hard-cuts accidental public
   proof-install state and the direct core error root while preserving issuer
   Candid, stable state, and diagnostic labels.
