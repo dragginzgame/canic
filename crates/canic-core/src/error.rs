@@ -1,4 +1,5 @@
 use crate::access::AccessError;
+use crate::domain::policy::pure::topology::{TopologyPolicyError, registry::RegistryPolicyError};
 use crate::dto::error::{Error as PublicError, ErrorCode as PublicErrorCode};
 use std::fmt;
 use thiserror::Error as ThisError;
@@ -167,6 +168,47 @@ impl From<AccessError> for InternalError {
                 message,
             ),
         }
+    }
+}
+
+impl From<TopologyPolicyError> for InternalError {
+    fn from(err: TopologyPolicyError) -> Self {
+        let message = err.to_string();
+        let public_code = match &err {
+            TopologyPolicyError::RegistryPolicy(err) => registry_policy_error_code(err),
+            TopologyPolicyError::DuplicateIndexRole(_)
+            | TopologyPolicyError::ImmediateParentMismatch { .. }
+            | TopologyPolicyError::IndexRoleMismatch { .. }
+            | TopologyPolicyError::ModuleHashMismatch(_)
+            | TopologyPolicyError::ParentNotFound(_)
+            | TopologyPolicyError::RegistryEntryMissing(_) => None,
+        };
+
+        match public_code {
+            Some(code) => Self::public(PublicError::policy(code, message)),
+            None => Self::domain(InternalErrorOrigin::Domain, message),
+        }
+    }
+}
+
+const fn registry_policy_error_code(err: &RegistryPolicyError) -> Option<PublicErrorCode> {
+    match err {
+        RegistryPolicyError::RoleAlreadyRegistered { .. } => {
+            Some(PublicErrorCode::PolicyRoleAlreadyRegistered)
+        }
+        RegistryPolicyError::SingletonAlreadyRegisteredUnderParent { .. } => {
+            Some(PublicErrorCode::PolicySingletonAlreadyRegisteredUnderParent)
+        }
+        RegistryPolicyError::ReplicaRequiresServiceWithScaling { .. } => {
+            Some(PublicErrorCode::PolicyReplicaRequiresServiceWithScaling)
+        }
+        RegistryPolicyError::ShardRequiresServiceWithSharding { .. } => {
+            Some(PublicErrorCode::PolicyShardRequiresServiceWithSharding)
+        }
+        RegistryPolicyError::InstanceRequiresServiceWithDirectory { .. } => {
+            Some(PublicErrorCode::PolicyInstanceRequiresServiceWithDirectory)
+        }
+        RegistryPolicyError::ServiceRequiresRootParent { .. } => None,
     }
 }
 

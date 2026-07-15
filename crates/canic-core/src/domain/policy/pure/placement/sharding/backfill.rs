@@ -7,7 +7,7 @@
 use crate::domain::value::Principal;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::ShardPlacement;
+use crate::model::placement::sharding::ShardPlacement;
 
 ///
 /// SlotBackfillPlan

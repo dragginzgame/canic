@@ -28,7 +28,10 @@ use crate::{
         storage::{intent::IntentStoreOps, pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
     workflow::{
-        pool::{PoolWorkflow, admissibility, query::PoolQuery, scheduler::PoolSchedulerWorkflow},
+        pool::{
+            PoolWorkflow, admissibility, metric_reason_for_policy, query::PoolQuery,
+            scheduler::PoolSchedulerWorkflow,
+        },
         runtime::intent::IntentCleanupWorkflow,
     },
 };
@@ -51,7 +54,7 @@ impl PoolWorkflow {
             MetricEvent::record(
                 MetricOperation::ImportImmediate,
                 MetricOutcome::Failed,
-                MetricReason::from_policy(&err),
+                metric_reason_for_policy(&err),
             );
             return Err(err.into());
         }
@@ -173,7 +176,7 @@ impl PoolWorkflow {
                         MetricEvent::record(
                             MetricOperation::ImportQueued,
                             MetricOutcome::Skipped,
-                            MetricReason::from_policy(&err),
+                            metric_reason_for_policy(&err),
                         );
                     }
                     skipped += 1;

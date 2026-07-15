@@ -12,10 +12,9 @@ mod registry;
 mod release;
 
 use crate::{
-    InternalError, InternalErrorOrigin,
-    config::schema::ShardPool,
-    domain::policy::pure::placement::sharding::{CreateBlockedReason, ShardingPolicyError},
-    ops::config::ConfigOps,
+    InternalError, InternalErrorOrigin, config::schema::ShardPool,
+    domain::policy::pure::placement::sharding::ShardingPolicyError,
+    model::placement::sharding::CreateBlockedReason, ops::config::ConfigOps,
 };
 use thiserror::Error as ThisError;
 

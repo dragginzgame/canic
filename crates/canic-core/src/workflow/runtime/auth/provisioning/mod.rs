@@ -20,7 +20,10 @@ use crate::{
     ids::BuildNetwork,
     model::auth::ChainKeyRootDelegationInstallFailure,
     ops::{
-        auth::{AuthOps, ChainKeyRootDelegationBatchInstallPlan},
+        auth::{
+            AuthOps, ChainKeyRootDelegationBatchInstallPlan,
+            PrepareChainKeyRootDelegationBatchInput,
+        },
         ic::{
             IcOps,
             call::{CallOps, CallResult},
@@ -28,7 +31,7 @@ use crate::{
         runtime::env::EnvOps,
     },
     protocol,
-    workflow::runtime::auth::RuntimeAuthWorkflow,
+    workflow::runtime::auth::{RuntimeAuthWorkflow, root_delegation_batch},
 };
 use std::future::Future;
 
@@ -63,19 +66,35 @@ impl RuntimeAuthWorkflow {
         let min_accepted_proof_epoch = chain_key_min_accepted_proof_epoch(&config)?;
         let now_ns = IcOps::now_nanos();
 
-        AuthOps::get_or_create_chain_key_delegation_proof_for_issuer(
-            issuer_pid,
-            build_network,
-            max_cert_ttl_ns,
-            min_accepted_proof_epoch,
-            now_ns,
-        )
-        .await?
-        .ok_or_else(|| {
-            InternalError::auth_proof_pending(
+        let prepared = root_delegation_batch::prepare_due_chain_key_root_delegation_batch(
+            PrepareChainKeyRootDelegationBatchInput {
+                build_network,
+                max_cert_ttl_ns,
+                min_accepted_proof_epoch,
+                required_issuer_pid: Some(issuer_pid),
+                now_ns,
+            },
+        )?;
+        let Some(batch_id) = prepared.batch_id else {
+            return Err(InternalError::auth_proof_pending(
                 "chain-key root delegation proof is not available yet; retry",
-            )
-        })
+            ));
+        };
+        let signing =
+            AuthOps::sign_chain_key_root_delegation_batch(build_network, batch_id, now_ns).await?;
+        if signing.signing_in_flight {
+            return Err(InternalError::auth_proof_pending(
+                "chain-key root delegation proof is not available yet; retry",
+            ));
+        }
+
+        AuthOps::signed_chain_key_delegation_proof_for_issuer(issuer_pid, now_ns)?.ok_or_else(
+            || {
+                InternalError::auth_proof_pending(
+                    "chain-key root delegation proof is not available yet; retry",
+                )
+            },
+        )
     }
 }
 

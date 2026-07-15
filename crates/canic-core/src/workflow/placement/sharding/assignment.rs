@@ -9,14 +9,15 @@ use crate::{
     cdk::types::Principal,
     config::schema::ShardPoolPolicy,
     domain::policy::pure::placement::sharding::{
-        ShardingPlanState, ShardingPolicy, ShardingState, compute_pool_metrics,
+        ShardingPolicy, ShardingState, compute_pool_metrics,
     },
     dto::placement::sharding::ShardingPlanStateResponse,
     ids::CanisterRole,
     log::Topic,
+    model::placement::sharding::ShardingPlanState,
     ops::{
         placement::sharding::mapper::{
-            ShardPartitionKeyAssignmentPolicyInputMapper, ShardPlacementPolicyInputMapper,
+            ShardPartitionKeyAssignmentMapper, ShardPlacementMapper,
             ShardingPlanStateResponseMapper,
         },
         runtime::metrics::{
@@ -94,9 +95,7 @@ impl ShardingWorkflow {
         let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
             .filter(|record| routable_active.contains(&record.pid))
-            .map(|record| {
-                ShardPlacementPolicyInputMapper::record_to_policy_input(record.pid, &record.entry)
-            })
+            .map(|record| ShardPlacementMapper::record_to_observation(record.pid, &record.entry))
             .collect();
 
         let metrics = compute_pool_metrics(pool, &entry_views);
@@ -106,10 +105,7 @@ impl ShardingWorkflow {
             .iter()
             .filter(|record| routable_active.contains(&record.shard))
             .map(|record| {
-                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(
-                    &record.key,
-                    record.shard,
-                )
+                ShardPartitionKeyAssignmentMapper::record_to_assignment(&record.key, record.shard)
             })
             .collect();
         crate::perf!("collect_registry");
@@ -242,9 +238,7 @@ impl ShardingWorkflow {
         let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
             .filter(|record| routable_active.contains(&record.pid))
-            .map(|record| {
-                ShardPlacementPolicyInputMapper::record_to_policy_input(record.pid, &record.entry)
-            })
+            .map(|record| ShardPlacementMapper::record_to_observation(record.pid, &record.entry))
             .collect();
 
         let metrics = compute_pool_metrics(pool, &entry_views);
@@ -254,10 +248,7 @@ impl ShardingWorkflow {
             .iter()
             .filter(|record| routable_active.contains(&record.shard))
             .map(|record| {
-                ShardPartitionKeyAssignmentPolicyInputMapper::record_to_policy_input(
-                    &record.key,
-                    record.shard,
-                )
+                ShardPartitionKeyAssignmentMapper::record_to_assignment(&record.key, record.shard)
             })
             .collect();
 
@@ -270,6 +261,8 @@ impl ShardingWorkflow {
         };
 
         let plan = ShardingPolicy::plan_assign(&state, partition_key, None);
-        Ok(ShardingPlanStateResponseMapper::record_to_view(plan.state))
+        Ok(ShardingPlanStateResponseMapper::plan_to_response(
+            plan.state,
+        ))
     }
 }

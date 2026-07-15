@@ -12,10 +12,10 @@ use crate::{
     config::schema::{ScalePool, ScalingConfig},
     domain::policy::pure::placement::scaling::{
         ScalingPlan, ScalingPolicy, ScalingPolicyInput, ScalingPoolPolicyInput,
-        ScalingWorkerPlanEntry,
     },
     dto::rpc::CreateCanisterParent,
     log::Topic,
+    model::placement::scaling::ScalingWorkerEntry,
     ops::{
         config::ConfigOps,
         ic::IcOps,
@@ -200,7 +200,7 @@ impl ScalingWorkflow {
                 return Ok(());
             }
 
-            let entry_plan = ScalingWorkerPlanEntry {
+            let entry_plan = ScalingWorkerEntry {
                 pool: BoundedString64::new(pool),
                 canister_role: pool_cfg.canister_role.clone(),
             };
@@ -225,7 +225,7 @@ impl ScalingWorkflow {
 
     // Create and register a worker from a policy-approved or bootstrap-approved plan.
     async fn create_worker_from_plan(
-        entry_plan: ScalingWorkerPlanEntry,
+        entry_plan: ScalingWorkerEntry,
     ) -> Result<Principal, InternalError> {
         let role = entry_plan.canister_role.clone();
 
@@ -250,7 +250,7 @@ impl ScalingWorkflow {
 
         MetricEvent::started(MetricOperation::RegisterWorker);
         let created_at_secs = IcOps::now_secs();
-        ScalingRegistryOps::upsert_from_plan(pid, entry_plan, created_at_secs);
+        ScalingRegistryOps::upsert(pid, entry_plan, created_at_secs);
         MetricEvent::completed(MetricOperation::RegisterWorker, MetricReason::Ok);
         crate::perf!("register_worker");
 

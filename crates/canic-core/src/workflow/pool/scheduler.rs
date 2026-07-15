@@ -25,7 +25,7 @@ use crate::{
     },
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_POOL_CHECK_INTERVAL},
-        pool::{PoolWorkflow, admissibility::check_can_enter_pool},
+        pool::{PoolWorkflow, admissibility::check_can_enter_pool, metric_reason_for_policy},
         runtime::timer::TimerWorkflow,
     },
 };
@@ -179,7 +179,7 @@ impl PoolSchedulerWorkflow {
                     MetricEvent::record(
                         MetricOperation::Reset,
                         MetricOutcome::Requeued,
-                        MetricReason::from_policy(&err),
+                        metric_reason_for_policy(&err),
                     );
                     continue;
                 }

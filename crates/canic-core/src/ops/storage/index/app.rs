@@ -6,8 +6,8 @@
 
 use crate::{
     InternalError,
-    domain::policy::pure::topology::IndexPolicyInput,
     dto::topology::AppIndexArgs,
+    model::topology::TopologyIndexEntry,
     ops::{
         config::ConfigOps,
         prelude::*,
@@ -56,8 +56,8 @@ impl AppIndexOps {
     }
 
     #[must_use]
-    pub(crate) fn policy_input() -> Vec<IndexPolicyInput> {
-        IndexEntryMapper::records_to_policy_input(&AppIndex::export().entries)
+    pub(crate) fn topology_entries() -> Vec<TopologyIndexEntry> {
+        IndexEntryMapper::records_to_topology_entries(&AppIndex::export().entries)
     }
 
     #[must_use]

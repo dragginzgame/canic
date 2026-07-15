@@ -14,11 +14,13 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.8` in the untagged local candidate at
-  `68b9ab2158865bce0d88a25bbc9d20d9704d4062`.
-- `v0.92.7` is published at
-  `8c8e5db9d782c4c66bfb39bb31be17b00b52f269`.
-- No local `v0.92.8` tag exists; do not describe 0.92.8 as published yet.
+- The workspace package version is `0.92.9`.
+- `v0.92.9`, `HEAD`, `main`, and `origin/main` identify
+  `23718e1b4b5c11ba85c368e79266ffc2f06bfe1f` before the current Unreleased
+  D11 worktree changes.
+- The `v0.92.9` source tree is
+  `e03c5c9101530d62a55d72cfc600673fce0d299f`; its product-tree hash is
+  `4b445b62db2a2a06ca1a79fa7650b50aee326544e892171ad35c1b29e7188896`.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -43,20 +45,22 @@ diagnostics no longer contain
 absolute build paths, isolated root/bootstrap artifacts reproduce byte for
 byte, and build provenance requires explicit optional-transform identity and
 outcome. This fixes `CANIC-092-BUILD-001` and `CANIC-092-BUILD-002`; the
-current mandatory-trace ledger is ten pass and zero fail. D9 is committed in
-the untagged 0.92.8 candidate: 13 external Action
+current mandatory-trace ledger is ten pass and zero fail. D9 is released in
+`v0.92.8`: 13 external Action
 executions use immutable commits, downloaded tools are version/checksum bound,
 and one governance matrix owns the Ubuntu 24.04 x86_64 native/Wasm support
 cell. This fixes `CANIC-092-RELEASE-001`, `-002`, and `-004`; the dedicated
-scanner gap remains blocked outside D9. D10 is implemented and focused
+scanner gap remains blocked outside D9. D10 is released in `v0.92.9` and
+focused
 validation passes: published feature documentation matches the owning
 manifests, active CLI proof asserts only maintained commands, warning-as-error
 core rustdoc passes, and installed plus packaged downstream artifact proofs
 pass before registry publication. This fixes `CANIC-092-PUBLISH-001`,
-`CANIC-092-RESIDUE-001`, and `CANIC-092-DOCS-002`, leaving five unresolved
-findings (2 P1 and 3 P2). The live layering
-guard remains at 18 separately owned ops-to-policy violations under
-`CANIC-092-LAYERING-005`.
+`CANIC-092-RESIDUE-001`, and `CANIC-092-DOCS-002`. D11 is implemented and
+focused validation passes: shared decision inputs now belong to model,
+root-proof admission belongs to workflow, and ops no longer imports policy.
+This fixes `CANIC-092-LAYERING-005`; four findings remain unresolved (1 P1
+and 3 P2), and the live layering guard passes with zero violations.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -103,10 +107,9 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
 - Phase D changes only accepted finding-backed slices and compares them to the
   immediate parent and frozen baseline.
 - D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in `v0.92.3`, D5 in
-  `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in `v0.92.7`. D9 is
-  committed in the untagged 0.92.8 candidate. D10 is implemented and
-  validated. The remaining layering subsystems remain separately bounded
-  rather than blanket authorization.
+  `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, D8 in `v0.92.7`, D9 in
+  `v0.92.8`, and D10 in `v0.92.9`. D11 is implemented and validated against
+  the `v0.92.9` parent.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -138,6 +141,10 @@ First primary results:
   findings. Manifest-derived docs proof, installed/packaged CLI proof, and
   generated/canonical packaged Wasm-store proof pass without product behavior
   or serialized-surface changes.
+- [D11 canonical layering closure](../audits/reports/2026-07/2026-07-15/0.92-d11-canonical-layering-closure.md)
+  fixes the remaining 18 ops-to-policy dependencies. Shared data belongs to
+  model, root delegation-proof admission belongs to workflow, and the current
+  executable layering guard passes with zero violations.
 - Findings `CANIC-092-AUDIT-007`, `CANIC-092-DEPENDENCY-001`, and
   `CANIC-092-RELEASE-001` through `-004` are indexed in the 0.92 tracker.
 - [layer boundary](../audits/reports/2026-07/2026-07-14/0.92-layer-boundary.md)
@@ -207,7 +214,8 @@ First primary results:
   fixes `CANIC-092-TEST-001` and removes seven root-issuer/model violations
   from `CANIC-092-LAYERING-005`. Workflow invokes pure policy before ops
   mutation; model owns state-shaped values. Public and stable shapes are
-  unchanged, and the canonical layering finding remains open.
+  unchanged. The canonical layering finding remained open after D4 and is
+  fixed by D11.
 - [D5 blob-billing workflow ownership](../audits/reports/2026-07/2026-07-15/0.92-d5-blob-billing-workflow-ownership.md)
   fixes `CANIC-092-LAYERING-001`. API now delegates Cashier sequencing,
   reserve/recovery, gateway sync, and readiness to one workflow over pure
@@ -317,7 +325,8 @@ First primary results:
   fixes two P2 accidental public surfaces, and D8 fixes the root-build P1 plus
   transform-provenance P2. D9 fixes the two release-execution P1s plus the
   support-matrix P2. D10 fixes two P2 active package/proof findings and the P3
-  rustdoc drift. Five findings remain unresolved (2 P1 and 3 P2).
+  rustdoc drift. D11 fixes the remaining layering P1. Four findings remain
+  unresolved (1 P1 and 3 P2).
   All current trace reruns pass; the frozen Phase C aggregate remains
   historical.
 
@@ -373,14 +382,14 @@ First primary results:
   manifest tests, four policy/DTO guards, 19 protocol tests, strict
   all-feature/all-target core Clippy, and exact PocketIC identical-replay and
   cross-family-conflict cases. The capability trace remains pass and the live
-  layering set remains 18.
+  layering set at the D6 boundary remains 18.
 - D7 validation passes all-feature/all-target core and control-plane checks,
   four provisioning tests, 20 chain-key batch tests, three DTO/serialization
   guards, 19 protocol tests, all-feature facade check, strict
   core/control-plane Clippy, offline core/facade package verification, the
   feature-owned control-plane facade test, and exact PocketIC new-issuer
-  provisioning. The live layering set remains 18. D10's later current-tree
-  rustdoc rerun passes with warnings denied.
+  provisioning. The live layering set at the D7 boundary remains 18. D10's
+  later current-tree rustdoc rerun passes with warnings denied.
 - Focused D1 publication validation passes 18 all-feature publication tests,
   30 replay/capability policy tests, four core and one publication-owned
   cost-permit structural checks, strict targeted Clippy, and five root/store
@@ -450,15 +459,19 @@ First primary results:
   CLI proof, packaged CLI proof, and generated plus canonical packaged
   Wasm-store builds. Bash syntax, ShellCheck, targeted formatting, and diff
   hygiene pass.
+- D11 validation passes focused environment, funding, topology, placement,
+  metrics, pool, and auth tests; default and sharding core checks; strict
+  all-target/all-feature core Clippy; and the executable layering guard with
+  zero production ops-to-policy dependencies. Public, serialized, stable,
+  configuration, and dependency surfaces are unchanged.
 
 ## Next Action
 
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 through
-D8 are released, D9 is committed in the untagged 0.92.8 candidate, and D10 is
-implemented and validated, leaving five unresolved findings (2 P1 and 3 P2).
-The next product step is to map the 18 remaining
-`CANIC-092-LAYERING-005` files into separately reviewed subsystem slices.
-The proposed scanner limitation is not yet a waiver; the three P2 watchpoints
-remain deferred.
+D10 are released through `v0.92.9`, and D11 is implemented and validated,
+leaving four unresolved findings (1 P1 and 3 P2). The next closeout decision
+is whether to accept the dedicated-scanner gap as a documented limitation or
+provide an approved scanner. The proposed limitation is not yet a waiver; the
+three P2 dependency, complexity, and instruction watchpoints remain deferred.

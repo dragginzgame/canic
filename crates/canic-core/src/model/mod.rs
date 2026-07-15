@@ -7,5 +7,9 @@
 pub mod auth;
 #[cfg(feature = "blob-storage")]
 pub mod blob_storage;
+pub mod cycles_funding;
+pub mod env;
 pub mod intent;
+pub mod placement;
 pub mod replay;
+pub mod topology;

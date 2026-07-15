@@ -4,10 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use crate::{
-    InternalError, InternalErrorClass, InternalErrorOrigin,
-    domain::policy::pure::pool::PoolPolicyError,
-};
+use crate::{InternalError, InternalErrorClass, InternalErrorOrigin};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -137,17 +134,6 @@ impl PoolMetricReason {
                 _,
             ) => Self::InvalidState,
             _ => Self::Unknown,
-        }
-    }
-
-    /// Classify one pool policy rejection into a bounded metric reason.
-    #[must_use]
-    pub(crate) const fn from_policy(err: &PoolPolicyError) -> Self {
-        match err {
-            PoolPolicyError::RegisteredInSubnet(_) => Self::RegisteredInSubnet,
-            PoolPolicyError::NonImportableOnLocal { .. } => Self::NonImportableLocal,
-            PoolPolicyError::NotRegisteredInSubnet(_) => Self::NotFound,
-            PoolPolicyError::NotAuthorized => Self::PolicyDenied,
         }
     }
 }

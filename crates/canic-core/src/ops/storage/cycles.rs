@@ -6,11 +6,11 @@
 
 use crate::{
     domain::cycles::CycleTopupEventStatus,
-    domain::policy::pure::cycles_funding::FundingLedgerSnapshot,
     dto::{
         cycles::{CycleTopupEvent, CycleTrackerEntry},
         page::Page,
     },
+    model::cycles_funding::FundingLedgerSnapshot,
     ops::prelude::*,
     storage::stable::cycles::{
         CycleTopupEventEntryRecord, CycleTopupEventStatusRecord, CycleTopupEvents, CycleTracker,

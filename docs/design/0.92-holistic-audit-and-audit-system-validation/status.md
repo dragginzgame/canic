@@ -19,19 +19,21 @@ is underway. D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 in
 root runtime records and
 diagnostics, isolated root/bootstrap artifacts reproduce byte for byte, and
 stable build provenance requires explicit transform identity and outcome.
-`CANIC-092-BUILD-001` and `CANIC-092-BUILD-002` are fixed. D9 is committed in
-the untagged 0.92.8 candidate: 13 external Action executions are immutable,
+`CANIC-092-BUILD-001` and `CANIC-092-BUILD-002` are fixed. D9 is released in
+`v0.92.8`: 13 external Action executions are immutable,
 downloaded executable tools are version/checksum bound, and one matrix owns
 the release-supported host/target cell. `CANIC-092-RELEASE-001`, `-002`, and
 `-004` are fixed; the dedicated scanner gap remains blocked outside D9. D10 is
-implemented and focused validation passes: published feature docs match their
+released in `v0.92.9`: published feature docs match their
 manifests, active CLI proof contains no removed-command anti-resurrection
 checks, public core rustdoc passes with warnings denied, and installed plus
 packaged downstream proofs pass before registry publication. This fixes
 `CANIC-092-PUBLISH-001`, `CANIC-092-RESIDUE-001`, and
-`CANIC-092-DOCS-002`. Five findings remain unresolved (2 P1 and 3 P2). The
-current trace ledger is ten pass and zero fail; the layering guard remains at
-18 separately owned ops-to-policy violations under `CANIC-092-LAYERING-005`.
+`CANIC-092-DOCS-002`. D11 is implemented and focused validation passes: shared
+decision inputs now belong to model, root-proof admission belongs to workflow,
+and ops no longer imports policy. This fixes `CANIC-092-LAYERING-005`. Four
+findings remain unresolved (1 P1 and 3 P2). The current trace ledger is ten
+pass and zero fail; the layering guard passes with zero violations.
 
 No runtime product code, public contract, stable state, dependency, or
 generated product behavior changed during method hardening. The reviewed
@@ -60,15 +62,11 @@ maintainer prerequisite for any future 1.0 discussion.
   `ab47f96a4ca388d0c61f01280e2a47bb37930b1ce863d675ea8427bf08b229e6`.
 - Freeze admission method fingerprint:
   `8188a7e08d9551efbad79e56c20cdd2213ed54758fc07b0bd0120b61e0dba82b`.
-- Latest published Phase D anchor: `v0.92.7` at
-  `8c8e5db9d782c4c66bfb39bb31be17b00b52f269`, source tree
-  `777e8cca82746e1461f208941ee251920088c3ed`, product-tree hash
-  `29acda521c40322d41035088653256e9b833679fe5df81f51e5c0166ddd9f208`.
-- D10 candidate parent: untagged local 0.92.8 commit
-  `68b9ab2158865bce0d88a25bbc9d20d9704d4062`, source tree
-  `332648e1d1a97b02f81f6ccde2f3505ed7740b41`, product-tree hash
-  `14747a0a05c10bb601cb5f2a68cf33f43d09acd8652c9ee1d3a458dc0d65aad0`.
-- Workspace package version: `0.92.8`; no local `v0.92.8` tag exists.
+- Latest published Phase D anchor and D11 parent: `v0.92.9` at
+  `23718e1b4b5c11ba85c368e79266ffc2f06bfe1f`, source tree
+  `e03c5c9101530d62a55d72cfc600673fce0d299f`, product-tree hash
+  `4b445b62db2a2a06ca1a79fa7650b50aee326544e892171ad35c1b29e7188896`.
+- Workspace package version: `0.92.9`.
 
 ## Slices
 
@@ -307,6 +305,10 @@ Primary evidence:
       manifests, active renewal proof asserts only the maintained status
       command, warning-as-error core rustdoc passes, and installed plus
       packaged downstream proofs pass from isolated artifacts.
+- [x] Implement and validate D11 canonical layering closure. Shared
+      environment, funding, topology, placement, and metrics values belong to
+      model; root delegation-proof admission belongs to workflow; and the
+      executable guard reports zero ops-to-policy dependencies.
 
 ### Slice E - Closeout
 
@@ -354,7 +356,7 @@ Primary evidence:
 | `CANIC-092-DOCS-001` | documentation drift | P2 | confirmed | fixed | D3 aligns public core docs with `endpoints -> workflow -> policy -> ops -> model` and model-owned state/storage invariants; released in `v0.92.2`. |
 | `CANIC-092-RESIDUE-001` | governance conflict | P2 | confirmed | fixed | D10 deletes removed-command negative assertions and the obsolete active probe breadcrumb while retaining current positive CLI proof. |
 | `CANIC-092-AUDIT-012` | audit method defect | P1 | confirmed | fixed | Layering v2 fixtures and guard detect all 25 production ops-to-policy files; corrected baseline validly fails; commit pending. |
-| `CANIC-092-LAYERING-005` | product defect | P1 | confirmed | open | D4 removes seven root-issuer/model ownership violations; 18 other ops-to-policy files remain for separately reviewed subsystem slices. |
+| `CANIC-092-LAYERING-005` | product defect | P1 | confirmed | fixed | D4 removes seven root-issuer/model ownership violations; D11 moves the remaining shared values to model and root-proof admission to workflow, leaving zero ops-to-policy dependencies. |
 | `CANIC-092-DOCS-002` | documentation drift | P3 | confirmed | fixed | D10 describes typed internal failure preservation without linking the crate-private type; warning-as-error core rustdoc passes. |
 | `CANIC-092-TEST-001` | evidence gap | P2 | confirmed | fixed | D4 directly proves valid policy/template admission, every request rejection boundary, unchanged state/epoch, skipped timers, and renewal/provisioning regressions. |
 | `CANIC-092-AUDIT-013` | audit method defect | P1 | confirmed | fixed | Complexity v2 has one fingerprinted runner, complete scope/manual evidence, and one reproducible score; commit pending. |
@@ -504,19 +506,18 @@ assigns identity by canonical owner/invariant rather than discovery order.
   unresolved findings (9 P1, 13 P2, one P3) at that snapshot.
 - Product fix slices: D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
   `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in
-  `v0.92.7`. D9 is committed in the untagged 0.92.8 candidate. D10 fixes the
-  package-doc, active-residue, and rustdoc findings. The live unresolved index
-  is 5 (2 P1 and 3 P2).
+  `v0.92.7`, D9 in `v0.92.8`, and D10 in `v0.92.9`. D11 fixes the remaining
+  layering finding. The live unresolved index is 4 (1 P1 and 3 P2).
 - Broad workspace, deployment, publish, and release gates: not run as Phase C
   audit evidence unless a frozen method specifically requires them.
 
 ## Next Action
 
-D10 active documentation and hard-cut residue is implemented and validated.
-The next product step is to map the 18 remaining
-`CANIC-092-LAYERING-005` files into separately reviewed subsystem slices; no
-bulk move is authorized. The scanner limitation remains unaccepted, and the
-three P2 dependency/complexity/instruction watchpoints remain deferred.
+D11 canonical layering closure is implemented and validated. The next
+closeout decision is whether to accept the dedicated-scanner gap as a
+documented limitation or provide an approved scanner. The limitation remains
+unaccepted, and the three P2 dependency/complexity/instruction watchpoints
+remain deferred.
 
 Primary review evidence:
 [0.92 Phase C baseline review](../../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md).
@@ -566,3 +567,6 @@ D9 implementation evidence:
 
 D10 implementation evidence:
 [active documentation and hard-cut residue](../../audits/reports/2026-07/2026-07-15/0.92-d10-active-documentation-and-hard-cut-residue.md).
+
+D11 implementation evidence:
+[canonical layering closure](../../audits/reports/2026-07/2026-07-15/0.92-d11-canonical-layering-closure.md).

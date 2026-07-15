@@ -14,7 +14,7 @@ use crate::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
         },
-        topology::input::mapper::RegistryPolicyInputMapper,
+        topology::input::mapper::TopologyRegistryMapper,
     },
     workflow::{
         cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
@@ -63,9 +63,9 @@ impl PropagationWorkflow {
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
         let registry_data = SubnetRegistryOps::data();
-        let registry_input = RegistryPolicyInputMapper::data_to_policy_input(registry_data);
-        let app_policy_input = AppIndexOps::policy_input();
-        let subnet_policy_input = SubnetIndexOps::policy_input();
+        let registry_input = TopologyRegistryMapper::data_to_registry(registry_data);
+        let app_policy_input = AppIndexOps::topology_entries();
+        let subnet_policy_input = SubnetIndexOps::topology_entries();
 
         TopologyPolicy::assert_index_consistent_with_registry(&registry_input, &app_policy_input)
             .map_err(InternalError::from)?;

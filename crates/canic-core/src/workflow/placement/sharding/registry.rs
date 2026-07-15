@@ -6,9 +6,9 @@
 
 use crate::{
     cdk::types::Principal,
-    domain::policy::pure::placement::sharding::ShardPlacement,
+    model::placement::sharding::ShardPlacement,
     ops::{
-        placement::sharding::mapper::ShardPlacementPolicyInputMapper,
+        placement::sharding::mapper::ShardPlacementMapper,
         storage::{children::CanisterChildrenOps, placement::sharding::ShardingRegistryOps},
     },
     workflow::placement::sharding::ShardingWorkflow,
@@ -21,9 +21,7 @@ impl ShardingWorkflow {
         ShardingRegistryOps::entries_for_pool(pool)
             .iter()
             .filter(|record| direct_children.is_empty() || direct_children.contains(&record.pid))
-            .map(|record| {
-                ShardPlacementPolicyInputMapper::record_to_policy_input(record.pid, &record.entry)
-            })
+            .map(|record| ShardPlacementMapper::record_to_observation(record.pid, &record.entry))
             .collect()
     }
 

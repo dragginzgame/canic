@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError, InternalErrorClass, InternalErrorOrigin,
-    domain::policy::pure::placement::sharding::CreateBlockedReason,
+    model::placement::sharding::CreateBlockedReason,
 };
 use std::{cell::RefCell, collections::HashMap};
 

@@ -17,7 +17,7 @@ pub mod scheduler;
 use crate::{
     InternalError,
     cdk::types::{Cycles, Principal},
-    domain::policy::pure::pool::authority::require_pool_admin,
+    domain::policy::pure::pool::{PoolPolicyError, authority::require_pool_admin},
     ops::{
         ic::IcOps,
         runtime::{
@@ -36,6 +36,16 @@ use crate::{
 ///
 
 pub struct PoolWorkflow;
+
+#[must_use]
+const fn metric_reason_for_policy(err: &PoolPolicyError) -> MetricReason {
+    match err {
+        PoolPolicyError::RegisteredInSubnet(_) => MetricReason::RegisteredInSubnet,
+        PoolPolicyError::NonImportableOnLocal { .. } => MetricReason::NonImportableLocal,
+        PoolPolicyError::NotRegisteredInSubnet(_) => MetricReason::NotFound,
+        PoolPolicyError::NotAuthorized => MetricReason::PolicyDenied,
+    }
+}
 
 impl PoolWorkflow {
     fn mark_pending_reset(pid: Principal) {

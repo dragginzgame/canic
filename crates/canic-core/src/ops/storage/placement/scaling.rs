@@ -5,8 +5,8 @@
 //! Boundary: storage ops facade over stable scaling registry records.
 
 use crate::{
-    domain::policy::pure::placement::scaling::ScalingWorkerPlanEntry,
     dto::placement::scaling::{ScalingRegistryEntry, ScalingRegistryResponse},
+    model::placement::scaling::ScalingWorkerEntry,
     ops::{placement::scaling::mapper::WorkerEntryRecordMapper, prelude::*},
     storage::stable::scaling::ScalingRegistry,
 };
@@ -20,8 +20,8 @@ use crate::{
 pub struct ScalingRegistryOps;
 
 impl ScalingRegistryOps {
-    pub fn upsert_from_plan(pid: Principal, plan: ScalingWorkerPlanEntry, created_at_secs: u64) {
-        let entry = WorkerEntryRecordMapper::validated_to_record(plan, created_at_secs);
+    pub fn upsert(pid: Principal, worker: ScalingWorkerEntry, created_at_secs: u64) {
+        let entry = WorkerEntryRecordMapper::validated_to_record(worker, created_at_secs);
         ScalingRegistry::upsert(pid, entry);
     }
 

@@ -6,8 +6,11 @@
 //! No IC calls. No async. No side effects.
 
 use crate::{
-    InternalError, domain::policy::pure::PolicyError, domain::value::BoundedString64,
+    InternalError,
+    domain::policy::pure::PolicyError,
+    domain::value::BoundedString64,
     ids::CanisterRole,
+    model::placement::scaling::{ScalingPlanReason, ScalingWorkerEntry},
 };
 use std::collections::BTreeMap;
 use thiserror::Error as ThisError;
@@ -41,28 +44,7 @@ pub struct ScalingPlan {
     pub should_spawn: bool,
     pub plan_reason: ScalingPlanReason,
     pub reason: String,
-    pub worker_entry: Option<ScalingWorkerPlanEntry>,
-}
-
-///
-/// ScalingWorkerPlanEntry
-///
-
-#[derive(Clone, Debug)]
-pub struct ScalingWorkerPlanEntry {
-    pub pool: BoundedString64,
-    pub canister_role: CanisterRole,
-}
-
-///
-/// ScalingPlanReason
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ScalingPlanReason {
-    AtMaxWorkers,
-    BelowMinWorkers,
-    WithinBounds,
+    pub worker_entry: Option<ScalingWorkerEntry>,
 }
 
 ///
@@ -114,7 +96,7 @@ impl ScalingPolicy {
 
         // Min bound check
         if worker_count < pool_cfg.min_workers {
-            let entry = ScalingWorkerPlanEntry {
+            let entry = ScalingWorkerEntry {
                 pool: BoundedString64::new(pool),
                 canister_role: pool_cfg.canister_role.clone(),
             };

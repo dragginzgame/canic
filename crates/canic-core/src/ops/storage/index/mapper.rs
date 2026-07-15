@@ -5,11 +5,11 @@
 //! Boundary: storage ops conversion layer for topology index snapshots.
 
 use crate::{
-    domain::policy::pure::topology::IndexPolicyInput,
     dto::{
         page::Page,
         topology::{AppIndexArgs, IndexEntryInput, IndexEntryResponse, SubnetIndexArgs},
     },
+    model::topology::TopologyIndexEntry,
     storage::stable::index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
     view::topology::IndexEntryView,
 };
@@ -120,10 +120,10 @@ impl IndexEntryMapper {
     }
 
     #[must_use]
-    pub fn records_to_policy_input(entries: &[IndexEntryRecord]) -> Vec<IndexPolicyInput> {
+    pub fn records_to_topology_entries(entries: &[IndexEntryRecord]) -> Vec<TopologyIndexEntry> {
         entries
             .iter()
-            .map(|entry| IndexPolicyInput {
+            .map(|entry| TopologyIndexEntry {
                 role: entry.role.clone(),
                 pid: entry.pid,
             })

@@ -11,23 +11,20 @@ mod selection;
 mod signing;
 
 use super::{
-    errors::{map_prepare_delegation_cert_error, map_root_provisioning_policy_error},
+    errors::map_prepare_delegation_cert_error,
     root_issuer_policy::{delegated_role_grant_views, delegation_audience_view},
     root_issuer_renewal::renewal_template_fingerprint,
 };
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    domain::policy::pure::auth::{
-        RootDelegationProofPreparePolicyDecision, RootDelegationProofPreparePolicyInput,
-        validate_root_delegation_proof_prepare_policy,
-    },
     dto::auth::{
         ChainKeyBatchHeaderV1, ChainKeyDelegationCertV1, IssuerProofAlgorithm, IssuerProofBinding,
         RootDelegationProofBatchProof,
     },
     model::auth::{
         ChainKeyRootDelegationInstallFailure, RootIssuerRenewalOutcome, RootIssuerRenewalState,
+        RootIssuerRenewalTemplate,
     },
     ops::{
         auth::{
@@ -37,7 +34,7 @@ use crate::{
                     chain_key_derivation_path_hash,
                 },
                 cert_rules::DelegatedAuthTtlLimits,
-                chain_key_signing::{ChainKeySigner, ChainKeySigningPolicy},
+                chain_key_signing::ChainKeySigningPolicy,
                 delegation_cert::{PrepareDelegationCertInput, prepare_delegation_cert},
             },
             issuer_canister_sig::{IssuerPayloadKind, issuer_canister_sig_seed_hash},
@@ -50,7 +47,8 @@ use crate::{
 };
 use batch_id::{ChainKeyBatchIdInput, chain_key_batch_id};
 use install::{
-    materialize_chain_key_delegation_proof, signed_chain_key_delegation_proof_for_issuer,
+    materialize_chain_key_delegation_proof,
+    signed_chain_key_delegation_proof_for_issuer as find_signed_chain_key_delegation_proof_for_issuer,
 };
 use merkle::{ChainKeyBatchLeaf, merkle_root_and_witnesses, reject_duplicate_chain_key_issuers};
 use selection::{
@@ -84,6 +82,52 @@ pub(in crate::ops::auth) struct PrepareDueChainKeyRootDelegationBatchInput<'a> {
     pub now_ns: u64,
 }
 
+/// Opaque ops plan awaiting workflow-owned issuer policy approval.
+pub struct ChainKeyRootDelegationBatchPreparePlan {
+    signing_policy: ChainKeySigningPolicy,
+    max_cert_ttl_ns: u64,
+    max_revocation_latency_ns: u64,
+    min_accepted_proof_epoch: u64,
+    registry_epoch: u64,
+    registry_hash: [u8; 32],
+    now_ns: u64,
+    cert_ttl_ns: u64,
+    expires_at_ns: u64,
+    enabled_templates: usize,
+    due_templates: Vec<DueChainKeyTemplate>,
+}
+
+impl ChainKeyRootDelegationBatchPreparePlan {
+    /// Templates that workflow must validate in this exact order.
+    pub fn issuer_templates(&self) -> impl ExactSizeIterator<Item = &RootIssuerRenewalTemplate> {
+        self.due_templates.iter().map(|due| &due.template)
+    }
+
+    #[must_use]
+    pub const fn cert_ttl_ns(&self) -> u64 {
+        self.cert_ttl_ns
+    }
+
+    #[must_use]
+    pub const fn issued_at_ns(&self) -> u64 {
+        self.now_ns
+    }
+}
+
+/// Workflow-owned approval for one issuer in an opaque preparation plan.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ChainKeyRootDelegationIssuerApproval {
+    pub issuer_pid: Principal,
+    pub expires_at_ns: u64,
+    pub refresh_after_ns: u64,
+}
+
+/// Result of planning a due batch before any proof epoch or batch mutation.
+pub enum ChainKeyRootDelegationBatchPreparation {
+    Complete(PrepareDueChainKeyRootDelegationBatchResult),
+    RequiresPolicy(ChainKeyRootDelegationBatchPreparePlan),
+}
+
 ///
 /// PrepareDueChainKeyRootDelegationBatchResult
 ///
@@ -91,7 +135,7 @@ pub(in crate::ops::auth) struct PrepareDueChainKeyRootDelegationBatchInput<'a> {
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::ops::auth) struct PrepareDueChainKeyRootDelegationBatchResult {
+pub struct PrepareDueChainKeyRootDelegationBatchResult {
     pub batch_id: Option<[u8; 32]>,
     pub prepared_issuers: usize,
     pub skipped_templates: usize,
@@ -124,9 +168,9 @@ pub struct ChainKeyRootDelegationBatchInstallPlan {
     pub proofs: Vec<RootDelegationProofBatchProof>,
 }
 
-pub(in crate::ops::auth) fn prepare_due_chain_key_root_delegation_batch(
+pub(in crate::ops::auth) fn plan_due_chain_key_root_delegation_batch(
     input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
-) -> Result<PrepareDueChainKeyRootDelegationBatchResult, InternalError> {
+) -> Result<ChainKeyRootDelegationBatchPreparation, InternalError> {
     AuthStateOps::prune_chain_key_root_delegation_batches(input.now_ns);
     mark_stale_preinstall_chain_key_batches(input.registry_epoch, input.registry_hash);
 
@@ -136,12 +180,14 @@ pub(in crate::ops::auth) fn prepare_due_chain_key_root_delegation_batch(
         input.registry_epoch,
         input.registry_hash,
     ) {
-        return Ok(PrepareDueChainKeyRootDelegationBatchResult {
-            batch_id: Some(batch.batch_id),
-            prepared_issuers: batch.issuers.len(),
-            skipped_templates: enabled_template_count().saturating_sub(batch.issuers.len()),
-            reused_in_flight: true,
-        });
+        return Ok(ChainKeyRootDelegationBatchPreparation::Complete(
+            PrepareDueChainKeyRootDelegationBatchResult {
+                batch_id: Some(batch.batch_id),
+                prepared_issuers: batch.issuers.len(),
+                skipped_templates: enabled_template_count().saturating_sub(batch.issuers.len()),
+                reused_in_flight: true,
+            },
+        ));
     }
 
     let mut due_templates = due_chain_key_templates(input.now_ns, input.required_issuer_pid);
@@ -154,12 +200,14 @@ pub(in crate::ops::auth) fn prepare_due_chain_key_root_delegation_batch(
     cap_due_chain_key_templates(&mut due_templates);
 
     if due_templates.is_empty() {
-        return Ok(PrepareDueChainKeyRootDelegationBatchResult {
-            batch_id: None,
-            prepared_issuers: 0,
-            skipped_templates: enabled_template_count(),
-            reused_in_flight: false,
-        });
+        return Ok(ChainKeyRootDelegationBatchPreparation::Complete(
+            PrepareDueChainKeyRootDelegationBatchResult {
+                batch_id: None,
+                prepared_issuers: 0,
+                skipped_templates: enabled_template_count(),
+                reused_in_flight: false,
+            },
+        ));
     }
 
     let pending_batches = pending_chain_key_root_delegation_batch_count(input.now_ns);
@@ -169,59 +217,66 @@ pub(in crate::ops::auth) fn prepare_due_chain_key_root_delegation_batch(
         ));
     }
 
+    let cert_ttl_ns = shared_batch_cert_ttl_ns(
+        &due_templates,
+        input.max_cert_ttl_ns,
+        input.max_revocation_latency_ns,
+    )?;
+    let expires_at_ns = input.now_ns.checked_add(cert_ttl_ns).ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "chain-key root delegation batch expiry overflow",
+        )
+    })?;
+
+    Ok(ChainKeyRootDelegationBatchPreparation::RequiresPolicy(
+        ChainKeyRootDelegationBatchPreparePlan {
+            signing_policy: input.signing_policy.clone(),
+            max_cert_ttl_ns: input.max_cert_ttl_ns,
+            max_revocation_latency_ns: input.max_revocation_latency_ns,
+            min_accepted_proof_epoch: input.min_accepted_proof_epoch,
+            registry_epoch: input.registry_epoch,
+            registry_hash: input.registry_hash,
+            now_ns: input.now_ns,
+            cert_ttl_ns,
+            expires_at_ns,
+            enabled_templates: enabled_template_count(),
+            due_templates,
+        },
+    ))
+}
+
+pub(in crate::ops::auth) fn commit_chain_key_root_delegation_batch(
+    plan: ChainKeyRootDelegationBatchPreparePlan,
+    approvals: Vec<ChainKeyRootDelegationIssuerApproval>,
+) -> Result<PrepareDueChainKeyRootDelegationBatchResult, InternalError> {
+    validate_issuer_approvals(&plan, &approvals)?;
     let proof_epoch =
-        AuthStateOps::advance_delegated_auth_proof_epoch_at_least(input.min_accepted_proof_epoch);
-    let batch = build_chain_key_root_delegation_batch(input, &due_templates, proof_epoch)?;
+        AuthStateOps::advance_delegated_auth_proof_epoch_at_least(plan.min_accepted_proof_epoch);
+    let batch = build_chain_key_root_delegation_batch(&plan, &approvals, proof_epoch)?;
     let result = PrepareDueChainKeyRootDelegationBatchResult {
         batch_id: Some(batch.batch_id),
         prepared_issuers: batch.issuers.len(),
-        skipped_templates: enabled_template_count().saturating_sub(batch.issuers.len()),
+        skipped_templates: plan.enabled_templates.saturating_sub(batch.issuers.len()),
         reused_in_flight: false,
     };
     AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
     Ok(result)
 }
 
-pub(in crate::ops::auth) async fn get_or_create_chain_key_delegation_proof_for_issuer<S>(
-    mut input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
+#[must_use]
+pub(in crate::ops::auth) fn signed_chain_key_delegation_proof_for_issuer(
     issuer_pid: Principal,
-    signer: &mut S,
-) -> Result<Option<RootDelegationProofBatchProof>, InternalError>
-where
-    S: ChainKeySigner,
-{
-    AuthStateOps::prune_chain_key_root_delegation_batches(input.now_ns);
-    if let Some(proof) = signed_chain_key_delegation_proof_for_issuer(
-        issuer_pid,
-        input.now_ns,
-        input.registry_epoch,
-        input.registry_hash,
-    ) {
-        return Ok(Some(proof));
-    }
-
-    let signing_policy = input.signing_policy;
-    let now_ns = input.now_ns;
-    let registry_epoch = input.registry_epoch;
-    let registry_hash = input.registry_hash;
-    input.required_issuer_pid = Some(issuer_pid);
-    let prepared = prepare_due_chain_key_root_delegation_batch(input)?;
-    let Some(batch_id) = prepared.batch_id else {
-        return Ok(None);
-    };
-
-    let signing_result =
-        sign_chain_key_root_delegation_batch(signing_policy, batch_id, now_ns, signer).await?;
-    if signing_result.signing_in_flight {
-        return Ok(None);
-    }
-
-    Ok(signed_chain_key_delegation_proof_for_issuer(
+    now_ns: u64,
+    registry_epoch: u64,
+    registry_hash: [u8; 32],
+) -> Option<RootDelegationProofBatchProof> {
+    find_signed_chain_key_delegation_proof_for_issuer(
         issuer_pid,
         now_ns,
         registry_epoch,
         registry_hash,
-    ))
+    )
 }
 
 pub(in crate::ops::auth) fn start_next_chain_key_root_delegation_batch_install(
@@ -480,25 +535,15 @@ fn batch_matches_registry(
 }
 
 fn build_chain_key_root_delegation_batch(
-    input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
-    due_templates: &[DueChainKeyTemplate],
+    plan: &ChainKeyRootDelegationBatchPreparePlan,
+    approvals: &[ChainKeyRootDelegationIssuerApproval],
     proof_epoch: u64,
 ) -> Result<ChainKeyRootDelegationBatch, InternalError> {
-    let cert_ttl_ns = shared_batch_cert_ttl_ns(
-        due_templates,
-        input.max_cert_ttl_ns,
-        input.max_revocation_latency_ns,
-    )?;
-    let expires_at_ns = input.now_ns.checked_add(cert_ttl_ns).ok_or_else(|| {
-        InternalError::invariant(
-            InternalErrorOrigin::Ops,
-            "chain-key root delegation batch expiry overflow",
-        )
-    })?;
-
-    let mut leaves = due_templates
+    let mut leaves = plan
+        .due_templates
         .iter()
-        .map(|due| build_chain_key_batch_leaf(&input, due, proof_epoch, cert_ttl_ns, expires_at_ns))
+        .zip(approvals)
+        .map(|(due, approval)| build_chain_key_batch_leaf(plan, due, *approval, proof_epoch))
         .collect::<Result<Vec<_>, _>>()?;
     leaves.sort_by(|left, right| {
         left.delegation_cert
@@ -510,35 +555,34 @@ fn build_chain_key_root_delegation_batch(
 
     let leaf_hashes = leaves.iter().map(|leaf| leaf.leaf_hash).collect::<Vec<_>>();
     let (tree_root, witnesses) = merkle_root_and_witnesses(&leaf_hashes)?;
-    let derivation_path_hash =
-        chain_key_derivation_path_hash(&input.signing_policy.derivation_path);
+    let derivation_path_hash = chain_key_derivation_path_hash(&plan.signing_policy.derivation_path);
     let batch_id = chain_key_batch_id(ChainKeyBatchIdInput {
-        root_canister_id: input.signing_policy.root_canister_id,
+        root_canister_id: plan.signing_policy.root_canister_id,
         proof_epoch,
-        registry_epoch: input.registry_epoch,
-        registry_hash: input.registry_hash,
+        registry_epoch: plan.registry_epoch,
+        registry_hash: plan.registry_hash,
         tree_root,
-        not_before_ns: input.now_ns,
-        expires_at_ns,
-        algorithm: input.signing_policy.algorithm,
-        key_id_name: &input.signing_policy.key_id.name,
+        not_before_ns: plan.now_ns,
+        expires_at_ns: plan.expires_at_ns,
+        algorithm: plan.signing_policy.algorithm,
+        key_id_name: &plan.signing_policy.key_id.name,
         derivation_path_hash,
-        key_version: input.signing_policy.key_version,
+        key_version: plan.signing_policy.key_version,
     });
     let header = ChainKeyBatchHeaderV1 {
         schema_version: CHAIN_KEY_BATCH_SCHEMA_VERSION_V1,
-        root_canister_id: input.signing_policy.root_canister_id,
+        root_canister_id: plan.signing_policy.root_canister_id,
         batch_id,
         proof_epoch,
-        registry_epoch: input.registry_epoch,
-        registry_hash: input.registry_hash,
+        registry_epoch: plan.registry_epoch,
+        registry_hash: plan.registry_hash,
         tree_root,
-        not_before_ns: input.now_ns,
-        expires_at_ns,
-        algorithm: input.signing_policy.algorithm,
-        key_id: input.signing_policy.key_id.clone(),
+        not_before_ns: plan.now_ns,
+        expires_at_ns: plan.expires_at_ns,
+        algorithm: plan.signing_policy.algorithm,
+        key_id: plan.signing_policy.key_id.clone(),
         derivation_path_hash,
-        key_version: input.signing_policy.key_version,
+        key_version: plan.signing_policy.key_version,
     };
 
     let issuers = leaves
@@ -563,7 +607,7 @@ fn build_chain_key_root_delegation_batch(
         header,
         signature: None,
         issuers,
-        prepared_at_ns: input.now_ns,
+        prepared_at_ns: plan.now_ns,
         signed_at_ns: None,
         install_started_at_ns: None,
         installed_at_ns: None,
@@ -594,44 +638,31 @@ fn shared_batch_cert_ttl_ns(
 }
 
 fn build_chain_key_batch_leaf(
-    input: &PrepareDueChainKeyRootDelegationBatchInput<'_>,
+    plan: &ChainKeyRootDelegationBatchPreparePlan,
     due: &DueChainKeyTemplate,
+    approval: ChainKeyRootDelegationIssuerApproval,
     proof_epoch: u64,
-    cert_ttl_ns: u64,
-    expires_at_ns: u64,
 ) -> Result<ChainKeyBatchLeaf, InternalError> {
-    let policy = AuthStateOps::root_issuer_policy(due.template.issuer_pid);
+    ensure_issuer_approval_matches_plan(plan, due, approval)?;
     let audience = delegation_audience_view(&due.template.audience);
     let grants = delegated_role_grant_views(&due.template.grants);
-    let decision = validate_root_delegation_proof_prepare_policy(
-        policy.as_ref(),
-        RootDelegationProofPreparePolicyInput {
-            issuer_pid: due.template.issuer_pid,
-            audience: &due.template.audience,
-            grants: &due.template.grants,
-            cert_ttl_ns,
-            issued_at_ns: input.now_ns,
-        },
-    )
-    .map_err(map_root_provisioning_policy_error)?;
-    ensure_policy_decision_matches_shared_window(decision, expires_at_ns)?;
 
     let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
         seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
     };
     let prepared = prepare_delegation_cert(PrepareDelegationCertInput {
-        root_pid: input.signing_policy.root_canister_id,
+        root_pid: plan.signing_policy.root_canister_id,
         issuer_pid: due.template.issuer_pid,
         issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
         issuer_proof_binding,
-        issued_at_ns: input.now_ns,
-        cert_ttl_ns,
-        max_token_ttl_ns: cert_ttl_ns,
+        issued_at_ns: plan.now_ns,
+        cert_ttl_ns: plan.cert_ttl_ns,
+        max_token_ttl_ns: plan.cert_ttl_ns,
         audience,
         grants,
         ttl_limits: DelegatedAuthTtlLimits {
-            max_cert_ttl_ns: input.max_cert_ttl_ns.min(input.max_revocation_latency_ns),
-            max_token_ttl_ns: cert_ttl_ns,
+            max_cert_ttl_ns: plan.max_cert_ttl_ns.min(plan.max_revocation_latency_ns),
+            max_token_ttl_ns: plan.cert_ttl_ns,
         },
     })
     .map_err(map_prepare_delegation_cert_error)?;
@@ -648,8 +679,8 @@ fn build_chain_key_batch_leaf(
         grants: prepared.cert.grants.clone(),
         not_before_ns: prepared.cert.not_before_ns,
         expires_at_ns: prepared.cert.expires_at_ns,
-        registry_epoch: input.registry_epoch,
-        registry_hash: input.registry_hash,
+        registry_epoch: plan.registry_epoch,
+        registry_hash: plan.registry_hash,
     };
     let leaf_hash = chain_key_delegation_cert_hash(&chain_key_delegation_cert).map_err(|err| {
         InternalError::invariant(
@@ -663,18 +694,42 @@ fn build_chain_key_batch_leaf(
         chain_key_delegation_cert,
         cert_hash: prepared.cert_hash,
         leaf_hash,
-        refresh_after_ns: decision.refresh_after_ns,
+        refresh_after_ns: approval.refresh_after_ns,
     })
 }
 
-fn ensure_policy_decision_matches_shared_window(
-    decision: RootDelegationProofPreparePolicyDecision,
-    expires_at_ns: u64,
+fn validate_issuer_approvals(
+    plan: &ChainKeyRootDelegationBatchPreparePlan,
+    approvals: &[ChainKeyRootDelegationIssuerApproval],
 ) -> Result<(), InternalError> {
-    if decision.expires_at_ns != expires_at_ns {
+    if plan.due_templates.len() != approvals.len() {
         return Err(InternalError::invariant(
             InternalErrorOrigin::Ops,
-            "chain-key root delegation policy decision expiry mismatch",
+            "chain-key root delegation issuer approval count mismatch",
+        ));
+    }
+
+    for (due, approval) in plan.due_templates.iter().zip(approvals) {
+        ensure_issuer_approval_matches_plan(plan, due, *approval)?;
+    }
+    Ok(())
+}
+
+fn ensure_issuer_approval_matches_plan(
+    plan: &ChainKeyRootDelegationBatchPreparePlan,
+    due: &DueChainKeyTemplate,
+    approval: ChainKeyRootDelegationIssuerApproval,
+) -> Result<(), InternalError> {
+    if approval.issuer_pid != due.template.issuer_pid {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "chain-key root delegation issuer approval identity mismatch",
+        ));
+    }
+    if approval.expires_at_ns != plan.expires_at_ns {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Ops,
+            "chain-key root delegation issuer approval expiry mismatch",
         ));
     }
     Ok(())
