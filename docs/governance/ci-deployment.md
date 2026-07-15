@@ -92,8 +92,12 @@ The Make version targets complete their required test and feature gates before
 changing package versions; any failed gate leaves the version unchanged. The
 underlying bump script rejects direct invocation without the private gate
 marker supplied by those targets.
-After a successful release push, `make release-push` clears Cargo build
-artifacts so repeated patch releases do not accumulate local target data.
+Before its final atomic network update, `make release-push` verifies the exact
+clean release commit/tag pair and clears Cargo build artifacts. No fallible
+local cleanup step runs after a successful push, and atomic push prevents a
+branch-only or tag-only remote update. A transport interruption can still make
+the remote outcome uncertain and must be resolved by inspecting the remote
+refs before retrying.
 For one-shot releases, humans may run `make release-patch`,
 `make release-minor`, or `make release-major`, which perform those steps in
 order.

@@ -48,7 +48,7 @@ help:
 	@echo "  release-major    Confirm, bump, stage, commit, tag, and push a major release"
 	@echo "  release-stage    Stage release version files after review"
 	@echo "  release-commit   Commit and tag the staged release"
-	@echo "  release-push     Push the release commit and tags, then clear Cargo build artifacts"
+	@echo "  release-push     Clear build artifacts, then atomically push the verified release"
 	@echo "  package          Build a publishable crate tarball"
 	@echo "  publish          Publish workspace crates to registry in dependency order"
 	@echo "  test-packaged-downstream-wasm-store  Verify the special packaged downstream wasm_store wrapper path"
@@ -77,7 +77,9 @@ help:
 	@echo "Examples:"
 	@echo "  make patch       # Bump patch version"
 	@echo "  make release-patch # Bump, stage, commit, tag, and push patch release"
-	@echo "  make release-stage release-commit release-push # Finish reviewed manual bump"
+	@echo "  make release-stage # Stage a reviewed manual bump"
+	@echo "  make release-commit # Commit and tag the staged bump"
+	@echo "  make release-push  # Push the verified release commit and tag atomically"
 	@echo "  make test-fleet-install # Install the reference fleet using fast wasm"
 	@echo "  make test        # Run workspace tests"
 	@echo "  make test-wasm   # Fast wasm iteration path without PocketIC/e2e"
@@ -137,7 +139,10 @@ version:
 tags:
 	@git tag --sort=-version:refname | head -10
 
-patch: ensure-clean fmt test-bump
+patch:
+	@$(MAKE) ensure-clean
+	@$(MAKE) fmt
+	@$(MAKE) test-bump
 	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh patch
 
 minor:
@@ -156,14 +161,26 @@ major:
 	@$(MAKE) test
 	@CANIC_RELEASE_GATES_PASSED=1 scripts/ci/bump-version.sh major
 
-release-patch: patch release-stage release-commit release-push
+release-patch:
+	@$(MAKE) patch
+	@$(MAKE) release-stage
+	@$(MAKE) release-commit
+	@$(MAKE) release-push
 
-release-minor: minor release-stage release-commit release-push
+release-minor:
+	@$(MAKE) minor
+	@$(MAKE) release-stage
+	@$(MAKE) release-commit
+	@$(MAKE) release-push
 
-release-major: major release-stage release-commit release-push
+release-major:
+	@$(MAKE) major
+	@$(MAKE) release-stage
+	@$(MAKE) release-commit
+	@$(MAKE) release-push
 
 release-stage:
-	git add Cargo.toml Cargo.lock README.md crates/canic-host/README.md scripts/dev/install_dev.sh \
+	git add Cargo.toml Cargo.lock scripts/dev/install_dev.sh \
 		scripts/ci/sync-release-surface-version.sh $$(git ls-files -m -- '*/Cargo.toml' || true)
 
 release-commit:
@@ -177,8 +194,9 @@ release-commit:
 	git tag -a "v$$version" -m "Release $$version"
 
 release-push:
-	git push --follow-tags
+	@bash scripts/ci/check-release-push-ready.sh
 	cargo clean
+	git push --atomic --follow-tags
 
 package: ensure-clean
 	$(CARGO_ENV) cargo package
