@@ -24,8 +24,6 @@ is_release_file() {
   case "$1" in
     Cargo.toml | \
       Cargo.lock | \
-      README.md | \
-      crates/canic-host/README.md | \
       scripts/dev/install_dev.sh | \
       scripts/ci/sync-release-surface-version.sh)
       return 0

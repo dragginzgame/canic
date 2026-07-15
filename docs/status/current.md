@@ -427,7 +427,9 @@ First primary results:
   host package probe, and matrix/changelog/diff guards. The integrity guard
   discovers the maintained version/checksum surface instead of duplicating a
   variable ledger, and `update-dev` no longer updates unrelated toolchains or
-  workspace dependencies.
+  workspace dependencies. Release mutation is transactional on failure,
+  one-shot phases are sequential under parallel Make, and push rejects unless
+  the clean release commit and annotated tag match before an atomic ref update.
 
 ## Next Action
 
