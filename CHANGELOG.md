@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.4` gives blob billing one workflow-owned Cashier, funding/recovery,
+  gateway-sync, and readiness path without changing protocol, prices, public
+  shapes, or stable state.
+
 - `0.92.3` gives root-issuer policy and renewal-template admission one
   workflow/policy owner with model-owned state, without changing public or
   stable shapes.

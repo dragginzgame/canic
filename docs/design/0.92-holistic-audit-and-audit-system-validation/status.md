@@ -13,15 +13,13 @@ ledger to 22 valid and zero invalid results. Evidence-only PocketIC slices now
 complete the auth and control mandatory traces: the aggregate is a valid
 `fail` with six passing and four failing traces, zero partial, and zero
 blocked. The product baseline gate and finding review are complete, and Phase D
-is underway. D1 is committed in `v0.92.1`. D2 and D3 are released in
-`v0.92.2`: auth paths preserve typed causes through one public boundary, and
-`AGENTS.md` is the sole active layer authority. D4 is implemented and focused
-validation passes in the current candidate. Root-issuer policy and
-renewal-template admission now run through workflow-owned orchestration and
-pure policy over model-owned state; ops owns conversion and persistence only.
-The layering guard drops from 25 to 18 violations. `CANIC-092-TEST-001` is
-fixed, while `CANIC-092-LAYERING-005` remains open for separately reviewed
-subsystems.
+is underway. D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 in
+`v0.92.3`. D5 is implemented and focused validation passes in the current
+candidate. Blob billing now delegates from API to one workflow-owned Cashier,
+reserve, recovery, gateway-sync, and readiness path over pure policy and
+single-step ops. `CANIC-092-LAYERING-001` is fixed without protocol, price,
+public-shape, or stable-state change. The layering guard remains at 18
+separately owned ops-to-policy violations under `CANIC-092-LAYERING-005`.
 
 No runtime product code, public contract, stable state, dependency, or
 generated product behavior changed during method hardening. The reviewed
@@ -50,11 +48,11 @@ maintainer prerequisite for any future 1.0 discussion.
   `ab47f96a4ca388d0c61f01280e2a47bb37930b1ce863d675ea8427bf08b229e6`.
 - Freeze admission method fingerprint:
   `8188a7e08d9551efbad79e56c20cdd2213ed54758fc07b0bd0120b61e0dba82b`.
-- Committed Phase D parent: `v0.92.2` at
-  `7e9c12785675781fa935b35ee78735bf2168280d`, source tree
-  `e7bf5705d1d61837779b8b543534b3dc03c27f50`, product-tree hash
-  `4d785d7926c7d62d85ce792f81ef6dfa331dbcb1eaef2257994c1a408722fa8c`.
-- Package version: `0.92.2`.
+- Committed Phase D parent: `v0.92.3` at
+  `b7f9aad9265e43def97362457148541f8e787d35`, source tree
+  `5150de1a25bd159f9bedfdc85669d0fae0d87ff9`, product-tree hash
+  `1e4a8802a8930fd17f28b9494b9fdb13092ee4974fa09d0065e7737e4adb4a6c`.
+- Package version: `0.92.3`.
 
 ## Slices
 
@@ -260,6 +258,12 @@ Primary evidence:
       state-shaped values, and ops owns conversion/persistence. Direct
       positive, rejection, unchanged-state, timer-order, stable-state, and
       PocketIC regression evidence passes.
+- [x] Record D4's fix and validation identity in released `v0.92.3`.
+- [x] Implement and validate D5 blob-billing workflow ownership. API delegates
+      Cashier sequencing, reserve/recovery, gateway synchronization, and
+      readiness to one workflow; pure policy owns deterministic decisions.
+      Reserve, transient failure/retry, status, and upgrade PocketIC evidence
+      passes without protocol or stable-state change.
 
 ### Slice E - Closeout
 
@@ -288,7 +292,7 @@ Primary evidence:
 | `CANIC-092-RELEASE-002` | operational risk | P1 | confirmed | open | CI executable/tool identities are mutable or unverified. |
 | `CANIC-092-RELEASE-003` | evidence gap | P1 | confirmed | blocked | No approved dedicated secret scanner is available. |
 | `CANIC-092-RELEASE-004` | evidence gap | P2 | confirmed | open | Supported host/target cells have no canonical matrix. |
-| `CANIC-092-LAYERING-001` | product defect | P2 | confirmed | open | API orchestration includes blob billing plus runtime/auth projection and sequencing. |
+| `CANIC-092-LAYERING-001` | product defect | P2 | confirmed | fixed | D5 moves blob Cashier, reserve/recovery, sync, and readiness orchestration behind one workflow; API delegates and public/stable shapes are unchanged. |
 | `CANIC-092-LAYERING-002` | product defect | P2 | confirmed | open | Root RPC DTO owns capability/replay canonicalization behavior. |
 | `CANIC-092-LAYERING-003` | governance conflict | P1 | high | fixed | D3 makes `AGENTS.md` the sole active authority and removes wording that permits endpoint-to-ops delegation; released in `v0.92.2`. |
 | `CANIC-092-AUDIT-008` | audit method defect | P1 | confirmed | fixed | Build v2 applies the exact semantic exclusion and preserves the root artifact drift; commit pending. |
@@ -341,9 +345,10 @@ assigns identity by canonical owner/invariant rather than discovery order.
   regex pass, while immutable action/tool identity and required dedicated
   secret evidence do not.
 - Layering v2: the immutable baseline remains a valid fail at risk 7/10 with
-  25 production ops-to-policy files. D4's current affected-scope rerun passes
-  detector fixtures and reduces the live violation set to 18; the canonical
-  product finding remains open. V1 remains invalid history.
+  25 production ops-to-policy files. D4's affected-scope rerun passes detector
+  fixtures and reduces the live violation set to 18; D5 adds no upward edge.
+  The canonical `CANIC-092-LAYERING-005` finding remains open. V1 remains
+  invalid history.
 - Build integrity v1 remains invalid history. Corrected build integrity v2 is
   a valid fail: two isolated lanes reproduce app/bootstrap-store raw and gzip
   bytes and app semantic provenance after excluding only observation time and
@@ -361,7 +366,7 @@ assigns identity by canonical owner/invariant rather than discovery order.
   `CANIC-MANDATORY-TRACE-001/v1` is cataloged and fingerprinted; all ten trace
   IDs are complete. Six pass; deploy/auth/control/blob fail on existing
   product findings. The valid aggregate `fail` has no partial or blocked trace
-  and completes the gate. Current D1/D2 reruns fix control/auth without
+  and completes the gate. Current D1/D2/D5 reruns fix control/auth/blob without
   rewriting that frozen result.
 - Control-plane publication: D1 focused validation passes. Admin, bootstrap,
   and reconciliation publication reserve distinct workflow-owned quota/cycle
@@ -395,6 +400,11 @@ assigns identity by canonical owner/invariant rather than discovery order.
   D4 removes the duplicate root-issuer admission owner and supplies the direct
   rejection/unchanged-state proof, fixing `CANIC-092-TEST-001`; unrelated
   ownership areas are unchanged.
+- D5 blob-billing validation passes 878 all-feature core library tests, 50
+  focused blob-storage tests, four policy/DTO guards, 19 protocol tests,
+  strict core Clippy, and four PocketIC billing selections. Reserve refusal,
+  transient failure/guard release/retry, readiness boundaries, and configured
+  or missing-config upgrade persistence retain parent behavior.
 - Complexity v1 remains invalid history. Corrected v2 is a valid first
   baseline failure at risk 8/10. It maps all 546 files, reproduces its runner
   digest, retains exact manual evidence, applies one score, and passes 178
@@ -419,22 +429,21 @@ assigns identity by canonical owner/invariant rather than discovery order.
   tests pass; the surface findings remain read-only.
 - Improved holistic suite: all 22 retained definitions have valid active
   results. Mandatory traces are complete with a frozen aggregate `fail`: six
-  pass and four fail. Current D1/D2 control/auth reruns pass, so current trace
-  state is eight pass and two fail without rewriting the Phase C baseline.
+  pass and four fail. Current D1/D2/D5 control/auth/blob reruns pass, so current
+  trace state is nine pass and one fail without rewriting the Phase C baseline.
 - Phase C technical baseline: complete. The original review remains preserved
   as the pre-correction blocked synthesis; the live index contains 23
   unresolved findings (9 P1, 13 P2, one P3) at that snapshot.
-- Product fix slices: D1 is released in `v0.92.1`; D2/D3 are released in
-  `v0.92.2`; D4 fixes one P2 evidence gap and partially remediates the still
-  open P1 layering finding. The live unresolved index is 17 (5 P1, 11 P2,
-  one P3).
+- Product fix slices: D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4
+  in `v0.92.3`. D5 fixes the P2 blob-billing authority defect. The live
+  unresolved index is 16 (5 P1, 10 P2, one P3).
 - Broad workspace, deployment, publish, and release gates: not run as Phase C
   audit evidence unless a frozen method specifically requires them.
 
 ## Next Action
 
-The next ordered candidate is D5 blob-billing workflow ownership. D5 through
-D10 remain separately bounded; remaining `CANIC-092-LAYERING-005` subsystems
+The next ordered candidate is D6 passive RPC DTO ownership. D6 through D10
+remain separately bounded; remaining `CANIC-092-LAYERING-005` subsystems
 also require explicit review. The scanner limitation remains unaccepted.
 
 Primary review evidence:
@@ -467,3 +476,6 @@ D3 implementation evidence:
 
 D4 implementation evidence:
 [root-issuer admission ownership](../../audits/reports/2026-07/2026-07-15/0.92-d4-root-issuer-admission-ownership.md).
+
+D5 implementation evidence:
+[blob-billing workflow ownership](../../audits/reports/2026-07/2026-07-15/0.92-d5-blob-billing-workflow-ownership.md).

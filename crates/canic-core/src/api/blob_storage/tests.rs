@@ -1,6 +1,4 @@
 use super::BlobStorageApi;
-#[cfg(feature = "blob-storage-billing")]
-use super::billing::BlobStorageFundingAttachment;
 use crate::{
     cdk::types::Principal,
     dto::{
@@ -12,15 +10,12 @@ use crate::{
 #[cfg(feature = "blob-storage-billing")]
 use crate::{
     cdk::candid::Nat,
-    dto::blob_storage::{
-        BlobStorageBillingConfig, BlobStorageCashierAccountTopUpError, BlobStorageFundingStatus,
-        BlobStorageGatewayPrincipalSyncAction, BlobStorageReadinessBlocker,
-        BlobStorageStatusRequest,
-    },
+    dto::blob_storage::{BlobStorageBillingConfig, BlobStorageCashierAccountTopUpError},
     ops::{
         blob_storage::funding::BlobStorageFundingInProgress,
         cashier::conversion::CashierDecodeError,
     },
+    workflow::blob_storage::billing::BlobStorageBillingWorkflowError,
 };
 
 #[cfg(feature = "blob-storage-billing")]
@@ -288,26 +283,29 @@ fn gateway_endpoint_helpers_match_toko_malformed_input_behavior() {
 #[test]
 fn cashier_decode_errors_map_to_rpc_malformed_code() {
     let empty_gateway =
-        BlobStorageApi::map_cashier_decode_error(CashierDecodeError::EmptyGatewayPrincipalList);
+        BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
+            CashierDecodeError::EmptyGatewayPrincipalList,
+        ));
     assert_eq!(empty_gateway.code, ErrorCode::InternalRpcMalformed);
 
     let invalid_balance =
-        BlobStorageApi::map_cashier_decode_error(CashierDecodeError::InvalidCycleBalance {
-            field: "total",
-        });
+        BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
+            CashierDecodeError::InvalidCycleBalance { field: "total" },
+        ));
     assert_eq!(invalid_balance.code, ErrorCode::InternalRpcMalformed);
 
     let invalid_gateway =
-        BlobStorageApi::map_cashier_decode_error(CashierDecodeError::InvalidGatewayPrincipal {
-            principal: Principal::anonymous(),
-        });
+        BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
+            CashierDecodeError::InvalidGatewayPrincipal {
+                principal: Principal::anonymous(),
+            },
+        ));
     assert_eq!(invalid_gateway.code, ErrorCode::InternalRpcMalformed);
 
     let too_many_gateways =
-        BlobStorageApi::map_cashier_decode_error(CashierDecodeError::TooManyGatewayPrincipals {
-            actual: 2,
-            max: 1,
-        });
+        BlobStorageApi::map_billing_error(BlobStorageBillingWorkflowError::CashierDecode(
+            CashierDecodeError::TooManyGatewayPrincipals { actual: 2, max: 1 },
+        ));
     assert_eq!(too_many_gateways.code, ErrorCode::InternalRpcMalformed);
 }
 
@@ -338,18 +336,11 @@ fn cashier_top_up_errors_map_to_stable_public_codes() {
 #[cfg(feature = "blob-storage-billing")]
 #[test]
 fn funding_in_progress_maps_to_conflict_code() {
-    let err = BlobStorageApi::map_funding_in_progress(BlobStorageFundingInProgress);
+    let err = BlobStorageApi::map_billing_error(
+        BlobStorageBillingWorkflowError::FundingInProgress(BlobStorageFundingInProgress),
+    );
 
     assert_eq!(err.code, ErrorCode::Conflict);
-}
-
-#[cfg(feature = "blob-storage-billing")]
-#[test]
-fn validate_requested_funding_cycles_rejects_zero() {
-    let err = BlobStorageApi::validate_requested_funding_cycles(0)
-        .expect_err("zero requested cycles should be invalid");
-
-    assert_eq!(err.code, ErrorCode::InvalidInput);
 }
 
 #[cfg(feature = "blob-storage-billing")]
@@ -403,115 +394,4 @@ fn configure_billing_rejects_oversized_nat_fields_without_replacing_current_conf
         assert_eq!(err.code, ErrorCode::InvalidInput);
         assert_eq!(BlobStorageApi::billing_config(), Some(valid.clone()));
     }
-}
-
-#[cfg(feature = "blob-storage-billing")]
-#[test]
-fn funding_attachment_attaches_requested_cycles_when_reserve_allows() {
-    assert_eq!(
-        BlobStorageApi::funding_attachment(500, 1_000, 500),
-        BlobStorageFundingAttachment {
-            project_cycles_available: 1_000,
-            attached_cycles: 500,
-            skipped_reason: None,
-        }
-    );
-}
-
-#[cfg(feature = "blob-storage-billing")]
-#[test]
-fn funding_attachment_rejects_partial_top_up_when_reserve_would_be_violated() {
-    assert_eq!(
-        BlobStorageApi::funding_attachment(500, 1_000, 700),
-        BlobStorageFundingAttachment {
-            project_cycles_available: 1_000,
-            attached_cycles: 0,
-            skipped_reason: Some("reserve would be violated"),
-        }
-    );
-}
-
-#[cfg(feature = "blob-storage-billing")]
-#[test]
-fn status_sync_action_is_read_only_when_requested() {
-    assert_eq!(
-        BlobStorageApi::status_sync_action(
-            &BlobStorageStatusRequest {
-                sync_gateway_principals: false,
-            },
-            true,
-        ),
-        BlobStorageGatewayPrincipalSyncAction::NotRequested
-    );
-    assert_eq!(
-        BlobStorageApi::status_sync_action(
-            &BlobStorageStatusRequest {
-                sync_gateway_principals: true,
-            },
-            false,
-        ),
-        BlobStorageGatewayPrincipalSyncAction::SkippedConfigMissing
-    );
-    assert_eq!(
-        BlobStorageApi::status_sync_action(
-            &BlobStorageStatusRequest {
-                sync_gateway_principals: true,
-            },
-            true,
-        ),
-        BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus
-    );
-}
-
-#[cfg(feature = "blob-storage-billing")]
-#[test]
-fn status_funding_status_reports_not_needed_at_min_balance() {
-    let mut blockers = Vec::new();
-
-    let status = BlobStorageApi::status_funding_status(10, 10, 100, 1, 1_000, &mut blockers);
-
-    assert_eq!(status, BlobStorageFundingStatus::NotNeeded);
-    assert!(blockers.is_empty());
-}
-
-#[cfg(feature = "blob-storage-billing")]
-#[test]
-fn status_funding_status_reports_required_top_up() {
-    let mut blockers = Vec::new();
-
-    let status = BlobStorageApi::status_funding_status(9, 10, 100, 1, 1_000, &mut blockers);
-
-    assert_eq!(
-        status,
-        BlobStorageFundingStatus::FundingRequired {
-            requested_cycles: Nat::from(91_u64),
-        }
-    );
-    assert_eq!(
-        blockers,
-        vec![BlobStorageReadinessBlocker::InsufficientCashierBalance]
-    );
-}
-
-#[cfg(feature = "blob-storage-billing")]
-#[test]
-fn status_funding_status_reports_reserve_violation() {
-    let mut blockers = Vec::new();
-
-    let status = BlobStorageApi::status_funding_status(9, 10, 100, 950, 1_000, &mut blockers);
-
-    assert_eq!(
-        status,
-        BlobStorageFundingStatus::ReserveWouldBeViolated {
-            requested_cycles: Nat::from(91_u64),
-            transferable_cycles: Nat::from(50_u64),
-        }
-    );
-    assert_eq!(
-        blockers,
-        vec![
-            BlobStorageReadinessBlocker::InsufficientCashierBalance,
-            BlobStorageReadinessBlocker::ReserveWouldBeViolated,
-        ]
-    );
 }

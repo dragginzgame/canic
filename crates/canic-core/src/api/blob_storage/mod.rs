@@ -2,7 +2,7 @@
 //!
 //! Responsibility: expose blob-storage helpers used by macro-generated endpoints.
 //! Does not own: stable storage, gateway authorization, or lifecycle workflows.
-//! Boundary: maps public endpoint inputs into ops validation and public errors.
+//! Boundary: delegates to workflow and maps typed failures into public errors.
 
 #[cfg(feature = "blob-storage-billing")]
 mod billing;

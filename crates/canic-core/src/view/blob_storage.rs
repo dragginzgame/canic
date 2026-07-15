@@ -2,7 +2,7 @@
 //!
 //! Responsibility: expose internal read-only blob-storage projections.
 //! Does not own: stable records, endpoint DTOs, or storage mutation.
-//! Boundary: ops map stable records into these views before API/workflow use.
+//! Boundary: ops map stable records into these views before workflow use.
 
 use crate::cdk::types::Principal;
 

@@ -3,7 +3,7 @@
 //! Responsibility: define pure blob-storage value enums shared by billing
 //! status builders and boundary DTOs.
 //! Does not own: Cashier request/result DTOs, blob-storage lifecycle storage,
-//! billing API orchestration, or gateway sync side effects.
+//! billing workflow orchestration, or gateway sync side effects.
 //! Boundary: DTO modules re-export these values to preserve public API paths
 //! while status builders import the domain owner directly.
 

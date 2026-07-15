@@ -104,6 +104,17 @@ directly with unchanged state/epoch and skipped timer checks. Public DTO,
 Candid, and stable record shapes are unchanged. This fixes
 `CANIC-092-TEST-001`, reduces the live layering guard from 25 to 18 violations,
 and leaves `CANIC-092-LAYERING-005` open for separately reviewed subsystems.
+D4 is released in `v0.92.3`.
+
+[D5 blob-billing workflow ownership](0.92-d5-blob-billing-workflow-ownership.md)
+moves Cashier sequencing, reserve/recovery, gateway synchronization, and
+readiness observation out of the API into one workflow. Pure policy owns
+configuration, funding, and readiness decisions; ops retains boundary
+conversion, single calls, guards, and state access. Reserve refusal performs
+no partial top-up, transient Cashier failure releases the guard for retry, and
+configured/missing-config state survives upgrade in PocketIC. Public DTOs,
+Candid, prices/protocol, and stable records are unchanged. This fixes
+`CANIC-092-LAYERING-001`; the current blob trace passes.
 
 ## Live Ledger
 
@@ -111,11 +122,11 @@ and leaves `CANIC-092-LAYERING-005` open for separately reviewed subsystems.
 - Valid active results: 22.
 - Invalid active results: 0; v1 failures remain preserved as invalid history.
 - Mandatory traces: frozen Phase C aggregate `fail` (6 pass, 4 fail, 0 partial,
-  0 blocked); D1/D2 move current reruns to 8 pass and 2 fail without rewriting
-  the baseline.
-- Unresolved findings: 17 (5 P1, 11 P2, one P3).
-- Phase D fixes: D1 released in `v0.92.1`; D2/D3 released in `v0.92.2`; D4
-  implemented with focused validation passing.
+  0 blocked); D1/D2/D5 move current reruns to 9 pass and 1 fail without
+  rewriting the baseline.
+- Unresolved findings: 16 (5 P1, 10 P2, one P3).
+- Phase D fixes: D1 released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
+  `v0.92.3`, and D5 implemented with focused validation passing.
 
 ## Validation
 
@@ -157,8 +168,13 @@ and leaves `CANIC-092-LAYERING-005` open for separately reviewed subsystems.
 - D4: 881 all-feature core library tests, four policy/DTO boundary guards, 19
   protocol tests, strict core Clippy, and two PocketIC proof/renewal regressions
   pass. Layering fixtures pass and the live violation set is 18.
+- D5: 878 all-feature core library tests, 50 focused blob-storage tests, four
+  policy/DTO boundary guards, 19 protocol tests, strict all-feature/all-target
+  core Clippy, and four PocketIC billing selections pass. Layering fixtures,
+  targeted formatting, and diff hygiene pass; the live violation set remains
+  18 with no new upward edge.
 
 ## Next
 
-D5 blob-billing workflow ownership is the next ordered candidate. D5 through
-D10 and the remaining layering subsystems remain separately bounded.
+D6 passive RPC DTO ownership is the next ordered candidate. D6 through D10 and
+the remaining layering subsystems remain separately bounded.
