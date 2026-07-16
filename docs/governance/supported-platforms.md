@@ -18,10 +18,11 @@ versions, and archive digests are fixed by the workflow and
 
 ## Install-Capable But Not Release-Supported
 
-The checksum-bound actionlint, ShellCheck, ICP CLI, and `ic-wasm` installers
-also contain Linux AArch64 and macOS x86_64/AArch64 branches. Those branches
-are retained for maintainer convenience, but they are not release-supported
-cells because no current CI or required maintainer gate exercises them.
+The checksum-bound actionlint, ShellCheck, Gitleaks, ICP CLI, and `ic-wasm`
+installers also contain Linux AArch64 and macOS x86_64/AArch64 branches. Those
+branches are retained for maintainer convenience, but they are not
+release-supported cells because no current CI or required maintainer gate
+exercises them.
 
 Other x86_64 Linux distributions may run the GNU/Linux tools, but only Ubuntu
 24.04 is the declared release host. Successful installation on another host

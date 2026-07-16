@@ -93,6 +93,14 @@ jobs:
       - name: Lint GitHub Actions workflows
         shell: bash
         run: "$ACTIONLINT_BIN"
+      - name: Install Gitleaks
+        shell: bash
+        run: |
+          BIN="$(bash scripts/ci/install-gitleaks.sh)"
+          echo "GITLEAKS_BIN=$BIN" >> "$GITHUB_ENV"
+      - name: Scan repository history for secrets
+        shell: bash
+        run: bash scripts/ci/run-secret-scan.sh
       - name: Install IC CLI tools
         shell: bash
         run: |

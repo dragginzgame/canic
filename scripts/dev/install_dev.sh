@@ -9,6 +9,7 @@ CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.92.10}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.96.0}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
 SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
+GITLEAKS_INSTALL_DIR="${GITLEAKS_INSTALL_DIR:-$HOME/.local/bin}"
 IC_WASM_INSTALL_DIR="${IC_WASM_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
@@ -120,6 +121,26 @@ install_or_update_shellcheck() {
     fi
 }
 
+install_or_update_gitleaks() {
+    local bin
+
+    yellow "Gitleaks:"
+    cyan_command "GITLEAKS_INSTALL_DIR=$GITLEAKS_INSTALL_DIR bash scripts/ci/install-gitleaks.sh"
+    require_command curl
+    require_command tar
+    bin="$(
+        GITLEAKS_INSTALL_DIR="$GITLEAKS_INSTALL_DIR" \
+            bash "$ROOT_DIR/scripts/ci/install-gitleaks.sh"
+    )"
+
+    green "Gitleaks installed: $("$bin" version 2>&1)"
+    if command -v gitleaks >/dev/null 2>&1; then
+        green "gitleaks on PATH: $(command -v gitleaks)"
+    else
+        yellow "gitleaks installed at $GITLEAKS_INSTALL_DIR/gitleaks; add $GITLEAKS_INSTALL_DIR to PATH to run it directly."
+    fi
+}
+
 install_or_update_icp_cli() {
     local cargo_bin_dir
     local icp_path=""
@@ -183,13 +204,14 @@ configure_git_hooks_if_present() {
 
 main() {
     if [ "${1:-}" = "--update-prereqs" ]; then
-        blue "Checking Python, shell lint, workflow lint, and ICP CLI prerequisites"
+        blue "Checking Python, shell lint, workflow lint, secret scan, and ICP CLI prerequisites"
         require_python
         install_or_update_shellcheck
         install_or_update_actionlint
+        install_or_update_gitleaks
         install_or_update_icp_cli
         install_or_update_ic_wasm
-        green "Python, shell lint, workflow lint, and ICP CLI prerequisites ready."
+        green "Python, shell lint, workflow lint, secret scan, and ICP CLI prerequisites ready."
         return 0
     fi
 
@@ -219,6 +241,7 @@ main() {
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_shellcheck
     install_or_update_actionlint
+    install_or_update_gitleaks
     install_or_update_icp_cli
     install_or_update_ic_wasm
 

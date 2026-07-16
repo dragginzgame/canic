@@ -157,7 +157,17 @@
   and makes pre-publish packaged CLI/Wasm-store proof resolve only extracted
   local 0.92.8 packages. This fixes `CANIC-092-PUBLISH-001`,
   `CANIC-092-RESIDUE-001`, and `CANIC-092-DOCS-002`. Five findings remain
-  (2 P1 and 3 P2); the dedicated scanner gap remains blocked outside D9.
+  (2 P1 and 3 P2) at the D10 boundary. D11 then moves the remaining shared
+  decision values to model, gives root-proof admission to workflow, and
+  removes all 18 remaining ops-to-policy dependencies. This fixes
+  `CANIC-092-LAYERING-005`; D11 is released in `v0.92.10`.
+- [2026-07-16](2026-07-16/summary.md): D12 adds Gitleaks 8.30.1 through the
+  repository's version/checksum-bound tool authority and runs a fully redacted
+  full-history scan in CI and the patch-release gate. Eleven initial generic
+  candidates are confirmed false positives and admitted only by exact
+  historical fingerprints; no path or rule is broadly excluded. The rerun
+  reports zero findings and fixes `CANIC-092-RELEASE-003` without a waiver.
+  Three explicitly deferred P2 watchpoints remain; no P0 or P1 remains.
 
 ## Month Status
 
@@ -178,13 +188,14 @@ also pass with typed causes preserved. Mandatory trace v1 is
 cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
-satisfied. Phase D finding review is complete; D1 through D8 are released, D9
-is committed in the untagged 0.92.8 candidate, and D10 passes focused
-validation. Published package docs and active proof now match the maintained
-surface, warning-as-error core rustdoc passes, and packaged CLI plus both
-generated and canonical Wasm-store proofs pass before registry publication.
-The current trace ledger is ten pass and zero fail without rewriting the
-frozen result. Security
+satisfied. Phase D finding review is complete; D1 through D11 are released
+through `v0.92.10`, and D12 passes focused validation. Published package docs
+and active proof match the maintained surface, warning-as-error core rustdoc
+passes, packaged CLI plus both generated and canonical Wasm-store proofs pass
+before registry publication, the layering guard reports zero violations, and
+the dedicated redacted secret scan reports zero findings. Three explicitly
+deferred P2 watchpoints remain; no P0 or P1 remains. The current trace ledger
+is ten pass and zero fail without rewriting the frozen result. Security
 ordering and lifecycle
 symmetry now have valid frozen-method
 passes with watchpoints. Capability v2 is a valid immutable-baseline pass at
@@ -217,21 +228,19 @@ C is closeable at a failing product baseline.
 
 ## Carry-Forward Follow-up
 
-1. Map the 18 remaining `CANIC-092-LAYERING-005` files into separately
-   reviewed subsystem slices; no bulk mechanical move is authorized.
-2. Keep the dedicated scanner limitation proposed until the maintainer records
-   every required waiver field; otherwise closeout remains blocked.
-3. Keep the dependency, complexity, and instruction-checkpoint P2 watchpoints
+1. Complete Slice E compatibility accounting and publish one explicit 0.92
+   closeout verdict; broad final gates remain maintainer-owned.
+2. Keep the dependency, complexity, and instruction-checkpoint P2 watchpoints
    deferred until each has finding-backed evidence for a bounded change.
-4. Keep the D4 root-issuer authority singular; do not reintroduce an ops
+3. Keep the D4 root-issuer authority singular; do not reintroduce an ops
    validator or policy-owned persisted state shape.
-5. Review delegated-auth/root-proof concentration after the complete
+4. Review delegated-auth/root-proof concentration after the complete
    baseline; do not infer a generic abstraction from size alone.
-6. Preserve Wasm v2's sole canonical host-builder authority and use only an
+5. Preserve Wasm v2's sole canonical host-builder authority and use only an
    exactly compatible v2 predecessor for future size deltas.
-7. Preserve D7's single internal proof-install path and deliberate
+6. Preserve D7's single internal proof-install path and deliberate
    control-plane support bridge; do not restore public mirrors or aliases.
-8. Carry the instruction auth-flow checkpoint gap as `CANIC-092-PERF-001`;
+7. Carry the instruction auth-flow checkpoint gap as `CANIC-092-PERF-001`;
    do not add instrumentation until a finding-backed product slice is accepted.
-9. Preserve D8's stable-only root runtime evidence and required transform
+8. Preserve D8's stable-only root runtime evidence and required transform
    provenance; do not add a legacy payload decoder or alternate build path.

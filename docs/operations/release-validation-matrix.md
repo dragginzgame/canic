@@ -33,6 +33,7 @@ bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-release-package-install-validation.sh
 cargo test --locked -p canic --test changelog_governance -- --nocapture
+make gitleaks-scan
 git diff --check
 ```
 
@@ -61,6 +62,7 @@ Before RC promotion, the maintainer runs or explicitly assigns:
 ```text
 make fmt-check
 bash scripts/ci/check-control-plane-feature-matrix.sh
+make gitleaks-scan
 make clippy
 make test
 ```
@@ -83,6 +85,7 @@ bash scripts/ci/check-release-integrity-contract.sh
 bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-release-package-install-validation.sh
+bash scripts/ci/run-secret-scan.sh
 make fmt-check
 make clippy
 make test-unit
@@ -90,9 +93,10 @@ cargo build -p canic --examples --locked
 cargo build --release --workspace --locked
 ```
 
-CI also validates workflow syntax and installs declared ICP/Wasm helpers. Audit
-definitions must not claim a guard runs in CI unless the current workflow
-contains it.
+CI also validates workflow syntax, installs declared ICP/Wasm helpers, and
+runs the pinned full-history secret scanner with fully redacted findings.
+Audit definitions must not claim a guard runs in CI unless the current
+workflow contains it.
 
 The sole support declaration is the
 [supported host and target matrix](../governance/supported-platforms.md). A
@@ -163,6 +167,7 @@ Final release accounting includes:
 
 ```text
 cargo build --release --workspace --locked
+make gitleaks-scan
 make package
 ```
 

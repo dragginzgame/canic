@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 ## Purpose
 
@@ -14,13 +14,13 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.9`.
-- `v0.92.9`, `HEAD`, `main`, and `origin/main` identify
-  `23718e1b4b5c11ba85c368e79266ffc2f06bfe1f` before the current Unreleased
-  D11 worktree changes.
-- The `v0.92.9` source tree is
-  `e03c5c9101530d62a55d72cfc600673fce0d299f`; its product-tree hash is
-  `4b445b62db2a2a06ca1a79fa7650b50aee326544e892171ad35c1b29e7188896`.
+- The workspace package version is `0.92.10`.
+- `v0.92.10`, `HEAD`, `main`, and `origin/main` identify
+  `35de57b53a5c331977e3f7ac49e8190355b1d9f4` before the current Unreleased
+  D12 worktree changes.
+- The `v0.92.10` source tree is
+  `b6b7541e697c264b1b40cd60a8a6fc72f497e9cd`; its product-tree hash is
+  `ad5421cac98f605266e55af9e55e7a1fd1845f56f774082c8f27b6714b25d5bb`.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -50,17 +50,23 @@ current mandatory-trace ledger is ten pass and zero fail. D9 is released in
 executions use immutable commits, downloaded tools are version/checksum bound,
 and one governance matrix owns the Ubuntu 24.04 x86_64 native/Wasm support
 cell. This fixes `CANIC-092-RELEASE-001`, `-002`, and `-004`; the dedicated
-scanner gap remains blocked outside D9. D10 is released in `v0.92.9` and
+scanner gap remained blocked after D9 and is fixed by D12. D10 is released in
+`v0.92.9` and
 focused
 validation passes: published feature documentation matches the owning
 manifests, active CLI proof asserts only maintained commands, warning-as-error
 core rustdoc passes, and installed plus packaged downstream artifact proofs
 pass before registry publication. This fixes `CANIC-092-PUBLISH-001`,
-`CANIC-092-RESIDUE-001`, and `CANIC-092-DOCS-002`. D11 is implemented and
+`CANIC-092-RESIDUE-001`, and `CANIC-092-DOCS-002`. D11 is released in
+`v0.92.10` and
 focused validation passes: shared decision inputs now belong to model,
 root-proof admission belongs to workflow, and ops no longer imports policy.
-This fixes `CANIC-092-LAYERING-005`; four findings remain unresolved (1 P1
-and 3 P2), and the live layering guard passes with zero violations.
+This fixes `CANIC-092-LAYERING-005`, and the live layering guard passes with
+zero violations. D12 is implemented and its focused current-tree rerun passes:
+Gitleaks 8.30.1 is version/checksum bound, scans complete history with full
+redaction, and reports zero unreviewed findings. This fixes
+`CANIC-092-RELEASE-003` without a waiver. Three P2 findings remain unresolved,
+all with explicit deferred dispositions; no P0 or P1 remains.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -108,8 +114,8 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
   immediate parent and frozen baseline.
 - D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in `v0.92.3`, D5 in
   `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, D8 in `v0.92.7`, D9 in
-  `v0.92.8`, and D10 in `v0.92.9`. D11 is implemented and validated against
-  the `v0.92.9` parent.
+  `v0.92.8`, D10 in `v0.92.9`, and D11 in `v0.92.10`. D12 is implemented and
+  validated against the `v0.92.10` parent.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -134,8 +140,8 @@ First primary results:
   absent, and no canonical supported host/target matrix exists.
 - [D9 release execution integrity](../audits/reports/2026-07/2026-07-15/0.92-d9-release-execution-integrity.md)
   fixes the action, executable-tool, and support-matrix findings. Its affected
-  subchecks pass, but the retained release-integrity method remains blocked by
-  the unchanged dedicated-scanner gap under `CANIC-092-RELEASE-003`.
+  subchecks pass. The dedicated-scanner gap that remained after D9 is fixed by
+  D12 below, so the current affected release-integrity rerun passes.
 - [D10 active documentation and hard-cut residue](../audits/reports/2026-07/2026-07-15/0.92-d10-active-documentation-and-hard-cut-residue.md)
   fixes the package-feature, active legacy-proof residue, and public-rustdoc
   findings. Manifest-derived docs proof, installed/packaged CLI proof, and
@@ -145,6 +151,10 @@ First primary results:
   fixes the remaining 18 ops-to-policy dependencies. Shared data belongs to
   model, root delegation-proof admission belongs to workflow, and the current
   executable layering guard passes with zero violations.
+- [D12 dedicated secret scan](../audits/reports/2026-07/2026-07-16/0.92-d12-dedicated-secret-scan.md)
+  fixes the final P1 evidence gap. The version/checksum-bound scanner runs over
+  complete history with full redaction; 11 reviewed false positives are
+  admitted only by exact fingerprints, and the rerun reports zero findings.
 - Findings `CANIC-092-AUDIT-007`, `CANIC-092-DEPENDENCY-001`, and
   `CANIC-092-RELEASE-001` through `-004` are indexed in the 0.92 tracker.
 - [layer boundary](../audits/reports/2026-07/2026-07-14/0.92-layer-boundary.md)
@@ -325,8 +335,9 @@ First primary results:
   fixes two P2 accidental public surfaces, and D8 fixes the root-build P1 plus
   transform-provenance P2. D9 fixes the two release-execution P1s plus the
   support-matrix P2. D10 fixes two P2 active package/proof findings and the P3
-  rustdoc drift. D11 fixes the remaining layering P1. Four findings remain
-  unresolved (1 P1 and 3 P2).
+  rustdoc drift. D11 fixes the remaining layering P1, and D12 fixes the
+  dedicated-scanner P1 without a waiver. Three P2 findings remain unresolved
+  with explicit deferred dispositions.
   All current trace reruns pass; the frozen Phase C aggregate remains
   historical.
 
@@ -340,8 +351,9 @@ First primary results:
 - Locked/offline Cargo metadata/tree and the dependency-v2 declaration rule
   pass. `cargo-audit 0.22.2` found zero vulnerabilities using advisory DB
   commit `9f3e1380...` from 2026-07-13.
-- The repository credential-pattern scan found no match; this does not replace
-  the blocked dedicated secret scan.
+- The original credential-pattern scan found no match. D12's dedicated
+  Gitleaks 8.30.1 full-history scan also passes after 11 false positives were
+  classified and admitted only by exact historical fingerprints.
 - Layering v2 detector fixtures pass. Its immutable baseline validly fails on
   25 production ops-to-policy dependencies; D4's affected-scope rerun reduces
   the live set to 18. Policy purity, passive DTO, and root-issuer ownership
@@ -464,14 +476,20 @@ First primary results:
   all-target/all-feature core Clippy; and the executable layering guard with
   zero production ops-to-policy dependencies. Public, serialized, stable,
   configuration, and dependency surfaces are unchanged.
+- D12 validation passes the checksum-bound Gitleaks install and exact-version
+  probe, redacted full-history scan, missing/wrong-version and argument
+  rejection probes, release-integrity and validation-matrix guards,
+  `actionlint`, Bash syntax, changed-script ShellCheck, and
+  `make gitleaks-scan`.
+  The admitted result has zero unreviewed findings and retains no raw report.
 
 ## Next Action
 
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 through
-D10 are released through `v0.92.9`, and D11 is implemented and validated,
-leaving four unresolved findings (1 P1 and 3 P2). The next closeout decision
-is whether to accept the dedicated-scanner gap as a documented limitation or
-provide an approved scanner. The proposed limitation is not yet a waiver; the
-three P2 dependency, complexity, and instruction watchpoints remain deferred.
+D11 are released through `v0.92.10`, and D12 is implemented and validated.
+No P0 or P1 remains. The next step is Slice E closeout: confirm the three
+deferred P2 dispositions, execute the `v0.91.6` compatibility accounting, and
+publish one explicit release-line verdict. Broad release validation remains
+maintainer-owned.
