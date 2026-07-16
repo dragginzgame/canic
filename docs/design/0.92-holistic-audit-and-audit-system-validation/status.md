@@ -42,11 +42,14 @@ transaction re-resolved six unrelated external packages. D13 fixes
 `CANIC-092-RELEASE-005` in released `v0.92.12` by synchronizing only workspace
 lock entries offline. Slice E compatibility accounting and the final
 release-line closeout are complete. The maintainer then explicitly accepted
-post-closeout D14, which fixes the auth instruction-checkpoint evidence gap in
-the current working tree. Two P2 findings remain unresolved with explicit
-deferred dispositions. The current trace ledger is ten pass and zero
-fail, no P0 or P1 remains, and the explicit verdict is
-`pass_with_limitations`.
+post-closeout D14, released in `v0.92.13`, which fixes the auth
+instruction-checkpoint evidence gap. The maintainer then accepted working-tree
+D15 for the final two P2s. D15 removes the three concrete auth/root-proof
+production hubs and makes the exact upstream dependency advisory set
+fail-closed in CI and patch releases. The complexity finding is fixed; the
+dependency finding is an accepted external limitation. The current trace
+ledger is ten pass and zero fail, no deferred, P0, or P1 finding remains, and
+the explicit verdict is `pass_with_limitations`.
 
 No runtime product code, public contract, stable state, or generated product
 behavior changed during method hardening. The final 0.92.11 version transaction
@@ -82,7 +85,13 @@ maintainer prerequisite for any future 1.0 discussion.
   `228ee32eaf1d8d2090f6b7b4aa188b01143ec429aee81efbf66a888c2d9df062`.
 - Final Cargo.lock SHA-256:
   `62c628a400247c89b6846a48c32e6d3d581a05ce3e99394d51643ce9030273ad`.
-- Workspace package version: `0.92.12`.
+- Post-closeout D14 release: `v0.92.13` at
+  `317ee35ba27a06f4f8372558e991730df6f443f8`, source tree
+  `0cd44acfc6c4603f11edcbb568f3157e9321a63d`, product-tree hash
+  `edbd04fd8e0ca87415cb065bff7f6efde1e2719a5024e6e5470ad511512ba35c`,
+  and Cargo.lock SHA-256
+  `35b40af2b8bd0d609666a53526f2902d360b3eeb9ecb50955c53bd44652b934a`.
+- Workspace package version: `0.92.13`.
 
 ## Slices
 
@@ -265,9 +274,9 @@ Primary evidence:
       mutation. Nineteen findings map to ten bounded candidate slices, three P2
       pressure findings remain deferred watchpoints, and the dedicated scanner
       P1 has a proposed but unaccepted limitation record.
-- [ ] Implement only accepted bounded fix slices.
-- [ ] Add targeted positive, rejection, boundary, and regression proof.
-- [ ] Compare each slice causally to its parent and cumulatively to the frozen
+- [x] Implement only accepted bounded fix slices.
+- [x] Add targeted positive, rejection, boundary, and regression proof.
+- [x] Compare each committed slice causally to its parent and cumulatively to the frozen
       product baseline.
 - [x] Implement and validate D1 publication safety and typed failures. Ten
       publications are admitted per window, the eleventh rejects before fleet
@@ -340,6 +349,11 @@ Primary evidence:
       Root-proof provisioning and delegated-token prepare, repair, cache, and
       full-verification stages now use the existing checkpoint authority;
       targeted tests and Clippy pass without contract or state changes.
+- [x] Implement and focus-validate post-closeout D15 final P2 hardening. An
+      exact dependency-risk gate rejects vulnerabilities and all advisory or
+      introducer drift; existing auth responsibilities replace the three
+      measured production hubs without behavior or contract changes. Final
+      committed-method comparison remains pending maintainer commit.
 
 ### Slice E - Closeout
 
@@ -369,7 +383,7 @@ Primary evidence:
 | `CANIC-092-AUDIT-005` | evidence gap | P1 | confirmed | fixed | `cdcd1487...` / `91736337...` |
 | `CANIC-092-AUDIT-006` | operational risk | P1 | confirmed | fixed | `cdcd1487...` / `91736337...` |
 | `CANIC-092-AUDIT-007` | audit method defect | P1 | confirmed | fixed | Dependency v2 defines and passes a deterministic declaration-integrity rule; retained correction committed at `daa67913...`. |
-| `CANIC-092-DEPENDENCY-001` | operational risk | P2 | confirmed | deferred | Four reachable transitive packages are unmaintained, but no known vulnerability or bounded safe replacement is established; reconsider on advisory, dependency update, or 1.0 preparation. |
+| `CANIC-092-DEPENDENCY-001` | operational risk | P2 | confirmed | accepted | D15 records the exact advisory, package, version, checksum, and immediate introducer set and rejects vulnerabilities or any drift in CI/release. The four packages remain upstream transitives, so the limitation is controlled rather than falsely called fixed. |
 | `CANIC-092-RELEASE-001` | operational risk | P1 | confirmed | fixed | D9 pins all 13 active external Action executions to reviewed full commits and guards future references. |
 | `CANIC-092-RELEASE-002` | operational risk | P1 | confirmed | fixed | D9 versions package tools and checksum-verifies all downloaded executable archives before extraction/execution. |
 | `CANIC-092-RELEASE-003` | evidence gap | P1 | confirmed | fixed | D12 installs pinned Gitleaks through a checksum-bound path and records a redacted full-history pass with zero unreviewed findings. |
@@ -398,7 +412,7 @@ Primary evidence:
 | `CANIC-092-DOCS-002` | documentation drift | P3 | confirmed | fixed | D10 describes typed internal failure preservation without linking the crate-private type; warning-as-error core rustdoc passes. |
 | `CANIC-092-TEST-001` | evidence gap | P2 | confirmed | fixed | D4 directly proves valid policy/template admission, every request rejection boundary, unchanged state/epoch, skipped timers, and renewal/provisioning regressions. |
 | `CANIC-092-AUDIT-013` | audit method defect | P1 | confirmed | fixed | Complexity v2 has one fingerprinted runner, complete scope/manual evidence, and one reproducible score; retained correction committed at `daa67913...`. |
-| `CANIC-092-COMPLEXITY-001` | operational risk | P2 | confirmed | deferred | Delegated-auth and chain-key trust paths remain concentrated, but no correctness defect or justified replacement abstraction is established; reconsider with operational evidence. |
+| `CANIC-092-COMPLEXITY-001` | operational risk | P2 | confirmed | fixed | D15 splits delegated-token ops, auth preparation, and chain-key installation by existing responsibility. All resulting production owners are below 600 logical lines, with no generic abstraction, competing authority, or behavior change. |
 | `CANIC-092-AUDIT-014` | audit method defect | P1 | confirmed | fixed | Change-friction v2 has exhaustive scope/layers, a frozen fixture, exact counters/formulas, and one reproducible score; retained correction committed at `daa67913...`. |
 | `CANIC-092-AUDIT-015` | audit method defect | P1 | confirmed | fixed | Instruction v2 uses authoritative root-harness artifacts, a complete fixed roster, exact endpoint labels, root-independent identity, compatible-predecessor discovery, and namespaced checkpoint scanning; retained correction committed at `daa67913...`. |
 | `CANIC-092-AUDIT-016` | audit method defect | P1 | confirmed | fixed | Wasm v2 uses only canonical host-builder release/debug artifacts, root-independent identity, exact comparison keys, and verified compact evidence; retained correction committed at `daa67913...`. |
@@ -553,9 +567,16 @@ assigns identity by canonical owner/invariant rather than discovery order.
   `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in
   `v0.92.7`, D9 in `v0.92.8`, D10 in `v0.92.9`, and D11 in `v0.92.10`.
   D12 is released in `v0.92.11`; D13 and Slice E compatibility evidence are
-  released in `v0.92.12`. Unreleased post-closeout D14 fixes
-  `CANIC-092-PERF-001`; the live working-tree unresolved index is 2 (0 P1 and
-  2 P2), both explicitly deferred.
+  released in `v0.92.12`. Post-closeout D14 is released in `v0.92.13` and
+  fixes `CANIC-092-PERF-001`. Working-tree D15 fixes
+  `CANIC-092-COMPLEXITY-001` and moves `CANIC-092-DEPENDENCY-001` from
+  deferred to accepted external limitation; the live unresolved index is one
+  accepted P2, with zero deferred or blocked findings.
+- D15 focused validation passes the exact dependency gate and negative
+  fixtures, release guards, `actionlint`, ShellCheck, 165 auth tests, 11 auth
+  prepare workflow tests, strict all-target core Clippy, formatting, and diff
+  hygiene. Final v2 complexity comparison requires the maintainer's commit
+  identity and is therefore pending release reconciliation.
 - Broad workspace, deployment, publish, and release gates: not run as Phase C
   audit evidence unless a frozen method specifically requires them.
 
@@ -565,13 +586,15 @@ The [0.92 release-line closeout](../../audits/release-lines/0.92-closeout.md)
 is complete at immutable `v0.92.12` with
 `closeout_verdict: pass_with_limitations`. No P0/P1, waiver, or blocked current
 run remains. The maintainer separately accepted D14, which fixes the
-instruction-checkpoint P2 in the current working tree. The dependency and
-complexity P2 watchpoints remain deferred because neither has a bounded safe
-product change.
+instruction-checkpoint P2 in released `v0.92.13`, and accepted D15 for the two
+remaining P2s. D15 fixes the concrete complexity concentration and converts
+the upstream dependency watchpoint into one exact fail-closed accepted
+limitation. No deferred or blocked finding remains.
 
-Continue with real-world use. Any new product work requires a separately
-accepted design or concrete operational finding. Broad deployment, package,
-publish, and release validation remains maintainer-owned.
+Commit and release-reconcile D15, including the frozen v2 complexity rerun on
+the committed identity. Then begin 0.93 discovery from operational use and
+current evidence. Broad deployment, package, publish, and release validation
+remains maintainer-owned.
 
 Primary review evidence:
 [0.92 Phase C baseline review](../../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md).
@@ -633,6 +656,11 @@ D13 implementation evidence:
 
 Slice E compatibility evidence:
 [`v0.91.6` compatibility accounting](../../audits/reports/2026-07/2026-07-16/0.92-v0916-compatibility-accounting.md).
+
+Post-closeout evidence:
+[D14 auth performance checkpoints](../../audits/reports/2026-07/2026-07-16/0.92-d14-auth-performance-checkpoints.md)
+and
+[D15 final P2 hardening](../../audits/reports/2026-07/2026-07-16/0.92-d15-final-p2-hardening.md).
 
 Final release-line evidence:
 [0.92 closeout](../../audits/release-lines/0.92-closeout.md).

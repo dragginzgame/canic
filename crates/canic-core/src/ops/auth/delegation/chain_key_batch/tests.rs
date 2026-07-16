@@ -1,12 +1,14 @@
 use super::merkle::chain_key_batch_node_hash;
 use super::selection::chain_key_template_due;
 use super::*;
+use crate::ops::auth::delegation::root_issuer_renewal::renewal_template_fingerprint;
 use crate::{
     dto::auth::{ChainKeyAlgorithm, ChainKeyBatchWitnessStepV1, ChainKeyKeyId},
     ids::{BuildNetwork, CanisterRole},
     model::auth::{
-        RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-        RootIssuerRenewalOutcome, RootIssuerRenewalTemplate,
+        ChainKeyRootDelegationInstallFailure, RootDelegatedRoleGrantPolicy,
+        RootDelegationAudiencePolicy, RootIssuerPolicy, RootIssuerRenewalOutcome,
+        RootIssuerRenewalState, RootIssuerRenewalTemplate,
     },
     ops::auth::delegated::chain_key::{
         ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,

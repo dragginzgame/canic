@@ -10,6 +10,8 @@ VERIFY="$ROOT/scripts/ci/verify-file-checksum.sh"
 ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
 SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
 GITLEAKS_IGNORE="$ROOT/.gitleaksignore"
+DEPENDENCY_RISK_GATE="$ROOT/scripts/ci/check-dependency-risk-inventory.sh"
+DEPENDENCY_RISK_INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
@@ -25,7 +27,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$BUMP_VERSION"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$DEPENDENCY_RISK_GATE" "$DEPENDENCY_RISK_INVENTORY" "$BUMP_VERSION"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -57,8 +59,12 @@ rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound Gitleaks installer"
 rg -F 'run: bash scripts/ci/run-secret-scan.sh' "$CI" >/dev/null ||
     fail "the dedicated secret scan is not active in CI"
+rg -F 'run: bash scripts/ci/check-dependency-risk-inventory.sh' "$CI" >/dev/null ||
+    fail "the dependency risk inventory gate is not active in CI"
 rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan' "$MAKEFILE" >/dev/null ||
     fail "the patch-release gate does not require the dedicated secret scan"
+rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan dependency-risk-gate' "$MAKEFILE" >/dev/null ||
+    fail "the patch-release gate does not require dependency risk validation"
 rg -F -- '--redact=100' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated secret scan does not redact findings"
 rg -F '"$GITLEAKS_BIN" git' "$SECRET_SCAN" >/dev/null ||
