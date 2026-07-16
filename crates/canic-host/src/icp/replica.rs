@@ -1,23 +1,13 @@
 use std::{path::Path, process::Command};
 
 use super::{
-    command::{add_debug_arg, command_display},
+    command::add_debug_arg,
     error::IcpCommandError,
     model::IcpCli,
     run::{run_json, run_output_with_stderr, run_status_inherit, run_success},
 };
 
 impl IcpCli {
-    /// Start the local ICP replica.
-    pub fn local_replica_start(
-        &self,
-        background: bool,
-        debug: bool,
-    ) -> Result<String, IcpCommandError> {
-        let mut command = self.local_replica_command("start");
-        run_local_replica_start_command(&mut command, background, debug)
-    }
-
     /// Start the local ICP replica from one ICP project root.
     pub fn local_replica_start_in(
         &self,
@@ -27,13 +17,6 @@ impl IcpCli {
     ) -> Result<String, IcpCommandError> {
         let mut command = self.local_replica_command_in("start", cwd);
         run_local_replica_start_command(&mut command, background, debug)
-    }
-
-    /// Return local ICP replica status.
-    pub fn local_replica_status(&self, debug: bool) -> Result<String, IcpCommandError> {
-        let mut command = self.local_replica_command("status");
-        add_debug_arg(&mut command, debug);
-        run_output_with_stderr(&mut command)
     }
 
     /// Return local ICP replica status from one ICP project root.
@@ -47,17 +30,6 @@ impl IcpCli {
         run_output_with_stderr(&mut command)
     }
 
-    /// Return local ICP replica status as the ICP CLI JSON payload.
-    pub fn local_replica_status_json(
-        &self,
-        debug: bool,
-    ) -> Result<serde_json::Value, IcpCommandError> {
-        let mut command = self.local_replica_command("status");
-        add_debug_arg(&mut command, debug);
-        command.arg("--json");
-        run_json(&mut command)
-    }
-
     /// Return local ICP replica status JSON from one ICP project root.
     pub fn local_replica_status_json_in(
         &self,
@@ -68,13 +40,6 @@ impl IcpCli {
         add_debug_arg(&mut command, debug);
         command.arg("--json");
         run_json(&mut command)
-    }
-
-    /// Return whether this project owns a running local ICP replica.
-    pub fn local_replica_project_running(&self, debug: bool) -> Result<bool, IcpCommandError> {
-        let mut command = self.local_replica_command("status");
-        add_debug_arg(&mut command, debug);
-        run_success(&mut command)
     }
 
     /// Return whether one ICP project root owns a running local ICP replica.
@@ -95,13 +60,6 @@ impl IcpCli {
         run_success(&mut command)
     }
 
-    /// Stop the local ICP replica.
-    pub fn local_replica_stop(&self, debug: bool) -> Result<String, IcpCommandError> {
-        let mut command = self.local_replica_command("stop");
-        add_debug_arg(&mut command, debug);
-        run_output_with_stderr(&mut command)
-    }
-
     /// Stop the local ICP replica from one ICP project root.
     pub fn local_replica_stop_in(
         &self,
@@ -111,33 +69,6 @@ impl IcpCli {
         let mut command = self.local_replica_command_in("stop", cwd);
         add_debug_arg(&mut command, debug);
         run_output_with_stderr(&mut command)
-    }
-
-    /// Render a local replica start command.
-    #[must_use]
-    pub fn local_replica_start_display(&self, background: bool, debug: bool) -> String {
-        let mut command = self.local_replica_command("start");
-        add_debug_arg(&mut command, debug);
-        if background {
-            command.arg("--background");
-        }
-        command_display(&command)
-    }
-
-    /// Render a local replica status command.
-    #[must_use]
-    pub fn local_replica_status_display(&self, debug: bool) -> String {
-        let mut command = self.local_replica_command("status");
-        add_debug_arg(&mut command, debug);
-        command_display(&command)
-    }
-
-    /// Render a local replica stop command.
-    #[must_use]
-    pub fn local_replica_stop_display(&self, debug: bool) -> String {
-        let mut command = self.local_replica_command("stop");
-        add_debug_arg(&mut command, debug);
-        command_display(&command)
     }
 
     fn local_replica_command(&self, action: &str) -> Command {

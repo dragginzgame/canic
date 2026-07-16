@@ -242,8 +242,7 @@ fn icp_cli_error_check(error: IcpCommandError) -> MedicCheck {
         IcpCommandError::IncompatibleCliVersion { .. }
         | IcpCommandError::Io(_)
         | IcpCommandError::Failed { .. }
-        | IcpCommandError::Json { .. }
-        | IcpCommandError::SnapshotIdUnavailable { .. } => "icp_cli_incompatible",
+        | IcpCommandError::Json { .. } => "icp_cli_incompatible",
     };
 
     MedicCheck::fail(

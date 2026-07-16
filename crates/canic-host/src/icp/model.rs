@@ -61,15 +61,6 @@ pub struct IcpSnapshotCreateReceipt {
 }
 
 ///
-/// IcpSnapshotUploadReceipt
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IcpSnapshotUploadReceipt {
-    pub snapshot_id: String,
-}
-
-///
 /// IcpCanisterStatusReport
 ///
 

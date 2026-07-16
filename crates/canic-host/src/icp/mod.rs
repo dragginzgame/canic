@@ -17,14 +17,13 @@ pub use diagnostic::{IcpDiagnostic, classify_icp_diagnostic};
 pub use error::IcpCommandError;
 pub use model::{
     ICP_CLI_SUPPORTED_VERSION_RANGE, IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli,
-    IcpCliVersion, IcpRawOutput, IcpSnapshotCreateReceipt, IcpSnapshotUploadReceipt,
-    LocalReplicaTarget, REQUIRED_ICP_CLI_VERSION,
+    IcpCliVersion, IcpRawOutput, IcpSnapshotCreateReceipt, LocalReplicaTarget,
+    REQUIRED_ICP_CLI_VERSION,
 };
 pub use run::{
     run_json, run_output, run_output_with_stderr, run_raw_output, run_status, run_status_inherit,
     run_success,
 };
-pub use snapshot::parse_snapshot_id;
 pub use version::{is_supported_icp_cli_version, parse_icp_cli_version};
 
 #[cfg(test)]
