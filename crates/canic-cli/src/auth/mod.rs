@@ -59,7 +59,7 @@ const DEPLOYMENT_ARG: &str = "deployment";
 const ISSUER_ARG: &str = "issuer";
 const JSON_ARG: &str = "json";
 const ROOT_ROLE: &str = "root";
-const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 2;
+const AUTH_RENEWAL_STATUS_SCHEMA_VERSION: u16 = 1;
 const ISSUER_NOT_IN_SUBNET_REGISTRY_REASON: &str = "issuer_not_in_subnet_registry";
 
 const HELP_AFTER: &str = "\
@@ -487,24 +487,28 @@ enum AuthRenewalCandidSource {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum AuthRenewalStatusCode {
-    ActiveAttempt,
+    BatchFailed,
+    BatchPending,
     Configured,
     Disabled,
     DriftDetected,
     IssuerUnregistered,
     Missing,
+    ProofUnavailable,
     Unavailable,
 }
 
 impl AuthRenewalStatusCode {
     const fn label(self) -> &'static str {
         match self {
-            Self::ActiveAttempt => "active_attempt",
+            Self::BatchFailed => "batch_failed",
+            Self::BatchPending => "batch_pending",
             Self::Configured => "configured",
             Self::Disabled => "disabled",
             Self::DriftDetected => "drift_detected",
             Self::IssuerUnregistered => "issuer_unregistered",
             Self::Missing => "missing",
+            Self::ProofUnavailable => "proof_unavailable",
             Self::Unavailable => "unavailable",
         }
     }
@@ -576,24 +580,25 @@ struct AuthRenewalTemplateStatus {
 struct AuthRenewalStateStatus {
     present: bool,
     last_installed_cert_hash: Option<String>,
-    last_outcome: Option<String>,
-    consecutive_failures: Option<u64>,
     last_installed_expires_at_ns: Option<String>,
     last_installed_refresh_after_ns: Option<String>,
     next_attempt_after_ns: Option<String>,
-    active_attempt_id: Option<String>,
 }
 
 ///
-/// AuthRenewalActiveAttemptStatus
+/// AuthRenewalBatchStatus
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-struct AuthRenewalActiveAttemptStatus {
+struct AuthRenewalBatchStatus {
     present: bool,
     status: Option<String>,
     batch_id: Option<String>,
-    prepared_expires_at_ns: Option<String>,
+    cert_hash: Option<String>,
+    proof_epoch: Option<u64>,
+    expires_at_ns: Option<String>,
+    installed_at_ns: Option<String>,
+    retry_after_ns: Option<String>,
     failure: Option<String>,
 }
 
@@ -605,7 +610,7 @@ struct AuthRenewalActiveAttemptStatus {
 struct AuthRenewalStatusSummary {
     template: AuthRenewalTemplateStatus,
     state: AuthRenewalStateStatus,
-    active_attempt: AuthRenewalActiveAttemptStatus,
+    latest_batch: AuthRenewalBatchStatus,
 }
 
 ///
@@ -928,22 +933,38 @@ fn renewal_status_code(
         AuthRenewalStatusCode::IssuerUnregistered
     } else if issuer_observation.drift_detected {
         AuthRenewalStatusCode::DriftDetected
-    } else if status.active_attempt.present {
-        AuthRenewalStatusCode::ActiveAttempt
     } else if status.template.enabled == Some(false) {
         AuthRenewalStatusCode::Disabled
-    } else if status.template.present {
-        AuthRenewalStatusCode::Configured
-    } else {
+    } else if status.latest_batch.failure.is_some()
+        || status.latest_batch.status.as_deref() == Some("failed_retryable")
+    {
+        AuthRenewalStatusCode::BatchFailed
+    } else if matches!(
+        status.latest_batch.status.as_deref(),
+        Some("prepared" | "signing" | "signed" | "installing")
+    ) {
+        AuthRenewalStatusCode::BatchPending
+    } else if !status.template.present {
         AuthRenewalStatusCode::Missing
+    } else if issuer_observation.available && !issuer_observation_is_usable(issuer_observation) {
+        AuthRenewalStatusCode::ProofUnavailable
+    } else {
+        AuthRenewalStatusCode::Configured
     }
+}
+
+fn issuer_observation_is_usable(observation: &AuthIssuerObservation) -> bool {
+    matches!(observation.status.as_str(), "valid" | "refresh_needed")
 }
 
 fn auth_renewal_medic_summary_from_result(
     result: &AuthRenewalStatusResult,
 ) -> AuthRenewalMedicSummary {
     let observation = &result.issuer_observation;
-    let status = if observation.available && !observation.drift_detected {
+    let status = if observation.available
+        && !observation.drift_detected
+        && issuer_observation_is_usable(observation)
+    {
         AuthRenewalMedicStatus::Ready
     } else {
         AuthRenewalMedicStatus::Warning
@@ -972,6 +993,21 @@ fn auth_renewal_medic_summary_from_result(
         format!(
             "run canic auth renewal status {} --issuer {}; if drift persists, wait for root chain-key renewal or retry an issuer login/update so lazy repair can run",
             result.deployment, result.issuer_pid
+        )
+    } else if result.status == AuthRenewalStatusCode::BatchFailed {
+        format!(
+            "wait for root chain-key renewal to retry issuer {}; inspect latest_batch.failure if the retry does not progress",
+            result.issuer_pid
+        )
+    } else if result.status == AuthRenewalStatusCode::BatchPending {
+        format!(
+            "allow the root chain-key renewal batch for issuer {} to finish",
+            result.issuer_pid
+        )
+    } else if result.status == AuthRenewalStatusCode::ProofUnavailable {
+        format!(
+            "provision issuer {} through the application root readiness facade or wait for root chain-key renewal",
+            result.issuer_pid
         )
     } else if observation.available {
         "-".to_string()

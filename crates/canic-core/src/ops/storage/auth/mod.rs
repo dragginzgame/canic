@@ -16,14 +16,11 @@ use crate::{
         ActiveDelegationProof, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessV1,
         ChainKeyDelegationCertV1, ChainKeyRootSignatureV1, DelegationCert,
     },
-    model::auth::{
-        RootIssuerPolicy, RootIssuerRenewalAttempt, RootIssuerRenewalState,
-        RootIssuerRenewalTemplate,
-    },
+    model::auth::{RootIssuerPolicy, RootIssuerRenewalState, RootIssuerRenewalTemplate},
     ops::storage::auth::mapper::{
         ActiveDelegationProofRecordMapper, ChainKeyRootDelegationBatchRecordMapper,
-        RootIssuerPolicyRecordMapper, RootIssuerRenewalAttemptRecordMapper,
-        RootIssuerRenewalStateRecordMapper, RootIssuerRenewalTemplateRecordMapper,
+        RootIssuerPolicyRecordMapper, RootIssuerRenewalStateRecordMapper,
+        RootIssuerRenewalTemplateRecordMapper,
     },
     storage::stable::auth::{
         AuthState, DelegatedSessionBootstrapBindingRecord, DelegatedSessionRecord,
@@ -286,18 +283,6 @@ impl AuthStateOps {
     }
 
     #[must_use]
-    pub fn root_issuer_renewal_attempt(attempt_id: [u8; 32]) -> Option<RootIssuerRenewalAttempt> {
-        AuthState::get_root_issuer_renewal_attempt(attempt_id)
-            .map(RootIssuerRenewalAttemptRecordMapper::record_to_attempt)
-    }
-
-    pub fn upsert_root_issuer_renewal_attempt(attempt: RootIssuerRenewalAttempt) {
-        AuthState::upsert_root_issuer_renewal_attempt(
-            RootIssuerRenewalAttemptRecordMapper::attempt_to_record(attempt),
-        );
-    }
-
-    #[must_use]
     pub fn chain_key_root_delegation_batch(
         batch_id: [u8; 32],
     ) -> Option<ChainKeyRootDelegationBatch> {
@@ -386,8 +371,7 @@ mod tests {
         ids::CanisterRole,
         model::auth::{
             RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-            RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
-            RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
+            RootIssuerRenewalState, RootIssuerRenewalTemplate,
         },
     };
 
@@ -571,9 +555,6 @@ mod tests {
             last_installed_cert_hash: Some([2; 32]),
             last_installed_expires_at_ns: Some(200),
             last_installed_refresh_after_ns: Some(160),
-            active_attempt_id: Some([3; 32]),
-            last_outcome: RootIssuerRenewalOutcome::RetrievalExpired,
-            consecutive_failures: 2,
             next_attempt_after_ns: 90,
             updated_at_ns: 80,
         };
@@ -582,35 +563,5 @@ mod tests {
 
         assert_eq!(AuthStateOps::root_issuer_renewal_state(p(51)), Some(state));
         assert_eq!(AuthStateOps::root_issuer_renewal_state(p(52)), None);
-    }
-
-    #[test]
-    fn root_issuer_renewal_attempt_round_trips_through_auth_state() {
-        let attempt = RootIssuerRenewalAttempt {
-            attempt_id: [4; 32],
-            issuer_pid: p(61),
-            template_fingerprint: [5; 32],
-            batch_id: [6; 32],
-            proof_ref: RootIssuerRenewalProofRef {
-                issuer_pid: p(61),
-                cert_hash: [7; 32],
-            },
-            status: RootIssuerRenewalAttemptStatus::Prepared,
-            prepared_at_ns: 10,
-            retrieval_expires_at_ns: 70,
-            install_deadline_ns: 90,
-            prepared_cert_hash: [7; 32],
-            prepared_expires_at_ns: 200,
-            prepared_refresh_after_ns: 160,
-            failure: Some(RootIssuerRenewalOutcome::RetrievalExpired),
-        };
-
-        AuthStateOps::upsert_root_issuer_renewal_attempt(attempt.clone());
-
-        assert_eq!(
-            AuthStateOps::root_issuer_renewal_attempt([4; 32]),
-            Some(attempt)
-        );
-        assert_eq!(AuthStateOps::root_issuer_renewal_attempt([8; 32]), None);
     }
 }

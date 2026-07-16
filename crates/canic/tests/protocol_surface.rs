@@ -24,11 +24,11 @@ use canic::{
         ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant,
         DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
         IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchProof,
-        RootDelegationProofBatchProofRef, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-        RootIssuerPolicyView, RootIssuerRenewalAttemptStatus, RootIssuerRenewalAttemptView,
-        RootIssuerRenewalOutcome, RootIssuerRenewalStateView, RootIssuerRenewalStatusRequest,
-        RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
-        RootIssuerRenewalTemplateUpsertRequest, RootIssuerRenewalTemplateView, RootProof,
+        RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerPolicyView,
+        RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView, RootIssuerRenewalStateView,
+        RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
+        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+        RootIssuerRenewalTemplateView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::memory::MemoryLedgerResponse,
@@ -808,24 +808,16 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
     let issuer_pid = Principal::from_slice(&[17; 29]);
     let batch_id = [19; 32];
     let cert_hash = [20; 32];
-    let proof_ref = RootDelegationProofBatchProofRef {
-        issuer_pid,
-        cert_hash,
-    };
-    let renewal_attempt = RootIssuerRenewalAttemptView {
-        attempt_id: [23; 32],
-        issuer_pid,
-        template_fingerprint: [21; 32],
+    let renewal_batch = RootIssuerRenewalBatchView {
         batch_id,
-        proof_ref,
-        status: RootIssuerRenewalAttemptStatus::Prepared,
+        status: RootIssuerRenewalBatchStatus::Prepared,
+        cert_hash,
+        proof_epoch: 4,
         prepared_at_ns: 60,
-        retrieval_expires_at_ns: 65,
-        install_deadline_ns: 70,
-        prepared_cert_hash: cert_hash,
-        prepared_expires_at_ns: 90,
-        prepared_refresh_after_ns: 72,
-        failure: Some(RootIssuerRenewalOutcome::RetrievalExpired),
+        expires_at_ns: 90,
+        installed_at_ns: None,
+        retry_after_ns: Some(80),
+        failure: Some("CallFailed".to_string()),
     };
     let renewal_template = RootIssuerRenewalTemplateView {
         issuer_pid,
@@ -853,13 +845,10 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
             last_installed_cert_hash: Some(cert_hash),
             last_installed_expires_at_ns: Some(90),
             last_installed_refresh_after_ns: Some(72),
-            active_attempt_id: Some([22; 32]),
-            last_outcome: RootIssuerRenewalOutcome::RetrievalExpired,
-            consecutive_failures: 2,
             next_attempt_after_ns: 80,
             updated_at_ns: 70,
         }),
-        active_attempt: Some(renewal_attempt),
+        latest_batch: Some(renewal_batch),
     };
 
     assert_candid_roundtrip(renewal_template_request);

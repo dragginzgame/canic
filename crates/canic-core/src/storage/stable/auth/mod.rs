@@ -18,9 +18,8 @@ pub use records::{
     ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegatedSessionBootstrapBindingRecord,
     DelegatedSessionRecord, DelegationAudienceRecord, DelegationCertRecord, DelegationProofRecord,
     IcChainKeyBatchSignatureProofRecord, IssuerProofAlgorithmRecord, IssuerProofBindingRecord,
-    RootIssuerRecord, RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
-    RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord, RootIssuerRenewalStateRecord,
-    RootIssuerRenewalTemplateRecord, RootProofRecord,
+    RootIssuerRecord, RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord,
+    RootProofRecord,
 };
 pub use sessions::DelegatedSessionUpsertResult;
 
@@ -347,37 +346,6 @@ impl AuthState {
                 *existing = record;
             } else {
                 data.root_issuer_renewal_states.push(record);
-            }
-            cell.set(data);
-        });
-    }
-
-    // Resolve a scheduled root-managed renewal attempt by attempt id.
-    #[must_use]
-    pub(crate) fn get_root_issuer_renewal_attempt(
-        attempt_id: [u8; 32],
-    ) -> Option<RootIssuerRenewalAttemptRecord> {
-        AUTH_STATE.with_borrow(|cell| {
-            cell.get()
-                .root_issuer_renewal_attempts
-                .iter()
-                .find(|record| record.attempt_id == attempt_id)
-                .cloned()
-        })
-    }
-
-    // Upsert a scheduled root-managed renewal attempt.
-    pub(crate) fn upsert_root_issuer_renewal_attempt(record: RootIssuerRenewalAttemptRecord) {
-        AUTH_STATE.with_borrow_mut(|cell| {
-            let mut data = cell.get().clone();
-            if let Some(existing) = data
-                .root_issuer_renewal_attempts
-                .iter_mut()
-                .find(|existing| existing.attempt_id == record.attempt_id)
-            {
-                *existing = record;
-            } else {
-                data.root_issuer_renewal_attempts.push(record);
             }
             cell.set(data);
         });

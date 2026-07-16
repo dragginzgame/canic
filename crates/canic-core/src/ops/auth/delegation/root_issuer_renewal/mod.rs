@@ -15,21 +15,15 @@ use crate::{
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     },
     log::Topic,
-    model::auth::{
-        RootIssuerRenewalAttemptStatus as PolicyRenewalAttemptStatus,
-        RootIssuerRenewalOutcome as PolicyRenewalOutcome, RootIssuerRenewalTemplate,
-    },
-    ops::{
-        runtime::metrics::delegated_auth::{
-            DelegatedAuthMetricOutcome, DelegatedAuthMetricReason, DelegatedAuthMetrics,
-        },
-        storage::auth::AuthStateOps,
+    model::auth::RootIssuerRenewalTemplate,
+    ops::storage::auth::{
+        AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
     },
 };
 
 pub(in crate::ops::auth::delegation) use identity::renewal_template_fingerprint;
 use view::{
-    root_issuer_renewal_attempt_view, root_issuer_renewal_state_view,
+    root_issuer_renewal_batch_view, root_issuer_renewal_state_view,
     root_issuer_renewal_template_view,
 };
 
@@ -40,7 +34,7 @@ pub(super) fn commit_root_issuer_renewal_template(
     AuthStateOps::upsert_root_issuer_renewal_template(template.clone());
     AuthStateOps::advance_delegated_auth_registry_epoch();
     if !template.enabled {
-        disable_active_renewal_attempt(&template, now_ns);
+        record_disabled_renewal_template(&template, now_ns);
     }
     crate::log!(
         Topic::Auth,
@@ -59,45 +53,48 @@ pub(super) fn root_issuer_renewal_status(
     request: RootIssuerRenewalStatusRequest,
 ) -> RootIssuerRenewalStatusResponse {
     let state = AuthStateOps::root_issuer_renewal_state(request.issuer_pid);
-    let active_attempt = state
-        .as_ref()
-        .and_then(|state| state.active_attempt_id)
-        .and_then(AuthStateOps::root_issuer_renewal_attempt)
-        .map(|attempt| root_issuer_renewal_attempt_view(&attempt));
+    let latest_batch = latest_issuer_renewal_batch(request.issuer_pid)
+        .map(|(batch, issuer)| root_issuer_renewal_batch_view(&batch, &issuer));
 
     RootIssuerRenewalStatusResponse {
         template: AuthStateOps::root_issuer_renewal_template(request.issuer_pid)
             .map(|template| root_issuer_renewal_template_view(&template)),
         state: state.map(|state| root_issuer_renewal_state_view(&state)),
-        active_attempt,
+        latest_batch,
     }
 }
 
-fn disable_active_renewal_attempt(template: &RootIssuerRenewalTemplate, now_ns: u64) {
+fn latest_issuer_renewal_batch(
+    issuer_pid: crate::cdk::types::Principal,
+) -> Option<(
+    ChainKeyRootDelegationBatch,
+    ChainKeyRootDelegationBatchIssuer,
+)> {
+    AuthStateOps::chain_key_root_delegation_batches()
+        .into_iter()
+        .filter_map(|batch| {
+            let issuer = batch
+                .issuers
+                .iter()
+                .find(|issuer| issuer.issuer_pid == issuer_pid)?
+                .clone();
+            Some((batch, issuer))
+        })
+        .max_by(|(left, _), (right, _)| {
+            left.header
+                .proof_epoch
+                .cmp(&right.header.proof_epoch)
+                .then_with(|| left.prepared_at_ns.cmp(&right.prepared_at_ns))
+                .then_with(|| left.batch_id.cmp(&right.batch_id))
+        })
+}
+
+fn record_disabled_renewal_template(template: &RootIssuerRenewalTemplate, now_ns: u64) {
     let Some(mut state) = AuthStateOps::root_issuer_renewal_state(template.issuer_pid) else {
         return;
     };
-    if let Some(attempt_id) = state.active_attempt_id
-        && let Some(mut attempt) = AuthStateOps::root_issuer_renewal_attempt(attempt_id)
-        && matches!(
-            attempt.status,
-            PolicyRenewalAttemptStatus::Prepared
-                | PolicyRenewalAttemptStatus::Installing
-                | PolicyRenewalAttemptStatus::FailedRetryable
-        )
-    {
-        attempt.status = PolicyRenewalAttemptStatus::Disabled;
-        attempt.failure = Some(PolicyRenewalOutcome::TemplateDisabled);
-        AuthStateOps::upsert_root_issuer_renewal_attempt(attempt);
-        DelegatedAuthMetrics::record_renewal_attempt(
-            DelegatedAuthMetricOutcome::Failed,
-            DelegatedAuthMetricReason::Disabled,
-        );
-    }
 
     state.template_fingerprint = renewal_template_fingerprint(template);
-    state.active_attempt_id = None;
-    state.last_outcome = PolicyRenewalOutcome::TemplateDisabled;
     state.next_attempt_after_ns = now_ns;
     state.updated_at_ns = now_ns;
     AuthStateOps::upsert_root_issuer_renewal_state(state);

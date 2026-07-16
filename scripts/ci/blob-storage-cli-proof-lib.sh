@@ -74,7 +74,7 @@ JSON
             ;;
         canic_root_issuer_renewal_status)
             cat <<'JSON'
-{"template":{"enabled":true,"cert_ttl_ns":"300000000000"},"state":{"last_installed_cert_hash":["0303030303030303030303030303030303030303030303030303030303030303"],"last_outcome":"Installed","consecutive_failures":0,"last_installed_expires_at_ns":["1620329000000000000"],"last_installed_refresh_after_ns":["1620328900000000000"],"next_attempt_after_ns":"1620328900000000000","active_attempt_id":null},"active_attempt":null}
+{"template":{"enabled":true,"cert_ttl_ns":"300000000000"},"state":{"last_installed_cert_hash":["0303030303030303030303030303030303030303030303030303030303030303"],"last_installed_expires_at_ns":["1620329000000000000"],"last_installed_refresh_after_ns":["1620328900000000000"],"next_attempt_after_ns":"1620328900000000000"},"latest_batch":null}
 JSON
             exit 0
             ;;

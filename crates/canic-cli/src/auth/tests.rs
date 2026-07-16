@@ -71,17 +71,18 @@ fn renewal_status_queries_root_status_endpoint() {
                 "cert_ttl_ns": "300000000000"
             },
             "state": {
-                "last_outcome": "Installed",
-                "consecutive_failures": 0,
                 "last_installed_expires_at_ns": ["1620329000000000000"],
                 "last_installed_refresh_after_ns": ["1620328900000000000"],
-                "next_attempt_after_ns": "1620328900000000000",
-                "active_attempt_id": [vec![1_u8; 32]]
+                "next_attempt_after_ns": "1620328900000000000"
             },
-            "active_attempt": {
+            "latest_batch": {
                 "status": "Prepared",
                 "batch_id": vec![2_u8; 32],
-                "prepared_expires_at_ns": "1620329000000000000",
+                "cert_hash": vec![3_u8; 32],
+                "proof_epoch": "4",
+                "expires_at_ns": "1620329000000000000",
+                "installed_at_ns": null,
+                "retry_after_ns": null,
                 "failure": null
             }
         })
@@ -115,11 +116,7 @@ fn renewal_status_queries_root_status_endpoint() {
         Some(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON)
     );
     assert_eq!(
-        result.renewal.state.last_outcome.as_deref(),
-        Some("installed")
-    );
-    assert_eq!(
-        result.renewal.active_attempt.status.as_deref(),
+        result.renewal.latest_batch.status.as_deref(),
         Some("prepared")
     );
     let json = serde_json::to_value(&result).expect("serialize auth renewal result");
@@ -213,6 +210,50 @@ fn renewal_status_reports_root_issuer_drift() {
 }
 
 #[test]
+fn renewal_status_warns_when_active_proof_is_missing() {
+    let issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+    let runtime = ScriptedAuthRenewalRuntime::new([
+        scripted_response(
+            CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+            Some(root_issuer_renewal_status_arg(issuer)),
+            Some("json"),
+            serde_json::json!({
+                "template": {
+                    "enabled": true,
+                    "cert_ttl_ns": "300000000000"
+                },
+                "state": null,
+                "latest_batch": null
+            })
+            .to_string(),
+        ),
+        scripted_response(
+            CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
+            None,
+            Some("json"),
+            serde_json::json!({
+                "status": "Missing",
+                "root_pid": null,
+                "issuer_pid": null,
+                "cert_hash": null,
+                "expires_at_ns": null,
+                "refresh_after_ns": null
+            })
+            .to_string(),
+        ),
+    ])
+    .with_issuer_available();
+
+    let result = renewal_status_result_with_runtime(&runtime, &renewal_status_options(issuer))
+        .expect("missing proof status should remain observable");
+    let medic = auth_renewal_medic_summary_from_result(&result);
+
+    assert_eq!(result.status, AuthRenewalStatusCode::ProofUnavailable);
+    assert_eq!(medic.status, AuthRenewalMedicStatus::Warning);
+    assert!(medic.next.contains("root readiness facade"));
+}
+
+#[test]
 fn renewal_status_rejects_invalid_issuer_principal() {
     let runtime = ScriptedAuthRenewalRuntime::empty();
     let err = renewal_status_result_with_runtime(
@@ -267,14 +308,11 @@ fn renewal_status_response_json(_issuer: &str, cert_hash: [u8; 32], expires_at_n
         },
         "state": {
             "last_installed_cert_hash": [cert_hash.to_vec()],
-            "last_outcome": "Installed",
-            "consecutive_failures": 0,
             "last_installed_expires_at_ns": [expires_at_ns],
             "last_installed_refresh_after_ns": ["1620328900000000000"],
-            "next_attempt_after_ns": "1620328900000000000",
-            "active_attempt_id": null
+            "next_attempt_after_ns": "1620328900000000000"
         },
-        "active_attempt": null
+        "latest_batch": null
     })
     .to_string()
 }

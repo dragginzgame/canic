@@ -816,10 +816,6 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
         DelegatedAuthMetricReason::TokenExpired,
     );
     DelegatedAuthMetrics::record_renewal_sweep_completed();
-    DelegatedAuthMetrics::record_renewal_attempt(
-        DelegatedAuthMetricOutcome::Failed,
-        DelegatedAuthMetricReason::RootProofPrepareFailed,
-    );
 
     let entries = entries(MetricsKind::Security);
 
@@ -852,16 +848,6 @@ fn delegated_auth_metrics_are_exposed_with_stable_labels() {
     assert_metric_count(
         &entries,
         &["delegated_auth", "renewal_sweep", "completed", "ok"],
-        1,
-    );
-    assert_metric_count(
-        &entries,
-        &[
-            "delegated_auth",
-            "renewal_attempt",
-            "failed",
-            "root_proof_prepare_failed",
-        ],
         1,
     );
 }

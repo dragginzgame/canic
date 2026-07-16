@@ -4,8 +4,8 @@
 //! Does not own: command execution, transport, or operator rendering.
 
 use super::{
-    AuthCommandError, AuthIssuerObservedStatus, AuthRenewalActiveAttemptStatus,
-    AuthRenewalStateStatus, AuthRenewalStatusSummary, AuthRenewalTemplateStatus,
+    AuthCommandError, AuthIssuerObservedStatus, AuthRenewalBatchStatus, AuthRenewalStateStatus,
+    AuthRenewalStatusSummary, AuthRenewalTemplateStatus,
 };
 use candid::Principal;
 use canic_host::response_parse::{find_field, parse_json_u64};
@@ -84,12 +84,12 @@ pub(super) fn parse_renewal_status_summary(
     }
     let template = parse_optional_record(payload, kind, "template")?;
     let state = parse_optional_record(payload, kind, "state")?;
-    let active_attempt = parse_optional_record(payload, kind, "active_attempt")?;
+    let latest_batch = parse_optional_record(payload, kind, "latest_batch")?;
 
     Ok(AuthRenewalStatusSummary {
         template: parse_template_status(template)?,
         state: parse_state_status(state)?,
-        active_attempt: parse_active_attempt_status(active_attempt)?,
+        latest_batch: parse_batch_status(latest_batch)?,
     })
 }
 
@@ -130,20 +130,6 @@ fn parse_state_status(
             "state.last_installed_cert_hash",
             parse_optional_bytes32_hex,
         )?,
-        last_outcome: parse_nested_optional_field(
-            state,
-            kind,
-            "last_outcome",
-            "state.last_outcome",
-            parse_variant_code,
-        )?,
-        consecutive_failures: parse_nested_optional_field(
-            state,
-            kind,
-            "consecutive_failures",
-            "state.consecutive_failures",
-            parse_u64_deep,
-        )?,
         last_installed_expires_at_ns: parse_nested_optional_field(
             state,
             kind,
@@ -168,50 +154,77 @@ fn parse_state_status(
             parse_u64_deep,
         )?
         .map(|value| value.to_string()),
-        active_attempt_id: parse_nested_optional_field(
-            state,
-            kind,
-            "active_attempt_id",
-            "state.active_attempt_id",
-            parse_optional_bytes32_hex,
-        )?,
     })
 }
 
-fn parse_active_attempt_status(
-    active_attempt: Option<&serde_json::Value>,
-) -> Result<AuthRenewalActiveAttemptStatus, AuthResponseParseError> {
+fn parse_batch_status(
+    latest_batch: Option<&serde_json::Value>,
+) -> Result<AuthRenewalBatchStatus, AuthResponseParseError> {
     let kind = AuthResponseKind::RenewalStatus;
-    Ok(AuthRenewalActiveAttemptStatus {
-        present: active_attempt.is_some(),
+    Ok(AuthRenewalBatchStatus {
+        present: latest_batch.is_some(),
         status: parse_nested_optional_field(
-            active_attempt,
+            latest_batch,
             kind,
             "status",
-            "active_attempt.status",
+            "latest_batch.status",
             parse_variant_code,
         )?,
         batch_id: parse_nested_optional_field(
-            active_attempt,
+            latest_batch,
             kind,
             "batch_id",
-            "active_attempt.batch_id",
+            "latest_batch.batch_id",
             parse_bytes32_hex_deep,
         )?,
-        prepared_expires_at_ns: parse_nested_optional_field(
-            active_attempt,
+        cert_hash: parse_nested_optional_field(
+            latest_batch,
             kind,
-            "prepared_expires_at_ns",
-            "active_attempt.prepared_expires_at_ns",
+            "cert_hash",
+            "latest_batch.cert_hash",
+            parse_bytes32_hex_deep,
+        )?,
+        proof_epoch: parse_nested_optional_field(
+            latest_batch,
+            kind,
+            "proof_epoch",
+            "latest_batch.proof_epoch",
+            parse_u64_deep,
+        )?,
+        expires_at_ns: parse_nested_optional_field(
+            latest_batch,
+            kind,
+            "expires_at_ns",
+            "latest_batch.expires_at_ns",
             parse_u64_deep,
         )?
         .map(|value| value.to_string()),
+        installed_at_ns: parse_nested_optional_field(
+            latest_batch,
+            kind,
+            "installed_at_ns",
+            "latest_batch.installed_at_ns",
+            parse_optional_u64_deep,
+        )?
+        .map(|value| value.to_string()),
+        retry_after_ns: parse_nested_optional_field(
+            latest_batch,
+            kind,
+            "retry_after_ns",
+            "latest_batch.retry_after_ns",
+            parse_optional_u64_deep,
+        )?
+        .map(|value| value.to_string()),
         failure: parse_nested_optional_field(
-            active_attempt,
+            latest_batch,
             kind,
             "failure",
-            "active_attempt.failure",
-            parse_optional_variant_code,
+            "latest_batch.failure",
+            |value| {
+                option_payload(value)
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string)
+            },
         )?,
     })
 }
@@ -355,10 +368,6 @@ fn parse_optional_bytes32_hex(value: &serde_json::Value) -> Option<String> {
 
 fn parse_bytes32_hex_deep(value: &serde_json::Value) -> Option<String> {
     parse_bytes32_json(value).map(|bytes| hex_bytes(&bytes))
-}
-
-fn parse_optional_variant_code(value: &serde_json::Value) -> Option<String> {
-    option_payload(value).and_then(parse_variant_code)
 }
 
 fn parse_variant_code(value: &serde_json::Value) -> Option<String> {

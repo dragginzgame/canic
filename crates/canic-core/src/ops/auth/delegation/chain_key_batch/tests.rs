@@ -7,8 +7,8 @@ use crate::{
     ids::{BuildNetwork, CanisterRole},
     model::auth::{
         ChainKeyRootDelegationInstallFailure, RootDelegatedRoleGrantPolicy,
-        RootDelegationAudiencePolicy, RootIssuerPolicy, RootIssuerRenewalOutcome,
-        RootIssuerRenewalState, RootIssuerRenewalTemplate,
+        RootDelegationAudiencePolicy, RootIssuerPolicy, RootIssuerRenewalState,
+        RootIssuerRenewalTemplate,
     },
     ops::auth::delegated::chain_key::{
         ChainKeyRootVerifierPolicy, ChainKeySignatureVerificationInput,
@@ -952,8 +952,6 @@ fn chain_key_batch_install_plan_materializes_signed_proof_and_records_success() 
         state.last_installed_expires_at_ns,
         Some(proof.proof.cert.expires_at_ns)
     );
-    assert_eq!(state.last_outcome, RootIssuerRenewalOutcome::Installed);
-    assert_eq!(state.consecutive_failures, 0);
     assert_eq!(
         start_chain_key_root_delegation_batch_install(batch_id, 5_000)
             .expect("installed batch should be ignored"),
@@ -1270,9 +1268,6 @@ fn chain_key_template_due_respects_refresh_and_template_fingerprint() {
         last_installed_cert_hash: Some([1; 32]),
         last_installed_expires_at_ns: Some(200),
         last_installed_refresh_after_ns: Some(100),
-        active_attempt_id: None,
-        last_outcome: RootIssuerRenewalOutcome::Installed,
-        consecutive_failures: 0,
         next_attempt_after_ns: 0,
         updated_at_ns: 10,
     };
