@@ -49,7 +49,7 @@ pub fn install_active_delegation_proof<V, ProofError>(
     mut verify_root_proof: V,
 ) -> Result<ActiveDelegationProof, InstallActiveDelegationProofError<ProofError>>
 where
-    V: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), ProofError>,
+    V: FnMut(&DelegationCert, &RootProof) -> Result<(), ProofError>,
 {
     let cert = &input.proof.cert;
     if cert.issuer_pid != input.this_canister {
@@ -63,7 +63,7 @@ where
     }
 
     let cert_hash = cert_hash(cert)?;
-    verify_root_proof(cert, cert_hash, &input.proof.root_proof)
+    verify_root_proof(cert, &input.proof.root_proof)
         .map_err(InstallActiveDelegationProofError::RootProofInvalid)?;
 
     let not_before_ns = cert.not_before_ns;
@@ -149,8 +149,7 @@ mod tests {
     #[test]
     fn install_active_delegation_proof_builds_active_state_after_root_verify() {
         let active =
-            install_active_delegation_proof(input(proof()), |_, _, _| Ok::<(), String>(()))
-                .unwrap();
+            install_active_delegation_proof(input(proof()), |_, _| Ok::<(), String>(())).unwrap();
 
         assert_eq!(active.proof.cert.issuer_pid, p(2));
         assert_eq!(active.not_before_ns, 20);
@@ -166,7 +165,7 @@ mod tests {
         input.this_canister = p(9);
 
         assert_eq!(
-            install_active_delegation_proof(input, |_, _, _| Ok::<(), String>(())),
+            install_active_delegation_proof(input, |_, _| Ok::<(), String>(())),
             Err(InstallActiveDelegationProofError::IssuerMismatch)
         );
     }
@@ -176,14 +175,14 @@ mod tests {
         let mut early = input(proof());
         early.now_ns = 19;
         assert_eq!(
-            install_active_delegation_proof(early, |_, _, _| Ok::<(), String>(())),
+            install_active_delegation_proof(early, |_, _| Ok::<(), String>(())),
             Err(InstallActiveDelegationProofError::CertNotYetValid)
         );
 
         let mut expired = input(proof());
         expired.now_ns = 120;
         assert_eq!(
-            install_active_delegation_proof(expired, |_, _, _| Ok::<(), String>(())),
+            install_active_delegation_proof(expired, |_, _| Ok::<(), String>(())),
             Err(InstallActiveDelegationProofError::CertExpired)
         );
     }
@@ -191,7 +190,7 @@ mod tests {
     #[test]
     fn install_active_delegation_proof_rejects_root_proof_failure() {
         assert_eq!(
-            install_active_delegation_proof(input(proof()), |_, _, _| Err("bad proof".to_string())),
+            install_active_delegation_proof(input(proof()), |_, _| Err("bad proof".to_string())),
             Err(InstallActiveDelegationProofError::RootProofInvalid(
                 "bad proof".to_string()
             ))

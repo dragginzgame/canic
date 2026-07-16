@@ -8,7 +8,7 @@ use crate::{
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
         REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayReceipt,
-        ReplayReceiptStatus, ReplayTerminalErrorCode, bounded_terminal_error_bytes,
+        ReplayReceiptStatus,
     },
     ops::storage::replay::ReplayReceiptOps,
     storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptSlotKey},
@@ -77,7 +77,7 @@ pub struct ReplayReceiptToken {
 
 impl ReplayReceiptToken {
     #[must_use]
-    #[cfg_attr(not(test), expect(dead_code))]
+    #[cfg(test)]
     pub const fn key(&self) -> ReplayReceiptSlotKey {
         self.key
     }
@@ -104,11 +104,6 @@ pub enum ReplayReceiptDecision {
     PayloadMismatch,
     Expired,
     RecoveryRequired(RecoveryReason),
-    TerminalFailed {
-        error_code: ReplayTerminalErrorCode,
-        error_bytes: Vec<u8>,
-        error_bytes_truncated: bool,
-    },
     PendingActorQuotaExceeded {
         actor: ReplayActor,
         max_pending: usize,
@@ -251,24 +246,6 @@ pub fn commit_receipt_response(
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
 }
 
-#[cfg_attr(not(test), expect(dead_code))]
-pub fn commit_terminal_failure(
-    token: &ReplayReceiptToken,
-    error_code: ReplayTerminalErrorCode,
-    error_bytes: &[u8],
-    now_ns: u64,
-) {
-    let bounded = bounded_terminal_error_bytes(error_bytes);
-    let mut receipt = latest_receipt_for_token(token);
-    receipt.status = ReplayReceiptStatus::TerminalFailed {
-        error_code,
-        error_bytes: bounded.bytes,
-        error_bytes_truncated: bounded.truncated,
-    };
-    receipt.updated_at_ns = now_ns;
-    ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
-}
-
 pub fn mark_recovery_required(token: &ReplayReceiptToken, reason: RecoveryReason, now_ns: u64) {
     let mut receipt = latest_receipt_for_token(token);
     receipt.status = ReplayReceiptStatus::RecoveryRequired { reason };
@@ -332,15 +309,6 @@ fn classify_existing_receipt(
             ReplayReceiptDecision::OperationInProgress
         }
         ReplayReceiptStatus::Committed => ReplayReceiptDecision::ReturnCommitted(existing),
-        ReplayReceiptStatus::TerminalFailed {
-            error_code,
-            error_bytes,
-            error_bytes_truncated,
-        } => ReplayReceiptDecision::TerminalFailed {
-            error_code,
-            error_bytes,
-            error_bytes_truncated,
-        },
         ReplayReceiptStatus::RecoveryRequired { reason } => {
             ReplayReceiptDecision::RecoveryRequired(reason)
         }
@@ -607,38 +575,5 @@ mod tests {
             .expect("receipt decodes");
         assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
         assert_eq!(receipt.effect, Some(effect));
-    }
-
-    #[test]
-    fn terminal_failure_is_bounded_before_storage() {
-        ReplayReceiptOps::reset_for_tests();
-
-        let token = match reserve_or_replay_receipt(input()).expect("reserve") {
-            ReplayReceiptDecision::Fresh(token) => token,
-            other => panic!("expected fresh, got {other:?}"),
-        };
-        commit_terminal_failure(
-            &token,
-            ReplayTerminalErrorCode::ExecutionFailed,
-            &vec![7; crate::model::replay::MAX_REPLAY_TERMINAL_ERROR_BYTES + 1],
-            300,
-        );
-
-        let duplicate = reserve_or_replay_receipt(input()).expect("duplicate");
-        let ReplayReceiptDecision::TerminalFailed {
-            error_code,
-            error_bytes,
-            error_bytes_truncated,
-        } = duplicate
-        else {
-            panic!("expected terminal failure replay");
-        };
-
-        assert_eq!(error_code, ReplayTerminalErrorCode::ExecutionFailed);
-        assert_eq!(
-            error_bytes.len(),
-            crate::model::replay::MAX_REPLAY_TERMINAL_ERROR_BYTES
-        );
-        assert!(error_bytes_truncated);
     }
 }

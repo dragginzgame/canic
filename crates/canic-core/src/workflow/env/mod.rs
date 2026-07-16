@@ -25,7 +25,7 @@ impl EnvWorkflow {
         env_args: EnvBootstrapArgs,
         role: CanisterRole,
     ) -> Result<(), InternalError> {
-        let network = NetworkOps::build_network().ok_or_else(|| {
+        NetworkOps::build_network().ok_or_else(|| {
             InternalError::invariant(
                 InternalErrorOrigin::Workflow,
                 "runtime network unavailable; set ICP_ENVIRONMENT=local|ic at build time"
@@ -42,7 +42,7 @@ impl EnvWorkflow {
             parent_pid: env_args.parent_pid,
         };
 
-        let validated = match validate_or_default(network, input) {
+        let validated = match validate_or_default(input) {
             Ok(validated) => validated,
             Err(EnvPolicyError::MissingEnvFields(missing)) => {
                 return Err(InternalError::invariant(

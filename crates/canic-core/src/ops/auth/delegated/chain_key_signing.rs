@@ -232,8 +232,6 @@ where
         .map_err(|err| ChainKeySignerError::SignatureVerification(err.to_string()))?;
     verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
         algorithm: input.policy.algorithm,
-        key_id: &input.policy.key_id,
-        derivation_path: &derivation_path,
         public_key: &public_key.public_key,
         message_hash,
         signature: &signature_bytes,

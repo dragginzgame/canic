@@ -42,19 +42,6 @@ pub struct TemplateManifestResponse {
 }
 
 //
-// TemplateChunkSetInput
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct TemplateChunkSetInput {
-    pub template_id: TemplateId,
-    pub version: TemplateVersion,
-    pub payload_hash: Vec<u8>,
-    pub payload_size_bytes: u64,
-    pub chunks: Vec<Vec<u8>>,
-}
-
-//
 // TemplateChunkSetPrepareInput
 //
 

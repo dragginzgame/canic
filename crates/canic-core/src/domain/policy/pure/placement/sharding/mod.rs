@@ -90,7 +90,7 @@ impl ShardingPolicy {
             .filter(|pid| exclude_pid != Some(*pid))
         {
             let slot = slot_plan.slots.get(&pid).copied();
-            return Self::make_plan(ShardingPlanState::AlreadyAssigned { pid }, *metrics, slot);
+            return Self::make_plan(ShardingPlanState::AlreadyAssigned { pid }, slot);
         }
 
         let shards_with_capacity: Vec<_> = entries
@@ -105,11 +105,7 @@ impl ShardingPolicy {
 
         if let Some(target_pid) = HrwSelector::select(partition_key, &shards_with_capacity) {
             let slot = slot_plan.slots.get(&target_pid).copied();
-            return Self::make_plan(
-                ShardingPlanState::UseExisting { pid: target_pid },
-                *metrics,
-                slot,
-            );
+            return Self::make_plan(ShardingPlanState::UseExisting { pid: target_pid }, slot);
         }
 
         let max_slots = state.max_shards;
@@ -124,33 +120,23 @@ impl ShardingPolicy {
                 ShardingPlanState::CreateBlocked {
                     reason: CreateBlockedReason::NoFreeSlots,
                 },
-                *metrics,
                 None,
             );
         };
 
         if Self::can_create(*metrics, state.max_shards) {
-            Self::make_plan(
-                ShardingPlanState::CreateAllowed,
-                *metrics,
-                Some(target_slot),
-            )
+            Self::make_plan(ShardingPlanState::CreateAllowed, Some(target_slot))
         } else {
             Self::make_plan(
                 ShardingPlanState::CreateBlocked {
                     reason: CreateBlockedReason::PoolAtCapacity,
                 },
-                *metrics,
                 Some(target_slot),
             )
         }
     }
 
-    const fn make_plan(
-        state: ShardingPlanState,
-        _metrics: PoolMetrics,
-        slot: Option<u32>,
-    ) -> ShardingPlan {
+    const fn make_plan(state: ShardingPlanState, slot: Option<u32>) -> ShardingPlan {
         ShardingPlan {
             state,
             target_slot: slot,

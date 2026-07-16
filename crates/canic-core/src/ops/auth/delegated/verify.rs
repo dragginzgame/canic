@@ -113,17 +113,13 @@ pub fn verify_delegated_token<R, S, RootProofError, IssuerProofError>(
     mut verify_issuer_proof: S,
 ) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError<RootProofError, IssuerProofError>>
 where
-    R: FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), RootProofError>,
+    R: FnMut(&DelegationCert, &RootProof) -> Result<(), RootProofError>,
     S: FnMut([u8; 32], &IssuerProof, Principal) -> Result<(), IssuerProofError>,
 {
     let material = verify_delegated_token_material(&input, true)?;
 
-    verify_root_proof(
-        &input.token.proof.cert,
-        material.cert_hash,
-        &input.token.proof.root_proof,
-    )
-    .map_err(VerifyDelegatedTokenError::RootProofInvalid)?;
+    verify_root_proof(&input.token.proof.cert, &input.token.proof.root_proof)
+        .map_err(VerifyDelegatedTokenError::RootProofInvalid)?;
 
     verify_issuer_proof(
         material.claims_hash,
@@ -143,7 +139,6 @@ pub fn verify_delegated_token_cached_proof_identity(
 
 struct VerifiedDelegatedTokenMaterial {
     verified: VerifiedDelegatedToken,
-    cert_hash: [u8; 32],
     claims_hash: [u8; 32],
 }
 
@@ -181,7 +176,6 @@ fn verify_delegated_token_material<RootProofError, IssuerProofError>(
             scopes: local_scopes,
             cert_hash: actual_cert_hash,
         },
-        cert_hash: actual_cert_hash,
         claims_hash: actual_claims_hash,
     })
 }
@@ -429,13 +423,8 @@ mod tests {
         crate::ops::auth::test_fixtures::chain_key_root_proof(byte)
     }
 
-    fn verify_root_ok(
-        expected_cert_hash: [u8; 32],
-    ) -> impl FnMut(&DelegationCert, [u8; 32], &RootProof) -> Result<(), String> {
-        move |cert, actual_cert_hash, proof| {
-            if actual_cert_hash != expected_cert_hash {
-                return Err("cert hash mismatch".to_string());
-            }
+    fn verify_root_ok() -> impl FnMut(&DelegationCert, &RootProof) -> Result<(), String> {
+        |cert, proof| {
             if cert.root_pid != p(1) {
                 return Err("root pid mismatch".to_string());
             }
@@ -471,7 +460,7 @@ mod tests {
     ) -> Result<VerifiedDelegatedToken, VerifyDelegatedTokenError> {
         verify_delegated_token(
             input(token, local_role, required_scopes),
-            verify_root_ok(cert_hash(&token.proof.cert).unwrap()),
+            verify_root_ok(),
             verify_issuer_ok,
         )
     }
@@ -580,7 +569,7 @@ mod tests {
         assert_eq!(
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
-                |_, _, _| Err("bad root proof".to_string()),
+                |_, _| Err("bad root proof".to_string()),
                 verify_issuer_ok,
             ),
             Err(VerifyDelegatedTokenError::RootProofInvalid(
@@ -597,7 +586,7 @@ mod tests {
         assert_eq!(
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
-                verify_root_ok(cert_hash(&token.proof.cert).unwrap()),
+                verify_root_ok(),
                 |_, _, _| Err("bad issuer proof".to_string()),
             ),
             Err(VerifyDelegatedTokenError::IssuerProofInvalid(
@@ -630,7 +619,7 @@ mod tests {
         assert_eq!(
             verify_delegated_token(
                 input(&token, Some(&role), &[]),
-                |_, _, _| Ok::<(), String>(()),
+                |_, _| Ok::<(), String>(()),
                 verify_issuer_ok
             ),
             Err(VerifyDelegatedTokenError::CertRules(
@@ -737,11 +726,7 @@ mod tests {
         input.now_ns = 180;
 
         assert_eq!(
-            verify_delegated_token(
-                input,
-                verify_root_ok(cert_hash(&token.proof.cert).unwrap()),
-                verify_issuer_ok,
-            ),
+            verify_delegated_token(input, verify_root_ok(), verify_issuer_ok,),
             Err(VerifyDelegatedTokenError::TokenExpired)
         );
     }

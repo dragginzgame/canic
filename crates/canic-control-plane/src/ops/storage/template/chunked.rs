@@ -5,8 +5,8 @@ use super::{
 use crate::{
     dto::template::{
         TemplateChunkInput, TemplateChunkResponse, TemplateChunkSetInfoResponse,
-        TemplateChunkSetInput, TemplateChunkSetPrepareInput, TemplateManifestInput,
-        WasmStoreGcStatusResponse, WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
+        TemplateChunkSetPrepareInput, TemplateManifestInput, WasmStoreGcStatusResponse,
+        WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
     },
     ids::{
         TemplateChunkKey, TemplateId, TemplateManifestState, TemplateReleaseKey, TemplateVersion,
@@ -199,143 +199,6 @@ impl TemplateChunkedOps {
 
         TemplateManifestOps::replace_approved_from_input(input);
         Ok(())
-    }
-
-    // Publish one complete chunk set into the local wasm store.
-    pub fn publish_chunk_set_from_input(
-        input: TemplateChunkSetInput,
-        created_at: u64,
-    ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        let release = TemplateReleaseKey::new(input.template_id, input.version);
-        if input.chunks.is_empty() {
-            return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
-        }
-
-        let payload_size_bytes = input
-            .chunks
-            .iter()
-            .map(|chunk| chunk.len() as u64)
-            .sum::<u64>();
-        if payload_size_bytes != input.payload_size_bytes {
-            return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
-        }
-
-        let mut payload_hasher = Sha256::new();
-        let mut chunk_hashes = Vec::with_capacity(input.chunks.len());
-
-        for chunk in &input.chunks {
-            payload_hasher.update(chunk);
-            chunk_hashes.push(wasm_hash(chunk));
-        }
-
-        if payload_hasher.finalize().to_vec() != input.payload_hash {
-            return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
-        }
-
-        let info = Self::prepare_chunk_set_from_input(
-            TemplateChunkSetPrepareInput {
-                template_id: release.template_id.clone(),
-                version: release.version.clone(),
-                payload_hash: input.payload_hash,
-                payload_size_bytes: input.payload_size_bytes,
-                chunk_hashes,
-            },
-            created_at,
-        )?;
-
-        for (chunk_index, bytes) in input.chunks.into_iter().enumerate() {
-            let chunk_index = u32::try_from(chunk_index)
-                .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
-            Self::publish_chunk_from_input(TemplateChunkInput {
-                template_id: release.template_id.clone(),
-                version: release.version.clone(),
-                chunk_index,
-                bytes,
-            })?;
-        }
-
-        Ok(info)
-    }
-
-    // Publish one complete chunk set into a local store with capacity enforcement.
-    #[cfg_attr(not(test), expect(dead_code))]
-    pub fn publish_chunk_set_in_store_from_input(
-        input: TemplateChunkSetInput,
-        created_at: u64,
-        limits: WasmStoreLimits,
-    ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
-        if input.chunks.is_empty() {
-            return Err(TemplateManifestOpsError::TemplateChunkSetEmpty(release).into());
-        }
-
-        let payload_size_bytes = input
-            .chunks
-            .iter()
-            .map(|chunk| chunk.len() as u64)
-            .sum::<u64>();
-        if payload_size_bytes != input.payload_size_bytes {
-            return Err(TemplateManifestOpsError::PayloadSizeMismatch(release).into());
-        }
-
-        let mut payload_hasher = Sha256::new();
-        let mut chunk_hashes = Vec::with_capacity(input.chunks.len());
-
-        for chunk in &input.chunks {
-            payload_hasher.update(chunk);
-            chunk_hashes.push(wasm_hash(chunk));
-        }
-
-        if payload_hasher.finalize().to_vec() != input.payload_hash {
-            return Err(TemplateManifestOpsError::PayloadHashMismatch(release).into());
-        }
-
-        let chunk_count = u32::try_from(chunk_hashes.len())
-            .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
-        let projected_chunk_set = TemplateChunkSetRecord {
-            payload_hash: input.payload_hash.clone(),
-            payload_size_bytes: input.payload_size_bytes,
-            chunk_count,
-            chunk_hashes,
-            created_at,
-        };
-        let projected_chunks = input
-            .chunks
-            .iter()
-            .enumerate()
-            .map(|(chunk_index, bytes)| {
-                let chunk_index = u32::try_from(chunk_index)
-                    .map_err(|_| TemplateManifestOpsError::ChunkIndexOverflow(release.clone()))?;
-                Ok((
-                    TemplateChunkKey::new(release.clone(), chunk_index),
-                    TemplateChunkRecord {
-                        bytes: bytes.clone(),
-                    },
-                ))
-            })
-            .collect::<Result<Vec<_>, InternalError>>()?;
-
-        let projected_manifests = TemplateManifestStateStore::export().entries;
-        let projected_chunk_sets = replace_chunk_set_entry(release, projected_chunk_set);
-        let current_chunk_bytes = TemplateChunkStore::occupied_bytes();
-        let replaced_chunk_bytes = projected_chunks
-            .iter()
-            .map(|(chunk_key, _)| TemplateChunkStore::entry_bytes(chunk_key).unwrap_or(0))
-            .sum::<u64>();
-        let inserted_chunk_bytes = projected_chunks
-            .iter()
-            .map(|(chunk_key, record)| chunk_entry_store_bytes(chunk_key, record))
-            .sum::<u64>();
-        let projected_bytes = TemplateManifestStateStore::occupied_bytes()
-            + chunk_set_store_bytes(&projected_chunk_sets)
-            + current_chunk_bytes
-                .saturating_sub(replaced_chunk_bytes)
-                .saturating_add(inserted_chunk_bytes);
-        let projected_versions =
-            projected_template_versions(&projected_manifests, &projected_chunk_sets);
-        ensure_store_limits_from_versions(limits, projected_bytes, projected_versions)?;
-
-        Self::publish_chunk_set_from_input(input, created_at)
     }
 
     // Prepare one chunk-set metadata record before chunk-by-chunk publication begins.
@@ -695,19 +558,11 @@ fn projected_manifests_after_replace(
     let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
     let mut manifests = TemplateManifestStateStore::export().entries;
 
-    for entry in &mut manifests {
-        if entry.record.role != role {
-            continue;
-        }
-        if entry.release == release {
-            continue;
-        }
-        if entry.record.manifest_state != TemplateManifestState::Approved {
-            continue;
-        }
-
-        entry.record.manifest_state = TemplateManifestState::Deprecated;
-    }
+    manifests.retain(|entry| {
+        entry.record.role != role
+            || entry.release == release
+            || entry.record.manifest_state != TemplateManifestState::Approved
+    });
 
     let record = input_to_record(input.clone());
     if let Some(existing) = manifests.iter_mut().find(|entry| entry.release == release) {

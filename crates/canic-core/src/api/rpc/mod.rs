@@ -89,12 +89,4 @@ impl RpcApi {
             .await
             .map_err(Error::from)
     }
-
-    pub async fn response_capability_v1(
-        envelope: RootCapabilityEnvelopeV1,
-    ) -> Result<RootCapabilityResponseV1, Error> {
-        capability::response_capability_v1_root(envelope)
-            .await
-            .map_err(Error::from)
-    }
 }

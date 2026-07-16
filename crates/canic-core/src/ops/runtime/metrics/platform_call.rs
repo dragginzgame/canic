@@ -107,7 +107,7 @@ mod tests {
             PlatformCallMetricSurface::Ledger,
             PlatformCallMetricMode::Update,
             PlatformCallMetricOutcome::Failed,
-            PlatformCallMetricReason::LedgerRejected,
+            PlatformCallMetricReason::Infra,
         );
 
         let map = snapshot_map();
@@ -125,7 +125,7 @@ mod tests {
                 surface: PlatformCallMetricSurface::Ledger,
                 mode: PlatformCallMetricMode::Update,
                 outcome: PlatformCallMetricOutcome::Failed,
-                reason: PlatformCallMetricReason::LedgerRejected,
+                reason: PlatformCallMetricReason::Infra,
             }),
             Some(&1)
         );

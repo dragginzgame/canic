@@ -126,21 +126,6 @@ impl ControlAuthority {
     }
 
     #[must_use]
-    pub fn alternate_controller(
-        controller: impl Into<String>,
-        reason: impl Into<String>,
-        evidence: AuthorityEvidence,
-    ) -> Self {
-        Self {
-            source: ControlAuthoritySource::AlternateController {
-                controller: controller.into(),
-                reason: reason.into(),
-            },
-            evidence,
-        }
-    }
-
-    #[must_use]
     pub fn is_proven(&self) -> bool {
         self.evidence == AuthorityEvidence::Proven && self.source != ControlAuthoritySource::Unknown
     }
@@ -165,7 +150,6 @@ pub enum ControlAuthoritySource {
     Unknown,
     RootController,
     OperatorController,
-    AlternateController { controller: String, reason: String },
 }
 
 ///
@@ -200,25 +184,9 @@ impl SnapshotReadAuthority {
     }
 
     #[must_use]
-    pub const fn snapshot_visibility(evidence: AuthorityEvidence) -> Self {
-        Self {
-            source: SnapshotReadAuthoritySource::SnapshotVisibility,
-            evidence,
-        }
-    }
-
-    #[must_use]
     pub const fn root_configured_read(evidence: AuthorityEvidence) -> Self {
         Self {
             source: SnapshotReadAuthoritySource::RootConfiguredRead,
-            evidence,
-        }
-    }
-
-    #[must_use]
-    pub const fn root_mediated_transfer(evidence: AuthorityEvidence) -> Self {
-        Self {
-            source: SnapshotReadAuthoritySource::RootMediatedTransfer,
             evidence,
         }
     }
@@ -242,9 +210,7 @@ impl SnapshotReadAuthority {
 pub enum SnapshotReadAuthoritySource {
     Unknown,
     OperatorController,
-    SnapshotVisibility,
     RootConfiguredRead,
-    RootMediatedTransfer,
 }
 
 ///
@@ -259,7 +225,6 @@ pub enum SnapshotReadAuthoritySource {
 pub enum QuiescencePolicy {
     CrashConsistent,
     RootCoordinated,
-    AppQuiesced,
 }
 
 ///
@@ -370,11 +335,7 @@ pub struct SnapshotReadAuthorityReceipt {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AuthorityProofSource {
-    RootCoordination,
     ManagementStatus,
-    SnapshotReadCheck,
-    Declaration,
-    Unknown,
 }
 
 ///

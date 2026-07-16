@@ -336,5 +336,4 @@ pub enum TemplateManifestState {
     Staged,
     Approved,
     Blocked,
-    Deprecated,
 }

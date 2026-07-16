@@ -74,7 +74,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
         )
     })?;
     crate::log!(Topic::Init, Info, "build network: {network}");
-    let validated = match validate_or_default(network, input) {
+    let validated = match validate_or_default(input) {
         Ok(validated) => validated,
         Err(EnvPolicyError::MissingEnvFields(missing)) => {
             return Err(InternalError::invariant(

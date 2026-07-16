@@ -42,10 +42,7 @@ impl PropagationWorkflow {
     /// This rebuilds index snapshots from the registry, applies current
     /// app state, cascades it to root children, and finally re-asserts
     /// index ↔ registry consistency.
-    pub async fn propagate_state(
-        _target: Principal,
-        role: &CanisterRole,
-    ) -> Result<(), InternalError> {
+    pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
         // The implicit wasm_store receives the normal topology cascade, but its
         // publication inventory is synchronized in root-owned subnet state after
         // creation rather than via the immediate create-time state cascade.

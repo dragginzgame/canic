@@ -28,10 +28,10 @@ impl WasmStorePublicationWorkflow {
         )
     }
 
-    // Deprecate any currently approved managed release that no longer belongs to the configured fleet.
+    // Remove any currently approved managed release that no longer belongs to the configured fleet.
     pub fn prune_unconfigured_managed_releases() -> Result<usize, InternalError> {
         let roles = config::current_subnet_managed_release_roles()?;
-        Ok(TemplateManifestOps::deprecate_approved_roles_not_in(&roles))
+        Ok(TemplateManifestOps::prune_approved_roles_not_in(&roles))
     }
 
     // Return the exact fleet stores that already carry one approved release.

@@ -4,7 +4,7 @@
 //! Does not own: public error DTOs, endpoint mapping, or verification logic.
 //! Boundary: converts auth-local failures into internal errors.
 
-use crate::{InternalError, InternalErrorOrigin, ids::CanisterRole, ops::prelude::*};
+use crate::{InternalError, InternalErrorOrigin, ops::prelude::*};
 use thiserror::Error as ThisError;
 
 ///
@@ -36,11 +36,6 @@ pub enum AuthOpsError {
 
 #[derive(Debug, ThisError)]
 pub enum AuthValidationError {
-    #[error(
-        "delegation cert expires_at ({expires_at}) must be greater than issued_at ({issued_at})"
-    )]
-    CertInvalidWindow { issued_at: u64, expires_at: u64 },
-
     #[error("delegation cert root pid mismatch (expected {expected}, found {found})")]
     InvalidRootAuthority {
         expected: Principal,
@@ -100,38 +95,11 @@ pub enum AuthSignatureError {
 
 #[derive(Debug, ThisError)]
 pub enum AuthScopeError {
-    #[error("audience principal '{aud}' not allowed by delegation")]
-    AudienceNotAllowed { aud: Principal },
-
-    #[error("audience role '{role}' not allowed by delegation")]
-    AudienceRoleNotAllowed { role: CanisterRole },
-
-    #[error("wildcard verifier audience not allowed by role-scoped delegation")]
-    AudienceAnyNotAllowed,
-
-    #[error("token audience role list must not be empty")]
-    AudienceRoleListEmpty,
-
-    #[error("scope '{scope}' not allowed by delegation")]
-    ScopeNotAllowed { scope: String },
-
     #[error("token issuer pid mismatch (expected {expected}, found {found})")]
     IssuerPidMismatch {
         expected: Principal,
         found: Principal,
     },
-
-    #[error("token audience does not include local canister '{self_pid}'")]
-    SelfAudienceMissing { self_pid: Principal },
-
-    #[error("token audience does not include local canister role '{role}' for '{self_pid}'")]
-    SelfRoleAudienceMissing {
-        self_pid: Principal,
-        role: CanisterRole,
-    },
-
-    #[error("local canister '{self_pid}' is not configured as a delegated auth verifier")]
-    SelfVerifierUnavailable { self_pid: Principal },
 
     #[error("attestation subject mismatch (expected caller {expected}, found {found})")]
     AttestationSubjectMismatch {
@@ -168,15 +136,6 @@ pub enum AuthExpiryError {
 
     #[error("token not yet valid (iat {iat})")]
     TokenNotYetValid { iat: u64 },
-
-    #[error("token issued before delegation (iat {token_iat} < cert {cert_iat})")]
-    TokenIssuedBeforeDelegation { token_iat: u64, cert_iat: u64 },
-
-    #[error("token expires after delegation (exp {token_exp} > cert {cert_exp})")]
-    TokenOutlivesDelegation { token_exp: u64, cert_exp: u64 },
-
-    #[error("delegated token expiry precedes issued_at")]
-    TokenExpiryBeforeIssued,
 
     #[error("delegated token ttl exceeds max {max_ttl_secs}s (ttl {ttl_secs}s)")]
     TokenTtlExceeded { ttl_secs: u64, max_ttl_secs: u64 },

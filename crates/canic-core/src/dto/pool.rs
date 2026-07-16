@@ -95,9 +95,6 @@ pub enum PoolAdminResponse {
 
     // One or more canisters were queued for import.
     QueuedImported { result: PoolBatchResult },
-
-    // Failed pool entries were requeued.
-    FailedRequeued { result: PoolBatchResult },
 }
 
 //

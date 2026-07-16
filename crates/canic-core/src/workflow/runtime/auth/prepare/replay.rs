@@ -193,14 +193,6 @@ pub(super) fn map_token_prepare_replay_decision(
                 "delegated token prepare request requires recovery before replay: {reason:?}"
             ))))
         }
-        ReplayReceiptDecision::TerminalFailed {
-            error_code,
-            error_bytes,
-            error_bytes_truncated,
-        } => Err(InternalError::public(Error::conflict(format!(
-            "delegated token prepare request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
-            error_bytes.len()
-        )))),
         ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
             Err(InternalError::public(Error::exhausted(format!(
                 "delegated token prepare pending replay receipt quota exceeded for caller; max_pending={max_pending}"
@@ -272,14 +264,6 @@ pub(super) fn map_role_attestation_replay_decision(
                 "role attestation prepare request requires recovery before replay: {reason:?}"
             ))))
         }
-        ReplayReceiptDecision::TerminalFailed {
-            error_code,
-            error_bytes,
-            error_bytes_truncated,
-        } => Err(InternalError::public(Error::conflict(format!(
-            "role attestation prepare request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
-            error_bytes.len()
-        )))),
         ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
             Err(InternalError::public(Error::exhausted(format!(
                 "role attestation prepare pending replay receipt quota exceeded for caller; max_pending={max_pending}"

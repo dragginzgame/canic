@@ -41,10 +41,12 @@ Historical detail is archived at:
   attempt model, storage slot, metric, outcome/failure counters, and status
   projection. The current chain-key batch is the sole renewal-work authority,
   and CLI/medic status warns when a reachable issuer has no usable active
-  proof. This working-tree slice is not a version bump or release preparation.
+  proof. Release notes are prepared for `0.93.0`; the workspace remains at
+  `0.92.14` pending the human-owned minor-version release flow.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
-- Detailed release notes are in the
+- Current release notes are in the
+  [0.93 changelog](../changelog/0.93.md); the completed 0.92 line remains in the
   [0.92 changelog](../changelog/0.92.md).
 
 ## Current Decision

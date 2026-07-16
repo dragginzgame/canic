@@ -111,17 +111,6 @@ pub(super) fn reserve_icp_refill_replay(
                 "ICP refill request requires recovery before replay: {reason:?}"
             ))))
         }
-        ReplayReceiptDecision::TerminalFailed {
-            error_code,
-            error_bytes,
-            error_bytes_truncated,
-        } => {
-            log_icp_refill_replay_conflict(operation_id, "terminal_failed");
-            Err(InternalError::public(Error::conflict(format!(
-                "ICP refill request previously failed: {error_code:?}; error_bytes_len={}; truncated={error_bytes_truncated}",
-                error_bytes.len()
-            ))))
-        }
         ReplayReceiptDecision::PendingActorQuotaExceeded { max_pending, .. } => {
             log_icp_refill_replay_conflict(operation_id, "pending_actor_quota_exceeded");
             Err(InternalError::public(Error::exhausted(format!(

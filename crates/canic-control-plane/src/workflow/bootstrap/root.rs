@@ -752,12 +752,12 @@ async fn root_reconcile_wasm_store() -> Result<(), InternalError> {
     ensure_required_wasm_store_canister().await?;
     canic_core::perf!("bootstrap_ensure_wasm_store");
 
-    let deprecated = WasmStorePublicationWorkflow::prune_unconfigured_managed_releases()?;
-    if deprecated > 0 {
+    let removed = WasmStorePublicationWorkflow::prune_unconfigured_managed_releases()?;
+    if removed > 0 {
         log!(
             Topic::Init,
             Warn,
-            "ws: deprecated {deprecated} stale managed release(s) no longer present in config"
+            "ws: removed {removed} stale managed release(s) no longer present in config"
         );
     }
     canic_core::perf!("bootstrap_prune_store_catalog");

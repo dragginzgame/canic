@@ -48,7 +48,6 @@ pub struct RoleArtifactV1 {
 pub enum ArtifactDigestSourceV1 {
     ReleaseSetManifest,
     ObservedFileDigest,
-    InstalledModuleHash,
 }
 
 ///

@@ -57,9 +57,6 @@ pub enum CyclesCommandError {
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
 
-    #[error("invalid duration {0}; use values like 1h, 6h, 24h, 7d, or 30m")]
-    InvalidDuration(String),
-
     #[error("recipient must be a principal or <deployment>/<role-or-canister>")]
     InvalidRecipient,
 

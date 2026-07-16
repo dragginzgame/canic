@@ -8,8 +8,8 @@ use crate::plan::{
     BackupPlan, BackupPlanError, BackupTarget, ControlAuthorityReceipt,
     SnapshotReadAuthorityReceipt,
     validation::{
-        validate_control_authority, validate_nonempty, validate_optional_nonempty,
-        validate_preflight_id, validate_preflight_window, validate_principal,
+        validate_nonempty, validate_optional_nonempty, validate_preflight_id,
+        validate_preflight_window, validate_principal,
     },
 };
 
@@ -119,7 +119,6 @@ fn control_receipt_map(
             expires_at: &receipt.expires_at,
             message: receipt.message.as_deref(),
         })?;
-        validate_control_authority(&receipt.authority)?;
         if receipt_map
             .insert(receipt.target_canister_id.clone(), receipt.clone())
             .is_some()

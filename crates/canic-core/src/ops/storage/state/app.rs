@@ -144,10 +144,8 @@ impl AppStateOps {
         AppStateMapper::record_to_response(AppState::export().record)
     }
 
-    /// Import application state from an operational snapshot.
-    ///
-    /// Validation occurs during snapshot → data conversion.
-    #[cfg_attr(not(test), expect(dead_code))]
+    /// Import application state from an operational snapshot for unit tests.
+    #[cfg(test)]
     pub fn import(data: AppStateData) {
         AppState::import(data);
     }

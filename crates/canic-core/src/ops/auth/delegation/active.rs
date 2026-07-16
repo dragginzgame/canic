@@ -35,9 +35,7 @@ pub(super) fn install_active_delegation_proof(
             this_canister: IcOps::canister_self(),
             now_ns,
         },
-        |cert, cert_hash, root_proof| {
-            AuthOps::verify_delegation_root_proof(cert, cert_hash, root_proof, &cfg, now_ns)
-        },
+        |cert, root_proof| AuthOps::verify_delegation_root_proof(cert, root_proof, &cfg, now_ns),
     )
     .map_err(map_install_active_delegation_proof_error)?;
 

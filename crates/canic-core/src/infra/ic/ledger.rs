@@ -110,11 +110,11 @@ impl LedgerInfra {
         Ok(allowance)
     }
 
-    /// Execute `icrc2_transfer_from` and return the raw result.
+    /// Execute `icrc2_transfer_from` and return the accepted block index.
     pub async fn icrc2_transfer_from(
         ledger_id: Principal,
         args: TransferFromArgs,
-    ) -> Result<TransferFromResult, InfraError> {
+    ) -> Result<u64, InfraError> {
         let result: TransferFromResult = Call::unbounded_wait(ledger_id, "icrc2_transfer_from")
             .with_arg(args)?
             .execute()
@@ -122,7 +122,7 @@ impl LedgerInfra {
             .candid()?;
 
         match result {
-            TransferFromResult::Ok(_) => Ok(result),
+            TransferFromResult::Ok(block_index) => Ok(block_index),
             TransferFromResult::Err(err) => Err(LedgerInfraError::TransferFromRejected {
                 symbol: Self::ledger_meta(ledger_id).symbol,
                 error: err,
