@@ -3,12 +3,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CI="$ROOT/.github/workflows/ci.yml"
+MAKEFILE="$ROOT/Makefile"
 TOOLS="$ROOT/tool-versions.env"
 MATRIX="$ROOT/docs/governance/supported-platforms.md"
 VERIFY="$ROOT/scripts/ci/verify-file-checksum.sh"
 ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
+SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
+GITLEAKS_IGNORE="$ROOT/.gitleaksignore"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
+    "$ROOT/scripts/ci/install-gitleaks.sh"
     "$ROOT/scripts/ci/install-shellcheck.sh"
     "$ROOT/scripts/ci/install-pocketic.sh"
     "$ROOT/scripts/ci/install-icp-cli.sh"
@@ -20,7 +24,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$SECRET_SCAN" "$GITLEAKS_IGNORE"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -48,6 +52,29 @@ ic_wasm_install_count="$(rg -c 'bash scripts/ci/install-ic-wasm\.sh' "$CI")"
     fail "all three IC tool jobs must use the checksum-bound ic-wasm installer"
 rg -F 'run: bash scripts/ci/check-release-integrity-contract.sh' "$CI" >/dev/null ||
     fail "release integrity guard is not active in CI"
+rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
+    fail "CI does not use the checksum-bound Gitleaks installer"
+rg -F 'run: bash scripts/ci/run-secret-scan.sh' "$CI" >/dev/null ||
+    fail "the dedicated secret scan is not active in CI"
+rg --multiline 'test-bump:[^\n]*\\\n[[:space:]]+gitleaks-scan' "$MAKEFILE" >/dev/null ||
+    fail "the patch-release gate does not require the dedicated secret scan"
+rg -F -- '--redact=100' "$SECRET_SCAN" >/dev/null ||
+    fail "the dedicated secret scan does not redact findings"
+rg -F '"$GITLEAKS_BIN" git' "$SECRET_SCAN" >/dev/null ||
+    fail "the dedicated scanner does not inspect Git history"
+rg -F -- '--gitleaks-ignore-path "$ROOT_DIR/.gitleaksignore"' "$SECRET_SCAN" >/dev/null ||
+    fail "the dedicated secret scan does not select the reviewed fingerprint file"
+
+gitleaks_ignore_count=0
+while IFS= read -r fingerprint; do
+    case "$fingerprint" in
+    '' | \#*) continue ;;
+    esac
+    [[ "$fingerprint" =~ ^[0-9a-f]{40}:.+:[a-z0-9-]+:[0-9]+$ ]] ||
+        fail "invalid Gitleaks fingerprint entry"
+    gitleaks_ignore_count=$((gitleaks_ignore_count + 1))
+done <"$GITLEAKS_IGNORE"
+[ "$gitleaks_ignore_count" -gt 0 ] || fail "no reviewed Gitleaks fingerprints were found"
 
 while IFS= read -r install_command; do
     if [[ "$install_command" != *"--version"* ]]; then
@@ -145,6 +172,14 @@ fi
 [[ "$wrong_ic_wasm_output" == *"unsupported ic-wasm version for Canic CI"* ]] ||
     fail "the IC prerequisite check did not preserve its version-mismatch cause"
 
+if wrong_gitleaks_output="$(
+    GITLEAKS_BIN=/bin/echo bash "$SECRET_SCAN" 2>&1
+)"; then
+    fail "the secret scan accepted an unpinned Gitleaks version"
+fi
+[[ "$wrong_gitleaks_output" == *"gitleaks version mismatch"* ]] ||
+    fail "the secret scan did not preserve its version-mismatch cause"
+
 if rg -n 'curl[^|]*\|' "${installers[@]}" "$ROOT/scripts/dev/install_dev.sh" >/dev/null; then
     fail "active installer pipes an unverified download into execution"
 fi
@@ -174,6 +209,6 @@ fi
 rg -F 'sha256 checksum mismatch' "$tmp_dir/rejection.stderr" >/dev/null ||
     fail "checksum mismatch did not preserve its deterministic cause"
 
-bash -n "$VERIFY" "${installers[@]}" "$ROOT/scripts/dev/install_dev.sh"
+bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$ROOT/scripts/dev/install_dev.sh"
 
 echo "release integrity contract guard passed ($external_action_count immutable Actions)"

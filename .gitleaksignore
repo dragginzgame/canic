@@ -1,0 +1,14 @@
+# Reviewed false positives from historical code and audit evidence. Entries are
+# exact Gitleaks fingerprints so a new occurrence, path, line, rule, or commit
+# remains visible to the scanner.
+daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-14/0.92-layer-boundary-v2.md:generic-api-key:153
+daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/method.json:generic-api-key:8
+daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/method.json:generic-api-key:9
+daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/wasm-footprint-v2.md:generic-api-key:55
+1fff56b38aa2f096fd540c47ad6c1da28c117fb5:crates/canic-core/src/ops/auth/delegation/chain_key_batch.rs:generic-api-key:903
+583c474309f632f85e1bc1bb0fdea81589170fc4:docs/audits/reports/2026-06/2026-06-19/security-boundary-ordering.md:generic-api-key:168
+8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:426
+8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:436
+8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:460
+8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:483
+8e2fd81390be7821bd8925e84a113d5b6117a7ba:crates/canic-memory/src/api/mod.rs:generic-api-key:515

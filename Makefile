@@ -6,6 +6,7 @@
         test test-wasm test-bump build check clippy fmt fmt-check clean clean-wasm \
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         control-plane-feature-gate \
+        gitleaks-scan \
         install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
@@ -15,6 +16,7 @@ TEST_TMPDIR ?= $(CURDIR)/.tmp/test-runtime
 include tool-versions.env
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
+GITLEAKS_INSTALL_DIR ?= $(HOME)/.local/bin
 
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
@@ -33,7 +35,7 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
-	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Canic toolchain"
+	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Canic toolchain"
 	@echo "  update-dev       Synchronize development tools to the repository pins"
 	@echo "  ensure-hooks     Configure git hooks"
 	@echo ""
@@ -70,6 +72,7 @@ help:
 	@echo "  fmt-check        Check formatting"
 	@echo "  clean            Clean build artifacts"
 	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
+	@echo "  gitleaks-scan     Scan complete repository history with pinned Gitleaks"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  cloc             Show runtime vs test Rust LOC across canic crates"
@@ -93,13 +96,13 @@ help:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Canic toolchain.
+# Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Canic toolchain.
 install-dev:
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
 # Synchronize local development tools to the repository-owned versions.
 update-dev:
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
 	cargo install --quiet \
 		"cargo-audit@$(CANIC_CARGO_AUDIT_VERSION)" \
 		"cargo-bloat@$(CANIC_CARGO_BLOAT_VERSION)" \
@@ -116,6 +119,7 @@ update-dev:
 	rg --version
 	icp --version
 	ic-wasm --version
+	"$(GITLEAKS_INSTALL_DIR)/gitleaks" version
 	cargo audit
 
 # Optional explicit install target (idempotent)
@@ -229,10 +233,14 @@ test: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit
 test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-unit-fast
 
 # Version-bump gate.
-# Keeps the control-plane feature matrix, clippy, and fast unit/lib/bin
-# workspace run, while leaving the local ICP CLI fast path explicit.
+# Keeps the secret scan, control-plane feature matrix, Clippy, and fast
+# unit/lib/bin workspace run, while leaving the local ICP CLI fast path explicit.
 test-bump: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
+        gitleaks-scan \
         control-plane-feature-gate clippy test-unit-fast
+
+gitleaks-scan:
+	GITLEAKS_BIN="$(GITLEAKS_INSTALL_DIR)/gitleaks" bash scripts/ci/run-secret-scan.sh
 
 control-plane-feature-gate:
 	bash scripts/ci/check-control-plane-feature-matrix.sh
