@@ -19,6 +19,12 @@ fail() {
     exit 1
 }
 
+if [ -n "${GITLEAKS_CONFIG:-}" ] || [ -n "${GITLEAKS_CONFIG_TOML:-}" ]; then
+    fail "Gitleaks configuration overrides are not allowed; built-in rules are required"
+fi
+[ ! -e "$ROOT_DIR/.gitleaks.toml" ] ||
+    fail "repository .gitleaks.toml overrides are not allowed; built-in rules are required"
+
 case "$GITLEAKS_BIN" in
 */*)
     [ -x "$GITLEAKS_BIN" ] || fail "gitleaks binary is not executable: $GITLEAKS_BIN"
@@ -32,15 +38,17 @@ esac
 if ! version_output="$("$GITLEAKS_BIN" version 2>&1)"; then
     fail "unable to read the gitleaks version"
 fi
-case "$version_output" in
-*"$CANIC_GITLEAKS_VERSION"*) ;;
-*)
+if [ "$version_output" != "$CANIC_GITLEAKS_VERSION" ]; then
     fail "gitleaks version mismatch; expected $CANIC_GITLEAKS_VERSION, got $version_output"
-    ;;
-esac
+fi
 
 git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
     fail "repository history is unavailable"
+if ! shallow_repository="$(git -C "$ROOT_DIR" rev-parse --is-shallow-repository 2>/dev/null)"; then
+    fail "unable to determine whether repository history is complete"
+fi
+[ "$shallow_repository" = "false" ] ||
+    fail "complete repository history is unavailable in a shallow clone"
 
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT

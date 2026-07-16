@@ -15,9 +15,11 @@ Historical detail is archived at:
 ## Current Release
 
 - The workspace package version is `0.92.10`.
-- `v0.92.10`, `HEAD`, `main`, and `origin/main` identify
-  `35de57b53a5c331977e3f7ac49e8190355b1d9f4` before the current Unreleased
-  D12 worktree changes.
+- The latest published release is `v0.92.10` at
+  `35de57b53a5c331977e3f7ac49e8190355b1d9f4`. D12 was initially committed at
+  `2e4131571aeb6ca13f050b012db30602d8e20b1b`; its focused scan-contract
+  hardening remains an Unreleased candidate until the maintainer assigns the
+  final commit and tag.
 - The `v0.92.10` source tree is
   `b6b7541e697c264b1b40cd60a8a6fc72f497e9cd`; its product-tree hash is
   `ad5421cac98f605266e55af9e55e7a1fd1845f56f774082c8f27b6714b25d5bb`.
@@ -477,10 +479,10 @@ First primary results:
   zero production ops-to-policy dependencies. Public, serialized, stable,
   configuration, and dependency surfaces are unchanged.
 - D12 validation passes the checksum-bound Gitleaks install and exact-version
-  probe, redacted full-history scan, missing/wrong-version and argument
-  rejection probes, release-integrity and validation-matrix guards,
-  `actionlint`, Bash syntax, changed-script ShellCheck, and
-  `make gitleaks-scan`.
+  probe, redacted full-history scan, unavailable/near-match version,
+  rule-configuration override, shallow-history, and argument rejection probes,
+  release-integrity and validation-matrix guards, `actionlint`, Bash syntax,
+  changed-script ShellCheck, and `make gitleaks-scan`.
   The admitted result has zero unreviewed findings and retains no raw report.
 
 ## Next Action
