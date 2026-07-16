@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.14`.
-- The latest published release is `v0.92.14` at
-  `ad37874993c93f4c73d1cc10f3097abc70e93cec`.
-- The `v0.92.14` source tree is
-  `c670ae56131fab0e797d8dd121fe110dc1c6c7e4`; its product-tree hash is
-  `1ef04da2266891a4ef62367b0ef8004a671b173ef455a11c5f5c8ce7b5f1bcfa`.
+- The workspace package version is `0.93.0`.
+- The latest published release is `v0.93.0` at
+  `543e76b064c8a7df90f2c819df6db4c2defe8354`.
+- The `v0.93.0` source tree is
+  `7cace2155eb01586a0ffc9c10cff27b0201c3f50`; its product-tree hash is
+  `e3328b41badd0e85662148f164311d3881e14feaefe20c02f11e08bd5e3698f1`.
   Its Cargo.lock SHA-256 is
-  `bafcc53054d540090cbaf151cee699531b5a65bc330723b2bf79df6cce6353cf`.
+  `a2d50b53f5871063615f3f6aae65cc5f8a915fb082456fcaec5d2da0d348d98c`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -37,12 +37,15 @@ Historical detail is archived at:
   CI/release inventory. The complexity finding is fixed; the four upstream
   transitives remain an accepted external limitation. The live ledger is 42
   fixed, one accepted P2, zero deferred, and zero blocked.
-- Current 0.93 development hard-cuts the unreachable 0.74 issuer-renewal
+- Released `v0.93.0` hard-cuts the unreachable 0.74 issuer-renewal
   attempt model, storage slot, metric, outcome/failure counters, and status
   projection. The current chain-key batch is the sole renewal-work authority,
   and CLI/medic status warns when a reachable issuer has no usable active
-  proof. Release notes are prepared for `0.93.0`; the workspace remains at
-  `0.92.14` pending the human-owned minor-version release flow.
+  proof.
+- Current post-0.93 development hard-cuts uncalled host ICP CLI convenience,
+  snapshot upload/restore, replica-display, and legacy text snapshot-ID
+  surfaces while preserving the maintained Candid-aware, rooted replica,
+  JSON snapshot-create, and backup-owned restore paths.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -549,7 +552,7 @@ First primary results:
   prepare workflow tests, strict all-target core Clippy, formatting, and diff
   hygiene. Every resulting auth/root-proof production owner is below 600
   logical lines. The slice is released in `v0.92.14`.
-- Current 0.93 stale-renewal cleanup passes targeted core renewal, chain-key
+- Released 0.93.0 stale-renewal cleanup passes targeted core renewal, chain-key
   batch, metrics, CLI auth, Candid protocol, changelog-governance, and isolated
   installed-CLI proofs; strict all-target Clippy for `canic-core`, `canic`, and
   `canic-cli`; targeted package checks; formatting; Bash syntax; and diff
@@ -571,8 +574,9 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-Current 0.93 development removes the stale issuer-renewal attempt authority
-and projects the canonical chain-key batch instead. After this focused slice,
-the next audited product risks are Wasm-store lifecycle compare-and-set/retry
-safety and unbounded ICP-refill history scans. Broad deployment, package,
-publish, and release validation remains maintainer-owned.
+Released 0.93.0 removes the stale issuer-renewal attempt authority and projects
+the canonical chain-key batch instead. The current follow-up removes orphaned
+host ICP CLI wrappers and the superseded text snapshot-ID path. The next
+audited product risks remain Wasm-store lifecycle compare-and-set/retry safety
+and unbounded ICP-refill history scans. Broad deployment, package, publish, and
+release validation remains maintainer-owned.

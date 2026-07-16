@@ -8,35 +8,6 @@ use super::{
 };
 
 impl IcpCli {
-    /// Call one canister method with optional JSON output.
-    pub fn canister_call_output(
-        &self,
-        canister: &str,
-        method: &str,
-        output: Option<&str>,
-    ) -> Result<String, IcpCommandError> {
-        self.canister_call_output_with_candid(canister, method, output, None)
-    }
-
-    /// Call one canister method with optional local Candid and JSON output.
-    pub fn canister_call_output_with_candid(
-        &self,
-        canister: &str,
-        method: &str,
-        output: Option<&str>,
-        candid_path: Option<&Path>,
-    ) -> Result<String, IcpCommandError> {
-        let mut command = self.canister_command();
-        command.args(["call", canister, method]);
-        command.arg("()");
-        add_candid_arg(&mut command, candid_path);
-        if let Some(output) = output {
-            add_output_arg(&mut command, output);
-        }
-        self.add_target_args(&mut command);
-        run_output(&mut command)
-    }
-
     /// Call one canister method with an explicit Candid argument and optional JSON output.
     pub fn canister_call_arg_output(
         &self,
@@ -68,16 +39,6 @@ impl IcpCli {
         run_output(&mut command)
     }
 
-    /// Query one canister method with no arguments and optional JSON output.
-    pub fn canister_query_output(
-        &self,
-        canister: &str,
-        method: &str,
-        output: Option<&str>,
-    ) -> Result<String, IcpCommandError> {
-        self.canister_query_output_with_candid(canister, method, output, None)
-    }
-
     /// Query one canister method with no arguments, optional local Candid, and optional JSON output.
     pub fn canister_query_output_with_candid(
         &self,
@@ -96,17 +57,6 @@ impl IcpCli {
         }
         self.add_target_args(&mut command);
         run_output(&mut command)
-    }
-
-    /// Query one canister method with an explicit Candid argument and optional JSON output.
-    pub fn canister_query_arg_output(
-        &self,
-        canister: &str,
-        method: &str,
-        arg: &str,
-        output: Option<&str>,
-    ) -> Result<String, IcpCommandError> {
-        self.canister_query_arg_output_with_candid(canister, method, arg, output, None)
     }
 
     /// Query one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
@@ -217,38 +167,6 @@ impl IcpCli {
         command.args(["top-up", "--amount"]);
         command.arg(amount_cycles.to_string());
         command.arg(canister);
-        self.add_target_args(&mut command);
-        command_display(&command)
-    }
-
-    /// Render a dry-run no-argument query call.
-    #[must_use]
-    pub fn canister_query_output_display(
-        &self,
-        canister: &str,
-        method: &str,
-        output: Option<&str>,
-    ) -> String {
-        self.canister_query_output_display_with_candid(canister, method, output, None)
-    }
-
-    /// Render a dry-run no-argument query call with optional local Candid.
-    #[must_use]
-    pub fn canister_query_output_display_with_candid(
-        &self,
-        canister: &str,
-        method: &str,
-        output: Option<&str>,
-        candid_path: Option<&Path>,
-    ) -> String {
-        let mut command = self.canister_command();
-        command.args(["call", canister, method]);
-        command.arg("()");
-        command.arg("--query");
-        add_candid_arg(&mut command, candid_path);
-        if let Some(output) = output {
-            add_output_arg(&mut command, output);
-        }
         self.add_target_args(&mut command);
         command_display(&command)
     }

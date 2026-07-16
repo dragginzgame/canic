@@ -28,9 +28,6 @@ pub enum IcpCommandError {
         output: String,
         source: serde_json::Error,
     },
-    SnapshotIdUnavailable {
-        output: String,
-    },
 }
 
 impl IcpCommandError {
@@ -45,7 +42,7 @@ impl IcpCommandError {
     pub fn external_output(&self) -> Option<&str> {
         match self {
             Self::Failed { stderr, .. } => Some(stderr),
-            Self::Json { output, .. } | Self::SnapshotIdUnavailable { output } => Some(output),
+            Self::Json { output, .. } => Some(output),
             Self::Io(_) | Self::MissingCli { .. } | Self::IncompatibleCliVersion { .. } => None,
         }
     }
@@ -83,12 +80,6 @@ impl fmt::Display for IcpCommandError {
                     "could not parse icp json output for {command}: {source}\n{output}"
                 )
             }
-            Self::SnapshotIdUnavailable { output } => {
-                write!(
-                    formatter,
-                    "could not parse snapshot id from icp output: {output}"
-                )
-            }
         }
     }
 }
@@ -105,10 +96,9 @@ impl Error for IcpCommandError {
         match self {
             Self::Io(err) => Some(err),
             Self::Json { source, .. } => Some(source),
-            Self::Failed { .. }
-            | Self::IncompatibleCliVersion { .. }
-            | Self::MissingCli { .. }
-            | Self::SnapshotIdUnavailable { .. } => None,
+            Self::Failed { .. } | Self::IncompatibleCliVersion { .. } | Self::MissingCli { .. } => {
+                None
+            }
         }
     }
 }

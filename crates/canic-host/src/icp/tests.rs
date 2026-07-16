@@ -114,60 +114,6 @@ fn renders_network_target() {
     );
 }
 
-// Keep local replica lifecycle commands explicit and project-scoped.
-#[test]
-fn renders_local_replica_commands() {
-    let icp = IcpCli::new("icp", None, None);
-
-    assert_eq!(
-        icp.local_replica_start_display(true, false),
-        "icp network start local --background"
-    );
-    assert_eq!(
-        icp.local_replica_start_display(false, false),
-        "icp network start local"
-    );
-    assert_eq!(
-        icp.local_replica_start_display(false, true),
-        "icp network start local --debug"
-    );
-    assert_eq!(
-        icp.local_replica_status_display(false),
-        "icp network status local"
-    );
-    assert_eq!(
-        icp.local_replica_status_display(true),
-        "icp network status local --debug"
-    );
-    assert_eq!(
-        icp.local_replica_stop_display(false),
-        "icp network stop local"
-    );
-    assert_eq!(
-        icp.local_replica_stop_display(true),
-        "icp network stop local --debug"
-    );
-}
-
-// Keep environment-backed local replica commands aligned with ICP CLI network selection.
-#[test]
-fn renders_environment_local_replica_commands() {
-    let icp = IcpCli::new("icp", Some("staging".to_string()), None);
-
-    assert_eq!(
-        icp.local_replica_start_display(true, false),
-        "icp network start -e staging --background"
-    );
-    assert_eq!(
-        icp.local_replica_status_display(true),
-        "icp network status -e staging --debug"
-    );
-    assert_eq!(
-        icp.local_replica_stop_display(false),
-        "icp network stop -e staging"
-    );
-}
-
 // Keep explicit project roots visible instead of relying only on current_dir.
 #[test]
 fn renders_project_root_override_for_rooted_context() {
@@ -176,48 +122,6 @@ fn renders_project_root_override_for_rooted_context() {
     assert_eq!(
         icp.canister_top_up_display("aaaaa-aa", 4_000_000_000_000),
         "icp --project-root-override /workspace/app canister top-up --amount 4000000000000 aaaaa-aa -n ic"
-    );
-}
-
-// Ensure restore planning uses the ICP CLI upload/restore flow.
-#[test]
-fn renders_snapshot_restore_flow() {
-    let icp = IcpCli::new("icp", Some("prod".to_string()), None);
-
-    assert_eq!(
-        icp.snapshot_upload_display("root", Path::new("artifact")),
-        "icp canister snapshot upload root --input artifact --resume --json -e prod"
-    );
-    assert_eq!(
-        icp.snapshot_restore_display("root", "uploaded-1"),
-        "icp canister snapshot restore root uploaded-1 -e prod"
-    );
-}
-
-// Ensure query helpers do not accidentally issue update calls for read-only endpoint probes.
-#[test]
-fn renders_no_argument_query_call() {
-    let icp = IcpCli::new("icp", None, Some("ic".to_string()));
-
-    assert_eq!(
-        icp.canister_query_output_display("root", "canic_ready", Some("json")),
-        "icp canister call root canic_ready () --query --json -n ic"
-    );
-}
-
-// Ensure local Candid support is available to query helpers.
-#[test]
-fn renders_no_argument_query_call_with_local_candid() {
-    let icp = IcpCli::new("icp", None, Some("local".to_string()));
-
-    assert_eq!(
-        icp.canister_query_output_display_with_candid(
-            "root",
-            "canic_ready",
-            Some("json"),
-            Some(Path::new(".icp/local/canisters/root/root.did"))
-        ),
-        "icp canister call root canic_ready () --query --candid .icp/local/canisters/root/root.did --json -n local"
     );
 }
 
@@ -303,27 +207,6 @@ fn renders_canister_top_up() {
     );
 }
 
-// Ensure snapshot ids can be extracted from common create output.
-#[test]
-fn parses_snapshot_id_from_output() {
-    let snapshot_id = parse_snapshot_id("Created snapshot: 0a0b0c0d\n");
-
-    assert_eq!(snapshot_id.as_deref(), Some("0a0b0c0d"));
-}
-
-// Ensure table units are not mistaken for snapshot ids.
-#[test]
-fn parses_snapshot_id_from_table_output() {
-    let output = "\
-ID         SIZE       CREATED_AT
-0a0b0c0d   1.37 MiB   2026-05-10T17:04:19Z
-";
-
-    let snapshot_id = parse_snapshot_id(output);
-
-    assert_eq!(snapshot_id.as_deref(), Some("0a0b0c0d"));
-}
-
 // Ensure current ICP CLI snapshot JSON receipts parse into the typed host shape.
 #[test]
 fn parses_snapshot_create_receipt_json() {
@@ -338,19 +221,6 @@ fn parses_snapshot_create_receipt_json() {
 
     assert_eq!(receipt.snapshot_id, "0000000000000000ffffffffffc000020101");
     assert_eq!(receipt.total_size_bytes, Some(272_586_987));
-}
-
-// Ensure current ICP CLI snapshot upload JSON receipts parse into the typed host shape.
-#[test]
-fn parses_snapshot_upload_receipt_json() {
-    let receipt = serde_json::from_str::<IcpSnapshotUploadReceipt>(
-        r#"{
-  "snapshot_id": "0000000000000000ffffffffffc000020101"
-}"#,
-    )
-    .expect("parse snapshot upload receipt");
-
-    assert_eq!(receipt.snapshot_id, "0000000000000000ffffffffffc000020101");
 }
 
 // Ensure current ICP CLI status JSON parses into the typed host shape.
