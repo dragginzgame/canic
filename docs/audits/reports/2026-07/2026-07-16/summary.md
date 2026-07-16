@@ -6,7 +6,10 @@ This run day closes the final non-deferred 0.92 finding by adding and executing
 the dedicated secret scanner required by retained method
 `CANIC-RELEASE-INTEGRITY-001/v1`, catches and fixes an unrelated
 dependency-resolution side effect in the human release-version transaction,
-and completes the executable `v0.91.6` compatibility accounting.
+completes the executable `v0.91.6` compatibility accounting, and closes the
+0.92 release line at immutable `v0.92.12`. It also records the separately
+accepted, unreleased D14 auth-checkpoint follow-up without rewriting that
+closeout.
 
 ## Result
 
@@ -58,6 +61,21 @@ envelope lacking `transforms` is rejected by the current policy with
 The documented migration remains rebuild/regenerate; no compatibility decoder
 or alias is added. No new finding results from the accounting.
 
+The [0.92 release-line closeout](../../../release-lines/0.92-closeout.md) binds
+D13 and the compatibility evidence to `v0.92.12` at
+`dd4d55df8a9c870707ecda62f91900df8c0f6c70`. Its explicit verdict is
+`pass_with_limitations`: all 28 P1 findings are fixed, while three bounded P2
+watchpoints remain deferred with recorded revisit conditions. There are no
+waivers, blocked current runs, or unclassified compatibility deltas.
+
+[D14 auth performance checkpoints](0.92-d14-auth-performance-checkpoints.md)
+is an explicitly accepted post-closeout P2 slice. It adds stage-level
+instruction checkpoints to root-proof provisioning and delegated-token
+prepare, repair, cache, and full-verification paths. Focused auth tests,
+instruction-audit regression proof, and strict targeted Clippy pass. This
+fixes `CANIC-092-PERF-001` in the unreleased working tree without rewriting the
+immutable `v0.92.12` closeout evidence.
+
 ## Live Ledger
 
 - Retained methods attempted: 22 of 22.
@@ -67,10 +85,13 @@ or alias is added. No new finding results from the accounting.
   remains historical.
 - Unresolved findings: 3 (0 P1 and 3 P2), all explicitly deferred watchpoints.
 - Required partial or blocked current runs: 0.
-- Additional current-tree finding: `CANIC-092-RELEASE-005` is fixed in the
-  D13 candidate and requires release identity before final Slice E closeout.
+- Final finding index: 43 canonical findings, 40 fixed and 3 deferred P2
+  watchpoints; `CANIC-092-RELEASE-005` is fixed in released `v0.92.12`.
 - `v0.91.6` contract: complete with explicit source/provenance hard cuts and
   no unclassified compatibility delta.
+- Closeout verdict: `pass_with_limitations`.
+- Post-closeout working-tree ledger: 41 fixed and 2 deferred P2 watchpoints;
+  the released `v0.92.12` ledger above remains 40 fixed and 3 deferred.
 
 ## Validation
 
@@ -96,11 +117,18 @@ or alias is added. No new finding results from the accounting.
 - Current build-provenance/policy proof: 15 passed; old provenance rejected as
   expected and current provenance admitted.
 - Current backup/restore domain proof: 195 passed.
+- Final `v0.92.12` method-catalog/fingerprint, release-integrity,
+  release-validation, recovery/runbook, and zero-violation layering guards:
+  pass.
+- Final release-flow, release-index, workspace-manifest, and changelog tests:
+  6, 5, 7, and 1 passed respectively.
+- Final pinned full-history secret scan: zero findings at
+  `dd4d55df8a9c870707ecda62f91900df8c0f6c70`.
 
 ## Next
 
-Phase D has no unresolved P0 or P1 finding. Compatibility accounting and the
-three deferred P2 dispositions are complete. D13 and this report must receive
-an immutable release identity before Slice E publishes one explicit 0.92
-closeout verdict. Broad product, package, deployment, publish, and release
-gates remain maintainer-owned.
+0.92 is closed. Do not start another 0.92 product slice from the deferred
+watchpoints alone; each requires its recorded revisit condition and a bounded,
+finding-backed decision. Continue with real-world use and treat future product
+work as a separately accepted design. Broad product, deployment, package,
+publish, and release gates remain maintainer-owned.

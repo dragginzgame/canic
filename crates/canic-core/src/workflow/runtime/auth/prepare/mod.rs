@@ -74,6 +74,7 @@ impl RuntimeAuthWorkflow {
             metadata.ttl_ns,
             "delegated token prepare replay metadata ttl_ns overflows nanoseconds",
         )?;
+        crate::perf!("delegated_token_validate_request");
 
         let token = match reserve_or_replay_receipt(replay_input)
             .map_err(map_token_prepare_replay_store_error)?
@@ -81,6 +82,7 @@ impl RuntimeAuthWorkflow {
             ReplayReceiptDecision::Fresh(token) => token,
             decision => return map_token_prepare_replay_decision(decision),
         };
+        crate::perf!("delegated_token_reserve_replay");
 
         let prepare_input = PrepareDelegatedTokenIssuerProofInput {
             subject: request.subject,
@@ -102,6 +104,7 @@ impl RuntimeAuthWorkflow {
                 return Err(err);
             }
         };
+        crate::perf!("delegated_token_prepare_proof");
 
         let response = DelegatedTokenPrepareResponse {
             claims: prepared.prepared.claims,
@@ -120,6 +123,7 @@ impl RuntimeAuthWorkflow {
                 return Err(err);
             }
         };
+        crate::perf!("delegated_token_encode_response");
 
         commit_receipt_response(
             &token,
@@ -127,6 +131,7 @@ impl RuntimeAuthWorkflow {
             response_bytes,
             secs_to_ns(IcOps::now_secs()),
         );
+        crate::perf!("delegated_token_commit_replay");
         Ok(response)
     }
 
@@ -257,6 +262,7 @@ fn delegated_token_prepare_error_allows_lazy_repair(err: &InternalError) -> bool
 async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError> {
     let verifier = AuthOps::auth_proof_verifier_config()?;
     let root_canister_id = verifier.root_canister_id;
+    crate::perf!("delegated_token_resolve_root");
     let call = CallOps::unbounded_wait(
         root_canister_id,
         protocol::CANIC_GET_OR_CREATE_CHAIN_KEY_DELEGATION_PROOF,
@@ -264,7 +270,9 @@ async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError>
     .execute()
     .await?;
     let proof = chain_key_delegation_proof_from_root_call(call)?;
+    crate::perf!("delegated_token_fetch_root_proof");
     AuthOps::install_active_delegation_proof(proof.proof, root_canister_id)?;
+    crate::perf!("delegated_token_install_root_proof");
     Ok(())
 }
 
