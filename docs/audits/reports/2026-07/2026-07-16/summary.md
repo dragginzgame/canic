@@ -21,12 +21,13 @@ identifiers, structured certificate construction, or stable-key test fixtures.
 They are excluded only by exact historical finding fingerprints; no path or
 rule is broadly allowed.
 
-The admitted rerun reports zero findings. Missing-version, wrong-version,
-unexpected-argument, and scanner-operational failures reject deterministically.
-All 18 changed or new D12 files also pass individual candidate-file scans.
-This fixes `CANIC-092-RELEASE-003` without a waiver and changes no runtime,
-public, serialized, stable-state, product-configuration, package, Cargo
-dependency, or lockfile surface.
+The admitted rerun reports zero findings. Unavailable or near-match versions,
+environment or repository rule overrides, shallow history,
+unexpected arguments, and scanner-operational failures reject
+deterministically. All 18 changed or new D12 files also pass individual
+candidate-file scans. This fixes `CANIC-092-RELEASE-003` without a waiver and
+changes no runtime, public, serialized, stable-state, product-configuration,
+package, Cargo dependency, or lockfile surface.
 
 ## Live Ledger
 
@@ -43,8 +44,9 @@ dependency, or lockfile surface.
 - Checksum-bound Gitleaks 8.30.1 install and reported-version check: pass.
 - Redacted full-history scan: pass with zero unreviewed findings.
 - Release-integrity and release-validation matrix guards: pass.
-- Gitleaks unavailable/version mismatch and installer-argument rejection:
-  pass with deterministic causes.
+- Gitleaks unavailable/near-match version, rule-configuration override,
+  shallow-history, and installer-argument rejection: pass with deterministic
+  causes.
 - `make gitleaks-scan`: pass with the pinned binary.
 - `actionlint`, Bash syntax, and changed-script ShellCheck: pass.
 

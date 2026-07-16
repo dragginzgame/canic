@@ -64,6 +64,16 @@ rg -F '"$GITLEAKS_BIN" git' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated scanner does not inspect Git history"
 rg -F -- '--gitleaks-ignore-path "$ROOT_DIR/.gitleaksignore"' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated secret scan does not select the reviewed fingerprint file"
+rg -F 'Gitleaks configuration overrides are not allowed' "$SECRET_SCAN" >/dev/null ||
+    fail "the dedicated secret scan does not reject external rule configuration"
+rg -F 'repository .gitleaks.toml overrides are not allowed' "$SECRET_SCAN" >/dev/null ||
+    fail "the dedicated secret scan does not reject repository rule configuration"
+rg -F -- '--is-shallow-repository' "$SECRET_SCAN" >/dev/null ||
+    fail "the dedicated secret scan does not reject incomplete Git history"
+rg -F '[ "$version_output" != "$CANIC_GITLEAKS_VERSION" ]' "$SECRET_SCAN" >/dev/null ||
+    fail "the dedicated secret scan does not require the exact Gitleaks version"
+rg -F '[ "$version_output" != "$VERSION" ]' "$ROOT/scripts/ci/install-gitleaks.sh" >/dev/null ||
+    fail "the Gitleaks installer does not require the exact reported version"
 
 gitleaks_ignore_count=0
 while IFS= read -r fingerprint; do
@@ -172,13 +182,73 @@ fi
 [[ "$wrong_ic_wasm_output" == *"unsupported ic-wasm version for Canic CI"* ]] ||
     fail "the IC prerequisite check did not preserve its version-mismatch cause"
 
-if wrong_gitleaks_output="$(
-    GITLEAKS_BIN=/bin/echo bash "$SECRET_SCAN" 2>&1
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT
+fake_gitleaks="$tmp_dir/gitleaks"
+# shellcheck disable=SC2016 # Preserve variable expansion for the generated fixture.
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'case "${1:-}" in' \
+    'version)' \
+    '    [ "${FAKE_GITLEAKS_VERSION_FAIL:-0}" != "1" ] || exit 1' \
+    '    printf "%s\\n" "${FAKE_GITLEAKS_VERSION:-}"' \
+    '    ;;' \
+    'git) exit 0 ;;' \
+    '*) exit 2 ;;' \
+    'esac' >"$fake_gitleaks"
+chmod +x "$fake_gitleaks"
+
+if unavailable_gitleaks_output="$(
+    FAKE_GITLEAKS_VERSION_FAIL=1 GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
 )"; then
-    fail "the secret scan accepted an unpinned Gitleaks version"
+    fail "the secret scan accepted unavailable Gitleaks version output"
 fi
-[[ "$wrong_gitleaks_output" == *"gitleaks version mismatch"* ]] ||
+[[ "$unavailable_gitleaks_output" == *"unable to read the gitleaks version"* ]] ||
+    fail "the secret scan did not preserve its unavailable-version cause"
+
+if near_gitleaks_output="$(
+    FAKE_GITLEAKS_VERSION="${CANIC_GITLEAKS_VERSION}0" \
+        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
+)"; then
+    fail "the secret scan accepted a near-match Gitleaks version"
+fi
+[[ "$near_gitleaks_output" == *"gitleaks version mismatch"* ]] ||
     fail "the secret scan did not preserve its version-mismatch cause"
+
+for config_variable in GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML; do
+    if config_override_output="$(
+        env "$config_variable=review-override" \
+            FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
+            GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
+    )"; then
+        fail "the secret scan accepted $config_variable"
+    fi
+    [[ "$config_override_output" == *"configuration overrides are not allowed"* ]] ||
+        fail "the secret scan did not preserve its configuration-override cause"
+done
+
+fake_bin="$tmp_dir/bin"
+mkdir -p "$fake_bin"
+# shellcheck disable=SC2016 # Preserve argument handling for the generated fixture.
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'last=""' \
+    'for argument in "$@"; do last="$argument"; done' \
+    'case "$last" in' \
+    '--is-inside-work-tree) exit 0 ;;' \
+    '--is-shallow-repository) printf "true\\n" ;;' \
+    '*) exit 2 ;;' \
+    'esac' >"$fake_bin/git"
+chmod +x "$fake_bin/git"
+if shallow_history_output="$(
+    PATH="$fake_bin:$PATH" \
+        FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
+        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
+)"; then
+    fail "the secret scan accepted incomplete Git history"
+fi
+[[ "$shallow_history_output" == *"complete repository history is unavailable in a shallow clone"* ]] ||
+    fail "the secret scan did not preserve its shallow-history cause"
 
 if rg -n 'curl[^|]*\|' "${installers[@]}" "$ROOT/scripts/dev/install_dev.sh" >/dev/null; then
     fail "active installer pipes an unverified download into execution"
@@ -195,8 +265,6 @@ rg -F '`wasm32-unknown-unknown`' "$MATRIX" >/dev/null ||
 rg -F 'Install-Capable But Not Release-Supported' "$MATRIX" >/dev/null ||
     fail "supported host matrix does not distinguish installer branches"
 
-tmp_dir="$(mktemp -d)"
-trap 'rm -rf "$tmp_dir"' EXIT
 printf 'canic-release-integrity\n' >"$tmp_dir/input"
 bash "$VERIFY" sha256 \
     ef57c7341ccbad50924ce5ffe7d2069b1106acac606f1f8ebd92b5b0a47067df \

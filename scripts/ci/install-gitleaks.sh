@@ -58,15 +58,12 @@ main() {
     candidate="$TMP_DIR/gitleaks"
     chmod +x "$candidate"
     version_output="$("$candidate" version 2>&1)"
-    case "$version_output" in
-    *"$VERSION"*) ;;
-    *)
+    if [ "$version_output" != "$VERSION" ]; then
         echo "installed gitleaks does not report the pinned version" >&2
         echo "expected: $VERSION" >&2
         echo "actual:   $version_output" >&2
         exit 1
-        ;;
-    esac
+    fi
 
     installed="$INSTALL_DIR/gitleaks"
     mv "$candidate" "$installed"
