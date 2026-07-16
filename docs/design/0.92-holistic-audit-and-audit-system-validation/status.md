@@ -33,18 +33,22 @@ packaged downstream proofs pass before registry publication. This fixes
 `CANIC-092-DOCS-002`. D11 is released in `v0.92.10`: shared
 decision inputs now belong to model, root-proof admission belongs to workflow,
 and ops no longer imports policy. This fixes `CANIC-092-LAYERING-005`; the
-layering guard passes with zero violations. D12 is implemented and focused
-validation passes: Gitleaks 8.30.1 is version/checksum bound, scans complete
-history with full redaction, and reports zero unreviewed findings after 11
-false positives were admitted only by exact fingerprints. This fixes
-`CANIC-092-RELEASE-003` without a waiver. Three P2 findings remain unresolved
-with explicit deferred dispositions. The current trace ledger is ten pass and
-zero fail, and no P0 or P1 remains.
+layering guard passes with zero violations. D12 is released in `v0.92.11`:
+Gitleaks 8.30.1 is version/checksum bound, scans complete history with full
+redaction, and reports zero unreviewed findings after 11 false positives were
+admitted only by exact fingerprints. This fixes `CANIC-092-RELEASE-003`
+without a waiver. Slice E then found that the version-only 0.92.11 release
+transaction re-resolved six unrelated external packages. D13 fixes
+`CANIC-092-RELEASE-005` in the current candidate by synchronizing only
+workspace lock entries offline. Three P2 findings remain unresolved with
+explicit deferred dispositions. The current trace ledger is ten pass and zero
+fail, and no P0 or P1 remains.
 
-No runtime product code, public contract, stable state, dependency, or
-generated product behavior changed during method hardening. The reviewed
-product-tree delta contains the deliberate operator/CI contract hard cut,
-audit/release documentation, and human-owned `0.92.0` version surfaces.
+No runtime product code, public contract, stable state, or generated product
+behavior changed during method hardening. The final 0.92.11 version transaction
+did advance six semver-compatible transitive lockfile entries; current
+locked/offline metadata and advisory checks pass, and D13 prevents later
+version-only bumps from repeating that unrelated dependency resolution.
 
 0.92 treats Canic as feature complete for this line but does not claim 1.0
 readiness. At least three months of real-world use remains a separate
@@ -68,11 +72,11 @@ maintainer prerequisite for any future 1.0 discussion.
   `ab47f96a4ca388d0c61f01280e2a47bb37930b1ce863d675ea8427bf08b229e6`.
 - Freeze admission method fingerprint:
   `8188a7e08d9551efbad79e56c20cdd2213ed54758fc07b0bd0120b61e0dba82b`.
-- Latest published Phase D anchor and D12 parent: `v0.92.10` at
-  `35de57b53a5c331977e3f7ac49e8190355b1d9f4`, source tree
-  `b6b7541e697c264b1b40cd60a8a6fc72f497e9cd`, product-tree hash
-  `ad5421cac98f605266e55af9e55e7a1fd1845f56f774082c8f27b6714b25d5bb`.
-- Workspace package version: `0.92.10`.
+- Latest published Phase D anchor and D13 parent: `v0.92.11` at
+  `fdf3bd6f2a20e2fc2da50398771660eae59fca94`, source tree
+  `6e67e6700c290501869242c9fbcf35bfff68ec57`, product-tree hash
+  `3cc60e4a86373cae61b26bccf4cdb29fc0a07869ef8ab3db817563a379853ca5`.
+- Workspace package version: `0.92.11`.
 
 ## Slices
 
@@ -320,15 +324,25 @@ Primary evidence:
       and its platform archives are version/checksum bound, the complete
       history scan is fully redacted, reviewed false positives use only exact
       fingerprints, and CI plus patch-release gates invoke the canonical scan.
+- [x] Record D12's fix and validation identity in released `v0.92.11`.
+- [x] Implement and validate D13 workspace-only release lock synchronization.
+      Version bumps update workspace package entries offline without
+      re-resolving unrelated external packages; the existing release-surface
+      rollback remains fail-closed.
 
 ### Slice E - Closeout
 
-- [ ] Resolve or explicitly disposition every finding.
-- [ ] Confirm no required run is partial, blocked, or unjustifiably not
-      applicable.
-- [ ] Confirm no P0 or non-waivable P1 remains unresolved.
-- [ ] Execute the `v0.91.6` compatibility contract or document each accepted
-      hard cut and migration boundary.
+- [x] Resolve or explicitly disposition every finding. Three P2 watchpoints
+      remain explicitly deferred with bounded revisit conditions; every other
+      reviewed finding is fixed or otherwise closed.
+- [x] Confirm no required run is partial, blocked, or unjustifiably not
+      applicable. All 22 retained definitions have valid current results and
+      all mandatory traces have complete current evidence.
+- [x] Confirm no P0 or non-waivable P1 remains unresolved.
+- [x] Execute the `v0.91.6` compatibility contract or document each accepted
+      hard cut and migration boundary. Generated Candid, CLI/config,
+      stable-state upgrade, backup/restore, package features, Rust source cuts,
+      and the provenance regeneration boundary are accounted directly.
 - [ ] Write `docs/audits/release-lines/0.92-closeout.md` with one explicit
       closeout verdict.
 
@@ -348,6 +362,7 @@ Primary evidence:
 | `CANIC-092-RELEASE-002` | operational risk | P1 | confirmed | fixed | D9 versions package tools and checksum-verifies all downloaded executable archives before extraction/execution. |
 | `CANIC-092-RELEASE-003` | evidence gap | P1 | confirmed | fixed | D12 installs pinned Gitleaks through a checksum-bound path and records a redacted full-history pass with zero unreviewed findings. |
 | `CANIC-092-RELEASE-004` | evidence gap | P2 | confirmed | fixed | D9 establishes one guarded Ubuntu 24.04 x86_64/native/Wasm support matrix and classifies other installer branches as unvalidated. |
+| `CANIC-092-RELEASE-005` | operational risk | P2 | confirmed | fixed | D13 replaces full lockfile regeneration with a workspace-only offline update; disposable proof changes only workspace package versions and locks zero external packages. |
 | `CANIC-092-LAYERING-001` | product defect | P2 | confirmed | fixed | D5 moves blob Cashier, reserve/recovery, sync, and readiness orchestration behind one workflow; API delegates and public/stable shapes are unchanged. |
 | `CANIC-092-LAYERING-002` | product defect | P2 | confirmed | fixed | D6 makes the DTO passive; one workflow command owns capability/replay identity and ops owns mechanical wire projection, with protocol and stable state unchanged. |
 | `CANIC-092-LAYERING-003` | governance conflict | P1 | high | fixed | D3 makes `AGENTS.md` the sole active authority and removes wording that permits endpoint-to-ops delegation; released in `v0.92.2`. |
@@ -389,10 +404,14 @@ assigns identity by canonical owner/invariant rather than discovery order.
 - Active method catalog, exact fingerprints, runner controls, and current
   operator guards: pass.
 - Committed product-tree hash and exact path classification: pass.
-- Release-only Cargo/lockfile/README/install-helper delta: reviewed; no
-  dependency or runtime behavior change.
-- Locked/offline Cargo metadata/tree and cached advisory scan: pass; zero known
-  vulnerabilities and four unmaintained transitive packages.
+- Release-only Cargo/lockfile/install-helper delta: reviewed. The 0.92.11
+  version bump advanced six compatible transitive entries despite unchanged
+  direct dependency declarations; D13 prevents future version-only bumps from
+  repeating that unrelated resolution.
+- Current locked/offline Cargo metadata and cached advisory scan: pass; 524
+  packages, 484 external registry packages, zero Git packages, zero missing
+  external license declarations, zero known vulnerabilities, and four
+  unmaintained transitive packages.
 - Dependency v1 remains invalid history. Corrected dependency v2 is a valid
   pass at risk 3/10: all 484 external packages identify license metadata, zero
   known vulnerabilities are present, and four unmaintained packages remain
@@ -401,7 +420,8 @@ assigns identity by canonical owner/invariant rather than discovery order.
   `actionlint`, permissions, and triggers pass. D12 adds the required pinned
   dedicated scanner; its fully redacted full-history run passes with zero
   unreviewed findings. The current affected-method rerun is pass without
-  rewriting the frozen Phase C failure.
+  rewriting the frozen Phase C failure. D13 adds bounded workspace-only
+  offline lock synchronization and a release-integrity regression guard.
 - Layering v2: the immutable baseline remains a valid fail at risk 7/10 with
   25 production ops-to-policy files. D4's affected-scope rerun passes detector
   fixtures and reduces the live violation set to 18; D5 and D6 add no upward
@@ -519,16 +539,19 @@ assigns identity by canonical owner/invariant rather than discovery order.
 - Product fix slices: D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
   `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in
   `v0.92.7`, D9 in `v0.92.8`, D10 in `v0.92.9`, and D11 in `v0.92.10`.
-  D12 fixes the dedicated-scanner gap. The live unresolved index is 3 (0 P1
+  D12 is released in `v0.92.11`; D13 fixes the newly observed release-lock
+  expansion in the current candidate. The live unresolved index is 3 (0 P1
   and 3 P2), all explicitly deferred.
 - Broad workspace, deployment, publish, and release gates: not run as Phase C
   audit evidence unless a frozen method specifically requires them.
 
 ## Next Action
 
-D12 dedicated secret scanning is implemented and validated without a waiver.
-The next step is Slice E closeout: confirm the three deferred P2 dispositions,
-execute the `v0.91.6` compatibility accounting, and publish one explicit
+D12 dedicated secret scanning is released in `v0.92.11`. Slice E compatibility
+accounting found and D13 fixes one bounded release-lock defect in the current
+candidate. The executable `v0.91.6` contract and all three deferred P2
+dispositions are now complete. The next step is to assign D13 and the
+compatibility report an immutable release identity, then publish one explicit
 release-line verdict. Broad release validation remains maintainer-owned.
 
 Primary review evidence:
@@ -585,3 +608,9 @@ D11 implementation evidence:
 
 D12 implementation evidence:
 [dedicated secret scan](../../audits/reports/2026-07/2026-07-16/0.92-d12-dedicated-secret-scan.md).
+
+D13 implementation evidence:
+[workspace-only release lock synchronization](../../audits/reports/2026-07/2026-07-16/0.92-d13-workspace-lock-sync.md).
+
+Slice E compatibility evidence:
+[`v0.91.6` compatibility accounting](../../audits/reports/2026-07/2026-07-16/0.92-v0916-compatibility-accounting.md).

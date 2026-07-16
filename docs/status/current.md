@@ -14,15 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.10`.
-- The latest published release is `v0.92.10` at
-  `35de57b53a5c331977e3f7ac49e8190355b1d9f4`. D12 was initially committed at
-  `2e4131571aeb6ca13f050b012db30602d8e20b1b`; its focused scan-contract
-  hardening remains an Unreleased candidate until the maintainer assigns the
-  final commit and tag.
-- The `v0.92.10` source tree is
-  `b6b7541e697c264b1b40cd60a8a6fc72f497e9cd`; its product-tree hash is
-  `ad5421cac98f605266e55af9e55e7a1fd1845f56f774082c8f27b6714b25d5bb`.
+- The workspace package version is `0.92.11`.
+- The latest published release is `v0.92.11` at
+  `fdf3bd6f2a20e2fc2da50398771660eae59fca94`.
+- The `v0.92.11` source tree is
+  `6e67e6700c290501869242c9fbcf35bfff68ec57`; its product-tree hash is
+  `3cc60e4a86373cae61b26bccf4cdb29fc0a07869ef8ab3db817563a379853ca5`.
+- D13 workspace-only release lock synchronization is the current Unreleased
+  candidate. Slice E `v0.91.6` compatibility accounting is complete against
+  immutable `v0.92.11`; both reports await the candidate's maintainer-owned
+  release identity.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -64,11 +65,18 @@ pass before registry publication. This fixes `CANIC-092-PUBLISH-001`,
 focused validation passes: shared decision inputs now belong to model,
 root-proof admission belongs to workflow, and ops no longer imports policy.
 This fixes `CANIC-092-LAYERING-005`, and the live layering guard passes with
-zero violations. D12 is implemented and its focused current-tree rerun passes:
-Gitleaks 8.30.1 is version/checksum bound, scans complete history with full
-redaction, and reports zero unreviewed findings. This fixes
-`CANIC-092-RELEASE-003` without a waiver. Three P2 findings remain unresolved,
-all with explicit deferred dispositions; no P0 or P1 remains.
+zero violations. D12 is released in `v0.92.11`: Gitleaks 8.30.1 is
+version/checksum bound, scans complete history with full redaction, and reports
+zero unreviewed findings. This fixes `CANIC-092-RELEASE-003` without a waiver.
+Slice E then found that the 0.92.11 version-only release transaction advanced
+six unrelated external packages. D13 fixes `CANIC-092-RELEASE-005` in the
+current candidate by synchronizing only workspace lock entries offline. Three
+P2 findings remain unresolved, all with explicit deferred dispositions; no P0
+or P1 remains. Executable compatibility accounting passes: generated root and
+Wasm-store Candid are byte-identical, production CLI/config/stable/backup and
+package-feature owners agree, and `v0.91.6` state upgrades to `v0.92.11` in
+PocketIC. The accepted 0.92.7 provenance hard cut rejects old envelopes and
+requires regeneration as documented.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -103,8 +111,10 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
 - The compatibility baseline remains `v0.91.6`, product-tree hash
   `8fce43e41ce430d9b505e19f8d596ed440b291d4c6ecb19c4a1cfdf71656a9b6`.
 - The committed delta is fully classified as audit-system, operator/CI
-  contract, requested documentation, and human-owned release-version changes;
-  no runtime/public/serialized/stable/dependency behavior changed.
+  contract, requested documentation, and human-owned release-version changes.
+  Runtime/public/serialized/stable behavior is unchanged. The 0.92.11 version
+  transaction advanced six compatible transitive lock entries; current audit
+  evidence records them and D13 prevents repetition.
 - At least three months of real-world use remains a separate prerequisite for
   any future 1.0 discussion.
 
@@ -116,8 +126,10 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
   immediate parent and frozen baseline.
 - D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in `v0.92.3`, D5 in
   `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, D8 in `v0.92.7`, D9 in
-  `v0.92.8`, D10 in `v0.92.9`, and D11 in `v0.92.10`. D12 is implemented and
-  validated against the `v0.92.10` parent.
+  `v0.92.8`, D10 in `v0.92.9`, D11 in `v0.92.10`, and D12 in `v0.92.11`.
+  D13 is implemented and validated against the `v0.92.11` parent. Slice E
+  compatibility accounting is complete; only immutable candidate identity and
+  the final release-line verdict remain.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -157,6 +169,16 @@ First primary results:
   fixes the final P1 evidence gap. The version/checksum-bound scanner runs over
   complete history with full redaction; 11 reviewed false positives are
   admitted only by exact fingerprints, and the rerun reports zero findings.
+- [D13 workspace-only release lock synchronization](../audits/reports/2026-07/2026-07-16/0.92-d13-workspace-lock-sync.md)
+  fixes the version transaction after the 0.92.11 bump advanced six unrelated
+  transitive packages. A disposable comparison proves the workspace-only
+  offline update changes only workspace versions and locks zero external
+  packages.
+- [`v0.91.6` compatibility accounting](../audits/reports/2026-07/2026-07-16/0.92-v0916-compatibility-accounting.md)
+  passes every required surface with the documented pre-1.0 hard cuts.
+  Independently generated root Candid is byte-identical, old persisted state
+  upgrades in PocketIC, and old build provenance rejects at the explicit
+  regeneration boundary.
 - Findings `CANIC-092-AUDIT-007`, `CANIC-092-DEPENDENCY-001`, and
   `CANIC-092-RELEASE-001` through `-004` are indexed in the 0.92 tracker.
 - [layer boundary](../audits/reports/2026-07/2026-07-14/0.92-layer-boundary.md)
@@ -484,14 +506,23 @@ First primary results:
   release-integrity and validation-matrix guards, `actionlint`, Bash syntax,
   changed-script ShellCheck, and `make gitleaks-scan`.
   The admitted result has zero unreviewed findings and retains no raw report.
+- D13 validation passes a disposable 0.92.10-to-0.92.11 workspace-only lock
+  synchronization with zero external updates, the release transaction rollback
+  test, current locked/offline metadata and license checks, cached advisory
+  scanning, the release-integrity guard, Bash syntax, and ShellCheck.
+- Slice E compatibility validation passes tagged root/Wasm-store Candid and
+  production CLI/config/package comparisons, a `v0.91.6`-to-`v0.92.11`
+  PocketIC state upgrade, 52 current stable-record tests, 19 protocol tests, 7
+  manifest tests, 15 provenance/policy tests, and 195 backup/restore tests.
 
 ## Next Action
 
 Phase C is complete and the
 [Phase D finding review](../audits/reports/2026-07/2026-07-15/0.92-phase-d-finding-review.md)
 maps the original 23 unresolved findings to bounded dispositions. D1 through
-D11 are released through `v0.92.10`, and D12 is implemented and validated.
-No P0 or P1 remains. The next step is Slice E closeout: confirm the three
-deferred P2 dispositions, execute the `v0.91.6` compatibility accounting, and
-publish one explicit release-line verdict. Broad release validation remains
-maintainer-owned.
+D11 are released through `v0.92.10`, D12 is released in `v0.92.11`, and D13 is
+implemented and validated against that parent. No P0 or P1 remains; the three
+P2 watchpoints are explicitly deferred and compatibility accounting is
+complete. The next step is to assign D13 and the compatibility report an
+immutable release identity, then publish one explicit release-line verdict.
+Broad release validation remains maintainer-owned.

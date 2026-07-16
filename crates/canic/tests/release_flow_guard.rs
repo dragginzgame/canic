@@ -226,7 +226,7 @@ case "$*" in
     "set-version --workspace --bump patch")
         sed -i 's/0.92.7/0.92.8/g' Cargo.toml crates/demo/Cargo.toml
         ;;
-    "generate-lockfile")
+    "update --workspace --offline")
         printf '# regenerated lock\n' >Cargo.lock
         ;;
     *)

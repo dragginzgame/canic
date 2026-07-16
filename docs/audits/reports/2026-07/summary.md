@@ -167,6 +167,10 @@
   candidates are confirmed false positives and admitted only by exact
   historical fingerprints; no path or rule is broadly excluded. The rerun
   reports zero findings and fixes `CANIC-092-RELEASE-003` without a waiver.
+  D13 then fixes `CANIC-092-RELEASE-005` after closeout accounting discovers
+  that full lockfile regeneration advanced six unrelated external packages in
+  the 0.92.11 version-only bump. Future bumps synchronize only workspace
+  entries offline; a disposable comparison locks zero external packages.
   Three explicitly deferred P2 watchpoints remain; no P0 or P1 remains.
 
 ## Month Status
@@ -189,7 +193,8 @@ cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
 satisfied. Phase D finding review is complete; D1 through D11 are released
-through `v0.92.10`, and D12 passes focused validation. Published package docs
+through `v0.92.10`, D12 is released in `v0.92.11`, and D13 passes focused
+candidate validation. Published package docs
 and active proof match the maintained surface, warning-as-error core rustdoc
 passes, packaged CLI plus both generated and canonical Wasm-store proofs pass
 before registry publication, the layering guard reports zero violations, and
@@ -226,10 +231,21 @@ current owners; D7 fixes its proof DTO and direct error-root findings. All 22
 retained-method results are valid and the mandatory traces are complete; Phase
 C is closeable at a failing product baseline.
 
+Slice E's executable `v0.91.6` accounting now passes with the accepted hard
+cuts: generated root and canonical Wasm-store Candid are byte-identical;
+production CLI, config, stable-state, backup/restore, and package-feature
+owners are unchanged; and a canister installed from the old Wasm upgrades to
+`v0.92.11` in PocketIC without losing its persisted environment/topology/state
+projection. The 0.92.7 provenance hard cut rejects old payloads without
+transform evidence and requires regeneration exactly as documented. D13 and
+the compatibility report still require immutable release identity before the
+final release-line verdict.
+
 ## Carry-Forward Follow-up
 
-1. Complete Slice E compatibility accounting and publish one explicit 0.92
-   closeout verdict; broad final gates remain maintainer-owned.
+1. Assign immutable release identity to D13 and the completed compatibility
+   accounting, then publish one explicit 0.92 closeout verdict; broad final
+   gates remain maintainer-owned.
 2. Keep the dependency, complexity, and instruction-checkpoint P2 watchpoints
    deferred until each has finding-backed evidence for a bounded change.
 3. Keep the D4 root-issuer authority singular; do not reintroduce an ops

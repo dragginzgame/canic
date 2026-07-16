@@ -10,6 +10,7 @@ VERIFY="$ROOT/scripts/ci/verify-file-checksum.sh"
 ICP_REQUIRE="$ROOT/scripts/ci/require_icp.sh"
 SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
 GITLEAKS_IGNORE="$ROOT/.gitleaksignore"
+BUMP_VERSION="$ROOT/scripts/ci/bump-version.sh"
 installers=(
     "$ROOT/scripts/ci/install-actionlint.sh"
     "$ROOT/scripts/ci/install-gitleaks.sh"
@@ -24,7 +25,7 @@ fail() {
     exit 1
 }
 
-for file in "$CI" "$MAKEFILE" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$SECRET_SCAN" "$GITLEAKS_IGNORE"; do
+for file in "$CI" "$MAKEFILE" "$TOOLS" "$MATRIX" "$VERIFY" "$ICP_REQUIRE" "$SECRET_SCAN" "$GITLEAKS_IGNORE" "$BUMP_VERSION"; do
     [ -f "$file" ] || fail "missing required file: $file"
 done
 
@@ -74,6 +75,8 @@ rg -F '[ "$version_output" != "$CANIC_GITLEAKS_VERSION" ]' "$SECRET_SCAN" >/dev/
     fail "the dedicated secret scan does not require the exact Gitleaks version"
 rg -F '[ "$version_output" != "$VERSION" ]' "$ROOT/scripts/ci/install-gitleaks.sh" >/dev/null ||
     fail "the Gitleaks installer does not require the exact reported version"
+rg -F 'cargo update --workspace --offline' "$BUMP_VERSION" >/dev/null ||
+    fail "the release bump does not preserve locked external dependency identities"
 
 gitleaks_ignore_count=0
 while IFS= read -r fingerprint; do
