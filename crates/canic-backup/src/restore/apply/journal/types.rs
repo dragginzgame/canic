@@ -257,6 +257,9 @@ pub enum RestoreApplyJournalError {
         to: RestoreApplyOperationState,
     },
 
+    #[error("restore apply journal receipt for operation {sequence} has invalid attempt {attempt}")]
+    InvalidOperationReceiptAttempt { sequence: usize, attempt: usize },
+
     #[error("failed restore apply journal operation {0} requires a reason")]
     FailureReasonRequired(usize),
 

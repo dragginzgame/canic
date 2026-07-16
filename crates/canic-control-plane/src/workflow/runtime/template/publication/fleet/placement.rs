@@ -55,10 +55,11 @@ impl PublicationStoreFleet {
             .iter()
             .enumerate()
             .filter(|(_, store)| {
-                !WasmStorePublicationWorkflow::binding_is_reserved_for_publication(
-                    &self.reserved_state,
-                    &store.binding,
-                )
+                store.is_available_for_publication()
+                    && !WasmStorePublicationWorkflow::binding_is_reserved_for_publication(
+                        &self.reserved_state,
+                        &store.binding,
+                    )
             })
             .collect::<Vec<_>>();
 

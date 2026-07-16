@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.2` is potentially breaking: it closes Wasm-store retirement races and
+  hard-cuts restore receipts that omit an explicit outcome or positive attempt
+  identity.
+
 - `0.93.1` is potentially breaking: it hard-cuts orphaned host ICP command,
   snapshot, and replica wrappers while preserving the production-backed
   Candid-aware, rooted-replica, JSON-receipt, and backup restore paths.

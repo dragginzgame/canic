@@ -397,6 +397,7 @@ fn local_template_status(gc: WasmStoreGcStatus) -> Result<WasmStoreStatusRespons
 fn local_prepare_chunk_set(
     request: TemplateChunkSetPrepareInput,
 ) -> Result<TemplateChunkSetInfoResponse, Error> {
+    WasmStoreGcOps::require_writable()?;
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits {
         max_store_bytes: store.max_store_bytes(),
@@ -409,6 +410,7 @@ fn local_prepare_chunk_set(
 
 #[cfg(feature = "wasm-store-canister")]
 fn local_stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
+    WasmStoreGcOps::require_writable()?;
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits {
         max_store_bytes: store.max_store_bytes(),
@@ -420,6 +422,7 @@ fn local_stage_manifest(request: TemplateManifestInput) -> Result<(), Error> {
 
 #[cfg(feature = "wasm-store-canister")]
 fn local_publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
+    WasmStoreGcOps::require_writable()?;
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits {
         max_store_bytes: store.max_store_bytes(),
