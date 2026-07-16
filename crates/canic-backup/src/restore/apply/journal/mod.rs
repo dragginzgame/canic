@@ -421,6 +421,12 @@ impl RestoreApplyJournal {
     fn validate_operation_receipt_attempts(&self) -> Result<(), RestoreApplyJournalError> {
         let mut attempts = BTreeSet::new();
         for receipt in &self.operation_receipts {
+            if receipt.attempt == 0 {
+                return Err(RestoreApplyJournalError::InvalidOperationReceiptAttempt {
+                    sequence: receipt.sequence,
+                    attempt: receipt.attempt,
+                });
+            }
             if !attempts.insert((receipt.sequence, receipt.attempt)) {
                 return Err(RestoreApplyJournalError::DuplicateOperationReceiptAttempt {
                     sequence: receipt.sequence,

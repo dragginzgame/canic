@@ -42,7 +42,9 @@ impl WasmStorePublicationWorkflow {
         let mut stores = fleet
             .stores
             .iter()
-            .filter(|store| store.has_exact_release(manifest))
+            .filter(|store| {
+                store.is_available_for_publication() && store.has_exact_release(manifest)
+            })
             .collect::<Vec<_>>();
 
         stores.sort_by(|left, right| {

@@ -23,11 +23,9 @@ use serde::{Deserialize, Serialize};
 pub struct RestoreApplyOperationReceipt {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,
-    #[serde(default)]
     pub outcome: RestoreApplyOperationReceiptOutcome,
     pub source_canister: String,
     pub target_canister: String,
-    #[serde(default)]
     pub attempt: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
@@ -224,10 +222,9 @@ impl RestoreApplyOperationReceipt {
 /// Owned by restore apply journaling and serialized with command receipts.
 ///
 
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RestoreApplyOperationReceiptOutcome {
-    #[default]
     CommandCompleted,
     CommandFailed,
 }

@@ -1,7 +1,7 @@
 use crate::dto::template::{
     TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
 };
-use crate::ids::{TemplateReleaseKey, WasmStoreBinding};
+use crate::ids::{TemplateReleaseKey, WasmStoreBinding, WasmStoreGcMode};
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
     error::InternalError,
@@ -27,6 +27,13 @@ impl PublicationStoreSnapshot {
     // Return the stable release key for one catalog entry.
     fn release_key(entry: &WasmStoreCatalogEntryResponse) -> TemplateReleaseKey {
         TemplateReleaseKey::new(entry.template_id.clone(), entry.version.clone())
+    }
+
+    // Return whether the store remains eligible for publication and release authority.
+    pub(in crate::workflow::runtime::template::publication) fn is_available_for_publication(
+        &self,
+    ) -> bool {
+        self.status.gc.mode == WasmStoreGcMode::Normal
     }
 
     // Return true when this store already carries the exact release bytes for one manifest.

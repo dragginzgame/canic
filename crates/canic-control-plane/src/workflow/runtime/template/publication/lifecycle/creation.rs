@@ -79,8 +79,15 @@ impl WasmStorePublicationWorkflow {
         Self::ensure_retired_binding_slot_available_for_promotion()?;
         let changed_at = IcOps::now_secs();
         let previous = SubnetStateOps::publication_store_state();
-        let _ = SubnetStateOps::activate_publication_store_binding(binding.clone(), changed_at);
+        let activated =
+            SubnetStateOps::activate_publication_store_binding(binding.clone(), changed_at);
         let current = SubnetStateOps::publication_store_state();
+        if !activated && current.active_binding.as_ref() != Some(&binding) {
+            return Err(InternalError::workflow(
+                InternalErrorOrigin::Workflow,
+                format!("new ws '{binding}' was not activated"),
+            ));
+        }
         Self::log_publication_state_transition(
             "activate_first_publication_binding",
             &previous,

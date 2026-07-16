@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.0`.
-- The latest published release is `v0.93.0` at
-  `543e76b064c8a7df90f2c819df6db4c2defe8354`.
-- The `v0.93.0` source tree is
-  `7cace2155eb01586a0ffc9c10cff27b0201c3f50`; its product-tree hash is
-  `e3328b41badd0e85662148f164311d3881e14feaefe20c02f11e08bd5e3698f1`.
+- The workspace package version is `0.93.1`.
+- The latest published release is `v0.93.1` at
+  `5c232876f2fa25ba3bbd0e4f210df89c8af5e2ef`.
+- The `v0.93.1` source tree is
+  `fac5ad51d0b1f5960c986bc555b7d3c77333f7e4`; its product-tree hash is
+  `9dd92280e4ac2b5d909f20e85188e63321c74b4627435d3183e081e372652be5`.
   Its Cargo.lock SHA-256 is
-  `a2d50b53f5871063615f3f6aae65cc5f8a915fb082456fcaec5d2da0d348d98c`.
+  `cb238e93ece3868d86594499ce7d5eb87499bc2d4840bc2b86ca77643a0559dd`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -42,10 +42,13 @@ Historical detail is archived at:
   projection. The current chain-key batch is the sole renewal-work authority,
   and CLI/medic status warns when a reachable issuer has no usable active
   proof.
-- Current post-0.93 development hard-cuts uncalled host ICP CLI convenience,
+- Released `v0.93.1` hard-cuts uncalled host ICP CLI convenience,
   snapshot upload/restore, replica-display, and legacy text snapshot-ID
   surfaces while preserving the maintained Candid-aware, rooted replica,
   JSON snapshot-create, and backup-owned restore paths.
+- Current development makes the Wasm-store retirement lifecycle generation
+  bound and non-reentrant, permanently excludes stores in GC from publication,
+  and makes restore operation-receipt outcome and attempt identity mandatory.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -557,6 +560,10 @@ First primary results:
   installed-CLI proofs; strict all-target Clippy for `canic-core`, `canic`, and
   `canic-cli`; targeted package checks; formatting; Bash syntax; and diff
   hygiene.
+- Current Wasm-store lifecycle and restore-receipt development passes 21
+  focused control-plane publication/GC tests, 34 restore apply-journal tests,
+  targeted package checks, and strict all-target Clippy for
+  `canic-control-plane` and `canic-backup`.
 - Slice E compatibility validation passes tagged root/Wasm-store Candid and
   production CLI/config/package comparisons, a `v0.91.6`-to-`v0.92.11`
   PocketIC state upgrade, 52 current stable-record tests, 19 protocol tests, 7
@@ -575,8 +582,9 @@ finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
 Released 0.93.0 removes the stale issuer-renewal attempt authority and projects
-the canonical chain-key batch instead. The current follow-up removes orphaned
-host ICP CLI wrappers and the superseded text snapshot-ID path. The next
-audited product risks remain Wasm-store lifecycle compare-and-set/retry safety
-and unbounded ICP-refill history scans. Broad deployment, package, publish, and
+the canonical chain-key batch instead. Released 0.93.1 removes orphaned host
+ICP CLI wrappers and the superseded text snapshot-ID path. Current development
+closes the audited Wasm-store lifecycle race and restore-receipt defaulting
+findings. The next audited product risks are unbounded ICP-refill history scans
+and discarded renewal-timer failures. Broad deployment, package, publish, and
 release validation remains maintainer-owned.

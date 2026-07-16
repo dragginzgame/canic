@@ -264,6 +264,13 @@ impl WasmStorePublicationWorkflow {
             releases: target_catalog,
             stored_chunk_hashes: None,
         };
+        if !target_store.is_available_for_publication() {
+            return Err(PublicationWorkflowError::StoreNotWritable {
+                binding: target_store_binding,
+                mode: target_store.status.gc.mode,
+            }
+            .into());
+        }
 
         for manifest in Self::managed_release_manifests()? {
             if target_store.has_exact_release(&manifest) {

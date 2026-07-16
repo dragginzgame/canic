@@ -32,6 +32,19 @@ impl WasmStoreGcOps {
         }
     }
 
+    // Reject store mutations after the one-way GC lifecycle has started.
+    pub fn require_writable() -> Result<(), Error> {
+        let current = Self::status();
+        if current.mode == WasmStoreGcMode::Normal {
+            Ok(())
+        } else {
+            Err(Error::conflict(format!(
+                "wasm store is not writable while gc={:?}",
+                current.mode
+            )))
+        }
+    }
+
     // Mark this local wasm store as prepared for store-local GC execution.
     pub fn prepare(changed_at: u64) -> Result<(), Error> {
         Self::transition_to(WasmStoreGcMode::Prepared, changed_at)
@@ -208,6 +221,19 @@ mod tests {
         .expect_err("normal -> in progress must fail");
 
         assert_eq!(err.code, ErrorCode::Conflict);
+    }
+
+    #[test]
+    fn writable_gate_closes_when_gc_starts() {
+        WasmStoreGcStateStore::set(WasmStoreGcStateRecord::default());
+        WasmStoreGcOps::require_writable().expect("normal store should be writable");
+
+        WasmStoreGcOps::prepare(10).expect("prepare gc");
+        let err = WasmStoreGcOps::require_writable()
+            .expect_err("prepared store must reject publication writes");
+        assert_eq!(err.code, ErrorCode::Conflict);
+
+        WasmStoreGcStateStore::set(WasmStoreGcStateRecord::default());
     }
 
     #[test]

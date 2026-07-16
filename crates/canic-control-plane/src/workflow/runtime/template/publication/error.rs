@@ -4,7 +4,7 @@
 //! Does not own: endpoint DTO construction, metrics, or store-side validation.
 //! Boundary: publication workflow code raises these causes and converts once to internal errors.
 
-use crate::ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding};
+use crate::ids::{CanisterRole, TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode};
 use canic_core::{
     cdk::types::Principal,
     control_plane_support::error::InternalError,
@@ -53,6 +53,18 @@ pub(super) enum PublicationWorkflowError {
     #[error("publication state invariant failed: {0}")]
     InvalidState(String),
 
+    #[error("wasm store lifecycle operation is already in progress")]
+    LifecycleBusy,
+
+    #[error(
+        "wasm store lifecycle state changed for {binding}: expected generation {expected_generation}, found {actual_generation}"
+    )]
+    LifecycleStateChanged {
+        binding: WasmStoreBinding,
+        expected_generation: u64,
+        actual_generation: u64,
+    },
+
     #[error(
         "ws conflict for {template_id}@{version} on {binding}: existing hash/size differ ({existing_payload_hash:?}, {existing_payload_size_bytes})"
     )]
@@ -66,6 +78,21 @@ pub(super) enum PublicationWorkflowError {
 
     #[error("wasm store {0} is not registered")]
     StoreNotRegistered(Principal),
+
+    #[error(
+        "wasm store binding '{binding}' gc state changed: expected {expected:?}, found {actual:?}"
+    )]
+    StoreGcStateChanged {
+        binding: WasmStoreBinding,
+        expected: WasmStoreGcMode,
+        actual: WasmStoreGcMode,
+    },
+
+    #[error("wasm store binding '{binding}' is not writable while gc={mode:?}")]
+    StoreNotWritable {
+        binding: WasmStoreBinding,
+        mode: WasmStoreGcMode,
+    },
 
     #[error("publication transport unavailable at {surface}: {cause}")]
     TransportUnavailable {
@@ -86,7 +113,11 @@ impl From<PublicationWorkflowError> for InternalError {
             PublicationWorkflowError::ExactReleaseMissing { .. } => {
                 ErrorCode::WasmStoreManifestMissing
             }
-            PublicationWorkflowError::ReleaseConflict { .. } => ErrorCode::Conflict,
+            PublicationWorkflowError::LifecycleBusy
+            | PublicationWorkflowError::LifecycleStateChanged { .. }
+            | PublicationWorkflowError::ReleaseConflict { .. }
+            | PublicationWorkflowError::StoreGcStateChanged { .. }
+            | PublicationWorkflowError::StoreNotWritable { .. } => ErrorCode::Conflict,
             PublicationWorkflowError::StoreNotRegistered(_) => ErrorCode::NotFound,
             PublicationWorkflowError::TransportUnavailable { .. } => ErrorCode::Unavailable,
         };
@@ -150,6 +181,15 @@ mod tests {
                 PublicationWorkflowError::InvalidState("missing snapshot".to_string()),
                 ErrorCode::InvariantViolation,
             ),
+            (PublicationWorkflowError::LifecycleBusy, ErrorCode::Conflict),
+            (
+                PublicationWorkflowError::LifecycleStateChanged {
+                    binding: WasmStoreBinding::new("primary"),
+                    expected_generation: 3,
+                    actual_generation: 4,
+                },
+                ErrorCode::Conflict,
+            ),
             (
                 PublicationWorkflowError::ReleaseConflict {
                     template_id: TemplateId::new("embedded:app"),
@@ -163,6 +203,21 @@ mod tests {
             (
                 PublicationWorkflowError::StoreNotRegistered(Principal::anonymous()),
                 ErrorCode::NotFound,
+            ),
+            (
+                PublicationWorkflowError::StoreGcStateChanged {
+                    binding: WasmStoreBinding::new("retired"),
+                    expected: WasmStoreGcMode::Complete,
+                    actual: WasmStoreGcMode::InProgress,
+                },
+                ErrorCode::Conflict,
+            ),
+            (
+                PublicationWorkflowError::StoreNotWritable {
+                    binding: WasmStoreBinding::new("retired"),
+                    mode: WasmStoreGcMode::Complete,
+                },
+                ErrorCode::Conflict,
             ),
             (
                 PublicationWorkflowError::TransportUnavailable {

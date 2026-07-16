@@ -1,5 +1,35 @@
 use super::*;
 
+fn completed_upload_receipt(
+    operation: &RestoreApplyJournalOperation,
+    attempt: usize,
+) -> RestoreApplyOperationReceipt {
+    RestoreApplyOperationReceipt::command_completed(
+        operation,
+        RestoreApplyRunnerCommand {
+            program: "icp".to_string(),
+            args: vec![
+                "canister".to_string(),
+                "snapshot".to_string(),
+                "upload".to_string(),
+                ROOT.to_string(),
+            ],
+            mutates: true,
+            requires_stopped_canister: false,
+            note: "Upload snapshot artifact to target canister".to_string(),
+        },
+        "exit:0".to_string(),
+        Some("unix:1".to_string()),
+        RestoreApplyCommandOutputPair::from_bytes(
+            br#"{"snapshot_id":"target-snap-root"}"#,
+            b"",
+            1024,
+        ),
+        attempt,
+        Some("target-snap-root".to_string()),
+    )
+}
+
 // Ensure command output receipts keep bounded tail output and byte counts.
 #[test]
 fn apply_command_output_bounds_to_tail_bytes() {
@@ -57,6 +87,45 @@ fn apply_journal_rejects_duplicate_operation_receipt_attempts() {
             attempt: 1,
         }
     );
+}
+
+// Ensure hand-edited journals cannot introduce the reserved zero attempt.
+#[test]
+fn apply_journal_rejects_zero_operation_receipt_attempt() {
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    journal
+        .mark_operation_completed_at(0, None)
+        .expect("mark upload completed");
+    let receipt = completed_upload_receipt(&journal.operations[0], 0);
+
+    let err = journal
+        .record_operation_receipt(receipt)
+        .expect_err("zero receipt attempt should reject");
+
+    std::assert_matches!(
+        err,
+        RestoreApplyJournalError::InvalidOperationReceiptAttempt {
+            sequence: 0,
+            attempt: 0,
+        }
+    );
+    assert!(journal.operation_receipts.is_empty());
+}
+
+// Ensure durable receipt identity and outcome fields are required at decode time.
+#[test]
+fn apply_journal_receipt_decode_requires_outcome_and_attempt() {
+    let journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    let receipt = completed_upload_receipt(&journal.operations[0], 1);
+
+    for field in ["outcome", "attempt"] {
+        let mut value = serde_json::to_value(&receipt).expect("serialize receipt");
+        value.as_object_mut().expect("receipt object").remove(field);
+
+        let err = serde_json::from_value::<RestoreApplyOperationReceipt>(value)
+            .expect_err("required receipt field should reject");
+        assert!(err.is_data());
+    }
 }
 
 // Ensure command receipts preserve the durable command/output audit envelope.

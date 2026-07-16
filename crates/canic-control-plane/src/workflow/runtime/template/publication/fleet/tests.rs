@@ -4,11 +4,12 @@ use crate::{
         TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreGcStatusResponse,
         WasmStoreStatusResponse, WasmStoreTemplateStatusResponse,
     },
-    ids::WasmStoreBinding,
     ids::{CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion},
+    ids::{WasmStoreBinding, WasmStoreGcMode},
     ops::storage::state::subnet::SubnetStateOps,
     storage::stable::state::subnet::{
         ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord,
+        WasmStoreGcRecord, WasmStoreRecord,
     },
     view::state::PublicationStoreStateView,
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
@@ -170,6 +171,77 @@ fn detached_and_retired_bindings_are_not_publication_candidates() {
             &state,
             &WasmStoreBinding::new("retired"),
         )
+    );
+}
+
+#[test]
+fn completed_gc_store_cannot_be_selected_or_reactivated() {
+    let binding = WasmStoreBinding::new("finalized");
+    let pid = Principal::from_slice(&[9; 29]);
+    SubnetStateOps::import(ControlPlaneSubnetStateData {
+        record: SubnetStateRecord {
+            publication_store: PublicationStoreStateRecord::default(),
+            wasm_stores: vec![WasmStoreRecord {
+                binding: binding.clone(),
+                pid,
+                created_at: 10,
+                gc: WasmStoreGcRecord {
+                    mode: WasmStoreGcMode::Complete,
+                    changed_at: 20,
+                    prepared_at: Some(11),
+                    started_at: Some(12),
+                    completed_at: Some(20),
+                    runs_completed: 1,
+                },
+            }],
+        },
+    });
+
+    let err = WasmStorePublicationWorkflow::set_current_publication_store_binding(binding.clone())
+        .expect_err("completed gc store must not become active again");
+    assert_eq!(
+        err.public_error().map(|public| public.code),
+        Some(ErrorCode::Conflict)
+    );
+    assert_eq!(SubnetStateOps::publication_store_binding(), None);
+
+    let manifest = manifest("app", "embedded:app", "0.20.9", 7, 512);
+    let mut finalized = store(
+        "finalized",
+        9,
+        10,
+        20_000_000,
+        vec![WasmStoreCatalogEntryResponse {
+            role: manifest.role.clone(),
+            template_id: manifest.template_id.clone(),
+            version: manifest.version.clone(),
+            payload_hash: manifest.payload_hash.clone(),
+            payload_size_bytes: manifest.payload_size_bytes,
+        }],
+        vec![WasmStoreTemplateStatusResponse {
+            template_id: manifest.template_id.clone(),
+            versions: 1,
+        }],
+    );
+    finalized.status.gc.mode = WasmStoreGcMode::Complete;
+    let fleet = PublicationStoreFleet {
+        preferred_binding: Some(binding),
+        reserved_state: PublicationStoreStateView::default(),
+        stores: vec![finalized],
+    };
+
+    assert!(fleet.writable_store_indices().is_empty());
+    assert!(
+        fleet
+            .select_existing_store_for_release(&manifest)
+            .expect("selection should remain deterministic")
+            .is_none()
+    );
+    let err = WasmStorePublicationWorkflow::reconciled_binding_for_manifest(&fleet, &manifest)
+        .expect_err("finalized store must not retain release authority");
+    assert_eq!(
+        err.public_error().map(|public| public.code),
+        Some(ErrorCode::WasmStoreManifestMissing)
     );
 }
 

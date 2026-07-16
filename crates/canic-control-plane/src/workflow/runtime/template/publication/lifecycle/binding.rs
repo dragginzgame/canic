@@ -1,8 +1,10 @@
 use super::super::super::store_pid_for_binding;
 use super::super::WasmStorePublicationWorkflow;
 use crate::{
-    ids::WasmStoreBinding, ops::storage::state::subnet::SubnetStateOps,
+    ids::{WasmStoreBinding, WasmStoreGcMode},
+    ops::storage::state::subnet::SubnetStateOps,
     view::state::PublicationStoreStateView,
+    workflow::runtime::template::publication::error::PublicationWorkflowError,
 };
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
@@ -43,6 +45,28 @@ impl WasmStorePublicationWorkflow {
                 InternalErrorOrigin::Workflow,
                 format!("ws binding '{binding}' is detached/retired"),
             ));
+        }
+
+        Ok(())
+    }
+
+    // Reject publication through a store that has entered the one-way GC lifecycle.
+    fn ensure_binding_is_writable(binding: &WasmStoreBinding) -> Result<(), InternalError> {
+        let store = SubnetStateOps::wasm_stores()
+            .into_iter()
+            .find(|store| &store.binding == binding)
+            .ok_or_else(|| {
+                PublicationWorkflowError::InvalidState(format!(
+                    "ws binding '{binding}' is missing from runtime inventory"
+                ))
+            })?;
+
+        if store.gc.mode != WasmStoreGcMode::Normal {
+            return Err(PublicationWorkflowError::StoreNotWritable {
+                binding: binding.clone(),
+                mode: store.gc.mode,
+            }
+            .into());
         }
 
         Ok(())
@@ -138,6 +162,7 @@ impl WasmStorePublicationWorkflow {
         Self::ensure_retired_binding_slot_available_for_promotion()?;
         let previous = SubnetStateOps::publication_store_state();
         Self::ensure_binding_is_selectable_for_publication(&previous, &binding)?;
+        Self::ensure_binding_is_writable(&binding)?;
         let changed_at = IcOps::now_secs();
 
         if SubnetStateOps::activate_publication_store_binding(binding, changed_at) {
@@ -190,7 +215,12 @@ impl WasmStorePublicationWorkflow {
         let changed_at = IcOps::now_secs();
         Self::ensure_retired_binding_slot_available_for_promotion()?;
         let previous = SubnetStateOps::publication_store_state();
-        let _ = SubnetStateOps::clear_publication_store_binding(changed_at);
+        if !SubnetStateOps::clear_publication_store_binding(changed_at) {
+            return Err(PublicationWorkflowError::InvalidState(format!(
+                "stale ws binding '{binding}' was no longer active"
+            ))
+            .into());
+        }
         let current = SubnetStateOps::publication_store_state();
         Self::log_publication_state_transition(
             "clear_stale_publication_binding",
