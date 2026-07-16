@@ -8,16 +8,6 @@ use super::{DelegatedRoleGrant, DelegationAudience, DelegationProof};
 use crate::dto::prelude::*;
 
 //
-// RootDelegationProofBatchProofRef
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootDelegationProofBatchProofRef {
-    pub issuer_pid: Principal,
-    pub cert_hash: [u8; 32],
-}
-
-//
 // RootDelegationProofBatchProof
 //
 
@@ -110,60 +100,34 @@ pub struct RootIssuerRenewalStatusRequest {
 }
 
 //
-// RootIssuerRenewalOutcome
+// RootIssuerRenewalBatchStatus
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum RootIssuerRenewalOutcome {
-    AlreadyInstalled,
-    DriftDetected,
-    InstallDeadlineExpired,
-    Installed,
-    IssuerCallFailed,
-    NeverRun,
-    PolicyRejected,
-    ProofMismatch,
-    QuotaExceeded,
-    RejectedByIssuer,
-    RetrievalExpired,
-    TemplateChanged,
-    TemplateDisabled,
-}
-
-//
-// RootIssuerRenewalAttemptStatus
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum RootIssuerRenewalAttemptStatus {
+pub enum RootIssuerRenewalBatchStatus {
     Prepared,
+    Signing,
+    Signed,
     Installing,
     Installed,
     FailedRetryable,
-    FailedTerminal,
-    Disabled,
-    Expired,
 }
 
 //
-// RootIssuerRenewalAttemptView
+// RootIssuerRenewalBatchView
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootIssuerRenewalAttemptView {
-    pub attempt_id: [u8; 32],
-    pub issuer_pid: Principal,
-    pub template_fingerprint: [u8; 32],
+pub struct RootIssuerRenewalBatchView {
     pub batch_id: [u8; 32],
-    pub proof_ref: RootDelegationProofBatchProofRef,
-    pub status: RootIssuerRenewalAttemptStatus,
+    pub status: RootIssuerRenewalBatchStatus,
+    pub cert_hash: [u8; 32],
+    pub proof_epoch: u64,
     pub prepared_at_ns: u64,
-    pub retrieval_expires_at_ns: u64,
-    pub install_deadline_ns: u64,
-    pub prepared_cert_hash: [u8; 32],
-    pub prepared_expires_at_ns: u64,
-    pub prepared_refresh_after_ns: u64,
-    pub failure: Option<RootIssuerRenewalOutcome>,
+    pub expires_at_ns: u64,
+    pub installed_at_ns: Option<u64>,
+    pub retry_after_ns: Option<u64>,
+    pub failure: Option<String>,
 }
 
 //
@@ -177,9 +141,6 @@ pub struct RootIssuerRenewalStateView {
     pub last_installed_cert_hash: Option<[u8; 32]>,
     pub last_installed_expires_at_ns: Option<u64>,
     pub last_installed_refresh_after_ns: Option<u64>,
-    pub active_attempt_id: Option<[u8; 32]>,
-    pub last_outcome: RootIssuerRenewalOutcome,
-    pub consecutive_failures: u32,
     pub next_attempt_after_ns: u64,
     pub updated_at_ns: u64,
 }
@@ -192,5 +153,5 @@ pub struct RootIssuerRenewalStateView {
 pub struct RootIssuerRenewalStatusResponse {
     pub template: Option<RootIssuerRenewalTemplateView>,
     pub state: Option<RootIssuerRenewalStateView>,
-    pub active_attempt: Option<RootIssuerRenewalAttemptView>,
+    pub latest_batch: Option<RootIssuerRenewalBatchView>,
 }

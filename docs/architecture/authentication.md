@@ -353,12 +353,12 @@ call, mark failed signing attempts retryable with backoff, and discard a
 returned signature if the stored batch changed while the management-canister
 call was in flight.
 
-Root-managed renewal stores root-owned renewal templates, issuer attempts,
-delegated-auth registry epoch/hash, proof epoch state, and signed chain-key
-root delegation batches. Duplicate timer ticks are idempotent, stale registry
-changes during signing invalidate the pending batch, partial issuer install
-failure is retried, and unknown signing outcomes are retryable without treating
-a reject as proof that no signature exists.
+Root-managed renewal stores root-owned renewal templates, issuer scheduling
+state, delegated-auth registry epoch/hash, proof epoch state, and signed
+chain-key root delegation batches. Duplicate timer ticks are idempotent, stale
+registry changes during signing invalidate the pending batch, partial issuer
+install failure is retried, and unknown signing outcomes are retryable without
+treating a reject as proof that no signature exists.
 
 The old bridge-backed canister-signature root proof provisioning surfaces are
 not part of the active protocol. In `root_proof_mode = "chain_key_batch"`,

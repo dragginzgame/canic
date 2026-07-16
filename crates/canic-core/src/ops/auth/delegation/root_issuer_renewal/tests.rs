@@ -2,15 +2,20 @@ use super::*;
 use crate::{
     cdk::types::Principal,
     dto::auth::{
-        DelegatedRoleGrant, DelegationAudience, RootIssuerRenewalOutcome,
+        ChainKeyAlgorithm, ChainKeyBatchHeaderV1, ChainKeyBatchWitnessV1, ChainKeyDelegationCertV1,
+        ChainKeyKeyId, DelegatedRoleGrant, DelegationAudience, DelegationCert,
+        IssuerProofAlgorithm, IssuerProofBinding, RootIssuerRenewalBatchStatus,
         RootIssuerRenewalStatusRequest,
     },
     ids::CanisterRole,
     model::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-        RootIssuerRenewalAttempt, RootIssuerRenewalProofRef, RootIssuerRenewalState,
+        RootIssuerRenewalState,
     },
-    ops::storage::auth::AuthStateOps,
+    ops::storage::auth::{
+        AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
+        ChainKeyRootDelegationBatchStatus,
+    },
 };
 
 fn p(id: u8) -> Principal {
@@ -48,28 +53,78 @@ fn upsert_request(issuer_pid: Principal) -> RootIssuerRenewalTemplateUpsertReque
     }
 }
 
-fn renewal_attempt(
-    attempt_id: [u8; 32],
+fn renewal_batch(
     batch_id: [u8; 32],
     issuer_pid: Principal,
     cert_hash: [u8; 32],
-) -> RootIssuerRenewalAttempt {
-    RootIssuerRenewalAttempt {
-        attempt_id,
-        issuer_pid,
-        template_fingerprint: [44; 32],
+) -> ChainKeyRootDelegationBatch {
+    let root_pid = p(1);
+    let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
+        seed_hash: [42; 32],
+    };
+    ChainKeyRootDelegationBatch {
         batch_id,
-        proof_ref: RootIssuerRenewalProofRef {
+        status: ChainKeyRootDelegationBatchStatus::Installing,
+        header_hash: [43; 32],
+        header: ChainKeyBatchHeaderV1 {
+            schema_version: 1,
+            root_canister_id: root_pid,
+            batch_id,
+            proof_epoch: u64::from(batch_id[0]),
+            registry_epoch: 1,
+            registry_hash: [44; 32],
+            tree_root: [45; 32],
+            not_before_ns: 10,
+            expires_at_ns: 200,
+            algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
+            key_id: ChainKeyKeyId {
+                name: "test_key_1".to_string(),
+            },
+            derivation_path_hash: [46; 32],
+            key_version: 1,
+        },
+        signature: None,
+        issuers: vec![ChainKeyRootDelegationBatchIssuer {
             issuer_pid,
             cert_hash,
-        },
-        status: PolicyRenewalAttemptStatus::Prepared,
+            delegation_cert: DelegationCert {
+                root_pid,
+                issuer_pid,
+                issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
+                issuer_proof_binding_hash: [47; 32],
+                issuer_proof_binding,
+                issued_at_ns: 10,
+                not_before_ns: 10,
+                expires_at_ns: 200,
+                max_token_ttl_ns: 60,
+                aud: DelegationAudience::Project("test".to_string()),
+                grants: vec![grant("canic.issue")],
+            },
+            chain_key_delegation_cert: ChainKeyDelegationCertV1 {
+                root_canister_id: root_pid,
+                issuer_canister_id: issuer_pid,
+                proof_epoch: u64::from(batch_id[0]),
+                issuer_proof_algorithm: IssuerProofAlgorithm::IcCanisterSignatureV1,
+                issuer_proof_binding_hash: [47; 32],
+                issuer_proof_binding,
+                max_token_ttl_ns: 60,
+                audience: DelegationAudience::Project("test".to_string()),
+                grants: vec![grant("canic.issue")],
+                not_before_ns: 10,
+                expires_at_ns: 200,
+                registry_epoch: 1,
+                registry_hash: [44; 32],
+            },
+            issuer_witness: ChainKeyBatchWitnessV1 { steps: Vec::new() },
+            refresh_after_ns: 160,
+            installed_at_ns: None,
+            last_failure: None,
+        }],
         prepared_at_ns: 10,
-        retrieval_expires_at_ns: 70,
-        install_deadline_ns: 90,
-        prepared_cert_hash: cert_hash,
-        prepared_expires_at_ns: 200,
-        prepared_refresh_after_ns: 160,
+        signed_at_ns: Some(20),
+        install_started_at_ns: Some(30),
+        installed_at_ns: None,
+        retry_after_ns: None,
         failure: None,
     }
 }
@@ -107,24 +162,18 @@ fn disabled_root_issuer_renewal_template_can_be_staged_without_policy() {
 }
 
 #[test]
-fn disabling_root_issuer_renewal_template_clears_active_attempt() {
+fn disabling_root_issuer_renewal_template_records_disabled_state() {
     let issuer_pid = p(84);
-    let attempt_id = [85; 32];
     AuthStateOps::upsert_root_issuer_policy(policy(issuer_pid));
     let active_template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
     AuthStateOps::upsert_root_issuer_renewal_template(active_template.clone());
-    let mut active_attempt = renewal_attempt(attempt_id, [86; 32], issuer_pid, [87; 32]);
-    active_attempt.template_fingerprint = renewal_template_fingerprint(&active_template);
-    AuthStateOps::upsert_root_issuer_renewal_attempt(active_attempt.clone());
+    let active_fingerprint = renewal_template_fingerprint(&active_template);
     AuthStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
         issuer_pid,
-        template_fingerprint: active_attempt.template_fingerprint,
+        template_fingerprint: active_fingerprint,
         last_installed_cert_hash: None,
         last_installed_expires_at_ns: None,
         last_installed_refresh_after_ns: None,
-        active_attempt_id: Some(attempt_id),
-        last_outcome: PolicyRenewalOutcome::NeverRun,
-        consecutive_failures: 0,
         next_attempt_after_ns: 0,
         updated_at_ns: 10,
     });
@@ -135,25 +184,11 @@ fn disabling_root_issuer_renewal_template_clears_active_attempt() {
     let response = commit_root_issuer_renewal_template(template, 90);
 
     assert!(!response.template.enabled);
-    let attempt = AuthStateOps::root_issuer_renewal_attempt(attempt_id)
-        .expect("disabled attempt should remain observable");
-    assert_eq!(attempt.status, PolicyRenewalAttemptStatus::Disabled);
-    assert_eq!(
-        attempt.failure,
-        Some(PolicyRenewalOutcome::TemplateDisabled)
-    );
-
     let state = AuthStateOps::root_issuer_renewal_state(issuer_pid)
         .expect("issuer renewal state should remain observable");
-    assert_eq!(state.active_attempt_id, None);
-    assert_eq!(state.last_outcome, PolicyRenewalOutcome::TemplateDisabled);
-    assert_eq!(state.consecutive_failures, 0);
     assert_eq!(state.next_attempt_after_ns, 90);
     assert_eq!(state.updated_at_ns, 90);
-    assert_ne!(
-        state.template_fingerprint,
-        active_attempt.template_fingerprint
-    );
+    assert_ne!(state.template_fingerprint, active_fingerprint);
 }
 
 #[test]
@@ -165,15 +200,9 @@ fn root_issuer_renewal_status_reports_root_owned_state() {
         last_installed_cert_hash: Some([2; 32]),
         last_installed_expires_at_ns: Some(200),
         last_installed_refresh_after_ns: Some(160),
-        active_attempt_id: Some([3; 32]),
-        last_outcome: PolicyRenewalOutcome::RetrievalExpired,
-        consecutive_failures: 2,
         next_attempt_after_ns: 90,
         updated_at_ns: 80,
     };
-    AuthStateOps::upsert_root_issuer_renewal_attempt(renewal_attempt(
-        [3; 32], [4; 32], issuer_pid, [5; 32],
-    ));
     AuthStateOps::upsert_root_issuer_renewal_state(state);
 
     let status = root_issuer_renewal_status(RootIssuerRenewalStatusRequest { issuer_pid });
@@ -183,14 +212,49 @@ fn root_issuer_renewal_status_reports_root_owned_state() {
         status
             .state
             .as_ref()
-            .map(|state| state.last_outcome.clone()),
-        Some(RootIssuerRenewalOutcome::RetrievalExpired)
+            .map(|state| state.next_attempt_after_ns),
+        Some(90)
     );
-    assert_eq!(
-        status
-            .active_attempt
-            .as_ref()
-            .map(|attempt| attempt.batch_id),
-        Some([4; 32])
-    );
+    assert_eq!(status.latest_batch, None);
+}
+
+#[test]
+fn root_issuer_renewal_status_projects_latest_chain_key_batch() {
+    let issuer_pid = p(88);
+    let installed_issuer_pid = p(89);
+    AuthStateOps::upsert_chain_key_root_delegation_batch(renewal_batch(
+        [4; 32], issuer_pid, [5; 32],
+    ));
+    let mut latest = renewal_batch([6; 32], issuer_pid, [7; 32]);
+    latest.issuers[0].last_failure = Some("CallFailed".to_string());
+    let mut installed_issuer = renewal_batch([6; 32], installed_issuer_pid, [8; 32])
+        .issuers
+        .remove(0);
+    installed_issuer.installed_at_ns = Some(40);
+    latest.issuers.push(installed_issuer);
+    latest.retry_after_ns = Some(300);
+    latest.failure = Some("CallFailed".to_string());
+    AuthStateOps::upsert_chain_key_root_delegation_batch(latest);
+
+    let status = root_issuer_renewal_status(RootIssuerRenewalStatusRequest { issuer_pid });
+    let latest = status
+        .latest_batch
+        .expect("latest chain-key batch should be projected");
+
+    assert_eq!(latest.batch_id, [6; 32]);
+    assert_eq!(latest.status, RootIssuerRenewalBatchStatus::Installing);
+    assert_eq!(latest.cert_hash, [7; 32]);
+    assert_eq!(latest.proof_epoch, 6);
+    assert_eq!(latest.retry_after_ns, Some(300));
+    assert_eq!(latest.failure.as_deref(), Some("CallFailed"));
+
+    let installed_status = root_issuer_renewal_status(RootIssuerRenewalStatusRequest {
+        issuer_pid: installed_issuer_pid,
+    });
+    let installed = installed_status
+        .latest_batch
+        .expect("installed issuer should project the shared batch");
+    assert_eq!(installed.status, RootIssuerRenewalBatchStatus::Installed);
+    assert_eq!(installed.installed_at_ns, Some(40));
+    assert_eq!(installed.failure, None);
 }

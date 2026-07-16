@@ -4,7 +4,7 @@
 //! Does not own: command parsing, transport, or response decoding.
 
 use super::{
-    AuthCommandError, AuthIssuerObservation, AuthRenewalActiveAttemptStatus, AuthRenewalStatusCode,
+    AuthCommandError, AuthIssuerObservation, AuthRenewalBatchStatus, AuthRenewalStatusCode,
     AuthRenewalStatusResult, AuthRenewalTemplateStatus,
 };
 
@@ -31,19 +31,14 @@ pub(super) fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> 
             render_template_status(&result.renewal.template)
         ),
     ];
+    append_state_lines(&mut lines, result);
+    append_batch_lines(&mut lines, result);
+    append_issuer_observation_lines(&mut lines, result);
+    lines.join("\n")
+}
+
+fn append_state_lines(lines: &mut Vec<String>, result: &AuthRenewalStatusResult) {
     if result.renewal.state.present {
-        lines.push(format!(
-            "Last outcome: {}",
-            result.renewal.state.last_outcome.as_deref().unwrap_or("-")
-        ));
-        lines.push(format!(
-            "Consecutive failures: {}",
-            result
-                .renewal
-                .state
-                .consecutive_failures
-                .map_or_else(|| "-".to_string(), |value| value.to_string())
-        ));
         lines.push(format!(
             "Last installed expires: {}",
             result
@@ -72,24 +67,47 @@ pub(super) fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> 
                 .unwrap_or("-")
         ));
     }
+}
+
+fn append_batch_lines(lines: &mut Vec<String>, result: &AuthRenewalStatusResult) {
     lines.push(format!(
-        "Active attempt: {}",
-        render_active_attempt_status(&result.renewal.active_attempt)
+        "Latest batch: {}",
+        render_batch_status(&result.renewal.latest_batch)
     ));
-    if result.renewal.active_attempt.present {
+    if result.renewal.latest_batch.present {
         lines.push(format!(
-            "Batch: {}",
+            "Batch ID: {}",
             result
                 .renewal
-                .active_attempt
+                .latest_batch
                 .batch_id
                 .as_deref()
                 .unwrap_or("-")
         ));
-        if let Some(failure) = &result.renewal.active_attempt.failure {
+        lines.push(format!(
+            "Batch proof epoch: {}",
+            result
+                .renewal
+                .latest_batch
+                .proof_epoch
+                .map_or_else(|| "-".to_string(), |value| value.to_string())
+        ));
+        lines.push(format!(
+            "Batch expires: {}",
+            result
+                .renewal
+                .latest_batch
+                .expires_at_ns
+                .as_deref()
+                .unwrap_or("-")
+        ));
+        if let Some(failure) = &result.renewal.latest_batch.failure {
             lines.push(format!("Failure: {failure}"));
         }
     }
+}
+
+fn append_issuer_observation_lines(lines: &mut Vec<String>, result: &AuthRenewalStatusResult) {
     lines.push(format!(
         "Issuer observation: {}",
         render_issuer_observation(&result.issuer_observation)
@@ -114,7 +132,6 @@ pub(super) fn render_renewal_status_result(result: &AuthRenewalStatusResult) -> 
     } else if let Some(reason) = &result.issuer_observation.reason {
         lines.push(format!("Issuer observation reason: {reason}"));
     }
-    lines.join("\n")
 }
 
 const fn render_template_status(template: &AuthRenewalTemplateStatus) -> &'static str {
@@ -126,9 +143,9 @@ const fn render_template_status(template: &AuthRenewalTemplateStatus) -> &'stati
     }
 }
 
-fn render_active_attempt_status(attempt: &AuthRenewalActiveAttemptStatus) -> &str {
-    if attempt.present {
-        attempt.status.as_deref().unwrap_or("present")
+fn render_batch_status(batch: &AuthRenewalBatchStatus) -> &str {
+    if batch.present {
+        batch.status.as_deref().unwrap_or("present")
     } else {
         "none"
     }

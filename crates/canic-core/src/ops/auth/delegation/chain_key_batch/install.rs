@@ -13,9 +13,7 @@ use crate::{
         ChainKeyRootSignatureV1, DelegationProof, IcChainKeyBatchSignatureProofV1,
         RootDelegationProofBatchProof, RootProof,
     },
-    model::auth::{
-        ChainKeyRootDelegationInstallFailure, RootIssuerRenewalOutcome, RootIssuerRenewalState,
-    },
+    model::auth::{ChainKeyRootDelegationInstallFailure, RootIssuerRenewalState},
     ops::storage::auth::{
         AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
         ChainKeyRootDelegationBatchStatus,
@@ -273,9 +271,6 @@ fn upsert_chain_key_issuer_installed_state(
         last_installed_cert_hash: Some(issuer.cert_hash),
         last_installed_expires_at_ns: Some(issuer.delegation_cert.expires_at_ns),
         last_installed_refresh_after_ns: Some(issuer.refresh_after_ns),
-        active_attempt_id: None,
-        last_outcome: RootIssuerRenewalOutcome::Installed,
-        consecutive_failures: 0,
         next_attempt_after_ns: issuer.refresh_after_ns,
         updated_at_ns: now_ns,
     });

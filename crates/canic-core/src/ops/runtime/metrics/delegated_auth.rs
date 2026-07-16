@@ -25,7 +25,6 @@ thread_local! {
 pub enum DelegatedAuthMetricOperation {
     PrepareIssuerProof,
     PrepareRootProof,
-    RenewalAttempt,
     RenewalSweep,
     VerifyToken,
 }
@@ -37,7 +36,6 @@ impl DelegatedAuthMetricOperation {
         match self {
             Self::PrepareIssuerProof => "prepare_issuer_proof",
             Self::PrepareRootProof => "prepare_root_proof",
-            Self::RenewalAttempt => "renewal_attempt",
             Self::RenewalSweep => "renewal_sweep",
             Self::VerifyToken => "verify_token",
         }
@@ -311,18 +309,6 @@ impl DelegatedAuthMetrics {
         );
     }
 
-    /// Record a scheduled issuer-level root renewal attempt lifecycle event.
-    pub fn record_renewal_attempt(
-        outcome: DelegatedAuthMetricOutcome,
-        reason: DelegatedAuthMetricReason,
-    ) {
-        Self::record(
-            DelegatedAuthMetricOperation::RenewalAttempt,
-            outcome,
-            reason,
-        );
-    }
-
     /// Record one delegated-auth verification event.
     pub fn record(
         operation: DelegatedAuthMetricOperation,
@@ -532,36 +518,6 @@ mod tests {
         assert_event_count(
             &map,
             DelegatedAuthMetricOperation::RenewalSweep,
-            DelegatedAuthMetricOutcome::Failed,
-            DelegatedAuthMetricReason::RootProofPrepareFailed,
-            1,
-        );
-    }
-
-    #[test]
-    fn record_renewal_attempt_outcomes_increment() {
-        DelegatedAuthMetrics::reset();
-
-        DelegatedAuthMetrics::record_renewal_attempt(
-            DelegatedAuthMetricOutcome::Started,
-            DelegatedAuthMetricReason::Ok,
-        );
-        DelegatedAuthMetrics::record_renewal_attempt(
-            DelegatedAuthMetricOutcome::Failed,
-            DelegatedAuthMetricReason::RootProofPrepareFailed,
-        );
-
-        let map = event_snapshot_map();
-        assert_event_count(
-            &map,
-            DelegatedAuthMetricOperation::RenewalAttempt,
-            DelegatedAuthMetricOutcome::Started,
-            DelegatedAuthMetricReason::Ok,
-            1,
-        );
-        assert_event_count(
-            &map,
-            DelegatedAuthMetricOperation::RenewalAttempt,
             DelegatedAuthMetricOutcome::Failed,
             DelegatedAuthMetricReason::RootProofPrepareFailed,
             1,

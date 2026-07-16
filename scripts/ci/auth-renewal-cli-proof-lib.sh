@@ -167,8 +167,8 @@ assert_auth_renewal_cli_surface_probe_outputs() {
         '1,160p'
     assert_auth_renewal_cli_file_contains \
         "$proof_label" \
-        "auth renewal status schema v2" \
-        '"schema_version": 2' \
+        "auth renewal status schema v1" \
+        '"schema_version": 1' \
         "$proof_root/auth-renewal-status-drift.json" \
         '1,220p'
     assert_auth_renewal_cli_file_contains \

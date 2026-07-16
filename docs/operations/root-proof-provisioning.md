@@ -12,7 +12,7 @@ bridge-backed canister-signature flow.
 | Issuer endpoint macro surface | `crates/canic/src/macros/endpoints/nonroot.rs` |
 | Public auth API adapters | `crates/canic-core/src/api/auth/mod.rs` |
 | Chain-key batch proof state and lookup | `crates/canic-core/src/ops/auth/delegation/chain_key_batch/mod.rs` |
-| Root issuer renewal templates, attempts, and status | `crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/` |
+| Root issuer renewal status projection | `crates/canic-core/src/ops/auth/delegation/root_issuer_renewal/` |
 | Root renewal timer orchestration | `crates/canic-core/src/workflow/runtime/auth/renewal.rs` |
 | Root chain-key management-canister signing | `crates/canic-core/src/ops/auth/delegated/chain_key_signing.rs` |
 | Root batch install broadcast workflow | `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs` |
@@ -30,7 +30,7 @@ enabled renewal templates:
 
 ```text
 controller             -> root canic_upsert_root_issuer_renewal_template update
-root timer             -> root prepares due issuer renewal attempts
+root timer             -> root prepares due issuer entries in a chain-key batch
 root                   -> management canister sign_with_ecdsa
 root                   -> issuer canic_install_active_delegation_proof update
 operator/medic         -> root canic_root_issuer_renewal_status query
@@ -78,10 +78,10 @@ canic auth renewal status <deployment> --issuer <principal> --json
 canic medic deployment <deployment> --auth-renewal <principal>
 ```
 
-The status command reports root-owned template/state/attempt data and, when the
-issuer status endpoint is locally available, compares root's last installed
-proof hash and expiry against the issuer's active proof. A drift warning is
-observational; it does not mutate root or issuer state.
+The status command reports root-owned template, state, and latest-batch data.
+When the issuer status endpoint is locally available, it compares root's last
+installed proof hash and expiry against the issuer's active proof. A drift
+warning is observational; it does not mutate root or issuer state.
 
 ## Hard Invariants
 
@@ -110,7 +110,7 @@ Root renewal and chain-key proof state are bounded:
   later batch after the current batch is signed and installed
 - max 128 non-expired, non-installed chain-key proof batches; a full pending
   batch queue rejects new batch creation with resource exhaustion
-- max one active renewal attempt per issuer
+- one per-issuer entry in each bounded chain-key proof batch
 - certificate TTL bounded by the enabled renewal template and root policy
 - signing retry-after recorded after retryable management-canister failures
 
@@ -131,18 +131,23 @@ Important status outcomes:
 
 | Status | Meaning |
 | --- | --- |
-| `configured` | Root has a renewal template and no active drift is observed. |
-| `active_attempt` | Root has in-progress renewal work for the issuer. |
+| `configured` | Root has a renewal template and a usable issuer proof with no active drift. |
+| `batch_pending` | The latest chain-key batch for the issuer is preparing, signing, signed, or installing. |
+| `batch_failed` | The latest chain-key batch or issuer install recorded a retryable failure. |
 | `disabled` | The renewal template is disabled. |
 | `missing` | Root has no renewal template for the issuer. |
+| `proof_unavailable` | The issuer is reachable but has no currently usable active proof. |
 | `drift_detected` | Issuer-observed active proof differs from root state. |
 | `issuer_unregistered` | Issuer is absent from the root subnet registry; restore topology before proof renewal. |
 | `unavailable` | CLI could not observe issuer-local status from installed metadata or transport. |
 
-For `active_attempt`, allow the root timer or lazy repair path to finish before
-forcing additional work. For `drift_detected`, first re-check status to rule out
-local metadata or transport staleness. If drift persists, repair by letting root
-chain-key renewal or issuer lazy repair install a fresh active proof.
+For `batch_pending`, allow the root timer or lazy repair path to finish before
+forcing additional work. For `batch_failed`, inspect `latest_batch.failure` and
+allow the recorded retry to run. For `proof_unavailable`, use the application
+root readiness facade after install/reinstall or wait for root renewal. For
+`drift_detected`, first re-check status to rule out local metadata or transport
+staleness. If drift persists, repair by letting root chain-key renewal or issuer
+lazy repair install a fresh active proof.
 
 ## Expected Failures
 

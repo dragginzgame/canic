@@ -18,8 +18,7 @@ use crate::{
     },
     model::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerPolicy,
-        RootIssuerRenewalAttempt, RootIssuerRenewalAttemptStatus, RootIssuerRenewalOutcome,
-        RootIssuerRenewalProofRef, RootIssuerRenewalState, RootIssuerRenewalTemplate,
+        RootIssuerRenewalState, RootIssuerRenewalTemplate,
     },
     storage::stable::auth::{
         ActiveDelegationProofRecord, ChainKeyAlgorithmRecord, ChainKeyBatchHeaderRecord,
@@ -29,8 +28,6 @@ use crate::{
         ChainKeyRootSignatureRecord, DelegatedRoleGrantRecord, DelegationAudienceRecord,
         DelegationCertRecord, DelegationProofRecord, IcChainKeyBatchSignatureProofRecord,
         IssuerProofAlgorithmRecord, IssuerProofBindingRecord, RootIssuerRecord,
-        RootIssuerRenewalAttemptRecord, RootIssuerRenewalAttemptStatusRecord,
-        RootIssuerRenewalOutcomeRecord, RootIssuerRenewalProofRefRecord,
         RootIssuerRenewalStateRecord, RootIssuerRenewalTemplateRecord, RootProofRecord,
     },
 };
@@ -240,9 +237,6 @@ impl RootIssuerRenewalStateRecordMapper {
             last_installed_cert_hash: record.last_installed_cert_hash,
             last_installed_expires_at_ns: record.last_installed_expires_at_ns,
             last_installed_refresh_after_ns: record.last_installed_refresh_after_ns,
-            active_attempt_id: record.active_attempt_id,
-            last_outcome: renewal_outcome_record_to_policy(record.last_outcome),
-            consecutive_failures: record.consecutive_failures,
             next_attempt_after_ns: record.next_attempt_after_ns,
             updated_at_ns: record.updated_at_ns,
         }
@@ -256,59 +250,8 @@ impl RootIssuerRenewalStateRecordMapper {
             last_installed_cert_hash: state.last_installed_cert_hash,
             last_installed_expires_at_ns: state.last_installed_expires_at_ns,
             last_installed_refresh_after_ns: state.last_installed_refresh_after_ns,
-            active_attempt_id: state.active_attempt_id,
-            last_outcome: renewal_outcome_policy_to_record(state.last_outcome),
-            consecutive_failures: state.consecutive_failures,
             next_attempt_after_ns: state.next_attempt_after_ns,
             updated_at_ns: state.updated_at_ns,
-        }
-    }
-}
-
-///
-/// RootIssuerRenewalAttemptRecordMapper
-///
-/// Storage-ops mapper for scheduled root-managed issuer renewal attempts.
-///
-
-pub struct RootIssuerRenewalAttemptRecordMapper;
-
-impl RootIssuerRenewalAttemptRecordMapper {
-    #[must_use]
-    pub fn record_to_attempt(record: RootIssuerRenewalAttemptRecord) -> RootIssuerRenewalAttempt {
-        RootIssuerRenewalAttempt {
-            attempt_id: record.attempt_id,
-            issuer_pid: record.issuer_pid,
-            template_fingerprint: record.template_fingerprint,
-            batch_id: record.batch_id,
-            proof_ref: renewal_proof_ref_record_to_policy(record.proof_ref),
-            status: renewal_attempt_status_record_to_policy(record.status),
-            prepared_at_ns: record.prepared_at_ns,
-            retrieval_expires_at_ns: record.retrieval_expires_at_ns,
-            install_deadline_ns: record.install_deadline_ns,
-            prepared_cert_hash: record.prepared_cert_hash,
-            prepared_expires_at_ns: record.prepared_expires_at_ns,
-            prepared_refresh_after_ns: record.prepared_refresh_after_ns,
-            failure: record.failure.map(renewal_outcome_record_to_policy),
-        }
-    }
-
-    #[must_use]
-    pub fn attempt_to_record(attempt: RootIssuerRenewalAttempt) -> RootIssuerRenewalAttemptRecord {
-        RootIssuerRenewalAttemptRecord {
-            attempt_id: attempt.attempt_id,
-            issuer_pid: attempt.issuer_pid,
-            template_fingerprint: attempt.template_fingerprint,
-            batch_id: attempt.batch_id,
-            proof_ref: renewal_proof_ref_policy_to_record(attempt.proof_ref),
-            status: renewal_attempt_status_policy_to_record(attempt.status),
-            prepared_at_ns: attempt.prepared_at_ns,
-            retrieval_expires_at_ns: attempt.retrieval_expires_at_ns,
-            install_deadline_ns: attempt.install_deadline_ns,
-            prepared_cert_hash: attempt.prepared_cert_hash,
-            prepared_expires_at_ns: attempt.prepared_expires_at_ns,
-            prepared_refresh_after_ns: attempt.prepared_refresh_after_ns,
-            failure: attempt.failure.map(renewal_outcome_policy_to_record),
         }
     }
 }
@@ -716,136 +659,6 @@ fn grant_policy_to_record(policy: RootDelegatedRoleGrantPolicy) -> DelegatedRole
     DelegatedRoleGrantRecord {
         target: policy.target,
         scopes: policy.scopes,
-    }
-}
-
-const fn renewal_outcome_record_to_policy(
-    record: RootIssuerRenewalOutcomeRecord,
-) -> RootIssuerRenewalOutcome {
-    match record {
-        RootIssuerRenewalOutcomeRecord::AlreadyInstalled => {
-            RootIssuerRenewalOutcome::AlreadyInstalled
-        }
-        RootIssuerRenewalOutcomeRecord::DriftDetected => RootIssuerRenewalOutcome::DriftDetected,
-        RootIssuerRenewalOutcomeRecord::InstallDeadlineExpired => {
-            RootIssuerRenewalOutcome::InstallDeadlineExpired
-        }
-        RootIssuerRenewalOutcomeRecord::Installed => RootIssuerRenewalOutcome::Installed,
-        RootIssuerRenewalOutcomeRecord::IssuerCallFailed => {
-            RootIssuerRenewalOutcome::IssuerCallFailed
-        }
-        RootIssuerRenewalOutcomeRecord::NeverRun => RootIssuerRenewalOutcome::NeverRun,
-        RootIssuerRenewalOutcomeRecord::PolicyRejected => RootIssuerRenewalOutcome::PolicyRejected,
-        RootIssuerRenewalOutcomeRecord::ProofMismatch => RootIssuerRenewalOutcome::ProofMismatch,
-        RootIssuerRenewalOutcomeRecord::QuotaExceeded => RootIssuerRenewalOutcome::QuotaExceeded,
-        RootIssuerRenewalOutcomeRecord::RejectedByIssuer => {
-            RootIssuerRenewalOutcome::RejectedByIssuer
-        }
-        RootIssuerRenewalOutcomeRecord::RetrievalExpired => {
-            RootIssuerRenewalOutcome::RetrievalExpired
-        }
-        RootIssuerRenewalOutcomeRecord::TemplateChanged => {
-            RootIssuerRenewalOutcome::TemplateChanged
-        }
-        RootIssuerRenewalOutcomeRecord::TemplateDisabled => {
-            RootIssuerRenewalOutcome::TemplateDisabled
-        }
-    }
-}
-
-const fn renewal_outcome_policy_to_record(
-    outcome: RootIssuerRenewalOutcome,
-) -> RootIssuerRenewalOutcomeRecord {
-    match outcome {
-        RootIssuerRenewalOutcome::AlreadyInstalled => {
-            RootIssuerRenewalOutcomeRecord::AlreadyInstalled
-        }
-        RootIssuerRenewalOutcome::DriftDetected => RootIssuerRenewalOutcomeRecord::DriftDetected,
-        RootIssuerRenewalOutcome::InstallDeadlineExpired => {
-            RootIssuerRenewalOutcomeRecord::InstallDeadlineExpired
-        }
-        RootIssuerRenewalOutcome::Installed => RootIssuerRenewalOutcomeRecord::Installed,
-        RootIssuerRenewalOutcome::IssuerCallFailed => {
-            RootIssuerRenewalOutcomeRecord::IssuerCallFailed
-        }
-        RootIssuerRenewalOutcome::NeverRun => RootIssuerRenewalOutcomeRecord::NeverRun,
-        RootIssuerRenewalOutcome::PolicyRejected => RootIssuerRenewalOutcomeRecord::PolicyRejected,
-        RootIssuerRenewalOutcome::ProofMismatch => RootIssuerRenewalOutcomeRecord::ProofMismatch,
-        RootIssuerRenewalOutcome::QuotaExceeded => RootIssuerRenewalOutcomeRecord::QuotaExceeded,
-        RootIssuerRenewalOutcome::RejectedByIssuer => {
-            RootIssuerRenewalOutcomeRecord::RejectedByIssuer
-        }
-        RootIssuerRenewalOutcome::RetrievalExpired => {
-            RootIssuerRenewalOutcomeRecord::RetrievalExpired
-        }
-        RootIssuerRenewalOutcome::TemplateChanged => {
-            RootIssuerRenewalOutcomeRecord::TemplateChanged
-        }
-        RootIssuerRenewalOutcome::TemplateDisabled => {
-            RootIssuerRenewalOutcomeRecord::TemplateDisabled
-        }
-    }
-}
-
-const fn renewal_proof_ref_record_to_policy(
-    record: RootIssuerRenewalProofRefRecord,
-) -> RootIssuerRenewalProofRef {
-    RootIssuerRenewalProofRef {
-        issuer_pid: record.issuer_pid,
-        cert_hash: record.cert_hash,
-    }
-}
-
-const fn renewal_proof_ref_policy_to_record(
-    proof_ref: RootIssuerRenewalProofRef,
-) -> RootIssuerRenewalProofRefRecord {
-    RootIssuerRenewalProofRefRecord {
-        issuer_pid: proof_ref.issuer_pid,
-        cert_hash: proof_ref.cert_hash,
-    }
-}
-
-const fn renewal_attempt_status_record_to_policy(
-    record: RootIssuerRenewalAttemptStatusRecord,
-) -> RootIssuerRenewalAttemptStatus {
-    match record {
-        RootIssuerRenewalAttemptStatusRecord::Prepared => RootIssuerRenewalAttemptStatus::Prepared,
-        RootIssuerRenewalAttemptStatusRecord::Installing => {
-            RootIssuerRenewalAttemptStatus::Installing
-        }
-        RootIssuerRenewalAttemptStatusRecord::Installed => {
-            RootIssuerRenewalAttemptStatus::Installed
-        }
-        RootIssuerRenewalAttemptStatusRecord::FailedRetryable => {
-            RootIssuerRenewalAttemptStatus::FailedRetryable
-        }
-        RootIssuerRenewalAttemptStatusRecord::FailedTerminal => {
-            RootIssuerRenewalAttemptStatus::FailedTerminal
-        }
-        RootIssuerRenewalAttemptStatusRecord::Disabled => RootIssuerRenewalAttemptStatus::Disabled,
-        RootIssuerRenewalAttemptStatusRecord::Expired => RootIssuerRenewalAttemptStatus::Expired,
-    }
-}
-
-const fn renewal_attempt_status_policy_to_record(
-    status: RootIssuerRenewalAttemptStatus,
-) -> RootIssuerRenewalAttemptStatusRecord {
-    match status {
-        RootIssuerRenewalAttemptStatus::Prepared => RootIssuerRenewalAttemptStatusRecord::Prepared,
-        RootIssuerRenewalAttemptStatus::Installing => {
-            RootIssuerRenewalAttemptStatusRecord::Installing
-        }
-        RootIssuerRenewalAttemptStatus::Installed => {
-            RootIssuerRenewalAttemptStatusRecord::Installed
-        }
-        RootIssuerRenewalAttemptStatus::FailedRetryable => {
-            RootIssuerRenewalAttemptStatusRecord::FailedRetryable
-        }
-        RootIssuerRenewalAttemptStatus::FailedTerminal => {
-            RootIssuerRenewalAttemptStatusRecord::FailedTerminal
-        }
-        RootIssuerRenewalAttemptStatus::Disabled => RootIssuerRenewalAttemptStatusRecord::Disabled,
-        RootIssuerRenewalAttemptStatus::Expired => RootIssuerRenewalAttemptStatusRecord::Expired,
     }
 }
 
