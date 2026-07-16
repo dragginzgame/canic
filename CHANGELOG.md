@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.14` makes the remaining upstream dependency risk exact and fail-closed
+  and splits the three auth/root-proof production hubs by existing ownership
+  without changing behavior or public contracts.
+
 - `0.92.13` instruments root-proof provisioning and delegated-token
   preparation and verification, fixing the auth instruction-observability P2
   without changing authorization or serialized contracts.

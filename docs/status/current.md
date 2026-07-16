@@ -14,20 +14,30 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.92.12`.
-- The latest published release is `v0.92.12` at
-  `dd4d55df8a9c870707ecda62f91900df8c0f6c70`.
-- The `v0.92.12` source tree is
-  `a96db3177f7e849b1e7e9f943496dce46e91cbf7`; its product-tree hash is
-  `228ee32eaf1d8d2090f6b7b4aa188b01143ec429aee81efbf66a888c2d9df062`.
+- The workspace package version is `0.92.13`.
+- The latest published release is `v0.92.13` at
+  `317ee35ba27a06f4f8372558e991730df6f443f8`.
+- The `v0.92.13` source tree is
+  `0cd44acfc6c4603f11edcbb568f3157e9321a63d`; its product-tree hash is
+  `edbd04fd8e0ca87415cb065bff7f6efde1e2719a5024e6e5470ad511512ba35c`.
+  Its Cargo.lock SHA-256 is
+  `35b40af2b8bd0d609666a53526f2902d360b3eeb9ecb50955c53bd44652b934a`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
-- The 0.92 line is closed with
-  `closeout_verdict: pass_with_limitations`; the limitations are three
-  explicitly deferred P2 watchpoints, with no P0/P1, waiver, or blocked run.
-- The maintainer subsequently accepted unreleased D14. Its auth performance
-  checkpoints fix `CANIC-092-PERF-001` in the working tree; the two remaining
-  deferred P2s are dependency-upstream and trust-path-complexity watchpoints.
+- The immutable `v0.92.12` closeout recorded
+  `closeout_verdict: pass_with_limitations` with three deferred P2 watchpoints.
+- The maintainer subsequently accepted D14, released in `v0.92.13`. Its auth
+  performance checkpoints fix `CANIC-092-PERF-001`; the two remaining deferred
+  P2s are dependency-upstream and trust-path-complexity watchpoints. The
+  verdict remains `pass_with_limitations`, with no P0/P1, waiver, or blocked
+  run.
+- The maintainer then accepted bounded D15 work on those final P2s. In the
+  current working tree, the three measured auth/root-proof production hubs are
+  split by existing ownership and the dependency risk has one exact
+  fail-closed CI/release inventory. The complexity finding is fixed; the four
+  upstream transitives remain an accepted external limitation rather than a
+  falsely claimed dependency fix. The live working-tree ledger is 42 fixed,
+  one accepted P2, zero deferred, and zero blocked.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Detailed release notes are in the
@@ -75,16 +85,19 @@ zero unreviewed findings. This fixes `CANIC-092-RELEASE-003` without a waiver.
 Slice E then found that the 0.92.11 version-only release transaction advanced
 six unrelated external packages. D13 fixes `CANIC-092-RELEASE-005` in released
 `v0.92.12` by synchronizing only workspace lock entries offline. Post-closeout
-D14 adds stage-level root-proof and delegated-token instruction checkpoints,
-fixing `CANIC-092-PERF-001` in the unreleased working tree. Two P2 findings
-remain unresolved, both with explicit deferred dispositions; no P0
-or P1 remains. Executable compatibility accounting passes: generated root and
+D14 adds stage-level root-proof and delegated-token instruction checkpoints
+and is released in `v0.92.13`, fixing `CANIC-092-PERF-001`. Two P2 findings
+remained after D14. Accepted working-tree D15 fixes the concrete trust-path
+ownership concentration and makes the exact upstream dependency limitation
+fail closed in CI and patch releases. No deferred finding remains; the one
+accepted upstream P2 keeps the verdict `pass_with_limitations`. No P0 or P1
+remains. Executable compatibility accounting passes: generated root and
 Wasm-store Candid are byte-identical, production CLI/config/stable/backup and
 package-feature owners agree, and `v0.91.6` state upgrades to `v0.92.11` in
 PocketIC. The accepted 0.92.7 provenance hard cut rejects old envelopes and
 requires regeneration as documented. The final release-line verdict is
-`pass_with_limitations`; D14 was separately and explicitly authorized by the
-maintainer after closeout.
+`pass_with_limitations`; D14 and D15 were separately and explicitly authorized
+by the maintainer after closeout.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
@@ -136,7 +149,9 @@ requests, receipts, evidence, retry, cancellation, or tests into Canic.
   `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, D8 in `v0.92.7`, D9 in
   `v0.92.8`, D10 in `v0.92.9`, D11 in `v0.92.10`, and D12 in `v0.92.11`.
   D13 and Slice E compatibility accounting are released in `v0.92.12`; the
-  release-line closeout is complete.
+  release-line closeout is complete. Post-closeout D14 is released in
+  `v0.92.13`. Post-closeout D15 is implemented and focused validation passes;
+  its final commit/release identity is pending maintainer commit.
 - Missing evidence remains partial/blocked, never pass, and historical Phase C
   results are not rewritten by later fixes.
 
@@ -148,7 +163,10 @@ First primary results:
   is a valid pass at risk 3/10: all 484 external packages identify license
   metadata, the cached advisory scan finds zero known vulnerabilities, and
   four reachable unmaintained transitive packages remain watchpoints. This is
-  metadata hygiene, not legal review.
+  metadata hygiene, not legal review. D15 now gives those four packages an
+  exact advisory/package/checksum/immediate-introducer inventory that rejects
+  vulnerabilities or any warning/graph drift; the upstream limitation remains
+  accepted until maintained owners remove or replace it.
 - [product baseline identity correction](../audits/reports/2026-07/2026-07-14/0.92-product-baseline-identity-correction.md)
   fixes `CANIC-092-AUDIT-017`: the previously cited `cfc49c36...` belonged to
   the Phase B implementation commit; exact published `v0.92.0` product identity
@@ -317,7 +335,10 @@ First primary results:
   exact manual evidence, and applies one score. The valid first v2 baseline
   fails at risk 8/10, fixes `CANIC-092-AUDIT-013`, and retains P2
   `CANIC-092-COMPLEXITY-001`; 178 focused test selections pass and no auth
-  correctness failure is inferred from the pressure measurements.
+  correctness failure is inferred from the pressure measurements. D15 fixes
+  the live concentration by splitting all three named auth/root-proof hubs
+  along existing responsibilities; the immutable baseline remains unchanged
+  and the exact current v2 rerun awaits the maintainer commit.
 - [change friction v1](../audits/reports/2026-07/2026-07-14/0.92-change-friction-v1.md)
   remains invalid history. Corrected
   [change friction v2](../audits/reports/2026-07/2026-07-14/0.92-change-friction-v2.md)
@@ -518,6 +539,12 @@ First primary results:
   synchronization with zero external updates, the release transaction rollback
   test, current locked/offline metadata and license checks, cached advisory
   scanning, the release-integrity guard, Bash syntax, and ShellCheck.
+- D15 focused validation passes the exact dependency inventory and rejection
+  fixtures, release guards, `actionlint`, ShellCheck, 165 auth tests, 11 auth
+  prepare workflow tests, strict all-target core Clippy, formatting, and diff
+  hygiene. Every resulting auth/root-proof production owner is below 600
+  logical lines; committed-method comparison remains pending the maintainer
+  commit.
 - Slice E compatibility validation passes tagged root/Wasm-store Candid and
   production CLI/config/package comparisons, a `v0.91.6`-to-`v0.92.11`
   PocketIC state upgrade, 52 current stable-record tests, 19 protocol tests, 7
@@ -526,14 +553,16 @@ First primary results:
 ## Next Action
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
-complete at immutable `v0.92.12` with
-`closeout_verdict: pass_with_limitations`. All 28 P1 findings are fixed; the
-released closeout has three deferred P2 watchpoints. The accepted unreleased
-D14 slice fixes the performance watchpoint with existing instrumentation,
-leaving the dependency and complexity P2s deferred.
+preserved at its immutable `v0.92.12` anchor with
+`closeout_verdict: pass_with_limitations`. Post-closeout D14 is released in
+`v0.92.13` and fixes the performance watchpoint with existing instrumentation.
+Accepted working-tree D15 fixes the concrete complexity concentration and
+controls the remaining upstream dependency risk through an exact fail-closed
+inventory. All 28 P1 findings are fixed; no deferred or blocked finding
+remains, and one accepted P2 external limitation keeps the live verdict at
+`pass_with_limitations`.
 
-Do not force the two remaining P2s closed through dependency forks, vendoring,
-compatibility patches, cosmetic file splitting, or a speculative auth
-abstraction. Continue with real-world use until an upstream replacement or a
-concrete trust-path defect establishes a bounded change. Broad deployment,
-package, publish, and release validation remains maintainer-owned.
+After the maintainer commits and releases D15, 0.92 has no further planned
+product slice. Begin 0.93 discovery from real use and current evidence rather
+than carrying forward a generic audit or compatibility backlog. Broad
+deployment, package, publish, and release validation remains maintainer-owned.

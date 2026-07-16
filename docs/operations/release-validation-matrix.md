@@ -33,6 +33,7 @@ bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-release-package-install-validation.sh
 cargo test --locked -p canic --test changelog_governance -- --nocapture
+make dependency-risk-gate
 make gitleaks-scan
 git diff --check
 ```
@@ -62,6 +63,7 @@ Before RC promotion, the maintainer runs or explicitly assigns:
 ```text
 make fmt-check
 bash scripts/ci/check-control-plane-feature-matrix.sh
+make dependency-risk-gate
 make gitleaks-scan
 make clippy
 make test
@@ -85,6 +87,7 @@ bash scripts/ci/check-release-integrity-contract.sh
 bash scripts/ci/check-audit-method-catalog.sh
 bash scripts/ci/check-recovery-runbooks.sh
 bash scripts/ci/check-release-package-install-validation.sh
+bash scripts/ci/check-dependency-risk-inventory.sh
 bash scripts/ci/run-secret-scan.sh
 make fmt-check
 make clippy
@@ -167,6 +170,7 @@ Final release accounting includes:
 
 ```text
 cargo build --release --workspace --locked
+make dependency-risk-gate
 make gitleaks-scan
 make package
 ```

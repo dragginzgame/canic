@@ -6,7 +6,7 @@
         test test-wasm test-bump build check clippy fmt fmt-check clean clean-wasm \
         blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
         control-plane-feature-gate \
-        gitleaks-scan \
+        dependency-risk-gate gitleaks-scan \
         install install-dev update-dev test-fleet-install \
         ensure-clean ensure-hooks test-unit test-unit-fast \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
@@ -73,6 +73,7 @@ help:
 	@echo "  clean            Clean build artifacts"
 	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
 	@echo "  gitleaks-scan     Scan complete repository history with pinned Gitleaks"
+	@echo "  dependency-risk-gate  Reject vulnerability or transitive advisory drift"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  cloc             Show runtime vs test Rust LOC across canic crates"
@@ -236,8 +237,11 @@ test-wasm: blob-storage-inventory-gate blob-storage-cashier-inventory-gate test-
 # Keeps the secret scan, control-plane feature matrix, Clippy, and fast
 # unit/lib/bin workspace run, while leaving the local ICP CLI fast path explicit.
 test-bump: blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
-        gitleaks-scan \
+        gitleaks-scan dependency-risk-gate \
         control-plane-feature-gate clippy test-unit-fast
+
+dependency-risk-gate:
+	bash scripts/ci/check-dependency-risk-inventory.sh
 
 gitleaks-scan:
 	GITLEAKS_BIN="$(GITLEAKS_INSTALL_DIR)/gitleaks" bash scripts/ci/run-secret-scan.sh

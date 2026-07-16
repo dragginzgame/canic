@@ -69,6 +69,7 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
+          cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
           cargo install cargo-sort --version "$CANIC_CARGO_SORT_VERSION" --locked
           cargo install cargo-sort-derives --version "$CANIC_CARGO_SORT_DERIVES_VERSION" --locked
           cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
@@ -76,6 +77,7 @@ jobs:
       - name: Check Rust helper tools
         shell: bash
         run: |
+          cargo audit --version
           cargo sort --version
           cargo sort-derives --version
           candid-extractor --version
@@ -101,6 +103,9 @@ jobs:
       - name: Scan repository history for secrets
         shell: bash
         run: bash scripts/ci/run-secret-scan.sh
+      - name: Check dependency risk inventory
+        shell: bash
+        run: bash scripts/ci/check-dependency-risk-inventory.sh
       - name: Install IC CLI tools
         shell: bash
         run: |

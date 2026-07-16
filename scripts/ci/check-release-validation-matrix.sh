@@ -25,10 +25,12 @@ require_texts "$MATRIX" "$GUARD_LABEL" \
     "git diff --check" \
     "bash scripts/ci/check-release-validation-matrix.sh" \
     "bash scripts/ci/check-release-integrity-contract.sh" \
+    "bash scripts/ci/check-dependency-risk-inventory.sh" \
     "bash scripts/ci/run-secret-scan.sh" \
     "bash scripts/ci/check-audit-method-catalog.sh" \
     "bash scripts/ci/check-control-plane-feature-matrix.sh" \
     "make fmt-check" \
+    "make dependency-risk-gate" \
     "make gitleaks-scan" \
     "make clippy" \
     "make test" \

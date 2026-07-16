@@ -8,8 +8,9 @@ the dedicated secret scanner required by retained method
 dependency-resolution side effect in the human release-version transaction,
 completes the executable `v0.91.6` compatibility accounting, and closes the
 0.92 release line at immutable `v0.92.12`. It also records the separately
-accepted, unreleased D14 auth-checkpoint follow-up without rewriting that
-closeout.
+accepted D14 auth-checkpoint follow-up, released in `v0.92.13`, without
+rewriting that closeout, and records accepted working-tree D15 hardening for
+the two final P2s.
 
 ## Result
 
@@ -73,8 +74,23 @@ is an explicitly accepted post-closeout P2 slice. It adds stage-level
 instruction checkpoints to root-proof provisioning and delegated-token
 prepare, repair, cache, and full-verification paths. Focused auth tests,
 instruction-audit regression proof, and strict targeted Clippy pass. This
-fixes `CANIC-092-PERF-001` in the unreleased working tree without rewriting the
+fixes `CANIC-092-PERF-001` in released `v0.92.13` without rewriting the
 immutable `v0.92.12` closeout evidence.
+
+[D15 final P2 hardening](0.92-d15-final-p2-hardening.md) gives the four known
+unmaintained transitives one exact advisory/package/checksum/immediate-owner
+inventory. Pinned `cargo-audit` now fails CI and patch releases on any
+vulnerability, warning drift, direct-dependency promotion, or introducer-set
+change. Because the four packages still exist upstream, the dependency finding
+moves from deferred to accepted limitation rather than being called fixed.
+
+D15 also splits the three concrete auth/root-proof production hubs along
+existing responsibilities. Delegated-token configuration, verification/cache,
+typed-error projection, request admission, replay ownership, and chain-key
+installation progress now have focused children. Every resulting production
+owner is below 600 logical lines, while authorization, replay, proof, state,
+diagnostic, public, and stable contracts remain unchanged. This fixes
+`CANIC-092-COMPLEXITY-001` without a generic abstraction or duplicate flow.
 
 ## Live Ledger
 
@@ -90,8 +106,11 @@ immutable `v0.92.12` closeout evidence.
 - `v0.91.6` contract: complete with explicit source/provenance hard cuts and
   no unclassified compatibility delta.
 - Closeout verdict: `pass_with_limitations`.
-- Post-closeout working-tree ledger: 41 fixed and 2 deferred P2 watchpoints;
-  the released `v0.92.12` ledger above remains 40 fixed and 3 deferred.
+- Post-closeout `v0.92.13` ledger: 41 fixed and 2 deferred P2 watchpoints; the
+  immutable `v0.92.12` closeout ledger above remains 40 fixed and 3 deferred.
+- Working-tree D15 ledger: 42 fixed, 1 accepted external P2 limitation, zero
+  deferred, and zero blocked. The live verdict remains
+  `pass_with_limitations`.
 
 ## Validation
 
@@ -124,11 +143,16 @@ immutable `v0.92.12` closeout evidence.
   6, 5, 7, and 1 passed respectively.
 - Final pinned full-history secret scan: zero findings at
   `dd4d55df8a9c870707ecda62f91900df8c0f6c70`.
+- D15 dependency gate and its vulnerability/addition/removal/identity
+  rejection fixtures: pass; release guards, ShellCheck, and `actionlint` pass.
+- D15 auth ownership validation: 165 auth tests and 11 auth-prepare workflow
+  tests pass; strict all-target `canic-core` Clippy, formatting, and diff
+  hygiene pass.
 
 ## Next
 
-0.92 is closed. Do not start another 0.92 product slice from the deferred
-watchpoints alone; each requires its recorded revisit condition and a bounded,
-finding-backed decision. Continue with real-world use and treat future product
-work as a separately accepted design. Broad product, deployment, package,
-publish, and release gates remain maintainer-owned.
+0.92 is closed and no deferred finding remains after accepted D15. Commit and
+release-reconcile D15, including the frozen complexity-method rerun on the
+committed identity. Then begin 0.93 discovery from operational use and current
+evidence. Broad product, deployment, package, publish, and release gates remain
+maintainer-owned.

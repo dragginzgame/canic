@@ -174,10 +174,13 @@
   D13 and executable compatibility accounting are released in `v0.92.12`.
   The final release-line verdict is `pass_with_limitations`: three explicitly
   deferred P2 watchpoints remain, while no P0, P1, waiver, or blocked current
-  run remains. The maintainer subsequently accepted unreleased D14, which adds
-  root-proof and delegated-token instruction checkpoints and fixes
-  `CANIC-092-PERF-001` in the working tree without rewriting the released
-  closeout.
+  run remains. The maintainer subsequently accepted D14, released in
+  `v0.92.13`, which adds root-proof and delegated-token instruction checkpoints
+  and fixes `CANIC-092-PERF-001` without rewriting the immutable closeout.
+  Accepted working-tree D15 then gives the exact transitive advisory set a
+  fail-closed CI/release contract and splits the three auth/root-proof
+  production hubs by existing responsibility. The live ledger is 42 fixed,
+  one accepted external P2 limitation, and zero deferred or blocked findings.
 
 ## Month Status
 
@@ -207,9 +210,10 @@ and active proof match the maintained surface, warning-as-error core rustdoc
 passes, packaged CLI plus both generated and canonical Wasm-store proofs pass
 before registry publication, the layering guard reports zero violations, and
 the dedicated redacted secret scan reports zero findings. The released
-closeout has three deferred P2 watchpoints; unreleased D14 fixes the
-performance finding, leaving two in the current working tree. No P0 or P1
-remains. The current trace ledger
+closeout has three deferred P2 watchpoints; D14 is released in `v0.92.13` and
+fixes the performance finding. Working-tree D15 fixes the complexity finding
+and moves the dependency finding to accepted external limitation, leaving no
+deferred finding in the current ledger. No P0 or P1 remains. The current trace ledger
 is ten pass and zero fail without rewriting the frozen result. Security
 ordering and lifecycle
 symmetry now have valid frozen-method
@@ -222,7 +226,9 @@ DRY consolidation has a valid first frozen-method failure at risk 6/10 and
 adds `CANIC-092-TEST-001` without duplicating the canonical layering finding.
 Complexity v2 is valid and establishes the first comparable baseline at risk
 8/10. Its exact scope/counters/manual evidence/score reproduce; the P2
-trust-path complexity hotspot is explicitly deferred. V1 is invalid history.
+trust-path complexity hotspot is fixed in working-tree D15 by decomposing its
+three production hubs along existing responsibilities. V1 is invalid history;
+the exact v2 rerun awaits D15's committed identity.
 Change friction v2 is valid and establishes the first comparable baseline at
 risk 8/10. Its exhaustive scope/layer map, frozen sample, exact formulas, and
 single score reproduce; v1 remains invalid history.
@@ -254,16 +260,17 @@ compatibility report to `v0.92.12` and records
 
 ## Carry-Forward Follow-up
 
-1. Keep 0.92 closed at `v0.92.12`; new product work requires a separately
-   accepted design or concrete operational finding. Broad final gates remain
-   maintainer-owned.
-2. Keep the dependency and complexity P2 watchpoints deferred until upstream
-   replacement or concrete operational evidence supports a bounded change;
-   D14 fixes the instruction-checkpoint finding in the current working tree.
+1. Preserve the immutable `v0.92.12` closeout and released `v0.92.13` D14
+   follow-up; commit and release-reconcile accepted D15 before starting 0.93.
+   Broad final gates remain maintainer-owned.
+2. Keep the exact dependency-risk gate fail closed until maintained upstream
+   owners remove or replace the four accepted transitives. Do not vendor or
+   fork them merely to claim the P2 fixed.
 3. Keep the D4 root-issuer authority singular; do not reintroduce an ops
    validator or policy-owned persisted state shape.
-4. Review delegated-auth/root-proof concentration after the complete
-   baseline; do not infer a generic abstraction from size alone.
+4. Preserve D15's focused delegated-auth/root-proof owners; do not collapse
+   them or infer a generic flow abstraction from the remaining state-machine
+   complexity.
 5. Preserve Wasm v2's sole canonical host-builder authority and use only an
    exactly compatible v2 predecessor for future size deltas.
 6. Preserve D7's single internal proof-install path and deliberate
