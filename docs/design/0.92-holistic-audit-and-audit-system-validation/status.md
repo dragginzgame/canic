@@ -13,7 +13,7 @@ ledger to 22 valid and zero invalid results. Evidence-only PocketIC slices now
 complete the auth and control mandatory traces: the aggregate is a valid
 `fail` with six passing and four failing traces, zero partial, and zero
 blocked. The product baseline gate and finding review are complete, and Phase D
-is underway. D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 in
+is complete. D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, and D4 in
 `v0.92.3`; D5 is released in `v0.92.4`; D6 in `v0.92.5`; and D7 in
 `v0.92.6`. D8 is released in `v0.92.7`. Absolute build paths are removed from
 root runtime records and
@@ -39,10 +39,14 @@ redaction, and reports zero unreviewed findings after 11 false positives were
 admitted only by exact fingerprints. This fixes `CANIC-092-RELEASE-003`
 without a waiver. Slice E then found that the version-only 0.92.11 release
 transaction re-resolved six unrelated external packages. D13 fixes
-`CANIC-092-RELEASE-005` in the current candidate by synchronizing only
-workspace lock entries offline. Three P2 findings remain unresolved with
-explicit deferred dispositions. The current trace ledger is ten pass and zero
-fail, and no P0 or P1 remains.
+`CANIC-092-RELEASE-005` in released `v0.92.12` by synchronizing only workspace
+lock entries offline. Slice E compatibility accounting and the final
+release-line closeout are complete. The maintainer then explicitly accepted
+post-closeout D14, which fixes the auth instruction-checkpoint evidence gap in
+the current working tree. Two P2 findings remain unresolved with explicit
+deferred dispositions. The current trace ledger is ten pass and zero
+fail, no P0 or P1 remains, and the explicit verdict is
+`pass_with_limitations`.
 
 No runtime product code, public contract, stable state, or generated product
 behavior changed during method hardening. The final 0.92.11 version transaction
@@ -72,11 +76,13 @@ maintainer prerequisite for any future 1.0 discussion.
   `ab47f96a4ca388d0c61f01280e2a47bb37930b1ce863d675ea8427bf08b229e6`.
 - Freeze admission method fingerprint:
   `8188a7e08d9551efbad79e56c20cdd2213ed54758fc07b0bd0120b61e0dba82b`.
-- Latest published Phase D anchor and D13 parent: `v0.92.11` at
-  `fdf3bd6f2a20e2fc2da50398771660eae59fca94`, source tree
-  `6e67e6700c290501869242c9fbcf35bfff68ec57`, product-tree hash
-  `3cc60e4a86373cae61b26bccf4cdb29fc0a07869ef8ab3db817563a379853ca5`.
-- Workspace package version: `0.92.11`.
+- Final released Phase D/Slice E anchor: `v0.92.12` at
+  `dd4d55df8a9c870707ecda62f91900df8c0f6c70`, source tree
+  `a96db3177f7e849b1e7e9f943496dce46e91cbf7`, product-tree hash
+  `228ee32eaf1d8d2090f6b7b4aa188b01143ec429aee81efbf66a888c2d9df062`.
+- Final Cargo.lock SHA-256:
+  `62c628a400247c89b6846a48c32e6d3d581a05ce3e99394d51643ce9030273ad`.
+- Workspace package version: `0.92.12`.
 
 ## Slices
 
@@ -329,6 +335,11 @@ Primary evidence:
       Version bumps update workspace package entries offline without
       re-resolving unrelated external packages; the existing release-surface
       rollback remains fail-closed.
+- [x] Record D13 and compatibility accounting in released `v0.92.12`.
+- [x] Implement and validate post-closeout D14 auth performance checkpoints.
+      Root-proof provisioning and delegated-token prepare, repair, cache, and
+      full-verification stages now use the existing checkpoint authority;
+      targeted tests and Clippy pass without contract or state changes.
 
 ### Slice E - Closeout
 
@@ -343,8 +354,9 @@ Primary evidence:
       hard cut and migration boundary. Generated Candid, CLI/config,
       stable-state upgrade, backup/restore, package features, Rust source cuts,
       and the provenance regeneration boundary are accounted directly.
-- [ ] Write `docs/audits/release-lines/0.92-closeout.md` with one explicit
-      closeout verdict.
+- [x] Write `docs/audits/release-lines/0.92-closeout.md` with
+      `closeout_verdict: pass_with_limitations` and name all three deferred P2
+      watchpoints.
 
 ## Finding Index
 
@@ -356,7 +368,7 @@ Primary evidence:
 | `CANIC-092-AUDIT-004` | governance conflict | P1 | confirmed | fixed | `cdcd1487...` / `91736337...` |
 | `CANIC-092-AUDIT-005` | evidence gap | P1 | confirmed | fixed | `cdcd1487...` / `91736337...` |
 | `CANIC-092-AUDIT-006` | operational risk | P1 | confirmed | fixed | `cdcd1487...` / `91736337...` |
-| `CANIC-092-AUDIT-007` | audit method defect | P1 | confirmed | fixed | Dependency v2 defines and passes a deterministic declaration-integrity rule; commit pending. |
+| `CANIC-092-AUDIT-007` | audit method defect | P1 | confirmed | fixed | Dependency v2 defines and passes a deterministic declaration-integrity rule; retained correction committed at `daa67913...`. |
 | `CANIC-092-DEPENDENCY-001` | operational risk | P2 | confirmed | deferred | Four reachable transitive packages are unmaintained, but no known vulnerability or bounded safe replacement is established; reconsider on advisory, dependency update, or 1.0 preparation. |
 | `CANIC-092-RELEASE-001` | operational risk | P1 | confirmed | fixed | D9 pins all 13 active external Action executions to reviewed full commits and guards future references. |
 | `CANIC-092-RELEASE-002` | operational risk | P1 | confirmed | fixed | D9 versions package tools and checksum-verifies all downloaded executable archives before extraction/execution. |
@@ -366,33 +378,33 @@ Primary evidence:
 | `CANIC-092-LAYERING-001` | product defect | P2 | confirmed | fixed | D5 moves blob Cashier, reserve/recovery, sync, and readiness orchestration behind one workflow; API delegates and public/stable shapes are unchanged. |
 | `CANIC-092-LAYERING-002` | product defect | P2 | confirmed | fixed | D6 makes the DTO passive; one workflow command owns capability/replay identity and ops owns mechanical wire projection, with protocol and stable state unchanged. |
 | `CANIC-092-LAYERING-003` | governance conflict | P1 | high | fixed | D3 makes `AGENTS.md` the sole active authority and removes wording that permits endpoint-to-ops delegation; released in `v0.92.2`. |
-| `CANIC-092-AUDIT-008` | audit method defect | P1 | confirmed | fixed | Build v2 applies the exact semantic exclusion and preserves the root artifact drift; commit pending. |
+| `CANIC-092-AUDIT-008` | audit method defect | P1 | confirmed | fixed | Build v2 applies the exact semantic exclusion and preserves the root artifact drift; retained correction committed at `daa67913...`. |
 | `CANIC-092-BUILD-001` | product defect | P1 | confirmed | fixed | D8 removes runtime build paths; two isolated root/bootstrap raw and gzip lanes plus semantic provenance reproduce exactly. |
 | `CANIC-092-BUILD-002` | operational risk | P2 | confirmed | fixed | D8 requires role/kind/mode/tool/version/outcome transform evidence and rejects inconsistent provenance. |
-| `CANIC-092-AUDIT-009` | audit method defect | P1 | confirmed | fixed | Audience/replay v2 use current exact filters through a zero-test-refusing runner; both immutable-baseline reruns pass; commit pending. |
-| `CANIC-092-AUTH-001` | evidence gap | P1 | confirmed | fixed | Exact PocketIC evidence proves pre-session rejection, bootstrap, generated-guard parity, replay conflict/idempotence, and unchanged authority; commit pending. |
+| `CANIC-092-AUDIT-009` | audit method defect | P1 | confirmed | fixed | Audience/replay v2 use current exact filters through a zero-test-refusing runner; both immutable-baseline reruns pass; retained correction committed at `daa67913...`. |
+| `CANIC-092-AUTH-001` | evidence gap | P1 | confirmed | fixed | Exact PocketIC evidence proves pre-session rejection, bootstrap, generated-guard parity, replay conflict/idempotence, and unchanged authority; retained evidence committed at `daa67913...`. |
 | `CANIC-092-ERROR-001` | product defect | P1 | confirmed | fixed | D2 preserves proof/provisioning causes through one existing public-code boundary; all seven auth methods and no-mutation PocketIC proof pass; released in `v0.92.2`. |
 | `CANIC-092-LAYERING-004` | product defect | P2 | confirmed | fixed | D7 removes the duplicate public install request/outcome; workflow consumes the internal ops plan and typed issuer result directly. |
-| `CANIC-092-AUDIT-010` | audit method defect | P1 | confirmed | fixed | Mandatory trace v1 is cataloged/fingerprinted and all ten IDs have admitted results; commit pending. |
+| `CANIC-092-AUDIT-010` | audit method defect | P1 | confirmed | fixed | Mandatory trace v1 is cataloged/fingerprinted and all ten IDs have admitted results; retained correction committed at `daa67913...`. |
 | `CANIC-092-COST-001` | product defect | P1 | confirmed | fixed | D1 gives publication one workflow-owned quota/cycle permit and settlement path; fixed in `daa67913...`, validated in `d9dc6304...`, released in `v0.92.1`. |
 | `CANIC-092-ERROR-002` | product defect | P1 | confirmed | fixed | D1 preserves publication conflict/capacity/missing/hash/state/store/transport causes; fixed in `daa67913...`, validated in `d9dc6304...`, released in `v0.92.1`. |
-| `CANIC-092-PUBLICATION-001` | evidence gap | P1 | confirmed | fixed | Exact PocketIC evidence commits the target before the root mirror and proves post-upgrade convergence without allocation; commit pending. |
-| `CANIC-092-AUDIT-011` | audit method defect | P1 | confirmed | fixed | Capability v2 uses its owning targeted test/Clippy contract; six artifact refreshes and the corrected baseline pass; commit pending. |
+| `CANIC-092-PUBLICATION-001` | evidence gap | P1 | confirmed | fixed | Exact PocketIC evidence commits the target before the root mirror and proves post-upgrade convergence without allocation; retained evidence committed at `daa67913...`. |
+| `CANIC-092-AUDIT-011` | audit method defect | P1 | confirmed | fixed | Capability v2 uses its owning targeted test/Clippy contract; six artifact refreshes and the corrected baseline pass; retained correction committed at `daa67913...`. |
 | `CANIC-092-PUBLISH-001` | documentation drift | P2 | confirmed | fixed | D10 documents every maintained facade/control-plane feature and exact default set, guarded by a manifest-derived package-doc test. |
 | `CANIC-092-DOCS-001` | documentation drift | P2 | confirmed | fixed | D3 aligns public core docs with `endpoints -> workflow -> policy -> ops -> model` and model-owned state/storage invariants; released in `v0.92.2`. |
 | `CANIC-092-RESIDUE-001` | governance conflict | P2 | confirmed | fixed | D10 deletes removed-command negative assertions and the obsolete active probe breadcrumb while retaining current positive CLI proof. |
-| `CANIC-092-AUDIT-012` | audit method defect | P1 | confirmed | fixed | Layering v2 fixtures and guard detect all 25 production ops-to-policy files; corrected baseline validly fails; commit pending. |
+| `CANIC-092-AUDIT-012` | audit method defect | P1 | confirmed | fixed | Layering v2 fixtures and guard detect all 25 production ops-to-policy files; corrected baseline validly fails; retained correction committed at `daa67913...`. |
 | `CANIC-092-LAYERING-005` | product defect | P1 | confirmed | fixed | D4 removes seven root-issuer/model ownership violations; D11 moves the remaining shared values to model and root-proof admission to workflow, leaving zero ops-to-policy dependencies. |
 | `CANIC-092-DOCS-002` | documentation drift | P3 | confirmed | fixed | D10 describes typed internal failure preservation without linking the crate-private type; warning-as-error core rustdoc passes. |
 | `CANIC-092-TEST-001` | evidence gap | P2 | confirmed | fixed | D4 directly proves valid policy/template admission, every request rejection boundary, unchanged state/epoch, skipped timers, and renewal/provisioning regressions. |
-| `CANIC-092-AUDIT-013` | audit method defect | P1 | confirmed | fixed | Complexity v2 has one fingerprinted runner, complete scope/manual evidence, and one reproducible score; commit pending. |
+| `CANIC-092-AUDIT-013` | audit method defect | P1 | confirmed | fixed | Complexity v2 has one fingerprinted runner, complete scope/manual evidence, and one reproducible score; retained correction committed at `daa67913...`. |
 | `CANIC-092-COMPLEXITY-001` | operational risk | P2 | confirmed | deferred | Delegated-auth and chain-key trust paths remain concentrated, but no correctness defect or justified replacement abstraction is established; reconsider with operational evidence. |
-| `CANIC-092-AUDIT-014` | audit method defect | P1 | confirmed | fixed | Change-friction v2 has exhaustive scope/layers, a frozen fixture, exact counters/formulas, and one reproducible score; commit pending. |
-| `CANIC-092-AUDIT-015` | audit method defect | P1 | confirmed | fixed | Instruction v2 uses authoritative root-harness artifacts, a complete fixed roster, exact endpoint labels, root-independent identity, compatible-predecessor discovery, and namespaced checkpoint scanning; commit pending. |
-| `CANIC-092-AUDIT-016` | audit method defect | P1 | confirmed | fixed | Wasm v2 uses only canonical host-builder release/debug artifacts, root-independent identity, exact comparison keys, and verified compact evidence; commit pending. |
-| `CANIC-092-PERF-001` | evidence gap | P2 | confirmed | deferred | Root proof provisioning and issuer token paths lack internal checkpoints, but the baseline is valid and no regression comparison exists; reconsider with a compatible predecessor or measured incident. |
+| `CANIC-092-AUDIT-014` | audit method defect | P1 | confirmed | fixed | Change-friction v2 has exhaustive scope/layers, a frozen fixture, exact counters/formulas, and one reproducible score; retained correction committed at `daa67913...`. |
+| `CANIC-092-AUDIT-015` | audit method defect | P1 | confirmed | fixed | Instruction v2 uses authoritative root-harness artifacts, a complete fixed roster, exact endpoint labels, root-independent identity, compatible-predecessor discovery, and namespaced checkpoint scanning; retained correction committed at `daa67913...`. |
+| `CANIC-092-AUDIT-016` | audit method defect | P1 | confirmed | fixed | Wasm v2 uses only canonical host-builder release/debug artifacts, root-independent identity, exact comparison keys, and verified compact evidence; retained correction committed at `daa67913...`. |
+| `CANIC-092-PERF-001` | evidence gap | P2 | confirmed | fixed | Post-closeout D14 adds stage-level checkpoints to root-proof provisioning and delegated-token prepare/repair/verification, with a source regression guard and focused auth validation. |
 | `CANIC-092-SURFACE-001` | product defect | P2 | confirmed | fixed | D7 hard-cuts the direct core error root; the deliberate control-plane support bridge remains the sole sibling surface. |
-| `CANIC-092-AUDIT-017` | audit method defect | P1 | confirmed | fixed | Published product-tree identity corrected from the Phase B tree to exact `v0.92.0`; commit pending. |
+| `CANIC-092-AUDIT-017` | audit method defect | P1 | confirmed | fixed | Published product-tree identity corrected from the Phase B tree to exact `v0.92.0`; retained correction committed at `daa67913...`. |
 
 Finding detail and exact evidence live in the dated primary reports. The index
 assigns identity by canonical owner/invariant rather than discovery order.
@@ -425,9 +437,9 @@ assigns identity by canonical owner/invariant rather than discovery order.
 - Layering v2: the immutable baseline remains a valid fail at risk 7/10 with
   25 production ops-to-policy files. D4's affected-scope rerun passes detector
   fixtures and reduces the live violation set to 18; D5 and D6 add no upward
-  edge.
-  The canonical `CANIC-092-LAYERING-005` finding remains open. V1 remains
-  invalid history.
+  edge. D11's final affected-scope rerun reports zero production violations
+  and fixes `CANIC-092-LAYERING-005`. V1 remains invalid history and the
+  corrected frozen baseline remains an unchanged historical fail.
 - Build integrity v1 remains invalid history. Corrected build integrity v2 is
   a valid fail: two isolated lanes reproduce app/bootstrap-store raw and gzip
   bytes and app semantic provenance after excluding only observation time and
@@ -492,9 +504,10 @@ assigns identity by canonical owner/invariant rather than discovery order.
   Clippy, four provisioning tests, 20 chain-key batch tests, three
   DTO/serialization guards, 19 protocol tests, all-feature facade check,
   offline core/facade package verification, the control-plane facade test, and
-  exact PocketIC new-issuer provisioning. The current trace ledger remains
-  nine pass and one fail.
-  D10's later current-tree rerun fixes the separately indexed rustdoc link.
+  exact PocketIC new-issuer provisioning. At the D7 parent the trace ledger was
+  nine pass and one fail; D8's later deploy rerun brings the final current
+  ledger to ten pass and zero fail. D10's later current-tree rerun fixes the
+  separately indexed rustdoc link.
 - D8 reproducible-root validation passes seven transform tests, 15 provenance
   and policy tests, 12 release-set manifest tests, targeted checks and strict
   Clippy, and two fresh isolated offline root builds. Root/bootstrap raw and
@@ -539,20 +552,26 @@ assigns identity by canonical owner/invariant rather than discovery order.
 - Product fix slices: D1 is released in `v0.92.1`, D2/D3 in `v0.92.2`, D4 in
   `v0.92.3`, D5 in `v0.92.4`, D6 in `v0.92.5`, D7 in `v0.92.6`, and D8 in
   `v0.92.7`, D9 in `v0.92.8`, D10 in `v0.92.9`, and D11 in `v0.92.10`.
-  D12 is released in `v0.92.11`; D13 fixes the newly observed release-lock
-  expansion in the current candidate. The live unresolved index is 3 (0 P1
-  and 3 P2), all explicitly deferred.
+  D12 is released in `v0.92.11`; D13 and Slice E compatibility evidence are
+  released in `v0.92.12`. Unreleased post-closeout D14 fixes
+  `CANIC-092-PERF-001`; the live working-tree unresolved index is 2 (0 P1 and
+  2 P2), both explicitly deferred.
 - Broad workspace, deployment, publish, and release gates: not run as Phase C
   audit evidence unless a frozen method specifically requires them.
 
 ## Next Action
 
-D12 dedicated secret scanning is released in `v0.92.11`. Slice E compatibility
-accounting found and D13 fixes one bounded release-lock defect in the current
-candidate. The executable `v0.91.6` contract and all three deferred P2
-dispositions are now complete. The next step is to assign D13 and the
-compatibility report an immutable release identity, then publish one explicit
-release-line verdict. Broad release validation remains maintainer-owned.
+The [0.92 release-line closeout](../../audits/release-lines/0.92-closeout.md)
+is complete at immutable `v0.92.12` with
+`closeout_verdict: pass_with_limitations`. No P0/P1, waiver, or blocked current
+run remains. The maintainer separately accepted D14, which fixes the
+instruction-checkpoint P2 in the current working tree. The dependency and
+complexity P2 watchpoints remain deferred because neither has a bounded safe
+product change.
+
+Continue with real-world use. Any new product work requires a separately
+accepted design or concrete operational finding. Broad deployment, package,
+publish, and release validation remains maintainer-owned.
 
 Primary review evidence:
 [0.92 Phase C baseline review](../../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md).
@@ -614,3 +633,6 @@ D13 implementation evidence:
 
 Slice E compatibility evidence:
 [`v0.91.6` compatibility accounting](../../audits/reports/2026-07/2026-07-16/0.92-v0916-compatibility-accounting.md).
+
+Final release-line evidence:
+[0.92 closeout](../../audits/release-lines/0.92-closeout.md).

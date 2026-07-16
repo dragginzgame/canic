@@ -967,4 +967,43 @@ mod tests {
         assert!(sites.iter().any(|site| site.contains("crate::perf!(")));
         assert!(sites.iter().any(|site| site.contains("canic_core::perf!(")));
     }
+
+    #[test]
+    fn auth_workflow_checkpoint_gaps_are_closed_in_current_source() {
+        let sites = scan_perf_callsites(&workspace_root());
+        let gaps = checkpoint_coverage_gaps(&sites);
+
+        for flow_name in [
+            "root proof provisioning",
+            "issuer delegated-token prepare and verification",
+        ] {
+            let gap = gaps
+                .iter()
+                .find(|gap| gap.flow_name == flow_name)
+                .expect("auth flow is part of the fixed checkpoint-gap roster");
+            assert_eq!(
+                gap.status, STATUS_PASS,
+                "{flow_name} must stay instrumented"
+            );
+        }
+
+        for label in [
+            "root_proof_resolve_policy",
+            "root_proof_prepare_batch",
+            "root_proof_sign_batch",
+            "root_proof_install_batch",
+            "delegated_token_validate_request",
+            "delegated_token_reserve_replay",
+            "delegated_token_prepare_proof",
+            "delegated_token_commit_replay",
+            "delegated_token_fetch_root_proof",
+            "delegated_token_verify_cached",
+            "delegated_token_verify_embedded_proofs",
+        ] {
+            assert!(
+                sites.iter().any(|site| site.contains(label)),
+                "auth checkpoint `{label}` must stay instrumented"
+            );
+        }
+    }
 }

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.92.md](docs/changelog/0.92.md)
 
+- `0.92.13` instruments root-proof provisioning and delegated-token
+  preparation and verification, fixing the auth instruction-observability P2
+  without changing authorization or serialized contracts.
+
 - `0.92.12` prevents version-only releases from re-resolving unrelated
   dependencies and completes executable `v0.91.6` compatibility accounting
   across maintained product and operator contracts.

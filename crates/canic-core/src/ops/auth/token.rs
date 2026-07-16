@@ -175,6 +175,7 @@ impl AuthOps {
         let cfg = delegated_tokens_config_for_verification()?;
         require_current_canister_delegated_token_verifier()?;
         let ctx = delegated_token_local_context()?;
+        crate::perf!("delegated_token_resolve_context");
 
         let cache_key = match delegated_token_cache_key(input.token, input.caller) {
             Ok(key) => key,
@@ -186,15 +187,20 @@ impl AuthOps {
                 return Err(map_verify_delegated_token_error(err));
             }
         };
+        crate::perf!("delegated_token_hash_cache_key");
 
         if let Some(verified) = verify_from_positive_cache(&input, &ctx, cache_key)? {
+            crate::perf!("delegated_token_verify_cached");
             DelegatedAuthMetrics::record_verify_completed();
             return Ok(verified);
         }
 
         let verifier_cfg = auth_proof_verifier_config_for_verification(&cfg)?;
+        crate::perf!("delegated_token_resolve_root_policy");
         let verified = verify_with_embedded_proofs(&input, &ctx, &verifier_cfg)?;
+        crate::perf!("delegated_token_verify_embedded_proofs");
         insert_positive_verification_cache(&input, cache_key);
+        crate::perf!("delegated_token_cache_verified");
         DelegatedAuthMetrics::record_verify_completed();
         Ok(verified)
     }

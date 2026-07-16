@@ -171,12 +171,20 @@
   that full lockfile regeneration advanced six unrelated external packages in
   the 0.92.11 version-only bump. Future bumps synchronize only workspace
   entries offline; a disposable comparison locks zero external packages.
-  Three explicitly deferred P2 watchpoints remain; no P0 or P1 remains.
+  D13 and executable compatibility accounting are released in `v0.92.12`.
+  The final release-line verdict is `pass_with_limitations`: three explicitly
+  deferred P2 watchpoints remain, while no P0, P1, waiver, or blocked current
+  run remains. The maintainer subsequently accepted unreleased D14, which adds
+  root-proof and delegated-token instruction checkpoints and fixes
+  `CANIC-092-PERF-001` in the working tree without rewriting the released
+  closeout.
 
 ## Month Status
 
-Partial. The corrected method set and product snapshot are frozen at
-`v0.92.0`; Phase C is complete and Phase D is underway. Locked/offline
+Closed with limitations. The corrected method set and product snapshot are
+frozen at `v0.92.0`; Phase C, Phase D, and Slice E are complete. The line
+closes at immutable `v0.92.12` with 40 fixed findings and three explicitly
+deferred P2 watchpoints. Locked/offline
 dependency resolution, the
 external declaration-integrity inventory, and the cached advisory scan pass
 with zero known vulnerabilities. Dependency v2 supersedes the invalid v1
@@ -193,13 +201,15 @@ cataloged, fingerprinted, and complete for all ten IDs: six pass and four fail
 on existing product findings. The auth and publication evidence gaps are
 fixed, so no trace remains partial or blocked and the Phase C gate is
 satisfied. Phase D finding review is complete; D1 through D11 are released
-through `v0.92.10`, D12 is released in `v0.92.11`, and D13 passes focused
-candidate validation. Published package docs
+through `v0.92.10`, D12 is released in `v0.92.11`, and D13 is released in
+`v0.92.12`. Published package docs
 and active proof match the maintained surface, warning-as-error core rustdoc
 passes, packaged CLI plus both generated and canonical Wasm-store proofs pass
 before registry publication, the layering guard reports zero violations, and
-the dedicated redacted secret scan reports zero findings. Three explicitly
-deferred P2 watchpoints remain; no P0 or P1 remains. The current trace ledger
+the dedicated redacted secret scan reports zero findings. The released
+closeout has three deferred P2 watchpoints; unreleased D14 fixes the
+performance finding, leaving two in the current working tree. No P0 or P1
+remains. The current trace ledger
 is ten pass and zero fail without rewriting the frozen result. Security
 ordering and lifecycle
 symmetry now have valid frozen-method
@@ -212,7 +222,7 @@ DRY consolidation has a valid first frozen-method failure at risk 6/10 and
 adds `CANIC-092-TEST-001` without duplicating the canonical layering finding.
 Complexity v2 is valid and establishes the first comparable baseline at risk
 8/10. Its exact scope/counters/manual evidence/score reproduce; the P2
-trust-path complexity hotspot remains open. V1 is invalid history.
+trust-path complexity hotspot is explicitly deferred. V1 is invalid history.
 Change friction v2 is valid and establishes the first comparable baseline at
 risk 8/10. Its exhaustive scope/layer map, frozen sample, exact formulas, and
 single score reproduce; v1 remains invalid history.
@@ -237,17 +247,19 @@ production CLI, config, stable-state, backup/restore, and package-feature
 owners are unchanged; and a canister installed from the old Wasm upgrades to
 `v0.92.11` in PocketIC without losing its persisted environment/topology/state
 projection. The 0.92.7 provenance hard cut rejects old payloads without
-transform evidence and requires regeneration exactly as documented. D13 and
-the compatibility report still require immutable release identity before the
-final release-line verdict.
+transform evidence and requires regeneration exactly as documented. The
+[release-line closeout](../../release-lines/0.92-closeout.md) binds D13 and the
+compatibility report to `v0.92.12` and records
+`closeout_verdict: pass_with_limitations`.
 
 ## Carry-Forward Follow-up
 
-1. Assign immutable release identity to D13 and the completed compatibility
-   accounting, then publish one explicit 0.92 closeout verdict; broad final
-   gates remain maintainer-owned.
-2. Keep the dependency, complexity, and instruction-checkpoint P2 watchpoints
-   deferred until each has finding-backed evidence for a bounded change.
+1. Keep 0.92 closed at `v0.92.12`; new product work requires a separately
+   accepted design or concrete operational finding. Broad final gates remain
+   maintainer-owned.
+2. Keep the dependency and complexity P2 watchpoints deferred until upstream
+   replacement or concrete operational evidence supports a bounded change;
+   D14 fixes the instruction-checkpoint finding in the current working tree.
 3. Keep the D4 root-issuer authority singular; do not reintroduce an ops
    validator or policy-owned persisted state shape.
 4. Review delegated-auth/root-proof concentration after the complete
@@ -256,7 +268,7 @@ final release-line verdict.
    exactly compatible v2 predecessor for future size deltas.
 6. Preserve D7's single internal proof-install path and deliberate
    control-plane support bridge; do not restore public mirrors or aliases.
-7. Carry the instruction auth-flow checkpoint gap as `CANIC-092-PERF-001`;
-   do not add instrumentation until a finding-backed product slice is accepted.
+7. Preserve D14's current auth-flow checkpoint coverage; do not add a second
+   metrics authority or speculative flow abstraction.
 8. Preserve D8's stable-only root runtime evidence and required transform
    provenance; do not add a legacy payload decoder or alternate build path.
