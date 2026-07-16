@@ -321,13 +321,13 @@ checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bitflags"
-version = "2.13.0"
+version = "2.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
+checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
 
 [[package]]
 name = "blob_storage_cashier_mock"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "blob_storage_probe"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -460,7 +460,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "candid_parser",
@@ -474,7 +474,7 @@ dependencies = [
 
 [[package]]
 name = "canic-backup"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "rustix",
@@ -486,7 +486,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic-backup",
@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "canic-control-plane"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "async-trait",
  "candid",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "async-trait",
  "candid",
@@ -541,7 +541,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "candid_parser",
@@ -561,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -570,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "canic-testing-internal"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -582,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "canic-tests"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -596,7 +596,7 @@ dependencies = [
 
 [[package]]
 name = "canic-wasm-store"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "canister_app"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -614,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "canister_minimal"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -623,7 +623,7 @@ dependencies = [
 
 [[package]]
 name = "canister_minimal_metrics"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -632,7 +632,7 @@ dependencies = [
 
 [[package]]
 name = "canister_root"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -642,7 +642,7 @@ dependencies = [
 
 [[package]]
 name = "canister_sandbox_blank"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -660,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "canister_scale_hub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "canister_test"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_hub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "canister_user_shard"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -764,9 +764,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.1"
+version = "4.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51"
+checksum = "dd059f9da4f5c36b3787f65d38ccaab1cc315f07b01f89abc8359ee6a8205011"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -774,9 +774,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.6.0"
+version = "4.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f"
+checksum = "f09628afdcc538b57f3c6341e9c8e9970f18e4a481690a64974d7023bd33548b"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1046,9 +1046,9 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "1.0.8"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb22e947478ccf9dc44d8922042c677a63fbb88f2cb468521d1145816e5087cb"
+checksum = "a394189d59f9befacce833f337f7b1eca5e9a91221bcdd4d28e0114d96e597b3"
 dependencies = [
  "link-section",
  "linktime-proc-macro",
@@ -1183,7 +1183,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
 name = "delegation_issuer_stub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "delegation_root_stub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -1203,7 +1203,7 @@ dependencies = [
 
 [[package]]
 name = "demo_fleet_app"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -1212,7 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "demo_fleet_root"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -1221,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "demo_fleet_user_hub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -1230,7 +1230,7 @@ dependencies = [
 
 [[package]]
 name = "demo_fleet_user_shard"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "intent_authority"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -2482,7 +2482,7 @@ dependencies = [
 
 [[package]]
 name = "intent_client"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2490,7 +2490,7 @@ dependencies = [
 
 [[package]]
 name = "intent_external"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2687,7 +2687,7 @@ checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 
 [[package]]
 name = "leaf_probe"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -3029,7 +3029,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "payload_limit_probe"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -3297,14 +3297,14 @@ dependencies = [
 
 [[package]]
 name = "project-protocol-stub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "canic",
 ]
 
 [[package]]
 name = "project_hub_stub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -3313,7 +3313,7 @@ dependencies = [
 
 [[package]]
 name = "project_instance_stub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -3529,9 +3529,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.13.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a0e75113e14dc5acb068cd0786884f214f1312650a3d36d269f5c4f3cdee8a2"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3541,9 +3541,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.15"
+version = "0.4.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f388202e4b80542a0921078cc23b6333bcf1409c1e3f86404cae4766a6131db"
+checksum = "8fcfdb36bda0c880c5931cdc7a2bcdc8ba4556847b9d912bca70bc94708711ad"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -3689,7 +3689,7 @@ dependencies = [
 
 [[package]]
 name = "root_probe"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -3698,7 +3698,7 @@ dependencies = [
 
 [[package]]
 name = "runtime_probe"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -3832,7 +3832,7 @@ dependencies = [
 
 [[package]]
 name = "scaling_probe"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
@@ -4101,7 +4101,7 @@ dependencies = [
 
 [[package]]
 name = "sharding_root_stub"
-version = "0.92.10"
+version = "0.92.11"
 dependencies = [
  "candid",
  "canic",
