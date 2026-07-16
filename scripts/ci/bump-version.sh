@@ -61,7 +61,7 @@ if [[ "$PREV" == "$NEW" ]]; then
   exit 0
 fi
 
-[[ -f Cargo.lock ]] && cargo generate-lockfile >/dev/null
+[[ -f Cargo.lock ]] && cargo update --workspace --offline >/dev/null
 
 scripts/ci/sync-release-surface-version.sh "$NEW"
 
