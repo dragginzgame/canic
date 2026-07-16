@@ -137,14 +137,8 @@ pub(super) fn verify_with_embedded_proofs<'a>(
     validate_network_root_key_pair(verifier_cfg.network, &verifier_cfg.ic_root_public_key_raw)?;
     verify_delegated_token(
         delegated_token_verify_input(input, ctx),
-        |cert, cert_hash, root_proof| {
-            AuthOps::verify_delegation_root_proof(
-                cert,
-                cert_hash,
-                root_proof,
-                verifier_cfg,
-                input.now_ns,
-            )
+        |cert, root_proof| {
+            AuthOps::verify_delegation_root_proof(cert, root_proof, verifier_cfg, input.now_ns)
         },
         |claims_hash, issuer_proof, issuer_pid| {
             AuthOps::verify_issuer_canister_signature_proof(
@@ -165,7 +159,6 @@ pub(super) fn verify_with_embedded_proofs<'a>(
 impl AuthOps {
     pub(crate) fn verify_delegation_root_proof(
         cert: &DelegationCert,
-        _cert_hash: [u8; 32],
         root_proof: &RootProof,
         verifier_cfg: &AuthProofVerifierConfig,
         now_ns: u64,

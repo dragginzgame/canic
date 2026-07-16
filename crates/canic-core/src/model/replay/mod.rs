@@ -3,8 +3,6 @@
 //! Responsibility: define pure shared replay receipt identifiers and state.
 //! Does not own: storage mutation, replay reservation, or command execution.
 //! Boundary: consumed by replay ops and stable replay storage records.
-#![expect(dead_code)]
-
 use crate::{cdk::types::Principal, ids::CanisterRole};
 use std::{fmt, str::FromStr};
 
@@ -13,7 +11,6 @@ use sha2::{Digest, Sha256};
 
 pub const REPLAY_RECEIPT_SCHEMA_VERSION: u32 = 1;
 pub const REPLAY_PAYLOAD_HASH_SCHEMA_VERSION: u32 = 1;
-pub const MAX_REPLAY_TERMINAL_ERROR_BYTES: usize = 4096;
 
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"canic-replay-payload-hash:v1";
 
@@ -207,19 +204,6 @@ impl ReplayActor {
 }
 
 ///
-/// ReplayReceiptKey
-///
-/// Logical replay receipt key before storage-specific hashing.
-/// Owned by the replay model and used by replay storage adapters.
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ReplayReceiptKey {
-    pub command_kind: CommandKind,
-    pub operation_id: OperationId,
-}
-
-///
 /// ReplayReceipt
 ///
 /// Canonical replay receipt state independent of stable-memory encoding.
@@ -255,29 +239,7 @@ pub enum ReplayReceiptStatus {
     Reserved,
     ExternalEffectInFlight,
     Committed,
-    TerminalFailed {
-        error_code: ReplayTerminalErrorCode,
-        error_bytes: Vec<u8>,
-        error_bytes_truncated: bool,
-    },
-    RecoveryRequired {
-        reason: RecoveryReason,
-    },
-}
-
-///
-/// ReplayTerminalErrorCode
-///
-/// Stable terminal replay failure classification.
-/// Owned by the replay model and stored with bounded error bytes.
-///
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ReplayTerminalErrorCode {
-    ValidationRejected,
-    ExecutionFailed,
-    ResponseEncodeFailed,
-    Other(String),
+    RecoveryRequired { reason: RecoveryReason },
 }
 
 ///
@@ -306,25 +268,6 @@ pub enum ExternalEffectDescriptor {
     ManagementCreateCanister { command_kind: CommandKind },
     ManagementCall { canister: Principal, method: String },
     IcpTransfer { operation_id: OperationId },
-}
-
-///
-/// ReplayError
-///
-/// Shared replay-domain error classification.
-/// Owned by the replay model and used by higher-level replay workflows.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum ReplayError {
-    OperationIdRequired,
-    OperationAlreadyCommittedPayloadMismatch,
-    OperationAlreadyCommittedActorMismatch,
-    OperationInProgress,
-    OperationRecoveryRequired,
-    OperationIdInvalid,
-    ReceiptDecodeFailed,
-    ReceiptSchemaUnsupported,
 }
 
 ///
@@ -360,11 +303,6 @@ impl ReplayPayloadHasher {
         hash_u64(&mut self.inner, value);
     }
 
-    /// Add a `u128` field to the replay payload hash.
-    pub fn hash_u128(&mut self, value: u128) {
-        hash_u128(&mut self.inner, value);
-    }
-
     /// Add byte string data to the replay payload hash.
     pub fn hash_bytes(&mut self, value: &[u8]) {
         hash_bytes(&mut self.inner, value);
@@ -380,14 +318,6 @@ impl ReplayPayloadHasher {
         hash_principal(&mut self.inner, value);
     }
 
-    /// Add an optional principal to the replay payload hash.
-    pub fn hash_optional_principal(&mut self, value: Option<Principal>) {
-        hash_bool(&mut self.inner, value.is_some());
-        if let Some(value) = value {
-            hash_principal(&mut self.inner, &value);
-        }
-    }
-
     /// Add a canister role to the replay payload hash.
     pub fn hash_role(&mut self, value: &CanisterRole) {
         hash_str(&mut self.inner, value.as_str());
@@ -397,35 +327,6 @@ impl ReplayPayloadHasher {
     #[must_use]
     pub fn finish(self) -> [u8; 32] {
         self.inner.finalize().into()
-    }
-}
-
-///
-/// BoundedTerminalError
-///
-/// Bounded terminal replay error bytes plus truncation metadata.
-/// Owned by the replay model and produced before receipt persistence.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BoundedTerminalError {
-    pub bytes: Vec<u8>,
-    pub truncated: bool,
-}
-
-/// Bound terminal replay error bytes to the stable receipt limit.
-#[must_use]
-pub fn bounded_terminal_error_bytes(bytes: &[u8]) -> BoundedTerminalError {
-    if bytes.len() <= MAX_REPLAY_TERMINAL_ERROR_BYTES {
-        return BoundedTerminalError {
-            bytes: bytes.to_vec(),
-            truncated: false,
-        };
-    }
-
-    BoundedTerminalError {
-        bytes: bytes[..MAX_REPLAY_TERMINAL_ERROR_BYTES].to_vec(),
-        truncated: true,
     }
 }
 
@@ -461,10 +362,6 @@ fn hash_u32(hasher: &mut Sha256, value: u32) {
 }
 
 fn hash_u64(hasher: &mut Sha256, value: u64) {
-    hasher.update(value.to_be_bytes());
-}
-
-fn hash_u128(hasher: &mut Sha256, value: u128) {
     hasher.update(value.to_be_bytes());
 }
 
@@ -563,17 +460,5 @@ mod tests {
         let mut changed_actor = ReplayPayloadHasher::new(&command, &other_actor);
         changed_actor.hash_str("payload");
         assert_ne!(first, changed_actor.finish());
-    }
-
-    #[test]
-    fn bounded_terminal_error_bytes_caps_large_payloads() {
-        let small = bounded_terminal_error_bytes(b"error");
-        assert_eq!(small.bytes, b"error");
-        assert!(!small.truncated);
-
-        let large = vec![7u8; MAX_REPLAY_TERMINAL_ERROR_BYTES + 12];
-        let bounded = bounded_terminal_error_bytes(&large);
-        assert_eq!(bounded.bytes.len(), MAX_REPLAY_TERMINAL_ERROR_BYTES);
-        assert!(bounded.truncated);
     }
 }

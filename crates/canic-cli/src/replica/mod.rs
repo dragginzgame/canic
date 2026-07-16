@@ -70,9 +70,6 @@ pub enum ReplicaCommandError {
     )]
     ForeignLocalReplicaOwner { network: String, project: String },
 
-    #[error("invalid replica port `{value}`; expected 1..65535")]
-    InvalidPort { value: String },
-
     #[error(
         "configured local replica port is {current}, but --port requested {requested}\nEdit icp.yaml networks.local.gateway.port, then retry."
     )]

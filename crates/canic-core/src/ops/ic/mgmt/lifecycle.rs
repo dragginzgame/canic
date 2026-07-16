@@ -140,38 +140,6 @@ impl MgmtOps {
         Ok(())
     }
 
-    /// Install or reinstall a Canic-style canister from chunk-store-backed wasm.
-    pub async fn install_chunked_canister_with_payload<P: CandidType>(
-        mode: CanisterInstallMode,
-        target_canister: Principal,
-        store_canister: Principal,
-        chunk_hashes_list: Vec<Vec<u8>>,
-        wasm_module_hash: Vec<u8>,
-        payload: P,
-        extra_arg: Option<Vec<u8>>,
-    ) -> Result<(), InternalError> {
-        Self::install_chunked_code(
-            mode,
-            target_canister,
-            store_canister,
-            chunk_hashes_list,
-            wasm_module_hash,
-            (payload, extra_arg),
-        )
-        .await
-    }
-
-    /// Install or reinstall a Canic-style canister from an embedded wasm payload.
-    pub async fn install_embedded_canister_with_payload<P: CandidType>(
-        mode: CanisterInstallMode,
-        target_canister: Principal,
-        wasm_module: Vec<u8>,
-        payload: P,
-        extra_arg: Option<Vec<u8>>,
-    ) -> Result<(), InternalError> {
-        Self::install_code(mode, target_canister, wasm_module, (payload, extra_arg)).await
-    }
-
     /// Upload one wasm chunk into a canister's chunk store.
     pub async fn upload_chunk(
         canister_pid: Principal,

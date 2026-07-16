@@ -79,22 +79,6 @@ pub(in crate::ops::auth) struct VerifyChainKeyBatchRootProofInput<'a> {
 
 pub(in crate::ops::auth) struct ChainKeySignatureVerificationInput<'a> {
     pub algorithm: ChainKeyAlgorithm,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "structural chain-key proof verification already checks key id before ECDSA verification"
-        )
-    )]
-    pub key_id: &'a ChainKeyKeyId,
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "structural chain-key proof verification already checks derivation path before ECDSA verification"
-        )
-    )]
-    pub derivation_path: &'a [Vec<u8>],
     pub public_key: &'a [u8],
     pub message_hash: [u8; 32],
     pub signature: &'a [u8],
@@ -226,8 +210,6 @@ where
 
     verify_signature(ChainKeySignatureVerificationInput {
         algorithm: signature.algorithm,
-        key_id: &signature.key_id,
-        derivation_path: &signature.derivation_path,
         public_key: &signature.public_key,
         message_hash: chain_key_batch_header_hash(header),
         signature: &signature.signature,
@@ -712,8 +694,6 @@ mod tests {
             |input| {
                 calls.set(calls.get() + 1);
                 assert_eq!(input.algorithm, policy.algorithm);
-                assert_eq!(input.key_id, &policy.key_id);
-                assert_eq!(input.derivation_path, derivation_path().as_slice());
                 assert_eq!(input.public_key, policy.public_key.as_slice());
                 assert_eq!(input.signature, &[9; 64]);
                 Ok(())

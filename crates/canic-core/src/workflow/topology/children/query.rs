@@ -60,14 +60,4 @@ impl CanisterChildrenQuery {
             .into_iter()
             .find(|entry| &entry.role == role)
     }
-
-    /// Returns all children with the given role.
-    /// Intended for replica, instance, or shard kinds.
-    #[must_use]
-    pub fn list_children_by_role(role: &CanisterRole) -> Vec<CanisterInfo> {
-        CanisterChildrenOps::infos()
-            .into_iter()
-            .filter(|entry| &entry.role == role)
-            .collect()
-    }
 }

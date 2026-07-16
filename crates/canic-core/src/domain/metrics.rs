@@ -528,7 +528,6 @@ pub enum PlatformCallMetricReason {
     CandidEncode,
     HttpStatus,
     Infra,
-    LedgerRejected,
     Ok,
 }
 
@@ -541,7 +540,6 @@ impl PlatformCallMetricReason {
             Self::CandidEncode => "candid_encode",
             Self::HttpStatus => "http_status",
             Self::Infra => "infra",
-            Self::LedgerRejected => "ledger_rejected",
             Self::Ok => "ok",
         }
     }

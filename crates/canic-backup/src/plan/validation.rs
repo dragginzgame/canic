@@ -4,10 +4,7 @@
 //! Does not own: plan construction, preflight receipt mapping, or journaling.
 //! Boundary: enforces plan invariants before dry-run or live execution.
 
-use super::{
-    BackupOperation, BackupOperationKind, BackupPlan, BackupPlanError, BackupScopeKind,
-    ControlAuthority, ControlAuthoritySource,
-};
+use super::{BackupOperation, BackupOperationKind, BackupPlan, BackupPlanError, BackupScopeKind};
 use candid::Principal;
 use std::{collections::BTreeSet, str::FromStr};
 
@@ -94,8 +91,6 @@ fn validate_targets(plan: &BackupPlan) -> Result<(), BackupPlanError> {
             "targets[].expected_module_hash",
             target.expected_module_hash.as_deref(),
         )?;
-        validate_control_authority(&target.control_authority)?;
-
         if !target_ids.insert(target.canister_id.clone()) {
             return Err(BackupPlanError::DuplicateTarget(target.canister_id.clone()));
         }
@@ -105,20 +100,6 @@ fn validate_targets(plan: &BackupPlan) -> Result<(), BackupPlanError> {
     }
 
     validate_operation_targets(&plan.phases, &target_ids)
-}
-
-pub(super) fn validate_control_authority(
-    authority: &ControlAuthority,
-) -> Result<(), BackupPlanError> {
-    match &authority.source {
-        ControlAuthoritySource::Unknown
-        | ControlAuthoritySource::RootController
-        | ControlAuthoritySource::OperatorController => Ok(()),
-        ControlAuthoritySource::AlternateController { controller, reason } => {
-            validate_principal("targets[].control_authority.controller", controller)?;
-            validate_nonempty("targets[].control_authority.reason", reason)
-        }
-    }
 }
 
 fn validate_selected_scope(plan: &BackupPlan) -> Result<(), BackupPlanError> {

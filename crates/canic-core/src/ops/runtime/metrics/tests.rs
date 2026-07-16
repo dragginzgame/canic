@@ -692,13 +692,13 @@ fn platform_call_metrics_are_exposed_with_stable_labels() {
         PlatformCallMetricSurface::Ledger,
         PlatformCallMetricMode::Update,
         PlatformCallMetricOutcome::Failed,
-        PlatformCallMetricReason::LedgerRejected,
+        PlatformCallMetricReason::Infra,
     );
     PlatformCallMetrics::record(
         PlatformCallMetricSurface::Ledger,
         PlatformCallMetricMode::Update,
         PlatformCallMetricOutcome::Failed,
-        PlatformCallMetricReason::LedgerRejected,
+        PlatformCallMetricReason::Infra,
     );
 
     let entries = entries(MetricsKind::Platform);
@@ -710,13 +710,7 @@ fn platform_call_metrics_are_exposed_with_stable_labels() {
     );
     assert_metric_count(
         &entries,
-        &[
-            "platform_call",
-            "ledger",
-            "update",
-            "failed",
-            "ledger_rejected",
-        ],
+        &["platform_call", "ledger", "update", "failed", "infra"],
         2,
     );
 }

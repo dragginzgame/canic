@@ -67,7 +67,6 @@ impl CapabilityProofVerifier for StructuralVerifier {
 ///
 pub(super) async fn verify_root_capability_proof(
     capability: &RootCapability,
-    _capability_version: u16,
     proof: RootCapabilityProof,
 ) -> Result<VerifiedCapability, Error> {
     let input = VerificationInput { capability };

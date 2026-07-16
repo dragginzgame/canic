@@ -140,10 +140,9 @@ fn validate_nonroot_cycles_envelope(
 
 async fn verify_root_capability_proof(
     capability: &RootCapability,
-    capability_version: u16,
     proof: RootCapabilityProof,
 ) -> Result<(), Error> {
-    verifier::verify_root_capability_proof(capability, capability_version, proof)
+    verifier::verify_root_capability_proof(capability, proof)
         .await
         .map(|_| ())
 }

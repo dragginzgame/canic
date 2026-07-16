@@ -215,7 +215,7 @@ fn inventory(observed_canisters: Vec<ObservedCanisterV1>) -> DeploymentInventory
             role: "external_app".to_string(),
             artifact_path: "observed:external_app".to_string(),
             file_sha256: None,
-            file_sha256_source: Some(ArtifactDigestSourceV1::InstalledModuleHash),
+            file_sha256_source: None,
             payload_sha256: None,
             payload_size_bytes: None,
             source: ArtifactSourceV1::External,

@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    cdk::spec::standards::icrc::icrc2::{Allowance, TransferFromArgs, TransferFromResult},
+    cdk::spec::standards::icrc::icrc2::{Allowance, TransferFromArgs},
     domain::metrics::{
         PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
         PlatformCallMetricSurface,
@@ -123,48 +123,22 @@ impl LedgerOps {
             PlatformCallMetricOutcome::Started,
             PlatformCallMetricReason::Ok,
         );
-        let result: TransferFromResult =
-            match LedgerInfra::icrc2_transfer_from(ledger_id, args).await {
-                Ok(result) => result,
-                Err(err) => {
-                    record_ledger_call(
-                        PlatformCallMetricOutcome::Failed,
-                        PlatformCallMetricReason::Infra,
-                    );
-                    return Err(LedgerOpsError::from(err).into());
-                }
-            };
-
-        match result {
-            TransferFromResult::Ok(block_index) => {
-                record_ledger_call(
-                    PlatformCallMetricOutcome::Completed,
-                    PlatformCallMetricReason::Ok,
-                );
-                Ok(block_index)
-            }
-
-            // By construction, infra::ic::ledger::icrc2_transfer_from already maps Err(...)
-            // into InfraError (lossless), so this branch should be unreachable. Keep it anyway
-            // to be robust to future infra changes.
-            TransferFromResult::Err(_) => {
+        let block_index = match LedgerInfra::icrc2_transfer_from(ledger_id, args).await {
+            Ok(block_index) => block_index,
+            Err(err) => {
                 record_ledger_call(
                     PlatformCallMetricOutcome::Failed,
-                    PlatformCallMetricReason::LedgerRejected,
+                    PlatformCallMetricReason::Infra,
                 );
-                unreachable!()
-                /*
-                Err(LedgerOpsError::Infra(InfraError::from(
-                LedgerInfraError::TransferFromRejected {
-                    symbol: LedgerInfra::ledger_meta(ledger_id).symbol,
-                    // We can't recover the error here without matching; infra should not return Err(...)
-                    // if it wants ops to handle it. Prefer keeping infra mapping.
-                    error: unreachable!(
-                        "infra::ic::ledger maps TransferFromResult::Err into InfraError"
-                    ),
-                },*/
+                return Err(LedgerOpsError::from(err).into());
             }
-        }
+        };
+
+        record_ledger_call(
+            PlatformCallMetricOutcome::Completed,
+            PlatformCallMetricReason::Ok,
+        );
+        Ok(block_index)
     }
 }
 

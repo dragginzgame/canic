@@ -1,6 +1,6 @@
 use crate::{
     domain::value::Principal,
-    ids::{BuildNetwork, CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetRole},
     model::env::ValidatedEnv,
 };
 use thiserror::Error as ThisError;
@@ -29,10 +29,7 @@ pub enum EnvPolicyError {
     MissingEnvFields(String),
 }
 
-pub fn validate_or_default(
-    _network: BuildNetwork,
-    raw_env: EnvInput,
-) -> Result<ValidatedEnv, EnvPolicyError> {
+pub fn validate_or_default(raw_env: EnvInput) -> Result<ValidatedEnv, EnvPolicyError> {
     let mut missing = Vec::new();
     if raw_env.prime_root_pid.is_none() {
         missing.push("prime_root_pid");

@@ -154,20 +154,12 @@ fn collect_canic_config_choices(
             collect_canic_config_choices(&path, choices)?;
         } else if file_type.is_file()
             && path.file_name().and_then(|name| name.to_str()) == Some("canic.toml")
-            && is_install_project_config(&path)
         {
             choices.push(path);
         }
     }
 
     Ok(())
-}
-
-// Treat checked-in fleet configs under the searched root as installable choices.
-// The canister crates may live elsewhere in split-source downstream repos and
-// are resolved separately.
-const fn is_install_project_config(_path: &Path) -> bool {
-    true
 }
 
 // Format an actionable config-selection error with whitespace-aligned choices.

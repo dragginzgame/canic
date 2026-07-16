@@ -90,15 +90,8 @@ fn chain_key_ecdsa_signature_verifier_accepts_valid_prehash_signature() {
         .sign_prehash(&message_hash)
         .expect("test prehash signature should sign");
     let signature_bytes = signature.to_bytes();
-    let key_id = ChainKeyKeyId {
-        name: "key_1".to_string(),
-    };
-    let derivation_path = Vec::new();
-
     verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
         algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
-        key_id: &key_id,
-        derivation_path: &derivation_path,
         public_key: public_key.as_bytes(),
         message_hash,
         signature: signature_bytes.as_ref(),
@@ -116,15 +109,8 @@ fn chain_key_ecdsa_signature_verifier_rejects_altered_signature() {
         .expect("test prehash signature should sign");
     let mut signature_bytes = signature.to_bytes().to_vec();
     signature_bytes[0] ^= 1;
-    let key_id = ChainKeyKeyId {
-        name: "key_1".to_string(),
-    };
-    let derivation_path = Vec::new();
-
     verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
         algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
-        key_id: &key_id,
-        derivation_path: &derivation_path,
         public_key: public_key.as_bytes(),
         message_hash,
         signature: &signature_bytes,

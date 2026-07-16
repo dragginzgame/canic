@@ -181,7 +181,7 @@ impl CanisterLifecycleWorkflow {
         }
 
         propagate_topology_with_metrics(pid, &role).await?;
-        propagate_state_with_metrics(pid, &role).await?;
+        propagate_state_with_metrics(&role).await?;
 
         record_canister_op(
             &role,
@@ -545,17 +545,14 @@ async fn propagate_topology_with_metrics(
 }
 
 // Propagate state and record workflow-level provisioning outcomes.
-async fn propagate_state_with_metrics(
-    pid: Principal,
-    role: &CanisterRole,
-) -> Result<(), InternalError> {
+async fn propagate_state_with_metrics(role: &CanisterRole) -> Result<(), InternalError> {
     record_provisioning(
         role,
         ProvisioningMetricOperation::PropagateState,
         ProvisioningMetricOutcome::Started,
         ProvisioningMetricReason::Ok,
     );
-    if let Err(err) = PropagationWorkflow::propagate_state(pid, role).await {
+    if let Err(err) = PropagationWorkflow::propagate_state(role).await {
         record_canister_op(
             role,
             CanisterOpsMetricOperation::Create,

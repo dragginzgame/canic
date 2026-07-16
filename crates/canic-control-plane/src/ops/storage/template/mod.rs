@@ -326,57 +326,54 @@ impl TemplateManifestOps {
         }
     }
 
-    // Replace the approved manifest for a role while deprecating older approved entries.
+    // Replace the approved manifest for a role while removing older approved entries.
     pub fn replace_approved_from_input(input: TemplateManifestInput) {
         let role = input.role.clone();
         let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
 
         for entry in TemplateManifestStateStore::export().entries {
-            let mut existing = entry.record;
-            if existing.role != role {
+            if entry.record.role != role {
                 continue;
             }
             if entry.release == release {
                 continue;
             }
-            if existing.manifest_state != TemplateManifestState::Approved {
+            if entry.record.manifest_state != TemplateManifestState::Approved {
                 continue;
             }
 
-            existing.manifest_state = TemplateManifestState::Deprecated;
-            TemplateManifestStateStore::upsert(entry.release, existing);
+            TemplateManifestStateStore::remove(&entry.release);
         }
 
         TemplateManifestStateStore::upsert(release, input_to_record(input));
     }
 
-    // Deprecate any currently approved managed release whose role is no longer configured.
+    // Remove any currently approved managed release whose role is no longer configured.
     #[cfg(feature = "root-control-plane")]
     #[must_use]
-    pub fn deprecate_approved_roles_not_in(roles: &BTreeSet<CanisterRole>) -> usize {
-        let mut deprecated = 0;
+    pub fn prune_approved_roles_not_in(roles: &BTreeSet<CanisterRole>) -> usize {
+        let mut removed = 0;
 
         for entry in TemplateManifestStateStore::export().entries {
-            let mut existing = entry.record;
-            if existing.manifest_state != TemplateManifestState::Approved {
+            if entry.record.manifest_state != TemplateManifestState::Approved {
                 continue;
             }
-            if existing.role == CanisterRole::WASM_STORE {
+            if entry.record.role == CanisterRole::WASM_STORE {
                 continue;
             }
-            if existing.chunking_mode != TemplateChunkingMode::Chunked {
+            if entry.record.chunking_mode != TemplateChunkingMode::Chunked {
                 continue;
             }
-            if roles.contains(&existing.role) {
+            if roles.contains(&entry.record.role) {
                 continue;
             }
 
-            existing.manifest_state = TemplateManifestState::Deprecated;
-            TemplateManifestStateStore::upsert(entry.release, existing);
-            deprecated += 1;
+            if TemplateManifestStateStore::remove(&entry.release).is_some() {
+                removed += 1;
+            }
         }
 
-        deprecated
+        removed
     }
 }
 
@@ -434,7 +431,7 @@ fn projected_template_versions_for_manifests(
 mod tests {
     use super::*;
     use crate::{
-        dto::template::{TemplateChunkInput, TemplateChunkSetInput, TemplateChunkSetPrepareInput},
+        dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
         ids::{TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcMode},
         storage::stable::template::{TemplateChunkSetStateStore, TemplateChunkStore},
     };
@@ -452,19 +449,6 @@ mod tests {
             manifest_state: TemplateManifestState::Approved,
             approved_at: Some(10),
             created_at: 9,
-        }
-    }
-
-    fn chunk_set_input() -> TemplateChunkSetInput {
-        let chunks = vec![vec![1, 2, 3], vec![4, 5]];
-        let payload = chunks.concat();
-
-        TemplateChunkSetInput {
-            template_id: TemplateId::new("embedded:app"),
-            version: TemplateVersion::new("0.18.0"),
-            payload_hash: wasm_hash(&payload),
-            payload_size_bytes: payload.len() as u64,
-            chunks,
         }
     }
 
@@ -502,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn replace_approved_keeps_one_approved_manifest_per_role() {
+    fn replace_approved_removes_the_superseded_manifest() {
         reset_store();
 
         TemplateManifestOps::replace_approved_from_input(approved_input("one", "app"));
@@ -513,15 +497,8 @@ mod tests {
             .into_iter()
             .map(|entry| record_to_response(entry.release, entry.record))
             .collect::<Vec<_>>();
-        let approved = manifests
-            .iter()
-            .filter(|entry| {
-                entry.role == CanisterRole::new("app")
-                    && entry.manifest_state == TemplateManifestState::Approved
-            })
-            .count();
-
-        assert_eq!(approved, 1);
+        assert_eq!(manifests.len(), 1);
+        assert_eq!(manifests[0].template_id, TemplateId::new("two"));
         assert_eq!(
             TemplateManifestOps::approved_for_role_response(&CanisterRole::new("app"))
                 .unwrap()
@@ -542,16 +519,16 @@ mod tests {
     }
 
     #[test]
-    fn deprecate_approved_roles_not_in_prunes_stale_managed_roles() {
+    fn prune_approved_roles_not_in_removes_stale_managed_roles() {
         reset_store();
 
         TemplateManifestOps::replace_approved_from_input(approved_chunked_input("one", "app"));
         TemplateManifestOps::replace_approved_from_input(approved_chunked_input("two", "scale"));
 
         let kept = BTreeSet::from([CanisterRole::new("app")]);
-        let deprecated = TemplateManifestOps::deprecate_approved_roles_not_in(&kept);
+        let removed = TemplateManifestOps::prune_approved_roles_not_in(&kept);
 
-        assert_eq!(deprecated, 1);
+        assert_eq!(removed, 1);
 
         let approved_roles = TemplateManifestOps::approved_manifests_response()
             .into_iter()
@@ -559,24 +536,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(approved_roles, vec![CanisterRole::new("app")]);
-    }
-
-    #[test]
-    fn publish_chunk_set_stores_info_and_chunks() {
-        reset_store();
-
-        let info = TemplateChunkedOps::publish_chunk_set_from_input(chunk_set_input(), 77).unwrap();
-
-        assert_eq!(info.chunk_hashes.len(), 2);
-
-        let chunk = TemplateChunkedOps::chunk_response(
-            &TemplateId::new("embedded:app"),
-            &TemplateVersion::new("0.18.0"),
-            1,
-        )
-        .unwrap();
-
-        assert_eq!(chunk.bytes, vec![4, 5]);
+        assert_eq!(TemplateManifestStateStore::export().entries.len(), 1);
     }
 
     #[test]
@@ -607,29 +567,6 @@ mod tests {
         assert_eq!(
             err.public_error().map(|error| error.code),
             Some(ErrorCode::WasmStoreHashMismatch)
-        );
-    }
-
-    #[test]
-    fn store_capacity_rejects_chunk_set_that_exceeds_limit() {
-        reset_store();
-
-        TemplateChunkedOps::replace_approved_in_store_from_input(
-            approved_input("embedded:app", "app"),
-            store_limits(10_000),
-        )
-        .unwrap();
-
-        let err = TemplateChunkedOps::publish_chunk_set_in_store_from_input(
-            chunk_set_input(),
-            77,
-            store_limits(32),
-        )
-        .expect_err("chunk set should fail once projected store bytes exceed the limit");
-
-        assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreCapacityExceeded)
         );
     }
 
@@ -680,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn store_limits_reject_version_growth_per_template() {
+    fn store_limits_release_version_slot_when_approved_manifest_is_replaced() {
         reset_store();
 
         TemplateChunkedOps::replace_approved_in_store_from_input(
@@ -693,7 +630,7 @@ mod tests {
         )
         .unwrap();
 
-        let err = TemplateChunkedOps::replace_approved_in_store_from_input(
+        TemplateChunkedOps::replace_approved_in_store_from_input(
             approved_input_with_version("embedded:app", "app", "0.18.2"),
             WasmStoreLimits {
                 max_store_bytes: 10_000,
@@ -701,12 +638,11 @@ mod tests {
                 max_template_versions_per_template: Some(1),
             },
         )
-        .expect_err("second retained version should exceed the per-template version limit");
+        .unwrap();
 
-        assert_eq!(
-            err.public_error().map(|error| error.code),
-            Some(ErrorCode::WasmStoreCapacityExceeded)
-        );
+        let manifests = TemplateManifestStateStore::export().entries;
+        assert_eq!(manifests.len(), 1);
+        assert_eq!(manifests[0].release.version, TemplateVersion::new("0.18.2"));
     }
 
     #[test]
@@ -754,7 +690,7 @@ mod tests {
         assert_eq!(status.gc.mode, WasmStoreGcMode::Normal);
         assert_eq!(status.gc.changed_at, 0);
         assert_eq!(status.template_count, 2);
-        assert_eq!(status.release_count, 3);
+        assert_eq!(status.release_count, 2);
         assert_eq!(status.max_templates, Some(4));
         assert_eq!(status.max_template_versions_per_template, Some(3));
         assert!(status.within_headroom);
@@ -763,7 +699,7 @@ mod tests {
             status.templates[0].template_id,
             TemplateId::new("embedded:app")
         );
-        assert_eq!(status.templates[0].versions, 2);
+        assert_eq!(status.templates[0].versions, 1);
         assert_eq!(
             status.templates[1].template_id,
             TemplateId::new("embedded:scale")

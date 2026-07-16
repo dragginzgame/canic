@@ -101,6 +101,19 @@ impl TemplateManifestStateStore {
         });
     }
 
+    // Remove one stored template manifest record.
+    pub fn remove(release: &TemplateReleaseKey) -> Option<TemplateManifestRecord> {
+        TEMPLATE_MANIFESTS.with_borrow_mut(|map| {
+            let removed = map.remove(release);
+            TEMPLATE_MANIFESTS_OCCUPIED_BYTES.with_borrow_mut(|occupied| {
+                if let (Some(current), Some(record)) = (occupied.as_mut(), removed.as_ref()) {
+                    *current = current.saturating_sub(manifest_entry_size(release, record));
+                }
+            });
+            removed
+        })
+    }
+
     // Export the full manifest snapshot for ops-owned filtering and shaping.
     #[must_use]
     pub fn export() -> TemplateManifestsData {
@@ -202,6 +215,18 @@ mod tests {
                 record,
             }]
         );
+    }
+
+    #[test]
+    fn manifest_store_remove_updates_occupied_bytes() {
+        TemplateManifestStateStore::clear_for_test();
+        let record = manifest();
+        TemplateManifestStateStore::upsert(release(), record.clone());
+
+        assert!(TemplateManifestStateStore::occupied_bytes() > 0);
+        assert_eq!(TemplateManifestStateStore::remove(&release()), Some(record));
+        assert!(TemplateManifestStateStore::export().entries.is_empty());
+        assert_eq!(TemplateManifestStateStore::occupied_bytes(), 0);
     }
 
     #[test]

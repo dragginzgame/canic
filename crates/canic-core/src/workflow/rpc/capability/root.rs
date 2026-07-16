@@ -75,9 +75,7 @@ pub(super) async fn response_capability_v1_root(
         proof_mode.metric_key(),
     );
 
-    if let Err(err) =
-        verify_root_capability_proof(&capability, capability_version, validated_proof).await
-    {
+    if let Err(err) = verify_root_capability_proof(&capability, validated_proof).await {
         RootCapabilityMetrics::record_proof(
             capability_key,
             RootCapabilityMetricOutcome::Rejected,

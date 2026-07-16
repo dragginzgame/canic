@@ -87,7 +87,6 @@ const fn control_authority_source_label(source: &ControlAuthoritySource) -> &str
         ControlAuthoritySource::Unknown => "unknown",
         ControlAuthoritySource::RootController => "root-controller",
         ControlAuthoritySource::OperatorController => "operator-controller",
-        ControlAuthoritySource::AlternateController { .. } => "alternate-controller",
     }
 }
 
@@ -95,9 +94,7 @@ const fn snapshot_read_authority_source_label(source: &SnapshotReadAuthoritySour
     match source {
         SnapshotReadAuthoritySource::Unknown => "unknown",
         SnapshotReadAuthoritySource::OperatorController => "operator-controller",
-        SnapshotReadAuthoritySource::SnapshotVisibility => "snapshot-visibility",
         SnapshotReadAuthoritySource::RootConfiguredRead => "root-configured-read",
-        SnapshotReadAuthoritySource::RootMediatedTransfer => "root-mediated-transfer",
     }
 }
 

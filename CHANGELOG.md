@@ -8,15 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-### Changed
+## [0.93.x] - 2026-07-16 - Pre-1.0 Surface Hard Cuts
 
-- Potentially breaking: hard-cuts the unreachable 0.74 issuer-renewal attempt
-  model, stable-state slot, attempt-only metric, outcome/failure counters, and
-  `active_attempt` status projection. Root renewal status now projects
-  `latest_batch` directly from the canonical persisted chain-key batch. The
-  maintained pre-1.0 CLI JSON schema v1 reports pending/failed batches and a
-  usable active proof as `proof_unavailable` instead of ready. Obsolete attempt
-  data is neither migrated nor exposed through a compatibility record.
+Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
+
+- `0.93.0` is potentially breaking: it hard-cuts stale pre-1.0 APIs,
+  serialized states, and operator projections so maintained contracts expose
+  only production-backed behavior.
 
 ## [0.92.x] - 2026-07-14 - Holistic Audit-System Validation
 

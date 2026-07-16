@@ -7,7 +7,7 @@
 //! domain layering (endpoints → ops → model).
 //! Instrumentation modules are layer-neutral and may be used anywhere.
 
-use crate::ids::{EndpointCall, EndpointCallKind, EndpointId};
+use crate::ids::{EndpointCall, EndpointCallKind};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -127,16 +127,6 @@ pub fn record(key: PerfKey, delta: u64) {
         let mut table = table.borrow_mut();
         table.entry(key).or_default().increment(delta);
     });
-}
-
-pub fn record_endpoint(endpoint: EndpointId, delta_instructions: u64) {
-    record_endpoint_call(
-        EndpointCall {
-            endpoint,
-            kind: EndpointCallKind::Update,
-        },
-        delta_instructions,
-    );
 }
 
 pub fn record_endpoint_call(call: EndpointCall, delta_instructions: u64) {
