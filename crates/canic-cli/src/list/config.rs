@@ -14,7 +14,6 @@ use canic_host::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt::Display,
     path::PathBuf,
 };
 
@@ -22,14 +21,14 @@ pub(super) fn load_config_role_rows(
     options: &ListOptions,
 ) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
     let config_path = selected_config_path(options)?;
-    let roles = load_config_value(|| configured_deployable_roles(&config_path))?;
-    let kinds = load_config_value(|| configured_role_kinds(&config_path))?;
-    let capabilities = load_config_value(|| configured_role_capabilities(&config_path))?;
-    let auto_create = load_config_value(|| configured_role_auto_create(&config_path))?;
-    let topups = load_config_value(|| configured_role_topups(&config_path))?;
-    let metrics = load_config_value(|| configured_role_metrics_profiles(&config_path))?;
+    let roles = configured_deployable_roles(&config_path)?;
+    let kinds = configured_role_kinds(&config_path)?;
+    let capabilities = configured_role_capabilities(&config_path)?;
+    let auto_create = configured_role_auto_create(&config_path)?;
+    let topups = configured_role_topups(&config_path)?;
+    let metrics = configured_role_metrics_profiles(&config_path)?;
     let details = if options.verbose {
-        load_config_value(|| configured_role_details(&config_path))?
+        configured_role_details(&config_path)?
     } else {
         BTreeMap::new()
     };
@@ -67,17 +66,6 @@ fn auto_create_label(role: &str, auto_create: &BTreeSet<String>) -> String {
     } else {
         "no".to_string()
     }
-}
-
-fn load_config_value<T, E>(load: impl FnOnce() -> Result<T, E>) -> Result<T, ListCommandError>
-where
-    E: Display,
-{
-    load().map_err(config_error)
-}
-
-fn config_error(error: impl Display) -> ListCommandError {
-    ListCommandError::Config(error.to_string())
 }
 
 pub(super) fn missing_config_roles(

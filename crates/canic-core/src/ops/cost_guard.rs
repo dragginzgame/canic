@@ -111,6 +111,12 @@ pub enum CostGuardReserveError {
     #[error("cost guard resource key is invalid: {0}")]
     ResourceKeyInvalid(String),
 
+    #[error("cost guard reservation failed: {reservation}; quota rollback failed: {rollback}")]
+    ReservationRollback {
+        reservation: Box<Self>,
+        rollback: InternalError,
+    },
+
     #[error(transparent)]
     Store(#[from] InternalError),
 }
@@ -131,7 +137,7 @@ impl CostGuardReserveError {
             | Self::CycleReserveRejected { .. } => {
                 Some(CostGuardReservePublicKind::ResourceExhausted)
             }
-            Self::Store(_) => None,
+            Self::ReservationRollback { .. } | Self::Store(_) => None,
         }
     }
 }
@@ -194,8 +200,7 @@ impl CostGuardOps {
             }) {
             Ok(reservation_id) => reservation_id,
             Err(err) => {
-                let _ = IntentStoreOps::abort(quota_record.id);
-                return Err(err);
+                return Err(rollback_quota_reservation(quota_record.id, err));
             }
         };
 
@@ -252,6 +257,24 @@ impl CostGuardOps {
         let _ = IntentStoreOps::abort_intent_if_pending(permit.quota_intent_id)?;
         let _ = IntentStoreOps::abort_intent_if_pending(permit.reservation_id)?;
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_for_tests() {
+        crate::storage::stable::intent::IntentStore::reset_for_tests();
+    }
+}
+
+fn rollback_quota_reservation(
+    quota_intent_id: IntentId,
+    reservation: CostGuardReserveError,
+) -> CostGuardReserveError {
+    match IntentStoreOps::abort(quota_intent_id) {
+        Ok(_) => reservation,
+        Err(rollback) => CostGuardReserveError::ReservationRollback {
+            reservation: Box::new(reservation),
+            rollback,
+        },
     }
 }
 
@@ -376,7 +399,7 @@ fn hash_bytes(value: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::stable::intent::IntentStore;
+    use crate::storage::stable::intent::{IntentStore, IntentStoreMetaRecord};
 
     fn p(id: u8) -> Principal {
         Principal::from_slice(&[id; 29])
@@ -430,6 +453,57 @@ mod tests {
             Some(CostGuardReservePublicKind::ResourceExhausted)
         );
         assert_eq!(IntentStoreOps::expirable_pending_total().expect("meta"), 0);
+    }
+
+    #[test]
+    fn reserve_rolls_back_quota_when_cycle_reservation_id_allocation_fails() {
+        reset();
+        IntentStore::set_meta(IntentStoreMetaRecord {
+            next_intent_id: IntentId(u64::MAX - 1),
+            ..IntentStoreMetaRecord::default()
+        });
+
+        let err = CostGuardOps::reserve(request(10)).expect_err("intent id exhaustion rejects");
+
+        assert!(matches!(err, CostGuardReserveError::Store(_)));
+        assert_eq!(
+            IntentStoreOps::expirable_pending_total().expect("pending"),
+            0
+        );
+    }
+
+    #[test]
+    fn rollback_failure_preserves_reservation_and_cleanup_causes() {
+        reset();
+        let quota_intent_id = IntentStoreOps::allocate_intent_id().expect("quota intent id");
+        let quota_record = IntentStoreOps::try_reserve(
+            quota_intent_id,
+            IntentResourceKey::new("cost_guard:test:quota"),
+            1,
+            10,
+            Some(INTENT_TTL_SECONDS),
+            10,
+        )
+        .expect("quota reservation");
+        IntentStoreOps::commit_at(quota_record.id, 10).expect("commit quota intent");
+
+        let err = rollback_quota_reservation(
+            quota_record.id,
+            CostGuardReserveError::CycleReservationOverflow,
+        );
+
+        let CostGuardReserveError::ReservationRollback {
+            reservation,
+            rollback,
+        } = err
+        else {
+            panic!("expected typed rollback failure");
+        };
+        assert!(matches!(
+            *reservation,
+            CostGuardReserveError::CycleReservationOverflow
+        ));
+        assert_eq!(rollback.origin(), InternalErrorOrigin::Ops);
     }
 
     #[test]

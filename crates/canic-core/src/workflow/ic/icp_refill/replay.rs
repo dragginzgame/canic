@@ -133,7 +133,7 @@ pub(super) fn finish_icp_refill_replay(
     cost_permit: Option<&crate::ops::cost_guard::CostGuardPermit>,
 ) -> Result<(), InternalError> {
     if IcpRefillStoreOps::is_resumable(operation) {
-        recover_icp_refill_cost_guard(cost_permit);
+        recover_icp_refill_cost_guard(cost_permit)?;
         log_icp_refill_resumable_abort(operation);
         abort_uncommitted_receipt(token).map_err(map_icp_refill_replay_store_error)?;
         return Ok(());
@@ -141,8 +141,12 @@ pub(super) fn finish_icp_refill_replay(
 
     let response_bytes = match encode_icp_refill_replay_response(response) {
         Ok(response_bytes) => response_bytes,
-        Err(err) => {
-            recover_icp_refill_cost_guard(cost_permit);
+        Err(mut err) => {
+            if let Err(recovery_error) = recover_icp_refill_cost_guard(cost_permit) {
+                err = err.with_diagnostic_context(format!(
+                    "ICP refill cost guard recovery failed: {recovery_error}"
+                ));
+            }
             mark_recovery_required(
                 token,
                 RecoveryReason::ResponseCommitFailed,
@@ -153,6 +157,7 @@ pub(super) fn finish_icp_refill_replay(
         }
     };
 
+    complete_icp_refill_cost_guard(cost_permit)?;
     commit_receipt_response(
         token,
         ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
@@ -160,7 +165,6 @@ pub(super) fn finish_icp_refill_replay(
         IcOps::now_nanos(),
     )
     .map_err(map_icp_refill_replay_store_error)?;
-    complete_icp_refill_cost_guard(cost_permit);
     log_icp_refill_commit(operation);
     Ok(())
 }

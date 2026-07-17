@@ -24,27 +24,18 @@ pub(in crate::workflow::runtime::template) struct WasmStoreInternalClient {
 }
 
 impl WasmStoreInternalClient {
-    const BEGIN_GC: WasmStoreEndpoint =
-        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_BEGIN_GC);
-    const CATALOG: WasmStoreEndpoint =
-        WasmStoreEndpoint::structural_query(protocol::CANIC_WASM_STORE_CATALOG);
-    const CHUNK: WasmStoreEndpoint =
-        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_CHUNK);
-    const COMPLETE_GC: WasmStoreEndpoint =
-        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_COMPLETE_GC);
-    const INFO: WasmStoreEndpoint = WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_INFO);
-    const PREPARE: WasmStoreEndpoint =
-        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_PREPARE);
-    const PREPARE_GC: WasmStoreEndpoint =
-        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_PREPARE_GC);
-    const PUBLISH_CHUNK: WasmStoreEndpoint =
-        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_PUBLISH_CHUNK);
-    const STAGE_MANIFEST: WasmStoreEndpoint =
-        WasmStoreEndpoint::root_update(protocol::CANIC_WASM_STORE_STAGE_MANIFEST);
-    const STATUS: WasmStoreEndpoint =
-        WasmStoreEndpoint::structural_query(protocol::CANIC_WASM_STORE_STATUS);
+    const BEGIN_GC: &str = protocol::CANIC_WASM_STORE_BEGIN_GC;
+    const CATALOG: &str = protocol::CANIC_WASM_STORE_CATALOG;
+    const CHUNK: &str = protocol::CANIC_WASM_STORE_CHUNK;
+    const COMPLETE_GC: &str = protocol::CANIC_WASM_STORE_COMPLETE_GC;
+    const INFO: &str = protocol::CANIC_WASM_STORE_INFO;
+    const PREPARE: &str = protocol::CANIC_WASM_STORE_PREPARE;
+    const PREPARE_GC: &str = protocol::CANIC_WASM_STORE_PREPARE_GC;
+    const PUBLISH_CHUNK: &str = protocol::CANIC_WASM_STORE_PUBLISH_CHUNK;
+    const STAGE_MANIFEST: &str = protocol::CANIC_WASM_STORE_STAGE_MANIFEST;
+    const STATUS: &str = protocol::CANIC_WASM_STORE_STATUS;
     #[cfg(test)]
-    const ENDPOINTS: &[WasmStoreEndpoint] = &[
+    const ENDPOINTS: &[&str] = &[
         Self::BEGIN_GC,
         Self::CATALOG,
         Self::CHUNK,
@@ -154,25 +145,12 @@ impl WasmStoreInternalClient {
         Ok(response.bytes)
     }
 
-    #[cfg(test)]
-    pub(super) fn method_requires_internal_proof(method: &str) -> bool {
-        Self::ENDPOINTS
-            .iter()
-            .find(|endpoint| endpoint.method == method)
-            .is_some_and(WasmStoreEndpoint::requires_internal_proof)
-    }
-
-    async fn call_result<T, A>(
-        &self,
-        endpoint: WasmStoreEndpoint,
-        arg: A,
-    ) -> Result<T, InternalError>
+    async fn call_result<T, A>(&self, method: &'static str, arg: A) -> Result<T, InternalError>
     where
         T: CandidType + serde::de::DeserializeOwned,
         A: ArgumentEncoder,
     {
-        debug_assert!(!endpoint.requires_internal_proof());
-        let call = CallOps::bounded_wait(self.store_pid, endpoint.method)
+        let call = CallOps::bounded_wait(self.store_pid, method)
             .with_args(arg)
             .map_err(|err| InternalError::public(Error::invariant(err.to_string())))?
             .execute()
@@ -183,29 +161,6 @@ impl WasmStoreInternalClient {
             .map_err(|err| InternalError::public(Error::invariant(err.to_string())))?;
 
         call_res.map_err(InternalError::public)
-    }
-}
-
-///
-/// WasmStoreEndpoint
-///
-#[derive(Clone, Copy)]
-struct WasmStoreEndpoint {
-    method: &'static str,
-}
-
-impl WasmStoreEndpoint {
-    const fn root_update(method: &'static str) -> Self {
-        Self { method }
-    }
-
-    const fn structural_query(method: &'static str) -> Self {
-        Self { method }
-    }
-
-    const fn requires_internal_proof(&self) -> bool {
-        let _ = self;
-        false
     }
 }
 
@@ -228,21 +183,17 @@ mod tests {
     fn typed_client_endpoint_table_matches_protocol_manifests() {
         let root_updates = WasmStoreInternalClient::ENDPOINTS
             .iter()
-            .filter(|endpoint| {
-                protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS.contains(&endpoint.method)
-            })
-            .map(|endpoint| endpoint.method)
+            .filter(|method| protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS.contains(method))
+            .copied()
             .collect::<BTreeSet<_>>();
         let structural = WasmStoreInternalClient::ENDPOINTS
             .iter()
-            .filter(|endpoint| {
-                protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS.contains(&endpoint.method)
-            })
-            .map(|endpoint| endpoint.method)
+            .filter(|method| protocol::CANIC_WASM_STORE_STRUCTURAL_QUERY_METHODS.contains(method))
+            .copied()
             .collect::<BTreeSet<_>>();
         let all = WasmStoreInternalClient::ENDPOINTS
             .iter()
-            .map(|endpoint| endpoint.method)
+            .copied()
             .collect::<BTreeSet<_>>();
 
         assert_eq!(
@@ -264,17 +215,5 @@ mod tests {
             WasmStoreInternalClient::ENDPOINTS.len(),
             "typed wasm-store client endpoint methods must be unique"
         );
-    }
-
-    #[test]
-    fn root_update_endpoint_table_does_not_require_internal_proofs() {
-        for endpoint in WasmStoreInternalClient::ENDPOINTS
-            .iter()
-            .filter(|endpoint| {
-                protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS.contains(&endpoint.method)
-            })
-        {
-            assert!(!endpoint.requires_internal_proof());
-        }
     }
 }

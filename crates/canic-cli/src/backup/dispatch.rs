@@ -55,9 +55,7 @@ where
             write_inspect_report(&options, &report)?;
             Ok(())
         }
-        "manifest" => {
-            run_manifest(args).map_err(|err| BackupCommandError::Manifest(err.to_string()))
-        }
+        "manifest" => run_manifest(args).map_err(BackupCommandError::from),
         "prune" => {
             if print_help_or_version(&args, prune_usage, version_text()) {
                 return Ok(());

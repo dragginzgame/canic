@@ -333,9 +333,8 @@ fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, Intern
 
 #[cfg(test)]
 mod tests {
-    use super::{WasmStoreInternalClient, release_source_label};
+    use super::release_source_label;
     use crate::ids::{TemplateId, TemplateVersion};
-    use canic_core::protocol;
 
     #[test]
     fn release_source_label_includes_version() {
@@ -345,22 +344,5 @@ mod tests {
         );
 
         assert_eq!(label, "embedded:user_hub@0.20.2");
-    }
-
-    #[test]
-    fn wasm_store_root_update_method_classifier_matches_protocol_list() {
-        for method in protocol::CANIC_WASM_STORE_ROOT_UPDATE_METHODS {
-            assert!(
-                !WasmStoreInternalClient::method_requires_internal_proof(method),
-                "{method} must use a direct root-principal call"
-            );
-        }
-
-        assert!(!WasmStoreInternalClient::method_requires_internal_proof(
-            protocol::CANIC_WASM_STORE_CATALOG
-        ));
-        assert!(!WasmStoreInternalClient::method_requires_internal_proof(
-            protocol::CANIC_WASM_STORE_STATUS
-        ));
     }
 }

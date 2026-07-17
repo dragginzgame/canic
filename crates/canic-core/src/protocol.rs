@@ -88,9 +88,3 @@ pub const BLOB_STORAGE_070_CASHIER_METHODS: &[&str] = &[
     BLOB_STORAGE_CASHIER_ACCOUNT_TOP_UP_V1,
     BLOB_STORAGE_CASHIER_STORAGE_GATEWAY_PRINCIPAL_LIST_V1,
 ];
-
-#[must_use]
-pub const fn canic_wasm_store_method_requires_internal_proof(method: &str) -> bool {
-    let _ = method;
-    false
-}

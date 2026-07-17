@@ -8,6 +8,7 @@ use canic_backup::discovery::DiscoveryError;
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, install_root::ConfigDiscoveryError,
     installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
+    release_set::FleetConfigError,
 };
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
@@ -60,8 +61,8 @@ pub enum ListCommandError {
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[from] IcpConfigError),
 
-    #[error("failed to read canic deployment state: {0}")]
-    Config(String),
+    #[error(transparent)]
+    FleetConfig(#[from] FleetConfigError),
 
     #[error("failed to discover Canic project configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),

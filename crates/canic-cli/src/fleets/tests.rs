@@ -49,6 +49,28 @@ fn parses_check_fleet() {
     assert_eq!(options.fleet, "test");
 }
 
+#[test]
+fn fleet_create_dispatch_preserves_scaffold_error() {
+    let error = run_create(std::iter::empty::<OsString>())
+        .expect_err("missing fleet create arguments reject");
+
+    std::assert_matches!(
+        error,
+        FleetCommandError::Create(scaffold::ScaffoldCommandError::Usage(_))
+    );
+}
+
+#[test]
+fn fleet_config_dispatch_preserves_list_error() {
+    let error = run_config(std::iter::empty::<OsString>())
+        .expect_err("missing fleet config arguments reject");
+
+    std::assert_matches!(
+        error,
+        FleetCommandError::Config(crate::list::ListCommandError::Usage(_))
+    );
+}
+
 // Ensure role list requires one fleet name.
 #[test]
 fn parses_role_list_fleet() {
