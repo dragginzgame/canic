@@ -379,46 +379,41 @@ impl WasmStorePublicationWorkflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::stable::state::subnet::{
-        ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord,
-        WasmStoreGcRecord, WasmStoreRecord,
+    use crate::ops::storage::state::subnet::{
+        PublicationStoreStateTestInput, WasmStoreStateTestInput,
     };
     use canic_core::dto::error::ErrorCode;
 
     fn import_retired_store(mode: WasmStoreGcMode) -> (WasmStoreBinding, Principal) {
         let binding = WasmStoreBinding::new("retired");
         let pid = Principal::from_slice(&[7; 29]);
-        SubnetStateOps::import(ControlPlaneSubnetStateData {
-            record: SubnetStateRecord {
-                publication_store: PublicationStoreStateRecord {
-                    active_binding: Some(WasmStoreBinding::new("active")),
-                    detached_binding: None,
-                    retired_binding: Some(binding.clone()),
-                    generation: 3,
-                    changed_at: 30,
-                    retired_at: 20,
-                },
-                wasm_stores: vec![WasmStoreRecord {
-                    binding: binding.clone(),
-                    pid,
-                    created_at: 10,
-                    gc: WasmStoreGcRecord {
-                        mode,
-                        changed_at: 20,
-                        prepared_at: (mode != WasmStoreGcMode::Normal).then_some(11),
-                        started_at: matches!(
-                            mode,
-                            WasmStoreGcMode::InProgress
-                                | WasmStoreGcMode::Clearing
-                                | WasmStoreGcMode::Complete
-                        )
-                        .then_some(12),
-                        completed_at: (mode == WasmStoreGcMode::Complete).then_some(20),
-                        runs_completed: u32::from(mode == WasmStoreGcMode::Complete),
-                    },
-                }],
+        SubnetStateOps::import_test_state(
+            PublicationStoreStateTestInput {
+                active_binding: Some(WasmStoreBinding::new("active")),
+                detached_binding: None,
+                retired_binding: Some(binding.clone()),
+                generation: 3,
+                changed_at: 30,
+                retired_at: 20,
             },
-        });
+            vec![WasmStoreStateTestInput {
+                binding: binding.clone(),
+                pid,
+                created_at: 10,
+                gc_mode: mode,
+                gc_changed_at: 20,
+                prepared_at: (mode != WasmStoreGcMode::Normal).then_some(11),
+                started_at: matches!(
+                    mode,
+                    WasmStoreGcMode::InProgress
+                        | WasmStoreGcMode::Clearing
+                        | WasmStoreGcMode::Complete
+                )
+                .then_some(12),
+                completed_at: (mode == WasmStoreGcMode::Complete).then_some(20),
+                runs_completed: u32::from(mode == WasmStoreGcMode::Complete),
+            }],
+        );
         (binding, pid)
     }
 

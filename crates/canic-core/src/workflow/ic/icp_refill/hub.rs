@@ -27,7 +27,7 @@ impl IcpRefillWorkflow {
         hub_cycles: Cycles,
     ) -> Result<IcpRefillResponse, InternalError> {
         let self_pid = IcOps::canister_self();
-        if let Some(operation) = IcpRefillStoreOps::find_resumable_hub_self_refill(self_pid) {
+        if let Some(operation) = IcpRefillStoreOps::find_resumable_hub_self_refill(self_pid)? {
             let request = IcpRefillStoreOps::to_request(&operation);
             return Self::execute_manual_refill(request).await;
         }
@@ -73,7 +73,7 @@ impl IcpRefillWorkflow {
                 hub_cycles.to_u128(),
                 &request,
                 observed_rate,
-                active_for_request(&request),
+                active_for_request(&request)?,
                 AppStateOps::cycles_funding_enabled(),
                 funding_cooldown_retry_after_secs(&request, now_secs)?,
             ),

@@ -13,6 +13,7 @@ mod nonroot;
 mod root;
 pub mod timer;
 
+use crate::ops::storage::icp_refill::IcpRefillStoreOps;
 use crate::{
     InternalError, InternalErrorOrigin,
     log::Topic,
@@ -77,4 +78,11 @@ fn init_post_upgrade_memory_registry() -> Result<(), InternalError> {
 
 pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
     init_post_upgrade_memory_registry()
+}
+
+pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
+    IcpRefillStoreOps::rebuild_indexes()
+        .map_err(|err| err.with_diagnostic_context("rebuild ICP-refill derived indexes"))?;
+
+    Ok(())
 }

@@ -43,7 +43,7 @@ impl_storable_bounded!(IcpRefillRecordKey, 16, false);
 /// Owned by stable storage and converted to the boundary DTO enum by storage ops.
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[remain::sorted]
 pub enum IcpRefillRecordStatus {
     Completed,
@@ -63,7 +63,7 @@ pub enum IcpRefillRecordStatus {
 /// Owned by stable storage and converted to the boundary DTO enum by storage ops.
 ///
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[remain::sorted]
 pub enum IcpRefillRecordErrorCode {
     BadFee,

@@ -73,7 +73,7 @@ async fn execute_manual_refill_operation(
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillOperation, InternalError> {
-    if let Some(operation) = IcpRefillStoreOps::find_by_operation_id(operation_id) {
+    if let Some(operation) = IcpRefillStoreOps::find_by_operation_id(operation_id)? {
         IcpRefillStoreOps::validate_retry_request_matches_operation(&request, &operation)?;
         return advance_operation(operation, token, cost_permit).await;
     }

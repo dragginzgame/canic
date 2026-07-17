@@ -16,7 +16,10 @@ use crate::{
         runtime::{env::EnvOps, memory::MemoryRegistryOps},
         storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
     },
-    workflow::runtime::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary},
+    workflow::runtime::{
+        RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary,
+        rebuild_derived_storage_indexes,
+    },
 };
 
 ///
@@ -32,6 +35,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
             format!("memory init failed: {err}"),
         )
     })?;
+    rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
 
     // --- Phase 2: Runtime header and env registration ---
@@ -119,6 +123,7 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
 ///
 
 pub fn post_upgrade_root_canister_after_memory_init() -> Result<(), InternalError> {
+    rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");
     log_memory_summary();

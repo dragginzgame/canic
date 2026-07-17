@@ -102,7 +102,7 @@ fn stored_record(id: u64, operation_byte: u8, status: IcpRefillStatus) -> IcpRef
     let mut record = sample_record(status);
     record.id = id;
     record.operation_id = [operation_byte; 32];
-    IcpRefillRecordOps::insert(record.clone());
+    IcpRefillRecordOps::insert(record.clone()).expect("insert refill record");
     record
 }
 
@@ -134,7 +134,11 @@ fn atomic_create_rejects_distinct_active_operation_for_same_refill_key() {
         error,
         IcpRefillRecordOpsError::ConcurrentOperation { id } if id == first.id
     ));
-    assert!(IcpRefillRecordOps::find_by_operation_id([202; 32]).is_none());
+    assert!(
+        IcpRefillRecordOps::find_by_operation_id([202; 32])
+            .expect("operation index lookup")
+            .is_none()
+    );
 }
 
 #[test]
@@ -814,7 +818,7 @@ fn fifth_notify_processing_attempt_is_terminal() {
     let mut record = stored_record(10_001, 101, IcpRefillStatus::NotifyProcessing);
     record.ledger_block_index = Some(42);
     record.notify_attempts = MAX_NOTIFY_ATTEMPTS - 1;
-    IcpRefillRecordOps::insert(record.clone());
+    IcpRefillRecordOps::insert(record.clone()).expect("insert refill record");
 
     let record =
         IcpRefillRecordOps::mark_notify_attempt_started(record.id, record.updated_at_ns + 1)
@@ -840,7 +844,7 @@ fn fifth_notify_failure_attempt_is_terminal() {
     record.ledger_block_index = Some(43);
     record.notify_attempts = MAX_NOTIFY_ATTEMPTS - 1;
     record.error_code = Some(IcpRefillErrorCode::NotifyFailed.into());
-    IcpRefillRecordOps::insert(record.clone());
+    IcpRefillRecordOps::insert(record.clone()).expect("insert refill record");
 
     let record =
         IcpRefillRecordOps::mark_notify_attempt_started(record.id, record.updated_at_ns + 1)
@@ -868,7 +872,7 @@ fn fifth_notify_failure_attempt_is_terminal() {
 fn notify_processing_before_attempt_cap_stays_retryable() {
     let mut record = stored_record(10_003, 103, IcpRefillStatus::Transferred);
     record.ledger_block_index = Some(44);
-    IcpRefillRecordOps::insert(record.clone());
+    IcpRefillRecordOps::insert(record.clone()).expect("insert refill record");
 
     let record = apply_notify_error(record.id, 1, NotifyTopUpError::Processing)
         .expect("processing should remain retryable before cap");
@@ -941,7 +945,7 @@ fn notify_invalid_transaction_is_terminal() {
 fn notify_other_error_stays_retryable_before_attempt_cap() {
     let mut record = stored_record(10_007, 107, IcpRefillStatus::Transferred);
     record.ledger_block_index = Some(57);
-    IcpRefillRecordOps::insert(record.clone());
+    IcpRefillRecordOps::insert(record.clone()).expect("insert refill record");
 
     let record = apply_notify_error(
         record.id,
