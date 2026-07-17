@@ -26,10 +26,10 @@ pub(crate) use manifest::{
     emit_root_release_set_manifest_from_build, validate_root_release_set_manifest,
 };
 pub use paths::{
-    canister_manifest_path, canisters_root, config_path, display_workspace_path, icp_root,
-    load_root_package_version, load_workspace_package_version, resolve_artifact_root,
-    root_manifest_path, root_release_set_manifest_path, workspace_manifest_path, workspace_root,
-    workspace_root_from,
+    CanisterManifestError, WorkspaceDiscoveryError, canister_manifest_path, canisters_root,
+    config_path, display_workspace_path, icp_root, load_root_package_version,
+    load_workspace_package_version, resolve_artifact_root, root_manifest_path,
+    root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };
 use stage::{build_release_set_entry, validate_release_artifact_relative_path};
 pub(crate) use stage::{icp_query_on_network, resolve_release_artifact_path};

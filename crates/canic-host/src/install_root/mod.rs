@@ -114,9 +114,8 @@ pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDis
         return Ok(choices);
     }
 
-    if let Ok(icp_root) = icp_root()
-        && icp_root != project_root
-    {
+    let icp_root = icp_root()?;
+    if icp_root != project_root {
         return config_selection::discover_workspace_canic_config_choices(&icp_root);
     }
 

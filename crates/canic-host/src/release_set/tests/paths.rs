@@ -164,8 +164,60 @@ fn canister_manifest_path_requires_declared_role_metadata() {
     )
     .expect("write workspace manifest");
 
-    canister_manifest_path(workspace_root, "user_hub")
+    let error = canister_manifest_path(workspace_root, "user_hub")
         .expect_err("missing role metadata must fail");
+
+    std::assert_matches!(
+        error,
+        CanisterManifestError::RoleNotFound { role, canister_root }
+            if role == "user_hub"
+                && canister_root == workspace_root.join("fleets").canonicalize().expect("root")
+    );
+}
+
+#[test]
+fn canister_manifest_path_preserves_ambiguous_role_manifests() {
+    let temp = TempWorkspace::new();
+    let workspace_root = temp.path();
+    for package in ["root_a", "root_b"] {
+        let package_root = workspace_root.join("fleets/test").join(package);
+        fs::create_dir_all(package_root.join("src")).expect("create package source");
+        fs::write(
+            package_root.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"{package}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[package.metadata.canic]\nrole = \"root\"\n"
+            ),
+        )
+        .expect("write package manifest");
+        fs::write(package_root.join("src/lib.rs"), "").expect("write package source");
+    }
+    fs::write(
+        workspace_root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"fleets/test/root_a\", \"fleets/test/root_b\"]\n",
+    )
+    .expect("write workspace manifest");
+
+    let error = root_manifest_path(workspace_root).expect_err("duplicate roles must fail");
+    let CanisterManifestError::RoleAmbiguous {
+        role, manifests, ..
+    } = error
+    else {
+        panic!("expected typed ambiguous role error");
+    };
+
+    assert_eq!(role, "root");
+    assert_eq!(
+        manifests,
+        ["root_a", "root_b"]
+            .into_iter()
+            .map(|package| {
+                workspace_root
+                    .join("fleets/test")
+                    .join(package)
+                    .join("Cargo.toml")
+            })
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]

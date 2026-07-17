@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.3`.
-- The latest published release is `v0.93.3` at
-  `270e8b5de898e0f10a4dbd283a4b16b926776f4a`.
-- The `v0.93.3` source tree is
-  `691f234f142239b81ff8ae154b6b564c9eff1d1b`; its product-tree hash is
-  `d5d768d99fbeb09f5cf477c10c9a0618cdbf0ca5e845dce082fcf5eac4c75cdf`.
+- The workspace package version is `0.93.8`.
+- The latest published release is `v0.93.8` at
+  `bb4835941cc9430adcb4cb14d659c35ba7ea575b`.
+- The `v0.93.8` source tree is
+  `8fd2fb6ce6d55bceea70879e9d7df26fe9f6b2c1`; its product-tree hash is
+  `abffaddaef676819904565d5c2a981e79bcbe92961f54e9891b63db3dd1b5fd7`.
   Its Cargo.lock SHA-256 is
-  `7a686ec30b837848fbd2efb6f9ca6ca93f24fe7f2443c7267bad8af48b5976db`.
+  `d2aa8d1855877903b9ada37e919ee15f9a6b7b496928ef1b63dd243a8df05376`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -52,9 +52,18 @@ Historical detail is archived at:
 - Released `v0.93.3` bounds ICP-refill lookup and metric work through
   lifecycle-rebuilt derived indexes, retains renewal-timer failure causes in
   runtime diagnostics, and restores the workflow/storage layering guard.
-- Current development decodes auth-renewal observations from the pinned ICP
-  JSON `response_bytes` envelope as typed Candid and removes the test-only
-  alternate authorization/replay pipeline.
+- Released `v0.93.4` through `v0.93.7` hard-cut permissive ICP response
+  parsing, duplicate registry and auth response models, and local query
+  transport fallback. Maintained query paths use canonical Candid DTOs and
+  retain typed command, envelope, decoding, endpoint, and replica causes.
+- Released `v0.93.8` gives project config discovery, duplicate fleet
+  admission, and fleet selection one typed authority. Install, deployment
+  verification, and deployed-list operations fail closed on project-root
+  resolution rather than continuing through optional fallbacks.
+- Current `0.93.9` development gives Cargo workspace, ICP project, and
+  canister-manifest discovery typed filesystem, TOML, metadata, missing, and
+  ambiguity failures. It removes the public explicit-path-to-current-workspace
+  fallback and rejects uncanonicalized manifest search roots.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

@@ -27,3 +27,16 @@ fn deploy_preserves_icp_root_resolution_causes() {
         DeployCommandError::IcpRoot(IcpConfigError::NoIcpRoot { .. })
     );
 }
+
+#[test]
+fn deploy_preserves_workspace_root_resolution_causes() {
+    let error = DeployCommandError::from(WorkspaceDiscoveryError::UnsupportedPath {
+        path: PathBuf::from("/project/socket"),
+    });
+
+    assert_eq!(error.exit_code(), 2);
+    std::assert_matches!(
+        error,
+        DeployCommandError::WorkspaceRoot(WorkspaceDiscoveryError::UnsupportedPath { .. })
+    );
+}

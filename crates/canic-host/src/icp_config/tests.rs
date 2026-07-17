@@ -340,6 +340,18 @@ fn icp_inspection_preserves_invalid_fleet_config_cause() {
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
+#[test]
+fn icp_config_preserves_workspace_discovery_cause() {
+    let error = IcpConfigError::from(WorkspaceDiscoveryError::UnsupportedPath {
+        path: PathBuf::from("/project/socket"),
+    });
+
+    std::assert_matches!(
+        error,
+        IcpConfigError::WorkspaceDiscovery(WorkspaceDiscoveryError::UnsupportedPath { .. })
+    );
+}
+
 fn write_test_config(path: &Path, fleet: &str, roles: &[&str]) {
     fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
     let mut source = format!("[fleet]\nname = \"{fleet}\"\n");

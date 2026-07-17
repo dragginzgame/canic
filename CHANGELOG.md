@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.9` is potentially breaking: it makes Cargo workspace, ICP project,
+  and canister-manifest discovery fail closed with typed errors and removes
+  the explicit-path fallback to the current workspace.
+
 - `0.93.8` is potentially breaking: it gives project configuration discovery
   and fleet selection one typed authority and makes operational project-root
   failures fail closed instead of continuing through optional fallbacks.

@@ -10,7 +10,7 @@ use crate::deployment_truth::{
     deployment_execution_preflight_from_check, safety_report_from_diff,
     validate_deployment_execution_preflight_for_check,
 };
-use crate::release_set::{configured_fleet_name, icp_root, workspace_root_from};
+use crate::release_set::{configured_fleet_name, icp_root, workspace_root};
 use std::path::{Path, PathBuf};
 
 struct CurrentInstallTruthInputs {
@@ -168,7 +168,7 @@ fn resolve_current_install_truth_inputs(
             )?
         }
     };
-    let workspace_root = workspace_root_from(&config_path)?;
+    let workspace_root = workspace_root()?;
     let fleet_template = configured_fleet_name(&config_path)?;
     let expected_fleet = options
         .expected_fleet
