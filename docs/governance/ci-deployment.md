@@ -23,10 +23,13 @@ Default development cadence:
 - Prefer roughly 20 minutes of coherent development work per batch when the
   task is open-ended.
 - Keep individual code slices focused by concern, module, or invariant.
-- Combine multiple compatible slices into one unreleased batch when that makes
-  review and publishing less noisy.
-- Do not assign patch versions during ordinary development. Version numbers are
-  assigned during release preparation by the human-owned release flow.
+- Combine multiple compatible slices into one coherent batch or open patch
+  draft when that makes review and publishing less noisy.
+- Maintain the changelog by default when a meaningful code or behavior batch
+  is complete. Reuse an existing untagged patch draft; otherwise prepare the
+  next patch draft according to the [changelog policy](changelog.md).
+- A changelog draft version is documentation planning, not a package-version
+  bump. Release version files remain owned by the human release flow.
 
 Validation is tiered:
 

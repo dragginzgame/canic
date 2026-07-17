@@ -1,9 +1,64 @@
 // Category C - System-level artifact test (no embedded config).
 
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
+
+#[test]
+fn production_cost_guard_call_sites_match_reviewed_inventory() {
+    let workflow_root = source_root().join("workflow");
+    let mut actual = BTreeMap::new();
+
+    scan_rust_files(&workflow_root, &mut |path, contents| {
+        if path.file_name().is_some_and(|name| name == "tests.rs")
+            || path.components().any(|part| part.as_os_str() == "tests")
+        {
+            return;
+        }
+        let production = contents.split("\n#[cfg(test)]").next().unwrap_or(contents);
+        let counts = (
+            production.matches("CostGuardOps::reserve(").count(),
+            production.matches("CostGuardOps::complete(").count(),
+            production.matches("CostGuardOps::recover(").count(),
+            production
+                .matches("CostGuardOps::recover_after_failure(")
+                .count(),
+        );
+        if counts != (0, 0, 0, 0) {
+            actual.insert(display(path), counts);
+        }
+    });
+
+    let expected = BTreeMap::from([
+        (
+            "src/workflow/canister_lifecycle/mod.rs".to_string(),
+            (1, 2, 0, 2),
+        ),
+        (
+            "src/workflow/ic/icp_refill/cost_guard.rs".to_string(),
+            (1, 1, 1, 0),
+        ),
+        (
+            "src/workflow/pool/create_empty.rs".to_string(),
+            (1, 2, 0, 2),
+        ),
+        (
+            "src/workflow/rpc/request/handler/execute.rs".to_string(),
+            (1, 2, 0, 3),
+        ),
+        (
+            "src/workflow/rpc/request/handler/nonroot_cycles.rs".to_string(),
+            (1, 2, 0, 1),
+        ),
+    ]);
+
+    assert_eq!(
+        actual, expected,
+        "production cost-guard flow inventory changed; review replay identity, effect, response staging, settlement, and retry behavior before updating this inventory"
+    );
+}
 
 #[test]
 fn cost_guard_permit_construction_stays_private() {

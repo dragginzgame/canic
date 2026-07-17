@@ -108,8 +108,9 @@ pub(super) fn reserve_icp_refill_replay(
         }
         ReplayReceiptDecision::RecoveryRequired {
             token,
-            reason: RecoveryReason::CostSettlementFailed,
-        } => recover_icp_refill_cost_settlement(&token).map(IcpRefillReplayReservation::Replay),
+            reason:
+                reason @ (RecoveryReason::CostSettlementFailed | RecoveryReason::ResponseCommitFailed),
+        } => recover_icp_refill_response(&token, reason).map(IcpRefillReplayReservation::Replay),
         ReplayReceiptDecision::RecoveryRequired { reason, .. } => {
             log_icp_refill_replay_conflict(operation_id, "recovery_required");
             Err(InternalError::public(Error::conflict(format!(
@@ -146,19 +147,12 @@ pub(super) fn finish_icp_refill_replay(
 
     let response_bytes = match encode_icp_refill_replay_response(response) {
         Ok(response_bytes) => response_bytes,
-        Err(mut err) => {
-            if let Err(recovery_error) = recover_icp_refill_cost_guard(cost_permit) {
-                err = err.with_diagnostic_context(format!(
-                    "ICP refill cost guard recovery failed: {recovery_error}"
-                ));
-            }
-            mark_recovery_required(
+        Err(err) => {
+            return Err(preserve_icp_refill_response_failure(
                 token,
-                RecoveryReason::ResponseCommitFailed,
-                IcOps::now_nanos(),
-            )
-            .map_err(map_icp_refill_replay_store_error)?;
-            return Err(err);
+                cost_permit,
+                err,
+            ));
         }
     };
 
@@ -168,19 +162,11 @@ pub(super) fn finish_icp_refill_replay(
         response_bytes,
         IcOps::now_nanos(),
     ) {
-        let mut err = map_icp_refill_replay_store_error(err);
-        if let Err(recovery_error) = recover_icp_refill_cost_guard(cost_permit) {
-            err = err.with_diagnostic_context(format!(
-                "ICP refill cost guard recovery failed: {recovery_error}"
-            ));
-        }
-        mark_recovery_required(
+        return Err(preserve_icp_refill_response_failure(
             token,
-            RecoveryReason::ResponseCommitFailed,
-            IcOps::now_nanos(),
-        )
-        .map_err(map_icp_refill_replay_store_error)?;
-        return Err(err);
+            cost_permit,
+            map_icp_refill_replay_store_error(err),
+        ));
     }
 
     if let Err(err) = complete_icp_refill_cost_guard(cost_permit) {
@@ -197,23 +183,81 @@ pub(super) fn finish_icp_refill_replay(
         }
         return Err(err);
     }
-    commit_staged_receipt_response(token, IcOps::now_nanos())
-        .map_err(map_icp_refill_replay_store_error)?;
+    if let Err(err) = commit_staged_receipt_response(token, IcOps::now_nanos()) {
+        let mut err = map_icp_refill_replay_store_error(err);
+        if let Err(recovery_err) = mark_recovery_required(
+            token,
+            RecoveryReason::ResponseCommitFailed,
+            IcOps::now_nanos(),
+        )
+        .map_err(map_icp_refill_replay_store_error)
+        {
+            err = err.with_diagnostic_context(format!(
+                "ICP refill replay recovery marker failed: {recovery_err}"
+            ));
+        }
+        return Err(err);
+    }
     log_icp_refill_commit(operation);
     Ok(())
 }
 
-fn recover_icp_refill_cost_settlement(
+fn preserve_icp_refill_response_failure(
     token: &ReplayReceiptToken,
+    cost_permit: Option<&crate::ops::cost_guard::CostGuardPermit>,
+    mut err: InternalError,
+) -> InternalError {
+    let reason = match complete_icp_refill_cost_guard(cost_permit) {
+        Ok(()) => RecoveryReason::ResponseCommitFailed,
+        Err(settlement_err) => {
+            err = err.with_diagnostic_context(format!(
+                "ICP refill cost settlement also failed: {settlement_err}"
+            ));
+            RecoveryReason::CostSettlementFailed
+        }
+    };
+    if let Err(recovery_err) = mark_recovery_required(token, reason, IcOps::now_nanos())
+        .map_err(map_icp_refill_replay_store_error)
+    {
+        err = err.with_diagnostic_context(format!(
+            "ICP refill replay recovery marker failed: {recovery_err}"
+        ));
+    }
+    err
+}
+
+fn recover_icp_refill_response(
+    token: &ReplayReceiptToken,
+    reason: RecoveryReason,
 ) -> Result<IcpRefillResponse, InternalError> {
-    let settlement =
-        replay_cost_guard_settlement(token).map_err(map_icp_refill_replay_store_error)?;
-    crate::ops::cost_guard::CostGuardOps::complete_replay_settlement(
-        &settlement,
-        IcOps::now_secs(),
-    )?;
-    let receipt = commit_staged_receipt_response(token, IcOps::now_nanos())
-        .map_err(map_icp_refill_replay_store_error)?;
+    let cost_settled = reason == RecoveryReason::CostSettlementFailed;
+    if cost_settled {
+        let settlement =
+            replay_cost_guard_settlement(token).map_err(map_icp_refill_replay_store_error)?;
+        crate::ops::cost_guard::CostGuardOps::complete_replay_settlement(
+            &settlement,
+            IcOps::now_secs(),
+        )?;
+    }
+    let receipt = match commit_staged_receipt_response(token, IcOps::now_nanos()) {
+        Ok(receipt) => receipt,
+        Err(err) => {
+            let mut err = map_icp_refill_replay_store_error(err);
+            if cost_settled
+                && let Err(recovery_err) = mark_recovery_required(
+                    token,
+                    RecoveryReason::ResponseCommitFailed,
+                    IcOps::now_nanos(),
+                )
+                .map_err(map_icp_refill_replay_store_error)
+            {
+                err = err.with_diagnostic_context(format!(
+                    "ICP refill response recovery marker failed: {recovery_err}"
+                ));
+            }
+            return Err(err);
+        }
+    };
     decode_icp_refill_replay_response(&receipt)
 }
 

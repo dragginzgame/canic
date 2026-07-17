@@ -29,6 +29,9 @@ with this file, the code is wrong.
 ## Changelog
 - Follow `docs/governance/changelog.md`; it is the authoritative changelog
   policy. Do not duplicate its rules here.
+- Changelog maintenance is part of the default completion of every meaningful
+  code or behavior batch. Do not wait for a separate maintainer request, and
+  keep extending the existing open patch entry until that version is tagged.
 
 ## Ownership
 - Runtime/facade: `canic`, `canic-core`, `canic-macros`.
@@ -108,8 +111,8 @@ Dependency direction is strict: `endpoints -> workflow -> policy -> ops -> model
 
 ## Checklist
 - Preserve dirty worktree state and keep edits scoped.
-- Treat focused code slices as development work, not as release patches. Use
-  `docs/governance/changelog.md` for `Unreleased` notes and release-finalized
-  changelog rules.
+- Treat focused code slices as development work and group them into coherent
+  batches. Follow `docs/governance/changelog.md` for automatic open-patch
+  updates; do not allocate one patch version per slice.
 - Respect CLI/host/backup ownership boundaries.
 - Run targeted checks only, following the Testing policy above.

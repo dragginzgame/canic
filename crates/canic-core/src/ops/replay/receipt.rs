@@ -328,23 +328,6 @@ pub fn replay_cost_guard_settlement(
         .ok_or(ReplayReceiptStoreError::CostGuardSettlementMissing)
 }
 
-pub fn commit_receipt_response(
-    token: &ReplayReceiptToken,
-    response_schema_version: u32,
-    response_bytes: Vec<u8>,
-    now_ns: u64,
-) -> Result<(), ReplayReceiptStoreError> {
-    let mut receipt = latest_receipt_for_token(token)?;
-    receipt.status = ReplayReceiptStatus::Committed;
-    receipt.response_schema_version = Some(response_schema_version);
-    receipt.response_bytes = Some(response_bytes);
-    receipt.staged_response_schema_version = None;
-    receipt.staged_response_bytes = None;
-    receipt.updated_at_ns = now_ns;
-    ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
-    Ok(())
-}
-
 pub fn mark_recovery_required(
     token: &ReplayReceiptToken,
     reason: RecoveryReason,
@@ -475,6 +458,16 @@ mod tests {
         )
     }
 
+    fn commit_response(
+        token: &ReplayReceiptToken,
+        response_schema_version: u32,
+        response_bytes: Vec<u8>,
+        now_ns: u64,
+    ) -> Result<(), ReplayReceiptStoreError> {
+        stage_receipt_response(token, response_schema_version, response_bytes, now_ns)?;
+        commit_staged_receipt_response(token, now_ns).map(|_| ())
+    }
+
     #[test]
     fn reserve_or_replay_receipt_reserves_new_receipt() {
         ReplayReceiptOps::reset_for_tests();
@@ -496,7 +489,7 @@ mod tests {
             ReplayReceiptDecision::Fresh(token) => token,
             other => panic!("expected fresh, got {other:?}"),
         };
-        commit_receipt_response(&token, 1, vec![1, 2, 3], 200).expect("commit receipt");
+        commit_response(&token, 1, vec![1, 2, 3], 200).expect("commit receipt");
 
         let duplicate = reserve_or_replay_receipt(input()).expect("duplicate");
         let ReplayReceiptDecision::ReturnCommitted(receipt) = duplicate else {
@@ -672,7 +665,7 @@ mod tests {
             ReplayReceiptDecision::Fresh(token) => token,
             other => panic!("expected fresh, got {other:?}"),
         };
-        commit_receipt_response(&committed_token, 1, vec![1, 2, 3], 150).expect("commit receipt");
+        commit_response(&committed_token, 1, vec![1, 2, 3], 150).expect("commit receipt");
 
         let pending = reserve_or_replay_receipt_with_limits(
             input_with("test.command.v1", p(1), [8; 32], 160),
@@ -703,7 +696,7 @@ mod tests {
             method: "deposit_cycles".to_string(),
         };
         mark_external_effect_in_flight(&token, effect.clone(), 150).expect("mark external effect");
-        commit_receipt_response(&token, 1, vec![1, 2, 3], 200).expect("commit receipt");
+        commit_response(&token, 1, vec![1, 2, 3], 200).expect("commit receipt");
 
         let receipt = ReplayReceiptOps::get(token.key())
             .expect("receipt stored")
@@ -775,7 +768,7 @@ mod tests {
         ReplayReceiptOps::upsert(token.key(), corrupt.clone());
 
         for result in [
-            commit_receipt_response(&token, 1, vec![1, 2, 3], 200),
+            commit_response(&token, 1, vec![1, 2, 3], 200),
             mark_recovery_required(&token, RecoveryReason::ResponseCommitFailed, 200),
             abort_reserved_receipt(&token),
             abort_uncommitted_receipt(&token),
@@ -799,7 +792,7 @@ mod tests {
         ReplayReceiptOps::remove(token.key()).expect("remove reserved receipt");
 
         for result in [
-            commit_receipt_response(&token, 1, vec![1, 2, 3], 200),
+            commit_response(&token, 1, vec![1, 2, 3], 200),
             mark_recovery_required(&token, RecoveryReason::ResponseCommitFailed, 200),
             abort_reserved_receipt(&token),
             abort_uncommitted_receipt(&token),

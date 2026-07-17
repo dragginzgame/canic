@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.11`.
-- The latest published release is `v0.93.11` at
-  `81ec9b8505362b096565f859c15ecc9001881fd0`.
-- The `v0.93.11` source tree is
-  `5c0c4569aa58ea75ee596daa93f5ca48fb84114d`; its product-tree hash is
-  `52188ee6c5e67b0ddf8aef447f862c4f596210184f50c2b0fcff7fe1366d3cda`.
+- The workspace package version is `0.93.12`.
+- The latest published release is `v0.93.12` at
+  `628b1cdd3a59297372777d69015353423b99ab9f`.
+- The `v0.93.12` source tree is
+  `4f483626321dd2fd60aa61366eefce96462cccf5`; its product-tree hash is
+  `aaea1ae67172ad577fdb4bcde08907c16e012068f0ef988a0cf04e698e2d979c`.
   Its Cargo.lock SHA-256 is
-  `fb51f825c2fd414a69012aba1b9cf6c0ca3dd661e59694372acfa3fb88c0b3d7`.
+  `6f081efb9bcee7d1a644b24f46ee69867842fedae12c1704cb00c4133e87b1f4`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -73,10 +73,13 @@ Historical detail is archived at:
   settlement fail closed, hard-cuts the retired Wasm-store internal-proof
   classifier and duplicate endpoint model, and preserves typed backup-manifest,
   fleet-create, fleet-config, and config-list child causes.
-- Current development makes the replay receipt the durable recovery authority
-  for costed refill, pool-create, root-provision, and root-upgrade completion,
-  and preserves the typed root-install failure when writing its failure receipt
-  also fails.
+- Released `v0.93.12` makes replay receipts the durable recovery authority for
+  costed refill, pool-create, root-provision, and root-upgrade completion, and
+  preserves both typed root-install failure causes.
+- Current development completes that invariant for `RequestCycles` and every
+  staged replay response, removes the duplicate direct response-commit and
+  cycles-specific replay paths, and makes the reviewed production cost-flow
+  inventory executable.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

@@ -18,7 +18,10 @@ use crate::{
     model::replay::{CommandKind, OperationId, ReplayActor, ReplayPayloadHasher, ReplayReceipt},
     ops::replay::{
         self as replay_ops,
-        receipt::{ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError},
+        receipt::{
+            ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
+            ReplayReceiptToken, commit_staged_receipt_response,
+        },
     },
 };
 
@@ -176,6 +179,10 @@ pub(super) fn map_token_prepare_replay_decision(
             "fresh delegated token replay decision escaped",
         )),
         ReplayReceiptDecision::ReturnCommitted(receipt) => decode_token_prepare_response(&receipt),
+        ReplayReceiptDecision::RecoveryRequired {
+            token,
+            reason: crate::model::replay::RecoveryReason::ResponseCommitFailed,
+        } => recover_token_prepare_response(&token),
         ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(Error::conflict(
             "delegated token prepare request is already in progress; retry later with the same request id",
         ))),
@@ -248,6 +255,14 @@ fn decode_token_prepare_response(
     })
 }
 
+fn recover_token_prepare_response(
+    token: &ReplayReceiptToken,
+) -> Result<DelegatedTokenPrepareResponse, InternalError> {
+    let receipt = commit_staged_receipt_response(token, crate::ops::ic::IcOps::now_nanos())
+        .map_err(map_token_prepare_replay_store_error)?;
+    decode_token_prepare_response(&receipt)
+}
+
 pub(super) fn map_role_attestation_replay_decision(
     decision: ReplayReceiptDecision,
 ) -> Result<RoleAttestationPrepareResponse, InternalError> {
@@ -259,6 +274,10 @@ pub(super) fn map_role_attestation_replay_decision(
         ReplayReceiptDecision::ReturnCommitted(receipt) => {
             decode_role_attestation_prepare_response(&receipt)
         }
+        ReplayReceiptDecision::RecoveryRequired {
+            token,
+            reason: crate::model::replay::RecoveryReason::ResponseCommitFailed,
+        } => recover_role_attestation_prepare_response(&token),
         ReplayReceiptDecision::OperationInProgress => Err(InternalError::public(Error::conflict(
             "role attestation prepare request is already in progress; retry later with the same request id",
         ))),
@@ -331,4 +350,138 @@ fn decode_role_attestation_prepare_response(
             InternalError::workflow(InternalErrorOrigin::Workflow, message)
         }
     })
+}
+
+fn recover_role_attestation_prepare_response(
+    token: &ReplayReceiptToken,
+) -> Result<RoleAttestationPrepareResponse, InternalError> {
+    let receipt = commit_staged_receipt_response(token, crate::ops::ic::IcOps::now_nanos())
+        .map_err(map_role_attestation_replay_store_error)?;
+    decode_role_attestation_prepare_response(&receipt)
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        dto::auth::{DelegatedTokenClaims, RoleAttestation},
+        ids::CanisterRole,
+        model::replay::{RecoveryReason, ReplayReceiptStatus},
+        ops::{
+            replay::receipt::{
+                mark_recovery_required, reserve_or_replay_receipt, stage_receipt_response,
+            },
+            storage::replay::ReplayReceiptOps,
+        },
+    };
+
+    fn p(id: u8) -> crate::cdk::types::Principal {
+        crate::cdk::types::Principal::from_slice(&[id; 29])
+    }
+
+    fn replay_input(
+        command_kind: CommandKind,
+        operation_id: [u8; 32],
+    ) -> ReplayReceiptReserveInput {
+        ReplayReceiptReserveInput::new(
+            command_kind,
+            OperationId::from_bytes(operation_id),
+            ReplayActor::direct_caller(p(1)),
+            [9; 32],
+            100,
+        )
+        .with_expires_at_ns(1_000)
+    }
+
+    #[test]
+    fn delegated_token_response_commit_retry_promotes_staged_response() {
+        ReplayReceiptOps::reset_for_tests();
+        let input = replay_input(token_prepare_replay_command_kind(), [41; 32]);
+        let token = match reserve_or_replay_receipt(input.clone()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh receipt, got {other:?}"),
+        };
+        let response = DelegatedTokenPrepareResponse {
+            claims: DelegatedTokenClaims {
+                subject: p(2),
+                issuer_pid: p(3),
+                cert_hash: [4; 32],
+                issued_at_ns: 100,
+                expires_at_ns: 200,
+                aud: DelegationAudience::Canister(p(5)),
+                grants: Vec::new(),
+                nonce: [6; 16],
+                ext: None,
+            },
+            claims_hash: [7; 32],
+            retrieval_expires_at_ns: 200,
+        };
+        stage_receipt_response(
+            &token,
+            replay_ops::DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
+            encode_token_prepare_response(&response).expect("encode response"),
+            110,
+        )
+        .expect("stage response");
+        mark_recovery_required(&token, RecoveryReason::ResponseCommitFailed, 120)
+            .expect("mark recovery");
+
+        let decision = reserve_or_replay_receipt(input).expect("retry decision");
+        let recovered = map_token_prepare_replay_decision(decision).expect("recover response");
+        assert_eq!(recovered, response);
+        let receipt = ReplayReceiptOps::get(token.key())
+            .expect("receipt")
+            .into_receipt()
+            .expect("receipt decodes");
+        assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+        ReplayReceiptOps::reset_for_tests();
+    }
+
+    #[test]
+    fn role_attestation_response_commit_retry_promotes_staged_response() {
+        ReplayReceiptOps::reset_for_tests();
+        let input = replay_input(role_attestation_replay_command_kind(), [42; 32]);
+        let token = match reserve_or_replay_receipt(input.clone()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh receipt, got {other:?}"),
+        };
+        let response = RoleAttestationPrepareResponse {
+            payload: RoleAttestation {
+                subject: p(2),
+                role: CanisterRole::new("project_hub"),
+                subnet_id: Some(p(3)),
+                audience: p(4),
+                issued_at_ns: 100,
+                expires_at_ns: 200,
+                epoch: 1,
+            },
+            payload_hash: [5; 32],
+            retrieval_expires_at_ns: 200,
+        };
+        stage_receipt_response(
+            &token,
+            replay_ops::ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
+            encode_role_attestation_prepare_response(&response).expect("encode response"),
+            110,
+        )
+        .expect("stage response");
+        mark_recovery_required(&token, RecoveryReason::ResponseCommitFailed, 120)
+            .expect("mark recovery");
+
+        let decision = reserve_or_replay_receipt(input).expect("retry decision");
+        let recovered = map_role_attestation_replay_decision(decision).expect("recover response");
+        assert_eq!(recovered, response);
+        let receipt = ReplayReceiptOps::get(token.key())
+            .expect("receipt")
+            .into_receipt()
+            .expect("receipt decodes");
+        assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+        ReplayReceiptOps::reset_for_tests();
+    }
 }

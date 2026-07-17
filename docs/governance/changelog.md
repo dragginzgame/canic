@@ -16,8 +16,9 @@ It records high-level architectural and behavioral changes per release.
 
 It must remain concise and structured.
 
-It is release-finalized output, not a mandatory log for every development
-slice.
+It is maintained by default when a meaningful code or behavior batch is
+complete. A versioned entry may remain an open draft and accumulate compatible
+work until that version is tagged.
 
 Detailed change breakdowns belong in:
 
@@ -25,7 +26,7 @@ Detailed change breakdowns belong in:
 
 For example: [docs/changelog/0.33.md](../changelog/0.33.md)
 
-Every finalized patch entry must have both views:
+Every versioned patch draft and finalized patch entry must have both views:
 
 - one concise patch bullet in the root `CHANGELOG.md`;
 - one detailed patch section in the matching
@@ -51,9 +52,10 @@ shape changes, and operational nuance.
 - Within each minor-line section, patch entries must be ordered chronologically newest first (`x.y.9` before `x.y.8` before `x.y.7`).
 - Each root minor-line section must link to its detailed
   `docs/changelog/<major>.<minor>.md` file when that file exists.
-- Ordinary development slices do not require root changelog edits. Update the
-  root changelog when preparing a release, when a maintainer explicitly asks for
-  release-finalized notes, or when documenting a finalized release artifact.
+- A completed meaningful code or behavior batch must update the root changelog
+  by default. Small incomplete slices may wait until they form a coherent
+  batch, and governance-only, formatting-only, or routine test-only work is
+  omitted unless it changes a maintained surface.
 
 ## 2.2 Detailed Minor Notes
 
@@ -90,29 +92,34 @@ Detailed minor notes must start with versioned patch sections and must not
 carry their own `Unreleased` sections.
 This root-only rule is guarded by `cargo test -p canic --test changelog_governance`.
 
-Use root `Unreleased` for ordinary development batches that are not yet being
-published. It is the normal place to record user-facing, operator-facing, or
-architecturally meaningful work before a release version has been assigned.
+Keep root `Unreleased` as a short holding area for incomplete work, work whose
+release target is intentionally undecided, or notes that a maintainer asks not
+to place in the open patch draft yet. It is not the default destination for a
+completed meaningful batch.
 
 Rules:
 
-- Do not create a patch-numbered section for every small code slice.
-- Group related slices into coherent bullets under `Unreleased`.
+- Do not create a patch-numbered section for every small code slice. Complete a
+  coherent batch first.
+- Group related incomplete slices into coherent bullets under `Unreleased`.
 - Keep notes concise enough that they can be collapsed into a release entry
   without rewriting from scratch.
 - Do not use `Unreleased` for formatting-only churn, transient debugging notes,
   or validation command inventories unless the validation surface itself
   changed.
-- When preparing a release, move the relevant `Unreleased` content into the
-  target detailed patch section, delete or clear consumed root `Unreleased`
-  bullets, and add one concise root bullet for the finalized patch.
+- When a coherent batch completes, move its relevant `Unreleased` content into
+  the open detailed patch section, delete or clear the consumed root bullets,
+  and create or update the single concise root patch bullet.
 
 Terminology:
 
 - Code slice: a small focused change suitable for review and targeted
   validation. It does not imply a version.
-- Unreleased batch: one or more related slices collected before release
-  preparation.
+- Unreleased batch: one or more related incomplete or deliberately unassigned
+  slices collected before they enter an open patch draft.
+- Open patch draft: the newest versioned changelog entry with no matching
+  immutable `v<version>` tag. Compatible completed work is added to this entry
+  until the tag exists.
 - Published patch release: a versioned release prepared by the human-owned
   release flow.
 
@@ -152,8 +159,10 @@ Rules:
 14. Each root minor-line patch bullet must be a high-level summary sentence, not an exhaustive implementation list.
 15. If a patch bullet starts becoming a multi-clause internal inventory, shorten it and move detail to `docs/changelog/<major>.<minor>.md`.
 16. Root minor-line patch bullets must be listed in descending patch order, with the newest patch first and the oldest patch last.
-17. Versioned root entries are created during release preparation, not during
-    ordinary development slices.
+17. Create or update a versioned root entry when a coherent meaningful batch
+    completes. The entry remains an open draft until its matching tag exists.
+18. Never create a second patch draft merely because another compatible slice
+    completed; extend the existing untagged draft instead.
 
 ## 3.1 Section Header Emoji Mapping
 
@@ -194,12 +203,23 @@ Do not use plain backticked path text for detailed-breakdown links.
 During ordinary development:
 
 1. Keep code slices focused and reviewable.
-2. Do not treat a completed code slice as a release patch.
-3. Do not invent a patch version for a slice or batch.
-4. If changelog notes are warranted, write them under `## Unreleased` in the
-   root `CHANGELOG.md`.
-5. Do not add `## Unreleased` to detailed minor notes.
-6. If the work is changelog-policy/governance-only, do not add or update
+2. Let small compatible slices accumulate until they form a coherent batch;
+   do not create a patch entry for each mechanical edit.
+3. When a meaningful code or behavior batch is complete, update its changelog
+   by default without waiting for a separate maintainer request.
+4. Treat the newest versioned entry without a matching immutable `v<version>`
+   tag as the open patch draft. Update both its single root bullet and detailed
+   section when more compatible work is added.
+5. If no open draft exists, use the current workspace version when it is not
+   tagged; otherwise open the next patch version in the active minor line.
+   An explicitly requested minor, major, or exact target takes precedence.
+6. Do not advance to another patch number while an open draft exists. The tag,
+   not the number of completed slices or commits, closes the draft.
+7. Use root `Unreleased` only for incomplete or deliberately unassigned work.
+   Do not add `## Unreleased` to detailed minor notes.
+8. Do not change Cargo versions, release-script defaults, install URLs, or lock
+   file package versions while maintaining changelog drafts.
+9. If the work is changelog-policy/governance-only, do not add or update
    release notes in either root or detailed changelog files unless explicitly
    requested as a release artifact.
 
@@ -215,15 +235,15 @@ When preparing a release:
    - Formatting-only changes
    - Test-only changes (unless behaviorally significant)
    - Internal renames without surface impact
-5. Move relevant root `Unreleased` notes into the target detailed patch
-   section.
-6. Replace the consumed root `Unreleased` notes with a concise finalized
-   summary entry under the relevant root release line.
-7. Generate or update docs/changelog/<major>.<minor>.md with full detail.
+5. Confirm the open patch draft covers every relevant completed change and
+   move any remaining in-scope `Unreleased` notes into it.
+6. Update its concise root summary to describe the complete release batch.
+7. Generate or update `docs/changelog/<major>.<minor>.md` with full detail.
 8. Insert clickable Markdown link from root file to detailed file.
 9. Confirm the target patch appears in both files before declaring the
    changelog ready.
-10. Use the version specified by the release request or the existing latest changelog entry.
+10. Use the existing open draft version unless the maintainer explicitly
+    changes the release target.
 11. Do not create a new version header if the newest entry already exists for the target version.
 12. If a change set is changelog-policy/governance-only, do not add or update release notes in `CHANGELOG.md` or `docs/changelog/<major>.<minor>.md`.
 13. When updating an existing minor line, keep the patch bullet/section in chronological order. In normal patch releases this means adding the new patch at the beginning of the existing minor-line list.
@@ -235,8 +255,9 @@ Agents must never:
 - Reorder version history.
 - Collapse multiple minor lines into one detailed file.
 - Add release notes for changelog-policy/governance-only edits (for example updates to `docs/governance/changelog.md`, `AGENTS.md`, or changelog formatting policy), unless explicitly requested as a documented release artifact.
-- Convert `Unreleased` notes into a versioned patch entry unless preparing a
-  release or explicitly asked by a maintainer.
+- Open a second patch draft while the newest versioned entry remains untagged.
+- Treat a changelog draft version as authorization to change package or release
+  version files.
 
 ---
 
@@ -281,10 +302,11 @@ Historical content must never be discarded.
 - PATCH: internal fixes without surface change.
 
 Agents must not bump version without checking semantic impact.
-During ordinary development, do not assign a version number. Use `Unreleased`
-notes in the root changelog when needed. When preparing a release, target the
-upcoming release version even if `Cargo.toml` still has the previous published
-version.
+During ordinary development, a versioned changelog draft may target the
+upcoming release even while `Cargo.toml` still has the previous published
+version. This documentation target does not authorize a package-version bump.
+If the requested semantic boundary conflicts with an existing open draft,
+report the conflict instead of silently allocating another release.
 
 ---
 
@@ -331,17 +353,21 @@ Testing section rules:
 
 For each release:
 
-1. Choose the release version.
-2. Collapse relevant root `Unreleased` notes into the detailed versioned patch
-   entry.
-3. Update version in Cargo.toml.
-4. Update CHANGELOG.md.
-5. Create or update docs/changelog/<major>.<minor>.md.
-6. Commit.
-7. Tag release.
+1. Keep the open versioned changelog draft current as meaningful batches
+   complete.
+2. Before release, compare the draft with all changes since the previous tag
+   and consume any remaining in-scope `Unreleased` notes.
+3. Confirm the root bullet and detailed minor-line section agree.
+4. The maintainer commits the completed implementation and changelog batch.
+5. The maintainer runs the governed version target, which performs its gates
+   before updating package and release version files.
+6. The maintainer reviews, stages, commits, tags, and pushes through the
+   governed release targets.
 
 Order must be preserved.
-Typical release flow is `make patch` followed by `make publish`.
+The normal human patch flow is `make patch`, review, `make release-stage`,
+`make release-commit`, and `make release-push`; `make release-patch` is the
+one-shot equivalent from a clean release-ready commit.
 
 ---
 

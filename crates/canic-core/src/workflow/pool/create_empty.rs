@@ -125,25 +125,15 @@ impl PoolWorkflow {
                 }
             };
 
+        let created_at = IcOps::now_secs();
+        PoolOps::register_ready(pid, cycles, None, None, None, created_at);
         let response = PoolAdminResponse::Created { pid };
         match encode_pool_create_empty_response(&response) {
             Ok(response_bytes) => {
-                commit_pool_create_empty_success(
-                    &token,
-                    &cost_permit,
-                    pid,
-                    cycles,
-                    response_bytes,
-                )?;
+                commit_pool_create_empty_success(&token, &cost_permit, created_at, response_bytes)?;
             }
             Err(err) => {
-                let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-                mark_recovery_required(
-                    &token,
-                    RecoveryReason::ResponseCommitFailed,
-                    secs_to_ns(IcOps::now_secs()),
-                )
-                .map_err(map_pool_create_empty_replay_store_error)?;
+                let err = preserve_pool_create_empty_response_failure(&token, &cost_permit, err);
                 MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
@@ -211,8 +201,9 @@ fn reserve_pool_create_empty_replay(
         }),
         Ok(ReplayReceiptDecision::RecoveryRequired {
             token,
-            reason: RecoveryReason::CostSettlementFailed,
-        }) => recover_pool_create_empty_cost_settlement(&token)
+            reason:
+                reason @ (RecoveryReason::CostSettlementFailed | RecoveryReason::ResponseCommitFailed),
+        }) => recover_pool_create_empty_response(&token, reason)
             .map(PoolCreateEmptyReplayReservation::Replay),
         Ok(decision) => map_pool_create_empty_replay_decision(decision)
             .map(PoolCreateEmptyReplayReservation::Replay),
@@ -281,24 +272,21 @@ fn mark_pool_create_empty_external_effect(
 fn commit_pool_create_empty_success(
     token: &ReplayReceiptToken,
     cost_permit: &CostGuardPermit,
-    pid: Principal,
-    cycles: Cycles,
+    created_at: u64,
     response_bytes: Vec<u8>,
 ) -> Result<(), InternalError> {
-    let created_at = IcOps::now_secs();
     if let Err(err) = stage_receipt_response(
         token,
         POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
         response_bytes,
         secs_to_ns(created_at),
     ) {
-        return Err(CostGuardOps::recover_after_failure(
+        return Err(preserve_pool_create_empty_response_failure(
+            token,
             cost_permit,
-            IcOps::now_secs(),
             map_pool_create_empty_replay_store_error(err),
         ));
     }
-    PoolOps::register_ready(pid, cycles, None, None, None, created_at);
     if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
         if let Err(recovery_err) = mark_recovery_required(
             token,
@@ -313,19 +301,77 @@ fn commit_pool_create_empty_success(
         }
         return Err(err);
     }
-    commit_staged_receipt_response(token, secs_to_ns(IcOps::now_secs()))
-        .map_err(map_pool_create_empty_replay_store_error)?;
+    if let Err(err) = commit_staged_receipt_response(token, secs_to_ns(IcOps::now_secs())) {
+        let mut err = map_pool_create_empty_replay_store_error(err);
+        if let Err(recovery_err) = mark_recovery_required(
+            token,
+            RecoveryReason::ResponseCommitFailed,
+            secs_to_ns(IcOps::now_secs()),
+        )
+        .map_err(map_pool_create_empty_replay_store_error)
+        {
+            err = err.with_diagnostic_context(format!(
+                "pool create-empty replay recovery marker failed: {recovery_err}"
+            ));
+        }
+        return Err(err);
+    }
     Ok(())
 }
 
-fn recover_pool_create_empty_cost_settlement(
+fn preserve_pool_create_empty_response_failure(
     token: &ReplayReceiptToken,
+    cost_permit: &CostGuardPermit,
+    mut err: InternalError,
+) -> InternalError {
+    let reason = match CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+        Ok(()) => RecoveryReason::ResponseCommitFailed,
+        Err(settlement_err) => {
+            err = err.with_diagnostic_context(format!(
+                "pool create-empty cost settlement also failed: {settlement_err}"
+            ));
+            RecoveryReason::CostSettlementFailed
+        }
+    };
+    if let Err(recovery_err) = mark_recovery_required(token, reason, secs_to_ns(IcOps::now_secs()))
+        .map_err(map_pool_create_empty_replay_store_error)
+    {
+        err = err.with_diagnostic_context(format!(
+            "pool create-empty replay recovery marker failed: {recovery_err}"
+        ));
+    }
+    err
+}
+
+fn recover_pool_create_empty_response(
+    token: &ReplayReceiptToken,
+    reason: RecoveryReason,
 ) -> Result<Principal, InternalError> {
-    let settlement =
-        replay_cost_guard_settlement(token).map_err(map_pool_create_empty_replay_store_error)?;
-    CostGuardOps::complete_replay_settlement(&settlement, IcOps::now_secs())?;
-    let receipt = commit_staged_receipt_response(token, secs_to_ns(IcOps::now_secs()))
-        .map_err(map_pool_create_empty_replay_store_error)?;
+    let cost_settled = reason == RecoveryReason::CostSettlementFailed;
+    if cost_settled {
+        let settlement = replay_cost_guard_settlement(token)
+            .map_err(map_pool_create_empty_replay_store_error)?;
+        CostGuardOps::complete_replay_settlement(&settlement, IcOps::now_secs())?;
+    }
+    let receipt = match commit_staged_receipt_response(token, secs_to_ns(IcOps::now_secs())) {
+        Ok(receipt) => receipt,
+        Err(err) => {
+            let mut err = map_pool_create_empty_replay_store_error(err);
+            if cost_settled
+                && let Err(recovery_err) = mark_recovery_required(
+                    token,
+                    RecoveryReason::ResponseCommitFailed,
+                    secs_to_ns(IcOps::now_secs()),
+                )
+                .map_err(map_pool_create_empty_replay_store_error)
+            {
+                err = err.with_diagnostic_context(format!(
+                    "pool create-empty response recovery marker failed: {recovery_err}"
+                ));
+            }
+            return Err(err);
+        }
+    };
     decode_pool_create_empty_response(&receipt)
 }
 
@@ -575,14 +621,8 @@ mod tests {
         let response_bytes = encode_pool_create_empty_response(&PoolAdminResponse::Created { pid })
             .expect("response bytes");
 
-        commit_pool_create_empty_success(
-            &token,
-            &permit,
-            pid,
-            Cycles::new(POOL_CANISTER_CYCLES),
-            response_bytes,
-        )
-        .expect_err("cost settlement failure must reject replay commit");
+        commit_pool_create_empty_success(&token, &permit, 10, response_bytes)
+            .expect_err("cost settlement failure must reject replay commit");
 
         let receipt = ReplayReceiptOps::get(token.key())
             .expect("receipt")
@@ -660,5 +700,48 @@ mod tests {
 
         ReplayReceiptOps::reset_for_tests();
         CostGuardOps::reset_for_tests();
+    }
+
+    #[test]
+    fn pool_create_empty_retry_promotes_staged_response_without_create_call() {
+        ReplayReceiptOps::reset_for_tests();
+        let caller = p(2);
+        let token = match reserve_pool_create_empty_replay(
+            metadata(242, POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS),
+            caller,
+        )
+        .expect("fresh reservation")
+        {
+            PoolCreateEmptyReplayReservation::Fresh { token, .. } => token,
+            PoolCreateEmptyReplayReservation::Replay(_) => panic!("expected fresh reservation"),
+        };
+        let pid = p(242);
+        stage_receipt_response(
+            &token,
+            POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
+            encode_pool_create_empty_response(&PoolAdminResponse::Created { pid })
+                .expect("response bytes"),
+            0,
+        )
+        .expect("stage response");
+        mark_recovery_required(&token, RecoveryReason::ResponseCommitFailed, 0)
+            .expect("mark response recovery");
+
+        let replayed = reserve_pool_create_empty_replay(
+            metadata(242, POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS),
+            caller,
+        )
+        .expect("retry should promote response");
+        assert!(matches!(
+            replayed,
+            PoolCreateEmptyReplayReservation::Replay(replayed_pid) if replayed_pid == pid
+        ));
+        let receipt = ReplayReceiptOps::get(token.key())
+            .expect("receipt")
+            .into_receipt()
+            .expect("receipt decodes");
+        assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+        ReplayReceiptOps::reset_for_tests();
     }
 }
