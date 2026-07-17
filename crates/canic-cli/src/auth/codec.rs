@@ -7,105 +7,15 @@ use super::{
     AuthCommandError, AuthIssuerObservedStatus, AuthRenewalBatchStatus, AuthRenewalStateStatus,
     AuthRenewalStatusSummary, AuthRenewalTemplateStatus,
 };
-use candid::{CandidType, Principal};
+use candid::Principal;
 use canic_core::{
     cdk::utils::hash::hex_bytes as encode_hex,
-    dto::{
-        auth::{
-            ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse,
-            RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusResponse,
-        },
-        error::{Error as CanicError, ErrorCode},
+    dto::auth::{
+        ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse,
+        RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusResponse,
     },
 };
 use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
-use serde::de::DeserializeOwned;
-use std::{error::Error, fmt};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum AuthResponseKind {
-    IssuerStatus,
-    RenewalStatus,
-}
-
-impl AuthResponseKind {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::IssuerStatus => "issuer status",
-            Self::RenewalStatus => "renewal status",
-        }
-    }
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub(super) enum AuthResponseParseError {
-    InvalidCandid {
-        kind: AuthResponseKind,
-        error: String,
-    },
-    InvalidJson {
-        kind: AuthResponseKind,
-        error: String,
-    },
-    InvalidPayload(AuthResponseKind),
-    InvalidResponseBytes {
-        kind: AuthResponseKind,
-        error: String,
-    },
-    RemoteError {
-        kind: AuthResponseKind,
-        code: ErrorCode,
-        message: String,
-    },
-}
-
-impl fmt::Display for AuthResponseParseError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidCandid { kind, error } => {
-                write!(
-                    formatter,
-                    "{} response bytes contain invalid Candid: {error}",
-                    kind.label()
-                )
-            }
-            Self::InvalidJson { kind, error } => {
-                write!(
-                    formatter,
-                    "{} response has invalid JSON: {error}",
-                    kind.label()
-                )
-            }
-            Self::InvalidPayload(kind) => {
-                write!(
-                    formatter,
-                    "{} response is missing string `response_bytes`",
-                    kind.label()
-                )
-            }
-            Self::InvalidResponseBytes { kind, error } => {
-                write!(
-                    formatter,
-                    "{} response_bytes is invalid hexadecimal: {error}",
-                    kind.label()
-                )
-            }
-            Self::RemoteError {
-                kind,
-                code,
-                message,
-            } => {
-                write!(
-                    formatter,
-                    "{} response returned [{code:?}] {message}",
-                    kind.label()
-                )
-            }
-        }
-    }
-}
-
-impl Error for AuthResponseParseError {}
 
 pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommandError> {
     Principal::from_text(issuer)
@@ -117,9 +27,8 @@ pub(super) fn parse_issuer_principal(issuer: &str) -> Result<String, AuthCommand
 
 pub(super) fn parse_renewal_status_summary(
     output: &str,
-) -> Result<AuthRenewalStatusSummary, AuthResponseParseError> {
-    let kind = AuthResponseKind::RenewalStatus;
-    let response = typed_response::<RootIssuerRenewalStatusResponse>(output, kind)?;
+) -> Result<AuthRenewalStatusSummary, IcpJsonResponseError> {
+    let response = decode_json_result_response::<RootIssuerRenewalStatusResponse>(output)?;
 
     let template = response.template;
     let state = response.state;
@@ -181,9 +90,8 @@ pub(super) fn parse_renewal_status_summary(
 
 pub(super) fn parse_issuer_observed_status(
     output: &str,
-) -> Result<AuthIssuerObservedStatus, AuthResponseParseError> {
-    let kind = AuthResponseKind::IssuerStatus;
-    let response = typed_response::<ActiveDelegationProofStatusResponse>(output, kind)?;
+) -> Result<AuthIssuerObservedStatus, IcpJsonResponseError> {
+    let response = decode_json_result_response::<ActiveDelegationProofStatusResponse>(output)?;
 
     Ok(AuthIssuerObservedStatus {
         status: active_proof_status_label(&response.status).to_string(),
@@ -211,36 +119,6 @@ const fn renewal_batch_status_label(status: &RootIssuerRenewalBatchStatus) -> &'
         RootIssuerRenewalBatchStatus::Signed => "signed",
         RootIssuerRenewalBatchStatus::Signing => "signing",
     }
-}
-
-fn remote_error(kind: AuthResponseKind, error: CanicError) -> AuthResponseParseError {
-    AuthResponseParseError::RemoteError {
-        kind,
-        code: error.code,
-        message: error.message,
-    }
-}
-
-fn typed_response<T>(output: &str, kind: AuthResponseKind) -> Result<T, AuthResponseParseError>
-where
-    T: CandidType + DeserializeOwned,
-{
-    decode_json_result_response(output).map_err(|error| match error {
-        IcpJsonResponseError::Candid(error) => AuthResponseParseError::InvalidCandid {
-            kind,
-            error: error.to_string(),
-        },
-        IcpJsonResponseError::Hex(error) => AuthResponseParseError::InvalidResponseBytes {
-            kind,
-            error: error.to_string(),
-        },
-        IcpJsonResponseError::Json(error) => AuthResponseParseError::InvalidJson {
-            kind,
-            error: error.to_string(),
-        },
-        IcpJsonResponseError::MissingResponseBytes => AuthResponseParseError::InvalidPayload(kind),
-        IcpJsonResponseError::Rejected(error) => remote_error(kind, error),
-    })
 }
 
 pub(super) fn root_issuer_renewal_status_arg(issuer_pid: &str) -> String {

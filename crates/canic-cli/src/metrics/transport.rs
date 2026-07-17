@@ -1,3 +1,9 @@
+//! Module: metrics::transport
+//!
+//! Responsibility: collect typed metric observations for installed deployment canisters.
+//! Does not own: metric DTOs, report rendering, or deployment registry authority.
+//! Boundary: preserves query causes until projecting per-canister report diagnostics.
+
 use crate::metrics::{
     CANIC_METRICS_METHOD, MetricsCommandError,
     model::{
@@ -9,7 +15,7 @@ use crate::metrics::{
 };
 use crate::support::candid::registry_entry_candid_path;
 use canic_host::{
-    icp::{IcpCli, IcpDiagnostic, classify_icp_diagnostic},
+    icp::{IcpCli, IcpCommandError, IcpDiagnostic, IcpJsonResponseError},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
@@ -18,6 +24,7 @@ use canic_host::{
     registry::RegistryEntry,
 };
 use std::{path::PathBuf, sync::Arc, thread};
+use thiserror::Error as ThisError;
 
 const METRICS_UNAVAILABLE_HINT: &str =
     "canic_metrics unavailable; check deployed Wasm and metrics profile";
@@ -26,6 +33,15 @@ const METRICS_EMPTY_HINT: &str =
 const METRICS_NONZERO_EMPTY_HINT: &str =
     "no nonzero metrics rows; rerun without --nonzero or check the deployed role profile";
 const METRICS_WORKER_PANIC: &str = "metrics query worker panicked";
+
+#[derive(Debug, ThisError)]
+enum MetricsQueryError {
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
+
+    #[error("invalid canic_metrics response: {0}")]
+    Response(#[source] IcpJsonResponseError),
+}
 
 pub(super) fn metrics_report(
     options: &MetricsOptions,
@@ -88,7 +104,7 @@ fn collect_metrics_worker_reports(
         .map(|(entry, handle)| {
             handle
                 .join()
-                .unwrap_or_else(|_| metrics_error_report(&entry, METRICS_WORKER_PANIC))
+                .unwrap_or_else(|_| metrics_message_error_report(&entry, METRICS_WORKER_PANIC))
         })
         .collect()
 }
@@ -113,7 +129,7 @@ fn metrics_canister_report(
                 error: None,
             }
         }
-        Err(error) => metrics_error_report(entry, &error),
+        Err(error) => metrics_query_error_report(entry, &error),
     }
 }
 
@@ -134,19 +150,43 @@ fn metrics_empty_report(entry: &RegistryEntry, nonzero: bool) -> MetricsCanister
     }
 }
 
-fn metrics_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
-    let (status, error) = if matches!(
-        classify_icp_diagnostic(error),
-        Some(IcpDiagnostic::MethodMissing)
+fn metrics_query_error_report(
+    entry: &RegistryEntry,
+    error: &MetricsQueryError,
+) -> MetricsCanisterReport {
+    if matches!(
+        error,
+        MetricsQueryError::Icp(error)
+            if matches!(error.diagnostic(), Some(IcpDiagnostic::MethodMissing))
     ) {
-        (MetricsCanisterStatus::Unavailable, METRICS_UNAVAILABLE_HINT)
-    } else {
-        (
-            MetricsCanisterStatus::Error,
-            error.lines().next().unwrap_or(error),
-        )
-    };
+        return metrics_failure_report(
+            entry,
+            MetricsCanisterStatus::Unavailable,
+            METRICS_UNAVAILABLE_HINT,
+        );
+    }
 
+    let error = error.to_string();
+    metrics_failure_report(
+        entry,
+        MetricsCanisterStatus::Error,
+        error.lines().next().unwrap_or(&error),
+    )
+}
+
+fn metrics_message_error_report(entry: &RegistryEntry, error: &str) -> MetricsCanisterReport {
+    metrics_failure_report(
+        entry,
+        MetricsCanisterStatus::Error,
+        error.lines().next().unwrap_or(error),
+    )
+}
+
+fn metrics_failure_report(
+    entry: &RegistryEntry,
+    status: MetricsCanisterStatus,
+    error: &str,
+) -> MetricsCanisterReport {
     MetricsCanisterReport {
         role: entry.role.clone().unwrap_or_else(|| "-".to_string()),
         canister_id: entry.pid.clone(),
@@ -178,7 +218,7 @@ const fn metrics_kind_candid_variant(kind: MetricsKind) -> &'static str {
 fn query_metrics(
     options: &MetricsOptions,
     entry: &RegistryEntry,
-) -> Result<Vec<MetricEntry>, String> {
+) -> Result<Vec<MetricEntry>, MetricsQueryError> {
     let arg = format!(
         "(variant {{ {} }}, record {{ offset = 0 : nat64; limit = {} : nat64 }})",
         metrics_kind_candid_variant(options.kind),
@@ -190,18 +230,15 @@ fn query_metrics(
     if let Some(root) = root {
         icp = icp.with_cwd(root);
     }
-    let output = icp
-        .canister_query_arg_output_with_candid(
-            &entry.pid,
-            CANIC_METRICS_METHOD,
-            &arg,
-            Some("json"),
-            candid_path.as_deref(),
-        )
-        .map_err(|err| err.to_string())?;
+    let output = icp.canister_query_arg_output_with_candid(
+        &entry.pid,
+        CANIC_METRICS_METHOD,
+        &arg,
+        Some("json"),
+        candid_path.as_deref(),
+    )?;
 
-    parse_metrics_page(&output)
-        .map_err(|error| format!("could not parse canic_metrics response: {error}"))
+    parse_metrics_page(&output).map_err(MetricsQueryError::Response)
 }
 
 fn resolve_metrics_deployment(
@@ -260,10 +297,11 @@ mod tests {
     // Ensure method-missing responses do not stretch the table with raw ICP output.
     #[test]
     fn shortens_metrics_unavailable_errors() {
-        let report = metrics_error_report(
-            &registry_entry(),
-            "icp command failed\nCanister has no query method 'canic_metrics'.",
-        );
+        let error = MetricsQueryError::Icp(IcpCommandError::Failed {
+            command: "icp canister call".to_string(),
+            stderr: "Canister has no query method 'canic_metrics'.".to_string(),
+        });
+        let report = metrics_query_error_report(&registry_entry(), &error);
 
         assert_eq!(report.status, MetricsCanisterStatus::Unavailable);
         assert_eq!(
@@ -322,5 +360,16 @@ mod tests {
         assert_eq!(reports[0].canister_id, entry.pid);
         assert_eq!(reports[0].status, MetricsCanisterStatus::Error);
         assert_eq!(reports[0].error.as_deref(), Some(METRICS_WORKER_PANIC));
+    }
+
+    #[test]
+    fn metrics_response_failure_preserves_typed_cause_until_projection() {
+        let error = MetricsQueryError::Response(IcpJsonResponseError::MissingResponseBytes);
+        let source = std::error::Error::source(&error).expect("typed response source");
+
+        assert!(matches!(
+            source.downcast_ref::<IcpJsonResponseError>(),
+            Some(IcpJsonResponseError::MissingResponseBytes)
+        ));
     }
 }

@@ -20,7 +20,7 @@ use canic_core::dto::runtime::{
     RuntimeStatus,
 };
 use canic_host::{
-    icp::{IcpCli, IcpCommandError, decode_json_result_response},
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     install_root::InstallStateError,
     installed_deployment::{
@@ -77,7 +77,7 @@ pub enum InspectCommandError {
     Icp(#[from] IcpCommandError),
 
     #[error("invalid canic_runtime_status response: {0}")]
-    InvalidResponse(String),
+    InvalidResponse(#[source] IcpJsonResponseError),
 
     #[error("runtime status reported {0}")]
     ReportStatus(String),
@@ -411,7 +411,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
 
 fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
     let status = decode_json_result_response::<CanicRuntimeStatus>(output)
-        .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
+        .map_err(InspectCommandError::InvalidResponse)?;
 
     Ok(RuntimeStatusPayload {
         source: InspectSource::RuntimeObserved,
@@ -784,7 +784,10 @@ mod tests {
     fn response_without_response_bytes_is_rejected() {
         let err = runtime_response_payload("{}").expect_err("typed response bytes are required");
 
-        assert!(matches!(err, InspectCommandError::InvalidResponse(_)));
+        assert!(matches!(
+            err,
+            InspectCommandError::InvalidResponse(IcpJsonResponseError::MissingResponseBytes)
+        ));
     }
 
     #[test]
@@ -808,7 +811,10 @@ mod tests {
         let err = runtime_response_payload(r#"{"response_bytes":"not-hex"}"#)
             .expect_err("invalid hex rejected");
 
-        assert!(matches!(err, InspectCommandError::InvalidResponse(_)));
+        assert!(matches!(
+            err,
+            InspectCommandError::InvalidResponse(IcpJsonResponseError::Hex(_))
+        ));
     }
 
     #[test]
