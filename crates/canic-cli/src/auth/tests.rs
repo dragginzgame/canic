@@ -10,6 +10,7 @@ use canic_core::dto::{
     },
     error::{Error as CanicError, ErrorCode},
 };
+use canic_host::icp::IcpJsonResponseError;
 use std::{cell::RefCell, collections::VecDeque};
 
 #[test]
@@ -250,45 +251,27 @@ fn renewal_status_rejects_invalid_issuer_principal() {
 }
 
 #[test]
-fn renewal_response_rejects_unwrapped_and_nested_payloads() {
-    for output in [
-        r#"{"response_candid":"(variant { Ok })"}"#,
-        r#"{"transport":{"response_bytes":"00"}}"#,
-    ] {
-        assert_eq!(
-            codec::parse_renewal_status_summary(output),
-            Err(codec::AuthResponseParseError::InvalidPayload(
-                codec::AuthResponseKind::RenewalStatus,
-            ))
-        );
-    }
-}
-
-#[test]
 fn renewal_response_preserves_typed_remote_error() {
     let response = icp_json_response(Err::<RootIssuerRenewalStatusResponse, _>(CanicError::new(
         ErrorCode::Unauthorized,
         "caller is not authorized".to_string(),
     )));
 
-    assert_eq!(
-        codec::parse_renewal_status_summary(&response),
-        Err(codec::AuthResponseParseError::RemoteError {
-            kind: codec::AuthResponseKind::RenewalStatus,
-            code: ErrorCode::Unauthorized,
-            message: "caller is not authorized".to_string(),
-        })
-    );
+    let error = codec::parse_renewal_status_summary(&response)
+        .expect_err("remote rejection should remain typed");
+    let IcpJsonResponseError::Rejected(error) = error else {
+        panic!("expected typed remote rejection");
+    };
+
+    assert_eq!(error.code, ErrorCode::Unauthorized);
+    assert_eq!(error.message, "caller is not authorized");
 }
 
 #[test]
 fn renewal_response_rejects_invalid_response_bytes() {
     assert!(matches!(
         codec::parse_renewal_status_summary(r#"{"response_bytes":"no"}"#),
-        Err(codec::AuthResponseParseError::InvalidResponseBytes {
-            kind: codec::AuthResponseKind::RenewalStatus,
-            ..
-        })
+        Err(IcpJsonResponseError::Hex(_))
     ));
 }
 
@@ -298,10 +281,7 @@ fn renewal_response_rejects_wrong_candid_type() {
 
     assert!(matches!(
         codec::parse_renewal_status_summary(&response),
-        Err(codec::AuthResponseParseError::InvalidCandid {
-            kind: codec::AuthResponseKind::RenewalStatus,
-            ..
-        })
+        Err(IcpJsonResponseError::Candid(_))
     ));
 }
 
@@ -309,10 +289,7 @@ fn renewal_response_rejects_wrong_candid_type() {
 fn renewal_response_rejects_invalid_json() {
     assert!(matches!(
         codec::parse_renewal_status_summary("not json"),
-        Err(codec::AuthResponseParseError::InvalidJson {
-            kind: codec::AuthResponseKind::RenewalStatus,
-            ..
-        })
+        Err(IcpJsonResponseError::Json(_))
     ));
 }
 

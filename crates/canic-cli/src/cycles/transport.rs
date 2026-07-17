@@ -1,3 +1,9 @@
+//! Module: cycles::transport
+//!
+//! Responsibility: collect cycle history and supplemental observations for deployment canisters.
+//! Does not own: cycle accounting, endpoint DTOs, or report rendering.
+//! Boundary: preserves query causes until projecting per-canister report diagnostics.
+
 use crate::{
     cycles::{
         CyclesCommandError,
@@ -15,8 +21,8 @@ use crate::{
     },
 };
 use canic_host::{
-    cycle_balance::query_cycle_balance,
-    icp::IcpCli,
+    cycle_balance::{CycleBalanceQueryError, query_cycle_balance},
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
         InstalledDeploymentRequest, InstalledDeploymentResolution,
@@ -30,6 +36,7 @@ use std::{
     thread,
     time::{SystemTime, UNIX_EPOCH},
 };
+use thiserror::Error as ThisError;
 
 const TOPUP_EVENTS_LIMIT: u64 = 1_000;
 const ICP_JSON_OUTPUT: &str = "json";
@@ -45,6 +52,22 @@ struct CycleQueryTarget {
     network: String,
     icp_root: Option<PathBuf>,
     candid_path: Option<PathBuf>,
+}
+
+#[derive(Debug, ThisError)]
+enum CycleObservationError {
+    #[error(transparent)]
+    Balance(#[from] CycleBalanceQueryError),
+
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
+
+    #[error("invalid {method} response: {source}")]
+    Response {
+        method: &'static str,
+        #[source]
+        source: IcpJsonResponseError,
+    },
 }
 
 pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, CyclesCommandError> {
@@ -137,9 +160,11 @@ fn cycle_tracker_report(
     match result {
         Ok(page) => {
             let topup_events = query_topup_events(&target);
+            let live_cycles_error = live_cycles.as_ref().err().map(ToString::to_string);
+            let topup_events_error = topup_events.as_ref().err().map(ToString::to_string);
             let observation_error = cycle_observation_error(
-                live_cycles.as_ref().err().map(String::as_str),
-                topup_events.as_ref().err().map(String::as_str),
+                live_cycles_error.as_deref(),
+                topup_events_error.as_deref(),
             );
             let mut report = summarize_cycle_tracker(
                 entry,
@@ -161,7 +186,7 @@ fn cycle_tracker_report(
             tree_prefix,
             requested_since_secs,
             live_cycles.ok().map(|cycles| (generated_at_secs, cycles)),
-            error,
+            error.to_string(),
         ),
     }
 }
@@ -310,7 +335,7 @@ pub(super) fn summarize_cycle_tracker(
     }
 }
 
-fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, String> {
+fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, CycleObservationError> {
     query_cycle_balance(
         &target.icp,
         &target.canister_id,
@@ -318,10 +343,12 @@ fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, String> {
         target.icp_root.as_deref(),
         target.candid_path.as_deref(),
     )
-    .map_err(|error| error.to_string())
+    .map_err(Into::into)
 }
 
-fn query_topup_events(target: &CycleQueryTarget) -> Result<Vec<CycleTopupEventSample>, String> {
+fn query_topup_events(
+    target: &CycleQueryTarget,
+) -> Result<Vec<CycleTopupEventSample>, CycleObservationError> {
     let mut page = query_topup_event_page(target, 0, TOPUP_EVENTS_LIMIT)?;
     if page.total > TOPUP_EVENTS_LIMIT {
         let offset = page.total.saturating_sub(TOPUP_EVENTS_LIMIT);
@@ -366,24 +393,26 @@ fn query_topup_event_page(
     target: &CycleQueryTarget,
     offset: u64,
     limit: u64,
-) -> Result<crate::cycles::model::CycleTopupEventPage, String> {
+) -> Result<crate::cycles::model::CycleTopupEventPage, CycleObservationError> {
     let arg = page_request_arg(offset, limit);
-    let output = target
-        .icp
-        .canister_query_arg_output_with_candid(
-            &target.canister_id,
-            canic_core::protocol::CANIC_CYCLE_TOPUPS,
-            &arg,
-            Some(ICP_JSON_OUTPUT),
-            target.candid_path.as_deref(),
-        )
-        .map_err(|err| err.to_string())?;
+    let output = target.icp.canister_query_arg_output_with_candid(
+        &target.canister_id,
+        canic_core::protocol::CANIC_CYCLE_TOPUPS,
+        &arg,
+        Some(ICP_JSON_OUTPUT),
+        target.candid_path.as_deref(),
+    )?;
 
-    parse_topup_event_page(&output)
-        .map_err(|error| format!("could not parse canic_cycle_topups response: {error}"))
+    parse_topup_event_page(&output).map_err(|source| CycleObservationError::Response {
+        method: canic_core::protocol::CANIC_CYCLE_TOPUPS,
+        source,
+    })
 }
 
-fn query_cycle_tracker(target: &CycleQueryTarget, limit: u64) -> Result<CycleTrackerPage, String> {
+fn query_cycle_tracker(
+    target: &CycleQueryTarget,
+    limit: u64,
+) -> Result<CycleTrackerPage, CycleObservationError> {
     let mut page = query_cycle_tracker_page(target, 0, limit)?;
     if page.total > limit {
         let offset = page.total.saturating_sub(limit);
@@ -396,21 +425,20 @@ fn query_cycle_tracker_page(
     target: &CycleQueryTarget,
     offset: u64,
     limit: u64,
-) -> Result<CycleTrackerPage, String> {
+) -> Result<CycleTrackerPage, CycleObservationError> {
     let arg = page_request_arg(offset, limit);
-    let output = target
-        .icp
-        .canister_query_arg_output_with_candid(
-            &target.canister_id,
-            canic_core::protocol::CANIC_CYCLE_TRACKER,
-            &arg,
-            Some(ICP_JSON_OUTPUT),
-            target.candid_path.as_deref(),
-        )
-        .map_err(|err| err.to_string())?;
+    let output = target.icp.canister_query_arg_output_with_candid(
+        &target.canister_id,
+        canic_core::protocol::CANIC_CYCLE_TRACKER,
+        &arg,
+        Some(ICP_JSON_OUTPUT),
+        target.candid_path.as_deref(),
+    )?;
 
-    parse_cycle_tracker_page(&output)
-        .map_err(|error| format!("could not parse canic_cycle_tracker response: {error}"))
+    parse_cycle_tracker_page(&output).map_err(|source| CycleObservationError::Response {
+        method: canic_core::protocol::CANIC_CYCLE_TRACKER,
+        source,
+    })
 }
 
 fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQueryTarget {
@@ -546,5 +574,19 @@ mod tests {
             )
         );
         assert_eq!(cycle_observation_error(None, None), None);
+    }
+
+    #[test]
+    fn cycle_response_failure_preserves_typed_cause_until_projection() {
+        let error = CycleObservationError::Response {
+            method: canic_core::protocol::CANIC_CYCLE_TRACKER,
+            source: IcpJsonResponseError::MissingResponseBytes,
+        };
+        let source = std::error::Error::source(&error).expect("typed response source");
+
+        assert!(matches!(
+            source.downcast_ref::<IcpJsonResponseError>(),
+            Some(IcpJsonResponseError::MissingResponseBytes)
+        ));
     }
 }

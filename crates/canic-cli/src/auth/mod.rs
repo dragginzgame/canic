@@ -27,7 +27,7 @@ use canic_core::protocol::{
 };
 use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
-    icp::{IcpCli, IcpCommandError},
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     install_root::InstallStateError,
     installed_deployment::{
@@ -47,8 +47,8 @@ use std::{
 use thiserror::Error as ThisError;
 
 use codec::{
-    AuthResponseParseError, parse_issuer_observed_status, parse_issuer_principal,
-    parse_renewal_status_summary, root_issuer_renewal_status_arg,
+    parse_issuer_observed_status, parse_issuer_principal, parse_renewal_status_summary,
+    root_issuer_renewal_status_arg,
 };
 use render::{render_issuer_observation, write_renewal_status_result};
 
@@ -135,8 +135,8 @@ pub enum AuthCommandError {
         actual: &'static str,
     },
 
-    #[error("failed to parse auth renewal response: {detail}")]
-    ResponseParse { detail: String },
+    #[error("failed to parse auth renewal response: {0}")]
+    ResponseParse(#[from] IcpJsonResponseError),
 }
 
 impl AuthCommandError {
@@ -157,15 +157,7 @@ impl AuthCommandError {
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
             Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => 2,
-            Self::ResponseParse { .. } => 3,
-        }
-    }
-}
-
-impl From<AuthResponseParseError> for AuthCommandError {
-    fn from(error: AuthResponseParseError) -> Self {
-        Self::ResponseParse {
-            detail: error.to_string(),
+            Self::ResponseParse(_) => 3,
         }
     }
 }

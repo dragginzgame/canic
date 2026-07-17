@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.6` is potentially breaking: it preserves canonical typed ICP response
+  causes through CLI observability and removes the duplicate string-backed
+  auth response-error flow without changing successful command reports.
+
 - `0.93.5` is potentially breaking: it makes the typed ICP response envelope
   and canonical endpoint DTOs the sole host/CLI query contract, removing
   permissive JSON parsing and duplicate registry wire models.
