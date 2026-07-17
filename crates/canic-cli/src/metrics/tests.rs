@@ -1,7 +1,16 @@
 use super::*;
 use crate::metrics::{
     model::{MetricValue, MetricsKind, MetricsReport},
-    parse::{MetricsParseError, parse_metrics_page},
+    parse::parse_metrics_page,
+};
+use candid::{CandidType, Encode, Principal};
+use canic_core::{
+    cdk::utils::hash::hex_bytes,
+    dto::{
+        error::Error as CanicError,
+        metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
+        page::Page,
+    },
 };
 
 // Ensure the public kind selector accepts the expected CLI vocabulary.
@@ -99,13 +108,32 @@ fn missing_metrics_deployment_mentions_unverified_registration_acknowledgement()
     assert!(message.contains("--allow-unverified"));
 }
 
-// Ensure named JSON metric pages parse into the CLI row shape.
 #[test]
-fn parses_metrics_json_page() {
-    let entries = parse_metrics_page(
-        r#"{"Ok":{"entries":[{"labels":["lifecycle","init","started"],"principal":null,"value":{"Count":2}},{"labels":["cycles_funding","minted"],"principal":"aaaaa-aa","value":{"U128":"1000"}},{"labels":["timer","tick"],"principal":null,"value":{"CountAndU64":{"count":3,"value_u64":12}}}],"total":3}}"#,
-    )
-    .expect("parse metrics page");
+fn parses_typed_metrics_page() {
+    let output = response_json(&Ok::<_, CanicError>(Page {
+        entries: vec![
+            MetricEntryDto {
+                labels: vec!["lifecycle".into(), "init".into(), "started".into()],
+                principal: None,
+                value: MetricValueDto::Count(2),
+            },
+            MetricEntryDto {
+                labels: vec!["cycles_funding".into(), "minted".into()],
+                principal: Some(Principal::from_text("aaaaa-aa").expect("principal")),
+                value: MetricValueDto::U128(1_000),
+            },
+            MetricEntryDto {
+                labels: vec!["timer".into(), "tick".into()],
+                principal: None,
+                value: MetricValueDto::CountAndU64 {
+                    count: 3,
+                    value_u64: 12,
+                },
+            },
+        ],
+        total: 3,
+    }));
+    let entries = parse_metrics_page(&output).expect("parse metrics page");
 
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].labels, ["lifecycle", "init", "started"]);
@@ -121,15 +149,7 @@ fn parses_metrics_json_page() {
     );
 }
 
-#[test]
-fn metrics_json_rejects_malformed_entries() {
-    assert_eq!(
-        parse_metrics_page(
-            r#"{"Ok":{"entries":[{"labels":["timer"],"principal":null}],"total":1}}"#
-        ),
-        Err(MetricsParseError::InvalidEntryField {
-            index: 0,
-            field: "value"
-        })
-    );
+fn response_json<T: CandidType>(response: &T) -> String {
+    let bytes = Encode!(response).expect("encode response");
+    serde_json::json!({ "response_bytes": hex_bytes(bytes) }).to_string()
 }

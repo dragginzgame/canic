@@ -14,7 +14,6 @@ pub(super) const BLOB_STORAGE_READINESS_BLOCKED: &str = "blocked";
 pub(super) const BLOB_STORAGE_READINESS_READY: &str = "ready";
 pub(super) const BLOB_STORAGE_READINESS_WARNING: &str = "warning";
 pub(super) const BLOB_STORAGE_CODE_NOT_CONFIGURED: &str = "not_configured";
-pub(super) const BLOB_STORAGE_CODE_PROJECT_AS_PAYMENT_ACCOUNT: &str = "project_as_payment_account";
 pub(super) const BLOB_STORAGE_CODE_FUNDING_NEEDED: &str = "funding_needed";
 pub(super) const BLOB_STORAGE_CODE_GATEWAY_PRINCIPALS_EMPTY: &str = "gateway_principals_empty";
 pub(super) const BLOB_STORAGE_CODE_CASHIER_BALANCE_BELOW_MIN: &str = "cashier_balance_below_min";
@@ -29,7 +28,6 @@ pub(super) const BLOB_STORAGE_CODE_SKIPPED_CONFIG_MISSING: &str = "skipped_confi
 pub(super) const BLOB_STORAGE_CODE_SKIPPED_READ_ONLY_STATUS: &str = "skipped_read_only_status";
 pub(super) const BLOB_STORAGE_CODE_STATUS_SYNC_REQUEST_IGNORED: &str =
     "status_sync_request_ignored";
-pub(super) const BLOB_STORAGE_CODE_UNKNOWN: &str = "unknown";
 pub(super) const BLOB_STORAGE_WARNING_POST_STATUS_UNAVAILABLE: &str = "post_status_unavailable";
 pub(super) const BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES: &str = "invalid_cycles";
 pub(super) const BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED: &str =
@@ -478,7 +476,6 @@ pub(super) enum BlobStorageFundingStatusCode {
     NotConfigured,
     NotNeeded,
     ProjectCyclesReserveBlocksFunding,
-    Unknown,
 }
 
 impl BlobStorageFundingStatusCode {
@@ -492,7 +489,6 @@ impl BlobStorageFundingStatusCode {
             Self::ProjectCyclesReserveBlocksFunding => {
                 BLOB_STORAGE_CODE_PROJECT_CYCLES_RESERVE_BLOCKS_FUNDING
             }
-            Self::Unknown => BLOB_STORAGE_CODE_UNKNOWN,
         }
     }
 }

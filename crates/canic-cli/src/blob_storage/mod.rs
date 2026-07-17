@@ -38,7 +38,7 @@ use canic_core::protocol::{
     BLOB_STORAGE_FUND_FROM_PROJECT_CYCLES, BLOB_STORAGE_STATUS,
     BLOB_STORAGE_UPDATE_GATEWAY_PRINCIPALS,
 };
-use canic_host::icp::IcpCli;
+use canic_host::icp::{IcpCli, IcpJsonResponseError};
 use canic_host::{
     candid_endpoints::CandidEndpointError, icp::IcpCommandError, icp_config::IcpConfigError,
     install_root::InstallStateError, installed_deployment::InstalledDeploymentError,
@@ -113,8 +113,14 @@ pub enum BlobStorageCommandError {
     #[error("local Candid sidecar {path} does not define blob-storage method {method}")]
     MethodUnavailable { path: PathBuf, method: String },
 
-    #[error("failed to parse blob-storage canister response: {detail}")]
-    ResponseParse { detail: String },
+    #[error("failed to decode blob-storage canister response: {0}")]
+    Response(#[source] IcpJsonResponseError),
+
+    #[error("blob-storage {response_kind} response field `{field}` exceeds u128")]
+    ResponseValueOutOfRange {
+        response_kind: &'static str,
+        field: &'static str,
+    },
 
     #[error("{message}")]
     ReadinessCheckFailed {
@@ -159,7 +165,7 @@ impl BlobStorageCommandError {
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. } => 1,
             Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => 2,
-            Self::ResponseParse { .. } => 3,
+            Self::Response(_) | Self::ResponseValueOutOfRange { .. } => 3,
             Self::ReadinessCheckFailed { .. } => 4,
         }
     }
@@ -197,7 +203,9 @@ impl BlobStorageCommandError {
             Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => {
                 BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
             }
-            Self::ResponseParse { .. } => BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED,
+            Self::Response(_) | Self::ResponseValueOutOfRange { .. } => {
+                BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED
+            }
             Self::CandidParse { .. } => BLOB_STORAGE_ERROR_CODE_CANDID_DECODE_FAILED,
             Self::ReadinessCheckFailed { .. } => BLOB_STORAGE_ERROR_CODE_READINESS_CHECK_FAILED,
             Self::JsonReported { source, .. } => source.command_error_code(),
@@ -207,8 +215,12 @@ impl BlobStorageCommandError {
 
 impl From<BlobStorageParseError> for BlobStorageCommandError {
     fn from(error: BlobStorageParseError) -> Self {
-        Self::ResponseParse {
-            detail: error.to_string(),
+        match error {
+            BlobStorageParseError::NatOutOfRange { kind, field } => Self::ResponseValueOutOfRange {
+                response_kind: kind.label(),
+                field,
+            },
+            BlobStorageParseError::Response(error) => Self::Response(error),
         }
     }
 }

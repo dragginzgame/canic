@@ -1,8 +1,25 @@
-use super::super::commands::{add_icp_environment_target, icp_command_in_network};
-use crate::{icp::LocalReplicaTarget, release_set::icp_query_on_network, replica_query};
-use canic_core::{dto::state::BootstrapStatusResponse, protocol};
-use serde_json::Value;
+//! Module: install_root::readiness::diagnostics
+//!
+//! Responsibility: render bounded diagnostics for root bootstrap readiness failures.
+//! Does not own: bootstrap state, registry state, or readiness polling.
+//! Boundary: queries maintained diagnostic endpoints without mutating canister state.
+
+#[cfg(test)]
+mod tests;
+
+use crate::{
+    icp::{LocalReplicaTarget, decode_json_result_response},
+    install_root::commands::{add_icp_environment_target, icp_command_in_network},
+    registry::parse_registry_entries,
+    release_set::icp_query_on_network,
+    replica_query,
+};
 use std::path::Path;
+
+use canic_core::{
+    dto::{log::LogEntry, page::Page, state::BootstrapStatusResponse},
+    protocol,
+};
 
 pub(super) fn print_bootstrap_failure_diagnostics(
     icp_root: &Path,
@@ -100,7 +117,7 @@ fn print_recent_root_logs(
     local_replica: Option<&LocalReplicaTarget>,
 ) {
     let page_args = r"(null, null, null, record { limit = 8; offset = 0 })";
-    let Ok(logs_json) = icp_query_on_network(
+    let Ok(output) = icp_query_on_network(
         icp_root,
         network,
         local_replica,
@@ -111,35 +128,25 @@ fn print_recent_root_logs(
     ) else {
         return;
     };
-    let Ok(data) = serde_json::from_str::<Value>(&logs_json) else {
+    let Ok(page) = decode_json_result_response::<Page<LogEntry>>(&output) else {
         return;
     };
-    let entries = data
-        .get("Ok")
-        .and_then(|ok| ok.get("entries"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
 
-    if entries.is_empty() {
+    if page.entries.is_empty() {
         println!("  <no runtime log entries>");
         return;
     }
 
-    for entry in entries.iter().rev() {
-        let level = entry.get("level").and_then(Value::as_str).unwrap_or("Info");
-        let topic = entry.get("topic").and_then(Value::as_str).unwrap_or("");
-        let message = entry
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .replace('\n', "\\n");
-        let topic_prefix = if topic.is_empty() {
-            String::new()
-        } else {
-            format!("[{topic}] ")
-        };
-        println!("  {level} {topic_prefix}{message}");
+    for entry in page.entries.iter().rev() {
+        let topic_prefix = entry
+            .topic
+            .as_deref()
+            .map_or_else(String::new, |topic| format!("[{topic}] "));
+        println!(
+            "  {:?} {topic_prefix}{}",
+            entry.level,
+            entry.message.replace('\n', "\\n")
+        );
     }
 }
 
@@ -159,7 +166,7 @@ fn current_registry_roles(
         return Some(render_registry_roles(&roles));
     }
 
-    let registry_json = icp_query_on_network(
+    let output = icp_query_on_network(
         icp_root,
         network,
         local_replica,
@@ -169,36 +176,12 @@ fn current_registry_roles(
         Some("json"),
     )
     .ok()?;
-    Some(registry_roles_from_json(&registry_json))
-}
-
-// Render the current subnet registry roles from one JSON response.
-fn registry_roles_from_json(registry_json: &str) -> String {
-    serde_json::from_str::<Value>(registry_json)
-        .ok()
-        .and_then(|data| {
-            data.get("Ok").and_then(Value::as_array).map(|entries| {
-                entries
-                    .iter()
-                    .filter_map(|entry| {
-                        entry
-                            .get("role")
-                            .and_then(Value::as_str)
-                            .map(str::to_string)
-                    })
-                    .collect::<Vec<_>>()
-            })
-        })
-        .map_or_else(
-            || "<unavailable>".to_string(),
-            |roles| {
-                if roles.is_empty() {
-                    "<empty>".to_string()
-                } else {
-                    roles.join(", ")
-                }
-            },
-        )
+    let entries = parse_registry_entries(&output).ok()?;
+    let roles = entries
+        .into_iter()
+        .filter_map(|entry| entry.role)
+        .collect::<Vec<_>>();
+    Some(render_registry_roles(&roles))
 }
 
 fn render_registry_roles(roles: &[String]) -> String {
@@ -224,6 +207,3 @@ fn print_raw_call(
     add_icp_environment_target(&mut command, network, local_replica);
     let _ = command.status();
 }
-
-#[cfg(test)]
-mod tests;

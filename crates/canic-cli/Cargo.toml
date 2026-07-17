@@ -20,7 +20,7 @@ path = "src/main.rs"
 [dependencies]
 candid = { workspace = true }
 canic-backup = { workspace = true }
-canic-core = { workspace = true }
+canic-core = { workspace = true, features = ["blob-storage-billing"] }
 canic-host = { workspace = true }
 clap = { workspace = true }
 rustix = { workspace = true }

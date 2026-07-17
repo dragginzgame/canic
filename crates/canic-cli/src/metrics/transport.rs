@@ -252,7 +252,6 @@ mod tests {
         RegistryEntry {
             pid: "aaaaa-aa".to_string(),
             role: Some("wasm_store".to_string()),
-            kind: Some("wasm_store".to_string()),
             parent_pid: None,
             module_hash: None,
         }

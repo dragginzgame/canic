@@ -37,8 +37,8 @@ use canic_host::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
-    registry::{RegistryEntry as HostRegistryEntry, parse_registry_entries},
-    subnet_registry::{SubnetRegistryQueryError, query_subnet_registry_json},
+    registry::RegistryEntry as HostRegistryEntry,
+    subnet_registry::{SubnetRegistryQueryError, query_subnet_registry},
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -269,24 +269,8 @@ fn validate_deployment_selection_if_needed(
         return validate_deployment_membership_entries(deployment, &request.canister, entries);
     }
 
-    let registry_json = call_subnet_registry(request, root)?;
-    validate_deployment_membership_json(deployment, &request.canister, &registry_json)
-}
-
-fn validate_deployment_membership_json(
-    deployment: &str,
-    canister: &str,
-    registry_json: &str,
-) -> Result<(), SnapshotCommandError> {
-    let entries = parse_registry_entries(registry_json).map_err(SnapshotCommandError::Registry)?;
-    if entries.iter().any(|entry| entry.pid == canister) {
-        return Ok(());
-    }
-
-    Err(SnapshotCommandError::CanisterNotInDeployment {
-        deployment: deployment.to_string(),
-        canister: canister.to_string(),
-    })
+    let entries = call_subnet_registry(request, root)?;
+    validate_deployment_membership_entries(deployment, &request.canister, &entries)
 }
 
 fn validate_deployment_membership_entries(
@@ -336,9 +320,7 @@ impl SnapshotDriver for IcpSnapshotDriver<'_> {
             return Ok(backup_registry_entries(entries));
         }
 
-        let registry_json = call_subnet_registry(self.request, root).map_err(driver_error)?;
-        let entries = parse_registry_entries(&registry_json)
-            .map_err(|err| driver_error(SnapshotCommandError::Registry(err)))?;
+        let entries = call_subnet_registry(self.request, root).map_err(driver_error)?;
         Ok(backup_registry_entries(&entries))
     }
 
@@ -413,17 +395,17 @@ fn snapshot_installed_deployment_error(error: InstalledDeploymentError) -> Snaps
 fn call_subnet_registry(
     request: &ResolvedSnapshotDownload,
     root: &str,
-) -> Result<String, SnapshotCommandError> {
+) -> Result<Vec<HostRegistryEntry>, SnapshotCommandError> {
     let network = state_network(request.network.as_deref());
     let candid_path = role_candid_path(Some(&request.icp_root), &network, "root");
-    query_subnet_registry_json(
+    query_subnet_registry(
         &icp(request),
         root,
         &network,
         Some(&request.icp_root),
         candid_path.as_deref(),
     )
-    .map(|query| query.registry_json)
+    .map(|query| query.entries)
     .map_err(snapshot_subnet_registry_error)
 }
 
@@ -431,6 +413,7 @@ fn snapshot_subnet_registry_error(error: SubnetRegistryQueryError) -> SnapshotCo
     match error {
         SubnetRegistryQueryError::Replica(err) => SnapshotCommandError::from(err),
         SubnetRegistryQueryError::Icp(err) => SnapshotCommandError::Icp(err),
+        SubnetRegistryQueryError::Registry(err) => SnapshotCommandError::Registry(err),
     }
 }
 
@@ -502,7 +485,7 @@ fn backup_registry_entries(entries: &[HostRegistryEntry]) -> Vec<BackupRegistryE
         .map(|entry| BackupRegistryEntry {
             pid: entry.pid.clone(),
             role: entry.role.clone(),
-            kind: entry.kind.clone(),
+            kind: None,
             parent_pid: entry.parent_pid.clone(),
             module_hash: entry.module_hash.clone(),
         })

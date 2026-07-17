@@ -62,17 +62,13 @@ fn parses_download_deployment_options_without_canister() {
 // Ensure explicit deployment/canister selections fail when the registry omits the canister.
 #[test]
 fn deployment_membership_rejects_unknown_canister() {
-    let registry = serde_json::json!({
-        "Ok": [
-            {
-                "pid": ROOT,
-                "role": "root",
-                "record": { "parent_pid": null }
-            }
-        ]
-    })
-    .to_string();
-    let err = validate_deployment_membership_json("demo", "missing-cai", &registry)
+    let registry = vec![HostRegistryEntry {
+        pid: ROOT.to_string(),
+        role: Some("root".to_string()),
+        parent_pid: None,
+        module_hash: None,
+    }];
+    let err = validate_deployment_membership_entries("demo", "missing-cai", &registry)
         .expect_err("missing canister should reject");
 
     std::assert_matches!(
@@ -88,7 +84,6 @@ fn deployment_membership_entries_accept_known_canister() {
     let entries = vec![HostRegistryEntry {
         pid: ROOT.to_string(),
         role: Some("root".to_string()),
-        kind: None,
         parent_pid: None,
         module_hash: None,
     }];

@@ -1286,8 +1286,9 @@ fn blob_storage_medic_error_check_classifies_target_errors() {
         "store",
     );
     let generic = blob_storage_medic_error_check(
-        BlobStorageCommandError::ResponseParse {
-            detail: "sample".to_string(),
+        BlobStorageCommandError::ResponseValueOutOfRange {
+            response_kind: "status",
+            field: "sample",
         },
         "demo",
         "store",
@@ -1549,7 +1550,6 @@ fn registry_entry(pid: &str, role: Option<&str>) -> canic_host::registry::Regist
     canic_host::registry::RegistryEntry {
         pid: pid.to_string(),
         role: role.map(str::to_string),
-        kind: Some("service".to_string()),
         parent_pid: Some("aaaaa-aa".to_string()),
         module_hash: None,
     }

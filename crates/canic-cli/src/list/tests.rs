@@ -1,4 +1,14 @@
 use super::*;
+use candid::{Encode, Principal};
+use canic_core::{
+    cdk::utils::hash::{decode_hex, hex_bytes},
+    dto::{
+        canister::CanisterInfo,
+        error::Error as CanicError,
+        topology::{SubnetRegistryEntry, SubnetRegistryResponse},
+    },
+    ids::CanisterRole,
+};
 use canic_host::registry::parse_registry_entries;
 use canic_host::table::{ColumnAlign, render_separator, render_table_row};
 use options::ListSource;
@@ -470,98 +480,49 @@ fn renders_config_output_with_fleet_roles() {
     );
 }
 
-// Build representative subnet registry JSON.
 fn registry_json() -> String {
-    json!({
-        "Ok": [
-            {
-                "pid": ROOT,
-                "role": "root",
-                "record": {
-                    "pid": ROOT,
-                    "role": "root",
-                    "kind": "root",
-                    "parent_pid": null,
-                    "module_hash": HASH
-                }
-            },
-            {
-                "pid": APP,
-                "role": "app",
-                "record": {
-                    "pid": APP,
-                    "role": "app",
-                    "kind": "singleton",
-                    "parent_pid": ROOT,
-                    "module_hash": HASH
-                }
-            },
-            {
-                "pid": MINIMAL,
-                "role": "minimal",
-                "record": {
-                    "pid": MINIMAL,
-                    "role": "minimal",
-                    "kind": "singleton",
-                    "parent_pid": ROOT,
-                    "module_hash": HASH
-                }
-            },
-            {
-                "pid": WORKER,
-                "role": "worker",
-                "record": {
-                    "pid": WORKER,
-                    "role": "worker",
-                    "kind": "replica",
-                    "parent_pid": [APP],
-                    "module_hash": HASH
-                }
-            }
-        ]
-    })
-    .to_string()
+    registry_response_json(vec![
+        registry_entry(ROOT, "root", None, HASH),
+        registry_entry(APP, "app", Some(ROOT), HASH),
+        registry_entry(MINIMAL, "minimal", Some(ROOT), HASH),
+        registry_entry(WORKER, "worker", Some(APP), HASH),
+    ])
 }
 
 fn same_role_variant_registry_json() -> String {
-    json!({
-        "Ok": [
-            {
-                "pid": ROOT,
-                "role": "root",
-                "record": {
-                    "pid": ROOT,
-                    "role": "root",
-                    "kind": "root",
-                    "parent_pid": null,
-                    "module_hash": HASH
-                }
-            },
-            {
-                "pid": APP,
-                "role": "app",
-                "record": {
-                    "pid": APP,
-                    "role": "app",
-                    "kind": "singleton",
-                    "parent_pid": ROOT,
-                    "module_hash": HASH
-                }
-            },
-            {
-                "pid": APP_VARIANT,
-                "role": "app",
-                "record": {
-                    "pid": APP_VARIANT,
-                    "role": "app",
-                    "kind": "singleton",
-                    "parent_pid": ROOT,
-                    "module_hash": VARIANT_HASH
-                }
-            }
-        ]
-    })
-    .to_string()
+    registry_response_json(vec![
+        registry_entry(ROOT, "root", None, HASH),
+        registry_entry(APP, "app", Some(ROOT), HASH),
+        registry_entry(APP_VARIANT, "app", Some(ROOT), VARIANT_HASH),
+    ])
+}
+
+fn registry_entry(
+    pid: &str,
+    role: &str,
+    parent_pid: Option<&str>,
+    module_hash: &str,
+) -> SubnetRegistryEntry {
+    let pid = Principal::from_text(pid).expect("registry principal");
+    let role = CanisterRole::owned(role.to_string());
+    SubnetRegistryEntry {
+        pid,
+        role: role.clone(),
+        record: CanisterInfo {
+            pid,
+            role,
+            parent_pid: parent_pid
+                .map(|parent| Principal::from_text(parent).expect("registry parent principal")),
+            module_hash: Some(decode_hex(module_hash).expect("registry module hash")),
+            created_at: 1,
+        },
+    }
+}
+
+fn registry_response_json(entries: Vec<SubnetRegistryEntry>) -> String {
+    let response = Ok::<_, CanicError>(SubnetRegistryResponse(entries));
+    let bytes = Encode!(&response).expect("encode registry response");
+    json!({ "response_bytes": hex_bytes(bytes) }).to_string()
 }
 
 fn readiness_map() -> BTreeMap<String, ReadyStatus> {

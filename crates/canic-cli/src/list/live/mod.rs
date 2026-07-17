@@ -26,7 +26,6 @@ use std::{
 
 use super::options::ListSource;
 
-const OBSERVATION_ABSENT: &str = "-";
 const OBSERVATION_ERROR: &str = "error";
 
 pub(super) fn load_registry_entries(
@@ -239,10 +238,8 @@ fn canic_version_label_endpoint(
     let network = network.unwrap_or_else(local_network);
     let candid_path = registry_entry_candid_path(icp_root, &network, entry);
     let icp = live_icp(icp, Some(network), icp_root);
-    query_canic_metadata_version(&icp, &entry.pid, candid_path.as_deref()).map_or_else(
-        |_| OBSERVATION_ERROR.to_string(),
-        |version| version.unwrap_or_else(|| OBSERVATION_ABSENT.to_string()),
-    )
+    query_canic_metadata_version(&icp, &entry.pid, candid_path.as_deref())
+        .unwrap_or_else(|_| OBSERVATION_ERROR.to_string())
 }
 
 fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpCli {

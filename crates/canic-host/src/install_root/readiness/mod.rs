@@ -1,21 +1,24 @@
+//! Module: install_root::readiness
+//!
+//! Responsibility: wait for a newly installed root to complete bootstrap.
+//! Does not own: bootstrap state, endpoint DTOs, or diagnostic rendering.
+//! Boundary: polls typed readiness and bootstrap responses, then delegates diagnostics.
+
+mod diagnostics;
+
 use self::diagnostics::{
     print_bootstrap_failure_diagnostics, print_bootstrap_status, print_current_registry_roles,
     print_root_diagnostics,
 };
-pub(super) use self::parsing::parse_bootstrap_status_value;
 use crate::{
     canister_ready::query_canister_ready,
-    icp::{IcpCli, IcpDiagnostic, LocalReplicaTarget, classify_icp_diagnostic},
+    icp::{IcpCli, LocalReplicaTarget, decode_json_response},
     release_set::icp_query_on_network,
     replica_query,
 };
-use canic_core::{dto::state::BootstrapStatusResponse, protocol};
-use serde_json::Value;
-use std::path::Path;
-use std::{thread, time::Duration};
+use std::{path::Path, thread, time::Duration};
 
-mod diagnostics;
-mod parsing;
+use canic_core::{dto::state::BootstrapStatusResponse, protocol};
 
 // Wait until root reports ready, printing periodic progress and diagnostics.
 pub(super) fn wait_for_root_ready(
@@ -39,10 +42,8 @@ pub(super) fn wait_for_root_ready(
             return Ok(());
         }
 
-        if let Some(status) =
-            root_bootstrap_status(icp_root, network, root_canister, local_replica)?
-            && let Some(last_error) = status.last_error.as_deref()
-        {
+        let status = root_bootstrap_status(icp_root, network, root_canister, local_replica)?;
+        if let Some(last_error) = status.last_error.as_deref() {
             print_bootstrap_failure_diagnostics(
                 icp_root,
                 network,
@@ -95,12 +96,12 @@ fn root_bootstrap_status(
     network: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
-) -> Result<Option<BootstrapStatusResponse>, Box<dyn std::error::Error>> {
+) -> Result<BootstrapStatusResponse, Box<dyn std::error::Error>> {
     if let Some(status) = local_bootstrap_status(icp_root, network, root_canister) {
-        return Ok(Some(status));
+        return Ok(status);
     }
 
-    let output = match icp_query_on_network(
+    let output = icp_query_on_network(
         icp_root,
         network,
         local_replica,
@@ -108,20 +109,8 @@ fn root_bootstrap_status(
         protocol::CANIC_BOOTSTRAP_STATUS,
         None,
         Some("json"),
-    ) {
-        Ok(output) => output,
-        Err(err) => {
-            if matches!(
-                classify_icp_diagnostic(&err.to_string()),
-                Some(IcpDiagnostic::MethodMissing)
-            ) {
-                return Ok(None);
-            }
-            return Err(err);
-        }
-    };
-    let data = serde_json::from_str::<Value>(&output)?;
-    Ok(parse_bootstrap_status_value(&data))
+    )?;
+    decode_json_response(&output).map_err(Into::into)
 }
 
 fn local_bootstrap_status(
@@ -141,8 +130,7 @@ fn print_current_bootstrap_status(
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(status) = root_bootstrap_status(icp_root, network, root_canister, local_replica)? {
-        print_bootstrap_status(&status);
-    }
+    let status = root_bootstrap_status(icp_root, network, root_canister, local_replica)?;
+    print_bootstrap_status(&status);
     Ok(())
 }

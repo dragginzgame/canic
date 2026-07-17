@@ -231,7 +231,7 @@ fn env_bindings(root_canister_id: &str, entries: &[RegistryEntry]) -> Vec<InfoEn
                 },
                 role: entry.role,
                 canister_id: entry.pid,
-                kind: entry.kind,
+                kind: None,
                 parent_pid: entry.parent_pid,
             }
         })
@@ -257,7 +257,6 @@ fn normalized_root_entries(
         entries.push(RegistryEntry {
             pid: root_canister_id.to_string(),
             role: Some("root".to_string()),
-            kind: Some("root".to_string()),
             parent_pid: None,
             module_hash: None,
         });
@@ -377,7 +376,6 @@ mod tests {
         RegistryEntry {
             pid: pid.to_string(),
             role: role.map(str::to_string),
-            kind: Some("canister".to_string()),
             parent_pid: None,
             module_hash: None,
         }

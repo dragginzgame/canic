@@ -4,6 +4,7 @@ mod diagnostic;
 mod error;
 mod model;
 mod replica;
+mod response;
 mod run;
 mod snapshot;
 mod version;
@@ -20,6 +21,7 @@ pub use model::{
     IcpCliVersion, IcpRawOutput, IcpSnapshotCreateReceipt, LocalReplicaTarget,
     REQUIRED_ICP_CLI_VERSION,
 };
+pub use response::{IcpJsonResponseError, decode_json_response, decode_json_result_response};
 pub use run::{
     run_json, run_output, run_output_with_stderr, run_raw_output, run_status, run_status_inherit,
     run_success,
