@@ -16,12 +16,13 @@ use canic_host::{
     adoption::AdoptionReportError,
     icp_config::{IcpConfigError, IcpProjectConfigReport, inspect_canic_icp_yaml},
     install_root::{
-        current_canic_project_root, discover_current_canic_config_choices, project_fleet_roots,
+        ConfigDiscoveryError, current_canic_project_root, discover_current_canic_config_choices,
+        project_fleet_roots, select_discovered_fleet_config_path,
     },
     release_set::{
         FleetConfigError, attach_fleet_role, configured_role_lifecycle, declare_fleet_role,
-        display_workspace_path, matching_fleet_config_paths, plan_attach_fleet_role,
-        plan_declare_fleet_role, plan_rename_fleet_role, rename_fleet_role,
+        display_workspace_path, plan_attach_fleet_role, plan_declare_fleet_role,
+        plan_rename_fleet_role, rename_fleet_role,
     },
 };
 use command::{
@@ -65,11 +66,6 @@ pub enum FleetCommandError {
     #[error("unknown fleet {0}; run canic fleet list to inspect config-defined fleets")]
     UnknownFleet(String),
 
-    #[error(
-        "multiple configs declare fleet {0}; use distinct [fleet].name values before selecting it"
-    )]
-    DuplicateFleet(String),
-
     #[error("fleet delete cancelled")]
     DeleteCancelled,
 
@@ -93,6 +89,9 @@ pub enum FleetCommandError {
 
     #[error(transparent)]
     IcpConfig(#[from] IcpConfigError),
+
+    #[error("failed to discover Canic project configs: {0}")]
+    ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -442,7 +441,7 @@ where
     Ok(())
 }
 
-fn discover_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+fn discover_config_choices() -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     discover_current_canic_config_choices()
 }
 
@@ -463,13 +462,8 @@ fn selected_fleet_config_path_from_choices(
     choices: &[PathBuf],
     fleet: &str,
 ) -> Result<PathBuf, FleetCommandError> {
-    let matches = matching_fleet_config_paths(choices, fleet);
-
-    match matches.as_slice() {
-        [] => Err(FleetCommandError::UnknownFleet(fleet.to_string())),
-        [path] => Ok(path.clone()),
-        _ => Err(FleetCommandError::DuplicateFleet(fleet.to_string())),
-    }
+    select_discovered_fleet_config_path(choices, fleet)?
+        .ok_or_else(|| FleetCommandError::UnknownFleet(fleet.to_string()))
 }
 
 fn delete_target_dir_from_choices(
@@ -477,13 +471,8 @@ fn delete_target_dir_from_choices(
     choices: &[PathBuf],
     fleet: &str,
 ) -> Result<PathBuf, FleetCommandError> {
-    let matches = matching_fleet_config_paths(choices, fleet);
-
-    let config_path = match matches.as_slice() {
-        [] => return Err(FleetCommandError::UnknownFleet(fleet.to_string())),
-        [path] => path,
-        _ => return Err(FleetCommandError::DuplicateFleet(fleet.to_string())),
-    };
+    let config_path = select_discovered_fleet_config_path(choices, fleet)?
+        .ok_or_else(|| FleetCommandError::UnknownFleet(fleet.to_string()))?;
     let target = config_path
         .parent()
         .ok_or_else(|| FleetCommandError::MissingFleetDirectory(fleet.to_string()))?

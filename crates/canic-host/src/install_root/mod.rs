@@ -42,8 +42,9 @@ use artifact_promotion::write_artifact_promotion_execution_receipt_for_install;
 use build_environment::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
-    current_canic_project_root, discover_canic_config_choices, discover_canic_project_root_from,
-    discover_project_canic_config_choices, project_fleet_roots,
+    ConfigDiscoveryError, current_canic_project_root, discover_canic_config_choices,
+    discover_canic_project_root_from, discover_project_canic_config_choices, project_fleet_roots,
+    select_discovered_fleet_config_path,
 };
 use current_execution::current_install_execution_context;
 pub use deployment_registration::{
@@ -106,7 +107,7 @@ impl InstallRootBlockedError {
 }
 
 /// Discover installable Canic config choices under the current workspace.
-pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+pub fn discover_current_canic_config_choices() -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let project_root = current_canic_project_root()?;
     let choices = config_selection::discover_workspace_canic_config_choices(&project_root)?;
     if !choices.is_empty() {

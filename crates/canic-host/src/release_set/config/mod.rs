@@ -9,7 +9,7 @@ use crate::durable_io::write_bytes;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 pub use error::{
@@ -231,18 +231,6 @@ fn commit_role_rename_sources_with_writer(
     }
 
     Ok(())
-}
-
-// Select config paths whose required [fleet].name matches the requested fleet.
-#[must_use]
-pub fn matching_fleet_config_paths(choices: &[PathBuf], fleet: &str) -> Vec<PathBuf> {
-    choices
-        .iter()
-        .filter_map(|path| match configured_fleet_name(path) {
-            Ok(name) if name == fleet => Some(path.clone()),
-            Ok(_) | Err(_) => None,
-        })
-        .collect()
 }
 
 // Enumerate configured role kinds across all subnets for operator-facing tables.

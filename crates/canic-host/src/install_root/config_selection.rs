@@ -7,6 +7,7 @@ use std::{
     io::{self, IsTerminal, Write},
     path::{Path, PathBuf},
 };
+use thiserror::Error as ThisError;
 
 ///
 /// ConfigChoiceRow
@@ -23,19 +24,66 @@ const FLEETS_ROOT: &str = "fleets";
 const ICP_CONFIG_FILE: &str = "icp.yaml";
 const ROOT_CONFIG_RELATIVE: &str = "canic.toml";
 
+///
+/// ConfigDiscoveryError
+///
+
+#[derive(Debug, ThisError)]
+pub enum ConfigDiscoveryError {
+    #[error("failed to resolve current directory: {0}")]
+    CurrentDirectory(#[source] io::Error),
+
+    #[error("failed to canonicalize Canic project path {path}: {source}")]
+    Canonicalize {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("failed to read Canic config directory {path}: {source}")]
+    Directory {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("failed to inspect Canic config path {path}: {source}")]
+    Path {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("multiple configs declare fleet {fleet}: {configs}")]
+    DuplicateFleet { fleet: String, configs: String },
+}
+
 // Resolve the operator-facing Canic project root from the current directory.
-pub fn current_canic_project_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let current_dir = env::current_dir()?.canonicalize()?;
+pub fn current_canic_project_root() -> Result<PathBuf, ConfigDiscoveryError> {
+    let current_dir = env::current_dir().map_err(ConfigDiscoveryError::CurrentDirectory)?;
+    let current_dir =
+        current_dir
+            .canonicalize()
+            .map_err(|source| ConfigDiscoveryError::Canonicalize {
+                path: current_dir,
+                source,
+            })?;
     Ok(discover_canic_project_root_from(&current_dir)?.unwrap_or(current_dir))
 }
 
 pub fn discover_canic_project_root_from(
     start: &Path,
-) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+) -> Result<Option<PathBuf>, ConfigDiscoveryError> {
     let mut nearest_fleets_root = None;
     for candidate in start.ancestors() {
         if !discover_project_canic_config_choices(candidate)?.is_empty() {
-            let root = candidate.canonicalize()?;
+            let root =
+                candidate
+                    .canonicalize()
+                    .map_err(|source| ConfigDiscoveryError::Canonicalize {
+                        path: candidate.to_path_buf(),
+                        source,
+                    })?;
             if candidate.join(ICP_CONFIG_FILE).is_file() {
                 return Ok(Some(root));
             }
@@ -78,14 +126,14 @@ pub(super) fn resolve_install_config_path(
 // Discover installable Canic config choices from the fleet root.
 pub(super) fn discover_workspace_canic_config_choices(
     workspace_root: &Path,
-) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     discover_project_canic_config_choices(workspace_root)
 }
 
 // Discover candidate `canic.toml` files under conventional project fleet roots.
 pub fn discover_project_canic_config_choices(
     project_root: &Path,
-) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let mut choices = Vec::new();
     for root in project_fleet_roots(project_root) {
         collect_canic_config_choices(&root, &mut choices)?;
@@ -97,9 +145,7 @@ pub fn discover_project_canic_config_choices(
 }
 
 // Discover candidate `canic.toml` files under one fleet config root.
-pub fn discover_canic_config_choices(
-    root: &Path,
-) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+pub fn discover_canic_config_choices(root: &Path) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let mut choices = Vec::new();
     collect_canic_config_choices(root, &mut choices)?;
     choices.sort();
@@ -112,7 +158,22 @@ pub fn project_fleet_roots(project_root: &Path) -> Vec<PathBuf> {
     vec![project_root.join(FLEETS_ROOT)]
 }
 
-fn reject_duplicate_fleet_names(choices: &[PathBuf]) -> Result<(), Box<dyn std::error::Error>> {
+fn reject_duplicate_fleet_names(choices: &[PathBuf]) -> Result<(), ConfigDiscoveryError> {
+    let _ = unique_configs_by_fleet(choices)?;
+    Ok(())
+}
+
+/// Select one config from a canonically admitted discovery result by fleet name.
+pub fn select_discovered_fleet_config_path(
+    choices: &[PathBuf],
+    fleet: &str,
+) -> Result<Option<PathBuf>, ConfigDiscoveryError> {
+    Ok(unique_configs_by_fleet(choices)?.remove(fleet))
+}
+
+fn unique_configs_by_fleet(
+    choices: &[PathBuf],
+) -> Result<BTreeMap<String, PathBuf>, ConfigDiscoveryError> {
     let mut by_fleet = BTreeMap::<String, Vec<&PathBuf>>::new();
     for path in choices {
         if let Ok(fleet) = configured_fleet_name(path) {
@@ -120,33 +181,51 @@ fn reject_duplicate_fleet_names(choices: &[PathBuf]) -> Result<(), Box<dyn std::
         }
     }
 
-    for (fleet, paths) in by_fleet {
+    for (fleet, paths) in &by_fleet {
         if paths.len() > 1 {
             let configs = paths
-                .into_iter()
+                .iter()
                 .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            return Err(format!("multiple configs declare fleet {fleet}: {configs}").into());
+            return Err(ConfigDiscoveryError::DuplicateFleet {
+                fleet: fleet.clone(),
+                configs,
+            });
         }
     }
 
-    Ok(())
+    Ok(by_fleet
+        .into_iter()
+        .filter_map(|(fleet, mut paths)| paths.pop().cloned().map(|path| (fleet, path)))
+        .collect())
 }
 
 // Recursively collect candidate config paths.
 fn collect_canic_config_choices(
     root: &Path,
     choices: &mut Vec<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), ConfigDiscoveryError> {
     if !root.is_dir() {
         return Ok(());
     }
 
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
+    let entries = fs::read_dir(root).map_err(|source| ConfigDiscoveryError::Directory {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    for entry in entries {
+        let entry = entry.map_err(|source| ConfigDiscoveryError::Directory {
+            path: root.to_path_buf(),
+            source,
+        })?;
         let path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|source| ConfigDiscoveryError::Path {
+                path: path.clone(),
+                source,
+            })?;
         if file_type.is_symlink() {
             continue;
         }

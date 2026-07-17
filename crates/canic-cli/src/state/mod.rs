@@ -19,8 +19,8 @@ use crate::{
 };
 use canic_core::state_contract::StateManifest;
 use canic_host::{
-    icp_config::resolve_current_canic_icp_root,
-    install_root::discover_project_canic_config_choices,
+    icp_config::{IcpConfigError, resolve_current_canic_icp_root},
+    install_root::{ConfigDiscoveryError, discover_project_canic_config_choices},
     role_contract::finding_detail,
     state_manifest::{
         STATE_AUDIT_COMMAND, STATE_MANIFEST_COMMAND, StateAuditReport, StateAuditStatus,
@@ -82,6 +82,12 @@ pub enum StateCommandError {
     #[error("state audit failed")]
     AuditFailed,
 
+    #[error("failed to resolve ICP project root: {0}")]
+    IcpRoot(#[from] IcpConfigError),
+
+    #[error("failed to discover Canic project configs: {0}")]
+    ConfigDiscovery(#[from] ConfigDiscoveryError),
+
     #[error("state contract resolution failed: {0}")]
     ContractRejected(String),
 }
@@ -90,7 +96,10 @@ impl StateCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
             Self::Usage(_) | Self::Json(_) => 2,
-            Self::AuditFailed | Self::ContractRejected(_) => 1,
+            Self::AuditFailed
+            | Self::IcpRoot(_)
+            | Self::ConfigDiscovery(_)
+            | Self::ContractRejected(_) => 1,
         }
     }
 
@@ -208,10 +217,8 @@ fn run_manifest(args: Vec<OsString>) -> Result<(), StateCommandError> {
 fn project_state_resolution(
     role: Option<&str>,
 ) -> Result<StateManifestResolution, StateCommandError> {
-    let project_root = resolve_current_canic_icp_root()
-        .map_err(|error| StateCommandError::ContractRejected(error.to_string()))?;
-    let configs = discover_project_canic_config_choices(&project_root)
-        .map_err(|error| StateCommandError::ContractRejected(error.to_string()))?;
+    let project_root = resolve_current_canic_icp_root()?;
+    let configs = discover_project_canic_config_choices(&project_root)?;
     Ok(resolve_project_state_manifest(
         &project_root,
         &configs,

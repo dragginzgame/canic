@@ -22,7 +22,7 @@ use crate::{
 };
 use canic_host::canister_build::CanisterBuildProfile;
 use canic_host::icp::{IcpDiagnostic, classify_icp_diagnostic};
-use canic_host::icp_config::resolve_current_canic_icp_root;
+use canic_host::icp_config::{IcpConfigError, resolve_current_canic_icp_root};
 use canic_host::install_root::{InstallRootBlockedError, InstallRootOptions, install_root};
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
@@ -57,6 +57,9 @@ The selected canic.toml must include:
 pub enum InstallCommandError {
     #[error("{0}")]
     Usage(String),
+
+    #[error("failed to resolve ICP project root: {0}")]
+    IcpRoot(#[from] IcpConfigError),
 
     #[error(transparent)]
     Install(#[from] Box<dyn std::error::Error>),
@@ -161,7 +164,7 @@ where
     let options = InstallOptions::parse(args)?;
     let fleet = options.fleet.clone();
     let network = options.network.clone();
-    let icp_root = resolve_current_canic_icp_root().ok();
+    let icp_root = Some(resolve_current_canic_icp_root()?);
     install_root(options.into_install_root_options_with_icp_root(icp_root))
         .map_err(|err| install_error_with_context(err, &fleet, &network))
 }

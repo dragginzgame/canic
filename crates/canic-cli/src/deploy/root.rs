@@ -154,7 +154,7 @@ where
         network: options.network,
         deployment_check: check,
         verified_at_unix_secs: None,
-        icp_root: resolve_current_canic_icp_root().ok(),
+        icp_root: Some(resolve_current_canic_icp_root()?),
     })
     .map_err(DeployCommandError::from)?;
     print_json_or_text(

@@ -20,7 +20,7 @@ use canic_host::{
         DEFAULT_LOCAL_GATEWAY_PORT, configured_local_gateway_port_from_root,
         inspect_canic_icp_yaml_from_root, resolve_current_canic_icp_root,
     },
-    install_root::discover_project_canic_config_choices,
+    install_root::{ConfigDiscoveryError, discover_project_canic_config_choices},
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
@@ -62,6 +62,9 @@ Note:
 pub enum StatusCommandError {
     #[error("{0}")]
     Usage(String),
+
+    #[error("failed to discover Canic project configs: {0}")]
+    ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),

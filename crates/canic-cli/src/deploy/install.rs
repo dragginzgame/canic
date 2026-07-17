@@ -68,7 +68,7 @@ where
 
     let options = DeployInstallPlanOptions::parse(args)?;
     let plan = read_plan(&options.plan)?;
-    let icp_root = resolve_current_canic_icp_root().ok();
+    let icp_root = Some(resolve_current_canic_icp_root()?);
     install_root(options.into_install_root_options(plan, icp_root))
         .map_err(DeployCommandError::from)
 }

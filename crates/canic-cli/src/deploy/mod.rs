@@ -32,7 +32,7 @@ use crate::{
 use canic_host::{
     canister_build::CanisterBuildProfile,
     deployment_truth::DeploymentCheckV1,
-    icp_config::resolve_current_canic_icp_root,
+    icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     install_root::{InstallRootOptions, check_install_deployment_truth},
 };
 use clap::Command as ClapCommand;
@@ -56,6 +56,9 @@ pub enum DeployCommandError {
     #[error("{0}")]
     Usage(String),
 
+    #[error("failed to resolve ICP project root: {0}")]
+    IcpRoot(#[from] IcpConfigError),
+
     #[error(transparent)]
     Check(#[from] Box<dyn std::error::Error>),
 
@@ -72,7 +75,7 @@ pub enum DeployCommandError {
 impl DeployCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
-            Self::Usage(_) | Self::PlanOutput(_) => 2,
+            Self::Usage(_) | Self::IcpRoot(_) | Self::PlanOutput(_) => 2,
             Self::Check(_) | Self::PlanBlocked(_) | Self::Blocked(_) => 1,
         }
     }
@@ -126,7 +129,7 @@ where
 pub fn load_deployment_check(
     options: DeployTruthOptions,
 ) -> Result<DeploymentCheckV1, DeployCommandError> {
-    let icp_root = resolve_current_canic_icp_root().ok();
+    let icp_root = Some(resolve_current_canic_icp_root()?);
     check_install_deployment_truth(
         &options.into_install_root_options_with_icp_root(icp_root),
         current_observed_at()?,

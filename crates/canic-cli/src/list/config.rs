@@ -4,12 +4,12 @@ use super::{
     render::ConfigRoleRow,
 };
 use canic_host::{
-    install_root::discover_current_canic_config_choices,
+    install_root::{discover_current_canic_config_choices, select_discovered_fleet_config_path},
     registry::RegistryEntry,
     release_set::{
         configured_deployable_roles, configured_role_auto_create, configured_role_capabilities,
         configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
-        configured_role_topups, matching_fleet_config_paths,
+        configured_role_topups,
     },
 };
 use std::{
@@ -106,14 +106,7 @@ pub(super) fn missing_config_roles(
 
 pub(super) fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
     let fleet = &options.target;
-    let choices = load_config_value(discover_current_canic_config_choices)?;
-    let matches = matching_fleet_config_paths(&choices, fleet);
-
-    match matches.as_slice() {
-        [] => Err(ListCommandError::UnknownFleet(fleet.clone())),
-        [path] => Ok(path.clone()),
-        _ => Err(ListCommandError::Config(format!(
-            "multiple configs declare fleet {fleet}"
-        ))),
-    }
+    let choices = discover_current_canic_config_choices()?;
+    select_discovered_fleet_config_path(&choices, fleet)?
+        .ok_or_else(|| ListCommandError::UnknownFleet(fleet.clone()))
 }
