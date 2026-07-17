@@ -2477,6 +2477,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+ "serde",
 ]
 
 [[package]]
