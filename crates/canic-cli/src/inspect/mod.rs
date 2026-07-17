@@ -14,13 +14,13 @@ use crate::{
     support::candid::registry_entry_candid_path,
     version_text,
 };
-use candid::{Decode, Principal, types::principal::PrincipalError};
+use candid::{Principal, types::principal::PrincipalError};
 use canic_core::dto::runtime::{
     CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RuntimeFeatureStatus,
     RuntimeStatus,
 };
 use canic_host::{
-    icp::{IcpCli, IcpCommandError},
+    icp::{IcpCli, IcpCommandError, decode_json_result_response},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     install_root::InstallStateError,
     installed_deployment::{
@@ -410,38 +410,14 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
 }
 
 fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, InspectCommandError> {
-    let value = serde_json::from_str::<serde_json::Value>(output)
+    let status = decode_json_result_response::<CanicRuntimeStatus>(output)
         .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
-    let Some(response_bytes) = value
-        .get("response_bytes")
-        .and_then(serde_json::Value::as_str)
-    else {
-        return Err(InspectCommandError::InvalidResponse(
-            "missing response_bytes; typed canic_runtime_status response requires response_bytes"
-                .to_string(),
-        ));
-    };
-    let status = decode_runtime_status_response_hex(response_bytes)?;
 
     Ok(RuntimeStatusPayload {
         source: InspectSource::RuntimeObserved,
         status,
         response_format: InspectResponseFormat::Candid,
     })
-}
-
-fn decode_runtime_status_response_hex(
-    response_bytes: &str,
-) -> Result<CanicRuntimeStatus, InspectCommandError> {
-    let bytes = hex_to_bytes(response_bytes).ok_or_else(|| {
-        InspectCommandError::InvalidResponse("response_bytes was not valid hex".to_string())
-    })?;
-    let response = Decode!(
-        &bytes,
-        Result<CanicRuntimeStatus, canic_core::dto::error::Error>
-    )
-    .map_err(|err| InspectCommandError::InvalidResponse(err.to_string()))?;
-    response.map_err(|err| InspectCommandError::InvalidResponse(err.message))
 }
 
 fn command_exit_result(report: &InspectReport) -> Result<(), InspectCommandError> {
@@ -585,29 +561,6 @@ fn enabled_runtime_feature_rows(features: &[RuntimeFeatureStatus]) -> String {
 
 const fn inspect_status(payload: &RuntimeStatusPayload) -> RuntimeStatus {
     payload.status.status
-}
-
-fn hex_to_bytes(text: &str) -> Option<Vec<u8>> {
-    if !text.len().is_multiple_of(2) {
-        return None;
-    }
-    text.as_bytes()
-        .chunks_exact(2)
-        .map(|pair| {
-            let high = hex_value(pair[0])?;
-            let low = hex_value(pair[1])?;
-            Some((high << 4) | low)
-        })
-        .collect()
-}
-
-const fn hex_value(byte: u8) -> Option<u8> {
-    match byte {
-        b'0'..=b'9' => Some(byte - b'0'),
-        b'a'..=b'f' => Some(byte - b'a' + 10),
-        b'A'..=b'F' => Some(byte - b'A' + 10),
-        _ => None,
-    }
 }
 
 fn validate_principal(value: &str) -> Result<(), InspectCommandError> {

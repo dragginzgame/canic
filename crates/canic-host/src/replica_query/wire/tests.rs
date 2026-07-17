@@ -1,13 +1,21 @@
 use super::{
-    CanisterInfoWire, SubnetRegistryEntryWire, SubnetRegistryResponseWire,
     decode_bootstrap_status_response, decode_cycle_balance_response,
     decode_subnet_registry_response,
 };
 use candid::{Encode, Principal};
+use canic_core::{
+    dto::{
+        canister::CanisterInfo,
+        error::Error as CanicError,
+        state::BootstrapStatusResponse,
+        topology::{SubnetRegistryEntry, SubnetRegistryResponse},
+    },
+    ids::CanisterRole,
+};
 
 #[test]
 fn decodes_bootstrap_status_response_bytes() {
-    let bytes = Encode!(&canic_core::dto::state::BootstrapStatusResponse {
+    let bytes = Encode!(&BootstrapStatusResponse {
         ready: false,
         phase: "root:init:create_canisters".to_string(),
         last_error: Some("registry phase failed".to_string()),
@@ -23,53 +31,49 @@ fn decodes_bootstrap_status_response_bytes() {
 
 #[test]
 fn decodes_cycle_balance_response_bytes() {
-    let response: Result<u128, canic_core::dto::error::Error> = Ok(99_999_000_000_000);
+    let response: Result<u128, CanicError> = Ok(99_999_000_000_000);
     let bytes = Encode!(&response).expect("encode cycle balance response");
 
-    let cycles = decode_cycle_balance_response(&bytes).expect("decode cycle balance");
-
-    assert_eq!(cycles, 99_999_000_000_000);
+    assert_eq!(
+        decode_cycle_balance_response(&bytes).expect("decode cycle balance"),
+        99_999_000_000_000
+    );
 }
 
 #[test]
-fn decodes_subnet_registry_response_roles_and_cli_json() {
+fn decodes_canonical_subnet_registry_response() {
     let root = Principal::from_text("aaaaa-aa").expect("root principal");
     let child = Principal::anonymous();
-    let response: Result<SubnetRegistryResponseWire, canic_core::dto::error::Error> =
-        Ok(SubnetRegistryResponseWire(vec![
-            SubnetRegistryEntryWire {
-                pid: root,
-                role: "root".to_string(),
-                record: CanisterInfoWire {
-                    pid: root,
-                    role: "root".to_string(),
-                    parent_pid: None,
-                    module_hash: None,
-                    created_at: 1,
-                },
-            },
-            SubnetRegistryEntryWire {
-                pid: child,
-                role: "worker".to_string(),
-                record: CanisterInfoWire {
-                    pid: child,
-                    role: "worker".to_string(),
-                    parent_pid: Some(root),
-                    module_hash: Some(vec![0xab, 0xcd]),
-                    created_at: 2,
-                },
-            },
-        ]));
+    let response: Result<SubnetRegistryResponse, CanicError> = Ok(SubnetRegistryResponse(vec![
+        registry_entry(root, "root", None, None, 1),
+        registry_entry(child, "worker", Some(root), Some(vec![0xab, 0xcd]), 2),
+    ]));
     let bytes = Encode!(&response).expect("encode subnet registry response");
 
     let decoded = decode_subnet_registry_response(&bytes).expect("decode subnet registry");
-    let registry_json = decoded.to_cli_json();
 
-    assert_eq!(decoded.roles(), vec!["root", "worker"]);
-    assert_eq!(registry_json["Ok"][0]["pid"], root.to_text());
-    assert_eq!(registry_json["Ok"][1]["role"], "worker");
-    assert_eq!(
-        registry_json["Ok"][1]["record"]["parent_pid"],
-        root.to_text()
-    );
+    assert_eq!(decoded.0.len(), 2);
+    assert_eq!(decoded.0[0].pid, root);
+    assert_eq!(decoded.0[1].role.as_str(), "worker");
+    assert_eq!(decoded.0[1].record.parent_pid, Some(root));
+}
+
+fn registry_entry(
+    pid: Principal,
+    role: &str,
+    parent_pid: Option<Principal>,
+    module_hash: Option<Vec<u8>>,
+    created_at: u64,
+) -> SubnetRegistryEntry {
+    SubnetRegistryEntry {
+        pid,
+        role: CanisterRole::owned(role.to_string()),
+        record: CanisterInfo {
+            pid,
+            role: CanisterRole::owned(role.to_string()),
+            parent_pid,
+            module_hash,
+            created_at,
+        },
+    }
 }

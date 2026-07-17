@@ -21,7 +21,7 @@ pub(super) fn backup_registry_entries(entries: &[HostRegistryEntry]) -> Vec<Back
         .map(|entry| BackupRegistryEntry {
             pid: entry.pid.clone(),
             role: entry.role.clone(),
-            kind: entry.kind.clone(),
+            kind: None,
             parent_pid: entry.parent_pid.clone(),
             module_hash: entry.module_hash.clone(),
         })

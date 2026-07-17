@@ -1,5 +1,18 @@
 use super::*;
 use crate::{blob_storage::options::BlobStorageOptions, cli::globals, run};
+use candid::{CandidType, Encode, Nat, Principal};
+use canic_core::{
+    cdk::utils::hash::hex_bytes,
+    dto::{
+        blob_storage::{
+            BlobProjectCyclesTopUpReport, BlobStorageBillingWarning,
+            BlobStorageFundingStatus as BlobStorageFundingStatusDto,
+            BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
+            BlobStorageReadinessBlocker, BlobStorageStatusResponse,
+        },
+        error::Error as CanicError,
+    },
+};
 use std::{cell::RefCell, collections::VecDeque, ffi::OsString, path::PathBuf};
 
 #[test]
@@ -78,13 +91,26 @@ fn parses_fund_cycles_strictly() {
 
 #[test]
 fn funding_response_reports_the_malformed_field() {
-    assert_eq!(
-        parse::parse_funding_report(r#"{"requested_cycles":"not-cycles"}"#),
-        Err(parse::BlobStorageParseError::InvalidField {
+    let too_large = "340282366920938463463374607431768211456"
+        .parse::<Nat>()
+        .expect("parse over-u128 Nat");
+    let output = response_json(&Ok::<_, CanicError>(BlobProjectCyclesTopUpReport {
+        requested_cycles: too_large,
+        attached_cycles: Nat::from(0_u8),
+        project_cycles_before: Nat::from(0_u8),
+        project_cycles_after: Nat::from(0_u8),
+        reserve_cycles: Nat::from(0_u8),
+        cashier_total_after: Nat::from(0_u8),
+        skipped_reason: None,
+    }));
+
+    assert!(matches!(
+        parse::parse_funding_report(&output),
+        Err(parse::BlobStorageParseError::NatOutOfRange {
             kind: parse::BlobStorageResponseKind::Funding,
             field: "requested_cycles"
         })
-    );
+    ));
 }
 
 #[test]
@@ -127,8 +153,9 @@ fn top_level_forwards_global_icp_and_network() {
 
 #[test]
 fn json_reported_errors_use_structured_blob_storage_shape() {
-    let err = BlobStorageCommandError::ResponseParse {
-        detail: "status response has invalid JSON: sample".to_string(),
+    let err = BlobStorageCommandError::ResponseValueOutOfRange {
+        response_kind: "status",
+        field: "sample",
     }
     .with_json_report("local", "backend");
     let cli_error = crate::CliError::from(err);
@@ -152,13 +179,14 @@ fn json_reported_errors_use_structured_blob_storage_shape() {
 
 #[test]
 fn non_json_blob_storage_errors_keep_top_level_prefix() {
-    let cli_error = crate::CliError::from(BlobStorageCommandError::ResponseParse {
-        detail: "status response has invalid JSON: sample".to_string(),
+    let cli_error = crate::CliError::from(BlobStorageCommandError::ResponseValueOutOfRange {
+        response_kind: "status",
+        field: "sample",
     });
 
     assert_eq!(
         crate::render_cli_error(&cli_error),
-        "blob-storage: failed to parse blob-storage canister response: status response has invalid JSON: sample"
+        "blob-storage: blob-storage status response field `sample` exceeds u128"
     );
     assert_eq!(crate::cli_error_exit_code(&cli_error), 3);
 }
@@ -348,18 +376,15 @@ fn renders_fund_dry_run_plain_text() {
 
 #[test]
 fn parses_funding_report_json_into_stable_cli_shape() {
-    let output = serde_json::json!({
-        "Ok": {
-            "requested_cycles": "1000",
-            "attached_cycles": "750",
-            "project_cycles_before": "5000",
-            "project_cycles_after": "4250",
-            "reserve_cycles": "2000",
-            "cashier_total_after": "1750",
-            "skipped_reason": null
-        }
-    })
-    .to_string();
+    let output = response_json(&Ok::<_, CanicError>(BlobProjectCyclesTopUpReport {
+        requested_cycles: Nat::from(1_000_u64),
+        attached_cycles: Nat::from(750_u64),
+        project_cycles_before: Nat::from(5_000_u64),
+        project_cycles_after: Nat::from(4_250_u64),
+        reserve_cycles: Nat::from(2_000_u64),
+        cashier_total_after: Nat::from(1_750_u64),
+        skipped_reason: None,
+    }));
 
     let report = parse::parse_funding_report(&output).expect("parse funding report");
 
@@ -422,22 +447,18 @@ fn parses_status_json_into_stable_cli_shape() {
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
     let output = status_response_from(StatusResponseFixture {
-        cashier_balance: serde_json::json!(["100"]),
+        cashier_balance: Some(Nat::from(100_u64)),
         gateway_principal_count: 0,
-        last_gateway_principal_sync_at_ns: serde_json::json!(null),
-        funding_status: serde_json::json!({
-            "FundingRequired": {
-                "requested_cycles": "900"
-            }
-        }),
+        last_gateway_principal_sync_at_ns: None,
+        funding_status: BlobStorageFundingStatusDto::FundingRequired {
+            requested_cycles: Nat::from(900_u64),
+        },
         ready: false,
-        blockers: serde_json::json!([
-            { "GatewayPrincipalsMissing": null },
-            { "InsufficientCashierBalance": null }
-        ]),
-        warnings: serde_json::json!([
-            { "GatewayPrincipalSetEmpty": null }
-        ]),
+        blockers: vec![
+            BlobStorageReadinessBlocker::GatewayPrincipalsMissing,
+            BlobStorageReadinessBlocker::InsufficientCashierBalance,
+        ],
+        warnings: vec![BlobStorageBillingWarning::GatewayPrincipalSetEmpty],
         ..StatusResponseFixture::default()
     });
 
@@ -498,10 +519,8 @@ fn parses_ready_status_with_warnings_as_warning_state() {
     );
     let output = status_response_from(StatusResponseFixture {
         gateway_principal_count: 0,
-        last_gateway_principal_sync_at_ns: serde_json::json!(null),
-        warnings: serde_json::json!([
-            { "GatewayPrincipalSetEmpty": null }
-        ]),
+        last_gateway_principal_sync_at_ns: None,
+        warnings: vec![BlobStorageBillingWarning::GatewayPrincipalSetEmpty],
         ..StatusResponseFixture::default()
     });
 
@@ -563,9 +582,7 @@ fn status_check_ready_failure_message_includes_warnings_without_blockers() {
     );
     let output = status_response_from(StatusResponseFixture {
         ready: false,
-        warnings: serde_json::json!([
-            { "CashierBalanceUnavailable": null }
-        ]),
+        warnings: vec![BlobStorageBillingWarning::CashierBalanceUnavailable],
         ..StatusResponseFixture::default()
     });
     let status = parse::parse_status_result("local", target, &output).expect("parse status");
@@ -695,21 +712,19 @@ fn renders_status_plain_text_with_blockers_and_next_actions() {
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );
     let output = status_response_from(StatusResponseFixture {
-        payment_model: serde_json::json!({ "NotConfigured": null }),
-        cashier_canister_id: serde_json::json!(null),
-        payment_account: serde_json::json!(null),
-        cashier_balance: serde_json::json!(null),
-        min_upload_balance: serde_json::json!(null),
-        target_upload_balance: serde_json::json!(null),
-        project_cycles_reserve: serde_json::json!(null),
+        payment_model: BlobStoragePaymentModelStatus::NotConfigured,
+        cashier_canister_id: None,
+        payment_account: None,
+        cashier_balance: None,
+        min_upload_balance: None,
+        target_upload_balance: None,
+        project_cycles_reserve: None,
         gateway_principal_count: 0,
-        last_gateway_principal_sync_at_ns: serde_json::json!(null),
-        gateway_principal_sync_action: serde_json::json!({ "SkippedConfigMissing": null }),
-        funding_status: serde_json::json!({ "NotConfigured": null }),
+        last_gateway_principal_sync_at_ns: None,
+        gateway_principal_sync_action: BlobStorageGatewayPrincipalSyncAction::SkippedConfigMissing,
+        funding_status: BlobStorageFundingStatusDto::NotConfigured,
         ready: false,
-        blockers: serde_json::json!([
-            { "NotConfigured": null }
-        ]),
+        blockers: vec![BlobStorageReadinessBlocker::NotConfigured],
         ..StatusResponseFixture::default()
     });
 
@@ -859,64 +874,69 @@ fn scripted_response(method: &'static str, output: String) -> ScriptedBlobStorag
 }
 
 struct StatusResponseFixture {
-    payment_model: serde_json::Value,
-    cashier_canister_id: serde_json::Value,
-    payment_account: serde_json::Value,
-    cashier_balance: serde_json::Value,
-    min_upload_balance: serde_json::Value,
-    target_upload_balance: serde_json::Value,
-    project_cycles_reserve: serde_json::Value,
-    project_cycles_available: &'static str,
+    payment_model: BlobStoragePaymentModelStatus,
+    cashier_canister_id: Option<Principal>,
+    payment_account: Option<Principal>,
+    cashier_balance: Option<Nat>,
+    min_upload_balance: Option<Nat>,
+    target_upload_balance: Option<Nat>,
+    project_cycles_reserve: Option<Nat>,
+    project_cycles_available: Nat,
     gateway_principal_count: u64,
-    last_gateway_principal_sync_at_ns: serde_json::Value,
-    gateway_principal_sync_action: serde_json::Value,
-    funding_status: serde_json::Value,
+    last_gateway_principal_sync_at_ns: Option<u64>,
+    gateway_principal_sync_action: BlobStorageGatewayPrincipalSyncAction,
+    funding_status: BlobStorageFundingStatusDto,
     ready: bool,
-    blockers: serde_json::Value,
-    warnings: serde_json::Value,
+    blockers: Vec<BlobStorageReadinessBlocker>,
+    warnings: Vec<BlobStorageBillingWarning>,
 }
 
 impl Default for StatusResponseFixture {
     fn default() -> Self {
         Self {
-            payment_model: serde_json::json!({ "ProjectAsPaymentAccount": null }),
-            cashier_canister_id: serde_json::json!(["ryjl3-tyaaa-aaaaa-aaaba-cai"]),
-            payment_account: serde_json::json!(["rrkah-fqaaa-aaaaa-aaaaq-cai"]),
-            cashier_balance: serde_json::json!(["1000"]),
-            min_upload_balance: serde_json::json!(["500"]),
-            target_upload_balance: serde_json::json!(["1000"]),
-            project_cycles_reserve: serde_json::json!(["2000"]),
-            project_cycles_available: "3000",
+            payment_model: BlobStoragePaymentModelStatus::ProjectAsPaymentAccount,
+            cashier_canister_id: Some(
+                Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").expect("cashier principal"),
+            ),
+            payment_account: Some(
+                Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").expect("payment principal"),
+            ),
+            cashier_balance: Some(Nat::from(1_000_u64)),
+            min_upload_balance: Some(Nat::from(500_u64)),
+            target_upload_balance: Some(Nat::from(1_000_u64)),
+            project_cycles_reserve: Some(Nat::from(2_000_u64)),
+            project_cycles_available: Nat::from(3_000_u64),
             gateway_principal_count: 1,
-            last_gateway_principal_sync_at_ns: serde_json::json!(["123"]),
-            gateway_principal_sync_action: serde_json::json!({ "SkippedReadOnlyStatus": null }),
-            funding_status: serde_json::json!({ "NotNeeded": null }),
+            last_gateway_principal_sync_at_ns: Some(123),
+            gateway_principal_sync_action:
+                BlobStorageGatewayPrincipalSyncAction::SkippedReadOnlyStatus,
+            funding_status: BlobStorageFundingStatusDto::NotNeeded,
             ready: true,
-            blockers: serde_json::json!([]),
-            warnings: serde_json::json!([]),
+            blockers: Vec::new(),
+            warnings: Vec::new(),
         }
     }
 }
 
 fn status_response(gateway_count: u64, ready: bool, requested_cycles: &str) -> String {
     let blockers = if ready {
-        serde_json::json!([])
+        Vec::new()
     } else {
-        serde_json::json!([{ "GatewayPrincipalsMissing": null }])
+        vec![BlobStorageReadinessBlocker::GatewayPrincipalsMissing]
     };
     let funding_status = if requested_cycles == "0" {
-        serde_json::json!({ "NotNeeded": null })
+        BlobStorageFundingStatusDto::NotNeeded
     } else {
-        serde_json::json!({
-            "FundingRequired": {
-                "requested_cycles": requested_cycles
-            }
-        })
+        BlobStorageFundingStatusDto::FundingRequired {
+            requested_cycles: requested_cycles
+                .parse::<Nat>()
+                .expect("requested cycles Nat"),
+        }
     };
 
     status_response_from(StatusResponseFixture {
         gateway_principal_count: gateway_count,
-        last_gateway_principal_sync_at_ns: serde_json::json!(null),
+        last_gateway_principal_sync_at_ns: None,
         funding_status,
         ready,
         blockers,
@@ -925,39 +945,43 @@ fn status_response(gateway_count: u64, ready: bool, requested_cycles: &str) -> S
 }
 
 fn status_response_from(fixture: StatusResponseFixture) -> String {
-    serde_json::json!({
-        "Ok": {
-            "payment_model": fixture.payment_model,
-            "cashier_canister_id": fixture.cashier_canister_id,
-            "payment_account": fixture.payment_account,
-            "cashier_balance": fixture.cashier_balance,
-            "min_upload_balance": fixture.min_upload_balance,
-            "target_upload_balance": fixture.target_upload_balance,
-            "project_cycles_reserve": fixture.project_cycles_reserve,
-            "project_cycles_available": fixture.project_cycles_available,
-            "gateway_principal_count": fixture.gateway_principal_count,
-            "last_gateway_principal_sync_at_ns": fixture.last_gateway_principal_sync_at_ns,
-            "gateway_principal_sync_action": fixture.gateway_principal_sync_action,
-            "funding_status": fixture.funding_status,
-            "ready": fixture.ready,
-            "blockers": fixture.blockers,
-            "warnings": fixture.warnings
-        }
-    })
-    .to_string()
+    response_json(&Ok::<_, CanicError>(BlobStorageStatusResponse {
+        payment_model: fixture.payment_model,
+        cashier_canister_id: fixture.cashier_canister_id,
+        payment_account: fixture.payment_account,
+        cashier_balance: fixture.cashier_balance,
+        min_upload_balance: fixture.min_upload_balance,
+        target_upload_balance: fixture.target_upload_balance,
+        project_cycles_reserve: fixture.project_cycles_reserve,
+        project_cycles_available: fixture.project_cycles_available,
+        gateway_principal_count: fixture.gateway_principal_count,
+        last_gateway_principal_sync_at_ns: fixture.last_gateway_principal_sync_at_ns,
+        gateway_principal_sync_action: fixture.gateway_principal_sync_action,
+        funding_status: fixture.funding_status,
+        ready: fixture.ready,
+        blockers: fixture.blockers,
+        warnings: fixture.warnings,
+    }))
 }
 
 fn funding_report_response(requested_cycles: u128, attached_cycles: u128) -> String {
+    response_json(&Ok::<_, CanicError>(BlobProjectCyclesTopUpReport {
+        requested_cycles: Nat::from(requested_cycles),
+        attached_cycles: Nat::from(attached_cycles),
+        project_cycles_before: Nat::from(3_000_u64),
+        project_cycles_after: Nat::from(2_100_u64),
+        reserve_cycles: Nat::from(2_000_u64),
+        cashier_total_after: Nat::from(1_900_u64),
+        skipped_reason: None,
+    }))
+}
+
+fn response_json<T: CandidType>(response: &T) -> String {
+    let bytes = Encode!(response).expect("encode scripted response");
     serde_json::json!({
-        "Ok": {
-            "requested_cycles": requested_cycles.to_string(),
-            "attached_cycles": attached_cycles.to_string(),
-            "project_cycles_before": "3000",
-            "project_cycles_after": "2100",
-            "reserve_cycles": "2000",
-            "cashier_total_after": "1900",
-            "skipped_reason": null
-        }
+        "response_bytes": hex_bytes(bytes),
+        "response_text": null,
+        "response_candid": "scripted",
     })
     .to_string()
 }

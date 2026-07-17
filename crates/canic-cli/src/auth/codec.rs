@@ -7,9 +7,9 @@ use super::{
     AuthCommandError, AuthIssuerObservedStatus, AuthRenewalBatchStatus, AuthRenewalStateStatus,
     AuthRenewalStatusSummary, AuthRenewalTemplateStatus,
 };
-use candid::{Decode, Principal};
+use candid::{CandidType, Principal};
 use canic_core::{
-    cdk::utils::hash::{decode_hex, hex_bytes as encode_hex},
+    cdk::utils::hash::hex_bytes as encode_hex,
     dto::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse,
@@ -18,6 +18,8 @@ use canic_core::{
         error::{Error as CanicError, ErrorCode},
     },
 };
+use canic_host::icp::{IcpJsonResponseError, decode_json_result_response};
+use serde::de::DeserializeOwned;
 use std::{error::Error, fmt};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -117,13 +119,7 @@ pub(super) fn parse_renewal_status_summary(
     output: &str,
 ) -> Result<AuthRenewalStatusSummary, AuthResponseParseError> {
     let kind = AuthResponseKind::RenewalStatus;
-    let bytes = response_bytes(output, kind)?;
-    let response = Decode!(&bytes, Result<RootIssuerRenewalStatusResponse, CanicError>)
-        .map_err(|error| AuthResponseParseError::InvalidCandid {
-            kind,
-            error: error.to_string(),
-        })?
-        .map_err(|error| remote_error(kind, error))?;
+    let response = typed_response::<RootIssuerRenewalStatusResponse>(output, kind)?;
 
     let template = response.template;
     let state = response.state;
@@ -187,13 +183,7 @@ pub(super) fn parse_issuer_observed_status(
     output: &str,
 ) -> Result<AuthIssuerObservedStatus, AuthResponseParseError> {
     let kind = AuthResponseKind::IssuerStatus;
-    let bytes = response_bytes(output, kind)?;
-    let response = Decode!(&bytes, Result<ActiveDelegationProofStatusResponse, CanicError>)
-        .map_err(|error| AuthResponseParseError::InvalidCandid {
-            kind,
-            error: error.to_string(),
-        })?
-        .map_err(|error| remote_error(kind, error))?;
+    let response = typed_response::<ActiveDelegationProofStatusResponse>(output, kind)?;
 
     Ok(AuthIssuerObservedStatus {
         status: active_proof_status_label(&response.status).to_string(),
@@ -231,21 +221,25 @@ fn remote_error(kind: AuthResponseKind, error: CanicError) -> AuthResponseParseE
     }
 }
 
-fn response_bytes(output: &str, kind: AuthResponseKind) -> Result<Vec<u8>, AuthResponseParseError> {
-    let value = serde_json::from_str::<serde_json::Value>(output).map_err(|error| {
-        AuthResponseParseError::InvalidJson {
+fn typed_response<T>(output: &str, kind: AuthResponseKind) -> Result<T, AuthResponseParseError>
+where
+    T: CandidType + DeserializeOwned,
+{
+    decode_json_result_response(output).map_err(|error| match error {
+        IcpJsonResponseError::Candid(error) => AuthResponseParseError::InvalidCandid {
             kind,
             error: error.to_string(),
-        }
-    })?;
-    let response_bytes = value
-        .get("response_bytes")
-        .and_then(serde_json::Value::as_str)
-        .ok_or(AuthResponseParseError::InvalidPayload(kind))?;
-
-    decode_hex(response_bytes).map_err(|error| AuthResponseParseError::InvalidResponseBytes {
-        kind,
-        error: error.to_string(),
+        },
+        IcpJsonResponseError::Hex(error) => AuthResponseParseError::InvalidResponseBytes {
+            kind,
+            error: error.to_string(),
+        },
+        IcpJsonResponseError::Json(error) => AuthResponseParseError::InvalidJson {
+            kind,
+            error: error.to_string(),
+        },
+        IcpJsonResponseError::MissingResponseBytes => AuthResponseParseError::InvalidPayload(kind),
+        IcpJsonResponseError::Rejected(error) => remote_error(kind, error),
     })
 }
 

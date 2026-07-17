@@ -69,21 +69,18 @@ fn topology_indexes_registry_entries() {
             RegistryEntry {
                 pid: "child-b".to_string(),
                 role: Some("worker".to_string()),
-                kind: None,
                 parent_pid: Some("root-id".to_string()),
                 module_hash: None,
             },
             RegistryEntry {
                 pid: "root-id".to_string(),
                 role: Some("root".to_string()),
-                kind: None,
                 parent_pid: None,
                 module_hash: None,
             },
             RegistryEntry {
                 pid: "child-a".to_string(),
                 role: Some("app".to_string()),
-                kind: None,
                 parent_pid: Some("root-id".to_string()),
                 module_hash: None,
             },

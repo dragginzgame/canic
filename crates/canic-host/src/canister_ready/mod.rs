@@ -1,5 +1,11 @@
+//! Module: canister_ready
+//!
+//! Responsibility: query the maintained Canic readiness endpoint.
+//! Does not own: readiness state, local replica transport, or install orchestration.
+//! Boundary: selects one transport and decodes the canonical boolean response.
+
 use crate::{
-    icp::{IcpCli, IcpCommandError},
+    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_response},
     replica_query::{self, ReplicaQueryError},
 };
 use std::{error::Error, fmt, path::Path};
@@ -13,17 +19,17 @@ const ICP_JSON_OUTPUT: &str = "json";
 
 #[derive(Debug)]
 pub enum CanisterReadyQueryError {
-    Replica(ReplicaQueryError),
     Icp(IcpCommandError),
-    Json(serde_json::Error),
+    Replica(ReplicaQueryError),
+    Response(IcpJsonResponseError),
 }
 
 impl fmt::Display for CanisterReadyQueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Replica(err) => write!(formatter, "{err}"),
             Self::Icp(err) => write!(formatter, "{err}"),
-            Self::Json(err) => write!(formatter, "{err}"),
+            Self::Replica(err) => write!(formatter, "{err}"),
+            Self::Response(err) => write!(formatter, "{err}"),
         }
     }
 }
@@ -31,16 +37,10 @@ impl fmt::Display for CanisterReadyQueryError {
 impl Error for CanisterReadyQueryError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Replica(err) => Some(err),
             Self::Icp(err) => Some(err),
-            Self::Json(err) => Some(err),
+            Self::Replica(err) => Some(err),
+            Self::Response(err) => Some(err),
         }
-    }
-}
-
-impl From<ReplicaQueryError> for CanisterReadyQueryError {
-    fn from(err: ReplicaQueryError) -> Self {
-        Self::Replica(err)
     }
 }
 
@@ -50,9 +50,15 @@ impl From<IcpCommandError> for CanisterReadyQueryError {
     }
 }
 
-impl From<serde_json::Error> for CanisterReadyQueryError {
-    fn from(err: serde_json::Error) -> Self {
-        Self::Json(err)
+impl From<ReplicaQueryError> for CanisterReadyQueryError {
+    fn from(err: ReplicaQueryError) -> Self {
+        Self::Replica(err)
+    }
+}
+
+impl From<IcpJsonResponseError> for CanisterReadyQueryError {
+    fn from(err: IcpJsonResponseError) -> Self {
+        Self::Response(err)
     }
 }
 
@@ -94,6 +100,5 @@ fn query_canister_ready_with_icp(
         Some(ICP_JSON_OUTPUT),
         candid_path,
     )?;
-    let data = serde_json::from_str::<serde_json::Value>(&output)?;
-    Ok(replica_query::parse_ready_json_value(&data))
+    decode_json_response(&output).map_err(Into::into)
 }

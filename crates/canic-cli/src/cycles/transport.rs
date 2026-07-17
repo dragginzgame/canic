@@ -515,7 +515,6 @@ mod tests {
         let entry = RegistryEntry {
             pid: "aaaaa-aa".to_string(),
             role: Some("root".to_string()),
-            kind: Some("root".to_string()),
             parent_pid: None,
             module_hash: None,
         };

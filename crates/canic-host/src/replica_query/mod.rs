@@ -1,22 +1,33 @@
-pub use self::{
-    status::{local_replica_root_key_from_root, local_replica_status_reachable_from_root},
-    transport::local_replica_endpoint_from_root,
-};
-use self::{
-    transport::{local_query, local_query_from_root},
-    wire::{
-        SubnetRegistryResponseWire, decode_bootstrap_status_response,
-        decode_cycle_balance_response, decode_subnet_registry_response,
-    },
-};
-use candid::Decode;
-use canic_core::dto::state::BootstrapStatusResponse;
-use std::{error::Error, fmt, path::Path};
+//! Module: replica_query
+//!
+//! Responsibility: query maintained Canic endpoints through a direct local replica transport.
+//! Does not own: endpoint DTOs, registry projection, or ICP CLI command execution.
+//! Boundary: decodes canonical Candid responses and preserves typed transport and endpoint errors.
 
 mod cbor;
 mod status;
 mod transport;
 mod wire;
+
+use self::{
+    transport::{local_query, local_query_from_root},
+    wire::{
+        decode_bootstrap_status_response, decode_cycle_balance_response,
+        decode_subnet_registry_response,
+    },
+};
+use crate::registry::{RegistryEntry, RegistryParseError, registry_entries_from_response};
+use std::{error::Error, fmt, path::Path};
+
+use candid::Decode;
+use canic_core::dto::{
+    error::Error as CanicError, state::BootstrapStatusResponse, topology::SubnetRegistryResponse,
+};
+
+pub use self::{
+    status::{local_replica_root_key_from_root, local_replica_status_reachable_from_root},
+    transport::local_replica_endpoint_from_root,
+};
 
 ///
 /// ReplicaQueryError
@@ -24,10 +35,12 @@ mod wire;
 
 #[derive(Debug)]
 pub enum ReplicaQueryError {
-    Io(std::io::Error),
+    Candid(candid::Error),
+    Canister(CanicError),
     Cbor(String),
-    Json(serde_json::Error),
+    Io(std::io::Error),
     Query(String),
+    Registry(RegistryParseError),
     Rejected { code: u64, message: String },
 }
 
@@ -35,10 +48,12 @@ impl fmt::Display for ReplicaQueryError {
     // Render local replica query failures as compact operator diagnostics.
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(err) => write!(formatter, "{err}"),
+            Self::Candid(err) => write!(formatter, "{err}"),
+            Self::Canister(err) => write!(formatter, "{err}"),
             Self::Cbor(err) => formatter.write_str(err),
-            Self::Json(err) => write!(formatter, "{err}"),
+            Self::Io(err) => write!(formatter, "{err}"),
             Self::Query(message) => write!(formatter, "{message}"),
+            Self::Registry(err) => write!(formatter, "{err}"),
             Self::Rejected { code, message } => {
                 write!(
                     formatter,
@@ -53,9 +68,10 @@ impl Error for ReplicaQueryError {
     // Preserve structured source errors for I/O and serialization failures.
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Candid(err) => Some(err),
             Self::Io(err) => Some(err),
-            Self::Json(err) => Some(err),
-            Self::Cbor(_) | Self::Query(_) | Self::Rejected { .. } => None,
+            Self::Registry(err) => Some(err),
+            Self::Canister(_) | Self::Cbor(_) | Self::Query(_) | Self::Rejected { .. } => None,
         }
     }
 }
@@ -74,10 +90,9 @@ impl From<cbor::CborError> for ReplicaQueryError {
     }
 }
 
-impl From<serde_json::Error> for ReplicaQueryError {
-    // Convert JSON rendering failures.
-    fn from(err: serde_json::Error) -> Self {
-        Self::Json(err)
+impl From<RegistryParseError> for ReplicaQueryError {
+    fn from(err: RegistryParseError) -> Self {
+        Self::Registry(err)
     }
 }
 
@@ -90,7 +105,7 @@ pub fn should_use_local_replica_query(network: Option<&str>) -> bool {
 /// Query `canic_ready` directly through the local replica HTTP API.
 pub fn query_ready(network: Option<&str>, canister: &str) -> Result<bool, ReplicaQueryError> {
     let bytes = local_query(network, canister, "canic_ready")?;
-    Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
+    Decode!(&bytes, bool).map_err(ReplicaQueryError::Candid)
 }
 
 /// Query `canic_ready` using the configured port from one ICP root.
@@ -100,7 +115,7 @@ pub fn query_ready_from_root(
     icp_root: &Path,
 ) -> Result<bool, ReplicaQueryError> {
     let bytes = local_query_from_root(network, canister, "canic_ready", icp_root)?;
-    Decode!(&bytes, bool).map_err(|err| ReplicaQueryError::Query(err.to_string()))
+    Decode!(&bytes, bool).map_err(ReplicaQueryError::Candid)
 }
 
 /// Query `canic_bootstrap_status` using the configured port from one ICP root.
@@ -123,36 +138,23 @@ pub fn query_cycle_balance_from_root(
     decode_cycle_balance_response(&bytes)
 }
 
-/// Parse common JSON shapes returned by command-line calls for `canic_ready`.
-#[must_use]
-pub fn parse_ready_json_value(data: &serde_json::Value) -> bool {
-    match data {
-        serde_json::Value::Bool(value) => *value,
-        serde_json::Value::Array(values) => values.iter().any(parse_ready_json_value),
-        serde_json::Value::Object(map) => map.get("Ok").is_some_and(parse_ready_json_value),
-        serde_json::Value::String(_) | serde_json::Value::Number(_) | serde_json::Value::Null => {
-            false
-        }
-    }
-}
-
-/// Query `canic_subnet_registry` and render JSON in the CLI response shape.
-pub fn query_subnet_registry_json(
+/// Query `canic_subnet_registry` and return validated host entries.
+pub fn query_subnet_registry_entries(
     network: Option<&str>,
     root: &str,
-) -> Result<String, ReplicaQueryError> {
+) -> Result<Vec<RegistryEntry>, ReplicaQueryError> {
     let response = query_subnet_registry_response(network, root)?;
-    serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
+    registry_entries_from_response(response).map_err(Into::into)
 }
 
-/// Query `canic_subnet_registry` using the configured port from one ICP root.
-pub fn query_subnet_registry_json_from_root(
+/// Query `canic_subnet_registry` from one ICP root and return validated host entries.
+pub fn query_subnet_registry_entries_from_root(
     network: Option<&str>,
     root: &str,
     icp_root: &Path,
-) -> Result<String, ReplicaQueryError> {
+) -> Result<Vec<RegistryEntry>, ReplicaQueryError> {
     let response = query_subnet_registry_response_from_root(network, root, icp_root)?;
-    serde_json::to_string(&response.to_cli_json()).map_err(ReplicaQueryError::from)
+    registry_entries_from_response(response).map_err(Into::into)
 }
 
 /// Query `canic_subnet_registry` using the configured port from one ICP root and return roles.
@@ -161,13 +163,18 @@ pub fn query_subnet_registry_roles_from_root(
     root: &str,
     icp_root: &Path,
 ) -> Result<Vec<String>, ReplicaQueryError> {
-    Ok(query_subnet_registry_response_from_root(network, root, icp_root)?.roles())
+    Ok(
+        query_subnet_registry_entries_from_root(network, root, icp_root)?
+            .into_iter()
+            .filter_map(|entry| entry.role)
+            .collect(),
+    )
 }
 
 fn query_subnet_registry_response(
     network: Option<&str>,
     root: &str,
-) -> Result<SubnetRegistryResponseWire, ReplicaQueryError> {
+) -> Result<SubnetRegistryResponse, ReplicaQueryError> {
     let bytes = local_query(network, root, "canic_subnet_registry")?;
     decode_subnet_registry_response(&bytes)
 }
@@ -176,10 +183,7 @@ fn query_subnet_registry_response_from_root(
     network: Option<&str>,
     root: &str,
     icp_root: &Path,
-) -> Result<SubnetRegistryResponseWire, ReplicaQueryError> {
+) -> Result<SubnetRegistryResponse, ReplicaQueryError> {
     let bytes = local_query_from_root(network, root, "canic_subnet_registry", icp_root)?;
     decode_subnet_registry_response(&bytes)
 }
-
-#[cfg(test)]
-mod tests;

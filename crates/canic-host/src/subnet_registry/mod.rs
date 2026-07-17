@@ -1,5 +1,12 @@
+//! Module: subnet_registry
+//!
+//! Responsibility: query one root canister's maintained subnet registry.
+//! Does not own: registry state, endpoint DTOs, or deployment discovery policy.
+//! Boundary: selects one transport and returns validated canonical host entries.
+
 use crate::{
     icp::{IcpCli, IcpCommandError},
+    registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
     replica_query::{self, ReplicaQueryError},
 };
 use std::{error::Error, fmt, path::Path};
@@ -14,7 +21,7 @@ const ICP_JSON_OUTPUT: &str = "json";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SubnetRegistryQuery {
     pub(crate) source: SubnetRegistryQuerySource,
-    pub registry_json: String,
+    pub entries: Vec<RegistryEntry>,
 }
 
 ///
@@ -23,8 +30,8 @@ pub struct SubnetRegistryQuery {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum SubnetRegistryQuerySource {
-    LocalReplica,
     IcpCli,
+    LocalReplica,
 }
 
 ///
@@ -33,15 +40,17 @@ pub(crate) enum SubnetRegistryQuerySource {
 
 #[derive(Debug)]
 pub enum SubnetRegistryQueryError {
-    Replica(ReplicaQueryError),
     Icp(IcpCommandError),
+    Registry(RegistryParseError),
+    Replica(ReplicaQueryError),
 }
 
 impl fmt::Display for SubnetRegistryQueryError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Replica(err) => write!(formatter, "{err}"),
             Self::Icp(err) => write!(formatter, "{err}"),
+            Self::Registry(err) => write!(formatter, "{err}"),
+            Self::Replica(err) => write!(formatter, "{err}"),
         }
     }
 }
@@ -49,15 +58,10 @@ impl fmt::Display for SubnetRegistryQueryError {
 impl Error for SubnetRegistryQueryError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Replica(err) => Some(err),
             Self::Icp(err) => Some(err),
+            Self::Registry(err) => Some(err),
+            Self::Replica(err) => Some(err),
         }
-    }
-}
-
-impl From<ReplicaQueryError> for SubnetRegistryQueryError {
-    fn from(err: ReplicaQueryError) -> Self {
-        Self::Replica(err)
     }
 }
 
@@ -67,8 +71,20 @@ impl From<IcpCommandError> for SubnetRegistryQueryError {
     }
 }
 
+impl From<RegistryParseError> for SubnetRegistryQueryError {
+    fn from(err: RegistryParseError) -> Self {
+        Self::Registry(err)
+    }
+}
+
+impl From<ReplicaQueryError> for SubnetRegistryQueryError {
+    fn from(err: ReplicaQueryError) -> Self {
+        Self::Replica(err)
+    }
+}
+
 /// Query `canic_subnet_registry`, using the local replica API for local targets.
-pub fn query_subnet_registry_json(
+pub fn query_subnet_registry(
     icp: &IcpCli,
     root: &str,
     network: &str,
@@ -76,10 +92,10 @@ pub fn query_subnet_registry_json(
     candid_path: Option<&Path>,
 ) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
     if replica_query::should_use_local_replica_query(Some(network)) {
-        return query_local_subnet_registry_json(root, network, icp_root);
+        return query_local_subnet_registry(root, network, icp_root);
     }
 
-    let registry_json = icp.canister_query_output_with_candid(
+    let output = icp.canister_query_output_with_candid(
         root,
         CANIC_SUBNET_REGISTRY_METHOD,
         Some(ICP_JSON_OUTPUT),
@@ -87,23 +103,23 @@ pub fn query_subnet_registry_json(
     )?;
     Ok(SubnetRegistryQuery {
         source: SubnetRegistryQuerySource::IcpCli,
-        registry_json,
+        entries: parse_registry_entries(&output)?,
     })
 }
 
-fn query_local_subnet_registry_json(
+fn query_local_subnet_registry(
     root: &str,
     network: &str,
     icp_root: Option<&Path>,
 ) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
-    let registry_json = icp_root.map_or_else(
-        || replica_query::query_subnet_registry_json(Some(network), root),
+    let entries = icp_root.map_or_else(
+        || replica_query::query_subnet_registry_entries(Some(network), root),
         |root_path| {
-            replica_query::query_subnet_registry_json_from_root(Some(network), root, root_path)
+            replica_query::query_subnet_registry_entries_from_root(Some(network), root, root_path)
         },
     )?;
     Ok(SubnetRegistryQuery {
         source: SubnetRegistryQuerySource::LocalReplica,
-        registry_json,
+        entries,
     })
 }

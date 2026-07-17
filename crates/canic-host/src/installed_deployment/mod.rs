@@ -4,11 +4,9 @@ use crate::{
         InstallState, InstallStateError, read_named_deployment_install_state,
         read_named_deployment_install_state_from_root,
     },
-    registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
+    registry::{RegistryEntry, RegistryParseError},
     replica_query::ReplicaQueryError,
-    subnet_registry::{
-        SubnetRegistryQueryError, SubnetRegistryQuerySource, query_subnet_registry_json,
-    },
+    subnet_registry::{SubnetRegistryQueryError, SubnetRegistryQuerySource, query_subnet_registry},
 };
 use std::{collections::BTreeMap, path::Path};
 use thiserror::Error as ThisError;
@@ -108,8 +106,8 @@ pub fn resolve_installed_deployment(
     request: &InstalledDeploymentRequest,
 ) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
     let state = read_installed_deployment_state(&request.network, &request.deployment)?;
-    let (source, registry_json) = query_registry(request, &state.root_canister_id)?;
-    installed_deployment_resolution(state, source, registry_json)
+    let (source, entries) = query_registry(request, &state.root_canister_id)?;
+    Ok(installed_deployment_resolution(state, source, entries))
 }
 
 pub fn resolve_installed_deployment_from_root(
@@ -118,28 +116,26 @@ pub fn resolve_installed_deployment_from_root(
 ) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
     let state =
         read_installed_deployment_state_from_root(&request.network, &request.deployment, icp_root)?;
-    let (source, registry_json) =
-        query_registry_from_root(request, &state.root_canister_id, icp_root)?;
-    installed_deployment_resolution(state, source, registry_json)
+    let (source, entries) = query_registry_from_root(request, &state.root_canister_id, icp_root)?;
+    Ok(installed_deployment_resolution(state, source, entries))
 }
 
 fn installed_deployment_resolution(
     state: InstallState,
     source: InstalledDeploymentSource,
-    registry_json: String,
-) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
-    let entries = parse_registry_entries(&registry_json)?;
+    entries: Vec<RegistryEntry>,
+) -> InstalledDeploymentResolution {
     let registry = InstalledDeploymentRegistry {
         root_canister_id: state.root_canister_id.clone(),
         entries,
     };
     let topology = ResolvedDeploymentTopology::from_registry(&registry);
-    Ok(InstalledDeploymentResolution {
+    InstalledDeploymentResolution {
         source,
         state,
         registry,
         topology,
-    })
+    }
 }
 
 pub fn read_installed_deployment_state(
@@ -194,24 +190,21 @@ impl ResolvedDeploymentTopology {
 fn query_registry(
     request: &InstalledDeploymentRequest,
     root: &str,
-) -> Result<(InstalledDeploymentSource, String), InstalledDeploymentError> {
+) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
     let icp = IcpCli::new(&request.icp, None, Some(request.network.clone()));
-    let query = query_subnet_registry_json(&icp, root, &request.network, None, None)
+    let query = query_subnet_registry(&icp, root, &request.network, None, None)
         .map_err(|err| installed_deployment_registry_error(request, root, err))?;
-    Ok((
-        installed_deployment_source(query.source),
-        query.registry_json,
-    ))
+    Ok((installed_deployment_source(query.source), query.entries))
 }
 
 fn query_registry_from_root(
     request: &InstalledDeploymentRequest,
     root: &str,
     icp_root: &Path,
-) -> Result<(InstalledDeploymentSource, String), InstalledDeploymentError> {
+) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
     let icp = IcpCli::new(&request.icp, None, Some(request.network.clone())).with_cwd(icp_root);
     let candid_path = existing_local_canister_candid_path(icp_root, &request.network, "root");
-    let query = query_subnet_registry_json(
+    let query = query_subnet_registry(
         &icp,
         root,
         &request.network,
@@ -219,10 +212,7 @@ fn query_registry_from_root(
         candid_path.as_deref(),
     )
     .map_err(|err| installed_deployment_registry_error(request, root, err))?;
-    Ok((
-        installed_deployment_source(query.source),
-        query.registry_json,
-    ))
+    Ok((installed_deployment_source(query.source), query.entries))
 }
 
 const fn installed_deployment_source(
@@ -242,6 +232,7 @@ fn installed_deployment_registry_error(
     match error {
         SubnetRegistryQueryError::Replica(err) => local_registry_error(request, root, err),
         SubnetRegistryQueryError::Icp(err) => InstalledDeploymentError::Icp(err),
+        SubnetRegistryQueryError::Registry(err) => InstalledDeploymentError::Registry(err),
     }
 }
 

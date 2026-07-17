@@ -18,7 +18,7 @@ use canic_backup::{
     },
     runner::BackupRunnerCommandError,
 };
-use canic_host::{icp::IcpCli, registry::parse_registry_entries};
+use canic_host::icp::IcpCli;
 use std::path::Path;
 
 pub(super) fn build_preflight_receipts(
@@ -30,9 +30,8 @@ pub(super) fn build_preflight_receipts(
     validated_at: &str,
     expires_at: &str,
 ) -> Result<BackupExecutionPreflightReceipts, BackupRunnerCommandError> {
-    let registry_json =
+    let host_registry =
         call_subnet_registry(options, icp_root, &plan.root_canister_id).map_err(preflight_error)?;
-    let host_registry = parse_registry_entries(&registry_json).map_err(preflight_error)?;
     let registry = backup_registry_entries(&host_registry);
     let topology_hash = registry_topology_hash(&registry).map_err(preflight_error)?;
     for target in &plan.targets {

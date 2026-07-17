@@ -487,7 +487,6 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
                 vec![RegistryEntry {
                     pid: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
                     role: Some("issuer".to_string()),
-                    kind: None,
                     parent_pid: None,
                     module_hash: None,
                 }]

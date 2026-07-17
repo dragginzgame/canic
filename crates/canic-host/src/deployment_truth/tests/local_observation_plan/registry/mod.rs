@@ -51,21 +51,18 @@ fn registry_entries_map_configured_pool_roles_to_observed_pool() {
         RegistryEntry {
             pid: "root-id".to_string(),
             role: Some("root".to_string()),
-            kind: None,
             parent_pid: None,
             module_hash: None,
         },
         RegistryEntry {
             pid: "shard-id".to_string(),
             role: Some("user_shard".to_string()),
-            kind: None,
             parent_pid: Some("user_hub-id".to_string()),
             module_hash: Some("module".to_string()),
         },
         RegistryEntry {
             pid: "user_hub-id".to_string(),
             role: Some("user_hub".to_string()),
-            kind: None,
             parent_pid: Some("root-id".to_string()),
             module_hash: None,
         },
@@ -95,14 +92,12 @@ fn registry_entries_map_roles_to_observed_canisters_without_controller_authority
         RegistryEntry {
             pid: "root-id".to_string(),
             role: Some("root".to_string()),
-            kind: None,
             parent_pid: None,
             module_hash: None,
         },
         RegistryEntry {
             pid: "user_hub-id".to_string(),
             role: Some("user_hub".to_string()),
-            kind: None,
             parent_pid: Some("root-id".to_string()),
             module_hash: Some("0xABCDEF".to_string()),
         },
@@ -132,7 +127,6 @@ fn registry_observation_can_be_enriched_with_live_status() {
         &[RegistryEntry {
             pid: "user_hub-id".to_string(),
             role: Some("user_hub".to_string()),
-            kind: None,
             parent_pid: Some("root-id".to_string()),
             module_hash: Some("stale".to_string()),
         }],
@@ -217,7 +211,6 @@ fn registry_entries_report_ambiguous_pool_role_mapping() {
     let entries = vec![RegistryEntry {
         pid: "worker-id".to_string(),
         role: Some("worker".to_string()),
-        kind: None,
         parent_pid: Some("root-id".to_string()),
         module_hash: None,
     }];

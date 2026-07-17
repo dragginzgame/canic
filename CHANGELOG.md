@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.5` is potentially breaking: it makes the typed ICP response envelope
+  and canonical endpoint DTOs the sole host/CLI query contract, removing
+  permissive JSON parsing and duplicate registry wire models.
+
 - `0.93.4` is potentially breaking: it hard-cuts permissive auth-renewal
   response parsing to the pinned ICP typed-response contract and makes the
   maintained replay-first preflight the sole authorization/replay order.

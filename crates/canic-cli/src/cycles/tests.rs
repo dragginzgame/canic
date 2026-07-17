@@ -4,10 +4,17 @@ use crate::cycles::{
         CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample,
         CyclesCanisterStatus, CyclesCoverageStatus, CyclesReport,
     },
-    parse::{
-        CycleResponseKind, CyclesParseError, parse_cycle_tracker_page, parse_topup_event_page,
-    },
+    parse::{parse_cycle_tracker_page, parse_topup_event_page},
     transport::summarize_cycle_tracker,
+};
+use candid::{CandidType, Encode};
+use canic_core::{
+    cdk::{types::Cycles, utils::hash::hex_bytes},
+    dto::{
+        cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
+        error::Error as CanicError,
+        page::Page,
+    },
 };
 use canic_host::format::compact_duration;
 use canic_host::registry::RegistryEntry;
@@ -126,13 +133,22 @@ fn formats_cycle_history_durations() {
     assert_eq!(compact_duration(1_555_200), "2w 4d");
 }
 
-// Ensure cycle tracker JSON output can be parsed from wrapped result shapes.
 #[test]
-fn parses_cycle_tracker_json() {
-    let page = parse_cycle_tracker_page(
-        r#"{"Ok":{"entries":[{"timestamp_secs":10,"cycles":"1000"},{"timestamp_secs":"20","cycles":750}],"total":2}}"#,
-    )
-    .expect("parse page");
+fn parses_typed_cycle_tracker_page() {
+    let output = response_json(&Ok::<_, CanicError>(Page {
+        entries: vec![
+            CycleTrackerEntry {
+                timestamp_secs: 10,
+                cycles: Cycles::new(1_000),
+            },
+            CycleTrackerEntry {
+                timestamp_secs: 20,
+                cycles: Cycles::new(750),
+            },
+        ],
+        total: 2,
+    }));
+    let page = parse_cycle_tracker_page(&output).expect("parse page");
 
     assert_eq!(page.total, 2);
     assert_eq!(page.entries[0].timestamp_secs, 10);
@@ -140,24 +156,29 @@ fn parses_cycle_tracker_json() {
 }
 
 #[test]
-fn cycle_tracker_json_rejects_malformed_entries() {
-    assert_eq!(
-        parse_cycle_tracker_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
-        Err(CyclesParseError::InvalidEntryField {
-            kind: CycleResponseKind::Tracker,
-            index: 0,
-            field: "cycles"
-        })
-    );
-}
-
-// Ensure top-up event JSON output can be parsed from wrapped result shapes.
-#[test]
-fn parses_topup_event_json() {
-    let page = parse_topup_event_page(
-        r#"{"Ok":{"entries":[{"timestamp_secs":10,"sequence":0,"requested_cycles":"4000000000000","transferred_cycles":"4000000000000","status":{"RequestOk":null},"error":null},{"timestamp_secs":"20","sequence":1,"requested_cycles":"4000000000000","transferred_cycles":null,"status":{"RequestErr":null},"error":"no cycles"}],"total":2}}"#,
-    )
-    .expect("parse topup page");
+fn parses_typed_topup_event_page() {
+    let output = response_json(&Ok::<_, CanicError>(Page {
+        entries: vec![
+            CycleTopupEvent {
+                timestamp_secs: 10,
+                sequence: 0,
+                requested_cycles: Cycles::new(4_000_000_000_000),
+                transferred_cycles: Some(Cycles::new(4_000_000_000_000)),
+                status: CycleTopupEventStatus::RequestOk,
+                error: None,
+            },
+            CycleTopupEvent {
+                timestamp_secs: 20,
+                sequence: 1,
+                requested_cycles: Cycles::new(4_000_000_000_000),
+                transferred_cycles: None,
+                status: CycleTopupEventStatus::RequestErr,
+                error: Some("no cycles".to_string()),
+            },
+        ],
+        total: 2,
+    }));
+    let page = parse_topup_event_page(&output).expect("parse topup page");
 
     assert_eq!(page.total, 2);
     assert_eq!(page.entries[0].status, CycleTopupStatus::RequestOk);
@@ -165,26 +186,9 @@ fn parses_topup_event_json() {
     assert_eq!(page.entries[1].status, CycleTopupStatus::RequestErr);
 }
 
-#[test]
-fn topup_event_json_rejects_malformed_entries() {
-    assert_eq!(
-        parse_topup_event_page(r#"{"Ok":{"entries":[{"timestamp_secs":10}],"total":1}}"#),
-        Err(CyclesParseError::InvalidEntryField {
-            kind: CycleResponseKind::Topup,
-            index: 0,
-            field: "status"
-        })
-    );
-    assert_eq!(
-        parse_topup_event_page(
-            r#"{"Ok":{"entries":[{"timestamp_secs":10,"status":{"NotRequestOk":null}}],"total":1}}"#,
-        ),
-        Err(CyclesParseError::InvalidEntryField {
-            kind: CycleResponseKind::Topup,
-            index: 0,
-            field: "status"
-        })
-    );
+fn response_json<T: CandidType>(response: &T) -> String {
+    let bytes = Encode!(response).expect("encode response");
+    serde_json::json!({ "response_bytes": hex_bytes(bytes) }).to_string()
 }
 
 // Ensure summaries report partial windows when no sample exists before the cutoff.
@@ -193,7 +197,6 @@ fn summarizes_partial_cycle_window() {
     let entry = RegistryEntry {
         pid: "aaaaa-aa".to_string(),
         role: Some("root".to_string()),
-        kind: Some("root".to_string()),
         parent_pid: None,
         module_hash: None,
     };
@@ -239,7 +242,6 @@ fn summarizes_topup_events() {
     let entry = RegistryEntry {
         pid: "aaaaa-aa".to_string(),
         role: Some("app".to_string()),
-        kind: Some("singleton".to_string()),
         parent_pid: None,
         module_hash: None,
     };
@@ -297,7 +299,6 @@ fn summarizes_burn_and_topup_rates() {
     let entry = RegistryEntry {
         pid: "aaaaa-aa".to_string(),
         role: Some("app".to_string()),
-        kind: Some("singleton".to_string()),
         parent_pid: None,
         module_hash: None,
     };
@@ -340,7 +341,6 @@ fn summarizes_post_sample_topup_events_against_live_balance() {
     let entry = RegistryEntry {
         pid: "aaaaa-aa".to_string(),
         role: Some("app".to_string()),
-        kind: Some("singleton".to_string()),
         parent_pid: None,
         module_hash: None,
     };
@@ -382,7 +382,6 @@ fn omits_burn_when_positive_delta_exceeds_topups() {
     let entry = RegistryEntry {
         pid: "aaaaa-aa".to_string(),
         role: Some("app".to_string()),
-        kind: Some("singleton".to_string()),
         parent_pid: None,
         module_hash: None,
     };

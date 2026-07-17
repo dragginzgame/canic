@@ -255,7 +255,6 @@ mod tests {
         RegistryEntry {
             pid: pid.to_string(),
             role: role.map(str::to_string),
-            kind: None,
             parent_pid: None,
             module_hash: None,
         }

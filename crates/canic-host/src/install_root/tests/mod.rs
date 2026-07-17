@@ -2,7 +2,7 @@ use super::build_environment::resolve_install_build_context;
 use super::build_snapshot::InstallBuildTarget;
 use super::commands::{
     add_create_root_target, add_icp_environment_target, icp_canister_command_in_network,
-    parse_canister_id_json, parse_created_canister_id, root_init_args,
+    root_init_args,
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
@@ -27,7 +27,6 @@ use super::phase_receipts::{
     write_completed_install_phase_receipt,
 };
 use super::plan_artifacts::validate_plan_artifacts_with_phase;
-use super::readiness::parse_bootstrap_status_value;
 use super::receipt_io::{
     install_deployment_truth_receipt_path, write_install_deployment_truth_receipt,
 };
@@ -67,7 +66,6 @@ use crate::deployment_truth::{
 use crate::icp::LocalReplicaTarget;
 use crate::release_set::{ReleaseSetEntry, RootReleaseSetBuildSnapshot, RootReleaseSetManifest};
 use crate::test_support::temp_dir;
-use serde_json::json;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -77,7 +75,6 @@ use std::{
 mod commands;
 mod config_selection;
 mod install_truth;
-mod readiness_parse;
 mod state_root_verification;
 
 #[test]

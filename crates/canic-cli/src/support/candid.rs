@@ -60,7 +60,6 @@ mod tests {
         RegistryEntry {
             pid: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
             role: role.map(str::to_string),
-            kind: None,
             parent_pid: None,
             module_hash: None,
         }
