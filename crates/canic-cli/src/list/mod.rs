@@ -6,7 +6,10 @@ mod render;
 
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
-    icp::IcpCommandError, install_root::InstallStateError, registry::RegistryParseError,
+    icp::IcpCommandError,
+    icp_config::IcpConfigError,
+    install_root::{ConfigDiscoveryError, InstallStateError},
+    registry::RegistryParseError,
     replica_query::ReplicaQueryError,
 };
 use config::{load_config_role_rows, missing_config_roles};
@@ -63,11 +66,14 @@ pub enum ListCommandError {
     #[error("failed to read canic deployment state: {0}")]
     InstallState(#[source] InstallStateError),
 
-    #[error("failed to read canic deployment state: could not resolve ICP root")]
-    IcpRootUnavailable,
+    #[error("failed to resolve ICP project root: {0}")]
+    IcpRoot(#[from] IcpConfigError),
 
     #[error("failed to read canic deployment state: {0}")]
     Config(String),
+
+    #[error("failed to discover Canic project configs: {0}")]
+    ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(
         "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` to deploy it, `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` to register existing state, or `canic fleet config <fleet-template>` to inspect its config"
@@ -110,7 +116,7 @@ fn run_list_options(options: ListOptions) -> Result<(), ListCommandError> {
     let readiness = list_ready_statuses(&options, &registry, anchor.as_deref())?;
     let canic_versions = list_canic_versions(&options, &registry, anchor.as_deref())?;
     let module_hashes = list_module_hashes(&registry, anchor.as_deref())?;
-    let wasm_sizes = resolve_wasm_sizes(&options, &registry);
+    let wasm_sizes = resolve_wasm_sizes(&options, &registry)?;
     let cycles = list_cycle_balances(&options, &registry, anchor.as_deref())?;
     let missing_roles = missing_config_roles(&options, &registry);
     let title = list_title(&options);

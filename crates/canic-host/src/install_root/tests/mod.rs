@@ -6,7 +6,7 @@ use super::commands::{
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
-    resolve_install_config_path,
+    resolve_install_config_path, select_discovered_fleet_config_path,
 };
 use super::current_execution::{
     current_install_execution_context, current_install_executor_missing_capabilities,

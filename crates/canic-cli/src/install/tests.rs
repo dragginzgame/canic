@@ -61,6 +61,18 @@ fn install_rejects_invalid_build_profile() {
     std::assert_matches!(err, InstallCommandError::Usage(_));
 }
 
+#[test]
+fn install_preserves_icp_root_resolution_causes() {
+    let error = InstallCommandError::from(IcpConfigError::NoIcpRoot {
+        start: PathBuf::from("/project"),
+    });
+
+    std::assert_matches!(
+        error,
+        InstallCommandError::IcpRoot(IcpConfigError::NoIcpRoot { .. })
+    );
+}
+
 // Ensure install requires an explicit fleet argument.
 #[test]
 fn install_requires_fleet_argument() {

@@ -9,7 +9,7 @@ use canic_core::{
     },
 };
 use canic_host::role_contract::materialize_state_manifest;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::PathBuf};
 
 fn test_state_manifest(role: Option<&str>) -> StateManifest {
     let contracts = if matches!(role, None | Some("root")) {
@@ -188,4 +188,24 @@ fn failing_state_audit_uses_exit_code_one() {
         cli_error_exit_code(&CliError::State(err)),
         i32::from(StateCommandError::AuditFailed.exit_code())
     );
+}
+
+#[test]
+fn state_command_preserves_project_discovery_causes() {
+    let root_error = StateCommandError::from(IcpConfigError::NoIcpRoot {
+        start: PathBuf::from("/missing/project"),
+    });
+    assert!(matches!(
+        root_error,
+        StateCommandError::IcpRoot(IcpConfigError::NoIcpRoot { .. })
+    ));
+
+    let discovery_error = StateCommandError::from(ConfigDiscoveryError::DuplicateFleet {
+        fleet: "duplicate".to_string(),
+        configs: "first/canic.toml, second/canic.toml".to_string(),
+    });
+    assert!(matches!(
+        discovery_error,
+        StateCommandError::ConfigDiscovery(ConfigDiscoveryError::DuplicateFleet { .. })
+    ));
 }

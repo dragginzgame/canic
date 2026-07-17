@@ -20,10 +20,12 @@ use crate::{
 use canic_core::shared_support::is_ascii_snake_case;
 use canic_host::{
     durable_io::write_bytes,
-    install_root::{current_canic_project_root, discover_project_canic_config_choices},
+    install_root::{
+        ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
+        select_discovered_fleet_config_path,
+    },
     release_set::{
-        FleetConfigError, declare_fleet_role, display_workspace_path, matching_fleet_config_paths,
-        plan_declare_fleet_role,
+        FleetConfigError, declare_fleet_role, display_workspace_path, plan_declare_fleet_role,
     },
 };
 use clap::{Arg, Command as ClapCommand};
@@ -75,13 +77,11 @@ pub enum ScaffoldCommandError {
     #[error("unknown fleet {0}; run canic fleet list to inspect config-defined fleets")]
     UnknownFleet(String),
 
-    #[error(
-        "multiple configs declare fleet {0}; use distinct [fleet].name values before selecting it"
-    )]
-    DuplicateFleet(String),
-
     #[error("fleet {0} config does not have a parent directory")]
     MissingFleetDirectory(String),
+
+    #[error("failed to discover Canic project configs: {0}")]
+    ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
     FleetConfig(#[from] FleetConfigError),
@@ -877,7 +877,7 @@ where
 }
 
 fn scaffold_project_root() -> Result<PathBuf, ScaffoldCommandError> {
-    current_canic_project_root().map_err(|err| ScaffoldCommandError::Usage(err.to_string()))
+    current_canic_project_root().map_err(Into::into)
 }
 
 fn selected_fleet_config_path(
@@ -889,12 +889,8 @@ fn selected_fleet_config_path(
         return Err(ScaffoldCommandError::NoConfigChoices);
     }
 
-    let matches = matching_fleet_config_paths(&choices, fleet);
-    match matches.as_slice() {
-        [path] => Ok(path.clone()),
-        [] => Err(ScaffoldCommandError::UnknownFleet(fleet.to_string())),
-        _ => Err(ScaffoldCommandError::DuplicateFleet(fleet.to_string())),
-    }
+    select_discovered_fleet_config_path(&choices, fleet)?
+        .ok_or_else(|| ScaffoldCommandError::UnknownFleet(fleet.to_string()))
 }
 
 fn parse_project_name(name: &str) -> Result<String, String> {

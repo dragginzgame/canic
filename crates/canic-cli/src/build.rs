@@ -27,10 +27,12 @@ use canic_host::{
         IcpBuildEnvironment, resolve_current_canic_icp_root,
         resolve_icp_build_environment_from_root,
     },
-    install_root::{current_canic_project_root, discover_project_canic_config_choices},
+    install_root::{
+        ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
+        select_discovered_fleet_config_path,
+    },
     release_set::{
-        FleetConfigError, configured_fleet_name, configured_role_lifecycle,
-        matching_fleet_config_paths, workspace_root_from,
+        FleetConfigError, configured_fleet_name, configured_role_lifecycle, workspace_root_from,
     },
 };
 use clap::Command as ClapCommand;
@@ -73,10 +75,8 @@ pub enum BuildCommandError {
     #[error("unknown fleet {0}; run canic fleet list to inspect config-defined fleets")]
     UnknownFleet(String),
 
-    #[error(
-        "multiple configs declare fleet {0}; use distinct [fleet].name values before selecting it"
-    )]
-    DuplicateFleet(String),
+    #[error("failed to discover Canic project configs: {0}")]
+    ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
     Build(#[from] Box<dyn std::error::Error>),
@@ -328,12 +328,8 @@ fn resolve_build_config_path(options: &BuildOptions) -> Result<PathBuf, BuildCom
         return Err(BuildCommandError::NoConfigChoices);
     }
 
-    let matches = matching_fleet_config_paths(&choices, &options.fleet);
-    match matches.as_slice() {
-        [path] => Ok(path.clone()),
-        [] => Err(BuildCommandError::UnknownFleet(options.fleet.clone())),
-        _ => Err(BuildCommandError::DuplicateFleet(options.fleet.clone())),
-    }
+    select_discovered_fleet_config_path(&choices, &options.fleet)?
+        .ok_or_else(|| BuildCommandError::UnknownFleet(options.fleet.clone()))
 }
 
 fn validate_config_fleet(

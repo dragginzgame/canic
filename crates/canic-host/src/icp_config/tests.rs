@@ -324,6 +324,22 @@ fn icp_inspection_rejects_missing_fleet_configs() {
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
+#[test]
+fn icp_inspection_preserves_invalid_fleet_config_cause() {
+    let root = temp_dir("canic-icp-invalid-fleet-config");
+    let config = root.join("fleets/toko/canic.toml");
+    fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
+    fs::write(&config, "[fleet\nname = \"toko\"\n").expect("write invalid config");
+
+    let error = discover_project_spec(&root, None).expect_err("invalid config should fail");
+    let IcpConfigError::FleetConfig(FleetConfigError::ConfigInvalid { path, .. }) = error else {
+        panic!("expected typed fleet config cause");
+    };
+
+    assert_eq!(path, config);
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
 fn write_test_config(path: &Path, fleet: &str, roles: &[&str]) {
     fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
     let mut source = format!("[fleet]\nname = \"{fleet}\"\n");

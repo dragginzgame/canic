@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.8` is potentially breaking: it gives project configuration discovery
+  and fleet selection one typed authority and makes operational project-root
+  failures fail closed instead of continuing through optional fallbacks.
+
 - `0.93.7` is potentially breaking: it makes direct replica queries the sole
   cycle-balance and bootstrap-status transport for local targets, preserving
   typed failures instead of retrying through ICP CLI.

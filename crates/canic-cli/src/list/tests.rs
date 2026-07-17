@@ -14,7 +14,7 @@ use canic_host::table::{ColumnAlign, render_separator, render_table_row};
 use options::ListSource;
 use render::ReadyStatus;
 use serde_json::json;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::PathBuf};
 
 const ROOT: &str = "aaaaa-aa";
 const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
@@ -75,6 +75,18 @@ fn missing_list_deployment_mentions_unverified_registration_acknowledgement() {
 
     assert!(message.contains("canic deploy register demo-local"));
     assert!(message.contains("--allow-unverified"));
+}
+
+#[test]
+fn list_preserves_icp_root_resolution_causes() {
+    let error = ListCommandError::from(IcpConfigError::NoIcpRoot {
+        start: PathBuf::from("/project"),
+    });
+
+    std::assert_matches!(
+        error,
+        ListCommandError::IcpRoot(IcpConfigError::NoIcpRoot { .. })
+    );
 }
 
 // Ensure config options parse declared fleet inspection.

@@ -50,12 +50,12 @@ pub(super) fn list_ready_statuses(
         return local_ready_statuses(options, registry, canister);
     }
 
-    let icp_root = resolve_live_icp_root(options);
+    let icp_root = resolve_live_icp_root()?;
     let mut statuses = BTreeMap::new();
     for entry in visible_entries(registry, canister)? {
         statuses.insert(
             entry.pid.clone(),
-            check_ready_status(options, icp_root.as_deref(), entry),
+            check_ready_status(options, Some(&icp_root), entry),
         );
     }
     Ok(statuses)
@@ -68,14 +68,12 @@ pub(super) fn list_cycle_balances(
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
     let network = options.network.clone();
-    let icp_root = resolve_live_icp_root(options);
+    let icp_root = resolve_live_icp_root()?;
     collect_visible_entry_values(
         registry,
         canister,
         OBSERVATION_ERROR.to_string(),
-        move |entry| {
-            cycle_balance_label_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
-        },
+        move |entry| cycle_balance_label_endpoint(&icp, network.clone(), Some(&icp_root), &entry),
     )
 }
 
@@ -86,14 +84,12 @@ pub(super) fn list_canic_versions(
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
     let network = options.network.clone();
-    let icp_root = resolve_live_icp_root(options);
+    let icp_root = resolve_live_icp_root()?;
     collect_visible_entry_values(
         registry,
         canister,
         OBSERVATION_ERROR.to_string(),
-        move |entry| {
-            canic_version_label_endpoint(&icp, network.clone(), icp_root.as_deref(), &entry)
-        },
+        move |entry| canic_version_label_endpoint(&icp, network.clone(), Some(&icp_root), &entry),
     )
 }
 
@@ -115,12 +111,10 @@ pub(super) fn list_module_hashes(
 pub(super) fn resolve_wasm_sizes(
     options: &ListOptions,
     registry: &[RegistryEntry],
-) -> BTreeMap<String, String> {
-    let Some(root) = resolve_icp_artifact_root(options) else {
-        return BTreeMap::new();
-    };
+) -> Result<BTreeMap<String, String>, ListCommandError> {
+    let root = resolve_icp_artifact_root(options)?;
     let network = state_network(options);
-    registry
+    Ok(registry
         .iter()
         .filter_map(|entry| entry.role.as_deref())
         .collect::<BTreeSet<_>>()
@@ -143,7 +137,7 @@ pub(super) fn resolve_wasm_sizes(
                 Some((role.to_string(), wasm_size_label(wasm_bytes, gzip_bytes)))
             }
         })
-        .collect()
+        .collect())
 }
 
 fn check_ready_status(
@@ -175,12 +169,12 @@ fn local_ready_statuses(
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
     let network = options.network.clone();
-    let icp_root = resolve_live_icp_root(options);
+    let icp_root = resolve_live_icp_root()?;
     collect_visible_entry_values(registry, canister, ReadyStatus::Error, move |entry| {
         match query_local_canister_ready(
             network.as_deref().unwrap_or("local"),
             &entry.pid,
-            icp_root.as_deref(),
+            Some(&icp_root),
         ) {
             Ok(true) => ReadyStatus::Ready,
             Ok(false) => ReadyStatus::NotReady,
@@ -251,22 +245,22 @@ fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpC
     }
 }
 
-fn resolve_icp_artifact_root(options: &ListOptions) -> Option<PathBuf> {
-    let icp_root = resolve_live_icp_root(options)?;
+fn resolve_icp_artifact_root(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
+    let icp_root = resolve_live_icp_root()?;
     if let Ok(state) = read_installed_deployment_state_from_root(
         &state_network(options),
         &options.target,
         &icp_root,
     ) {
-        return Some(PathBuf::from(state.icp_root));
+        return Ok(PathBuf::from(state.icp_root));
     }
-    Some(icp_root)
+    Ok(icp_root)
 }
 
 fn resolve_list_deployment(
     options: &ListOptions,
 ) -> Result<InstalledDeploymentResolution, ListCommandError> {
-    let icp_root = resolve_live_icp_root(options).ok_or(ListCommandError::IcpRootUnavailable)?;
+    let icp_root = resolve_live_icp_root()?;
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.target.clone(),
@@ -280,16 +274,8 @@ fn resolve_list_deployment(
     .map_err(add_root_registry_hint)
 }
 
-fn resolve_live_icp_root(options: &ListOptions) -> Option<PathBuf> {
-    resolve_current_canic_icp_root().ok().or_else(|| {
-        read_installed_deployment_state_from_root(
-            &state_network(options),
-            &options.target,
-            &std::env::current_dir().ok()?,
-        )
-        .ok()
-        .map(|state| PathBuf::from(state.icp_root))
-    })
+fn resolve_live_icp_root() -> Result<PathBuf, ListCommandError> {
+    resolve_current_canic_icp_root().map_err(ListCommandError::from)
 }
 
 fn list_installed_deployment_error(error: InstalledDeploymentError) -> ListCommandError {

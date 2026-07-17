@@ -1,4 +1,5 @@
 use super::*;
+use crate::install_root::ConfigDiscoveryError;
 
 #[test]
 fn install_config_defaults_to_project_config_when_present() {
@@ -383,7 +384,15 @@ fn discovered_workspace_config_choices_accept_root_fleets() {
 
     let choices = discover_project_canic_config_choices(&root).expect("discover choices");
 
-    assert_eq!(choices, vec![config]);
+    assert_eq!(choices, vec![config.clone()]);
+    assert_eq!(
+        select_discovered_fleet_config_path(&choices, "toko").expect("select fleet"),
+        Some(config)
+    );
+    assert_eq!(
+        select_discovered_fleet_config_path(&choices, "missing").expect("select missing fleet"),
+        None
+    );
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -458,10 +467,12 @@ kind = "root"
     fs::write(&copy, config).expect("write copy config");
 
     let err = discover_canic_config_choices(&root).expect_err("duplicate fleet names should fail");
-    let message = err.to_string();
+    let ConfigDiscoveryError::DuplicateFleet { fleet, configs } = err else {
+        panic!("expected typed duplicate fleet error");
+    };
 
-    assert!(message.contains("multiple configs declare fleet demo"));
-    assert!(message.contains("demo/canic.toml"));
-    assert!(message.contains("copy/canic.toml"));
+    assert_eq!(fleet, "demo");
+    assert!(configs.contains("demo/canic.toml"));
+    assert!(configs.contains("copy/canic.toml"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }

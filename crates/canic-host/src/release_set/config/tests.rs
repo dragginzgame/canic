@@ -1,6 +1,9 @@
 use super::*;
 use canic_core::bootstrap::ConfigError;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 const CONFIG: &str = r#"
 controllers = []

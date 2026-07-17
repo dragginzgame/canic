@@ -1,16 +1,17 @@
 use crate::{
     install_root::{
-        current_canic_project_root, discover_project_canic_config_choices, project_fleet_roots,
+        ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
+        project_fleet_roots,
     },
-    release_set::{configured_deployable_roles, configured_fleet_name, icp_root},
+    release_set::{FleetConfigError, configured_deployable_roles, configured_fleet_name, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    error::Error,
-    fmt, fs,
+    fs,
     path::{Path, PathBuf},
 };
+use thiserror::Error as ThisError;
 
 const ICP_CONFIG_FILE: &str = "icp.yaml";
 pub const DEFAULT_LOCAL_GATEWAY_PORT: u16 = 8000;
@@ -41,42 +42,22 @@ impl IcpBuildEnvironment {
 /// IcpConfigError
 ///
 
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
 pub enum IcpConfigError {
+    #[error("could not find icp.yaml from {}", start.display())]
     NoIcpRoot { start: PathBuf },
+
+    #[error("{0}")]
     Config(String),
-    Io(std::io::Error),
-}
 
-impl fmt::Display for IcpConfigError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoIcpRoot { start } => {
-                write!(
-                    formatter,
-                    "could not find icp.yaml from {}",
-                    start.display()
-                )
-            }
-            Self::Config(message) => write!(formatter, "{message}"),
-            Self::Io(err) => write!(formatter, "{err}"),
-        }
-    }
-}
+    #[error(transparent)]
+    ConfigDiscovery(#[from] ConfigDiscoveryError),
 
-impl Error for IcpConfigError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Io(err) => Some(err),
-            Self::Config(_) | Self::NoIcpRoot { .. } => None,
-        }
-    }
-}
+    #[error(transparent)]
+    FleetConfig(#[from] FleetConfigError),
 
-impl From<std::io::Error> for IcpConfigError {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 ///
@@ -238,35 +219,12 @@ fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
 
 /// Resolve the ICP project root implied by the current Canic fleet layout.
 pub fn resolve_current_canic_icp_root() -> Result<PathBuf, IcpConfigError> {
-    let search_root = current_project_search_root()?;
-    let choices = discover_project_canic_config_choices(&search_root)
-        .map_err(|err| IcpConfigError::Config(err.to_string()))?;
-    if !choices.is_empty() {
-        return Ok(search_root);
-    }
-
-    current_icp_root().or_else(|_| {
-        icp_root()
-            .map_err(|err| IcpConfigError::Config(err.to_string()))
-            .and_then(|path| path.canonicalize().map_err(IcpConfigError::from))
-    })
-}
-
-fn current_project_search_root() -> Result<PathBuf, IcpConfigError> {
-    let root = current_canic_project_root()
-        .map_err(|err| IcpConfigError::Config(err.to_string()))?
-        .canonicalize()?;
-    if !discover_project_canic_config_choices(&root)
-        .map_err(|err| IcpConfigError::Config(err.to_string()))?
-        .is_empty()
-    {
+    let root = current_canic_project_root()?.canonicalize()?;
+    if !discover_project_canic_config_choices(&root)?.is_empty() {
         return Ok(root);
     }
 
-    if let Ok(root) = icp_root() {
-        return Ok(root);
-    }
-    Ok(std::env::current_dir()?.canonicalize()?)
+    Ok(icp_root()?)
 }
 
 ///
@@ -283,8 +241,7 @@ fn discover_project_spec(
     root: &Path,
     fleet_filter: Option<&str>,
 ) -> Result<CanicIcpSpec, IcpConfigError> {
-    let choices = discover_project_canic_config_choices(root)
-        .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+    let choices = discover_project_canic_config_choices(root)?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
             "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
@@ -298,8 +255,7 @@ fn discover_project_spec(
     let mut matched_filter = fleet_filter.is_none();
 
     for config_path in choices {
-        let fleet = configured_fleet_name(&config_path)
-            .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+        let fleet = configured_fleet_name(&config_path)?;
         if let Some(filter) = fleet_filter {
             if filter != fleet {
                 continue;
@@ -307,8 +263,7 @@ fn discover_project_spec(
             matched_filter = true;
         }
 
-        let roles = configured_deployable_roles(&config_path)
-            .map_err(|err| IcpConfigError::Config(err.to_string()))?;
+        let roles = configured_deployable_roles(&config_path)?;
         for role in &roles {
             if seen_canisters.insert(role.clone()) {
                 canisters.push(role.clone());
