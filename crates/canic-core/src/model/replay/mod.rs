@@ -3,7 +3,10 @@
 //! Responsibility: define pure shared replay receipt identifiers and state.
 //! Does not own: storage mutation, replay reservation, or command execution.
 //! Boundary: consumed by replay ops and stable replay storage records.
-use crate::{cdk::types::Principal, ids::CanisterRole};
+use crate::{
+    cdk::types::Principal,
+    ids::{CanisterRole, IntentId},
+};
 use std::{fmt, str::FromStr};
 
 use serde::{Deserialize, Serialize};
@@ -224,7 +227,24 @@ pub struct ReplayReceipt {
     pub expires_at_ns: Option<u64>,
     pub response_schema_version: Option<u32>,
     pub response_bytes: Option<Vec<u8>>,
+    pub staged_response_schema_version: Option<u32>,
+    pub staged_response_bytes: Option<Vec<u8>>,
+    pub cost_guard_settlement: Option<ReplayCostGuardSettlement>,
     pub effect: Option<ExternalEffectDescriptor>,
+}
+
+///
+/// ReplayCostGuardSettlement
+///
+/// Durable cost-intent identity required to finish accounting without repeating
+/// an external effect.
+/// Owned by the replay model and persisted with the protected replay receipt.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReplayCostGuardSettlement {
+    pub quota_intent_id: IntentId,
+    pub reservation_intent_id: IntentId,
 }
 
 ///
@@ -253,6 +273,8 @@ pub enum ReplayReceiptStatus {
 pub enum RecoveryReason {
     ExternalEffectStatusUnknown,
     ResponseCommitFailed,
+    CostSettlementFailed,
+    StateProjectionFailed,
     Other(String),
 }
 

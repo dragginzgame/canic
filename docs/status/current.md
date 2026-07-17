@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.10`.
-- The latest published release is `v0.93.10` at
-  `728033a2ba598f01beac91a3f504d1971fa97564`.
-- The `v0.93.10` source tree is
-  `16e4f9ae63a2dc3e15538b8094ac2c5e82e32c70`; its product-tree hash is
-  `508048774bc8ddd09b5220cc28f730ab201258545e51211400d302b83c7b0338`.
+- The workspace package version is `0.93.11`.
+- The latest published release is `v0.93.11` at
+  `81ec9b8505362b096565f859c15ecc9001881fd0`.
+- The `v0.93.11` source tree is
+  `5c0c4569aa58ea75ee596daa93f5ca48fb84114d`; its product-tree hash is
+  `52188ee6c5e67b0ddf8aef447f862c4f596210184f50c2b0fcff7fe1366d3cda`.
   Its Cargo.lock SHA-256 is
-  `04ab50d28269a3d245f8e3accc78d7cafea25c2c25b3b11cb6ee64f449ee6440`.
+  `fb51f825c2fd414a69012aba1b9cf6c0ca3dd661e59694372acfa3fb88c0b3d7`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -69,10 +69,14 @@ Historical detail is archived at:
   receipts, gives root install a typed phase/cause boundary, and preserves the
   host-owned installed-deployment error through CLI commands without duplicate
   mappings.
-- Current development makes cost-guard rollback and ICP-refill/pool-create
+- Released `v0.93.11` makes cost-guard rollback and ICP-refill/pool-create
   settlement fail closed, hard-cuts the retired Wasm-store internal-proof
   classifier and duplicate endpoint model, and preserves typed backup-manifest,
   fleet-create, fleet-config, and config-list child causes.
+- Current development makes the replay receipt the durable recovery authority
+  for costed refill, pool-create, root-provision, and root-upgrade completion,
+  and preserves the typed root-install failure when writing its failure receipt
+  also fails.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

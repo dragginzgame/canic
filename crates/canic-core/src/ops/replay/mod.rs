@@ -21,7 +21,9 @@ use crate::{
         guard::ReplayPending,
         receipt::{
             ReplayReceiptStoreError, abort_reserved_receipt, commit_receipt_response,
-            mark_external_effect_in_flight, mark_recovery_required, reserve_receipt_token,
+            commit_staged_receipt_response, mark_costed_external_effect_in_flight,
+            mark_external_effect_in_flight, mark_recovery_required, replay_cost_guard_settlement,
+            reserve_receipt_token, stage_receipt_response,
         },
     },
     ops::storage::replay::ReplayReceiptOps,
@@ -146,6 +148,53 @@ pub fn mark_root_replay_external_effect(
     now_ns: u64,
 ) -> Result<(), ReplayReceiptStoreError> {
     mark_external_effect_in_flight(&pending.receipt_token, effect, now_ns)
+}
+
+/// Persist a root external-effect boundary together with its durable cost settlement identity.
+pub fn mark_root_replay_costed_external_effect(
+    pending: &ReplayPending,
+    effect: ExternalEffectDescriptor,
+    cost_permit: &crate::ops::cost_guard::CostGuardPermit,
+    now_ns: u64,
+) -> Result<(), ReplayReceiptStoreError> {
+    mark_costed_external_effect_in_flight(
+        &pending.receipt_token,
+        effect,
+        cost_permit.replay_settlement(),
+        now_ns,
+    )
+}
+
+/// Encode and stage a root response before cost settlement is attempted.
+pub fn stage_root_replay_response(
+    pending: &ReplayPending,
+    response: &Response,
+    now_ns: u64,
+) -> Result<(), ReplayFinalizeError> {
+    let response_bytes =
+        encode_root_replay_response(response).map_err(ReplayFinalizeError::Encode)?;
+    stage_receipt_response(
+        &pending.receipt_token,
+        ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
+        response_bytes,
+        now_ns,
+    )
+    .map_err(ReplayFinalizeError::Store)
+}
+
+/// Return the durable cost settlement identity for one root replay receipt.
+pub fn root_replay_cost_guard_settlement(
+    pending: &ReplayPending,
+) -> Result<crate::model::replay::ReplayCostGuardSettlement, ReplayReceiptStoreError> {
+    replay_cost_guard_settlement(&pending.receipt_token)
+}
+
+/// Promote a staged root response after durable cost settlement succeeds.
+pub fn commit_staged_root_replay_response(
+    pending: &ReplayPending,
+    now_ns: u64,
+) -> Result<ReplayReceipt, ReplayReceiptStoreError> {
+    commit_staged_receipt_response(&pending.receipt_token, now_ns)
 }
 
 /// mark_root_replay_recovery_required

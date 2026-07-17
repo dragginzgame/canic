@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.12` is potentially breaking: it makes post-effect replay receipts
+  non-expiring and recoverable through accounting-only retries, and preserves
+  both typed root-install failure causes.
+
 - `0.93.11` is potentially breaking: it makes cost-guard settlement fail
   closed, removes the retired Wasm-store proof classifier, and preserves typed
   child-command and fleet-config failures through CLI dispatch.

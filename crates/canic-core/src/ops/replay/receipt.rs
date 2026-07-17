@@ -7,8 +7,8 @@
 use crate::{
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
-        REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayReceipt,
-        ReplayReceiptStatus,
+        REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayCostGuardSettlement,
+        ReplayReceipt, ReplayReceiptStatus,
     },
     ops::storage::replay::ReplayReceiptOps,
     storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptSlotKey},
@@ -66,8 +66,8 @@ impl ReplayReceiptReserveInput {
 ///
 /// ReplayReceiptToken
 ///
-/// Capability proving a fresh replay receipt reservation.
-/// Owned by replay ops and passed to commit/abort/effect helpers.
+/// Capability identifying a validated replay receipt reservation or recovery.
+/// Owned by replay ops and passed to lifecycle mutation helpers.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -104,7 +104,10 @@ pub enum ReplayReceiptDecision {
     ActorMismatch,
     PayloadMismatch,
     Expired,
-    RecoveryRequired(RecoveryReason),
+    RecoveryRequired {
+        token: ReplayReceiptToken,
+        reason: RecoveryReason,
+    },
     PendingActorQuotaExceeded {
         actor: ReplayActor,
         max_pending: usize,
@@ -129,6 +132,12 @@ pub enum ReplayReceiptStoreError {
 
     #[error("failed to decode replay receipt: {0}")]
     ReceiptDecodeFailed(String),
+
+    #[error("replay receipt is missing staged response data")]
+    StagedResponseMissing,
+
+    #[error("replay receipt is missing cost guard settlement identity")]
+    CostGuardSettlementMissing,
 }
 
 pub fn reserve_or_replay_receipt(
@@ -178,6 +187,9 @@ pub fn prepare_replay_receipt(
             expires_at_ns: input.expires_at_ns,
             response_schema_version: None,
             response_bytes: None,
+            staged_response_schema_version: None,
+            staged_response_bytes: None,
+            cost_guard_settlement: None,
             effect: None,
         };
         return Ok(ReplayReceiptDecision::Fresh(ReplayReceiptToken {
@@ -189,7 +201,7 @@ pub fn prepare_replay_receipt(
     let existing = existing
         .into_receipt()
         .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
-    Ok(classify_existing_receipt(&input, existing))
+    Ok(classify_existing_receipt(&input, key, existing))
 }
 
 pub fn reserve_receipt_token(token: &ReplayReceiptToken) {
@@ -238,6 +250,84 @@ pub fn mark_external_effect_in_flight(
     Ok(())
 }
 
+/// Atomically persist an external-effect boundary and its cost intent identity.
+pub fn mark_costed_external_effect_in_flight(
+    token: &ReplayReceiptToken,
+    effect: ExternalEffectDescriptor,
+    settlement: ReplayCostGuardSettlement,
+    now_ns: u64,
+) -> Result<(), ReplayReceiptStoreError> {
+    let mut receipt = latest_receipt_for_token(token)?;
+    receipt.status = ReplayReceiptStatus::ExternalEffectInFlight;
+    receipt.effect = Some(effect);
+    receipt.cost_guard_settlement = Some(settlement);
+    receipt.updated_at_ns = now_ns;
+    ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
+    Ok(())
+}
+
+/// Persist the cost intent identity before a workflow crosses an external-effect boundary.
+pub fn record_cost_guard_settlement(
+    token: &ReplayReceiptToken,
+    settlement: ReplayCostGuardSettlement,
+    now_ns: u64,
+) -> Result<(), ReplayReceiptStoreError> {
+    let mut receipt = latest_receipt_for_token(token)?;
+    receipt.cost_guard_settlement = Some(settlement);
+    receipt.updated_at_ns = now_ns;
+    ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
+    Ok(())
+}
+
+/// Persist a terminal response before its cost intents are settled.
+pub fn stage_receipt_response(
+    token: &ReplayReceiptToken,
+    response_schema_version: u32,
+    response_bytes: Vec<u8>,
+    now_ns: u64,
+) -> Result<(), ReplayReceiptStoreError> {
+    let mut receipt = latest_receipt_for_token(token)?;
+    receipt.staged_response_schema_version = Some(response_schema_version);
+    receipt.staged_response_bytes = Some(response_bytes);
+    receipt.updated_at_ns = now_ns;
+    ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
+    Ok(())
+}
+
+/// Promote a staged terminal response after cost settlement succeeds.
+pub fn commit_staged_receipt_response(
+    token: &ReplayReceiptToken,
+    now_ns: u64,
+) -> Result<ReplayReceipt, ReplayReceiptStoreError> {
+    let mut receipt = latest_receipt_for_token(token)?;
+    let response_schema_version = receipt
+        .staged_response_schema_version
+        .take()
+        .ok_or(ReplayReceiptStoreError::StagedResponseMissing)?;
+    let response_bytes = receipt
+        .staged_response_bytes
+        .take()
+        .ok_or(ReplayReceiptStoreError::StagedResponseMissing)?;
+    receipt.status = ReplayReceiptStatus::Committed;
+    receipt.response_schema_version = Some(response_schema_version);
+    receipt.response_bytes = Some(response_bytes);
+    receipt.updated_at_ns = now_ns;
+    ReplayReceiptOps::upsert(
+        token.key,
+        ReplayReceiptRecord::from_receipt(receipt.clone()),
+    );
+    Ok(receipt)
+}
+
+/// Read the durable cost intent identity for an accounting-only retry.
+pub fn replay_cost_guard_settlement(
+    token: &ReplayReceiptToken,
+) -> Result<ReplayCostGuardSettlement, ReplayReceiptStoreError> {
+    latest_receipt_for_token(token)?
+        .cost_guard_settlement
+        .ok_or(ReplayReceiptStoreError::CostGuardSettlementMissing)
+}
+
 pub fn commit_receipt_response(
     token: &ReplayReceiptToken,
     response_schema_version: u32,
@@ -248,6 +338,8 @@ pub fn commit_receipt_response(
     receipt.status = ReplayReceiptStatus::Committed;
     receipt.response_schema_version = Some(response_schema_version);
     receipt.response_bytes = Some(response_bytes);
+    receipt.staged_response_schema_version = None;
+    receipt.staged_response_bytes = None;
     receipt.updated_at_ns = now_ns;
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
     Ok(())
@@ -309,15 +401,9 @@ fn latest_receipt_for_token(
 
 fn classify_existing_receipt(
     input: &ReplayReceiptReserveInput,
+    key: ReplayReceiptSlotKey,
     existing: ReplayReceipt,
 ) -> ReplayReceiptDecision {
-    if existing
-        .expires_at_ns
-        .is_some_and(|expires_at_ns| input.now_ns >= expires_at_ns)
-    {
-        return ReplayReceiptDecision::Expired;
-    }
-
     if existing.actor != input.actor {
         return ReplayReceiptDecision::ActorMismatch;
     }
@@ -327,13 +413,36 @@ fn classify_existing_receipt(
         return ReplayReceiptDecision::PayloadMismatch;
     }
 
+    if let ReplayReceiptStatus::RecoveryRequired { reason } = &existing.status {
+        let reason = reason.clone();
+        return ReplayReceiptDecision::RecoveryRequired {
+            token: ReplayReceiptToken {
+                key,
+                receipt: existing,
+            },
+            reason,
+        };
+    }
+
+    if existing.status == ReplayReceiptStatus::ExternalEffectInFlight {
+        return ReplayReceiptDecision::OperationInProgress;
+    }
+
+    if existing
+        .expires_at_ns
+        .is_some_and(|expires_at_ns| input.now_ns >= expires_at_ns)
+    {
+        return ReplayReceiptDecision::Expired;
+    }
+
     match existing.status {
-        ReplayReceiptStatus::Reserved | ReplayReceiptStatus::ExternalEffectInFlight => {
-            ReplayReceiptDecision::OperationInProgress
+        ReplayReceiptStatus::Reserved => ReplayReceiptDecision::OperationInProgress,
+        ReplayReceiptStatus::ExternalEffectInFlight => {
+            unreachable!("external-effect receipts are classified before expiry")
         }
         ReplayReceiptStatus::Committed => ReplayReceiptDecision::ReturnCommitted(existing),
-        ReplayReceiptStatus::RecoveryRequired { reason } => {
-            ReplayReceiptDecision::RecoveryRequired(reason)
+        ReplayReceiptStatus::RecoveryRequired { .. } => {
+            unreachable!("recovery receipts are classified before expiry")
         }
     }
 }
@@ -423,12 +532,13 @@ mod tests {
     fn reserve_or_replay_receipt_reports_in_progress_for_reserved_or_effect() {
         ReplayReceiptOps::reset_for_tests();
 
-        let token = match reserve_or_replay_receipt(input()).expect("reserve") {
+        let original_input = input().with_expires_at_ns(175);
+        let token = match reserve_or_replay_receipt(original_input.clone()).expect("reserve") {
             ReplayReceiptDecision::Fresh(token) => token,
             other => panic!("expected fresh, got {other:?}"),
         };
         assert_eq!(
-            reserve_or_replay_receipt(input()).expect("reserved duplicate"),
+            reserve_or_replay_receipt(original_input.clone()).expect("reserved duplicate"),
             ReplayReceiptDecision::OperationInProgress
         );
 
@@ -440,8 +550,10 @@ mod tests {
             150,
         )
         .expect("mark external effect");
+        let mut expired_retry = original_input;
+        expired_retry.now_ns = 200;
         assert_eq!(
-            reserve_or_replay_receipt(input()).expect("in-flight duplicate"),
+            reserve_or_replay_receipt(expired_retry).expect("in-flight duplicate"),
             ReplayReceiptDecision::OperationInProgress
         );
     }
@@ -599,6 +711,55 @@ mod tests {
             .expect("receipt decodes");
         assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
         assert_eq!(receipt.effect, Some(effect));
+    }
+
+    #[test]
+    fn cost_settlement_recovery_preserves_staged_response_past_request_expiry() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let original_input = input().with_expires_at_ns(120);
+        let token = match reserve_or_replay_receipt(original_input.clone()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        let settlement = ReplayCostGuardSettlement {
+            quota_intent_id: crate::ids::IntentId(41),
+            reservation_intent_id: crate::ids::IntentId(42),
+        };
+        mark_costed_external_effect_in_flight(
+            &token,
+            ExternalEffectDescriptor::ManagementCall {
+                canister: p(8),
+                method: "install_code".to_string(),
+            },
+            settlement,
+            105,
+        )
+        .expect("mark costed effect");
+        stage_receipt_response(&token, 1, vec![1, 2, 3], 110).expect("stage response");
+        mark_recovery_required(&token, RecoveryReason::CostSettlementFailed, 115)
+            .expect("mark recovery");
+
+        let mut retry_input = original_input;
+        retry_input.now_ns = 200;
+        let ReplayReceiptDecision::RecoveryRequired {
+            token: recovery_token,
+            reason,
+        } = reserve_or_replay_receipt(retry_input).expect("recovery decision")
+        else {
+            panic!("expected recovery decision");
+        };
+        assert_eq!(reason, RecoveryReason::CostSettlementFailed);
+        assert_eq!(
+            replay_cost_guard_settlement(&recovery_token).expect("settlement identity"),
+            settlement
+        );
+
+        let committed =
+            commit_staged_receipt_response(&recovery_token, 205).expect("commit staged response");
+        assert_eq!(committed.status, ReplayReceiptStatus::Committed);
+        assert_eq!(committed.response_bytes.as_deref(), Some(&[1, 2, 3][..]));
+        assert!(committed.staged_response_bytes.is_none());
     }
 
     #[test]

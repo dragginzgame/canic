@@ -52,7 +52,7 @@ pub(super) async fn execute_root_capability(
 
     let result = match capability {
         RootCapability::ProvisionCanister(req) => execute_provision(ctx, pending, &req).await,
-        RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, &req).await,
+        RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, pending, &req).await,
         RootCapability::RecycleCanister(req) => execute_recycle(&req).await,
         RootCapability::RequestCycles(req) => {
             let response = if let Some(grant) = authorized_cycles {
@@ -89,7 +89,15 @@ async fn execute_provision(
     preflight_provision_parent_registered(parent_pid)?;
     let reservation_cycles = root_provision_cycle_reservation_cycles(req)?;
     let cost_permit = reserve_root_provision_cost_guard(ctx, reservation_cycles)?;
-    mark_root_provision_external_effect(pending, ctx, req, parent_pid)?;
+    if let Err(err) =
+        mark_root_provision_external_effect(pending, ctx, req, parent_pid, &cost_permit)
+    {
+        return Err(CostGuardOps::recover_after_failure(
+            &cost_permit,
+            IcOps::now_secs(),
+            err,
+        ));
+    }
 
     let event = CanisterLifecycleEvent::Create {
         deployment_permit: &cost_permit,
@@ -113,14 +121,24 @@ async fn execute_provision(
         return Err(err);
     };
 
-    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+    let response = Response::CreateCanister(CreateCanisterResponse { new_canister_pid });
+    if let Err(err) = replay::stage_response(pending, &response) {
+        let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
         replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed)?;
         return Err(err);
     }
+    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+        if let Err(recovery_err) =
+            replay::mark_recovery_required(pending, RecoveryReason::CostSettlementFailed)
+        {
+            return Err(err.with_diagnostic_context(format!(
+                "root provision replay recovery marker failed: {recovery_err}"
+            )));
+        }
+        return Err(err);
+    }
 
-    Ok(Response::CreateCanister(CreateCanisterResponse {
-        new_canister_pid,
-    }))
+    Ok(response)
 }
 
 fn resolve_provision_parent(
@@ -195,12 +213,14 @@ pub(super) fn mark_root_provision_external_effect(
     ctx: &RootContext,
     req: &CreateCanisterRequest,
     parent_pid: Principal,
+    cost_permit: &CostGuardPermit,
 ) -> Result<(), InternalError> {
-    replay::mark_external_effect_in_flight(
+    replay::mark_costed_external_effect_in_flight(
         pending,
         ExternalEffectDescriptor::ManagementCreateCanister {
             command_kind: root_provision_command_kind(),
         },
+        cost_permit,
     )?;
     log!(
         Topic::Rpc,
@@ -239,8 +259,11 @@ fn mark_root_provision_recovery_required(
 
 async fn execute_upgrade(
     ctx: &RootContext,
+    pending: &ReplayPending,
     req: &UpgradeCanisterRequest,
 ) -> Result<Response, InternalError> {
+    let response = Response::UpgradeCanister(UpgradeCanisterResponse {});
+    replay::stage_response(pending, &response)?;
     let event = CanisterLifecycleEvent::Upgrade {
         cost_context: CanisterUpgradeCostContext {
             quota_subject: ctx.caller,
@@ -248,11 +271,12 @@ async fn execute_upgrade(
             now_secs: ctx.now,
         },
         pid: req.canister_pid,
+        replay_pending: pending,
     };
 
     CanisterLifecycleWorkflow::apply(event).await?;
 
-    Ok(Response::UpgradeCanister(UpgradeCanisterResponse {}))
+    Ok(response)
 }
 
 async fn execute_recycle(req: &RecycleCanisterRequest) -> Result<Response, InternalError> {

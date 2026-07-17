@@ -16,6 +16,7 @@ use crate::{
     ids::CanisterRole,
     model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
     ops::{
+        cost_guard::CostGuardOps,
         ic::IcOps,
         replay::{
             self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayFinalizeError,
@@ -77,7 +78,7 @@ pub(super) fn check_replay(
             );
             Ok(ReplayPreflight::Fresh(pending))
         }
-        other => map_existing_replay_decision(replay_input, other),
+        other => map_existing_replay_decision(ctx, replay_input, other),
     }
 }
 
@@ -109,6 +110,7 @@ fn evaluate_replay(
 }
 
 fn map_existing_replay_decision(
+    ctx: &RootContext,
     replay_input: RootReplayInput,
     decision: ReplayDecision,
 ) -> Result<ReplayPreflight, InternalError> {
@@ -137,6 +139,41 @@ fn map_existing_replay_decision(
             RootCapabilityMetrics::record_replay(
                 replay_input.descriptor.key,
                 RootCapabilityMetricOutcome::DuplicateSame,
+            );
+            Err(RpcWorkflowError::ReplayDuplicateSame(replay_input.descriptor.name).into())
+        }
+        ReplayDecision::RecoveryRequired {
+            pending,
+            reason: RecoveryReason::CostSettlementFailed,
+        } => {
+            let settlement = replay_ops::root_replay_cost_guard_settlement(&pending)
+                .map_err(map_replay_store_error)?;
+            CostGuardOps::complete_replay_settlement(&settlement, ctx.now)?;
+            let receipt =
+                replay_ops::commit_staged_root_replay_response(&pending, secs_to_ns(ctx.now))
+                    .map_err(map_replay_store_error)?;
+            let response_bytes = receipt.response_bytes.ok_or_else(|| {
+                map_replay_decode_error(ReplayDecodeError::DecodeFailed(
+                    "recovered root replay receipt is missing response bytes".to_string(),
+                ))
+            })?;
+            let response = decode_replay_response(&response_bytes)?;
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Completed,
+                ReplayMetricReason::Duplicate,
+            );
+            RootCapabilityMetrics::record_replay(
+                replay_input.descriptor.key,
+                RootCapabilityMetricOutcome::DuplicateSame,
+            );
+            Ok(ReplayPreflight::Cached(response))
+        }
+        ReplayDecision::RecoveryRequired { .. } => {
+            ReplayMetrics::record(
+                ReplayMetricOperation::Check,
+                ReplayMetricOutcome::Failed,
+                ReplayMetricReason::InFlight,
             );
             Err(RpcWorkflowError::ReplayDuplicateSame(replay_input.descriptor.name).into())
         }
@@ -272,6 +309,16 @@ fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
             map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
         }
+        ReplayReceiptStoreError::StagedResponseMissing => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
+                "replay receipt is missing staged response data".to_string(),
+            ))
+        }
+        ReplayReceiptStoreError::CostGuardSettlementMissing => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
+                "replay receipt is missing cost guard settlement identity".to_string(),
+            ))
+        }
     }
 }
 
@@ -343,15 +390,28 @@ pub(super) fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> 
     Ok(())
 }
 
-/// mark_external_effect_in_flight
-///
-/// Record that a root replay request crossed an external-effect boundary.
-pub(super) fn mark_external_effect_in_flight(
+/// Record a root external effect together with the cost intents needed for recovery.
+pub(super) fn mark_costed_external_effect_in_flight(
     pending: &ReplayPending,
     effect: ExternalEffectDescriptor,
+    cost_permit: &crate::ops::cost_guard::CostGuardPermit,
 ) -> Result<(), InternalError> {
-    replay_ops::mark_root_replay_external_effect(pending, effect, secs_to_ns(IcOps::now_secs()))
-        .map_err(map_replay_store_error)
+    replay_ops::mark_root_replay_costed_external_effect(
+        pending,
+        effect,
+        cost_permit,
+        secs_to_ns(IcOps::now_secs()),
+    )
+    .map_err(map_replay_store_error)
+}
+
+/// Stage the response that an accounting-only retry will commit.
+pub(super) fn stage_response(
+    pending: &ReplayPending,
+    response: &Response,
+) -> Result<(), InternalError> {
+    replay_ops::stage_root_replay_response(pending, response, secs_to_ns(IcOps::now_secs()))
+        .map_err(map_replay_finalize_error)
 }
 
 /// mark_recovery_required

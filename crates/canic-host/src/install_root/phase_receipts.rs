@@ -7,9 +7,42 @@ use crate::deployment_truth::{
     RolePhaseResultV1, deployment_receipt_from_check_with_status, phase_receipt,
 };
 use std::{
+    error::Error,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use thiserror::Error as ThisError;
+
+///
+/// InstallPhaseFailureError
+///
+/// Host error preserving both the phase operation error and the independent
+/// failure-receipt persistence error. Owned by the install receipt adapter and
+/// exposed through root-install failures.
+///
+#[derive(Debug, ThisError)]
+#[error(
+    "install phase operation failed and its failure receipt could not be written: operation={operation}; receipt_write={receipt_write}"
+)]
+pub struct InstallPhaseFailureError {
+    #[source]
+    operation: Box<dyn Error>,
+    receipt_write: Box<dyn Error>,
+}
+
+impl InstallPhaseFailureError {
+    /// Return the original phase operation failure.
+    #[must_use]
+    pub fn operation_error(&self) -> &(dyn Error + 'static) {
+        self.operation.as_ref()
+    }
+
+    /// Return the independent failure-receipt persistence failure.
+    #[must_use]
+    pub fn receipt_write_error(&self) -> &(dyn Error + 'static) {
+        self.receipt_write.as_ref()
+    }
+}
 
 #[derive(Clone, Copy)]
 pub(super) struct InstallReceiptScope<'a> {
@@ -206,13 +239,18 @@ impl InstallReceiptScope<'_> {
                 Ok(duration)
             }
             Err(err) => {
-                self.try_write_failed_phase_receipt(
+                if let Err(receipt_write) = self.write_failed_phase_receipt(
                     phase,
                     started_at,
                     attempted_action,
                     evidence,
                     err.as_ref(),
-                );
+                ) {
+                    return Err(Box::new(InstallPhaseFailureError {
+                        operation: err,
+                        receipt_write,
+                    }));
+                }
                 Err(err)
             }
         }
@@ -242,22 +280,20 @@ impl InstallReceiptScope<'_> {
         Ok(path)
     }
 
-    fn try_write_failed_phase_receipt(
+    fn write_failed_phase_receipt(
         self,
         phase: InstallPhaseLabel,
         started_at: String,
         attempted_action: &str,
         evidence: Vec<String>,
         err: &dyn std::error::Error,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         let receipt = install_deployment_truth_phase_receipt_with_result(
             self.check,
             PhaseReceiptInput {
                 phase,
                 started_at,
-                finished_at: Some(
-                    current_unix_timestamp_label().unwrap_or_else(|_| "unknown".to_string()),
-                ),
+                finished_at: Some(current_unix_timestamp_label()?),
                 attempted_action,
                 status: ObservationStatusV1::Inconclusive,
                 evidence,
@@ -270,8 +306,7 @@ impl InstallReceiptScope<'_> {
             },
         );
         let receipt = self.with_execution_context(receipt);
-        if let Err(write_err) = self.write_receipt(&receipt) {
-            eprintln!("Deployment truth receipt JSON write failed: {write_err}");
-        }
+        self.write_receipt(&receipt)?;
+        Ok(())
     }
 }

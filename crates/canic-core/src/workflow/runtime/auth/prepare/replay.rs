@@ -188,7 +188,7 @@ pub(super) fn map_token_prepare_replay_decision(
         ReplayReceiptDecision::Expired => Err(InternalError::public(Error::conflict(
             "delegated token prepare replay receipt expired; retry with a new request id",
         ))),
-        ReplayReceiptDecision::RecoveryRequired(reason) => {
+        ReplayReceiptDecision::RecoveryRequired { reason, .. } => {
             Err(InternalError::public(Error::conflict(format!(
                 "delegated token prepare request requires recovery before replay: {reason:?}"
             ))))
@@ -215,6 +215,14 @@ pub(super) fn map_token_prepare_replay_store_error(err: ReplayReceiptStoreError)
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to decode delegated token prepare replay receipt: {message}"),
+        ),
+        ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "delegated token prepare replay receipt is missing staged response data",
+        ),
+        ReplayReceiptStoreError::CostGuardSettlementMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "delegated token prepare replay receipt is missing cost guard settlement identity",
         ),
     }
 }
@@ -263,7 +271,7 @@ pub(super) fn map_role_attestation_replay_decision(
         ReplayReceiptDecision::Expired => Err(InternalError::public(Error::conflict(
             "role attestation prepare replay receipt expired; retry with a new request id",
         ))),
-        ReplayReceiptDecision::RecoveryRequired(reason) => {
+        ReplayReceiptDecision::RecoveryRequired { reason, .. } => {
             Err(InternalError::public(Error::conflict(format!(
                 "role attestation prepare request requires recovery before replay: {reason:?}"
             ))))
@@ -292,6 +300,14 @@ pub(super) fn map_role_attestation_replay_store_error(
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to decode role attestation replay receipt: {message}"),
+        ),
+        ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "role attestation replay receipt is missing staged response data",
+        ),
+        ReplayReceiptStoreError::CostGuardSettlementMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "role attestation replay receipt is missing cost guard settlement identity",
         ),
     }
 }
