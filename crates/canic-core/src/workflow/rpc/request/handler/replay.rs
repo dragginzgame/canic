@@ -79,34 +79,6 @@ pub(super) fn check_replay(
     }
 }
 
-/// check_existing_replay
-///
-/// Run a non-reserving replay probe for auth-first paths.
-#[cfg(test)]
-pub(super) fn check_existing_replay(
-    ctx: &RootContext,
-    capability: &RootCapability,
-) -> Result<Option<ReplayPreflight>, InternalError> {
-    let Some(replay_input) = capability.replay_input() else {
-        return Ok(None);
-    };
-
-    let Some(decision) = replay::evaluate_existing_root_replay(
-        ctx,
-        replay_input.descriptor.command_kind,
-        OperationId::from_bytes(replay_input.metadata.request_id),
-        replay_input.metadata.ttl_ns,
-        replay_input.payload_hash,
-    )
-    .map_err(|err| map_replay_guard_error(replay_input.descriptor.key, err))?
-    else {
-        return Ok(None);
-    };
-    crate::perf!("evaluate_existing_replay");
-
-    map_existing_replay_decision(replay_input, decision).map(Some)
-}
-
 fn evaluate_replay(
     ctx: &RootContext,
     capability: &RootCapability,
@@ -466,31 +438,6 @@ mod replay {
         let command_kind =
             CommandKind::new(command_kind).expect("root replay command kind constants are valid");
         crate::ops::replay::guard::evaluate_root_replay(RootReplayGuardInput {
-            caller: ctx.caller,
-            command_kind,
-            operation_id,
-            ttl_ns,
-            payload_hash,
-            now_ns: secs_to_ns(ctx.now),
-            max_ttl_ns: MAX_ROOT_TTL_NS,
-            purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
-        })
-    }
-
-    /// evaluate_existing_root_replay
-    ///
-    /// Call the ops replay guard without classifying fresh requests.
-    #[cfg(test)]
-    pub(super) fn evaluate_existing_root_replay(
-        ctx: &RootContext,
-        command_kind: &'static str,
-        operation_id: OperationId,
-        ttl_ns: u64,
-        payload_hash: [u8; 32],
-    ) -> Result<Option<ReplayDecision>, ReplayGuardError> {
-        let command_kind =
-            CommandKind::new(command_kind).expect("root replay command kind constants are valid");
-        crate::ops::replay::guard::evaluate_existing_root_replay(RootReplayGuardInput {
             caller: ctx.caller,
             command_kind,
             operation_id,

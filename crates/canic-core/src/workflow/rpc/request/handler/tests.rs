@@ -459,7 +459,7 @@ fn root_provision_marks_create_external_effect() {
 }
 
 #[test]
-fn preflight_authorize_then_replay_denies_before_replay_validation() {
+fn preflight_validates_replay_before_policy() {
     ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
@@ -474,37 +474,8 @@ fn preflight_authorize_then_replay_denies_before_replay_validation() {
         metadata: None,
     });
 
-    let err = RootResponseWorkflow::preflight(
-        &ctx,
-        &capability,
-        AuthorizationPipelineOrder::AuthorizeThenReplay,
-    )
-    .expect_err("authorize-then-replay should deny before replay validation");
-    assert!(err.public_error().is_none());
-}
-
-#[test]
-fn preflight_replay_then_authorize_validates_replay_before_policy() {
-    ReplayReceiptOps::reset_for_tests();
-
-    let ctx = RootContext {
-        caller: p(1),
-        self_pid: p(9),
-        is_root_env: false,
-        subnet_id: p(2),
-        now: 5,
-    };
-    let capability = RootCapability::RequestCycles(CyclesRequest {
-        cycles: 42,
-        metadata: None,
-    });
-
-    let err = RootResponseWorkflow::preflight(
-        &ctx,
-        &capability,
-        AuthorizationPipelineOrder::ReplayThenAuthorize,
-    )
-    .expect_err("replay-then-authorize should validate replay first");
+    let err = RootResponseWorkflow::preflight(&ctx, &capability)
+        .expect_err("preflight should validate replay first");
     let public = err
         .public_error()
         .expect("missing operation id is a public hard-cut error");
@@ -512,7 +483,7 @@ fn preflight_replay_then_authorize_validates_replay_before_policy() {
 }
 
 #[test]
-fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
+fn preflight_aborts_reserved_replay_on_policy_denial() {
     ReplayReceiptOps::reset_for_tests();
 
     let ctx = RootContext {
@@ -527,12 +498,8 @@ fn preflight_replay_then_authorize_aborts_reserved_replay_on_policy_denial() {
         metadata: Some(meta(7, secs_to_ns(60))),
     });
 
-    RootResponseWorkflow::preflight(
-        &ctx,
-        &capability,
-        AuthorizationPipelineOrder::ReplayThenAuthorize,
-    )
-    .expect_err("policy denial should fail preflight");
+    RootResponseWorkflow::preflight(&ctx, &capability)
+        .expect_err("policy denial should fail preflight");
 
     let replay = RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect("denied preflight must not leave replay slot in-flight");
@@ -1080,44 +1047,6 @@ fn check_replay_rejects_cross_variant_same_request_id() {
     .expect("commit");
 
     RootResponseWorkflow::check_replay(&ctx, &cycles).expect_err("must conflict");
-}
-
-#[test]
-fn preflight_authorize_then_replay_reports_existing_cross_variant_conflict_before_policy() {
-    ReplayReceiptOps::reset_for_tests();
-
-    let ctx = RootContext {
-        caller: p(3),
-        self_pid: p(42),
-        is_root_env: true,
-        subnet_id: p(4),
-        now: 2_000,
-    };
-    let upgrade = RootCapability::UpgradeCanister(UpgradeCanisterRequest {
-        canister_pid: p(9),
-        metadata: Some(meta(8, secs_to_ns(60))),
-    });
-    let cycles = RootCapability::RequestCycles(CyclesRequest {
-        cycles: 11,
-        metadata: Some(meta(8, secs_to_ns(60))),
-    });
-
-    let pending = match RootResponseWorkflow::check_replay(&ctx, &upgrade).expect("first replay") {
-        replay::ReplayPreflight::Fresh(pending) => pending,
-        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
-    };
-    RootResponseWorkflow::commit_replay(
-        &pending,
-        &Response::UpgradeCanister(UpgradeCanisterResponse {}),
-    )
-    .expect("commit");
-
-    RootResponseWorkflow::preflight(
-        &ctx,
-        &cycles,
-        AuthorizationPipelineOrder::AuthorizeThenReplay,
-    )
-    .expect_err("existing replay conflict must win before policy");
 }
 
 #[test]

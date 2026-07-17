@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.2`.
-- The latest published release is `v0.93.2` at
-  `d51d21d271b1e49a0568ea62fe5526ae2c0822c3`.
-- The `v0.93.2` source tree is
-  `39423696cabedc1cb52334f31a742b37e20dc15d`; its product-tree hash is
-  `7ec3dd80144a5321bec176b764ea37fc443415a8e48aea8ac7acca51b0ff531d`.
+- The workspace package version is `0.93.3`.
+- The latest published release is `v0.93.3` at
+  `270e8b5de898e0f10a4dbd283a4b16b926776f4a`.
+- The `v0.93.3` source tree is
+  `691f234f142239b81ff8ae154b6b564c9eff1d1b`; its product-tree hash is
+  `d5d768d99fbeb09f5cf477c10c9a0618cdbf0ca5e845dce082fcf5eac4c75cdf`.
   Its Cargo.lock SHA-256 is
-  `1579d6a10b0d9abbd0ba5e35f7331452ab24f94a78d6d59a6c0e951c551a60cc`.
+  `7a686ec30b837848fbd2efb6f9ca6ca93f24fe7f2443c7267bad8af48b5976db`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -49,9 +49,12 @@ Historical detail is archived at:
 - Released `v0.93.2` makes the Wasm-store retirement lifecycle generation
   bound and non-reentrant, permanently excludes stores in GC from publication,
   and makes restore operation-receipt outcome and attempt identity mandatory.
-- Current development bounds ICP-refill lookup and metric work through
+- Released `v0.93.3` bounds ICP-refill lookup and metric work through
   lifecycle-rebuilt derived indexes, retains renewal-timer failure causes in
   runtime diagnostics, and restores the workflow/storage layering guard.
+- Current development decodes auth-renewal observations from the pinned ICP
+  JSON `response_bytes` envelope as typed Candid and removes the test-only
+  alternate authorization/replay pipeline.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -403,8 +406,8 @@ First primary results:
   transform-provenance P2. D9 fixes the two release-execution P1s plus the
   support-matrix P2. D10 fixes two P2 active package/proof findings and the P3
   rustdoc drift. D11 fixes the remaining layering P1, and D12 fixes the
-  dedicated-scanner P1 without a waiver. Three P2 findings remain unresolved
-  with explicit deferred dispositions.
+  dedicated-scanner P1 without a waiver. D14 fixes the performance P2 and D15
+  fixes the complexity P2; one accepted upstream dependency P2 remains.
   All current trace reruns pass; the frozen Phase C aggregate remains
   historical.
 
@@ -563,11 +566,11 @@ First primary results:
   installed-CLI proofs; strict all-target Clippy for `canic-core`, `canic`, and
   `canic-cli`; targeted package checks; formatting; Bash syntax; and diff
   hygiene.
-- Current Wasm-store lifecycle and restore-receipt development passes 21
+- Released Wasm-store lifecycle and restore-receipt development passes 21
   focused control-plane publication/GC tests, 34 restore apply-journal tests,
   targeted package checks, and strict all-target Clippy for
   `canic-control-plane` and `canic-backup`.
-- Current ICP-refill, renewal diagnostics, and test-layering development passes
+- Released ICP-refill, renewal diagnostics, and test-layering development passes
   80 focused ICP-refill tests, 15 renewal tests, 22 control-plane publication
   tests, strict all-feature Clippy for `canic-core` and
   `canic-control-plane`, the layering guard, and Cargo Machete.
@@ -592,8 +595,9 @@ Released 0.93.0 removes the stale issuer-renewal attempt authority and projects
 the canonical chain-key batch instead. Released 0.93.1 removes orphaned host
 ICP CLI wrappers and the superseded text snapshot-ID path. Released 0.93.2
 closes the audited Wasm-store lifecycle race and restore-receipt defaulting
-findings. Current development fixes the remaining ICP-refill history scans,
-discarded renewal-timer failures, and publication-test layering residue. The
-next audit candidates are fail-closed auth-renewal response parsing and the
-test-only alternate auth/replay ordering path. Broad deployment, package,
-publish, and release validation remains maintainer-owned.
+findings. Released 0.93.3 removes the remaining ICP-refill history scans,
+retains renewal-timer failure diagnostics, and fixes publication-test layering
+residue. Current development makes auth-renewal response parsing fail closed on
+the pinned ICP JSON/Candid contract and deletes the test-only alternate
+auth/replay ordering path. Broad deployment, package, publish, and release
+validation remains maintainer-owned.
