@@ -128,6 +128,15 @@ pub fn query_bootstrap_status_from_root(
     decode_bootstrap_status_response(&bytes)
 }
 
+/// Query `canic_cycle_balance` directly through the local replica HTTP API.
+pub(crate) fn query_cycle_balance(
+    network: Option<&str>,
+    canister: &str,
+) -> Result<u128, ReplicaQueryError> {
+    let bytes = local_query(network, canister, "canic_cycle_balance")?;
+    decode_cycle_balance_response(&bytes)
+}
+
 /// Query `canic_cycle_balance` using the configured port from one ICP root.
 pub fn query_cycle_balance_from_root(
     network: Option<&str>,

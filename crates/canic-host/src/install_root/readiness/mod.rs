@@ -5,6 +5,8 @@
 //! Boundary: polls typed readiness and bootstrap responses, then delegates diagnostics.
 
 mod diagnostics;
+#[cfg(test)]
+mod tests;
 
 use self::diagnostics::{
     print_bootstrap_failure_diagnostics, print_bootstrap_status, print_current_registry_roles,
@@ -97,8 +99,13 @@ fn root_bootstrap_status(
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<BootstrapStatusResponse, Box<dyn std::error::Error>> {
-    if let Some(status) = local_bootstrap_status(icp_root, network, root_canister) {
-        return Ok(status);
+    if replica_query::should_use_local_replica_query(Some(network)) {
+        return replica_query::query_bootstrap_status_from_root(
+            Some(network),
+            root_canister,
+            icp_root,
+        )
+        .map_err(Into::into);
     }
 
     let output = icp_query_on_network(
@@ -111,17 +118,6 @@ fn root_bootstrap_status(
         Some("json"),
     )?;
     decode_json_response(&output).map_err(Into::into)
-}
-
-fn local_bootstrap_status(
-    icp_root: &Path,
-    network: &str,
-    root_canister: &str,
-) -> Option<BootstrapStatusResponse> {
-    if !replica_query::should_use_local_replica_query(Some(network)) {
-        return None;
-    }
-    replica_query::query_bootstrap_status_from_root(Some(network), root_canister, icp_root).ok()
 }
 
 fn print_current_bootstrap_status(

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.7` is potentially breaking: it makes direct replica queries the sole
+  cycle-balance and bootstrap-status transport for local targets, preserving
+  typed failures instead of retrying through ICP CLI.
+
 - `0.93.6` is potentially breaking: it preserves canonical typed ICP response
   causes through CLI observability and removes the duplicate string-backed
   auth response-error flow without changing successful command reports.
