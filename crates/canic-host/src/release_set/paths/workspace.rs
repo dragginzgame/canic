@@ -1,37 +1,38 @@
-use crate::workspace_discovery::{discover_icp_root_from, discover_workspace_root_from};
-use std::{
-    io,
-    path::{Path, PathBuf},
+use crate::workspace_discovery::{
+    WorkspaceDiscoveryError, discover_icp_root_from, discover_workspace_root_from,
 };
+use std::path::{Path, PathBuf};
 
 use super::super::{CANISTERS_ROOT_RELATIVE, ROOT_CONFIG_FILE, WORKSPACE_MANIFEST_RELATIVE};
 
 // Resolve the downstream Cargo workspace root from the current directory.
-pub fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    if let Some(root) = discover_workspace_root_from(&std::env::current_dir()?) {
+pub fn workspace_root() -> Result<PathBuf, WorkspaceDiscoveryError> {
+    let current_dir = std::env::current_dir().map_err(WorkspaceDiscoveryError::CurrentDirectory)?;
+    if let Some(root) = discover_workspace_root_from(&current_dir)? {
         return Ok(root);
     }
 
-    Ok(std::env::current_dir()?.canonicalize()?)
-}
-
-// Resolve the Cargo workspace containing an explicit config or workspace hint.
-pub fn workspace_root_from(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    if let Some(root) = discover_workspace_root_from(path) {
-        return Ok(root);
-    }
-
-    workspace_root()
+    current_dir
+        .canonicalize()
+        .map_err(|source| WorkspaceDiscoveryError::Canonicalize {
+            path: current_dir,
+            source,
+        })
 }
 
 // Resolve the downstream ICP CLI/project root from the current directory.
-pub fn icp_root() -> io::Result<PathBuf> {
-    let current_dir = std::env::current_dir()?.canonicalize()?;
-    if let Some(root) = discover_icp_root_from(&current_dir) {
+pub fn icp_root() -> Result<PathBuf, WorkspaceDiscoveryError> {
+    let current_dir = std::env::current_dir().map_err(WorkspaceDiscoveryError::CurrentDirectory)?;
+    if let Some(root) = discover_icp_root_from(&current_dir)? {
         return Ok(root);
     }
 
-    Ok(current_dir)
+    current_dir
+        .canonicalize()
+        .map_err(|source| WorkspaceDiscoveryError::Canonicalize {
+            path: current_dir,
+            source,
+        })
 }
 
 // Resolve the downstream Canic config path.

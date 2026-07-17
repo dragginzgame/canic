@@ -150,9 +150,7 @@ const fn default_true() -> bool {
 pub fn cargo_metadata_no_deps_cached(
     workspace_root: &Path,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
-    let cache_key = workspace_root
-        .canonicalize()
-        .unwrap_or_else(|_| workspace_root.to_path_buf());
+    let cache_key = workspace_root.canonicalize()?;
     let cache = CARGO_METADATA_NO_DEPS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
 
     {
@@ -162,7 +160,7 @@ pub fn cargo_metadata_no_deps_cached(
         }
     }
 
-    let metadata = cargo_metadata(workspace_root, false)?;
+    let metadata = cargo_metadata(&cache_key, false)?;
     {
         let mut cache = cache.lock().expect("cargo metadata cache lock poisoned");
         cache.insert(cache_key, metadata.clone());

@@ -1,4 +1,6 @@
-use crate::release_set::{configured_deployable_roles, configured_fleet_name};
+use crate::release_set::{
+    WorkspaceDiscoveryError, configured_deployable_roles, configured_fleet_name,
+};
 use crate::table::{ColumnAlign, render_table};
 use crate::workspace_discovery::normalize_workspace_path;
 use std::{
@@ -56,6 +58,9 @@ pub enum ConfigDiscoveryError {
 
     #[error("multiple configs declare fleet {fleet}: {configs}")]
     DuplicateFleet { fleet: String, configs: String },
+
+    #[error(transparent)]
+    WorkspaceDiscovery(#[from] WorkspaceDiscoveryError),
 }
 
 // Resolve the operator-facing Canic project root from the current directory.

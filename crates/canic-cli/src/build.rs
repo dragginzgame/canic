@@ -32,7 +32,8 @@ use canic_host::{
         select_discovered_fleet_config_path,
     },
     release_set::{
-        FleetConfigError, configured_fleet_name, configured_role_lifecycle, workspace_root_from,
+        FleetConfigError, WorkspaceDiscoveryError, configured_fleet_name,
+        configured_role_lifecycle, workspace_root,
     },
 };
 use clap::Command as ClapCommand;
@@ -77,6 +78,9 @@ pub enum BuildCommandError {
 
     #[error("failed to discover Canic project configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
+
+    #[error("failed to resolve Cargo workspace: {0}")]
+    WorkspaceDiscovery(#[from] WorkspaceDiscoveryError),
 
     #[error(transparent)]
     Build(#[from] Box<dyn std::error::Error>),
@@ -362,7 +366,7 @@ fn resolve_build_context(
     let config_path = resolve_build_config_path(options)?.canonicalize()?;
     let workspace_root = match &options.workspace {
         Some(workspace) => normalize_build_path(workspace)?.canonicalize()?,
-        None => workspace_root_from(&config_path)?,
+        None => workspace_root()?,
     };
     let icp_root = match &options.icp_root {
         Some(root) => normalize_build_path(root)?.canonicalize()?,
@@ -500,6 +504,18 @@ mod tests {
         assert_eq!(
             options.provenance.as_deref(),
             Some(Path::new("artifacts/root-provenance.json"))
+        );
+    }
+
+    #[test]
+    fn build_preserves_workspace_discovery_causes() {
+        let error = BuildCommandError::from(WorkspaceDiscoveryError::UnsupportedPath {
+            path: PathBuf::from("/project/socket"),
+        });
+
+        std::assert_matches!(
+            error,
+            BuildCommandError::WorkspaceDiscovery(WorkspaceDiscoveryError::UnsupportedPath { .. })
         );
     }
 

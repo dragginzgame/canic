@@ -3,7 +3,10 @@ use crate::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
         project_fleet_roots,
     },
-    release_set::{FleetConfigError, configured_deployable_roles, configured_fleet_name, icp_root},
+    release_set::{
+        FleetConfigError, WorkspaceDiscoveryError, configured_deployable_roles,
+        configured_fleet_name, icp_root,
+    },
     workspace_discovery::discover_icp_root_from,
 };
 use std::{
@@ -55,6 +58,9 @@ pub enum IcpConfigError {
 
     #[error(transparent)]
     FleetConfig(#[from] FleetConfigError),
+
+    #[error(transparent)]
+    WorkspaceDiscovery(#[from] WorkspaceDiscoveryError),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -213,8 +219,8 @@ fn read_optional_icp_yaml(path: &Path) -> Result<(String, bool), IcpConfigError>
 }
 
 fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
-    let start = std::env::current_dir()?;
-    discover_icp_root_from(&start).ok_or(IcpConfigError::NoIcpRoot { start })
+    let start = std::env::current_dir().map_err(WorkspaceDiscoveryError::CurrentDirectory)?;
+    discover_icp_root_from(&start)?.ok_or(IcpConfigError::NoIcpRoot { start })
 }
 
 /// Resolve the ICP project root implied by the current Canic fleet layout.

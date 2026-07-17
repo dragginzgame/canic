@@ -34,6 +34,7 @@ use canic_host::{
     deployment_truth::DeploymentCheckV1,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
     install_root::{InstallRootOptions, check_install_deployment_truth},
+    release_set::WorkspaceDiscoveryError,
 };
 use clap::Command as ClapCommand;
 use serde::de::DeserializeOwned;
@@ -59,6 +60,9 @@ pub enum DeployCommandError {
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[from] IcpConfigError),
 
+    #[error("failed to resolve Cargo workspace: {0}")]
+    WorkspaceRoot(#[from] WorkspaceDiscoveryError),
+
     #[error(transparent)]
     Check(#[from] Box<dyn std::error::Error>),
 
@@ -75,7 +79,7 @@ pub enum DeployCommandError {
 impl DeployCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
-            Self::Usage(_) | Self::IcpRoot(_) | Self::PlanOutput(_) => 2,
+            Self::Usage(_) | Self::IcpRoot(_) | Self::WorkspaceRoot(_) | Self::PlanOutput(_) => 2,
             Self::Check(_) | Self::PlanBlocked(_) | Self::Blocked(_) => 1,
         }
     }

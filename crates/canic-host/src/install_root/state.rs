@@ -1,4 +1,7 @@
-use crate::{durable_io::write_bytes, release_set::icp_root};
+use crate::{
+    durable_io::write_bytes,
+    release_set::{WorkspaceDiscoveryError, icp_root},
+};
 use std::{fs, io, path::Path, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -43,7 +46,7 @@ pub enum InstallStateError {
     ResolveIcpRoot {
         path: PathBuf,
         #[source]
-        source: io::Error,
+        source: WorkspaceDiscoveryError,
     },
 
     #[error("failed to read deployment state {}: {source}", path.display())]

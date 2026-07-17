@@ -1,10 +1,12 @@
-use crate::workspace_discovery::resolve_canister_manifest_from_metadata_under;
+use crate::workspace_discovery::{
+    CanisterManifestError, resolve_canister_manifest_from_metadata_under,
+};
 use std::path::{Path, PathBuf};
 
 use super::workspace::canisters_root;
 
 // Resolve the downstream root canister manifest path.
-pub fn root_manifest_path(workspace_root: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub fn root_manifest_path(workspace_root: &Path) -> Result<PathBuf, CanisterManifestError> {
     canister_manifest_path(workspace_root, "root")
 }
 
@@ -12,15 +14,7 @@ pub fn root_manifest_path(workspace_root: &Path) -> Result<PathBuf, Box<dyn std:
 pub fn canister_manifest_path(
     workspace_root: &Path,
     canister_name: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
+) -> Result<PathBuf, CanisterManifestError> {
     let root = canisters_root(workspace_root);
-    resolve_canister_manifest_from_metadata_under(workspace_root, canister_name, &root).map_err(
-        |err| {
-            format!(
-                "{err}; selected canister root is {}. Declare the role package in Cargo workspace metadata.",
-                root.display()
-            )
-            .into()
-        },
-    )
+    resolve_canister_manifest_from_metadata_under(workspace_root, canister_name, &root)
 }
