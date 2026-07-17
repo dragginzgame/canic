@@ -4,36 +4,26 @@
 //! Does not own: endpoint auth, stable replay receipts, or management-call primitives.
 //! Boundary: RPC request handler calls this for root and non-root cycles funding paths.
 
-use super::{
-    MAX_ROOT_REPLAY_ENTRIES, MAX_ROOT_REPLAY_ENTRIES_PER_CALLER, MAX_ROOT_TTL_NS,
-    REPLAY_PURGE_SCAN_LIMIT, RootContext,
-};
+use super::{RootCapability, RootContext, replay};
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     domain::policy::pure::cycles_funding::{FundingPolicyViolation, evaluate},
     dto::rpc::{CyclesRequest, CyclesResponse},
     ids::CanisterRole,
     log,
     log::Topic,
-    model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
+    model::replay::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
     ops::{
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
-        replay::{
-            self as replay_ops, ReplayDecodeError, ReplayReserveError,
-            guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
-            receipt::ReplayReceiptStoreError,
-        },
+        replay::{self as replay_ops, guard::ReplayPending},
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
             env::EnvOps,
             metrics::{
                 cycles_funding::{CyclesFundingDeniedReason, CyclesFundingMetrics},
-                replay::{
-                    ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
-                },
                 root_capability::{
                     RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
                 },
@@ -109,11 +99,6 @@ pub(super) async fn response_replay_first_root(
     .await
 }
 
-enum ReplayPreflight {
-    Fresh(ReplayPending),
-    Cached(CyclesResponse),
-}
-
 async fn response_replay_first_with_planner(
     ctx: RootContext,
     req: CyclesRequest,
@@ -122,16 +107,24 @@ async fn response_replay_first_with_planner(
         &CyclesRequest,
     ) -> Result<AuthorizedCyclesGrant, InternalError>,
 ) -> Result<CyclesResponse, InternalError> {
-    let preflight = check_cycles_replay(&ctx, &req)?;
-    let pending = match preflight {
-        ReplayPreflight::Fresh(pending) => pending,
-        ReplayPreflight::Cached(response) => return Ok(response),
+    let capability = RootCapability::RequestCycles(req.clone());
+    let pending = match replay::check_replay(&ctx, &capability)? {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(crate::dto::rpc::Response::Cycles(response)) => {
+            return Ok(response);
+        }
+        replay::ReplayPreflight::Cached(_) => {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "request cycles replay returned a non-cycles response",
+            ));
+        }
     };
 
     let grant = match authorize_plan(&ctx, &req) {
         Ok(grant) => grant,
         Err(err) => {
-            abort_replay(pending)?;
+            replay::abort_replay(pending)?;
             return Err(err);
         }
     };
@@ -139,7 +132,7 @@ async fn response_replay_first_with_planner(
     let response = match execute_authorized_request_cycles(&ctx, &pending, grant).await {
         Ok(response) => response,
         Err(err) => {
-            abort_replay(pending)?;
+            replay::abort_replay(pending)?;
             RootCapabilityMetrics::record_execution(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::Error,
@@ -148,7 +141,16 @@ async fn response_replay_first_with_planner(
         }
     };
 
-    commit_cycles_replay(pending, &response)?;
+    if let Err(err) = replay::commit_replay(&pending) {
+        if let Err(recovery_err) =
+            replay::mark_recovery_required(&pending, RecoveryReason::ResponseCommitFailed)
+        {
+            return Err(err.with_diagnostic_context(format!(
+                "request cycles replay recovery marker failed: {recovery_err}"
+            )));
+        }
+        return Err(err);
+    }
 
     RootCapabilityMetrics::record_execution(
         RootCapabilityMetricKey::RequestCycles,
@@ -341,7 +343,7 @@ pub(super) async fn execute_authorized_request_cycles(
     grant: AuthorizedCyclesGrant,
 ) -> Result<CyclesResponse, InternalError> {
     let cost_permit = reserve_request_cycles_cost_guard(ctx, grant.approved_cycles)?;
-    mark_request_cycles_external_effect(pending, ctx, grant.approved_cycles)?;
+    mark_request_cycles_external_effect(pending, ctx, grant.approved_cycles, &cost_permit)?;
     let ledger_before_grant = CyclesFundingLedgerOps::snapshot(ctx.caller);
     CyclesFundingLedgerOps::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
 
@@ -361,19 +363,43 @@ pub(super) async fn execute_authorized_request_cycles(
 
     CyclesFundingMetrics::record_granted(ctx.caller, grant.approved_cycles);
 
-    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
-        replay_ops::mark_root_replay_recovery_required(
-            pending,
-            RecoveryReason::ResponseCommitFailed,
-            replay_ops::guard::secs_to_ns(IcOps::now_secs()),
-        )
-        .map_err(map_replay_store_error)?;
+    let response = CyclesResponse {
+        cycles_transferred: grant.approved_cycles,
+    };
+    if let Err(err) = replay::stage_response(
+        pending,
+        &crate::dto::rpc::Response::Cycles(response.clone()),
+    ) {
+        let mut err = err;
+        let reason = match CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+            Ok(()) => RecoveryReason::ResponseCommitFailed,
+            Err(settlement_err) => {
+                err = err.with_diagnostic_context(format!(
+                    "request cycles cost settlement also failed: {settlement_err}"
+                ));
+                RecoveryReason::CostSettlementFailed
+            }
+        };
+        if let Err(recovery_err) = replay::mark_recovery_required(pending, reason) {
+            err = err.with_diagnostic_context(format!(
+                "request cycles replay recovery marker failed: {recovery_err}"
+            ));
+        }
         return Err(err);
     }
 
-    Ok(CyclesResponse {
-        cycles_transferred: grant.approved_cycles,
-    })
+    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+        if let Err(recovery_err) =
+            replay::mark_recovery_required(pending, RecoveryReason::CostSettlementFailed)
+        {
+            return Err(err.with_diagnostic_context(format!(
+                "request cycles replay recovery marker failed: {recovery_err}"
+            )));
+        }
+        return Err(err);
+    }
+
+    Ok(response)
 }
 
 fn direct_child_record(pid: Principal) -> Option<ResolvedCyclesChild> {
@@ -420,111 +446,6 @@ fn map_funding_policy_violation(
     }
 }
 
-fn check_cycles_replay(
-    ctx: &RootContext,
-    req: &CyclesRequest,
-) -> Result<ReplayPreflight, InternalError> {
-    let metadata = req.metadata.ok_or_else(|| {
-        ReplayMetrics::record(
-            ReplayMetricOperation::Check,
-            ReplayMetricOutcome::Failed,
-            ReplayMetricReason::MissingMetadata,
-        );
-        RpcWorkflowError::MissingReplayMetadata("RequestCycles")
-    })?;
-    let payload_hash = hash_cycles_payload(req);
-
-    let decision = replay_ops::guard::evaluate_root_replay(RootReplayGuardInput {
-        caller: ctx.caller,
-        command_kind: root_request_cycles_command_kind()
-            .expect("root request cycles command kind is valid"),
-        operation_id: OperationId::from_bytes(metadata.request_id),
-        ttl_ns: metadata.ttl_ns,
-        payload_hash,
-        now_ns: replay_ops::guard::secs_to_ns(ctx.now),
-        max_ttl_ns: MAX_ROOT_TTL_NS,
-        purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
-    })
-    .map_err(map_replay_guard_error)?;
-
-    match decision {
-        ReplayDecision::Fresh(pending) => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Check,
-                ReplayMetricOutcome::Completed,
-                ReplayMetricReason::Fresh,
-            );
-            replay_ops::reserve_root_replay(
-                &pending,
-                MAX_ROOT_REPLAY_ENTRIES,
-                MAX_ROOT_REPLAY_ENTRIES_PER_CALLER,
-            )
-            .map_err(map_replay_reserve_error)?;
-            ReplayMetrics::record(
-                ReplayMetricOperation::Reserve,
-                ReplayMetricOutcome::Completed,
-                ReplayMetricReason::Ok,
-            );
-            RootCapabilityMetrics::record_replay(
-                RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityMetricOutcome::Accepted,
-            );
-            Ok(ReplayPreflight::Fresh(pending))
-        }
-        ReplayDecision::DuplicateSame(cached) => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Check,
-                ReplayMetricOutcome::Completed,
-                ReplayMetricReason::Duplicate,
-            );
-            RootCapabilityMetrics::record_replay(
-                RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityMetricOutcome::DuplicateSame,
-            );
-            decode_cycles_response(&cached.response_bytes).map(ReplayPreflight::Cached)
-        }
-        ReplayDecision::InFlight | ReplayDecision::RecoveryRequired { .. } => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Check,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::InFlight,
-            );
-            RootCapabilityMetrics::record_replay(
-                RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityMetricOutcome::DuplicateSame,
-            );
-            Err(RpcWorkflowError::ReplayDuplicateSame("RequestCycles").into())
-        }
-        ReplayDecision::DuplicateConflict => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Check,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::Conflict,
-            );
-            RootCapabilityMetrics::record_replay(
-                RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityMetricOutcome::DuplicateConflict,
-            );
-            Err(RpcWorkflowError::ReplayConflict("RequestCycles").into())
-        }
-        ReplayDecision::Expired => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Check,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::Expired,
-            );
-            RootCapabilityMetrics::record_replay(
-                RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityMetricOutcome::Expired,
-            );
-            Err(RpcWorkflowError::ReplayExpired("RequestCycles").into())
-        }
-        ReplayDecision::DecodeFailed(message) => Err(map_replay_decode_error(
-            ReplayDecodeError::DecodeFailed(message),
-        )),
-    }
-}
-
 fn reserve_request_cycles_cost_guard(
     ctx: &RootContext,
     approved_cycles: u128,
@@ -566,16 +487,18 @@ pub(super) fn mark_request_cycles_external_effect(
     pending: &ReplayPending,
     ctx: &RootContext,
     approved_cycles: u128,
+    cost_permit: &CostGuardPermit,
 ) -> Result<(), InternalError> {
-    replay_ops::mark_root_replay_external_effect(
+    replay_ops::mark_root_replay_costed_external_effect(
         pending,
         ExternalEffectDescriptor::ManagementCall {
             canister: ctx.caller,
             method: "deposit_cycles".to_string(),
         },
+        cost_permit,
         replay_ops::guard::secs_to_ns(IcOps::now_secs()),
     )
-    .map_err(map_replay_store_error)?;
+    .map_err(replay::map_replay_store_error)?;
     log!(
         Topic::Rpc,
         Info,
@@ -599,7 +522,7 @@ fn mark_request_cycles_recovery_required(
         RecoveryReason::ExternalEffectStatusUnknown,
         replay_ops::guard::secs_to_ns(IcOps::now_secs()),
     )
-    .map_err(map_replay_store_error)?;
+    .map_err(replay::map_replay_store_error)?;
     log!(
         Topic::Rpc,
         Error,
@@ -611,142 +534,4 @@ fn mark_request_cycles_recovery_required(
         error_origin
     );
     Ok(())
-}
-
-fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
-    match err {
-        ReplayGuardError::InvalidTtl { ttl_ns, max_ttl_ns } => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Check,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::InvalidTtl,
-            );
-            RootCapabilityMetrics::record_replay(
-                RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityMetricOutcome::TtlExceeded,
-            );
-            RpcWorkflowError::InvalidReplayTtl { ttl_ns, max_ttl_ns }.into()
-        }
-        ReplayGuardError::TtlOverflow { now_ns, ttl_ns } => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Check,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::InvalidTtl,
-            );
-            RootCapabilityMetrics::record_replay(
-                RootCapabilityMetricKey::RequestCycles,
-                RootCapabilityMetricOutcome::TtlExceeded,
-            );
-            RpcWorkflowError::ReplayTtlOverflow { now_ns, ttl_ns }.into()
-        }
-        ReplayGuardError::ReceiptDecodeFailed(message) => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
-        }
-    }
-}
-
-fn map_replay_reserve_error(err: ReplayReserveError) -> InternalError {
-    match err {
-        ReplayReserveError::CapacityReached { max_entries } => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Reserve,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::Capacity,
-            );
-            RpcWorkflowError::ReplayStoreCapacityReached(max_entries).into()
-        }
-        ReplayReserveError::CallerCapacityReached {
-            caller,
-            max_entries,
-        } => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Reserve,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::Capacity,
-            );
-            RpcWorkflowError::ReplayStoreCallerCapacityReached {
-                caller,
-                max_entries,
-            }
-            .into()
-        }
-    }
-}
-
-fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
-    match err {
-        ReplayDecodeError::DecodeFailed(message) => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Decode,
-                ReplayMetricOutcome::Failed,
-                ReplayMetricReason::DecodeFailed,
-            );
-            RpcWorkflowError::ReplayDecodeFailed(message).into()
-        }
-    }
-}
-
-fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
-    match err {
-        ReplayReceiptStoreError::ReceiptMissing => map_replay_decode_error(
-            ReplayDecodeError::DecodeFailed("reserved replay receipt is missing".to_string()),
-        ),
-        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
-        }
-        ReplayReceiptStoreError::StagedResponseMissing => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
-                "replay receipt is missing staged response data".to_string(),
-            ))
-        }
-        ReplayReceiptStoreError::CostGuardSettlementMissing => {
-            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
-                "replay receipt is missing cost guard settlement identity".to_string(),
-            ))
-        }
-    }
-}
-
-fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError> {
-    match replay_ops::decode_root_cycles_replay_response(bytes) {
-        Ok(response) => {
-            ReplayMetrics::record(
-                ReplayMetricOperation::Decode,
-                ReplayMetricOutcome::Completed,
-                ReplayMetricReason::Ok,
-            );
-            Ok(response)
-        }
-        Err(err) => Err(map_replay_decode_error(err)),
-    }
-}
-
-fn commit_cycles_replay(
-    pending: ReplayPending,
-    response: &CyclesResponse,
-) -> Result<(), InternalError> {
-    replay_ops::commit_root_cycles_replay(pending, response).map_err(map_replay_store_error)?;
-    ReplayMetrics::record(
-        ReplayMetricOperation::Commit,
-        ReplayMetricOutcome::Completed,
-        ReplayMetricReason::Ok,
-    );
-    Ok(())
-}
-
-fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> {
-    replay_ops::abort_root_replay(pending).map_err(map_replay_store_error)?;
-    ReplayMetrics::record(
-        ReplayMetricOperation::Abort,
-        ReplayMetricOutcome::Completed,
-        ReplayMetricReason::Ok,
-    );
-    Ok(())
-}
-
-fn hash_cycles_payload(req: &CyclesRequest) -> [u8; 32] {
-    let mut hasher = super::replay::payload_hasher();
-    super::replay::hash_str(&mut hasher, "RequestCycles");
-    super::replay::hash_u128(&mut hasher, req.cycles);
-    super::replay::finish_payload_hash(hasher)
 }

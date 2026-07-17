@@ -625,6 +625,52 @@ fn refill_retry_finishes_cost_settlement_without_ledger_call() {
 }
 
 #[test]
+fn refill_retry_promotes_staged_response_without_ledger_call() {
+    ReplayReceiptOps::reset_for_tests();
+    let request = request_with_operation(193);
+    let IcpRefillReplayReservation::Fresh {
+        operation_id,
+        token,
+    } = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+        .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Completed);
+    record.operation_id = operation_id;
+    let response = IcpRefillStoreOps::to_response(&operation_from_record(&record));
+    stage_receipt_response(
+        &token,
+        crate::ops::replay::ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
+        crate::ops::replay::encode_icp_refill_replay_response(&response).expect("response bytes"),
+        1_001,
+    )
+    .expect("stage response");
+    crate::ops::replay::receipt::mark_recovery_required(
+        &token,
+        RecoveryReason::ResponseCommitFailed,
+        1_002,
+    )
+    .expect("mark response recovery");
+
+    let replay = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_003))
+        .expect("retry should promote response");
+    assert!(matches!(
+        replay,
+        IcpRefillReplayReservation::Replay(cached)
+            if cached.operation_id == response.operation_id
+                && cached.status == IcpRefillStatus::Completed
+    ));
+    let receipt = ReplayReceiptOps::get(token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+    ReplayReceiptOps::reset_for_tests();
+}
+
+#[test]
 fn refill_replay_resumable_response_aborts_reserved_receipt() {
     let request = request_with_operation(181);
     let IcpRefillReplayReservation::Fresh { token, .. } =

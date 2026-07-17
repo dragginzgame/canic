@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.13` is potentially breaking: it completes staged-response recovery,
+  gives `RequestCycles` accounting-only retry, and hard-cuts duplicate replay
+  and response-commit paths.
+
 - `0.93.12` is potentially breaking: it makes post-effect replay receipts
   non-expiring and recoverable through accounting-only retries, and preserves
   both typed root-install failure causes.

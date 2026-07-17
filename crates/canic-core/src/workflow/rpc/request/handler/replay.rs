@@ -144,20 +144,10 @@ fn map_existing_replay_decision(
         }
         ReplayDecision::RecoveryRequired {
             pending,
-            reason: RecoveryReason::CostSettlementFailed,
+            reason:
+                reason @ (RecoveryReason::CostSettlementFailed | RecoveryReason::ResponseCommitFailed),
         } => {
-            let settlement = replay_ops::root_replay_cost_guard_settlement(&pending)
-                .map_err(map_replay_store_error)?;
-            CostGuardOps::complete_replay_settlement(&settlement, ctx.now)?;
-            let receipt =
-                replay_ops::commit_staged_root_replay_response(&pending, secs_to_ns(ctx.now))
-                    .map_err(map_replay_store_error)?;
-            let response_bytes = receipt.response_bytes.ok_or_else(|| {
-                map_replay_decode_error(ReplayDecodeError::DecodeFailed(
-                    "recovered root replay receipt is missing response bytes".to_string(),
-                ))
-            })?;
-            let response = decode_replay_response(&response_bytes)?;
+            let response = recover_staged_response(ctx, &pending, reason)?;
             ReplayMetrics::record(
                 ReplayMetricOperation::Check,
                 ReplayMetricOutcome::Completed,
@@ -207,6 +197,45 @@ fn map_existing_replay_decision(
             ReplayDecodeError::DecodeFailed(message),
         )),
     }
+}
+
+pub(super) fn recover_staged_response(
+    ctx: &RootContext,
+    pending: &ReplayPending,
+    reason: RecoveryReason,
+) -> Result<Response, InternalError> {
+    let cost_settled = reason == RecoveryReason::CostSettlementFailed;
+    if cost_settled {
+        let settlement = replay_ops::root_replay_cost_guard_settlement(pending)
+            .map_err(map_replay_store_error)?;
+        CostGuardOps::complete_replay_settlement(&settlement, ctx.now)?;
+    }
+    let receipt = match replay_ops::commit_staged_root_replay_response(pending, secs_to_ns(ctx.now))
+    {
+        Ok(receipt) => receipt,
+        Err(err) => {
+            let mut err = map_replay_store_error(err);
+            if cost_settled
+                && let Err(recovery_err) = replay_ops::mark_root_replay_recovery_required(
+                    pending,
+                    RecoveryReason::ResponseCommitFailed,
+                    secs_to_ns(ctx.now),
+                )
+                .map_err(map_replay_store_error)
+            {
+                err = err.with_diagnostic_context(format!(
+                    "root replay response recovery marker failed: {recovery_err}"
+                ));
+            }
+            return Err(err);
+        }
+    };
+    let response_bytes = receipt.response_bytes.ok_or_else(|| {
+        map_replay_decode_error(ReplayDecodeError::DecodeFailed(
+            "recovered root replay receipt is missing response bytes".to_string(),
+        ))
+    })?;
+    decode_replay_response(&response_bytes)
 }
 
 /// map_replay_guard_error
@@ -301,7 +330,7 @@ fn map_replay_finalize_error(err: ReplayFinalizeError) -> InternalError {
     }
 }
 
-fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
+pub(super) fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
     match err {
         ReplayReceiptStoreError::ReceiptMissing => map_replay_decode_error(
             ReplayDecodeError::DecodeFailed("reserved replay receipt is missing".to_string()),
@@ -358,13 +387,9 @@ fn decode_replay_response(bytes: &[u8]) -> Result<Response, InternalError> {
 /// commit_replay
 ///
 /// Persist a replay record after successful capability execution.
-pub(super) fn commit_replay(
-    pending: &ReplayPending,
-    response: &Response,
-) -> Result<(), InternalError> {
-    crate::perf!("commit_encode");
-    match replay_ops::commit_root_replay(pending, response) {
-        Ok(()) => {
+pub(super) fn commit_replay(pending: &ReplayPending) -> Result<(), InternalError> {
+    match replay_ops::commit_staged_root_replay_response(pending, secs_to_ns(IcOps::now_secs())) {
+        Ok(_) => {
             ReplayMetrics::record(
                 ReplayMetricOperation::Commit,
                 ReplayMetricOutcome::Completed,
@@ -372,7 +397,7 @@ pub(super) fn commit_replay(
             );
             Ok(())
         }
-        Err(err) => Err(map_replay_finalize_error(err)),
+        Err(err) => Err(map_replay_store_error(err)),
     }
 }
 

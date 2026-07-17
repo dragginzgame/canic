@@ -131,11 +131,15 @@ impl RootResponseWorkflow {
             }
         };
         crate::perf!("execute_capability");
-        if let Err(err) = Self::commit_replay(&prepared.pending, &response) {
-            Self::mark_replay_recovery_required(
+        if let Err(err) = Self::commit_replay(&prepared.pending) {
+            if let Err(recovery_err) = Self::mark_replay_recovery_required(
                 &prepared.pending,
                 crate::model::replay::RecoveryReason::ResponseCommitFailed,
-            )?;
+            ) {
+                return Err(err.with_diagnostic_context(format!(
+                    "root replay recovery marker failed: {recovery_err}"
+                )));
+            }
             log!(
                 Topic::Rpc,
                 Warn,
@@ -218,8 +222,8 @@ impl RootResponseWorkflow {
         replay::check_replay(ctx, capability)
     }
 
-    fn commit_replay(pending: &ReplayPending, response: &Response) -> Result<(), InternalError> {
-        replay::commit_replay(pending, response)
+    fn commit_replay(pending: &ReplayPending) -> Result<(), InternalError> {
+        replay::commit_replay(pending)
     }
 
     fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> {

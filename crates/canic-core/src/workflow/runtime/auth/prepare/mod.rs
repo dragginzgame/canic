@@ -27,10 +27,10 @@ use crate::{
         replay::{
             DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
-            guard::secs_to_ns,
             receipt::{
-                ReplayReceiptDecision, abort_reserved_receipt, commit_receipt_response,
-                mark_recovery_required, reserve_or_replay_receipt,
+                ReplayReceiptDecision, ReplayReceiptStoreError, ReplayReceiptToken,
+                abort_reserved_receipt, commit_staged_receipt_response, mark_recovery_required,
+                reserve_or_replay_receipt, stage_receipt_response,
             },
         },
         runtime::env::EnvOps,
@@ -112,24 +112,17 @@ impl RuntimeAuthWorkflow {
         let response_bytes = match encode_token_prepare_response(&response) {
             Ok(response_bytes) => response_bytes,
             Err(err) => {
-                mark_recovery_required(
+                return Err(preserve_auth_response_failure(
                     &token,
-                    RecoveryReason::ResponseCommitFailed,
-                    secs_to_ns(IcOps::now_secs()),
-                )
-                .map_err(map_token_prepare_replay_store_error)?;
-                return Err(err);
+                    err,
+                    map_token_prepare_replay_store_error,
+                    "delegated token prepare",
+                ));
             }
         };
         crate::perf!("delegated_token_encode_response");
 
-        commit_receipt_response(
-            &token,
-            DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
-            response_bytes,
-            secs_to_ns(IcOps::now_secs()),
-        )
-        .map_err(map_token_prepare_replay_store_error)?;
+        commit_token_prepare_response(&token, response_bytes)?;
         crate::perf!("delegated_token_commit_replay");
         Ok(response)
     }
@@ -189,25 +182,94 @@ impl RuntimeAuthWorkflow {
         let response_bytes = match encode_role_attestation_prepare_response(&response) {
             Ok(response_bytes) => response_bytes,
             Err(err) => {
-                mark_recovery_required(
+                return Err(preserve_auth_response_failure(
                     &token,
-                    RecoveryReason::ResponseCommitFailed,
-                    secs_to_ns(IcOps::now_secs()),
-                )
-                .map_err(map_role_attestation_replay_store_error)?;
-                return Err(err);
+                    err,
+                    map_role_attestation_replay_store_error,
+                    "role attestation prepare",
+                ));
             }
         };
 
-        commit_receipt_response(
-            &token,
-            ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
-            response_bytes,
-            secs_to_ns(IcOps::now_secs()),
-        )
-        .map_err(map_role_attestation_replay_store_error)?;
+        commit_role_attestation_prepare_response(&token, response_bytes)?;
         Ok(response)
     }
+}
+
+fn commit_token_prepare_response(
+    token: &ReplayReceiptToken,
+    response_bytes: Vec<u8>,
+) -> Result<(), InternalError> {
+    if let Err(err) = stage_receipt_response(
+        token,
+        DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
+        response_bytes,
+        IcOps::now_nanos(),
+    ) {
+        return Err(preserve_auth_response_failure(
+            token,
+            map_token_prepare_replay_store_error(err),
+            map_token_prepare_replay_store_error,
+            "delegated token prepare",
+        ));
+    }
+    if let Err(err) = commit_staged_receipt_response(token, IcOps::now_nanos()) {
+        return Err(preserve_auth_response_failure(
+            token,
+            map_token_prepare_replay_store_error(err),
+            map_token_prepare_replay_store_error,
+            "delegated token prepare",
+        ));
+    }
+    Ok(())
+}
+
+fn commit_role_attestation_prepare_response(
+    token: &ReplayReceiptToken,
+    response_bytes: Vec<u8>,
+) -> Result<(), InternalError> {
+    if let Err(err) = stage_receipt_response(
+        token,
+        ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
+        response_bytes,
+        IcOps::now_nanos(),
+    ) {
+        return Err(preserve_auth_response_failure(
+            token,
+            map_role_attestation_replay_store_error(err),
+            map_role_attestation_replay_store_error,
+            "role attestation prepare",
+        ));
+    }
+    if let Err(err) = commit_staged_receipt_response(token, IcOps::now_nanos()) {
+        return Err(preserve_auth_response_failure(
+            token,
+            map_role_attestation_replay_store_error(err),
+            map_role_attestation_replay_store_error,
+            "role attestation prepare",
+        ));
+    }
+    Ok(())
+}
+
+fn preserve_auth_response_failure(
+    token: &ReplayReceiptToken,
+    mut err: InternalError,
+    map_store_error: fn(ReplayReceiptStoreError) -> InternalError,
+    label: &'static str,
+) -> InternalError {
+    if let Err(recovery_err) = mark_recovery_required(
+        token,
+        RecoveryReason::ResponseCommitFailed,
+        IcOps::now_nanos(),
+    )
+    .map_err(map_store_error)
+    {
+        err = err.with_diagnostic_context(format!(
+            "{label} replay recovery marker failed: {recovery_err}"
+        ));
+    }
+    err
 }
 
 async fn prepare_delegated_token_with_lazy_repair(

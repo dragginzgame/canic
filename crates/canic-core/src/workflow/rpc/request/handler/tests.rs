@@ -6,8 +6,8 @@ use crate::{
         error::ErrorCode,
         rpc::{
             CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
-            RecycleCanisterRequest, Request, RootRequestMetadata, UpgradeCanisterRequest,
-            UpgradeCanisterResponse,
+            RecycleCanisterRequest, RecycleCanisterResponse, Request, RootRequestMetadata,
+            UpgradeCanisterRequest, UpgradeCanisterResponse,
         },
     },
     ids::CanisterRole,
@@ -787,7 +787,14 @@ fn request_cycles_marks_deposit_external_effect() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
 
-    nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77)
+    CostGuardOps::reset_for_tests();
+    let permit = CostGuardOps::reserve(nonroot_cycles::request_cycles_cost_guard_request(
+        &ctx,
+        77,
+        10 * TC,
+    ))
+    .expect("cost permit");
+    nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77, &permit)
         .expect("mark cycles effect");
 
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
@@ -795,6 +802,10 @@ fn request_cycles_marks_deposit_external_effect() {
         .into_receipt()
         .expect("receipt decodes");
     assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
+    assert_eq!(
+        receipt.cost_guard_settlement,
+        Some(permit.replay_settlement())
+    );
     assert_eq!(
         receipt.effect,
         Some(ExternalEffectDescriptor::ManagementCall {
@@ -804,6 +815,8 @@ fn request_cycles_marks_deposit_external_effect() {
     );
 
     RootResponseWorkflow::abort_replay(pending).expect("abort replay");
+    CostGuardOps::abort(&permit).expect("abort cost permit");
+    CostGuardOps::reset_for_tests();
 }
 
 #[test]
@@ -932,7 +945,8 @@ fn check_replay_returns_cached_response_for_duplicate_same_payload() {
     let response = Response::Cycles(CyclesResponse {
         cycles_transferred: 77,
     });
-    RootResponseWorkflow::commit_replay(&pending, &response).expect("commit");
+    replay::stage_response(&pending, &response).expect("stage response");
+    RootResponseWorkflow::commit_replay(&pending).expect("commit");
 
     let preflight = RootResponseWorkflow::check_replay(&ctx, &capability).expect("must cache-hit");
     match preflight {
@@ -1059,6 +1073,158 @@ fn check_replay_finishes_cost_settlement_without_reexecuting_capability() {
 }
 
 #[test]
+fn request_cycles_retry_finishes_cost_settlement_without_reexecuting_deposit() {
+    ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(5),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(6),
+        now: 1_000,
+    };
+    let capability = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 77,
+        metadata: Some(meta(19, secs_to_ns(60))),
+    });
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    let permit = CostGuardOps::reserve(nonroot_cycles::request_cycles_cost_guard_request(
+        &ctx,
+        77,
+        10 * TC,
+    ))
+    .expect("cost permit");
+    nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77, &permit)
+        .expect("mark costed cycles effect");
+    replay::stage_response(
+        &pending,
+        &Response::Cycles(CyclesResponse {
+            cycles_transferred: 77,
+        }),
+    )
+    .expect("stage terminal response");
+    replay::mark_recovery_required(&pending, RecoveryReason::CostSettlementFailed)
+        .expect("mark settlement recovery");
+
+    let recovered = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("identical retry should finish accounting");
+    assert!(matches!(
+        recovered,
+        replay::ReplayPreflight::Cached(Response::Cycles(CyclesResponse {
+            cycles_transferred: 77
+        }))
+    ));
+    let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+    ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
+}
+
+#[test]
+fn cost_recovery_without_staged_response_transitions_to_response_recovery() {
+    ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(5),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(6),
+        now: 1_000,
+    };
+    let capability = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 77,
+        metadata: Some(meta(21, secs_to_ns(60))),
+    });
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    let permit = CostGuardOps::reserve(nonroot_cycles::request_cycles_cost_guard_request(
+        &ctx,
+        77,
+        10 * TC,
+    ))
+    .expect("cost permit");
+    nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77, &permit)
+        .expect("mark costed cycles effect");
+    replay::mark_recovery_required(&pending, RecoveryReason::CostSettlementFailed)
+        .expect("mark settlement recovery");
+
+    RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect_err("missing staged response must fail closed after settlement");
+    let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(
+        receipt.status,
+        ReplayReceiptStatus::RecoveryRequired {
+            reason: RecoveryReason::ResponseCommitFailed
+        }
+    );
+
+    ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
+}
+
+#[test]
+fn response_commit_retry_promotes_staged_response_without_reexecution() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(5),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(6),
+        now: 1_000,
+    };
+    let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        canister_pid: p(55),
+        metadata: Some(meta(20, secs_to_ns(60))),
+    });
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    replay::stage_response(
+        &pending,
+        &Response::RecycleCanister(RecycleCanisterResponse {}),
+    )
+    .expect("stage terminal response");
+    replay::mark_recovery_required(&pending, RecoveryReason::ResponseCommitFailed)
+        .expect("mark response recovery");
+
+    let recovered = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("identical retry should promote staged response");
+    assert!(matches!(
+        recovered,
+        replay::ReplayPreflight::Cached(Response::RecycleCanister(RecycleCanisterResponse {}))
+    ));
+    let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+    ReplayReceiptOps::reset_for_tests();
+}
+
+#[test]
 fn check_replay_rejects_conflicting_payload_for_same_request_id() {
     ReplayReceiptOps::reset_for_tests();
 
@@ -1082,13 +1248,14 @@ fn check_replay_rejects_conflicting_payload_for_same_request_id() {
         replay::ReplayPreflight::Fresh(pending) => pending,
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
-    RootResponseWorkflow::commit_replay(
+    replay::stage_response(
         &pending,
         &Response::Cycles(CyclesResponse {
             cycles_transferred: 10,
         }),
     )
-    .expect("commit");
+    .expect("stage response");
+    RootResponseWorkflow::commit_replay(&pending).expect("commit");
 
     RootResponseWorkflow::check_replay(&ctx, &conflict).expect_err("must conflict");
 }
@@ -1117,11 +1284,12 @@ fn check_replay_rejects_cross_variant_same_request_id() {
         replay::ReplayPreflight::Fresh(pending) => pending,
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
-    RootResponseWorkflow::commit_replay(
+    replay::stage_response(
         &pending,
         &Response::UpgradeCanister(UpgradeCanisterResponse {}),
     )
-    .expect("commit");
+    .expect("stage response");
+    RootResponseWorkflow::commit_replay(&pending).expect("commit");
 
     RootResponseWorkflow::check_replay(&ctx, &cycles).expect_err("must conflict");
 }

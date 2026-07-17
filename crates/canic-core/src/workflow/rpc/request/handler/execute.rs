@@ -53,7 +53,7 @@ pub(super) async fn execute_root_capability(
     let result = match capability {
         RootCapability::ProvisionCanister(req) => execute_provision(ctx, pending, &req).await,
         RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, pending, &req).await,
-        RootCapability::RecycleCanister(req) => execute_recycle(&req).await,
+        RootCapability::RecycleCanister(req) => execute_recycle(pending, &req).await,
         RootCapability::RequestCycles(req) => {
             let response = if let Some(grant) = authorized_cycles {
                 nonroot_cycles::execute_authorized_request_cycles(ctx, pending, grant).await
@@ -123,8 +123,21 @@ async fn execute_provision(
 
     let response = Response::CreateCanister(CreateCanisterResponse { new_canister_pid });
     if let Err(err) = replay::stage_response(pending, &response) {
-        let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-        replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed)?;
+        let mut err = err;
+        let reason = match CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+            Ok(()) => RecoveryReason::ResponseCommitFailed,
+            Err(settlement_err) => {
+                err = err.with_diagnostic_context(format!(
+                    "root provision cost settlement also failed: {settlement_err}"
+                ));
+                RecoveryReason::CostSettlementFailed
+            }
+        };
+        if let Err(recovery_err) = replay::mark_recovery_required(pending, reason) {
+            err = err.with_diagnostic_context(format!(
+                "root provision replay recovery marker failed: {recovery_err}"
+            ));
+        }
         return Err(err);
     }
     if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
@@ -279,8 +292,13 @@ async fn execute_upgrade(
     Ok(response)
 }
 
-async fn execute_recycle(req: &RecycleCanisterRequest) -> Result<Response, InternalError> {
+async fn execute_recycle(
+    pending: &ReplayPending,
+    req: &RecycleCanisterRequest,
+) -> Result<Response, InternalError> {
+    let response = Response::RecycleCanister(RecycleCanisterResponse {});
+    replay::stage_response(pending, &response)?;
     PoolWorkflow::pool_recycle_canister(req.canister_pid).await?;
 
-    Ok(Response::RecycleCanister(RecycleCanisterResponse {}))
+    Ok(response)
 }
