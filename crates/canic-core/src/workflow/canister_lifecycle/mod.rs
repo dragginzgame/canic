@@ -2,12 +2,12 @@
 //!
 //! Responsibility: orchestrate canister create and upgrade lifecycle events.
 //! Does not own: endpoint authorization, stable registry schemas, or pure upgrade policy.
-//! Boundary: workflow layer coordinating cost guards, IC ops, registry ops, and cascades.
+//! Boundary: workflow layer coordinating replay, cost guards, IC ops, registry ops, and cascades.
 
 mod propagation;
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     cdk::types::{Principal, TC},
     domain::metrics::{
         CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
@@ -19,13 +19,14 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    model::replay::CommandKind,
+    model::replay::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::{
             IcOps,
             mgmt::{CanisterInstallMode, MgmtOps},
         },
+        replay::{self as replay_ops, guard::ReplayPending},
         runtime::install_source::{ApprovedModuleSource, ModuleSourceRuntimeApi},
         runtime::metrics::canister_ops::CanisterOpsMetrics,
         runtime::metrics::provisioning::{
@@ -56,6 +57,7 @@ pub enum CanisterLifecycleEvent<'a> {
     Upgrade {
         cost_context: CanisterUpgradeCostContext,
         pid: Principal,
+        replay_pending: &'a ReplayPending,
     },
 }
 
@@ -103,9 +105,11 @@ impl CanisterLifecycleWorkflow {
                 extra_arg,
             } => Self::apply_create(deployment_permit, role, parent, extra_arg).await,
 
-            CanisterLifecycleEvent::Upgrade { cost_context, pid } => {
-                Self::apply_upgrade(cost_context, pid).await
-            }
+            CanisterLifecycleEvent::Upgrade {
+                cost_context,
+                pid,
+                replay_pending,
+            } => Self::apply_upgrade(cost_context, pid, replay_pending).await,
         }
     }
 
@@ -204,6 +208,7 @@ impl CanisterLifecycleWorkflow {
     async fn apply_upgrade(
         cost_context: CanisterUpgradeCostContext,
         pid: Principal,
+        replay_pending: &ReplayPending,
     ) -> Result<CanisterLifecycleResult, InternalError> {
         let (role, parent_pid) = upgrade_target(pid)?;
 
@@ -273,31 +278,20 @@ impl CanisterLifecycleWorkflow {
             pid
         );
 
-        if let Err(err) = ModuleInstallWorkflow::install_code_with_permit(
-            &cost_permit,
-            CanisterInstallMode::Upgrade(None),
+        if let Err(err) = execute_costed_upgrade(
+            &role,
             pid,
+            &target_hash,
             &module_source,
-            (),
+            &cost_permit,
+            replay_pending,
         )
         .await
         {
-            let err = CostGuardOps::recover_after_failure(
-                &cost_permit,
-                crate::ops::ic::IcOps::now_secs(),
-                err,
-            );
             record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
             record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
             return Err(err);
         }
-        if let Err(err) = CostGuardOps::complete(&cost_permit, crate::ops::ic::IcOps::now_secs()) {
-            record_canister_op_failure(&role, CanisterOpsMetricOperation::Upgrade, &err);
-            record_provisioning_failure(&role, ProvisioningMetricOperation::Upgrade, &err);
-            return Err(err);
-        }
-        SubnetRegistryOps::update_module_hash(pid, target_hash.clone());
-        assert_upgrade_module_hash(pid, &target_hash, &role)?;
         record_canister_op(
             &role,
             CanisterOpsMetricOperation::Upgrade,
@@ -313,6 +307,100 @@ impl CanisterLifecycleWorkflow {
 
         Ok(CanisterLifecycleResult::default())
     }
+}
+
+async fn execute_costed_upgrade(
+    role: &CanisterRole,
+    pid: Principal,
+    target_hash: &[u8],
+    module_source: &ApprovedModuleSource,
+    cost_permit: &CostGuardPermit,
+    replay_pending: &ReplayPending,
+) -> Result<(), InternalError> {
+    if let Err(replay_err) = replay_ops::mark_root_replay_costed_external_effect(
+        replay_pending,
+        ExternalEffectDescriptor::ManagementCall {
+            canister: pid,
+            method: "install_code:upgrade".to_string(),
+        },
+        cost_permit,
+        crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
+    ) {
+        return Err(CostGuardOps::recover_after_failure(
+            cost_permit,
+            IcOps::now_secs(),
+            map_upgrade_replay_store_error(replay_err),
+        ));
+    }
+
+    if let Err(err) = ModuleInstallWorkflow::install_code_with_permit(
+        cost_permit,
+        CanisterInstallMode::Upgrade(None),
+        pid,
+        module_source,
+        (),
+    )
+    .await
+    {
+        let err = CostGuardOps::recover_after_failure(cost_permit, IcOps::now_secs(), err);
+        return match replay_ops::mark_root_replay_recovery_required(
+            replay_pending,
+            RecoveryReason::ExternalEffectStatusUnknown,
+            crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
+        )
+        .map_err(map_upgrade_replay_store_error)
+        {
+            Ok(()) => Err(err),
+            Err(recovery_err) => Err(err.with_diagnostic_context(format!(
+                "root upgrade replay recovery marker failed: {recovery_err}"
+            ))),
+        };
+    }
+
+    SubnetRegistryOps::update_module_hash(pid, target_hash.to_vec());
+    if let Err(mut err) = assert_upgrade_module_hash(pid, target_hash, role) {
+        if let Err(settlement_err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+            err = err.with_diagnostic_context(format!(
+                "root upgrade cost settlement also failed: {settlement_err}"
+            ));
+        }
+        if let Err(recovery_err) = replay_ops::mark_root_replay_recovery_required(
+            replay_pending,
+            RecoveryReason::StateProjectionFailed,
+            crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
+        )
+        .map_err(map_upgrade_replay_store_error)
+        {
+            err = err.with_diagnostic_context(format!(
+                "root upgrade replay recovery marker failed: {recovery_err}"
+            ));
+        }
+        return Err(err);
+    }
+    if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+        return match replay_ops::mark_root_replay_recovery_required(
+            replay_pending,
+            RecoveryReason::CostSettlementFailed,
+            crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
+        )
+        .map_err(map_upgrade_replay_store_error)
+        {
+            Ok(()) => Err(err),
+            Err(recovery_err) => Err(err.with_diagnostic_context(format!(
+                "root upgrade replay recovery marker failed: {recovery_err}"
+            ))),
+        };
+    }
+    Ok(())
+}
+
+fn map_upgrade_replay_store_error(
+    err: crate::ops::replay::receipt::ReplayReceiptStoreError,
+) -> InternalError {
+    InternalError::workflow(
+        InternalErrorOrigin::Workflow,
+        format!("root upgrade replay receipt update failed: {err}"),
+    )
 }
 
 const CANISTER_UPGRADE_COMMAND_KIND: &str = "management.canister_upgrade.v1";

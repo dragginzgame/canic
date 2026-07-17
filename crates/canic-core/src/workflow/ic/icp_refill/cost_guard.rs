@@ -10,7 +10,7 @@ use crate::{
     ops::{
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::IcOps,
-        replay::receipt::ReplayReceiptToken,
+        replay::receipt::{ReplayReceiptToken, record_cost_guard_settlement},
     },
     replay_policy::CostClass,
     view::icp_refill::IcpRefillOperation,
@@ -44,8 +44,11 @@ pub(super) fn reserve_icp_refill_cost_guard_if_needed(
         IcOps::now_secs(),
     ))
     .map_err(map_cost_guard_reserve_error)?;
-    log_icp_refill_cost_guard_reserved(operation);
     *cost_permit = Some(permit);
+    let permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
+    record_cost_guard_settlement(token, permit.replay_settlement(), IcOps::now_nanos())
+        .map_err(super::replay::map_icp_refill_replay_store_error)?;
+    log_icp_refill_cost_guard_reserved(operation);
     Ok(())
 }
 

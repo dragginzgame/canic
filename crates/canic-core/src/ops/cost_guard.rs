@@ -8,7 +8,7 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     ids::{IntentId, IntentResourceKey},
-    model::replay::CommandKind,
+    model::replay::{CommandKind, ReplayCostGuardSettlement},
     ops::storage::intent::IntentStoreOps,
     replay_policy::CostClass,
 };
@@ -35,6 +35,17 @@ pub struct CostGuardPermit {
     _payer: Principal,
     quota_intent_id: IntentId,
     _private: (),
+}
+
+impl CostGuardPermit {
+    /// Return the durable intent identity needed to finish this permit's settlement.
+    #[must_use]
+    pub const fn replay_settlement(&self) -> ReplayCostGuardSettlement {
+        ReplayCostGuardSettlement {
+            quota_intent_id: self.quota_intent_id,
+            reservation_intent_id: self.reservation_id,
+        }
+    }
 }
 
 ///
@@ -218,7 +229,19 @@ impl CostGuardOps {
     ///
     /// Commit both quota and cycle reservation intents after the protected operation succeeds.
     pub fn complete(permit: &CostGuardPermit, now_secs: u64) -> Result<(), InternalError> {
-        IntentStoreOps::commit_pair_at(permit.quota_intent_id, permit.reservation_id, now_secs)
+        Self::complete_replay_settlement(&permit.replay_settlement(), now_secs)
+    }
+
+    /// Complete a permit from intent identity persisted in a replay receipt.
+    pub fn complete_replay_settlement(
+        settlement: &ReplayCostGuardSettlement,
+        now_secs: u64,
+    ) -> Result<(), InternalError> {
+        IntentStoreOps::commit_pair_at(
+            settlement.quota_intent_id,
+            settlement.reservation_intent_id,
+            now_secs,
+        )
     }
 
     /// recover

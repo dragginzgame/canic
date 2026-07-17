@@ -483,7 +483,7 @@ fn check_cycles_replay(
             );
             decode_cycles_response(&cached.response_bytes).map(ReplayPreflight::Cached)
         }
-        ReplayDecision::InFlight => {
+        ReplayDecision::InFlight | ReplayDecision::RecoveryRequired { .. } => {
             ReplayMetrics::record(
                 ReplayMetricOperation::Check,
                 ReplayMetricOutcome::Failed,
@@ -693,6 +693,16 @@ fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
         ),
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
             map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
+        }
+        ReplayReceiptStoreError::StagedResponseMissing => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
+                "replay receipt is missing staged response data".to_string(),
+            ))
+        }
+        ReplayReceiptStoreError::CostGuardSettlementMissing => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
+                "replay receipt is missing cost guard settlement identity".to_string(),
+            ))
         }
     }
 }

@@ -59,6 +59,7 @@ use identity::resolve_install_identity;
 use install_state::{build_install_state, write_install_state_with_deployment_truth_receipt};
 pub use options::InstallRootOptions;
 use output::{print_install_result_summary, print_install_timing_summary};
+pub use phase_receipts::InstallPhaseFailureError;
 use phase_receipts::InstallReceiptScope;
 use plan_artifacts::emit_manifest_with_deployment_truth_receipt;
 use preparation::prepare_install_deployment_truth;

@@ -12,7 +12,7 @@ use crate::{
     eager_static,
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
-        ReplayActor, ReplayReceipt, ReplayReceiptStatus,
+        ReplayActor, ReplayCostGuardSettlement, ReplayReceipt, ReplayReceiptStatus,
     },
     role_contract::allocation::memory::auth::REPLAY_RECEIPTS_ID,
     storage::prelude::*,
@@ -85,6 +85,12 @@ pub struct ReplayReceiptRecord {
     pub expires_at_ns: Option<u64>,
     pub response_schema_version: Option<u32>,
     pub response_bytes: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staged_response_schema_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub staged_response_bytes: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_guard_settlement: Option<ReplayCostGuardSettlement>,
     pub effect: Option<ExternalEffectDescriptor>,
 }
 
@@ -105,6 +111,9 @@ impl ReplayReceiptRecord {
             expires_at_ns: receipt.expires_at_ns,
             response_schema_version: receipt.response_schema_version,
             response_bytes: receipt.response_bytes,
+            staged_response_schema_version: receipt.staged_response_schema_version,
+            staged_response_bytes: receipt.staged_response_bytes,
+            cost_guard_settlement: receipt.cost_guard_settlement,
             effect: receipt.effect,
         }
     }
@@ -130,6 +139,9 @@ impl ReplayReceiptRecord {
             expires_at_ns: self.expires_at_ns,
             response_schema_version: self.response_schema_version,
             response_bytes: self.response_bytes,
+            staged_response_schema_version: self.staged_response_schema_version,
+            staged_response_bytes: self.staged_response_bytes,
+            cost_guard_settlement: self.cost_guard_settlement,
             effect: self.effect,
         })
     }
@@ -232,11 +244,12 @@ impl ReplayReceiptStore {
         REPLAY_RECEIPTS.with_borrow(|map| {
             map.iter()
                 .filter(|entry| {
-                    entry.value().actor == actor
-                        && entry
-                            .value()
-                            .expires_at_ns
-                            .is_none_or(|expires_at_ns| now_ns <= expires_at_ns)
+                    let record = entry.value();
+                    record.actor == actor
+                        && (record_survives_replay_expiry(&record)
+                            || record
+                                .expires_at_ns
+                                .is_none_or(|expires_at_ns| now_ns < expires_at_ns))
                 })
                 .count()
         })
@@ -270,10 +283,11 @@ impl ReplayReceiptStore {
         let mut expired = Vec::new();
         REPLAY_RECEIPTS.with_borrow(|map| {
             for entry in map.iter() {
-                if entry
-                    .value()
-                    .expires_at_ns
-                    .is_some_and(|expires_at_ns| expires_at_ns < now_ns)
+                let record = entry.value();
+                if !record_survives_replay_expiry(&record)
+                    && record
+                        .expires_at_ns
+                        .is_some_and(|expires_at_ns| expires_at_ns < now_ns)
                 {
                     expired.push(*entry.key());
                     if expired.len() >= limit {
@@ -287,15 +301,18 @@ impl ReplayReceiptStore {
 }
 
 fn record_is_pending(record: &ReplayReceiptRecord, now_ns: u64) -> bool {
-    record
-        .expires_at_ns
-        .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
-        && matches!(
-            record.status,
-            ReplayReceiptStatus::Reserved
-                | ReplayReceiptStatus::ExternalEffectInFlight
-                | ReplayReceiptStatus::RecoveryRequired { .. }
-        )
+    record_survives_replay_expiry(record)
+        || (record
+            .expires_at_ns
+            .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
+            && matches!(record.status, ReplayReceiptStatus::Reserved))
+}
+
+const fn record_survives_replay_expiry(record: &ReplayReceiptRecord) -> bool {
+    matches!(
+        record.status,
+        ReplayReceiptStatus::ExternalEffectInFlight | ReplayReceiptStatus::RecoveryRequired { .. }
+    )
 }
 
 #[cfg(test)]
@@ -351,6 +368,9 @@ mod tests {
             expires_at_ns: Some(200),
             response_schema_version: None,
             response_bytes: None,
+            staged_response_schema_version: None,
+            staged_response_bytes: None,
+            cost_guard_settlement: None,
             effect: None,
         }
     }
@@ -450,6 +470,54 @@ mod tests {
             }
         );
         assert_eq!(receipt.effect, Some(effect));
+    }
+
+    #[test]
+    fn staged_cost_recovery_data_survives_stable_round_trip() {
+        let mut record = receipt_record_fixture();
+        record.status = ReplayReceiptStatus::RecoveryRequired {
+            reason: RecoveryReason::CostSettlementFailed,
+        };
+        record.staged_response_schema_version = Some(1);
+        record.staged_response_bytes = Some(vec![1, 2, 3]);
+        record.cost_guard_settlement = Some(ReplayCostGuardSettlement {
+            quota_intent_id: crate::ids::IntentId(41),
+            reservation_intent_id: crate::ids::IntentId(42),
+        });
+
+        let receipt = stable_round_trip_into_receipt(record.clone());
+
+        assert_eq!(ReplayReceiptRecord::from_receipt(receipt), record);
+    }
+
+    #[test]
+    fn external_effect_and_recovery_receipts_are_not_expired_or_removed() {
+        ReplayReceiptStore::reset_for_tests();
+        let recovery_key = ReplayReceiptSlotKey([44; 32]);
+        let mut record = receipt_record_fixture();
+        record.status = ReplayReceiptStatus::RecoveryRequired {
+            reason: RecoveryReason::CostSettlementFailed,
+        };
+        let actor = record.actor;
+        let command_kind = record.command_kind.clone();
+        ReplayReceiptStore::upsert(recovery_key, record);
+        let effect_key = ReplayReceiptSlotKey([45; 32]);
+        let mut effect = receipt_record_fixture();
+        effect.operation_id = [8; 32];
+        effect.status = ReplayReceiptStatus::ExternalEffectInFlight;
+        ReplayReceiptStore::upsert(effect_key, effect);
+
+        assert_eq!(ReplayReceiptStore::active_len_for_actor(actor, 300), 2);
+        assert_eq!(ReplayReceiptStore::pending_len_for_actor(actor, 300), 2);
+        assert_eq!(
+            ReplayReceiptStore::pending_len_for_command_kind(&command_kind, 300),
+            2
+        );
+        assert!(ReplayReceiptStore::collect_expired(300, 10).is_empty());
+        assert!(ReplayReceiptStore::get(recovery_key).is_some());
+        assert!(ReplayReceiptStore::get(effect_key).is_some());
+
+        ReplayReceiptStore::reset_for_tests();
     }
 
     #[test]

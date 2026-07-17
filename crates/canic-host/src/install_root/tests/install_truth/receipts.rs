@@ -346,6 +346,52 @@ fn install_truth_receipted_phase_records_success_and_failure() {
 }
 
 #[test]
+fn install_truth_phase_preserves_operation_and_failure_receipt_errors() {
+    let (root, check) =
+        demo_install_deployment_truth_check("canic-install-truth-failed-receipt-write");
+    let execution_context = current_install_execution_context(&root, &root, "local");
+    fs::write(root.join(".canic"), b"blocks receipt directory")
+        .expect("create receipt directory blocker");
+    let scope = InstallReceiptScope {
+        icp_root: &root,
+        network: "local",
+        deployment_name: "demo",
+        check: &check,
+        execution_context: Some(&execution_context),
+    };
+
+    let err = scope
+        .run_phase(
+            InstallPhaseLabel::STAGE_RELEASE_SET,
+            "stage root release set",
+            Vec::new(),
+            || Err::<(), Box<dyn std::error::Error>>(std::io::Error::other("stage failed").into()),
+        )
+        .expect_err("operation and receipt write must both fail");
+    let composite = err
+        .downcast_ref::<crate::install_root::InstallPhaseFailureError>()
+        .expect("combined failure remains typed");
+
+    assert_eq!(
+        composite
+            .operation_error()
+            .downcast_ref::<std::io::Error>()
+            .expect("operation cause remains typed")
+            .kind(),
+        std::io::ErrorKind::Other
+    );
+    assert!(
+        composite
+            .receipt_write_error()
+            .downcast_ref::<std::io::Error>()
+            .is_some(),
+        "receipt persistence cause remains typed"
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn install_truth_latest_receipt_uses_newest_persisted_receipt() {
     let root = temp_dir("canic-install-truth-latest-receipt");
     let receipt_dir = root.join(".canic/local/deployment-receipts/demo");

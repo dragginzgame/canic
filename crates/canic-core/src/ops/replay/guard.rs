@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::types::Principal,
-    model::replay::{CommandKind, OperationId, ReplayActor},
+    model::replay::{CommandKind, OperationId, RecoveryReason, ReplayActor},
     ops::replay::{
         receipt::{
             ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
@@ -38,7 +38,7 @@ pub struct RootReplayGuardInput {
 ///
 /// ReplayPending
 ///
-/// Fresh replay reservation metadata for later commit.
+/// Validated replay reservation metadata for execution or recovery.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,6 +61,10 @@ pub enum ReplayDecision {
     Fresh(ReplayPending),
     DuplicateSame(ReplayCached),
     InFlight,
+    RecoveryRequired {
+        pending: ReplayPending,
+        reason: RecoveryReason,
+    },
     DuplicateConflict,
     Expired,
     DecodeFailed(String),
@@ -126,6 +130,14 @@ pub fn evaluate_root_replay(
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
             ReplayGuardError::ReceiptDecodeFailed(message)
         }
+        ReplayReceiptStoreError::StagedResponseMissing => ReplayGuardError::ReceiptDecodeFailed(
+            "replay receipt is missing staged response data".to_string(),
+        ),
+        ReplayReceiptStoreError::CostGuardSettlementMissing => {
+            ReplayGuardError::ReceiptDecodeFailed(
+                "replay receipt is missing cost guard settlement identity".to_string(),
+            )
+        }
     })?;
     if matches!(decision, ReplayReceiptDecision::Fresh(_)) {
         let _ = ReplayReceiptOps::purge_expired(now_ns, input.purge_scan_limit);
@@ -146,7 +158,11 @@ fn evaluate_cross_command_replay(input: &RootReplayGuardInput) -> Option<ReplayD
 
     let now_ns = input.now_ns;
     if matches.iter().any(|record| {
-        record
+        matches!(
+            record.status,
+            crate::model::replay::ReplayReceiptStatus::ExternalEffectInFlight
+                | crate::model::replay::ReplayReceiptStatus::RecoveryRequired { .. }
+        ) || record
             .expires_at_ns
             .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
     }) {
@@ -179,8 +195,23 @@ fn map_receipt_decision(decision: ReplayReceiptDecision) -> ReplayDecision {
             };
             ReplayDecision::DuplicateSame(ReplayCached { response_bytes })
         }
+        ReplayReceiptDecision::RecoveryRequired {
+            token: receipt_token,
+            reason,
+        } => {
+            let receipt = receipt_token.receipt();
+            ReplayDecision::RecoveryRequired {
+                pending: ReplayPending {
+                    caller: receipt.actor.effective_principal,
+                    payload_hash: receipt.payload_hash,
+                    issued_at_ns: receipt.created_at_ns,
+                    expires_at_ns: receipt.expires_at_ns.unwrap_or(u64::MAX),
+                    receipt_token: Box::new(receipt_token),
+                },
+                reason,
+            }
+        }
         ReplayReceiptDecision::OperationInProgress
-        | ReplayReceiptDecision::RecoveryRequired(_)
         | ReplayReceiptDecision::PendingActorQuotaExceeded { .. }
         | ReplayReceiptDecision::PendingCommandQuotaExceeded { .. } => ReplayDecision::InFlight,
         ReplayReceiptDecision::ActorMismatch | ReplayReceiptDecision::PayloadMismatch => {
@@ -249,6 +280,9 @@ mod tests {
                 expires_at_ns: Some(secs_to_ns(1_200)),
                 response_schema_version: None,
                 response_bytes: None,
+                staged_response_schema_version: None,
+                staged_response_bytes: None,
+                cost_guard_settlement: None,
                 effect: None,
             },
         );
@@ -286,6 +320,9 @@ mod tests {
                 expires_at_ns: Some(secs_to_ns(1_200)),
                 response_schema_version: Some(1),
                 response_bytes: Some(expected.clone()),
+                staged_response_schema_version: None,
+                staged_response_bytes: None,
+                cost_guard_settlement: None,
                 effect: None,
             },
         );

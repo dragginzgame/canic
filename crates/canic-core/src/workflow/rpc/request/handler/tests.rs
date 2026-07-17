@@ -81,6 +81,9 @@ fn seed_root_replay_receipt(
             expires_at_ns: Some(secs_to_ns(expires_at_secs)),
             response_schema_version: response_bytes.as_ref().map(|_| 1),
             response_bytes,
+            staged_response_schema_version: None,
+            staged_response_bytes: None,
+            cost_guard_settlement: None,
             effect: None,
         },
     );
@@ -419,6 +422,7 @@ fn root_provision_cost_guard_request_uses_deployment_policy() {
 #[test]
 fn root_provision_marks_create_external_effect() {
     ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
 
     let ctx = RootContext {
         caller: p(96),
@@ -441,7 +445,13 @@ fn root_provision_marks_create_external_effect() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
 
-    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42))
+    let permit = CostGuardOps::reserve(execute::root_provision_cost_guard_request(
+        &ctx,
+        5 * TC,
+        10 * TC,
+    ))
+    .expect("cost permit");
+    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42), &permit)
         .expect("mark provision effect");
 
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
@@ -450,13 +460,18 @@ fn root_provision_marks_create_external_effect() {
         .expect("receipt decodes");
     assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
     assert_eq!(
+        receipt.cost_guard_settlement,
+        Some(permit.replay_settlement())
+    );
+    assert_eq!(
         receipt.effect,
         Some(ExternalEffectDescriptor::ManagementCreateCanister {
             command_kind: CommandKind::new("root.provision.v1").expect("command kind"),
         })
     );
 
-    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
+    CostGuardOps::abort(&permit).expect("abort cost permit");
+    ReplayReceiptOps::reset_for_tests();
 }
 
 #[test]
@@ -983,6 +998,64 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
 
     RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect_err("recovery-required duplicate must not run fresh");
+}
+
+#[test]
+fn check_replay_finishes_cost_settlement_without_reexecuting_capability() {
+    ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(5),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(6),
+        now: 1_000,
+    };
+    let req = CreateCanisterRequest {
+        canister_role: CanisterRole::new("project_hub"),
+        parent: CreateCanisterParent::Root,
+        extra_arg: None,
+        metadata: Some(meta(18, secs_to_ns(60))),
+    };
+    let capability = RootCapability::ProvisionCanister(req.clone());
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    let permit = CostGuardOps::reserve(execute::root_provision_cost_guard_request(
+        &ctx,
+        5 * TC,
+        10 * TC,
+    ))
+    .expect("cost permit");
+    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42), &permit)
+        .expect("mark costed effect");
+    let response = Response::CreateCanister(crate::dto::rpc::CreateCanisterResponse {
+        new_canister_pid: p(99),
+    });
+    replay::stage_response(&pending, &response).expect("stage terminal response");
+    replay::mark_recovery_required(&pending, RecoveryReason::CostSettlementFailed)
+        .expect("mark settlement recovery");
+
+    let recovered = RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("identical retry should finish accounting");
+    match recovered {
+        replay::ReplayPreflight::Cached(Response::CreateCanister(response)) => {
+            assert_eq!(response.new_canister_pid, p(99));
+        }
+        other => panic!("expected cached recovered response, got {other:?}"),
+    }
+    let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
+
+    ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
 }
 
 #[test]
