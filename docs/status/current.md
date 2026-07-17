@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-16
+Last updated: 2026-07-17
 
 ## Purpose
 
@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.1`.
-- The latest published release is `v0.93.1` at
-  `5c232876f2fa25ba3bbd0e4f210df89c8af5e2ef`.
-- The `v0.93.1` source tree is
-  `fac5ad51d0b1f5960c986bc555b7d3c77333f7e4`; its product-tree hash is
-  `9dd92280e4ac2b5d909f20e85188e63321c74b4627435d3183e081e372652be5`.
+- The workspace package version is `0.93.2`.
+- The latest published release is `v0.93.2` at
+  `d51d21d271b1e49a0568ea62fe5526ae2c0822c3`.
+- The `v0.93.2` source tree is
+  `39423696cabedc1cb52334f31a742b37e20dc15d`; its product-tree hash is
+  `7ec3dd80144a5321bec176b764ea37fc443415a8e48aea8ac7acca51b0ff531d`.
   Its Cargo.lock SHA-256 is
-  `cb238e93ece3868d86594499ce7d5eb87499bc2d4840bc2b86ca77643a0559dd`.
+  `1579d6a10b0d9abbd0ba5e35f7331452ab24f94a78d6d59a6c0e951c551a60cc`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -46,9 +46,12 @@ Historical detail is archived at:
   snapshot upload/restore, replica-display, and legacy text snapshot-ID
   surfaces while preserving the maintained Candid-aware, rooted replica,
   JSON snapshot-create, and backup-owned restore paths.
-- Current development makes the Wasm-store retirement lifecycle generation
+- Released `v0.93.2` makes the Wasm-store retirement lifecycle generation
   bound and non-reentrant, permanently excludes stores in GC from publication,
   and makes restore operation-receipt outcome and attempt identity mandatory.
+- Current development bounds ICP-refill lookup and metric work through
+  lifecycle-rebuilt derived indexes, retains renewal-timer failure causes in
+  runtime diagnostics, and restores the workflow/storage layering guard.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -564,6 +567,10 @@ First primary results:
   focused control-plane publication/GC tests, 34 restore apply-journal tests,
   targeted package checks, and strict all-target Clippy for
   `canic-control-plane` and `canic-backup`.
+- Current ICP-refill, renewal diagnostics, and test-layering development passes
+  80 focused ICP-refill tests, 15 renewal tests, 22 control-plane publication
+  tests, strict all-feature Clippy for `canic-core` and
+  `canic-control-plane`, the layering guard, and Cargo Machete.
 - Slice E compatibility validation passes tagged root/Wasm-store Candid and
   production CLI/config/package comparisons, a `v0.91.6`-to-`v0.92.11`
   PocketIC state upgrade, 52 current stable-record tests, 19 protocol tests, 7
@@ -583,8 +590,10 @@ verdict at `pass_with_limitations`.
 
 Released 0.93.0 removes the stale issuer-renewal attempt authority and projects
 the canonical chain-key batch instead. Released 0.93.1 removes orphaned host
-ICP CLI wrappers and the superseded text snapshot-ID path. Current development
+ICP CLI wrappers and the superseded text snapshot-ID path. Released 0.93.2
 closes the audited Wasm-store lifecycle race and restore-receipt defaulting
-findings. The next audited product risks are unbounded ICP-refill history scans
-and discarded renewal-timer failures. Broad deployment, package, publish, and
-release validation remains maintainer-owned.
+findings. Current development fixes the remaining ICP-refill history scans,
+discarded renewal-timer failures, and publication-test layering residue. The
+next audit candidates are fail-closed auth-renewal response parsing and the
+test-only alternate auth/replay ordering path. Broad deployment, package,
+publish, and release validation remains maintainer-owned.

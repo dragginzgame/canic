@@ -1,5 +1,8 @@
 #[cfg(test)]
-use crate::storage::stable::state::subnet::ControlPlaneSubnetStateData;
+use crate::storage::stable::state::subnet::{
+    ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord, WasmStoreGcRecord,
+    WasmStoreRecord,
+};
 use crate::{
     dto::{state::SubnetStateResponse, template::WasmStorePublicationStateResponse},
     ids::{WasmStoreBinding, WasmStoreGcMode},
@@ -13,6 +16,41 @@ use canic_core::{
     cdk::types::Principal,
     control_plane_support::error::{InternalError, InternalErrorOrigin},
 };
+
+///
+/// PublicationStoreStateTestInput
+///
+/// Ops-owned test input for publication-store lifecycle state.
+///
+
+#[cfg(test)]
+pub struct PublicationStoreStateTestInput {
+    pub active_binding: Option<WasmStoreBinding>,
+    pub detached_binding: Option<WasmStoreBinding>,
+    pub retired_binding: Option<WasmStoreBinding>,
+    pub generation: u64,
+    pub changed_at: u64,
+    pub retired_at: u64,
+}
+
+///
+/// WasmStoreStateTestInput
+///
+/// Ops-owned test input for one runtime-managed Wasm store.
+///
+
+#[cfg(test)]
+pub struct WasmStoreStateTestInput {
+    pub binding: WasmStoreBinding,
+    pub pid: Principal,
+    pub created_at: u64,
+    pub gc_mode: WasmStoreGcMode,
+    pub gc_changed_at: u64,
+    pub prepared_at: Option<u64>,
+    pub started_at: Option<u64>,
+    pub completed_at: Option<u64>,
+    pub runs_completed: u32,
+}
 
 ///
 /// SubnetStateOps
@@ -140,7 +178,37 @@ impl SubnetStateOps {
     }
 
     #[cfg(test)]
-    pub fn import(data: ControlPlaneSubnetStateData) {
-        SubnetState::import(data);
+    pub fn import_test_state(
+        publication_store: PublicationStoreStateTestInput,
+        wasm_stores: Vec<WasmStoreStateTestInput>,
+    ) {
+        SubnetState::import(ControlPlaneSubnetStateData {
+            record: SubnetStateRecord {
+                publication_store: PublicationStoreStateRecord {
+                    active_binding: publication_store.active_binding,
+                    detached_binding: publication_store.detached_binding,
+                    retired_binding: publication_store.retired_binding,
+                    generation: publication_store.generation,
+                    changed_at: publication_store.changed_at,
+                    retired_at: publication_store.retired_at,
+                },
+                wasm_stores: wasm_stores
+                    .into_iter()
+                    .map(|store| WasmStoreRecord {
+                        binding: store.binding,
+                        pid: store.pid,
+                        created_at: store.created_at,
+                        gc: WasmStoreGcRecord {
+                            mode: store.gc_mode,
+                            changed_at: store.gc_changed_at,
+                            prepared_at: store.prepared_at,
+                            started_at: store.started_at,
+                            completed_at: store.completed_at,
+                            runs_completed: store.runs_completed,
+                        },
+                    })
+                    .collect(),
+            },
+        });
     }
 }

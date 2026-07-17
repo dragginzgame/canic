@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.3` bounds ICP-refill lookup and metric work, preserves renewal-timer
+  failure diagnostics, and restores the publication-test layering boundary.
+
 - `0.93.2` is potentially breaking: it closes Wasm-store retirement races and
   hard-cuts restore receipts that omit an explicit outcome or positive attempt
   identity.

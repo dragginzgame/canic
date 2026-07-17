@@ -19,7 +19,10 @@ use crate::{
     },
     workflow::{
         env::EnvWorkflow,
-        runtime::{RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary},
+        runtime::{
+            RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary,
+            rebuild_derived_storage_indexes,
+        },
     },
 };
 
@@ -41,6 +44,7 @@ pub fn init_nonroot_canister(
             format!("memory init failed: {err}"),
         )
     })?;
+    rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 init: {}", canister_role);
     log_memory_summary();
@@ -110,6 +114,7 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
     with_role_attestation_refresh: bool,
 ) -> Result<(), InternalError> {
+    rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
     crate::log!(
         Topic::Init,

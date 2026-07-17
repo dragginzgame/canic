@@ -16,14 +16,116 @@ use crate::{
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ops::storage::StorageOpsError,
     storage::stable::icp_refill::{
-        IcpRefillEntryRecord, IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordStatus,
-        IcpRefillRecords,
+        IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordStatus, IcpRefillRecords,
     },
     view::icp_refill::IcpRefillOperation,
 };
+use std::{cell::RefCell, collections::BTreeMap};
 use thiserror::Error as ThisError;
 
 const ERROR_MESSAGE_MAX_CHARS: usize = 512;
+
+thread_local! {
+    static ICP_REFILL_DERIVED_INDEX: RefCell<IcpRefillDerivedIndex> =
+        RefCell::new(IcpRefillDerivedIndex::default());
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct IcpRefillActiveKey {
+    source_canister: Principal,
+    source_subaccount: Option<Subaccount>,
+    target_canister: Principal,
+}
+
+impl IcpRefillActiveKey {
+    const fn from_record(record: &IcpRefillRecord) -> Self {
+        Self {
+            source_canister: record.source_canister,
+            source_subaccount: record.source_subaccount,
+            target_canister: record.target_canister,
+        }
+    }
+
+    const fn new(
+        source_canister: Principal,
+        source_subaccount: Option<Subaccount>,
+        target_canister: Principal,
+    ) -> Self {
+        Self {
+            source_canister,
+            source_subaccount,
+            target_canister,
+        }
+    }
+}
+
+///
+/// IcpRefillMetricStatusCount
+///
+/// Derived count for one persisted ICP-refill status and error combination.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IcpRefillMetricStatusCount {
+    pub status: IcpRefillRecordStatus,
+    pub error_code: Option<IcpRefillRecordErrorCode>,
+    pub count: u64,
+}
+
+///
+/// IcpRefillMetricErrorCount
+///
+/// Derived count for one persisted ICP-refill error code.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IcpRefillMetricErrorCount {
+    pub error_code: IcpRefillRecordErrorCode,
+    pub count: u64,
+}
+
+///
+/// IcpRefillMetricTargetTotal
+///
+/// Derived cumulative amount and completed-cycle totals for one refill target.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IcpRefillMetricTargetTotal {
+    pub target_canister: Principal,
+    pub amount_e8s: u128,
+    pub cycles_sent: Option<u128>,
+}
+
+///
+/// IcpRefillMetricSnapshot
+///
+/// Bounded-by-dimension metric projection maintained with refill record writes.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct IcpRefillMetricSnapshot {
+    pub statuses: Vec<IcpRefillMetricStatusCount>,
+    pub errors: Vec<IcpRefillMetricErrorCount>,
+    pub targets: Vec<IcpRefillMetricTargetTotal>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct IcpRefillTargetTotals {
+    amount_e8s: u128,
+    cycles_sent: u128,
+    completed_cycles_records: u64,
+}
+
+#[derive(Default)]
+struct IcpRefillDerivedIndex {
+    operation_ids: BTreeMap<[u8; 32], u64>,
+    active_operations: BTreeMap<IcpRefillActiveKey, u64>,
+    status_counts: BTreeMap<(IcpRefillRecordStatus, Option<IcpRefillRecordErrorCode>), u64>,
+    error_counts: BTreeMap<IcpRefillRecordErrorCode, u64>,
+    target_totals: BTreeMap<Principal, IcpRefillTargetTotals>,
+    max_id: u64,
+}
 
 ///
 /// IcpRefillRecordOpsError
@@ -37,8 +139,30 @@ pub enum IcpRefillRecordOpsError {
     #[error("ICP refill conflicts with active record {id} for the same source and target")]
     ConcurrentOperation { id: u64 },
 
+    #[error(
+        "ICP refill active-operation index conflicts between records {existing_id} and {conflicting_id}"
+    )]
+    DuplicateActiveIndex {
+        existing_id: u64,
+        conflicting_id: u64,
+    },
+
+    #[error(
+        "ICP refill operation index conflicts between records {existing_id} and {conflicting_id}"
+    )]
+    DuplicateOperationIndex {
+        existing_id: u64,
+        conflicting_id: u64,
+    },
+
     #[error("ICP refill record id space exhausted")]
     IdOverflow,
+
+    #[error("ICP refill {index} index points to missing record {id}")]
+    IndexRecordMissing { index: &'static str, id: u64 },
+
+    #[error("ICP refill {index} index does not match record {id}")]
+    IndexRecordMismatch { index: &'static str, id: u64 },
 
     #[error("ICP refill operation id conflicts with existing record {id}")]
     OperationConflict { id: u64 },
@@ -236,8 +360,16 @@ impl From<IcpRefillOperationCreateInput> for IcpRefillRecordCreateInput {
 pub struct IcpRefillStoreOps;
 
 impl IcpRefillStoreOps {
-    pub fn find_by_operation_id(operation_id: [u8; 32]) -> Option<IcpRefillOperation> {
-        IcpRefillRecordOps::find_by_operation_id(operation_id).map(record_to_operation)
+    /// Rebuild all heap-only lookup and metric indexes from canonical records.
+    pub fn rebuild_indexes() -> Result<(), InternalError> {
+        IcpRefillRecordOps::rebuild_indexes()?;
+        Ok(())
+    }
+
+    pub fn find_by_operation_id(
+        operation_id: [u8; 32],
+    ) -> Result<Option<IcpRefillOperation>, InternalError> {
+        Ok(IcpRefillRecordOps::find_by_operation_id(operation_id)?.map(record_to_operation))
     }
 
     pub fn validate_retry_request_matches_operation(
@@ -269,17 +401,19 @@ impl IcpRefillStoreOps {
         source_subaccount: Option<Subaccount>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
-    ) -> bool {
-        IcpRefillRecordOps::has_active_for_key(
+    ) -> Result<bool, InternalError> {
+        Ok(IcpRefillRecordOps::has_active_for_key(
             source_canister,
             source_subaccount,
             target_canister,
             except_operation_id,
-        )
+        )?)
     }
 
-    pub fn find_resumable_hub_self_refill(self_pid: Principal) -> Option<IcpRefillOperation> {
-        IcpRefillRecordOps::find_resumable_hub_self_refill(self_pid).map(record_to_operation)
+    pub fn find_resumable_hub_self_refill(
+        self_pid: Principal,
+    ) -> Result<Option<IcpRefillOperation>, InternalError> {
+        Ok(IcpRefillRecordOps::find_resumable_hub_self_refill(self_pid)?.map(record_to_operation))
     }
 
     #[must_use]
@@ -481,6 +615,181 @@ impl IcpRefillStoreOps {
     }
 }
 
+impl IcpRefillDerivedIndex {
+    fn from_records(
+        records: impl IntoIterator<Item = IcpRefillRecord>,
+    ) -> Result<Self, IcpRefillRecordOpsError> {
+        let mut index = Self::default();
+        for record in records {
+            index.add_record(&record)?;
+        }
+        Ok(index)
+    }
+
+    fn replace_record(
+        &mut self,
+        previous: Option<&IcpRefillRecord>,
+        record: &IcpRefillRecord,
+    ) -> Result<(), IcpRefillRecordOpsError> {
+        self.validate_record(record)?;
+        if let Some(previous) = previous {
+            self.remove_record(previous);
+        }
+        self.add_record_unchecked(record);
+        Ok(())
+    }
+
+    fn add_record(&mut self, record: &IcpRefillRecord) -> Result<(), IcpRefillRecordOpsError> {
+        self.validate_record(record)?;
+        self.add_record_unchecked(record);
+        Ok(())
+    }
+
+    fn validate_record(&self, record: &IcpRefillRecord) -> Result<(), IcpRefillRecordOpsError> {
+        if let Some(existing_id) = self.operation_ids.get(&record.operation_id)
+            && *existing_id != record.id
+        {
+            return Err(IcpRefillRecordOpsError::DuplicateOperationIndex {
+                existing_id: *existing_id,
+                conflicting_id: record.id,
+            });
+        }
+
+        let active_key = IcpRefillActiveKey::from_record(record);
+        if record_is_resumable(record)
+            && let Some(existing_id) = self.active_operations.get(&active_key)
+            && *existing_id != record.id
+        {
+            return Err(IcpRefillRecordOpsError::DuplicateActiveIndex {
+                existing_id: *existing_id,
+                conflicting_id: record.id,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn add_record_unchecked(&mut self, record: &IcpRefillRecord) {
+        let active_key = IcpRefillActiveKey::from_record(record);
+        self.operation_ids.insert(record.operation_id, record.id);
+        if record_is_resumable(record) {
+            self.active_operations.insert(active_key, record.id);
+        }
+        let status_count = self
+            .status_counts
+            .entry((record.status, record.error_code))
+            .or_default();
+        *status_count = status_count.saturating_add(1);
+        if let Some(error_code) = record.error_code {
+            let count = self.error_counts.entry(error_code).or_default();
+            *count = count.saturating_add(1);
+        }
+        let totals = self
+            .target_totals
+            .entry(record.target_canister)
+            .or_default();
+        totals.amount_e8s = totals
+            .amount_e8s
+            .saturating_add(u128::from(record.amount_e8s));
+        totals.cycles_sent = totals
+            .cycles_sent
+            .saturating_add(completed_cycles_sent(record));
+        if record.status == IcpRefillRecordStatus::Completed && record.cycles_sent.is_some() {
+            totals.completed_cycles_records = totals.completed_cycles_records.saturating_add(1);
+        }
+        self.max_id = self.max_id.max(record.id);
+    }
+
+    fn remove_record(&mut self, record: &IcpRefillRecord) {
+        if self.operation_ids.get(&record.operation_id) == Some(&record.id) {
+            self.operation_ids.remove(&record.operation_id);
+        }
+        let active_key = IcpRefillActiveKey::from_record(record);
+        if self.active_operations.get(&active_key) == Some(&record.id) {
+            self.active_operations.remove(&active_key);
+        }
+        decrement_count(&mut self.status_counts, &(record.status, record.error_code));
+        if let Some(error_code) = record.error_code {
+            decrement_count(&mut self.error_counts, &error_code);
+        }
+        if let Some(totals) = self.target_totals.get_mut(&record.target_canister) {
+            totals.amount_e8s = totals
+                .amount_e8s
+                .saturating_sub(u128::from(record.amount_e8s));
+            totals.cycles_sent = totals
+                .cycles_sent
+                .saturating_sub(completed_cycles_sent(record));
+            if record.status == IcpRefillRecordStatus::Completed && record.cycles_sent.is_some() {
+                totals.completed_cycles_records = totals.completed_cycles_records.saturating_sub(1);
+            }
+            if *totals == IcpRefillTargetTotals::default() {
+                self.target_totals.remove(&record.target_canister);
+            }
+        }
+    }
+
+    fn metric_snapshot(&self) -> IcpRefillMetricSnapshot {
+        IcpRefillMetricSnapshot {
+            statuses: self
+                .status_counts
+                .iter()
+                .map(|((status, error_code), count)| IcpRefillMetricStatusCount {
+                    status: *status,
+                    error_code: *error_code,
+                    count: *count,
+                })
+                .collect(),
+            errors: self
+                .error_counts
+                .iter()
+                .map(|(error_code, count)| IcpRefillMetricErrorCount {
+                    error_code: *error_code,
+                    count: *count,
+                })
+                .collect(),
+            targets: self
+                .target_totals
+                .iter()
+                .map(|(target_canister, totals)| IcpRefillMetricTargetTotal {
+                    target_canister: *target_canister,
+                    amount_e8s: totals.amount_e8s,
+                    cycles_sent: (totals.completed_cycles_records > 0)
+                        .then_some(totals.cycles_sent),
+                })
+                .collect(),
+        }
+    }
+}
+
+fn decrement_count<K: Ord>(counts: &mut BTreeMap<K, u64>, key: &K) {
+    let remove = counts.get_mut(key).is_some_and(|count| {
+        *count = count.saturating_sub(1);
+        *count == 0
+    });
+    if remove {
+        counts.remove(key);
+    }
+}
+
+fn record_is_resumable(record: &IcpRefillRecord) -> bool {
+    icp_refill_outcome_is_resumable(
+        record.status.into(),
+        record.error_code.map(Into::into),
+        record.ledger_block_index.is_some(),
+    )
+}
+
+fn completed_cycles_sent(record: &IcpRefillRecord) -> u128 {
+    if record.status != IcpRefillRecordStatus::Completed {
+        return 0;
+    }
+    record
+        .cycles_sent
+        .as_ref()
+        .map(|cycles| u128::try_from(cycles.0.clone()).unwrap_or(u128::MAX))
+        .unwrap_or_default()
+}
+
 ///
 /// IcpRefillRecordOps
 ///
@@ -491,8 +800,23 @@ impl IcpRefillStoreOps {
 pub struct IcpRefillRecordOps;
 
 impl IcpRefillRecordOps {
-    pub fn insert(record: IcpRefillRecord) -> Option<IcpRefillRecord> {
-        IcpRefillRecords::insert(record)
+    pub fn rebuild_indexes() -> Result<(), IcpRefillRecordOpsError> {
+        let records = IcpRefillRecords::data(0, usize::MAX)
+            .entries
+            .into_iter()
+            .map(|entry| entry.record);
+        let rebuilt = IcpRefillDerivedIndex::from_records(records)?;
+        ICP_REFILL_DERIVED_INDEX.with_borrow_mut(|index| *index = rebuilt);
+        Ok(())
+    }
+
+    pub fn insert(
+        record: IcpRefillRecord,
+    ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
+        let previous = IcpRefillRecords::get(record.id);
+        ICP_REFILL_DERIVED_INDEX
+            .with_borrow_mut(|index| index.replace_record(previous.as_ref(), &record))?;
+        Ok(IcpRefillRecords::insert(record))
     }
 
     #[must_use]
@@ -500,17 +824,8 @@ impl IcpRefillRecordOps {
         IcpRefillRecords::get(id)
     }
 
-    #[must_use]
-    pub fn entries() -> Vec<IcpRefillEntryRecord> {
-        IcpRefillRecords::data(0, usize::MAX).entries
-    }
-
-    #[must_use]
-    pub fn records() -> Vec<IcpRefillRecord> {
-        Self::entries()
-            .into_iter()
-            .map(|entry| entry.record)
-            .collect()
+    pub fn metric_snapshot() -> IcpRefillMetricSnapshot {
+        ICP_REFILL_DERIVED_INDEX.with_borrow(IcpRefillDerivedIndex::metric_snapshot)
     }
 
     #[must_use]
@@ -518,10 +833,22 @@ impl IcpRefillRecordOps {
         u128::try_from(value.0.clone()).unwrap_or(u128::MAX)
     }
 
-    pub fn find_by_operation_id(operation_id: [u8; 32]) -> Option<IcpRefillRecord> {
-        Self::records()
-            .into_iter()
-            .find(|record| record.operation_id == operation_id)
+    pub fn find_by_operation_id(
+        operation_id: [u8; 32],
+    ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
+        let id = ICP_REFILL_DERIVED_INDEX
+            .with_borrow(|index| index.operation_ids.get(&operation_id).copied());
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let record = indexed_record("operation", id)?;
+        if record.operation_id != operation_id {
+            return Err(IcpRefillRecordOpsError::IndexRecordMismatch {
+                index: "operation",
+                id,
+            });
+        }
+        Ok(Some(record))
     }
 
     pub fn has_active_for_key(
@@ -529,38 +856,31 @@ impl IcpRefillRecordOps {
         source_subaccount: Option<Subaccount>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
-    ) -> bool {
-        Self::find_active_for_key(
+    ) -> Result<bool, IcpRefillRecordOpsError> {
+        Ok(Self::find_active_for_key(
             source_canister,
             source_subaccount,
             target_canister,
-            except_operation_id,
-        )
-        .is_some()
+            Some(except_operation_id),
+        )?
+        .is_some())
     }
 
-    pub fn find_resumable_hub_self_refill(self_pid: Principal) -> Option<IcpRefillRecord> {
-        Self::records().into_iter().find(|record| {
-            record.source_canister == self_pid
-                && record.source_subaccount.is_none()
-                && record.target_canister == self_pid
-                && Self::is_resumable(record)
-        })
+    pub fn find_resumable_hub_self_refill(
+        self_pid: Principal,
+    ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
+        Self::find_active_for_key(self_pid, None, self_pid, None)
     }
 
     #[must_use]
     pub fn is_resumable(record: &IcpRefillRecord) -> bool {
-        icp_refill_outcome_is_resumable(
-            record.status.into(),
-            record.error_code.map(Into::into),
-            record.ledger_block_index.is_some(),
-        )
+        record_is_resumable(record)
     }
 
     pub fn create_or_get(
         input: IcpRefillRecordCreateInput,
     ) -> Result<IcpRefillRecord, IcpRefillRecordOpsError> {
-        if let Some(existing) = Self::find_by_operation_id(input.operation_id) {
+        if let Some(existing) = Self::find_by_operation_id(input.operation_id)? {
             ensure_compatible_operation(&existing, &input)?;
             return Ok(existing);
         }
@@ -569,8 +889,8 @@ impl IcpRefillRecordOps {
             input.source_canister,
             input.source_subaccount,
             input.target_canister,
-            input.operation_id,
-        ) {
+            Some(input.operation_id),
+        )? {
             return Err(IcpRefillRecordOpsError::ConcurrentOperation { id: existing.id });
         }
 
@@ -601,7 +921,7 @@ impl IcpRefillRecordOps {
             updated_at_ns: input.now_ns,
         };
 
-        Self::insert(record.clone());
+        Self::insert(record.clone())?;
 
         Ok(record)
     }
@@ -610,15 +930,25 @@ impl IcpRefillRecordOps {
         source_canister: Principal,
         source_subaccount: Option<Subaccount>,
         target_canister: Principal,
-        except_operation_id: [u8; 32],
-    ) -> Option<IcpRefillRecord> {
-        Self::records().into_iter().find(|record| {
-            record.source_canister == source_canister
-                && record.source_subaccount == source_subaccount
-                && record.target_canister == target_canister
-                && Self::is_resumable(record)
-                && record.operation_id != except_operation_id
-        })
+        except_operation_id: Option<[u8; 32]>,
+    ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
+        let key = IcpRefillActiveKey::new(source_canister, source_subaccount, target_canister);
+        let id = ICP_REFILL_DERIVED_INDEX
+            .with_borrow(|index| index.active_operations.get(&key).copied());
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let record = indexed_record("active operation", id)?;
+        if IcpRefillActiveKey::from_record(&record) != key || !Self::is_resumable(&record) {
+            return Err(IcpRefillRecordOpsError::IndexRecordMismatch {
+                index: "active operation",
+                id,
+            });
+        }
+        if except_operation_id == Some(record.operation_id) {
+            return Ok(None);
+        }
+        Ok(Some(record))
     }
 
     pub fn mark_transferred(
@@ -787,14 +1117,17 @@ impl IcpRefillRecordOps {
 }
 
 fn next_id() -> Result<u64, IcpRefillRecordOpsError> {
-    IcpRefillRecords::data(0, usize::MAX)
-        .entries
-        .into_iter()
-        .map(|entry| entry.key.0)
-        .max()
-        .unwrap_or(0)
+    ICP_REFILL_DERIVED_INDEX
+        .with_borrow(|index| index.max_id)
         .checked_add(1)
         .ok_or(IcpRefillRecordOpsError::IdOverflow)
+}
+
+fn indexed_record(
+    index: &'static str,
+    id: u64,
+) -> Result<IcpRefillRecord, IcpRefillRecordOpsError> {
+    IcpRefillRecords::get(id).ok_or(IcpRefillRecordOpsError::IndexRecordMissing { index, id })
 }
 
 fn update_record(
@@ -806,7 +1139,7 @@ fn update_record(
         IcpRefillRecordOps::get(id).ok_or(IcpRefillRecordOpsError::RecordNotFound(id))?;
     update(&mut record);
     record.updated_at_ns = now_ns;
-    IcpRefillRecordOps::insert(record.clone());
+    IcpRefillRecordOps::insert(record.clone())?;
     Ok(record)
 }
 
@@ -904,5 +1237,172 @@ fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {
         status: record.status.into(),
         error_code: record.error_code.map(Into::into),
         error_message: record.error_message,
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::seams;
+
+    fn p(id: u8) -> Principal {
+        Principal::from_slice(&[id; 29])
+    }
+
+    fn record(id: u64, operation_id: [u8; 32], target: Principal) -> IcpRefillRecord {
+        IcpRefillRecord {
+            id,
+            operation_id,
+            source_canister: p(u8::try_from(id).expect("test id fits")),
+            source_subaccount: None,
+            target_canister: target,
+            ledger_canister_id: p(20),
+            cmc_canister_id: p(21),
+            cmc_to_account_owner: p(21),
+            cmc_to_account_subaccount: Some([22; 32]),
+            amount_e8s: id.saturating_mul(100),
+            fee_e8s: 10_000,
+            memo: vec![23],
+            created_at_time_ns: id,
+            ledger_block_index: None,
+            notify_attempts: 0,
+            cycles_sent: None,
+            status: IcpRefillRecordStatus::Requested,
+            error_code: None,
+            error_message: None,
+            refund_block_index: None,
+            transaction_too_old_min_block_index: None,
+            created_at_ns: id,
+            updated_at_ns: id,
+        }
+    }
+
+    fn reset_records() {
+        IcpRefillRecords::clear_for_tests();
+        ICP_REFILL_DERIVED_INDEX.with_borrow_mut(|index| *index = IcpRefillDerivedIndex::default());
+    }
+
+    #[test]
+    fn rebuild_restores_bounded_lookup_id_and_metric_indexes() {
+        let _guard = seams::lock();
+        reset_records();
+        let target = p(30);
+        let mut completed = record(1, [1; 32], target);
+        completed.status = IcpRefillRecordStatus::Completed;
+        completed.cycles_sent = Some(Nat::from(4_000_u64));
+        let requested = record(2, [2; 32], target);
+        let _ = IcpRefillRecords::insert(completed);
+        let _ = IcpRefillRecords::insert(requested.clone());
+
+        IcpRefillRecordOps::rebuild_indexes().expect("rebuild derived indexes");
+
+        assert_eq!(
+            IcpRefillRecordOps::find_by_operation_id([1; 32])
+                .expect("operation lookup")
+                .map(|record| record.id),
+            Some(1)
+        );
+        assert!(
+            IcpRefillRecordOps::has_active_for_key(
+                requested.source_canister,
+                requested.source_subaccount,
+                requested.target_canister,
+                [9; 32],
+            )
+            .expect("active lookup")
+        );
+        assert_eq!(next_id().expect("next id"), 3);
+        let metrics = IcpRefillRecordOps::metric_snapshot();
+        assert_eq!(metrics.targets.len(), 1);
+        assert_eq!(metrics.targets[0].amount_e8s, 300);
+        assert_eq!(metrics.targets[0].cycles_sent, Some(4_000));
+        reset_records();
+    }
+
+    #[test]
+    fn rebuild_rejects_duplicate_operation_identity() {
+        let _guard = seams::lock();
+        reset_records();
+        let mut first = record(1, [7; 32], p(31));
+        first.status = IcpRefillRecordStatus::Completed;
+        let mut second = record(2, [7; 32], p(32));
+        second.status = IcpRefillRecordStatus::Completed;
+        let _ = IcpRefillRecords::insert(first);
+        let _ = IcpRefillRecords::insert(second);
+
+        let err = IcpRefillRecordOps::rebuild_indexes()
+            .expect_err("duplicate operation identity must fail closed");
+
+        assert!(matches!(
+            err,
+            IcpRefillRecordOpsError::DuplicateOperationIndex {
+                existing_id: 1,
+                conflicting_id: 2,
+            }
+        ));
+        reset_records();
+    }
+
+    #[test]
+    fn rebuild_rejects_duplicate_active_refill_identity() {
+        let _guard = seams::lock();
+        reset_records();
+        let first = record(1, [7; 32], p(31));
+        let mut second = record(2, [8; 32], first.target_canister);
+        second.source_canister = first.source_canister;
+        second.source_subaccount = first.source_subaccount;
+        let _ = IcpRefillRecords::insert(first);
+        let _ = IcpRefillRecords::insert(second);
+
+        let err = IcpRefillRecordOps::rebuild_indexes()
+            .expect_err("duplicate active refill identity must fail closed");
+
+        assert!(matches!(
+            err,
+            IcpRefillRecordOpsError::DuplicateActiveIndex {
+                existing_id: 1,
+                conflicting_id: 2,
+            }
+        ));
+        reset_records();
+    }
+
+    #[test]
+    fn terminal_transition_removes_active_index_and_updates_metrics() {
+        let _guard = seams::lock();
+        reset_records();
+        let requested = record(1, [8; 32], p(33));
+        IcpRefillRecordOps::insert(requested.clone()).expect("insert requested record");
+        assert!(
+            IcpRefillRecordOps::has_active_for_key(
+                requested.source_canister,
+                requested.source_subaccount,
+                requested.target_canister,
+                [9; 32],
+            )
+            .expect("active lookup")
+        );
+
+        IcpRefillRecordOps::mark_completed(1, Nat::from(5_000_u64), 2).expect("complete refill");
+
+        assert!(
+            !IcpRefillRecordOps::has_active_for_key(
+                requested.source_canister,
+                requested.source_subaccount,
+                requested.target_canister,
+                [9; 32],
+            )
+            .expect("active lookup")
+        );
+        let metrics = IcpRefillRecordOps::metric_snapshot();
+        assert_eq!(metrics.targets[0].cycles_sent, Some(5_000));
+        assert!(metrics.statuses.iter().any(|status| {
+            status.status == IcpRefillRecordStatus::Completed && status.count == 1
+        }));
+        reset_records();
     }
 }

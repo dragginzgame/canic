@@ -125,7 +125,7 @@ impl ManualRefillPreflight {
             0,
             request,
             None,
-            active_for_request(request),
+            active_for_request(request)?,
             AppStateOps::cycles_funding_enabled(),
             funding_cooldown_retry_after_secs(request, IcOps::now_secs())?,
         );
@@ -312,7 +312,7 @@ fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {
     IcpRefillWorkflowError::PolicyDenied(violation).into()
 }
 
-fn active_for_request(request: &IcpRefillRequest) -> bool {
+fn active_for_request(request: &IcpRefillRequest) -> Result<bool, InternalError> {
     IcpRefillStoreOps::has_active_for_key(
         request.source_canister,
         request.source_subaccount,

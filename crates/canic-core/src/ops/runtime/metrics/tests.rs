@@ -10,52 +10,58 @@ use crate::ops::runtime::metrics::sharding::{
     ShardingMetricOperation, ShardingMetricOutcome, ShardingMetricReason, ShardingMetrics,
 };
 use crate::{
-    cdk::candid::Nat,
     cdk::types::Principal,
-    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
     ids::{AccessMetricKind, CanisterRole, EndpointCall, EndpointCallKind, EndpointId},
-    ops::runtime::metrics::{
-        auth::{AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface},
-        canister_ops::{
-            CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+    ops::{
+        runtime::metrics::{
+            auth::{AuthMetricOperation, AuthMetricOutcome, AuthMetricReason, AuthMetricSurface},
+            canister_ops::{
+                CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
+            },
+            cascade::{CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason},
+            cycles_funding::CyclesFundingDeniedReason,
+            delegated_auth::{
+                DelegatedAuthMetricOperation, DelegatedAuthMetricOutcome, DelegatedAuthMetricReason,
+            },
+            directory::{DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason},
+            http::HttpMethod,
+            icp_refill::entries_from_snapshot,
+            intent::{
+                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
+            },
+            lifecycle::{
+                LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
+                LifecycleMetricStage,
+            },
+            management_call::{
+                ManagementCallMetricOperation, ManagementCallMetricOutcome,
+                ManagementCallMetricReason,
+            },
+            platform_call::{
+                PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
+                PlatformCallMetricSurface,
+            },
+            pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason},
+            provisioning::{
+                ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
+            },
+            replay::{ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason},
+            root_capability::{
+                RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetricProofMode,
+            },
+            scaling::{ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason},
+            timer::TimerMode,
+            wasm_store::{
+                WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
+                WasmStoreMetricSource,
+            },
         },
-        cascade::{CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason},
-        cycles_funding::CyclesFundingDeniedReason,
-        delegated_auth::{
-            DelegatedAuthMetricOperation, DelegatedAuthMetricOutcome, DelegatedAuthMetricReason,
-        },
-        directory::{DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason},
-        http::HttpMethod,
-        icp_refill::entries_from_records,
-        intent::{
-            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
-        },
-        lifecycle::{
-            LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricStage,
-        },
-        management_call::{
-            ManagementCallMetricOperation, ManagementCallMetricOutcome, ManagementCallMetricReason,
-        },
-        platform_call::{
-            PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
-            PlatformCallMetricSurface,
-        },
-        pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason},
-        provisioning::{
-            ProvisioningMetricOperation, ProvisioningMetricOutcome, ProvisioningMetricReason,
-        },
-        replay::{ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason},
-        root_capability::{
-            RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetricProofMode,
-        },
-        scaling::{ScalingMetricOperation, ScalingMetricOutcome, ScalingMetricReason},
-        timer::TimerMode,
-        wasm_store::{
-            WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason,
-            WasmStoreMetricSource,
+        storage::icp_refill::{
+            IcpRefillMetricErrorCount, IcpRefillMetricSnapshot, IcpRefillMetricStatusCount,
+            IcpRefillMetricTargetTotal,
         },
     },
-    storage::stable::icp_refill::IcpRefillRecord,
+    storage::stable::icp_refill::{IcpRefillRecordErrorCode, IcpRefillRecordStatus},
 };
 use std::time::Duration;
 
@@ -585,32 +591,36 @@ fn icp_refill_metrics_project_bounded_record_state() {
     let other_target = Principal::from_slice(&[23; 29]);
     let entries = prefix_entries(
         "cycles_funding",
-        entries_from_records(&[
-            refill_record(
-                1,
-                target,
-                IcpRefillStatus::Completed,
-                None,
-                100,
-                Some(4_000),
-            ),
-            refill_record(
-                2,
-                target,
-                IcpRefillStatus::Failed,
-                Some(IcpRefillErrorCode::NotifyFailed),
-                200,
-                None,
-            ),
-            refill_record(
-                3,
-                other_target,
-                IcpRefillStatus::Failed,
-                Some(IcpRefillErrorCode::NotifyFailed),
-                300,
-                None,
-            ),
-        ]),
+        entries_from_snapshot(&IcpRefillMetricSnapshot {
+            statuses: vec![
+                IcpRefillMetricStatusCount {
+                    status: IcpRefillRecordStatus::Completed,
+                    error_code: None,
+                    count: 1,
+                },
+                IcpRefillMetricStatusCount {
+                    status: IcpRefillRecordStatus::Failed,
+                    error_code: Some(IcpRefillRecordErrorCode::NotifyFailed),
+                    count: 2,
+                },
+            ],
+            errors: vec![IcpRefillMetricErrorCount {
+                error_code: IcpRefillRecordErrorCode::NotifyFailed,
+                count: 2,
+            }],
+            targets: vec![
+                IcpRefillMetricTargetTotal {
+                    target_canister: target,
+                    amount_e8s: 300,
+                    cycles_sent: Some(4_000),
+                },
+                IcpRefillMetricTargetTotal {
+                    target_canister: other_target,
+                    amount_e8s: 300,
+                    cycles_sent: None,
+                },
+            ],
+        }),
     );
 
     assert_metric_count(
@@ -859,41 +869,6 @@ fn reset_for_tests_clears_all_metric_families() {
 
     for kind in all_metric_kinds() {
         assert!(entries(*kind).is_empty());
-    }
-}
-
-fn refill_record(
-    id: u64,
-    target_canister: Principal,
-    status: IcpRefillStatus,
-    error_code: Option<IcpRefillErrorCode>,
-    amount_e8s: u64,
-    cycles_sent: Option<u128>,
-) -> IcpRefillRecord {
-    IcpRefillRecord {
-        id,
-        operation_id: [u8::try_from(id).expect("test id fits"); 32],
-        source_canister: Principal::from_slice(&[11; 29]),
-        source_subaccount: None,
-        target_canister,
-        ledger_canister_id: Principal::from_slice(&[12; 29]),
-        cmc_canister_id: Principal::from_slice(&[13; 29]),
-        cmc_to_account_owner: Principal::from_slice(&[13; 29]),
-        cmc_to_account_subaccount: Some([14; 32]),
-        amount_e8s,
-        fee_e8s: 10_000,
-        memo: b"TPUP\0\0\0\0".to_vec(),
-        created_at_time_ns: id,
-        ledger_block_index: None,
-        notify_attempts: 0,
-        cycles_sent: cycles_sent.map(Nat::from),
-        status: status.into(),
-        error_code: error_code.map(Into::into),
-        error_message: None,
-        refund_block_index: None,
-        transaction_too_old_min_block_index: None,
-        created_at_ns: id,
-        updated_at_ns: id,
     }
 }
 

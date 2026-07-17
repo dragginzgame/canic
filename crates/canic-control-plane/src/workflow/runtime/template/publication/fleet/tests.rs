@@ -6,10 +6,8 @@ use crate::{
     },
     ids::{CanisterRole, TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion},
     ids::{WasmStoreBinding, WasmStoreGcMode},
-    ops::storage::state::subnet::SubnetStateOps,
-    storage::stable::state::subnet::{
-        ControlPlaneSubnetStateData, PublicationStoreStateRecord, SubnetStateRecord,
-        WasmStoreGcRecord, WasmStoreRecord,
+    ops::storage::state::subnet::{
+        PublicationStoreStateTestInput, SubnetStateOps, WasmStoreStateTestInput,
     },
     view::state::PublicationStoreStateView,
     workflow::runtime::template::publication::WasmStorePublicationWorkflow,
@@ -79,21 +77,23 @@ fn store(
     }
 }
 
+fn import_occupied_retired_slot() {
+    SubnetStateOps::import_test_state(
+        PublicationStoreStateTestInput {
+            active_binding: Some(WasmStoreBinding::new("active")),
+            detached_binding: Some(WasmStoreBinding::new("detached")),
+            retired_binding: Some(WasmStoreBinding::new("retired")),
+            generation: 3,
+            changed_at: 30,
+            retired_at: 20,
+        },
+        Vec::new(),
+    );
+}
+
 #[test]
 fn promotion_is_blocked_when_it_would_overwrite_retired_binding() {
-    SubnetStateOps::import(ControlPlaneSubnetStateData {
-        record: SubnetStateRecord {
-            publication_store: PublicationStoreStateRecord {
-                active_binding: Some(WasmStoreBinding::new("active")),
-                detached_binding: Some(WasmStoreBinding::new("detached")),
-                retired_binding: Some(WasmStoreBinding::new("retired")),
-                generation: 3,
-                changed_at: 30,
-                retired_at: 20,
-            },
-            wasm_stores: Vec::new(),
-        },
-    });
+    import_occupied_retired_slot();
 
     WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_promotion()
         .expect_err("promotion must fail closed while retired binding is still pending");
@@ -101,19 +101,7 @@ fn promotion_is_blocked_when_it_would_overwrite_retired_binding() {
 
 #[test]
 fn explicit_retirement_is_blocked_when_retired_binding_already_exists() {
-    SubnetStateOps::import(ControlPlaneSubnetStateData {
-        record: SubnetStateRecord {
-            publication_store: PublicationStoreStateRecord {
-                active_binding: Some(WasmStoreBinding::new("active")),
-                detached_binding: Some(WasmStoreBinding::new("detached")),
-                retired_binding: Some(WasmStoreBinding::new("retired")),
-                generation: 3,
-                changed_at: 30,
-                retired_at: 20,
-            },
-            wasm_stores: Vec::new(),
-        },
-    });
+    import_occupied_retired_slot();
 
     WasmStorePublicationWorkflow::ensure_retired_binding_slot_available_for_retirement()
         .expect_err("retirement must fail closed while an older retired binding exists");
@@ -121,19 +109,7 @@ fn explicit_retirement_is_blocked_when_retired_binding_already_exists() {
 
 #[test]
 fn clear_binding_reports_blocked_retired_slot() {
-    SubnetStateOps::import(ControlPlaneSubnetStateData {
-        record: SubnetStateRecord {
-            publication_store: PublicationStoreStateRecord {
-                active_binding: Some(WasmStoreBinding::new("active")),
-                detached_binding: Some(WasmStoreBinding::new("detached")),
-                retired_binding: Some(WasmStoreBinding::new("retired")),
-                generation: 3,
-                changed_at: 30,
-                retired_at: 20,
-            },
-            wasm_stores: Vec::new(),
-        },
-    });
+    import_occupied_retired_slot();
 
     WasmStorePublicationWorkflow::clear_current_publication_store_binding()
         .expect_err("clear must fail while it would overwrite a retired slot");
@@ -178,24 +154,27 @@ fn detached_and_retired_bindings_are_not_publication_candidates() {
 fn completed_gc_store_cannot_be_selected_or_reactivated() {
     let binding = WasmStoreBinding::new("finalized");
     let pid = Principal::from_slice(&[9; 29]);
-    SubnetStateOps::import(ControlPlaneSubnetStateData {
-        record: SubnetStateRecord {
-            publication_store: PublicationStoreStateRecord::default(),
-            wasm_stores: vec![WasmStoreRecord {
-                binding: binding.clone(),
-                pid,
-                created_at: 10,
-                gc: WasmStoreGcRecord {
-                    mode: WasmStoreGcMode::Complete,
-                    changed_at: 20,
-                    prepared_at: Some(11),
-                    started_at: Some(12),
-                    completed_at: Some(20),
-                    runs_completed: 1,
-                },
-            }],
+    SubnetStateOps::import_test_state(
+        PublicationStoreStateTestInput {
+            active_binding: None,
+            detached_binding: None,
+            retired_binding: None,
+            generation: 0,
+            changed_at: 0,
+            retired_at: 0,
         },
-    });
+        vec![WasmStoreStateTestInput {
+            binding: binding.clone(),
+            pid,
+            created_at: 10,
+            gc_mode: WasmStoreGcMode::Complete,
+            gc_changed_at: 20,
+            prepared_at: Some(11),
+            started_at: Some(12),
+            completed_at: Some(20),
+            runs_completed: 1,
+        }],
+    );
 
     let err = WasmStorePublicationWorkflow::set_current_publication_store_binding(binding.clone())
         .expect_err("completed gc store must not become active again");
