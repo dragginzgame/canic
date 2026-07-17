@@ -130,41 +130,6 @@ pub fn evaluate_root_replay(
     Ok(map_receipt_decision(decision))
 }
 
-/// evaluate_existing_root_replay
-///
-/// Evaluate only existing replay state, leaving fresh requests unreserved and
-/// otherwise unclassified for callers that must authorize before reserving.
-#[cfg(test)]
-pub fn evaluate_existing_root_replay(
-    input: RootReplayGuardInput,
-) -> Result<Option<ReplayDecision>, ReplayGuardError> {
-    if let Some(decision) = evaluate_cross_command_replay(&input) {
-        return Ok(Some(decision));
-    }
-
-    let now_ns = input.now_ns;
-    let expires_at_ns = now_ns.saturating_add(input.ttl_ns);
-    let actor = ReplayActor::direct_caller(input.caller);
-    let receipt_input = ReplayReceiptReserveInput::new(
-        input.command_kind,
-        input.operation_id,
-        actor,
-        input.payload_hash,
-        now_ns,
-    )
-    .with_expires_at_ns(expires_at_ns);
-
-    let decision = prepare_replay_receipt(receipt_input).map_err(
-        |ReplayReceiptStoreError::ReceiptDecodeFailed(message)| {
-            ReplayGuardError::ReceiptDecodeFailed(message)
-        },
-    )?;
-    match decision {
-        ReplayReceiptDecision::Fresh(_) => Ok(None),
-        other => Ok(Some(map_receipt_decision(other))),
-    }
-}
-
 fn evaluate_cross_command_replay(input: &RootReplayGuardInput) -> Option<ReplayDecision> {
     let actor = ReplayActor::direct_caller(input.caller);
     let matches = ReplayReceiptOps::list_by_actor_operation_excluding_command(

@@ -79,19 +79,6 @@ enum RootPreflight {
 }
 
 ///
-/// AuthorizationPipelineOrder
-///
-/// Ordering strategy for replay and authorization checks.
-///
-
-#[derive(Clone, Copy, Debug)]
-enum AuthorizationPipelineOrder {
-    #[cfg(test)]
-    AuthorizeThenReplay,
-    ReplayThenAuthorize,
-}
-
-///
 /// RootResponseWorkflow
 ///
 /// Workflow entry point for root-bound request execution.
@@ -109,20 +96,16 @@ impl RootResponseWorkflow {
             return Ok(Response::Cycles(response));
         }
 
-        Self::response_with_pipeline(capability, AuthorizationPipelineOrder::ReplayThenAuthorize)
-            .await
+        Self::response(capability).await
     }
 
-    async fn response_with_pipeline(
-        capability: RootCapability,
-        order: AuthorizationPipelineOrder,
-    ) -> Result<Response, InternalError> {
+    async fn response(capability: RootCapability) -> Result<Response, InternalError> {
         let ctx = Self::extract_root_context()?;
         crate::perf!("extract_context");
         let descriptor = capability.descriptor();
         crate::perf!("map_request");
 
-        let preflight = Self::preflight(&ctx, &capability, order)?;
+        let preflight = Self::preflight(&ctx, &capability)?;
         crate::perf!("preflight");
         let prepared = match preflight {
             RootPreflight::Fresh(prepared) => prepared,
@@ -175,54 +158,22 @@ impl RootResponseWorkflow {
     fn preflight(
         ctx: &RootContext,
         capability: &RootCapability,
-        order: AuthorizationPipelineOrder,
     ) -> Result<RootPreflight, InternalError> {
-        match order {
-            #[cfg(test)]
-            AuthorizationPipelineOrder::AuthorizeThenReplay => {
-                if let Some(preflight) = Self::check_existing_replay(ctx, capability)? {
-                    return match preflight {
-                        replay::ReplayPreflight::Fresh(_) => {
-                            unreachable!("existing replay probe cannot return fresh replay")
-                        }
-                        replay::ReplayPreflight::Cached(response) => {
-                            Ok(RootPreflight::Cached(response))
-                        }
-                    };
-                }
-                let authorized_cycles = Self::authorize_with_hint(ctx, capability)?;
-                match Self::check_replay(ctx, capability)? {
-                    replay::ReplayPreflight::Fresh(pending) => {
-                        Ok(RootPreflight::Fresh(PreparedExecution {
-                            pending,
-                            authorized_cycles,
-                        }))
+        match Self::check_replay(ctx, capability)? {
+            replay::ReplayPreflight::Fresh(pending) => {
+                let authorized_cycles = match Self::authorize_with_hint(ctx, capability) {
+                    Ok(authorized_cycles) => authorized_cycles,
+                    Err(err) => {
+                        Self::abort_replay(pending);
+                        return Err(err);
                     }
-                    replay::ReplayPreflight::Cached(response) => {
-                        Ok(RootPreflight::Cached(response))
-                    }
-                }
+                };
+                Ok(RootPreflight::Fresh(PreparedExecution {
+                    pending,
+                    authorized_cycles,
+                }))
             }
-            AuthorizationPipelineOrder::ReplayThenAuthorize => {
-                match Self::check_replay(ctx, capability)? {
-                    replay::ReplayPreflight::Fresh(pending) => {
-                        let authorized_cycles = match Self::authorize_with_hint(ctx, capability) {
-                            Ok(authorized_cycles) => authorized_cycles,
-                            Err(err) => {
-                                Self::abort_replay(pending);
-                                return Err(err);
-                            }
-                        };
-                        Ok(RootPreflight::Fresh(PreparedExecution {
-                            pending,
-                            authorized_cycles,
-                        }))
-                    }
-                    replay::ReplayPreflight::Cached(response) => {
-                        Ok(RootPreflight::Cached(response))
-                    }
-                }
-            }
+            replay::ReplayPreflight::Cached(response) => Ok(RootPreflight::Cached(response)),
         }
     }
 
@@ -260,14 +211,6 @@ impl RootResponseWorkflow {
         capability: &RootCapability,
     ) -> Result<replay::ReplayPreflight, InternalError> {
         replay::check_replay(ctx, capability)
-    }
-
-    #[cfg(test)]
-    fn check_existing_replay(
-        ctx: &RootContext,
-        capability: &RootCapability,
-    ) -> Result<Option<replay::ReplayPreflight>, InternalError> {
-        replay::check_existing_replay(ctx, capability)
     }
 
     fn commit_replay(pending: &ReplayPending, response: &Response) -> Result<(), InternalError> {
