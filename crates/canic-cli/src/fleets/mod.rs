@@ -79,10 +79,10 @@ pub enum FleetCommandError {
     UnknownRole { fleet: String, role: String },
 
     #[error("fleet create: {0}")]
-    Create(String),
+    Create(#[from] scaffold::ScaffoldCommandError),
 
     #[error("config: {0}")]
-    Config(String),
+    Config(#[from] crate::list::ListCommandError),
 
     #[error(transparent)]
     AdoptionReport(#[from] AdoptionReportError),
@@ -378,7 +378,7 @@ where
         return Ok(());
     }
 
-    scaffold::run_fleet_create(args).map_err(|err| FleetCommandError::Create(err.to_string()))
+    scaffold::run_fleet_create(args).map_err(FleetCommandError::from)
 }
 
 fn run_list<I>(args: I) -> Result<(), FleetCommandError>
@@ -407,7 +407,7 @@ fn run_config<I>(args: I) -> Result<(), FleetCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    crate::list::run_config(args).map_err(|err| FleetCommandError::Config(err.to_string()))
+    crate::list::run_config(args).map_err(FleetCommandError::from)
 }
 
 fn run_delete<I>(args: I) -> Result<(), FleetCommandError>

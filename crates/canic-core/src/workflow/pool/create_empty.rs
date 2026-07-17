@@ -12,8 +12,6 @@ use crate::{
         pool::{CreateEmptyPoolRequest, PoolAdminResponse},
         rpc::RootRequestMetadata,
     },
-    log,
-    log::Topic,
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
         ReplayPayloadHasher, ReplayReceipt,
@@ -275,6 +273,7 @@ fn commit_pool_create_empty_success(
 ) -> Result<(), InternalError> {
     let created_at = IcOps::now_secs();
     PoolOps::register_ready(pid, cycles, None, None, None, created_at);
+    CostGuardOps::complete(cost_permit, IcOps::now_secs())?;
     commit_receipt_response(
         token,
         POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
@@ -282,13 +281,6 @@ fn commit_pool_create_empty_success(
         secs_to_ns(IcOps::now_secs()),
     )
     .map_err(map_pool_create_empty_replay_store_error)?;
-    if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
-        log!(
-            Topic::CanisterPool,
-            Error,
-            "pool create cost guard completion failed pid={pid}: {err}"
-        );
-    }
     Ok(())
 }
 
@@ -385,6 +377,7 @@ mod tests {
             REPLAY_PAYLOAD_HASH_SCHEMA_VERSION, REPLAY_RECEIPT_SCHEMA_VERSION, ReplayReceipt,
             ReplayReceiptStatus,
         },
+        ops::{replay::receipt::reserve_or_replay_receipt, storage::replay::ReplayReceiptOps},
     };
 
     fn p(id: u8) -> Principal {
@@ -485,5 +478,61 @@ mod tests {
             map_pool_create_empty_replay_decision(decision).expect("committed receipt replays"),
             pid
         );
+    }
+
+    #[test]
+    fn pool_create_empty_does_not_commit_replay_when_cost_settlement_fails() {
+        CostGuardOps::reset_for_tests();
+        let command_kind = pool_create_empty_command_kind();
+        let actor = ReplayActor::direct_caller(p(2));
+        let replay_input = pool_create_empty_replay_input(
+            command_kind.clone(),
+            [240; 32],
+            actor,
+            pool_create_empty_payload_hash(&command_kind, &actor),
+            1_000,
+            POOL_CREATE_EMPTY_MAX_REPLAY_TTL_NS,
+        )
+        .expect("replay input");
+        let ReplayReceiptDecision::Fresh(token) =
+            reserve_or_replay_receipt(replay_input).expect("fresh replay receipt")
+        else {
+            panic!("expected fresh replay receipt");
+        };
+        mark_pool_create_empty_external_effect(&token, &command_kind).expect("mark create effect");
+        let permit = CostGuardOps::reserve(CostGuardRequest {
+            cost_class: CostClass::ManagementDeployment,
+            command_kind,
+            quota_subject: p(2),
+            payer: p(3),
+            now_secs: 10,
+            quota_window_secs: POOL_CREATE_EMPTY_QUOTA_WINDOW_SECONDS,
+            max_operations_per_window: POOL_CREATE_EMPTY_MAX_OPERATIONS_PER_WINDOW,
+            current_cycle_balance: 10 * TC,
+            cycle_reservation_cycles: POOL_CANISTER_CYCLES,
+            min_cycles_after_reservation: POOL_CREATE_EMPTY_MIN_CYCLES_AFTER_RESERVATION,
+        })
+        .expect("cost permit");
+        CostGuardOps::abort(&permit).expect("invalidate cost permit");
+        let pid = p(240);
+        let response_bytes = encode_pool_create_empty_response(&PoolAdminResponse::Created { pid })
+            .expect("response bytes");
+
+        commit_pool_create_empty_success(
+            &token,
+            &permit,
+            pid,
+            Cycles::new(POOL_CANISTER_CYCLES),
+            response_bytes,
+        )
+        .expect_err("cost settlement failure must reject replay commit");
+
+        let receipt = ReplayReceiptOps::get(token.key())
+            .expect("receipt")
+            .into_receipt()
+            .expect("receipt decodes");
+        assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
+        assert!(receipt.response_bytes.is_none());
+        PoolOps::remove(&pid);
     }
 }

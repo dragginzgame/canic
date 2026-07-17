@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.11` is potentially breaking: it makes cost-guard settlement fail
+  closed, removes the retired Wasm-store proof classifier, and preserves typed
+  child-command and fleet-config failures through CLI dispatch.
+
 - `0.93.10` is potentially breaking: it makes selected-network artifact and
   replay-finalization authority fail closed and replaces duplicate install and
   installed-deployment error projections with canonical typed causes.

@@ -4,6 +4,7 @@
 //! Does not own: command dispatch or backup operation behavior.
 //! Boundary: public error surface for `canic backup` and restore integration.
 
+use super::manifest::ManifestCommandError;
 use canic_backup::{
     discovery::DiscoveryError, execution::BackupExecutionJournalError,
     persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
@@ -43,7 +44,7 @@ pub enum BackupCommandError {
     BackupReferenceAmbiguous { reference: String },
 
     #[error("manifest: {0}")]
-    Manifest(String),
+    Manifest(#[from] ManifestCommandError),
 
     #[error(
         "backup layout at --out is for a different request: {field} existing={existing}, requested={requested}"

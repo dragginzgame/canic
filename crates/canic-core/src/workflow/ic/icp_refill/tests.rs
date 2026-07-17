@@ -520,6 +520,43 @@ fn refill_replay_commits_terminal_response_for_replay() {
 }
 
 #[test]
+fn refill_replay_does_not_commit_when_cost_guard_completion_fails() {
+    CostGuardOps::reset_for_tests();
+    let request = request_with_operation(190);
+    let IcpRefillReplayReservation::Fresh {
+        operation_id,
+        token,
+    } = reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+        .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Completed);
+    record.operation_id = operation_id;
+    let operation = operation_from_record(&record);
+    let response = IcpRefillStoreOps::to_response(&operation);
+    mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
+    let permit = CostGuardOps::reserve(icp_refill_cost_guard_request(
+        &token,
+        p(99),
+        10_000_000_000,
+        10,
+    ))
+    .expect("cost permit");
+    CostGuardOps::abort(&permit).expect("invalidate cost permit");
+
+    finish_icp_refill_replay(&token, &operation, &response, Some(&permit))
+        .expect_err("cost settlement failure must reject replay commit");
+
+    let receipt = ReplayReceiptOps::get(token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
+    assert!(receipt.response_bytes.is_none());
+}
+
+#[test]
 fn refill_replay_resumable_response_aborts_reserved_receipt() {
     let request = request_with_operation(181);
     let IcpRefillReplayReservation::Fresh { token, .. } =
@@ -540,6 +577,40 @@ fn refill_replay_resumable_response_aborts_reserved_receipt() {
             .expect("fresh after abort"),
         IcpRefillReplayReservation::Fresh { .. }
     ));
+}
+
+#[test]
+fn refill_replay_keeps_receipt_when_cost_guard_recovery_fails() {
+    CostGuardOps::reset_for_tests();
+    let request = request_with_operation(191);
+    let IcpRefillReplayReservation::Fresh { token, .. } =
+        reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
+            .expect("fresh reservation")
+    else {
+        panic!("expected fresh reservation");
+    };
+    let mut record = sample_record(IcpRefillStatus::Requested);
+    record.operation_id = request.operation_id;
+    let operation = operation_from_record(&record);
+    let response = IcpRefillStoreOps::to_response(&operation);
+    mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
+    let permit = CostGuardOps::reserve(icp_refill_cost_guard_request(
+        &token,
+        p(99),
+        10_000_000_000,
+        10,
+    ))
+    .expect("cost permit");
+    CostGuardOps::abort(&permit).expect("invalidate cost permit");
+
+    finish_icp_refill_replay(&token, &operation, &response, Some(&permit))
+        .expect_err("cost recovery failure must preserve replay receipt");
+
+    let receipt = ReplayReceiptOps::get(token.key())
+        .expect("receipt")
+        .into_receipt()
+        .expect("receipt decodes");
+    assert_eq!(receipt.status, ReplayReceiptStatus::ExternalEffectInFlight);
 }
 
 #[test]

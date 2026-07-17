@@ -5,7 +5,9 @@
 //! Boundary: human-facing backup command help text.
 
 use super::super::super::*;
+use crate::backup::manifest::ManifestCommandError;
 use canic_host::installed_deployment::InstalledDeploymentError;
+use std::ffi::OsString;
 
 // Ensure backup help stays at command-family level.
 #[test]
@@ -50,5 +52,16 @@ fn missing_backup_deployment_preserves_canonical_typed_error() {
         BackupCommandError::InstalledDeployment(
             InstalledDeploymentError::NoInstalledDeployment { .. }
         )
+    );
+}
+
+#[test]
+fn backup_dispatch_preserves_manifest_command_error() {
+    let error = run([OsString::from("manifest"), OsString::from("validate")])
+        .expect_err("missing manifest argument rejects");
+
+    std::assert_matches!(
+        error,
+        BackupCommandError::Manifest(ManifestCommandError::Usage(_))
     );
 }

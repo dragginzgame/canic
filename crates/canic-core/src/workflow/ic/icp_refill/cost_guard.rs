@@ -80,34 +80,22 @@ pub(super) fn icp_refill_cost_guard_request(
     }
 }
 
-pub(super) fn complete_icp_refill_cost_guard(cost_permit: Option<&CostGuardPermit>) {
+pub(super) fn complete_icp_refill_cost_guard(
+    cost_permit: Option<&CostGuardPermit>,
+) -> Result<(), InternalError> {
     let Some(cost_permit) = cost_permit else {
-        return;
+        return Ok(());
     };
-    if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
-        crate::log!(
-            crate::log::Topic::Cycles,
-            Error,
-            "icp refill value-transfer cost guard completion failed reservation_id={}: {}",
-            cost_permit.reservation_id,
-            err
-        );
-    }
+    CostGuardOps::complete(cost_permit, IcOps::now_secs())
 }
 
-pub(super) fn recover_icp_refill_cost_guard(cost_permit: Option<&CostGuardPermit>) {
+pub(super) fn recover_icp_refill_cost_guard(
+    cost_permit: Option<&CostGuardPermit>,
+) -> Result<(), InternalError> {
     let Some(cost_permit) = cost_permit else {
-        return;
+        return Ok(());
     };
-    if let Err(err) = CostGuardOps::recover(cost_permit, IcOps::now_secs()) {
-        crate::log!(
-            crate::log::Topic::Cycles,
-            Error,
-            "icp refill value-transfer cost guard recovery failed reservation_id={}: {}",
-            cost_permit.reservation_id,
-            err
-        );
-    }
+    CostGuardOps::recover(cost_permit, IcOps::now_secs())
 }
 
 fn log_icp_refill_cost_guard_reserved(operation: &IcpRefillOperation) {

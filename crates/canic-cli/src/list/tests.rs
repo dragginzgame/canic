@@ -9,8 +9,11 @@ use canic_core::{
     },
     ids::CanisterRole,
 };
-use canic_host::registry::parse_registry_entries;
 use canic_host::table::{ColumnAlign, render_separator, render_table_row};
+use canic_host::{
+    registry::parse_registry_entries,
+    release_set::{FleetConfigDeclaration, FleetConfigError},
+};
 use options::ListSource;
 use render::ReadyStatus;
 use serde_json::json;
@@ -94,6 +97,20 @@ fn list_preserves_icp_root_resolution_causes() {
     std::assert_matches!(
         error,
         ListCommandError::IcpRoot(IcpConfigError::NoIcpRoot { .. })
+    );
+}
+
+#[test]
+fn list_preserves_fleet_config_causes() {
+    let error = ListCommandError::from(FleetConfigError::DeclarationMissing {
+        declaration: FleetConfigDeclaration::FleetName,
+    });
+
+    std::assert_matches!(
+        error,
+        ListCommandError::FleetConfig(FleetConfigError::DeclarationMissing {
+            declaration: FleetConfigDeclaration::FleetName
+        })
     );
 }
 
