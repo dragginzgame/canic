@@ -13,6 +13,7 @@ use crate::{
     ops::storage::replay::ReplayReceiptOps,
     storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptSlotKey},
 };
+use thiserror::Error as ThisError;
 
 pub const MAX_PENDING_REPLAY_RECEIPTS_PER_ACTOR: usize = 64;
 pub const MAX_PENDING_REPLAY_RECEIPTS_PER_COMMAND_KIND: usize = 512;
@@ -121,8 +122,12 @@ pub enum ReplayReceiptDecision {
 /// Owned by replay ops and mapped by callers into workflow errors.
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 pub enum ReplayReceiptStoreError {
+    #[error("reserved replay receipt is missing")]
+    ReceiptMissing,
+
+    #[error("failed to decode replay receipt: {0}")]
     ReceiptDecodeFailed(String),
 }
 
@@ -224,12 +229,13 @@ pub fn mark_external_effect_in_flight(
     token: &ReplayReceiptToken,
     effect: ExternalEffectDescriptor,
     now_ns: u64,
-) {
-    let mut receipt = token.receipt.clone();
+) -> Result<(), ReplayReceiptStoreError> {
+    let mut receipt = latest_receipt_for_token(token)?;
     receipt.status = ReplayReceiptStatus::ExternalEffectInFlight;
     receipt.effect = Some(effect);
     receipt.updated_at_ns = now_ns;
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
+    Ok(())
 }
 
 pub fn commit_receipt_response(
@@ -237,51 +243,68 @@ pub fn commit_receipt_response(
     response_schema_version: u32,
     response_bytes: Vec<u8>,
     now_ns: u64,
-) {
-    let mut receipt = latest_receipt_for_token(token);
+) -> Result<(), ReplayReceiptStoreError> {
+    let mut receipt = latest_receipt_for_token(token)?;
     receipt.status = ReplayReceiptStatus::Committed;
     receipt.response_schema_version = Some(response_schema_version);
     receipt.response_bytes = Some(response_bytes);
     receipt.updated_at_ns = now_ns;
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
+    Ok(())
 }
 
-pub fn mark_recovery_required(token: &ReplayReceiptToken, reason: RecoveryReason, now_ns: u64) {
-    let mut receipt = latest_receipt_for_token(token);
+pub fn mark_recovery_required(
+    token: &ReplayReceiptToken,
+    reason: RecoveryReason,
+    now_ns: u64,
+) -> Result<(), ReplayReceiptStoreError> {
+    let mut receipt = latest_receipt_for_token(token)?;
     receipt.status = ReplayReceiptStatus::RecoveryRequired { reason };
     receipt.updated_at_ns = now_ns;
     ReplayReceiptOps::upsert(token.key, ReplayReceiptRecord::from_receipt(receipt));
+    Ok(())
 }
 
-pub fn abort_reserved_receipt(token: &ReplayReceiptToken) {
-    let Some(receipt) =
-        ReplayReceiptOps::get(token.key).and_then(|record| record.into_receipt().ok())
-    else {
-        return;
+pub fn abort_reserved_receipt(token: &ReplayReceiptToken) -> Result<(), ReplayReceiptStoreError> {
+    let Some(record) = ReplayReceiptOps::get(token.key) else {
+        return Err(ReplayReceiptStoreError::ReceiptMissing);
     };
+    let receipt = record
+        .into_receipt()
+        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
     if receipt.status == ReplayReceiptStatus::Reserved {
         let _ = ReplayReceiptOps::remove(token.key);
     }
+    Ok(())
 }
 
-pub fn abort_uncommitted_receipt(token: &ReplayReceiptToken) {
-    let Some(receipt) =
-        ReplayReceiptOps::get(token.key).and_then(|record| record.into_receipt().ok())
-    else {
-        return;
+pub fn abort_uncommitted_receipt(
+    token: &ReplayReceiptToken,
+) -> Result<(), ReplayReceiptStoreError> {
+    let Some(record) = ReplayReceiptOps::get(token.key) else {
+        return Err(ReplayReceiptStoreError::ReceiptMissing);
     };
+    let receipt = record
+        .into_receipt()
+        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
     if matches!(
         receipt.status,
         ReplayReceiptStatus::Reserved | ReplayReceiptStatus::ExternalEffectInFlight
     ) {
         let _ = ReplayReceiptOps::remove(token.key);
     }
+    Ok(())
 }
 
-fn latest_receipt_for_token(token: &ReplayReceiptToken) -> ReplayReceipt {
-    ReplayReceiptOps::get(token.key)
-        .and_then(|record| record.into_receipt().ok())
-        .unwrap_or_else(|| token.receipt.clone())
+fn latest_receipt_for_token(
+    token: &ReplayReceiptToken,
+) -> Result<ReplayReceipt, ReplayReceiptStoreError> {
+    let Some(record) = ReplayReceiptOps::get(token.key) else {
+        return Err(ReplayReceiptStoreError::ReceiptMissing);
+    };
+    record
+        .into_receipt()
+        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)
 }
 
 fn classify_existing_receipt(
@@ -364,7 +387,7 @@ mod tests {
             ReplayReceiptDecision::Fresh(token) => token,
             other => panic!("expected fresh, got {other:?}"),
         };
-        commit_receipt_response(&token, 1, vec![1, 2, 3], 200);
+        commit_receipt_response(&token, 1, vec![1, 2, 3], 200).expect("commit receipt");
 
         let duplicate = reserve_or_replay_receipt(input()).expect("duplicate");
         let ReplayReceiptDecision::ReturnCommitted(receipt) = duplicate else {
@@ -415,7 +438,8 @@ mod tests {
                 command_kind: CommandKind::new("test.command.v1").expect("command"),
             },
             150,
-        );
+        )
+        .expect("mark external effect");
         assert_eq!(
             reserve_or_replay_receipt(input()).expect("in-flight duplicate"),
             ReplayReceiptDecision::OperationInProgress
@@ -536,7 +560,7 @@ mod tests {
             ReplayReceiptDecision::Fresh(token) => token,
             other => panic!("expected fresh, got {other:?}"),
         };
-        commit_receipt_response(&committed_token, 1, vec![1, 2, 3], 150);
+        commit_receipt_response(&committed_token, 1, vec![1, 2, 3], 150).expect("commit receipt");
 
         let pending = reserve_or_replay_receipt_with_limits(
             input_with("test.command.v1", p(1), [8; 32], 160),
@@ -566,8 +590,8 @@ mod tests {
             canister: Principal::from_slice(&[8; 29]),
             method: "deposit_cycles".to_string(),
         };
-        mark_external_effect_in_flight(&token, effect.clone(), 150);
-        commit_receipt_response(&token, 1, vec![1, 2, 3], 200);
+        mark_external_effect_in_flight(&token, effect.clone(), 150).expect("mark external effect");
+        commit_receipt_response(&token, 1, vec![1, 2, 3], 200).expect("commit receipt");
 
         let receipt = ReplayReceiptOps::get(token.key())
             .expect("receipt stored")
@@ -575,5 +599,52 @@ mod tests {
             .expect("receipt decodes");
         assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
         assert_eq!(receipt.effect, Some(effect));
+    }
+
+    #[test]
+    fn terminal_receipt_transitions_reject_corrupt_records_without_mutation() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let token = match reserve_or_replay_receipt(input()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        let mut corrupt = ReplayReceiptOps::get(token.key()).expect("receipt stored");
+        corrupt.schema_version = REPLAY_RECEIPT_SCHEMA_VERSION + 1;
+        ReplayReceiptOps::upsert(token.key(), corrupt.clone());
+
+        for result in [
+            commit_receipt_response(&token, 1, vec![1, 2, 3], 200),
+            mark_recovery_required(&token, RecoveryReason::ResponseCommitFailed, 200),
+            abort_reserved_receipt(&token),
+            abort_uncommitted_receipt(&token),
+        ] {
+            assert!(matches!(
+                result,
+                Err(ReplayReceiptStoreError::ReceiptDecodeFailed(_))
+            ));
+            assert_eq!(ReplayReceiptOps::get(token.key()), Some(corrupt.clone()));
+        }
+    }
+
+    #[test]
+    fn terminal_receipt_transitions_reject_missing_records() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let token = match reserve_or_replay_receipt(input()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        ReplayReceiptOps::remove(token.key()).expect("remove reserved receipt");
+
+        for result in [
+            commit_receipt_response(&token, 1, vec![1, 2, 3], 200),
+            mark_recovery_required(&token, RecoveryReason::ResponseCommitFailed, 200),
+            abort_reserved_receipt(&token),
+            abort_uncommitted_receipt(&token),
+        ] {
+            assert_eq!(result, Err(ReplayReceiptStoreError::ReceiptMissing));
+            assert_eq!(ReplayReceiptOps::get(token.key()), None);
+        }
     }
 }

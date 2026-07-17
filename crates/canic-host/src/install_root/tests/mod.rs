@@ -40,9 +40,9 @@ use super::state::{
 use super::timing::InstallTimingSummary;
 use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_fleet_name};
 use super::{
-    InstallRootBlockKind, InstallRootBlockedError, InstallRootOptions, InstallState,
-    RegisterDeploymentStateOptions, RootVerificationStatus, VerifyDeploymentRootOptions,
-    check_install_deployment_truth, check_install_execution_preflight,
+    InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
+    InstallRootPhase, InstallState, RegisterDeploymentStateOptions, RootVerificationStatus,
+    VerifyDeploymentRootOptions, check_install_deployment_truth, check_install_execution_preflight,
     latest_deployment_truth_receipt_path_from_root, register_deployment_state,
     verify_registered_deployment_root, write_artifact_promotion_execution_receipt_for_install,
     write_install_state_with_deployment_truth_receipt,
@@ -76,6 +76,21 @@ mod commands;
 mod config_selection;
 mod install_truth;
 mod state_root_verification;
+
+#[test]
+fn public_install_error_preserves_phase_and_typed_source() {
+    let error = InstallRootError::new(
+        InstallRootPhase::Activation,
+        std::io::Error::other("activation failed"),
+    );
+
+    assert_eq!(error.phase(), InstallRootPhase::Activation);
+    assert!(
+        std::error::Error::source(&error)
+            .and_then(|source| source.downcast_ref::<std::io::Error>())
+            .is_some()
+    );
+}
 
 #[test]
 fn named_ic_environment_is_explicit_for_cargo_builds() {

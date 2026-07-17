@@ -89,7 +89,7 @@ async fn execute_provision(
     preflight_provision_parent_registered(parent_pid)?;
     let reservation_cycles = root_provision_cycle_reservation_cycles(req)?;
     let cost_permit = reserve_root_provision_cost_guard(ctx, reservation_cycles)?;
-    mark_root_provision_external_effect(pending, ctx, req, parent_pid);
+    mark_root_provision_external_effect(pending, ctx, req, parent_pid)?;
 
     let event = CanisterLifecycleEvent::Create {
         deployment_permit: &cost_permit,
@@ -102,19 +102,19 @@ async fn execute_provision(
         Ok(result) => result,
         Err(err) => {
             let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-            mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err);
+            mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err)?;
             return Err(err);
         }
     };
     let Some(new_canister_pid) = lifecycle_result.new_canister_pid else {
         let err: InternalError = RpcWorkflowError::MissingNewCanisterPid.into();
         let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-        mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err);
+        mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err)?;
         return Err(err);
     };
 
     if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
-        replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed);
+        replay::mark_recovery_required(pending, RecoveryReason::ResponseCommitFailed)?;
         return Err(err);
     }
 
@@ -195,13 +195,13 @@ pub(super) fn mark_root_provision_external_effect(
     ctx: &RootContext,
     req: &CreateCanisterRequest,
     parent_pid: Principal,
-) {
+) -> Result<(), InternalError> {
     replay::mark_external_effect_in_flight(
         pending,
         ExternalEffectDescriptor::ManagementCreateCanister {
             command_kind: root_provision_command_kind(),
         },
-    );
+    )?;
     log!(
         Topic::Rpc,
         Info,
@@ -211,6 +211,7 @@ pub(super) fn mark_root_provision_external_effect(
         req.canister_role,
         parent_pid
     );
+    Ok(())
 }
 
 fn mark_root_provision_recovery_required(
@@ -219,9 +220,9 @@ fn mark_root_provision_recovery_required(
     req: &CreateCanisterRequest,
     parent_pid: Principal,
     err: &InternalError,
-) {
+) -> Result<(), InternalError> {
     let (error_class, error_origin) = err.log_fields();
-    replay::mark_recovery_required(pending, RecoveryReason::ExternalEffectStatusUnknown);
+    replay::mark_recovery_required(pending, RecoveryReason::ExternalEffectStatusUnknown)?;
     log!(
         Topic::Rpc,
         Error,
@@ -233,6 +234,7 @@ fn mark_root_provision_recovery_required(
         error_class,
         error_origin
     );
+    Ok(())
 }
 
 async fn execute_upgrade(

@@ -23,7 +23,9 @@ use crate::{
 use canic_host::canister_build::CanisterBuildProfile;
 use canic_host::icp::{IcpDiagnostic, classify_icp_diagnostic};
 use canic_host::icp_config::{IcpConfigError, resolve_current_canic_icp_root};
-use canic_host::install_root::{InstallRootBlockedError, InstallRootOptions, install_root};
+use canic_host::install_root::{
+    InstallRootBlockedError, InstallRootError, InstallRootOptions, install_root,
+};
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -62,11 +64,11 @@ pub enum InstallCommandError {
     IcpRoot(#[from] IcpConfigError),
 
     #[error(transparent)]
-    Install(#[from] Box<dyn std::error::Error>),
+    Install(#[from] InstallRootError),
 
     #[error("{source}\n\nHint: {hint}")]
     InstallHint {
-        source: Box<dyn std::error::Error>,
+        source: InstallRootError,
         hint: String,
     },
 }
@@ -178,11 +180,11 @@ fn usage() -> String {
 }
 
 fn install_error_with_context(
-    err: Box<dyn std::error::Error>,
+    err: InstallRootError,
     fleet: &str,
     network: &str,
 ) -> InstallCommandError {
-    if install_error_needs_existing_deployment_hint(err.as_ref()) {
+    if install_error_needs_existing_deployment_hint(&err) {
         return InstallCommandError::InstallHint {
             source: err,
             hint: format!(

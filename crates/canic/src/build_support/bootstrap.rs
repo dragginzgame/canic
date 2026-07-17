@@ -144,34 +144,18 @@ pub fn manifest_declares_workspace(source: &str) -> bool {
 }
 
 fn discover_release_artifact_root(workspace_root: &Path) -> PathBuf {
-    if let Ok(root) = env::var(canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV) {
-        let icp_root = PathBuf::from(root);
-        let network = env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string());
-        let network_root = icp_root.join(".icp").join(&network).join("canisters");
-        if network_root.is_dir() {
-            return network_root;
-        }
+    let canonical_icp_root =
+        env::var_os(canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV).map(PathBuf::from);
+    canonical_release_artifact_root(workspace_root, canonical_icp_root.as_deref())
+}
 
-        let local_root = icp_root.join(".icp").join("local").join("canisters");
-        if local_root.is_dir() {
-            return local_root;
-        }
-
-        return network_root;
-    }
-
-    let network = env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string());
-    let network_root = workspace_root.join(".icp").join(&network).join("canisters");
-    if network_root.is_dir() {
-        return network_root;
-    }
-
-    let local_root = workspace_root.join(".icp").join("local").join("canisters");
-    if local_root.is_dir() {
-        return local_root;
-    }
-
-    network_root
+fn canonical_release_artifact_root(
+    workspace_root: &Path,
+    canonical_icp_root: Option<&Path>,
+) -> PathBuf {
+    canonical_icp_root
+        .unwrap_or(workspace_root)
+        .join(".icp/local/canisters")
 }
 
 fn render_root_wasm_store_bootstrap_release_set_source(
@@ -353,4 +337,25 @@ fn is_gzip_payload(bytes: &[u8]) -> bool {
 
 fn is_raw_wasm(bytes: &[u8]) -> bool {
     bytes.len() >= 4 && bytes[0] == 0x00 && bytes[1] == 0x61 && bytes[2] == 0x73 && bytes[3] == 0x6d
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn root_bootstrap_uses_only_the_canonical_local_artifact_root() {
+        assert_eq!(
+            canonical_release_artifact_root(Path::new("/workspace"), Some(Path::new("/project")),),
+            PathBuf::from("/project/.icp/local/canisters")
+        );
+        assert_eq!(
+            canonical_release_artifact_root(Path::new("/workspace"), None),
+            PathBuf::from("/workspace/.icp/local/canisters")
+        );
+    }
 }

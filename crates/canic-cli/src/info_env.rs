@@ -19,13 +19,11 @@ use crate::{
 use canic_host::{
     icp::IcpCommandError,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry, RegistryParseError},
-    replica_query::ReplicaQueryError,
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -54,22 +52,11 @@ pub enum InfoEnvCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` before exporting canister IDs"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
-    #[error("local replica query failed: root canister {root} is not present")]
-    LostLocalRoot { root: String },
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -167,27 +154,7 @@ fn resolve_info_env_deployment(
         },
         icp_root,
     )
-    .map_err(info_env_installed_deployment_error)
-}
-
-fn info_env_installed_deployment_error(error: InstalledDeploymentError) -> InfoEnvCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => InfoEnvCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => InfoEnvCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => InfoEnvCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Icp(error) => InfoEnvCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            InfoEnvCommandError::LostLocalRoot { root }
-        }
-        InstalledDeploymentError::Registry(error) => InfoEnvCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => InfoEnvCommandError::Io(error),
-    }
+    .map_err(InfoEnvCommandError::from)
 }
 
 fn env_report(

@@ -97,8 +97,8 @@ pub(super) fn root_wasm_for_install_plan(
     root_build_target: &str,
     plan: Option<&DeploymentPlanV1>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
     if let Some(plan) = plan {
+        let artifact_root = resolve_artifact_root(icp_root, network)?;
         let root_artifact = plan
             .role_artifacts
             .iter()
@@ -107,7 +107,8 @@ pub(super) fn root_wasm_for_install_plan(
         return Ok(plan_role_wasm_path(icp_root, &artifact_root, root_artifact));
     }
 
-    Ok(artifact_root
+    Ok(icp_root
+        .join(".icp/local/canisters")
         .join(root_build_target)
         .join(format!("{root_build_target}.wasm")))
 }
@@ -249,5 +250,34 @@ fn plan_artifact_path(icp_root: &Path, path: &str) -> PathBuf {
         path
     } else {
         icp_root.join(path)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::temp_dir;
+
+    #[test]
+    fn normal_install_uses_current_local_root_wasm_when_network_artifacts_exist() {
+        let icp_root = temp_dir("canic-install-root-artifact-authority");
+        let _ = fs::remove_dir_all(&icp_root);
+        fs::create_dir_all(icp_root.join(".icp/local/canisters/root"))
+            .expect("create local root artifacts");
+        fs::create_dir_all(icp_root.join(".icp/ic/canisters/root"))
+            .expect("create selected-network root artifacts");
+
+        let resolved = root_wasm_for_install_plan(&icp_root, "ic", "root", None)
+            .expect("resolve current root wasm");
+
+        assert_eq!(
+            resolved,
+            icp_root.join(".icp/local/canisters/root/root.wasm")
+        );
+        let _ = fs::remove_dir_all(icp_root);
     }
 }

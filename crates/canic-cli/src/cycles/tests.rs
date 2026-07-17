@@ -53,15 +53,23 @@ fn parses_duration_selectors() {
 }
 
 #[test]
-fn missing_cycles_deployment_mentions_unverified_registration_acknowledgement() {
-    let message = CyclesCommandError::NoInstalledDeployment {
+fn missing_cycles_deployment_preserves_canonical_typed_error() {
+    let error = CyclesCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
         network: "local".to_string(),
         deployment: "demo-local".to_string(),
-    }
-    .to_string();
+    });
+    let message = error.to_string();
 
-    assert!(message.contains("canic deploy register demo-local"));
-    assert!(message.contains("--allow-unverified"));
+    assert_eq!(
+        message,
+        "deployment target demo-local is not installed on network local"
+    );
+    std::assert_matches!(
+        error,
+        CyclesCommandError::InstalledDeployment(
+            InstalledDeploymentError::NoInstalledDeployment { .. }
+        )
+    );
 }
 
 // Ensure cycle summaries can target one installed deployment subtree by role or principal.

@@ -18,7 +18,7 @@ use canic_host::{
     icp::{IcpCli, IcpCommandError, IcpDiagnostic, IcpJsonResponseError},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
+        InstalledDeploymentRequest, InstalledDeploymentResolution,
         resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
@@ -254,31 +254,11 @@ fn resolve_metrics_deployment(
         },
         &root,
     )
-    .map_err(metrics_installed_deployment_error)
+    .map_err(MetricsCommandError::from)
 }
 
 fn resolve_metrics_icp_root() -> Option<PathBuf> {
     resolve_current_canic_icp_root().ok()
-}
-
-fn metrics_installed_deployment_error(error: InstalledDeploymentError) -> MetricsCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => MetricsCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => MetricsCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => MetricsCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Icp(error) => MetricsCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            MetricsCommandError::LostLocalRoot { root }
-        }
-        InstalledDeploymentError::Registry(error) => MetricsCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => MetricsCommandError::Io(error),
-    }
 }
 
 #[cfg(test)]

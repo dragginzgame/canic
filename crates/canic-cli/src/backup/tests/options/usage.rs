@@ -5,6 +5,7 @@
 //! Boundary: human-facing backup command help text.
 
 use super::super::super::*;
+use canic_host::installed_deployment::InstalledDeploymentError;
 
 // Ensure backup help stays at command-family level.
 #[test]
@@ -33,13 +34,21 @@ fn backup_create_usage_uses_deployment_target_wording() {
 }
 
 #[test]
-fn missing_backup_deployment_mentions_unverified_registration_acknowledgement() {
-    let message = BackupCommandError::NoInstalledDeployment {
+fn missing_backup_deployment_preserves_canonical_typed_error() {
+    let error = BackupCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
         network: "local".to_string(),
         deployment: "demo-local".to_string(),
-    }
-    .to_string();
+    });
+    let message = error.to_string();
 
-    assert!(message.contains("canic deploy register demo-local"));
-    assert!(message.contains("--allow-unverified"));
+    assert_eq!(
+        message,
+        "deployment target demo-local is not installed on network local"
+    );
+    std::assert_matches!(
+        error,
+        BackupCommandError::InstalledDeployment(
+            InstalledDeploymentError::NoInstalledDeployment { .. }
+        )
+    );
 }

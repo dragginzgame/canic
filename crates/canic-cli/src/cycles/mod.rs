@@ -21,9 +21,8 @@ use crate::{
 use canic_backup::discovery::DiscoveryError;
 use canic_core::{cdk::utils::hash::DecodeHexError, dto::error::ErrorCode};
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, install_root::InstallStateError,
+    icp::IcpCommandError, icp_config::IcpConfigError,
     installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
-    replica_query::ReplicaQueryError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -37,22 +36,11 @@ pub enum CyclesCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` before using cycles commands"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
     #[error("failed to read canic deployment state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
-    #[error("local replica query failed: root canister {root} is not present")]
-    LostLocalRoot { root: String },
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -136,24 +124,4 @@ where
 fn run_options(options: &CyclesOptions) -> Result<(), CyclesCommandError> {
     let report = cycles_report(options)?;
     write_cycles_report(options, &report)
-}
-
-fn cycles_installed_deployment_error(error: InstalledDeploymentError) -> CyclesCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => CyclesCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => CyclesCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => CyclesCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Icp(error) => CyclesCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            CyclesCommandError::LostLocalRoot { root }
-        }
-        InstalledDeploymentError::Registry(error) => CyclesCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => CyclesCommandError::Io(error),
-    }
 }

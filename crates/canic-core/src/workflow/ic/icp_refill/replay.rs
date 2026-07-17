@@ -135,7 +135,7 @@ pub(super) fn finish_icp_refill_replay(
     if IcpRefillStoreOps::is_resumable(operation) {
         recover_icp_refill_cost_guard(cost_permit);
         log_icp_refill_resumable_abort(operation);
-        abort_uncommitted_receipt(token);
+        abort_uncommitted_receipt(token).map_err(map_icp_refill_replay_store_error)?;
         return Ok(());
     }
 
@@ -147,7 +147,8 @@ pub(super) fn finish_icp_refill_replay(
                 token,
                 RecoveryReason::ResponseCommitFailed,
                 IcOps::now_nanos(),
-            );
+            )
+            .map_err(map_icp_refill_replay_store_error)?;
             return Err(err);
         }
     };
@@ -157,7 +158,8 @@ pub(super) fn finish_icp_refill_replay(
         ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
         response_bytes,
         IcOps::now_nanos(),
-    );
+    )
+    .map_err(map_icp_refill_replay_store_error)?;
     complete_icp_refill_cost_guard(cost_permit);
     log_icp_refill_commit(operation);
     Ok(())
@@ -166,14 +168,15 @@ pub(super) fn finish_icp_refill_replay(
 pub(super) fn mark_icp_refill_transfer_effect(
     token: &ReplayReceiptToken,
     operation: &IcpRefillOperation,
-) {
+) -> Result<(), InternalError> {
     mark_external_effect_in_flight(
         token,
         ExternalEffectDescriptor::IcpTransfer {
             operation_id: OperationId::from_bytes(operation.operation_id),
         },
         IcOps::now_nanos(),
-    );
+    )
+    .map_err(map_icp_refill_replay_store_error)?;
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
@@ -185,12 +188,13 @@ pub(super) fn mark_icp_refill_transfer_effect(
         operation.target_canister,
         operation.amount_e8s
     );
+    Ok(())
 }
 
 pub(super) fn mark_icp_refill_notify_effect(
     token: &ReplayReceiptToken,
     operation: &IcpRefillOperation,
-) {
+) -> Result<(), InternalError> {
     mark_external_effect_in_flight(
         token,
         ExternalEffectDescriptor::ManagementCall {
@@ -198,7 +202,8 @@ pub(super) fn mark_icp_refill_notify_effect(
             method: "notify_top_up".to_string(),
         },
         IcOps::now_nanos(),
-    );
+    )
+    .map_err(map_icp_refill_replay_store_error)?;
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
@@ -210,6 +215,7 @@ pub(super) fn mark_icp_refill_notify_effect(
         operation.target_canister,
         operation.amount_e8s
     );
+    Ok(())
 }
 
 pub(super) fn mark_icp_refill_recovery_required(
@@ -217,13 +223,14 @@ pub(super) fn mark_icp_refill_recovery_required(
     operation: &IcpRefillOperation,
     effect: &'static str,
     err: &InternalError,
-) {
+) -> Result<(), InternalError> {
     let (error_class, error_origin) = err.log_fields();
     mark_recovery_required(
         token,
         RecoveryReason::ExternalEffectStatusUnknown,
         IcOps::now_nanos(),
-    );
+    )
+    .map_err(map_icp_refill_replay_store_error)?;
     crate::log!(
         crate::log::Topic::Cycles,
         Error,
@@ -238,6 +245,7 @@ pub(super) fn mark_icp_refill_recovery_required(
         error_class,
         error_origin
     );
+    Ok(())
 }
 
 pub(super) fn log_icp_refill_fresh_reservation(request: &IcpRefillRequest) {
@@ -358,8 +366,12 @@ fn decode_icp_refill_replay_response(
     })
 }
 
-fn map_icp_refill_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
+pub(super) fn map_icp_refill_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
     match err {
+        ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "ICP refill replay receipt is missing",
+        ),
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to decode ICP refill replay receipt: {message}"),

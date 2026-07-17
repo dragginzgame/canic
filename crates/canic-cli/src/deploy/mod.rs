@@ -33,7 +33,7 @@ use canic_host::{
     canister_build::CanisterBuildProfile,
     deployment_truth::DeploymentCheckV1,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    install_root::{InstallRootOptions, check_install_deployment_truth},
+    install_root::{InstallRootError, InstallRootOptions, check_install_deployment_truth},
     release_set::WorkspaceDiscoveryError,
 };
 use clap::Command as ClapCommand;
@@ -66,6 +66,9 @@ pub enum DeployCommandError {
     #[error(transparent)]
     Check(#[from] Box<dyn std::error::Error>),
 
+    #[error(transparent)]
+    Install(#[from] InstallRootError),
+
     #[error("failed to write deployment plan output: {0}")]
     PlanOutput(#[source] Box<dyn std::error::Error>),
 
@@ -80,7 +83,7 @@ impl DeployCommandError {
     pub const fn exit_code(&self) -> u8 {
         match self {
             Self::Usage(_) | Self::IcpRoot(_) | Self::WorkspaceRoot(_) | Self::PlanOutput(_) => 2,
-            Self::Check(_) | Self::PlanBlocked(_) | Self::Blocked(_) => 1,
+            Self::Check(_) | Self::Install(_) | Self::PlanBlocked(_) | Self::Blocked(_) => 1,
         }
     }
 

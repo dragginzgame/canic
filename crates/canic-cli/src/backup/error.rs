@@ -9,8 +9,9 @@ use canic_backup::{
     persistence::PersistenceError, plan::BackupPlanError, runner::BackupRunnerError,
 };
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, install_root::InstallStateError,
-    registry::RegistryParseError, replica_query::ReplicaQueryError,
+    icp::IcpCommandError, icp_config::IcpConfigError,
+    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
+    replica_query::ReplicaQueryError,
 };
 use thiserror::Error as ThisError;
 
@@ -56,22 +57,8 @@ pub enum BackupCommandError {
     #[error("backup layout is incomplete: missing {missing}")]
     BackupLayoutIncomplete { missing: &'static str },
 
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` before planning a backup"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
-    #[error(
-        "deployment target {deployment} points to root {root}, but that canister is not present on local network {network}. Local ICP CLI replica state is not persistent; run `canic install <fleet-template>` to recreate it or re-register {deployment} with `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified`."
-    )]
-    LostLocalDeployment {
-        network: String,
-        deployment: String,
-        root: String,
-    },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error("local replica query failed: {0}")]
     ReplicaQuery(#[source] ReplicaQueryError),

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.10` is potentially breaking: it makes selected-network artifact and
+  replay-finalization authority fail closed and replaces duplicate install and
+  installed-deployment error projections with canonical typed causes.
+
 - `0.93.9` is potentially breaking: it makes Cargo workspace, ICP project,
   and canister-manifest discovery fail closed with typed errors and removes
   the explicit-path fallback to the current workspace.

@@ -41,8 +41,7 @@ use canic_core::protocol::{
 use canic_host::icp::{IcpCli, IcpJsonResponseError};
 use canic_host::{
     candid_endpoints::CandidEndpointError, icp::IcpCommandError, icp_config::IcpConfigError,
-    install_root::InstallStateError, installed_deployment::InstalledDeploymentError,
-    registry::RegistryParseError, replica_query::ReplicaQueryError,
+    installed_deployment::InstalledDeploymentError,
 };
 use std::{ffi::OsString, io, path::PathBuf};
 use thiserror::Error as ThisError;
@@ -62,28 +61,11 @@ pub enum BlobStorageCommandError {
     #[error("failed to render JSON output: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; install or register it before using blob-storage commands"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
     #[error("failed to read canic deployment state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
-    #[error("local replica query failed: root canister {root} is not present")]
-    LostLocalRoot { root: String },
-
-    #[error("failed to read canic deployment state: {0}")]
-    Registry(#[source] RegistryParseError),
-
-    #[error("failed to read canic deployment state: {0}")]
-    Io(#[source] io::Error),
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -153,18 +135,26 @@ impl BlobStorageCommandError {
             | Self::Usage(_)
             | Self::InvalidCycles(_)
             | Self::Json(_)
-            | Self::NoInstalledDeployment { .. }
-            | Self::InstallState(_)
+            | Self::InstalledDeployment(
+                InstalledDeploymentError::Icp(IcpCommandError::Io(_))
+                | InstalledDeploymentError::NoInstalledDeployment { .. }
+                | InstalledDeploymentError::InstallState(_)
+                | InstalledDeploymentError::Registry(_)
+                | InstalledDeploymentError::Io(_),
+            )
             | Self::IcpRoot(_)
-            | Self::Registry(_)
-            | Self::Io(_)
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
             | Self::CandidUnavailable { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. } => 1,
-            Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => 2,
+            Self::InstalledDeployment(
+                InstalledDeploymentError::ReplicaQuery(_)
+                | InstalledDeploymentError::LostLocalDeployment { .. }
+                | InstalledDeploymentError::Icp(_),
+            )
+            | Self::Icp(_) => 2,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => 3,
             Self::ReadinessCheckFailed { .. } => 4,
         }
@@ -188,11 +178,14 @@ impl BlobStorageCommandError {
             Self::InvalidCycles(_) => BLOB_STORAGE_ERROR_CODE_INVALID_CYCLES,
             Self::Usage(_)
             | Self::Json(_)
-            | Self::InstallState(_)
             | Self::IcpRoot(_)
-            | Self::Registry(_)
-            | Self::Io(_)
-            | Self::NoInstalledDeployment { .. }
+            | Self::InstalledDeployment(
+                InstalledDeploymentError::NoInstalledDeployment { .. }
+                | InstalledDeploymentError::InstallState(_)
+                | InstalledDeploymentError::Registry(_)
+                | InstalledDeploymentError::Io(_)
+                | InstalledDeploymentError::Icp(IcpCommandError::Io(_)),
+            )
             | Self::UnknownTarget { .. }
             | Self::AmbiguousRole { .. }
             | Self::Icp(IcpCommandError::Io(_)) => BLOB_STORAGE_ERROR_CODE_TARGET_RESOLUTION_FAILED,
@@ -200,9 +193,12 @@ impl BlobStorageCommandError {
                 BLOB_STORAGE_ERROR_CODE_CANDID_UNAVAILABLE
             }
             Self::MethodUnavailable { .. } => BLOB_STORAGE_ERROR_CODE_METHOD_UNAVAILABLE,
-            Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => {
-                BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED
-            }
+            Self::InstalledDeployment(
+                InstalledDeploymentError::ReplicaQuery(_)
+                | InstalledDeploymentError::LostLocalDeployment { .. }
+                | InstalledDeploymentError::Icp(_),
+            )
+            | Self::Icp(_) => BLOB_STORAGE_ERROR_CODE_TRANSPORT_FAILED,
             Self::Response(_) | Self::ResponseValueOutOfRange { .. } => {
                 BLOB_STORAGE_ERROR_CODE_RESPONSE_PARSE_FAILED
             }
@@ -669,32 +665,6 @@ fn live_call_output(
         ),
     };
     result.map_err(BlobStorageCommandError::from)
-}
-
-fn blob_storage_installed_deployment_error(
-    error: InstalledDeploymentError,
-) -> BlobStorageCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => BlobStorageCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => {
-            BlobStorageCommandError::InstallState(error)
-        }
-        InstalledDeploymentError::ReplicaQuery(error) => {
-            BlobStorageCommandError::ReplicaQuery(error)
-        }
-        InstalledDeploymentError::Icp(error) => BlobStorageCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            BlobStorageCommandError::LostLocalRoot { root }
-        }
-        InstalledDeploymentError::Registry(error) => BlobStorageCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => BlobStorageCommandError::Io(error),
-    }
 }
 
 fn write_status_result(

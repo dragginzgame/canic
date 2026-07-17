@@ -190,7 +190,7 @@ fn resolve_snapshot_download_request(
     ) {
         Ok(installed) => Some(installed),
         Err(InstalledDeploymentError::NoInstalledDeployment { .. }) => None,
-        Err(err) => return Err(snapshot_installed_deployment_error(err)),
+        Err(err) => return Err(SnapshotCommandError::from(err)),
     };
     let state = installed.as_ref().map(|installed| &installed.state);
     let explicit_canister = options.canister.is_some();
@@ -374,22 +374,6 @@ fn driver_error(error: SnapshotCommandError) -> SnapshotDriverError {
 
 fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
     IcpCli::new(&request.icp, None, request.network.clone()).with_cwd(&request.icp_root)
-}
-
-fn snapshot_installed_deployment_error(error: InstalledDeploymentError) -> SnapshotCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment { .. }
-        | InstalledDeploymentError::LostLocalDeployment { .. } => {
-            SnapshotCommandError::DeploymentState(error.to_string())
-        }
-        InstalledDeploymentError::InstallState(error) => SnapshotCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => {
-            SnapshotCommandError::LocalReplicaQuery(error)
-        }
-        InstalledDeploymentError::Icp(error) => SnapshotCommandError::Icp(error),
-        InstalledDeploymentError::Registry(err) => SnapshotCommandError::Registry(err),
-        InstalledDeploymentError::Io(err) => SnapshotCommandError::Io(err),
-    }
 }
 
 fn call_subnet_registry(

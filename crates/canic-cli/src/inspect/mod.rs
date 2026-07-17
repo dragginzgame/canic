@@ -22,13 +22,10 @@ use canic_core::dto::runtime::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
-    registry::RegistryParseError,
-    replica_query::ReplicaQueryError,
 };
 use clap::{Arg, Command as ClapCommand};
 use serde::Serialize;
@@ -61,17 +58,8 @@ pub enum InspectCommandError {
     #[error("{0}")]
     Target(String),
 
-    #[error("{0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("{0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
-    #[error("{0}")]
-    Registry(#[source] RegistryParseError),
-
-    #[error("{0}")]
-    Io(#[source] std::io::Error),
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error("icp command failed: {0}")]
     Icp(#[from] IcpCommandError),
@@ -96,10 +84,7 @@ impl InspectCommandError {
             Self::Usage(_)
             | Self::InvalidPrincipal { .. }
             | Self::Target(_)
-            | Self::InstallState(_)
-            | Self::ReplicaQuery(_)
-            | Self::Registry(_)
-            | Self::Io(_)
+            | Self::InstalledDeployment(_)
             | Self::Icp(_)
             | Self::InvalidResponse(_)
             | Self::IcpRoot(_)
@@ -338,7 +323,7 @@ fn resolve_deployment_target(
         },
         &root,
     )
-    .map_err(installed_deployment_error)?;
+    .map_err(InspectCommandError::from)?;
     let matches = installed
         .registry
         .entries
@@ -570,25 +555,6 @@ fn validate_principal(value: &str) -> Result<(), InspectCommandError> {
             source,
         }
     })
-}
-
-fn installed_deployment_error(error: InstalledDeploymentError) -> InspectCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => InspectCommandError::Target(format!(
-            "deployment target {deployment} is not installed on network {network}"
-        )),
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            InspectCommandError::Target(format!("root canister {root} is not present"))
-        }
-        InstalledDeploymentError::InstallState(error) => InspectCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => InspectCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Registry(error) => InspectCommandError::Registry(error),
-        InstalledDeploymentError::Icp(error) => InspectCommandError::Icp(error),
-        InstalledDeploymentError::Io(error) => InspectCommandError::Io(error),
-    }
 }
 
 fn command() -> ClapCommand {

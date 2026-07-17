@@ -97,15 +97,23 @@ fn metrics_report_json_uses_deployment_identity_field() {
 }
 
 #[test]
-fn missing_metrics_deployment_mentions_unverified_registration_acknowledgement() {
-    let message = MetricsCommandError::NoInstalledDeployment {
+fn missing_metrics_deployment_preserves_canonical_typed_error() {
+    let error = MetricsCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
         network: "local".to_string(),
         deployment: "demo-local".to_string(),
-    }
-    .to_string();
+    });
+    let message = error.to_string();
 
-    assert!(message.contains("canic deploy register demo-local"));
-    assert!(message.contains("--allow-unverified"));
+    assert_eq!(
+        message,
+        "deployment target demo-local is not installed on network local"
+    );
+    std::assert_matches!(
+        error,
+        MetricsCommandError::InstalledDeployment(
+            InstalledDeploymentError::NoInstalledDeployment { .. }
+        )
+    );
 }
 
 #[test]

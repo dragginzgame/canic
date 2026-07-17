@@ -657,7 +657,7 @@ fn refill_replay_marks_ledger_transfer_effect() {
     record.operation_id = request.operation_id;
 
     let operation = operation_from_record(&record);
-    mark_icp_refill_transfer_effect(&token, &operation);
+    mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
 
     let receipt = ReplayReceiptOps::get(token.key())
         .expect("receipt")
@@ -685,7 +685,7 @@ fn refill_replay_marks_cmc_notify_effect() {
     record.operation_id = request.operation_id;
 
     let operation = operation_from_record(&record);
-    mark_icp_refill_notify_effect(&token, &operation);
+    mark_icp_refill_notify_effect(&token, &operation).expect("mark notify effect");
 
     let receipt = ReplayReceiptOps::get(token.key())
         .expect("receipt")
@@ -714,7 +714,7 @@ fn refill_replay_resumable_response_aborts_in_flight_receipt() {
     record.operation_id = request.operation_id;
     let operation = operation_from_record(&record);
     let response = IcpRefillStoreOps::to_response(&operation);
-    mark_icp_refill_transfer_effect(&token, &operation);
+    mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
 
     finish_icp_refill_replay(&token, &operation, &response, None).expect("abort in-flight receipt");
 
@@ -738,14 +738,15 @@ fn refill_replay_recovery_required_preserves_effect_receipt() {
     let mut record = sample_record(IcpRefillStatus::Requested);
     record.operation_id = request.operation_id;
     let operation = operation_from_record(&record);
-    mark_icp_refill_transfer_effect(&token, &operation);
+    mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
 
     mark_icp_refill_recovery_required(
         &token,
         &operation,
         "ledger_transfer",
         &InternalError::infra(InternalErrorOrigin::Infra, "call failed"),
-    );
+    )
+    .expect("mark recovery required");
 
     let receipt = ReplayReceiptOps::get(token.key())
         .expect("receipt")

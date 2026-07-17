@@ -18,9 +18,11 @@ use crate::{
     ops::{
         ic::IcOps,
         replay::{
-            self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayReserveError,
+            self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayFinalizeError,
+            ReplayReserveError,
             guard::secs_to_ns,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
+            receipt::ReplayReceiptStoreError,
         },
         runtime::metrics::replay::{
             ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
@@ -255,6 +257,24 @@ fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
     }
 }
 
+fn map_replay_finalize_error(err: ReplayFinalizeError) -> InternalError {
+    match err {
+        ReplayFinalizeError::Encode(err) => map_replay_commit_error(err),
+        ReplayFinalizeError::Store(err) => map_replay_store_error(err),
+    }
+}
+
+fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
+    match err {
+        ReplayReceiptStoreError::ReceiptMissing => map_replay_decode_error(
+            ReplayDecodeError::DecodeFailed("reserved replay receipt is missing".to_string()),
+        ),
+        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
+        }
+    }
+}
+
 /// map_replay_decode_error
 ///
 /// Convert ops replay-decode failures into workflow replay errors.
@@ -305,21 +325,22 @@ pub(super) fn commit_replay(
             );
             Ok(())
         }
-        Err(err) => Err(map_replay_commit_error(err)),
+        Err(err) => Err(map_replay_finalize_error(err)),
     }
 }
 
 /// abort_replay
 ///
 /// Remove reserved replay state when capability execution fails.
-pub(super) fn abort_replay(pending: ReplayPending) {
-    replay_ops::abort_root_replay(pending);
+pub(super) fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> {
+    replay_ops::abort_root_replay(pending).map_err(map_replay_store_error)?;
     ReplayMetrics::record(
         ReplayMetricOperation::Abort,
         ReplayMetricOutcome::Completed,
         ReplayMetricReason::Ok,
     );
     crate::perf!("abort_replay");
+    Ok(())
 }
 
 /// mark_external_effect_in_flight
@@ -328,15 +349,20 @@ pub(super) fn abort_replay(pending: ReplayPending) {
 pub(super) fn mark_external_effect_in_flight(
     pending: &ReplayPending,
     effect: ExternalEffectDescriptor,
-) {
-    replay_ops::mark_root_replay_external_effect(pending, effect, secs_to_ns(IcOps::now_secs()));
+) -> Result<(), InternalError> {
+    replay_ops::mark_root_replay_external_effect(pending, effect, secs_to_ns(IcOps::now_secs()))
+        .map_err(map_replay_store_error)
 }
 
 /// mark_recovery_required
 ///
 /// Preserve a root replay receipt for manual recovery after uncertain execution.
-pub(super) fn mark_recovery_required(pending: &ReplayPending, reason: RecoveryReason) {
-    replay_ops::mark_root_replay_recovery_required(pending, reason, secs_to_ns(IcOps::now_secs()));
+pub(super) fn mark_recovery_required(
+    pending: &ReplayPending,
+    reason: RecoveryReason,
+) -> Result<(), InternalError> {
+    replay_ops::mark_root_replay_recovery_required(pending, reason, secs_to_ns(IcOps::now_secs()))
+        .map_err(map_replay_store_error)
 }
 
 /// payload_hasher

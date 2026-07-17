@@ -122,7 +122,7 @@ impl RootResponseWorkflow {
         {
             Ok(response) => response,
             Err(err) => {
-                Self::abort_replay(prepared.pending);
+                Self::abort_replay(prepared.pending)?;
                 RootCapabilityMetrics::record_execution(
                     descriptor.key,
                     RootCapabilityMetricOutcome::Error,
@@ -135,7 +135,7 @@ impl RootResponseWorkflow {
             Self::mark_replay_recovery_required(
                 &prepared.pending,
                 crate::model::replay::RecoveryReason::ResponseCommitFailed,
-            );
+            )?;
             log!(
                 Topic::Rpc,
                 Warn,
@@ -145,6 +145,11 @@ impl RootResponseWorkflow {
                 ctx.subnet_id,
                 ctx.now
             );
+            RootCapabilityMetrics::record_execution(
+                descriptor.key,
+                RootCapabilityMetricOutcome::Error,
+            );
+            return Err(err);
         }
         crate::perf!("commit_replay");
         RootCapabilityMetrics::record_execution(
@@ -164,7 +169,7 @@ impl RootResponseWorkflow {
                 let authorized_cycles = match Self::authorize_with_hint(ctx, capability) {
                     Ok(authorized_cycles) => authorized_cycles,
                     Err(err) => {
-                        Self::abort_replay(pending);
+                        Self::abort_replay(pending)?;
                         return Err(err);
                     }
                 };
@@ -217,15 +222,15 @@ impl RootResponseWorkflow {
         replay::commit_replay(pending, response)
     }
 
-    fn abort_replay(pending: ReplayPending) {
-        replay::abort_replay(pending);
+    fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> {
+        replay::abort_replay(pending)
     }
 
     fn mark_replay_recovery_required(
         pending: &ReplayPending,
         reason: crate::model::replay::RecoveryReason,
-    ) {
-        replay::mark_recovery_required(pending, reason);
+    ) -> Result<(), InternalError> {
+        replay::mark_recovery_required(pending, reason)
     }
 
     fn extract_root_context() -> Result<RootContext, InternalError> {
