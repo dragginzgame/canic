@@ -20,8 +20,8 @@ use crate::{
     ops::replay::{
         guard::ReplayPending,
         receipt::{
-            abort_reserved_receipt, commit_receipt_response, mark_external_effect_in_flight,
-            mark_recovery_required, reserve_receipt_token,
+            ReplayReceiptStoreError, abort_reserved_receipt, commit_receipt_response,
+            mark_external_effect_in_flight, mark_recovery_required, reserve_receipt_token,
         },
     },
     ops::storage::replay::ReplayReceiptOps,
@@ -65,6 +65,18 @@ pub enum ReplayReserveError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ReplayCommitError {
     EncodeFailed(String),
+}
+
+///
+/// ReplayFinalizeError
+///
+/// Typed response-encoding and receipt-store failures for one replay commit.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ReplayFinalizeError {
+    Encode(ReplayCommitError),
+    Store(ReplayReceiptStoreError),
 }
 
 ///
@@ -112,14 +124,16 @@ pub fn reserve_root_replay(
 pub fn commit_root_replay(
     pending: &ReplayPending,
     response: &Response,
-) -> Result<(), ReplayCommitError> {
-    let response_bytes = encode_root_replay_response(response)?;
+) -> Result<(), ReplayFinalizeError> {
+    let response_bytes =
+        encode_root_replay_response(response).map_err(ReplayFinalizeError::Encode)?;
     commit_receipt_response(
         &pending.receipt_token,
         ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
         response_bytes,
         pending.issued_at_ns,
-    );
+    )
+    .map_err(ReplayFinalizeError::Store)?;
     Ok(())
 }
 
@@ -130,8 +144,8 @@ pub fn mark_root_replay_external_effect(
     pending: &ReplayPending,
     effect: ExternalEffectDescriptor,
     now_ns: u64,
-) {
-    mark_external_effect_in_flight(&pending.receipt_token, effect, now_ns);
+) -> Result<(), ReplayReceiptStoreError> {
+    mark_external_effect_in_flight(&pending.receipt_token, effect, now_ns)
 }
 
 /// mark_root_replay_recovery_required
@@ -141,21 +155,24 @@ pub fn mark_root_replay_recovery_required(
     pending: &ReplayPending,
     reason: RecoveryReason,
     now_ns: u64,
-) {
-    mark_recovery_required(&pending.receipt_token, reason, now_ns);
+) -> Result<(), ReplayReceiptStoreError> {
+    mark_recovery_required(&pending.receipt_token, reason, now_ns)
 }
 
 /// commit_root_cycles_replay
 ///
 /// Persist a cached cycles response without rebuilding the enum wrapper at the call site.
-pub fn commit_root_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
+pub fn commit_root_cycles_replay(
+    pending: ReplayPending,
+    response: &CyclesResponse,
+) -> Result<(), ReplayReceiptStoreError> {
     let response_bytes = encode_root_cycles_replay_response(response);
     commit_receipt_response(
         &pending.receipt_token,
         ROOT_REPLAY_RESPONSE_SCHEMA_VERSION,
         response_bytes,
         pending.issued_at_ns,
-    );
+    )
 }
 
 /// decode_root_replay_response
@@ -301,8 +318,8 @@ pub fn decode_role_attestation_prepare_replay_response(
 /// abort_root_replay
 ///
 /// Remove an in-flight replay reservation after failed capability execution.
-pub fn abort_root_replay(pending: ReplayPending) {
-    abort_reserved_receipt(&pending.receipt_token);
+pub fn abort_root_replay(pending: ReplayPending) -> Result<(), ReplayReceiptStoreError> {
+    abort_reserved_receipt(&pending.receipt_token)
 }
 
 fn encode_root_replay_response(response: &Response) -> Result<Vec<u8>, ReplayCommitError> {

@@ -29,13 +29,11 @@ use canic_host::{
     candid_endpoints::{CandidEndpointError, EndpointMode, parse_candid_service_endpoints},
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
-    registry::{RegistryEntry, RegistryParseError},
-    replica_query::ReplicaQueryError,
+    registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
 use serde::Serialize;
@@ -79,28 +77,11 @@ pub enum AuthCommandError {
     #[error("failed to render JSON output: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; install or register it before using auth renewal commands"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
     #[error("failed to read canic deployment state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
-    #[error("local replica query failed: root canister {root} is not present")]
-    LostLocalRoot { root: String },
-
-    #[error("failed to read canic deployment state: {0}")]
-    Registry(#[source] RegistryParseError),
-
-    #[error("failed to read canic deployment state: {0}")]
-    Io(#[source] io::Error),
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -145,18 +126,26 @@ impl AuthCommandError {
             Self::Icp(IcpCommandError::Io(_))
             | Self::Usage(_)
             | Self::Json(_)
-            | Self::NoInstalledDeployment { .. }
-            | Self::InstallState(_)
+            | Self::InstalledDeployment(
+                InstalledDeploymentError::Icp(IcpCommandError::Io(_))
+                | InstalledDeploymentError::NoInstalledDeployment { .. }
+                | InstalledDeploymentError::InstallState(_)
+                | InstalledDeploymentError::Registry(_)
+                | InstalledDeploymentError::Io(_),
+            )
             | Self::IcpRoot(_)
-            | Self::Registry(_)
-            | Self::Io(_)
             | Self::CandidUnavailable { .. }
             | Self::InvalidIssuerPrincipal { .. }
             | Self::CandidRead { .. }
             | Self::CandidParse { .. }
             | Self::MethodUnavailable { .. }
             | Self::MethodModeMismatch { .. } => 1,
-            Self::ReplicaQuery(_) | Self::LostLocalRoot { .. } | Self::Icp(_) => 2,
+            Self::InstalledDeployment(
+                InstalledDeploymentError::ReplicaQuery(_)
+                | InstalledDeploymentError::LostLocalDeployment { .. }
+                | InstalledDeploymentError::Icp(_),
+            )
+            | Self::Icp(_) => 2,
             Self::ResponseParse(_) => 3,
         }
     }
@@ -674,7 +663,7 @@ fn resolve_auth_root_call_target(
         },
         &icp_root,
     )
-    .map_err(auth_installed_deployment_error)?;
+    .map_err(AuthCommandError::from)?;
     let candid_path =
         role_candid_path(Some(&icp_root), &options.network, ROOT_ROLE).ok_or_else(|| {
             AuthCommandError::CandidUnavailable {
@@ -1014,24 +1003,5 @@ fn auth_renewal_medic_summary_from_result(
         status,
         detail,
         next,
-    }
-}
-fn auth_installed_deployment_error(error: InstalledDeploymentError) -> AuthCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => AuthCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => AuthCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => AuthCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Icp(error) => AuthCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            AuthCommandError::LostLocalRoot { root }
-        }
-        InstalledDeploymentError::Registry(error) => AuthCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => AuthCommandError::Io(error),
     }
 }

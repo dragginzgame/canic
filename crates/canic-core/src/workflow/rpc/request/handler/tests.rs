@@ -441,7 +441,8 @@ fn root_provision_marks_create_external_effect() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
 
-    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42));
+    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42))
+        .expect("mark provision effect");
 
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
         .expect("receipt")
@@ -455,7 +456,7 @@ fn root_provision_marks_create_external_effect() {
         })
     );
 
-    RootResponseWorkflow::abort_replay(pending);
+    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
 }
 
 #[test]
@@ -509,7 +510,7 @@ fn preflight_aborts_reserved_replay_on_policy_denial() {
             panic!("policy-denied replay should not return cached response")
         }
     };
-    RootResponseWorkflow::abort_replay(pending);
+    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
 }
 
 #[test]
@@ -771,7 +772,8 @@ fn request_cycles_marks_deposit_external_effect() {
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
 
-    nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77);
+    nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77)
+        .expect("mark cycles effect");
 
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
         .expect("receipt")
@@ -786,7 +788,7 @@ fn request_cycles_marks_deposit_external_effect() {
         })
     );
 
-    RootResponseWorkflow::abort_replay(pending);
+    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
 }
 
 #[test]
@@ -957,13 +959,15 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
         method: "deposit_cycles".to_string(),
     };
 
-    mark_external_effect_in_flight(&pending.receipt_token, effect.clone(), secs_to_ns(1_001));
+    mark_external_effect_in_flight(&pending.receipt_token, effect.clone(), secs_to_ns(1_001))
+        .expect("mark external effect");
     mark_recovery_required(
         &pending.receipt_token,
         RecoveryReason::ExternalEffectStatusUnknown,
         secs_to_ns(1_002),
-    );
-    RootResponseWorkflow::abort_replay(pending);
+    )
+    .expect("mark recovery required");
+    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
 
     let receipt = ReplayReceiptOps::get(key)
         .expect("recovery receipt must remain")

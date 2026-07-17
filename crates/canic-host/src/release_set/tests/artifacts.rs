@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn selected_network_artifact_root_never_falls_back_to_local() {
+    let temp = TempWorkspace::new();
+    fs::create_dir_all(temp.path().join(".icp/local/canisters")).expect("create local artifacts");
+
+    assert_eq!(
+        resolve_artifact_root(temp.path(), "ic")
+            .expect_err("selected network must not use local artifacts"),
+        ArtifactRootError::Missing {
+            artifact_root: temp.path().join(".icp/ic/canisters"),
+        }
+    );
+    fs::create_dir_all(temp.path().join(".icp/ic/canisters"))
+        .expect("create selected-network artifacts");
+    assert_eq!(
+        resolve_artifact_root(temp.path(), "ic").expect("selected root"),
+        temp.path().join(".icp/ic/canisters")
+    );
+}
+
+#[test]
 fn read_release_artifact_accepts_gzip_wasm() {
     let temp = TempWorkspace::new();
     let path = temp.path().join("artifact.wasm.gz");

@@ -85,7 +85,7 @@ impl PoolWorkflow {
         let controllers = match Self::pool_controllers() {
             Ok(controllers) => controllers,
             Err(err) => {
-                abort_reserved_receipt(&token);
+                abort_reserved_receipt(&token).map_err(map_pool_create_empty_replay_store_error)?;
                 MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
@@ -93,13 +93,13 @@ impl PoolWorkflow {
         let cost_permit = match reserve_pool_create_empty_cost_guard(&command_kind, caller) {
             Ok(permit) => permit,
             Err(err) => {
-                abort_reserved_receipt(&token);
+                abort_reserved_receipt(&token).map_err(map_pool_create_empty_replay_store_error)?;
                 MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
         };
 
-        mark_pool_create_empty_external_effect(&token, &command_kind);
+        mark_pool_create_empty_external_effect(&token, &command_kind)?;
 
         let pid =
             match MgmtOps::create_canister_with_permit(&cost_permit, controllers, cycles.clone())
@@ -113,7 +113,8 @@ impl PoolWorkflow {
                         &token,
                         RecoveryReason::ExternalEffectStatusUnknown,
                         secs_to_ns(IcOps::now_secs()),
-                    );
+                    )
+                    .map_err(map_pool_create_empty_replay_store_error)?;
                     MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                     return Err(err);
                 }
@@ -122,7 +123,13 @@ impl PoolWorkflow {
         let response = PoolAdminResponse::Created { pid };
         match encode_pool_create_empty_response(&response) {
             Ok(response_bytes) => {
-                commit_pool_create_empty_success(&token, &cost_permit, pid, cycles, response_bytes);
+                commit_pool_create_empty_success(
+                    &token,
+                    &cost_permit,
+                    pid,
+                    cycles,
+                    response_bytes,
+                )?;
             }
             Err(err) => {
                 let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
@@ -130,7 +137,8 @@ impl PoolWorkflow {
                     &token,
                     RecoveryReason::ResponseCommitFailed,
                     secs_to_ns(IcOps::now_secs()),
-                );
+                )
+                .map_err(map_pool_create_empty_replay_store_error)?;
                 MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
@@ -244,14 +252,18 @@ fn reserve_pool_create_empty_cost_guard(
     .map_err(map_cost_guard_reserve_error)
 }
 
-fn mark_pool_create_empty_external_effect(token: &ReplayReceiptToken, command_kind: &CommandKind) {
+fn mark_pool_create_empty_external_effect(
+    token: &ReplayReceiptToken,
+    command_kind: &CommandKind,
+) -> Result<(), InternalError> {
     mark_external_effect_in_flight(
         token,
         ExternalEffectDescriptor::ManagementCreateCanister {
             command_kind: command_kind.clone(),
         },
         secs_to_ns(IcOps::now_secs()),
-    );
+    )
+    .map_err(map_pool_create_empty_replay_store_error)
 }
 
 fn commit_pool_create_empty_success(
@@ -260,7 +272,7 @@ fn commit_pool_create_empty_success(
     pid: Principal,
     cycles: Cycles,
     response_bytes: Vec<u8>,
-) {
+) -> Result<(), InternalError> {
     let created_at = IcOps::now_secs();
     PoolOps::register_ready(pid, cycles, None, None, None, created_at);
     commit_receipt_response(
@@ -268,7 +280,8 @@ fn commit_pool_create_empty_success(
         POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
         response_bytes,
         secs_to_ns(IcOps::now_secs()),
-    );
+    )
+    .map_err(map_pool_create_empty_replay_store_error)?;
     if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
         log!(
             Topic::CanisterPool,
@@ -276,6 +289,7 @@ fn commit_pool_create_empty_success(
             "pool create cost guard completion failed pid={pid}: {err}"
         );
     }
+    Ok(())
 }
 
 fn pool_create_empty_command_kind() -> CommandKind {
@@ -332,6 +346,10 @@ fn map_pool_create_empty_replay_decision(
 
 fn map_pool_create_empty_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
     match err {
+        ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "pool create-empty replay receipt is missing",
+        ),
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to decode pool create-empty replay receipt: {message}"),

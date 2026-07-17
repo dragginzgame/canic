@@ -24,6 +24,7 @@ use crate::{
         replay::{
             self as replay_ops, ReplayDecodeError, ReplayReserveError,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
+            receipt::ReplayReceiptStoreError,
         },
         runtime::{
             cycles_funding::CyclesFundingLedgerOps,
@@ -130,7 +131,7 @@ async fn response_replay_first_with_planner(
     let grant = match authorize_plan(&ctx, &req) {
         Ok(grant) => grant,
         Err(err) => {
-            abort_replay(pending);
+            abort_replay(pending)?;
             return Err(err);
         }
     };
@@ -138,7 +139,7 @@ async fn response_replay_first_with_planner(
     let response = match execute_authorized_request_cycles(&ctx, &pending, grant).await {
         Ok(response) => response,
         Err(err) => {
-            abort_replay(pending);
+            abort_replay(pending)?;
             RootCapabilityMetrics::record_execution(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::Error,
@@ -147,7 +148,7 @@ async fn response_replay_first_with_planner(
         }
     };
 
-    commit_cycles_replay(pending, &response);
+    commit_cycles_replay(pending, &response)?;
 
     RootCapabilityMetrics::record_execution(
         RootCapabilityMetricKey::RequestCycles,
@@ -340,7 +341,7 @@ pub(super) async fn execute_authorized_request_cycles(
     grant: AuthorizedCyclesGrant,
 ) -> Result<CyclesResponse, InternalError> {
     let cost_permit = reserve_request_cycles_cost_guard(ctx, grant.approved_cycles)?;
-    mark_request_cycles_external_effect(pending, ctx, grant.approved_cycles);
+    mark_request_cycles_external_effect(pending, ctx, grant.approved_cycles)?;
     let ledger_before_grant = CyclesFundingLedgerOps::snapshot(ctx.caller);
     CyclesFundingLedgerOps::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
 
@@ -349,7 +350,7 @@ pub(super) async fn execute_authorized_request_cycles(
     {
         CyclesFundingLedgerOps::restore_child_snapshot(ctx.caller, ledger_before_grant);
         let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-        mark_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, &err);
+        mark_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, &err)?;
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             grant.approved_cycles,
@@ -365,7 +366,8 @@ pub(super) async fn execute_authorized_request_cycles(
             pending,
             RecoveryReason::ResponseCommitFailed,
             replay_ops::guard::secs_to_ns(IcOps::now_secs()),
-        );
+        )
+        .map_err(map_replay_store_error)?;
         return Err(err);
     }
 
@@ -564,7 +566,7 @@ pub(super) fn mark_request_cycles_external_effect(
     pending: &ReplayPending,
     ctx: &RootContext,
     approved_cycles: u128,
-) {
+) -> Result<(), InternalError> {
     replay_ops::mark_root_replay_external_effect(
         pending,
         ExternalEffectDescriptor::ManagementCall {
@@ -572,7 +574,8 @@ pub(super) fn mark_request_cycles_external_effect(
             method: "deposit_cycles".to_string(),
         },
         replay_ops::guard::secs_to_ns(IcOps::now_secs()),
-    );
+    )
+    .map_err(map_replay_store_error)?;
     log!(
         Topic::Rpc,
         Info,
@@ -581,6 +584,7 @@ pub(super) fn mark_request_cycles_external_effect(
         ctx.caller,
         approved_cycles
     );
+    Ok(())
 }
 
 fn mark_request_cycles_recovery_required(
@@ -588,13 +592,14 @@ fn mark_request_cycles_recovery_required(
     ctx: &RootContext,
     approved_cycles: u128,
     err: &InternalError,
-) {
+) -> Result<(), InternalError> {
     let (error_class, error_origin) = err.log_fields();
     replay_ops::mark_root_replay_recovery_required(
         pending,
         RecoveryReason::ExternalEffectStatusUnknown,
         replay_ops::guard::secs_to_ns(IcOps::now_secs()),
-    );
+    )
+    .map_err(map_replay_store_error)?;
     log!(
         Topic::Rpc,
         Error,
@@ -605,6 +610,7 @@ fn mark_request_cycles_recovery_required(
         error_class,
         error_origin
     );
+    Ok(())
 }
 
 fn map_replay_guard_error(err: ReplayGuardError) -> InternalError {
@@ -680,6 +686,17 @@ fn map_replay_decode_error(err: ReplayDecodeError) -> InternalError {
     }
 }
 
+fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
+    match err {
+        ReplayReceiptStoreError::ReceiptMissing => map_replay_decode_error(
+            ReplayDecodeError::DecodeFailed("reserved replay receipt is missing".to_string()),
+        ),
+        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
+        }
+    }
+}
+
 fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError> {
     match replay_ops::decode_root_cycles_replay_response(bytes) {
         Ok(response) => {
@@ -694,22 +711,27 @@ fn decode_cycles_response(bytes: &[u8]) -> Result<CyclesResponse, InternalError>
     }
 }
 
-fn commit_cycles_replay(pending: ReplayPending, response: &CyclesResponse) {
-    replay_ops::commit_root_cycles_replay(pending, response);
+fn commit_cycles_replay(
+    pending: ReplayPending,
+    response: &CyclesResponse,
+) -> Result<(), InternalError> {
+    replay_ops::commit_root_cycles_replay(pending, response).map_err(map_replay_store_error)?;
     ReplayMetrics::record(
         ReplayMetricOperation::Commit,
         ReplayMetricOutcome::Completed,
         ReplayMetricReason::Ok,
     );
+    Ok(())
 }
 
-fn abort_replay(pending: ReplayPending) {
-    replay_ops::abort_root_replay(pending);
+fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> {
+    replay_ops::abort_root_replay(pending).map_err(map_replay_store_error)?;
     ReplayMetrics::record(
         ReplayMetricOperation::Abort,
         ReplayMetricOutcome::Completed,
         ReplayMetricReason::Ok,
     );
+    Ok(())
 }
 
 fn hash_cycles_payload(req: &CyclesRequest) -> [u8; 32] {

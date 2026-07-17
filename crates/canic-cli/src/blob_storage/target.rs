@@ -6,7 +6,7 @@
 
 use crate::{
     blob_storage::{
-        BlobStorageCommandError, blob_storage_installed_deployment_error,
+        BlobStorageCommandError,
         model::{BlobStorageMethodMode, BlobStorageTarget},
         options::CommonOptions,
     },
@@ -62,7 +62,7 @@ pub(super) fn resolve_blob_storage_call_target(
         },
         &icp_root,
     )
-    .map_err(blob_storage_installed_deployment_error)?;
+    .map_err(BlobStorageCommandError::from)?;
     let resolved = resolve_blob_storage_target(
         deployment,
         selector,

@@ -208,6 +208,10 @@ pub(super) fn map_token_prepare_replay_decision(
 
 pub(super) fn map_token_prepare_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
     match err {
+        ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "delegated token prepare replay receipt is missing",
+        ),
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to decode delegated token prepare replay receipt: {message}"),
@@ -281,6 +285,10 @@ pub(super) fn map_role_attestation_replay_store_error(
     err: ReplayReceiptStoreError,
 ) -> InternalError {
     match err {
+        ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "role attestation replay receipt is missing",
+        ),
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             format!("failed to decode role attestation replay receipt: {message}"),

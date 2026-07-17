@@ -527,7 +527,7 @@ fn resolve_cycles_deployment(
         },
         &root,
     )
-    .map_err(crate::cycles::cycles_installed_deployment_error)
+    .map_err(CyclesCommandError::from)
 }
 
 fn resolve_cycles_icp_root() -> Option<PathBuf> {

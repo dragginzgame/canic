@@ -33,7 +33,9 @@ use canic_host::{
     },
     icp::local_canister_candid_path,
     install_root::{InstallState, InstallStateError},
-    installed_deployment::{InstalledDeploymentResolution, InstalledDeploymentSource},
+    installed_deployment::{
+        InstalledDeploymentError, InstalledDeploymentResolution, InstalledDeploymentSource,
+    },
     state_manifest::{StateAuditStatus, build_state_audit_report},
 };
 use serde_json::Value as JsonValue;
@@ -1333,9 +1335,11 @@ fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
         "not a principal",
     );
     let generic = auth_renewal_medic_error_check(
-        AuthCommandError::InstallState(InstallStateError::InvalidStateName {
-            name: "missing state".to_string(),
-        }),
+        AuthCommandError::InstalledDeployment(InstalledDeploymentError::InstallState(
+            InstallStateError::InvalidStateName {
+                name: "missing state".to_string(),
+            },
+        )),
         "demo",
         "rrkah-fqaaa-aaaaa-aaaaq-cai",
     );

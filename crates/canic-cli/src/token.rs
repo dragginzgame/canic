@@ -17,13 +17,11 @@ use crate::{
 use canic_host::{
     icp::{IcpCli, IcpCommandError, command_display, run_output_with_stderr},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    install_root::InstallStateError,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest,
         resolve_installed_deployment_from_root,
     },
     registry::{RegistryEntry, RegistryParseError},
-    replica_query::ReplicaQueryError,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::Path};
@@ -58,22 +56,11 @@ pub enum TokenCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` before using token commands"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
     #[error("failed to read canic deployment state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
-    #[error("local replica query failed: root canister {root} is not present")]
-    LostLocalRoot { root: String },
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),
@@ -317,7 +304,7 @@ fn transfer_receiver(
         },
         root,
     )
-    .map_err(token_installed_deployment_error)?;
+    .map_err(TokenCommandError::from)?;
     resolve_canister_or_role(
         deployment,
         canister_or_role,
@@ -474,26 +461,6 @@ fn balance_usage() -> String {
 
 fn transfer_usage() -> String {
     render_usage(transfer_command)
-}
-
-fn token_installed_deployment_error(error: InstalledDeploymentError) -> TokenCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => TokenCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => TokenCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => TokenCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Icp(error) => TokenCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment { root, .. } => {
-            TokenCommandError::LostLocalRoot { root }
-        }
-        InstalledDeploymentError::Registry(error) => TokenCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => TokenCommandError::Io(error),
-    }
 }
 
 // -----------------------------------------------------------------------------

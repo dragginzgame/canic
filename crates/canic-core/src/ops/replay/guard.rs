@@ -119,11 +119,14 @@ pub fn evaluate_root_replay(
     )
     .with_expires_at_ns(expires_at_ns);
 
-    let decision = prepare_replay_receipt(receipt_input).map_err(
-        |ReplayReceiptStoreError::ReceiptDecodeFailed(message)| {
+    let decision = prepare_replay_receipt(receipt_input).map_err(|error| match error {
+        ReplayReceiptStoreError::ReceiptMissing => {
+            ReplayGuardError::ReceiptDecodeFailed("reserved replay receipt is missing".to_string())
+        }
+        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
             ReplayGuardError::ReceiptDecodeFailed(message)
-        },
-    )?;
+        }
+    })?;
     if matches!(decision, ReplayReceiptDecision::Fresh(_)) {
         let _ = ReplayReceiptOps::purge_expired(now_ns, input.purge_scan_limit);
     }

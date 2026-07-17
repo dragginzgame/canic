@@ -10,8 +10,9 @@ use super::config::{
 };
 use super::stage::{read_release_artifact, resolve_release_artifact_path};
 use super::{
-    CanisterManifestError, canister_manifest_path, canisters_root, config_path,
-    plan_attach_fleet_role, plan_declare_fleet_role, plan_rename_fleet_role, root_manifest_path,
+    ArtifactRootError, CanisterManifestError, canister_manifest_path, canisters_root, config_path,
+    plan_attach_fleet_role, plan_declare_fleet_role, plan_rename_fleet_role, resolve_artifact_root,
+    root_manifest_path,
 };
 use crate::test_support::temp_dir;
 use flate2::{Compression, write::GzEncoder};

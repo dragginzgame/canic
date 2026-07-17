@@ -498,7 +498,7 @@ pub(super) fn resolve_deployment(
         },
         root,
     )
-    .map_err(crate::cycles::cycles_installed_deployment_error)
+    .map_err(CyclesCommandError::from)
 }
 
 fn resolve_role_principal(

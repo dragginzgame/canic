@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.8`.
-- The latest published release is `v0.93.8` at
-  `bb4835941cc9430adcb4cb14d659c35ba7ea575b`.
-- The `v0.93.8` source tree is
-  `8fd2fb6ce6d55bceea70879e9d7df26fe9f6b2c1`; its product-tree hash is
-  `abffaddaef676819904565d5c2a981e79bcbe92961f54e9891b63db3dd1b5fd7`.
+- The workspace package version is `0.93.9`.
+- The latest published release is `v0.93.9` at
+  `b5c9dbeb5909fbbc0057facba836cf431d558135`.
+- The `v0.93.9` source tree is
+  `c2b34078a3e4a85c5b26d2cfa647d480325ff37f`; its product-tree hash is
+  `1e5d56f5fb2e4da6105e363ebb6982ebbf6b14ce0b1b0296e4b5afc36529823f`.
   Its Cargo.lock SHA-256 is
-  `d2aa8d1855877903b9ada37e919ee15f9a6b7b496928ef1b63dd243a8df05376`.
+  `fcb04db7099de8ea4486f13ecf7b527b476d9d2c4b0b87854ca3005bfbd81b2d`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -60,10 +60,15 @@ Historical detail is archived at:
   admission, and fleet selection one typed authority. Install, deployment
   verification, and deployed-list operations fail closed on project-root
   resolution rather than continuing through optional fallbacks.
-- Current `0.93.9` development gives Cargo workspace, ICP project, and
+- Released `v0.93.9` gives Cargo workspace, ICP project, and
   canister-manifest discovery typed filesystem, TOML, metadata, missing, and
   ambiguity failures. It removes the public explicit-path-to-current-workspace
   fallback and rejects uncanonicalized manifest search roots.
+- Current development makes selected-network artifact lookup exact, makes
+  replay terminal transitions fail closed on missing or corrupt persisted
+  receipts, gives root install a typed phase/cause boundary, and preserves the
+  host-owned installed-deployment error through CLI commands without duplicate
+  mappings.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -606,7 +611,9 @@ ICP CLI wrappers and the superseded text snapshot-ID path. Released 0.93.2
 closes the audited Wasm-store lifecycle race and restore-receipt defaulting
 findings. Released 0.93.3 removes the remaining ICP-refill history scans,
 retains renewal-timer failure diagnostics, and fixes publication-test layering
-residue. Current development makes auth-renewal response parsing fail closed on
-the pinned ICP JSON/Candid contract and deletes the test-only alternate
-auth/replay ordering path. Broad deployment, package, publish, and release
-validation remains maintainer-owned.
+residue. Released 0.93.4 through 0.93.9 then hard-cut permissive response and
+transport fallbacks and made project/workspace discovery fail closed. Current
+development removes the remaining artifact-root fallback and duplicate
+installed-deployment CLI projections, and makes replay finalization plus root
+install failures preserve typed authority. Broad deployment, package, publish,
+and release validation remains maintainer-owned.

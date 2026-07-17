@@ -6,11 +6,8 @@ mod render;
 
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
-    icp::IcpCommandError,
-    icp_config::IcpConfigError,
-    install_root::{ConfigDiscoveryError, InstallStateError},
-    registry::RegistryParseError,
-    replica_query::ReplicaQueryError,
+    icp::IcpCommandError, icp_config::IcpConfigError, install_root::ConfigDiscoveryError,
+    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
 };
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
@@ -51,20 +48,14 @@ pub enum ListCommandError {
         hint: &'static str,
     },
 
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
-    #[error(
-        "deployment target {deployment} points to root {root}, but that canister is not present on network {network}. Local replica state was probably restarted or reset. Run `canic install <fleet-template>` to recreate it or re-register {deployment} with `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified`."
-    )]
-    LostLocalDeployment {
-        deployment: String,
-        network: String,
-        root: String,
+    #[error("{source}\nHint: {hint}")]
+    InstalledDeploymentHint {
+        source: InstalledDeploymentError,
+        hint: &'static str,
     },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
 
     #[error("failed to resolve ICP project root: {0}")]
     IcpRoot(#[from] IcpConfigError),
@@ -74,11 +65,6 @@ pub enum ListCommandError {
 
     #[error("failed to discover Canic project configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
-
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` to deploy it, `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` to register existing state, or `canic fleet config <fleet-template>` to inspect its config"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
 
     #[error("fleet {0} is not declared by any config under fleets; run `canic fleet list`")]
     UnknownFleet(String),

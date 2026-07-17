@@ -35,8 +35,9 @@ use crate::{
         },
         policy_denied, prepare_context,
         replay::{
-            finish_icp_refill_replay, mark_icp_refill_notify_effect,
-            mark_icp_refill_recovery_required, mark_icp_refill_transfer_effect,
+            finish_icp_refill_replay, map_icp_refill_replay_store_error,
+            mark_icp_refill_notify_effect, mark_icp_refill_recovery_required,
+            mark_icp_refill_transfer_effect,
         },
     },
 };
@@ -53,14 +54,14 @@ pub(super) async fn execute_fresh_manual_refill(
             Ok(operation) => operation,
             Err(err) => {
                 recover_icp_refill_cost_guard(cost_permit.as_ref());
-                abort_reserved_receipt(token);
+                abort_reserved_receipt(token).map_err(map_icp_refill_replay_store_error)?;
                 return Err(err);
             }
         };
     let response = IcpRefillStoreOps::to_response(&operation);
 
     if let Err(err) = finish_icp_refill_replay(token, &operation, &response, cost_permit.as_ref()) {
-        abort_reserved_receipt(token);
+        abort_reserved_receipt(token).map_err(map_icp_refill_replay_store_error)?;
         return Err(err);
     }
 
@@ -129,13 +130,13 @@ async fn transfer_operation(
 
     reserve_icp_refill_cost_guard_if_needed(token, &operation, cost_permit)?;
     let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
-    mark_icp_refill_transfer_effect(token, &operation);
+    mark_icp_refill_transfer_effect(token, &operation)?;
 
     match IcpRefillOps::icrc1_transfer(cost_permit, operation.ledger_canister_id, transfer_arg)
         .await
     {
         Err(err) => {
-            mark_icp_refill_recovery_required(token, &operation, "ledger_transfer", &err);
+            mark_icp_refill_recovery_required(token, &operation, "ledger_transfer", &err)?;
             Err(err)
         }
         Ok(Ok(block_index)) => {
@@ -219,7 +220,7 @@ async fn notify_operation(
 
     reserve_icp_refill_cost_guard_if_needed(token, &operation, cost_permit)?;
     let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
-    mark_icp_refill_notify_effect(token, &operation);
+    mark_icp_refill_notify_effect(token, &operation)?;
 
     match IcpRefillOps::notify_top_up(cost_permit, operation.cmc_canister_id, args).await {
         Ok(Ok(cycles_sent)) => {
@@ -230,7 +231,7 @@ async fn notify_operation(
         }
         Ok(Err(err)) => apply_notify_error(operation.id, operation.notify_attempts, err),
         Err(err) => {
-            mark_icp_refill_recovery_required(token, &operation, "cmc_notify_top_up", &err);
+            mark_icp_refill_recovery_required(token, &operation, "cmc_notify_top_up", &err)?;
             Err(err)
         }
     }

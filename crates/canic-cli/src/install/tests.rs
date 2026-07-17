@@ -1,4 +1,5 @@
 use super::*;
+use canic_host::install_root::InstallRootPhase;
 
 // Ensure install defaults to the conventional local root canister target.
 #[test]
@@ -102,7 +103,10 @@ fn install_usage_explains_fleet_config() {
 #[test]
 fn install_existing_deployment_errors_get_action_hint() {
     let err = install_error_with_context(
-        Box::new(std::io::Error::other("canister already has installed code")),
+        InstallRootError::new(
+            InstallRootPhase::Activation,
+            std::io::Error::other("canister already has installed code"),
+        ),
         "demo",
         "academic",
     );
@@ -114,7 +118,10 @@ fn install_existing_deployment_errors_get_action_hint() {
 
     std::assert_matches!(
         install_error_with_context(
-            Box::new(std::io::Error::other("failed to read config")),
+            InstallRootError::new(
+                InstallRootPhase::Configuration,
+                std::io::Error::other("failed to read config"),
+            ),
             "demo",
             "academic",
         ),

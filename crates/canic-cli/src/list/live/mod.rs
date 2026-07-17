@@ -270,7 +270,7 @@ fn resolve_list_deployment(
         },
         &icp_root,
     )
-    .map_err(list_installed_deployment_error)
+    .map_err(ListCommandError::from)
     .map_err(add_root_registry_hint)
 }
 
@@ -278,42 +278,27 @@ fn resolve_live_icp_root() -> Result<PathBuf, ListCommandError> {
     resolve_current_canic_icp_root().map_err(ListCommandError::from)
 }
 
-fn list_installed_deployment_error(error: InstalledDeploymentError) -> ListCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => ListCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => ListCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => ListCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Icp(error) => ListCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment {
-            deployment,
-            network,
-            root,
-        } => ListCommandError::LostLocalDeployment {
-            deployment,
-            network,
-            root,
-        },
-        InstalledDeploymentError::Registry(error) => ListCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => ListCommandError::Io(error),
-    }
-}
-
 fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
-    let ListCommandError::Icp(source) = error else {
-        return error;
-    };
-
-    let Some(hint) = source.external_output().and_then(root_registry_hint) else {
-        return ListCommandError::Icp(source);
-    };
-
-    ListCommandError::IcpHint { source, hint }
+    match error {
+        ListCommandError::Icp(source) => {
+            let Some(hint) = source.external_output().and_then(root_registry_hint) else {
+                return ListCommandError::Icp(source);
+            };
+            ListCommandError::IcpHint { source, hint }
+        }
+        ListCommandError::InstalledDeployment(InstalledDeploymentError::Icp(source)) => {
+            let Some(hint) = source.external_output().and_then(root_registry_hint) else {
+                return ListCommandError::InstalledDeployment(InstalledDeploymentError::Icp(
+                    source,
+                ));
+            };
+            ListCommandError::InstalledDeploymentHint {
+                source: InstalledDeploymentError::Icp(source),
+                hint,
+            }
+        }
+        error => error,
+    }
 }
 
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {

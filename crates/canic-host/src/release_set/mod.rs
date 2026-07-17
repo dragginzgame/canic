@@ -26,8 +26,8 @@ pub(crate) use manifest::{
     emit_root_release_set_manifest_from_build, validate_root_release_set_manifest,
 };
 pub use paths::{
-    CanisterManifestError, WorkspaceDiscoveryError, canister_manifest_path, canisters_root,
-    config_path, display_workspace_path, icp_root, load_root_package_version,
+    ArtifactRootError, CanisterManifestError, WorkspaceDiscoveryError, canister_manifest_path,
+    canisters_root, config_path, display_workspace_path, icp_root, load_root_package_version,
     load_workspace_package_version, resolve_artifact_root, root_manifest_path,
     root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };

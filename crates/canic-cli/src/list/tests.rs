@@ -66,15 +66,23 @@ fn parses_live_list_options() {
 }
 
 #[test]
-fn missing_list_deployment_mentions_unverified_registration_acknowledgement() {
-    let message = ListCommandError::NoInstalledDeployment {
+fn missing_list_deployment_preserves_canonical_typed_error() {
+    let error = ListCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
         network: "local".to_string(),
         deployment: "demo-local".to_string(),
-    }
-    .to_string();
+    });
+    let message = error.to_string();
 
-    assert!(message.contains("canic deploy register demo-local"));
-    assert!(message.contains("--allow-unverified"));
+    assert_eq!(
+        message,
+        "deployment target demo-local is not installed on network local"
+    );
+    std::assert_matches!(
+        error,
+        ListCommandError::InstalledDeployment(
+            InstalledDeploymentError::NoInstalledDeployment { .. }
+        )
+    );
 }
 
 #[test]

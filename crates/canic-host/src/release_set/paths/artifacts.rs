@@ -2,30 +2,25 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use thiserror::Error as ThisError;
 
 use super::super::ROOT_RELEASE_SET_MANIFEST_FILE;
 
-// Resolve the built artifact directory for the selected ICP environment.
-pub fn resolve_artifact_root(
-    icp_root: &Path,
-    network: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let preferred = icp_root.join(".icp").join(network).join("canisters");
-    if preferred.is_dir() {
-        return Ok(preferred);
+/// Failure to locate the exact artifact root for a selected ICP environment.
+#[derive(Debug, Eq, PartialEq, ThisError)]
+pub enum ArtifactRootError {
+    #[error("missing built ICP artifacts under {artifact_root}")]
+    Missing { artifact_root: PathBuf },
+}
+
+/// Resolve the built artifact directory for the selected ICP environment.
+pub fn resolve_artifact_root(icp_root: &Path, network: &str) -> Result<PathBuf, ArtifactRootError> {
+    let artifact_root = icp_root.join(".icp").join(network).join("canisters");
+    if artifact_root.is_dir() {
+        return Ok(artifact_root);
     }
 
-    let local_artifact_root = icp_root.join(".icp/local/canisters");
-    if local_artifact_root.is_dir() {
-        return Ok(local_artifact_root);
-    }
-
-    Err(format!(
-        "missing built ICP artifacts under {} or {}",
-        preferred.display(),
-        local_artifact_root.display()
-    )
-    .into())
+    Err(ArtifactRootError::Missing { artifact_root })
 }
 
 // Return the canonical manifest path for the staged root release set.

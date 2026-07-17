@@ -14,8 +14,9 @@ use crate::{
 };
 use canic_backup::snapshot::SnapshotDownloadError;
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, install_root::InstallStateError,
-    registry::RegistryParseError, replica_query::ReplicaQueryError,
+    icp::IcpCommandError, icp_config::IcpConfigError,
+    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
+    replica_query::ReplicaQueryError,
 };
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -51,13 +52,10 @@ pub enum SnapshotCommandError {
     Icp(#[from] IcpCommandError),
 
     #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("failed to read canic deployment state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
-    #[error("failed to read canic deployment state: {0}")]
-    DeploymentState(String),
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error("local replica query failed: {0}")]
     LocalReplicaQuery(#[from] ReplicaQueryError),

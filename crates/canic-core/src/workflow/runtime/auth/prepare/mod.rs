@@ -97,7 +97,7 @@ impl RuntimeAuthWorkflow {
         {
             Ok(prepared) => prepared,
             Err(err) => {
-                abort_reserved_receipt(&token);
+                abort_reserved_receipt(&token).map_err(map_token_prepare_replay_store_error)?;
                 return Err(err);
             }
         };
@@ -116,7 +116,8 @@ impl RuntimeAuthWorkflow {
                     &token,
                     RecoveryReason::ResponseCommitFailed,
                     secs_to_ns(IcOps::now_secs()),
-                );
+                )
+                .map_err(map_token_prepare_replay_store_error)?;
                 return Err(err);
             }
         };
@@ -127,7 +128,8 @@ impl RuntimeAuthWorkflow {
             DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             response_bytes,
             secs_to_ns(IcOps::now_secs()),
-        );
+        )
+        .map_err(map_token_prepare_replay_store_error)?;
         crate::perf!("delegated_token_commit_replay");
         Ok(response)
     }
@@ -173,7 +175,7 @@ impl RuntimeAuthWorkflow {
         }) {
             Ok(prepared) => prepared,
             Err(err) => {
-                abort_reserved_receipt(&token);
+                abort_reserved_receipt(&token).map_err(map_role_attestation_replay_store_error)?;
                 return Err(err);
             }
         };
@@ -191,7 +193,8 @@ impl RuntimeAuthWorkflow {
                     &token,
                     RecoveryReason::ResponseCommitFailed,
                     secs_to_ns(IcOps::now_secs()),
-                );
+                )
+                .map_err(map_role_attestation_replay_store_error)?;
                 return Err(err);
             }
         };
@@ -201,7 +204,8 @@ impl RuntimeAuthWorkflow {
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             response_bytes,
             secs_to_ns(IcOps::now_secs()),
-        );
+        )
+        .map_err(map_role_attestation_replay_store_error)?;
         Ok(response)
     }
 }

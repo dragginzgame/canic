@@ -15,8 +15,8 @@ use crate::{
 };
 use canic_backup::discovery::DiscoveryError;
 use canic_host::{
-    icp::IcpCommandError, icp_config::IcpConfigError, install_root::InstallStateError,
-    registry::RegistryParseError, replica_query::ReplicaQueryError,
+    icp::IcpCommandError, icp_config::IcpConfigError,
+    installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
 };
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -32,22 +32,11 @@ pub enum MetricsCommandError {
     #[error("{0}")]
     Usage(String),
 
-    #[error(
-        "deployment target {deployment} is not installed on network {network}; run `canic install <fleet-template>` or `canic deploy register {deployment} --fleet-template <fleet-template> --root <principal> --allow-unverified` before querying metrics"
-    )]
-    NoInstalledDeployment { network: String, deployment: String },
-
-    #[error("failed to read canic deployment state: {0}")]
-    InstallState(#[source] InstallStateError),
-
-    #[error("local replica query failed: {0}")]
-    ReplicaQuery(#[source] ReplicaQueryError),
-
     #[error("failed to read canic deployment state: {0}")]
     IcpRoot(#[source] IcpConfigError),
 
-    #[error("local replica query failed: root canister {root} is not present")]
-    LostLocalRoot { root: String },
+    #[error(transparent)]
+    InstalledDeployment(#[from] InstalledDeploymentError),
 
     #[error(transparent)]
     Icp(#[from] IcpCommandError),

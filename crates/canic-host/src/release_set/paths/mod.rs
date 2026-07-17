@@ -4,7 +4,7 @@ mod version;
 mod workspace;
 
 pub use crate::workspace_discovery::{CanisterManifestError, WorkspaceDiscoveryError};
-pub use artifacts::{resolve_artifact_root, root_release_set_manifest_path};
+pub use artifacts::{ArtifactRootError, resolve_artifact_root, root_release_set_manifest_path};
 pub use manifests::{canister_manifest_path, root_manifest_path};
 pub use version::{load_root_package_version, load_workspace_package_version};
 pub use workspace::{

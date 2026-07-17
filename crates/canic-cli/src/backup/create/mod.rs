@@ -12,10 +12,7 @@ use canic_backup::{
 };
 use canic_host::{
     icp_config::resolve_current_canic_icp_root,
-    installed_deployment::{
-        InstalledDeploymentError, InstalledDeploymentRequest,
-        resolve_installed_deployment_from_root,
-    },
+    installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
 };
 #[cfg(test)]
 use std::path::Path;
@@ -44,7 +41,7 @@ pub(super) fn backup_create(
         },
         &icp_root,
     )
-    .map_err(backup_installed_deployment_error)?;
+    .map_err(BackupCommandError::from)?;
     let registry = backup_registry_entries(&installed.registry.entries);
     let topology_hash = registry_topology_hash(&registry)?;
     let plan_id = backup_plan_id(&options.deployment);
@@ -148,31 +145,5 @@ const fn backup_run_status(run: &BackupRunResponse) -> BackupRunStatus {
         BackupRunStatus::Paused
     } else {
         BackupRunStatus::Running
-    }
-}
-
-fn backup_installed_deployment_error(error: InstalledDeploymentError) -> BackupCommandError {
-    match error {
-        InstalledDeploymentError::NoInstalledDeployment {
-            network,
-            deployment,
-        } => BackupCommandError::NoInstalledDeployment {
-            network,
-            deployment,
-        },
-        InstalledDeploymentError::InstallState(error) => BackupCommandError::InstallState(error),
-        InstalledDeploymentError::ReplicaQuery(error) => BackupCommandError::ReplicaQuery(error),
-        InstalledDeploymentError::Icp(error) => BackupCommandError::Icp(error),
-        InstalledDeploymentError::LostLocalDeployment {
-            network,
-            deployment,
-            root,
-        } => BackupCommandError::LostLocalDeployment {
-            network,
-            deployment,
-            root,
-        },
-        InstalledDeploymentError::Registry(error) => BackupCommandError::Registry(error),
-        InstalledDeploymentError::Io(error) => BackupCommandError::Io(error),
     }
 }
