@@ -19,6 +19,14 @@ fn command_preview_journal(
     operation: RestoreApplyOperationKind,
     verification_kind: Option<&str>,
 ) -> RestoreApplyJournal {
+    let artifact_checksum = matches!(
+        operation,
+        RestoreApplyOperationKind::UploadSnapshot | RestoreApplyOperationKind::LoadSnapshot
+    )
+    .then(|| ArtifactChecksum {
+        algorithm: "sha256".to_string(),
+        hash: HASH.to_string(),
+    });
     let mut journal = RestoreApplyJournal {
         journal_version: 1,
         backup_id: "fbk_test_001".to_string(),
@@ -44,6 +52,7 @@ fn command_preview_journal(
             role: "root".to_string(),
             snapshot_id: Some("snap-root".to_string()),
             artifact_path: Some("artifacts/root".to_string()),
+            artifact_checksum,
             verification_kind: verification_kind.map(str::to_string),
         }],
         operation_receipts: Vec::new(),

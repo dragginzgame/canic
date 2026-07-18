@@ -290,7 +290,7 @@ fn run_restore_run_execute_marks_completed_operation() {
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
     let fake_icp = write_fake_icp_upload(&root, "target-snap-root");
-    let journal = ready_apply_journal();
+    let journal = ready_apply_journal_with_artifacts(&root);
 
     fs::write(
         &journal_path,
@@ -394,7 +394,7 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
     let fake_icp = write_fake_icp_upload(&root, "target-snap-root");
-    let journal = ready_apply_journal();
+    let journal = ready_apply_journal_with_artifacts(&root);
 
     fs::write(
         &journal_path,
@@ -421,7 +421,7 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
             .expect("decode updated journal");
     let preview = updated.next_command_preview();
 
-    fs::remove_dir_all(root).expect("remove temp root");
+    fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(updated.operation_receipts.len(), 1);
     assert_eq!(updated.operation_receipts[0].attempt, 1);
     assert_eq!(updated.operation_receipts[0].status.as_deref(), Some("0"));
@@ -446,7 +446,7 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
             "upload".to_string(),
             CHILD.to_string(),
             "--input".to_string(),
-            "/tmp/canic-cli-restore-artifacts/artifacts/app".to_string(),
+            root.join("artifacts/app").display().to_string(),
             "--json".to_string(),
         ]
     );
@@ -461,7 +461,7 @@ fn run_restore_run_execute_rejects_upload_without_snapshot_id() {
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
     let fake_icp = write_fake_icp_upload_without_id(&root);
-    let journal = ready_apply_journal();
+    let journal = ready_apply_journal_with_artifacts(&root);
 
     fs::write(
         &journal_path,
@@ -583,7 +583,7 @@ fn run_restore_run_require_complete_writes_summary_then_fails() {
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
     let fake_icp = write_fake_icp_upload(&root, "target-snap-root");
-    let journal = ready_apply_journal();
+    let journal = ready_apply_journal_with_artifacts(&root);
 
     fs::write(
         &journal_path,
@@ -634,7 +634,7 @@ fn run_restore_run_execute_marks_failed_operation() {
     fs::create_dir_all(&root).expect("create temp root");
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
-    let journal = ready_apply_journal();
+    let journal = ready_apply_journal_with_artifacts(&root);
 
     fs::write(
         &journal_path,
@@ -756,7 +756,7 @@ fn run_restore_run_execute_marks_failed_operation() {
 #[test]
 fn run_restore_run_retry_failed_marks_operation_ready() {
     let fixture = RestoreCliFixture::new("canic-cli-restore-run-retry-failed", "restore-run.json");
-    let journal = ready_apply_journal();
+    let journal = ready_apply_journal_with_artifacts(&fixture.root);
     fixture.write_journal(&journal);
 
     fixture

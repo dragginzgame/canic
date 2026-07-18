@@ -5,6 +5,7 @@
 //! Boundary: provides journal row validation and shared journal helper functions.
 
 use crate::{
+    artifacts::{ArtifactChecksum, ArtifactChecksumError},
     manifest::VERIFICATION_KIND_STATUS,
     restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation},
 };
@@ -36,6 +37,7 @@ pub struct RestoreApplyJournalOperation {
     pub role: String,
     pub snapshot_id: Option<String>,
     pub artifact_path: Option<String>,
+    pub artifact_checksum: Option<ArtifactChecksum>,
     pub verification_kind: Option<String>,
 }
 
@@ -61,6 +63,7 @@ impl RestoreApplyJournalOperation {
             role: operation.role.clone(),
             snapshot_id: operation.snapshot_id.clone(),
             artifact_path: operation.artifact_path.clone(),
+            artifact_checksum: operation.artifact_checksum.clone(),
             verification_kind: operation.verification_kind.clone(),
         }
     }
@@ -100,12 +103,24 @@ impl RestoreApplyJournalOperation {
 
     fn validate_operation_fields(&self) -> Result<(), RestoreApplyJournalError> {
         match self.operation {
-            RestoreApplyOperationKind::UploadSnapshot => self
-                .validate_required_field("operations[].artifact_path", self.artifact_path.as_ref())
-                .map(|_| ()),
-            RestoreApplyOperationKind::LoadSnapshot => self
-                .validate_required_field("operations[].snapshot_id", self.snapshot_id.as_ref())
-                .map(|_| ()),
+            RestoreApplyOperationKind::UploadSnapshot => {
+                self.validate_required_field(
+                    "operations[].artifact_path",
+                    self.artifact_path.as_ref(),
+                )?;
+                self.validate_artifact_checksum()
+            }
+            RestoreApplyOperationKind::LoadSnapshot => {
+                self.validate_required_field(
+                    "operations[].snapshot_id",
+                    self.snapshot_id.as_ref(),
+                )?;
+                self.validate_required_field(
+                    "operations[].artifact_path",
+                    self.artifact_path.as_ref(),
+                )?;
+                self.validate_artifact_checksum()
+            }
             RestoreApplyOperationKind::StopCanister | RestoreApplyOperationKind::StartCanister => {
                 Ok(())
             }
@@ -124,6 +139,25 @@ impl RestoreApplyJournalOperation {
                 Ok(())
             }
         }
+    }
+
+    fn validate_artifact_checksum(&self) -> Result<(), RestoreApplyJournalError> {
+        if self.state == RestoreApplyOperationState::Blocked && self.artifact_checksum.is_none() {
+            return Ok(());
+        }
+        let checksum = self.artifact_checksum.as_ref().ok_or_else(|| {
+            RestoreApplyJournalError::OperationMissingField {
+                sequence: self.sequence,
+                operation: self.operation.clone(),
+                field: "operations[].artifact_checksum",
+            }
+        })?;
+        checksum
+            .validate()
+            .map_err(|source| RestoreApplyJournalError::ArtifactChecksum {
+                sequence: self.sequence,
+                source,
+            })
     }
 
     fn validate_required_field<'a>(
@@ -209,6 +243,13 @@ pub enum RestoreApplyOperationState {
 
 #[derive(Debug, ThisError)]
 pub enum RestoreApplyJournalError {
+    #[error("restore apply journal operation {sequence} has invalid artifact checksum")]
+    ArtifactChecksum {
+        sequence: usize,
+        #[source]
+        source: ArtifactChecksumError,
+    },
+
     #[error("unsupported restore apply journal version {0}")]
     UnsupportedVersion(u16),
 

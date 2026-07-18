@@ -236,6 +236,7 @@ mod tests {
                 role: "root".to_string(),
                 snapshot_id: None,
                 artifact_path: None,
+                artifact_checksum: None,
                 verification_kind: None,
             }],
             operation_receipts: Vec::new(),

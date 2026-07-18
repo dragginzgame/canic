@@ -4,18 +4,20 @@
 //! Does not own: journal persistence, command execution, or restore plan construction.
 //! Boundary: public response contract for restore runner preview and execution APIs.
 
+use crate::{artifacts::ArtifactChecksumError, persistence::JournalLockError};
+
+use std::{io, path::PathBuf};
+
+use serde::Serialize;
+use thiserror::Error as ThisError;
+
 use super::{
     RestoreApplyCommandConfig, RestoreApplyCommandOutputPair, RestoreApplyJournalError,
     RestoreApplyJournalOperation, RestoreApplyJournalReport, RestoreApplyOperationKind,
     RestoreApplyOperationKindCounts, RestoreApplyPendingSummary, RestoreApplyProgressSummary,
     RestoreApplyReportOperation, RestoreApplyReportOutcome, RestoreApplyRunnerCommand,
-    RestorePersistenceError, constants::*,
+    RestorePersistenceError, artifact::StagedRestoreArtifact, constants::*,
 };
-use serde::Serialize;
-use std::{io, path::PathBuf};
-use thiserror::Error as ThisError;
-
-use crate::persistence::JournalLockError;
 
 ///
 /// RestoreRunnerConfig
@@ -71,6 +73,29 @@ pub struct RestoreRunnerCommandOutput {
 
 #[derive(Debug, ThisError)]
 pub enum RestoreRunnerError {
+    #[error("restore artifact staging checksum failed for operation {sequence}")]
+    ArtifactStageChecksum {
+        sequence: usize,
+        #[source]
+        source: ArtifactChecksumError,
+    },
+
+    #[error("restore artifact staging IO failed at {path}")]
+    ArtifactStageIo {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("restore artifact staging operation {sequence} is missing {field}")]
+    ArtifactStageMissingField {
+        sequence: usize,
+        field: &'static str,
+    },
+
+    #[error("restore artifact staging path is unsafe or occupied: {path}")]
+    ArtifactStagePathConflict { path: PathBuf },
+
     #[error("restore run command failed for operation {sequence}: status={status}")]
     CommandFailed { sequence: usize, status: String },
 
@@ -608,6 +633,7 @@ pub(super) struct RestoreRunPreparedOperation {
     pub(super) command: RestoreApplyRunnerCommand,
     pub(super) sequence: usize,
     pub(super) attempt: usize,
+    pub(super) _staged_artifact: Option<StagedRestoreArtifact>,
 }
 
 ///

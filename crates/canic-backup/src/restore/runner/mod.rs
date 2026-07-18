@@ -4,12 +4,15 @@
 //! Does not own: restore planning, apply journal construction, or ICP command semantics.
 //! Boundary: reads/writes restore apply journals and returns operator runner responses.
 
+mod artifact;
 mod constants;
 mod execute;
 mod io;
 mod precondition;
 mod preview;
 mod status;
+#[cfg(test)]
+mod tests;
 mod types;
 
 use super::{

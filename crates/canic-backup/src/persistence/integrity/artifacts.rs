@@ -101,7 +101,11 @@ fn verify_member_artifact(
         ));
     }
 
-    ArtifactChecksum::from_path(&artifact_path)?.verify(expected_hash)?;
+    ArtifactChecksum::from_relative_path_no_follow(
+        layout.root(),
+        std::path::Path::new(&entry.artifact_path),
+    )?
+    .verify(expected_hash)?;
     Ok(ArtifactIntegrityReport {
         canister_id: entry.canister_id.clone(),
         snapshot_id: entry.snapshot_id.clone(),

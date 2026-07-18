@@ -4,14 +4,14 @@
 //! Does not own: snapshot capture, artifact storage, or restore planning.
 //! Boundary: provides deterministic checksum primitives to backup workflows.
 
+mod secure;
 #[cfg(test)]
 mod tests;
 
 use crate::hash::{hex_bytes, sha256_hex};
 
 use std::{
-    fs::{self, File},
-    io::{self, Read},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -56,8 +56,7 @@ impl ArtifactChecksum {
 
     /// Compute a SHA-256 checksum from one filesystem file.
     pub fn from_file(path: &Path) -> Result<Self, ArtifactChecksumError> {
-        let mut file = File::open(path)?;
-        Self::from_reader(&mut file)
+        secure::checksum_path(path, secure::ExpectedArtifactType::File)
     }
 
     /// Compute a file checksum from an already-open artifact descriptor.
@@ -79,29 +78,36 @@ impl ArtifactChecksum {
         })
     }
 
+    pub(crate) fn copy_from_reader(
+        reader: &mut impl Read,
+        writer: &mut impl Write,
+    ) -> Result<Self, ArtifactChecksumError> {
+        let mut hasher = Sha256::new();
+        let mut buffer = vec![0u8; 64 * 1024];
+
+        loop {
+            let read = reader.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            writer.write_all(&buffer[..read])?;
+            hasher.update(&buffer[..read]);
+        }
+
+        Ok(Self {
+            algorithm: SHA256_ALGORITHM.to_string(),
+            hash: hex_bytes(hasher.finalize()),
+        })
+    }
+
     /// Compute a SHA-256 checksum from a file or deterministic directory listing.
     pub fn from_path(path: &Path) -> Result<Self, ArtifactChecksumError> {
-        if path.is_dir() {
-            Self::from_directory(path)
-        } else {
-            Self::from_file(path)
-        }
+        secure::checksum_path(path, secure::ExpectedArtifactType::Any)
     }
 
     /// Compute a deterministic SHA-256 checksum over all files in a directory.
     pub fn from_directory(path: &Path) -> Result<Self, ArtifactChecksumError> {
-        let mut files = Vec::new();
-        collect_files(path, path, &mut files)?;
-        files.sort();
-
-        let checksums = files
-            .into_iter()
-            .map(|relative_path| {
-                let checksum = Self::from_file(&path.join(&relative_path))?;
-                Ok((relative_path, checksum))
-            })
-            .collect::<Result<Vec<_>, ArtifactChecksumError>>()?;
-        Ok(Self::from_relative_file_checksums(checksums))
+        secure::checksum_path(path, secure::ExpectedArtifactType::Directory)
     }
 
     /// Compose the maintained directory checksum from relative file checksums.
@@ -123,11 +129,7 @@ impl ArtifactChecksum {
 
     /// Verify that the checksum matches an expected SHA-256 hash.
     pub fn verify(&self, expected_hash: &str) -> Result<(), ArtifactChecksumError> {
-        if self.algorithm != SHA256_ALGORITHM {
-            return Err(ArtifactChecksumError::UnsupportedAlgorithm(
-                self.algorithm.clone(),
-            ));
-        }
+        self.validate()?;
 
         if self.hash == expected_hash {
             Ok(())
@@ -137,6 +139,34 @@ impl ArtifactChecksum {
                 actual: self.hash.clone(),
             })
         }
+    }
+
+    /// Validate checksum metadata without comparing artifact bytes.
+    pub fn validate(&self) -> Result<(), ArtifactChecksumError> {
+        if self.algorithm != SHA256_ALGORITHM {
+            return Err(ArtifactChecksumError::UnsupportedAlgorithm(
+                self.algorithm.clone(),
+            ));
+        }
+        if self.hash.len() != 64 || !self.hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ArtifactChecksumError::InvalidHash(self.hash.clone()));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn from_relative_path_no_follow(
+        root: &Path,
+        relative: &Path,
+    ) -> Result<Self, ArtifactChecksumError> {
+        secure::checksum_relative_path(root, relative)
+    }
+
+    pub(crate) fn stage_relative_path_no_follow(
+        root: &Path,
+        relative: &Path,
+        destination: &Path,
+    ) -> Result<Self, ArtifactChecksumError> {
+        secure::stage_relative_path(root, relative, destination)
     }
 }
 
@@ -149,34 +179,21 @@ impl ArtifactChecksum {
 
 #[derive(Debug, ThisError)]
 pub enum ArtifactChecksumError {
+    #[error("checksum mismatch: expected {expected}, actual {actual}")]
+    ChecksumMismatch { expected: String, actual: String },
+
+    #[error("invalid SHA-256 checksum: {0}")]
+    InvalidHash(String),
+
     #[error(transparent)]
     Io(#[from] io::Error),
 
     #[error("unsupported checksum algorithm {0}")]
     UnsupportedAlgorithm(String),
 
-    #[error("checksum mismatch: expected {expected}, actual {actual}")]
-    ChecksumMismatch { expected: String, actual: String },
-}
+    #[error("unsupported artifact filesystem entry at {path}: {kind}")]
+    UnsupportedEntry { path: String, kind: String },
 
-// Recursively collect file paths relative to a directory root.
-fn collect_files(
-    root: &Path,
-    path: &Path,
-    files: &mut Vec<PathBuf>,
-) -> Result<(), ArtifactChecksumError> {
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            collect_files(root, &path, files)?;
-        } else if path.is_file() {
-            let relative = path
-                .strip_prefix(root)
-                .map_err(io::Error::other)?
-                .to_path_buf();
-            files.push(relative);
-        }
-    }
-    Ok(())
+    #[error("secure artifact traversal is unsupported on platform {0}")]
+    UnsupportedPlatform(&'static str),
 }

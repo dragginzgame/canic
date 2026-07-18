@@ -5,7 +5,10 @@ use crate::{
     persistence::resolve_backup_artifact_path,
 };
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use thiserror::Error as ThisError;
 
 mod journal;
@@ -129,10 +132,11 @@ fn validate_restore_apply_artifacts(
     plan: &RestorePlan,
     backup_root: &Path,
 ) -> Result<RestoreApplyArtifactValidation, RestoreApplyDryRunError> {
+    let backup_root = canonical_restore_backup_root(backup_root)?;
     let mut checks = Vec::new();
 
     for member in plan.ordered_members() {
-        checks.push(validate_restore_apply_artifact(member, backup_root)?);
+        checks.push(validate_restore_apply_artifact(member, &backup_root)?);
     }
 
     let members_with_expected_checksums = checks
@@ -164,22 +168,23 @@ fn validate_restore_apply_artifact(
         &member.source_snapshot.artifact_path,
     )?;
 
-    if !resolved_path.exists() {
-        return Err(RestoreApplyDryRunError::ArtifactMissing {
-            source_canister: member.source_canister.clone(),
-            artifact_path: member.source_snapshot.artifact_path.clone(),
-            resolved_path: resolved_path.to_string_lossy().to_string(),
-        });
-    }
+    validate_restore_artifact_type(
+        backup_root,
+        &member.source_canister,
+        &member.source_snapshot.artifact_path,
+        &resolved_path,
+    )?;
 
     let (checksum_actual, checksum_verified) =
         if let Some(expected) = &member.source_snapshot.checksum {
-            let checksum = ArtifactChecksum::from_path(&resolved_path).map_err(|source| {
-                RestoreApplyDryRunError::ArtifactChecksum {
-                    source_canister: member.source_canister.clone(),
-                    artifact_path: member.source_snapshot.artifact_path.clone(),
-                    source,
-                }
+            let checksum = ArtifactChecksum::from_relative_path_no_follow(
+                backup_root,
+                Path::new(&member.source_snapshot.artifact_path),
+            )
+            .map_err(|source| RestoreApplyDryRunError::ArtifactChecksum {
+                source_canister: member.source_canister.clone(),
+                artifact_path: member.source_snapshot.artifact_path.clone(),
+                source,
             })?;
             checksum.verify(expected).map_err(|source| {
                 RestoreApplyDryRunError::ArtifactChecksum {
@@ -205,6 +210,78 @@ fn validate_restore_apply_artifact(
         checksum_actual,
         checksum_verified,
     })
+}
+
+fn canonical_restore_backup_root(backup_root: &Path) -> Result<PathBuf, RestoreApplyDryRunError> {
+    let metadata = fs::symlink_metadata(backup_root).map_err(|source| {
+        RestoreApplyDryRunError::ArtifactRootIo {
+            backup_root: backup_root.to_path_buf(),
+            source,
+        }
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(RestoreApplyDryRunError::ArtifactRootUnsafe {
+            backup_root: backup_root.to_path_buf(),
+        });
+    }
+    backup_root
+        .canonicalize()
+        .map_err(|source| RestoreApplyDryRunError::ArtifactRootIo {
+            backup_root: backup_root.to_path_buf(),
+            source,
+        })
+}
+
+fn validate_restore_artifact_type(
+    backup_root: &Path,
+    source_canister: &str,
+    artifact_path: &str,
+    resolved_path: &Path,
+) -> Result<(), RestoreApplyDryRunError> {
+    let mut current = backup_root.to_path_buf();
+    let mut artifact_metadata = None;
+    for component in Path::new(artifact_path).components() {
+        current.push(component);
+        let metadata = match fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {
+                return Err(RestoreApplyDryRunError::ArtifactMissing {
+                    source_canister: source_canister.to_string(),
+                    artifact_path: artifact_path.to_string(),
+                    resolved_path: resolved_path.to_string_lossy().to_string(),
+                });
+            }
+            Err(source) => {
+                return Err(RestoreApplyDryRunError::ArtifactChecksum {
+                    source_canister: source_canister.to_string(),
+                    artifact_path: artifact_path.to_string(),
+                    source: ArtifactChecksumError::Io(source),
+                });
+            }
+        };
+        if metadata.file_type().is_symlink() {
+            return Err(RestoreApplyDryRunError::ArtifactUnsafeType {
+                source_canister: source_canister.to_string(),
+                artifact_path: current.to_string_lossy().to_string(),
+                kind: "symlink".to_string(),
+            });
+        }
+        artifact_metadata = Some(metadata);
+    }
+    let metadata =
+        artifact_metadata.ok_or_else(|| RestoreApplyDryRunError::ArtifactPathEscapesBackup {
+            source_canister: source_canister.to_string(),
+            artifact_path: artifact_path.to_string(),
+        })?;
+    if metadata.is_file() || metadata.is_dir() {
+        Ok(())
+    } else {
+        Err(RestoreApplyDryRunError::ArtifactUnsafeType {
+            source_canister: source_canister.to_string(),
+            artifact_path: artifact_path.to_string(),
+            kind: "special".to_string(),
+        })
+    }
 }
 
 // Reject absolute paths and parent traversal before joining with the backup root.
@@ -301,6 +378,7 @@ fn push_member_operation(
 
     let snapshot_id = operation_snapshot_id(&operation, member);
     let artifact_path = operation_artifact_path(&operation, member);
+    let artifact_checksum = operation_artifact_checksum(&operation, member);
 
     operations.push(RestoreApplyDryRunOperation {
         sequence,
@@ -311,6 +389,7 @@ fn push_member_operation(
         role: member.role.clone(),
         snapshot_id,
         artifact_path,
+        artifact_checksum,
         verification_kind: check.map(|check| check.kind.clone()),
     });
 }
@@ -335,6 +414,27 @@ fn operation_artifact_path(
         RestoreApplyOperationKind::UploadSnapshot | RestoreApplyOperationKind::LoadSnapshot
     )
     .then(|| member.source_snapshot.artifact_path.clone())
+}
+
+fn operation_artifact_checksum(
+    operation: &RestoreApplyOperationKind,
+    member: &RestorePlanMember,
+) -> Option<ArtifactChecksum> {
+    matches!(
+        operation,
+        RestoreApplyOperationKind::UploadSnapshot | RestoreApplyOperationKind::LoadSnapshot
+    )
+    .then(|| {
+        member
+            .source_snapshot
+            .checksum
+            .as_ref()
+            .map(|hash| ArtifactChecksum {
+                algorithm: member.source_snapshot.checksum_algorithm.clone(),
+                hash: hash.clone(),
+            })
+    })
+    .flatten()
 }
 
 // Append deployment-level verification checks after all member operations.
@@ -391,6 +491,7 @@ fn push_deployment_operation(
         role: "deployment".to_string(),
         snapshot_id: None,
         artifact_path: None,
+        artifact_checksum: None,
         verification_kind: Some(check.kind.clone()),
     });
 }
@@ -410,6 +511,7 @@ pub struct RestoreApplyDryRunOperation {
     pub role: String,
     pub snapshot_id: Option<String>,
     pub artifact_path: Option<String>,
+    pub artifact_checksum: Option<ArtifactChecksum>,
     pub verification_kind: Option<String>,
 }
 
@@ -423,6 +525,25 @@ pub enum RestoreApplyDryRunError {
     ArtifactPathEscapesBackup {
         source_canister: String,
         artifact_path: String,
+    },
+
+    #[error("restore backup artifact root IO failed at {backup_root}")]
+    ArtifactRootIo {
+        backup_root: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("restore backup artifact root is not a direct directory: {backup_root}")]
+    ArtifactRootUnsafe { backup_root: PathBuf },
+
+    #[error(
+        "restore artifact for {source_canister} has unsupported filesystem type {kind}: {artifact_path}"
+    )]
+    ArtifactUnsafeType {
+        source_canister: String,
+        artifact_path: String,
+        kind: String,
     },
 
     #[error(

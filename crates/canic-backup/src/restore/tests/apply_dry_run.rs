@@ -41,6 +41,13 @@ fn apply_dry_run_renders_ordered_member_operations() {
         Some("artifacts/root".to_string())
     );
     assert_eq!(
+        operations[0]
+            .artifact_checksum
+            .as_ref()
+            .map(|checksum| checksum.hash.as_str()),
+        Some(HASH)
+    );
+    assert_eq!(
         operations[2].operation,
         RestoreApplyOperationKind::StopCanister
     );
@@ -183,4 +190,75 @@ fn apply_dry_run_rejects_artifact_path_traversal() {
         err,
         RestoreApplyDryRunError::ArtifactPathEscapesBackup { .. }
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn apply_dry_run_rejects_symlinked_artifact_components() {
+    let root = temp_dir("canic-restore-apply-artifact-symlink");
+    fs::create_dir_all(root.join("artifacts")).expect("create artifact root");
+    let outside = root.join("outside");
+    fs::write(&outside, b"outside").expect("write outside artifact");
+    std::os::unix::fs::symlink(&outside, root.join("artifacts/root"))
+        .expect("create artifact symlink");
+    let mut manifest = valid_manifest(IdentityMode::Relocatable);
+    let member = manifest
+        .deployment
+        .members
+        .iter_mut()
+        .find(|member| member.canister_id == ROOT)
+        .expect("root member");
+    member.source_snapshot.artifact_path = "artifacts/root".to_string();
+    member.source_snapshot.checksum = Some(ArtifactChecksum::from_bytes(b"outside").hash);
+
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let error = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
+        .expect_err("symlinked artifact must reject");
+
+    std::assert_matches!(error, RestoreApplyDryRunError::ArtifactUnsafeType { .. });
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[cfg(unix)]
+#[test]
+fn apply_dry_run_rejects_symlinked_backup_root() {
+    let root = temp_dir("canic-restore-apply-root-symlink");
+    let actual = root.join("actual");
+    fs::create_dir_all(&actual).expect("create actual root");
+    let linked = root.join("linked");
+    std::os::unix::fs::symlink(&actual, &linked).expect("create root symlink");
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+    let error = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &linked)
+        .expect_err("symlinked backup root must reject");
+
+    std::assert_matches!(error, RestoreApplyDryRunError::ArtifactRootUnsafe { .. });
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[cfg(unix)]
+#[test]
+fn apply_dry_run_rejects_special_artifact_files() {
+    use std::os::unix::net::UnixListener;
+
+    let root = temp_dir("canic-restore-apply-special-artifact");
+    fs::create_dir_all(root.join("artifacts")).expect("create artifact root");
+    let socket = root.join("artifacts/root");
+    let _listener = UnixListener::bind(&socket).expect("create artifact socket");
+    let mut manifest = valid_manifest(IdentityMode::Relocatable);
+    let member = manifest
+        .deployment
+        .members
+        .iter_mut()
+        .find(|member| member.canister_id == ROOT)
+        .expect("root member");
+    member.source_snapshot.artifact_path = "artifacts/root".to_string();
+
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let error = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
+        .expect_err("special artifact must reject");
+
+    std::assert_matches!(error, RestoreApplyDryRunError::ArtifactUnsafeType { .. });
+    fs::remove_dir_all(root).expect("remove fixture");
 }
