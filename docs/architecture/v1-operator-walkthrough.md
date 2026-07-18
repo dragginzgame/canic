@@ -194,7 +194,7 @@ canic deploy inspect catalog inspect demo-staging --json
 The catalog reads only:
 
 ```text
-.canic/<network>/deployments/<deployment>.json
+.canic/<environment>/deployments/<deployment>.json
 ```
 
 It does not refresh live state, infer deployments from fleet names, create

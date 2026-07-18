@@ -22,7 +22,7 @@ pub(super) fn install_state_registry_observations(
     match resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: request.deployment_name.clone(),
-            network: request.network.clone(),
+            environment: request.environment.clone(),
             icp: "icp".to_string(),
             detect_lost_local_root: false,
         },
@@ -36,7 +36,7 @@ pub(super) fn install_state_registry_observations(
             enrich_registry_observed_canisters(
                 &mut registry_canisters,
                 &request.icp_root,
-                &request.network,
+                &request.environment,
                 gaps,
             );
             let mut observed_pool = registry_entries_to_observed_pool(
@@ -106,11 +106,11 @@ pub(in crate::deployment_truth) fn apply_canister_control_to_observed_pool(
 fn enrich_registry_observed_canisters(
     observed_canisters: &mut [ObservedCanisterV1],
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) {
     for observed in observed_canisters {
-        match read_live_canister_status(icp_root, network, &observed.canister_id) {
+        match read_live_canister_status(icp_root, environment, &observed.canister_id) {
             Ok(report) => apply_live_status_to_registry_observation(observed, &report),
             Err(err) => gaps.push(observation_gap(
                 live_status_gap_key(observed),

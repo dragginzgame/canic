@@ -72,7 +72,7 @@ pub(in crate::deployment_truth::tests) fn sample_build_materialization_input()
         materialization_input_id: "materialization-input:root:prod".to_string(),
         build_recipe_id: "recipe:root:debug".to_string(),
         canonical_embedded_config_sha256: sample_sha256("3"),
-        network: "ic".to_string(),
+        environment: "ic".to_string(),
         root_trust_anchor: "aaaaa-aa".to_string(),
         runtime_variant: "prod".to_string(),
     }

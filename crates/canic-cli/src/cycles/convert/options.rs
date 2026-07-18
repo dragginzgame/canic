@@ -4,7 +4,7 @@ use crate::{
             flag_arg, parse_matches, render_usage, required_string, string_option, typed_option,
             value_arg,
         },
-        globals::{internal_icp_arg, internal_network_arg},
+        globals::{internal_environment_arg, internal_icp_arg},
     },
     cycles::{
         CyclesCommandError,
@@ -165,7 +165,7 @@ fn command() -> ClapCommand {
         )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))
         .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .group(
             ArgGroup::new("convert-mode")

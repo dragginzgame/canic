@@ -211,7 +211,7 @@ fn validate_role_materialization_identity(
         "canonical_embedded_config_sha256",
         &role.canonical_embedded_config_sha256,
     )?;
-    ensure_materialization_report_field("network", &role.network)?;
+    ensure_materialization_report_field("environment", &role.environment)?;
     ensure_materialization_report_field("root_trust_anchor", &role.root_trust_anchor)?;
     ensure_materialization_report_field("runtime_variant", &role.runtime_variant)?;
     ensure_materialization_report_sha256("wasm_sha256", &role.wasm_sha256)?;

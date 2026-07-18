@@ -61,7 +61,7 @@ fn parses_endpoint_options() {
     let options = EndpointsOptions::parse_info([
         OsString::from("test"),
         OsString::from("app"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/bin/icp"),
@@ -71,7 +71,7 @@ fn parses_endpoint_options() {
 
     assert_eq!(options.deployment, "test");
     assert_eq!(options.canister, "app");
-    assert_eq!(options.network.as_deref(), Some("local"));
+    assert_eq!(options.environment.as_deref(), Some("local"));
     assert_eq!(options.icp, "/bin/icp");
     assert!(options.json);
 }

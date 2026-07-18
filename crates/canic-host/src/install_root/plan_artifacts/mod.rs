@@ -23,11 +23,11 @@ use std::{
 pub(super) fn validate_plan_artifacts_with_phase(
     plan: &DeploymentPlanV1,
     icp_root: &Path,
-    network: &str,
+    environment: &str,
 ) -> Result<(CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
     let started_at = current_unix_timestamp_label()?;
     let started = Instant::now();
-    validate_plan_artifact_paths(plan, icp_root, network)?;
+    validate_plan_artifact_paths(plan, icp_root, environment)?;
     let duration = started.elapsed();
     let role_names = plan
         .role_artifacts
@@ -57,7 +57,7 @@ pub(super) fn emit_manifest_with_deployment_truth_receipt(
     let emit_manifest_started_at_label = current_unix_timestamp_label()?;
     let emit_manifest_started_at = Instant::now();
     let manifest_path = if let Some(plan) = &options.deployment_plan_override {
-        emit_root_release_set_manifest_from_plan(icp_root, &options.network, plan)?
+        emit_root_release_set_manifest_from_plan(icp_root, &options.environment, plan)?
     } else {
         let complete_build = install_snapshot
             .complete_build
@@ -81,7 +81,7 @@ pub(super) fn emit_manifest_with_deployment_truth_receipt(
     );
     let emit_manifest_receipt_path = write_install_deployment_truth_receipt(
         icp_root,
-        &options.network,
+        &options.environment,
         deployment_name,
         &emit_manifest_receipt,
     )?;
@@ -94,12 +94,12 @@ pub(super) fn emit_manifest_with_deployment_truth_receipt(
 
 pub(super) fn root_wasm_for_install_plan(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_build_target: &str,
     plan: Option<&DeploymentPlanV1>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if let Some(plan) = plan {
-        let artifact_root = resolve_artifact_root(icp_root, network)?;
+        let artifact_root = resolve_artifact_root(icp_root, environment)?;
         let root_artifact = plan
             .role_artifacts
             .iter()
@@ -116,9 +116,9 @@ pub(super) fn root_wasm_for_install_plan(
 fn validate_plan_artifact_paths(
     plan: &DeploymentPlanV1,
     icp_root: &Path,
-    network: &str,
+    environment: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
+    let artifact_root = resolve_artifact_root(icp_root, environment)?;
     let root_artifact = plan
         .role_artifacts
         .iter()
@@ -149,10 +149,10 @@ fn validate_plan_artifact_paths(
 
 fn emit_root_release_set_manifest_from_plan(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     plan: &DeploymentPlanV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let artifact_root = resolve_artifact_root(icp_root, network)?;
+    let artifact_root = resolve_artifact_root(icp_root, environment)?;
     let manifest_path = root_release_set_manifest_path(&artifact_root);
     let entries = plan_release_role_artifacts(plan)
         .map(|artifact| release_set_entry_from_plan_artifact(icp_root, &artifact_root, artifact))
@@ -263,13 +263,13 @@ mod tests {
     use crate::test_support::temp_dir;
 
     #[test]
-    fn normal_install_uses_current_local_root_wasm_when_network_artifacts_exist() {
+    fn normal_install_uses_current_local_root_wasm_when_environment_artifacts_exist() {
         let icp_root = temp_dir("canic-install-root-artifact-authority");
         let _ = fs::remove_dir_all(&icp_root);
         fs::create_dir_all(icp_root.join(".icp/local/canisters/root"))
             .expect("create local root artifacts");
         fs::create_dir_all(icp_root.join(".icp/ic/canisters/root"))
-            .expect("create selected-network root artifacts");
+            .expect("create selected-environment root artifacts");
 
         let resolved = root_wasm_for_install_plan(&icp_root, "ic", "root", None)
             .expect("resolve current root wasm");

@@ -10,7 +10,7 @@ use canic_host::table::{ColumnAlign, render_table};
 pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
     let rows = [[
         report.deployment.clone(),
-        report.network.clone(),
+        report.environment.clone(),
         report.mode.label().to_string(),
         report.layout.label().to_string(),
         report.status.label().to_string(),
@@ -23,7 +23,7 @@ pub(super) fn render_create_report(report: &BackupCreateReport) -> String {
     render_table(
         &[
             "DEPLOYMENT",
-            "NETWORK",
+            "ENVIRONMENT",
             "MODE",
             "LAYOUT",
             "STATUS",
@@ -48,7 +48,7 @@ mod tests {
     fn render_backup_create_report_shows_layout_source() {
         let report = BackupCreateReport {
             deployment: "demo".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             out: PathBuf::from("backups/demo"),
             plan_id: "plan-demo".to_string(),
             run_id: "run-demo".to_string(),

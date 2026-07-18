@@ -4,7 +4,7 @@ use crate::{
         string_option_or_else, value_arg,
     },
     cli::defaults::default_icp,
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
 };
 use clap::{ArgGroup, Command as ClapCommand};
 use std::{ffi::OsString, path::PathBuf};
@@ -228,7 +228,7 @@ pub(super) struct RestoreRunOptions {
     pub(super) backup_ref: Option<String>,
     pub(super) journal: Option<PathBuf>,
     pub(super) icp: String,
-    pub(super) network: Option<String>,
+    pub(super) environment: Option<String>,
     pub(super) out: Option<PathBuf>,
     pub(super) dry_run: bool,
     pub(super) execute: bool,
@@ -252,7 +252,7 @@ impl RestoreRunOptions {
             backup_ref: string_option(&matches, BACKUP_REF),
             journal: path_option(&matches, "journal"),
             icp: string_option_or_else(&matches, "icp", default_icp),
-            network: string_option(&matches, "network"),
+            environment: string_option(&matches, "environment"),
             out: path_option(&matches, "out"),
             dry_run: matches.get_flag("dry-run"),
             execute: matches.get_flag("execute"),
@@ -286,7 +286,7 @@ pub(super) fn restore_run_command() -> ClapCommand {
         .arg(value_arg(BACKUP_REF).value_name(BACKUP_REF))
         .arg(value_arg("journal").long("journal").value_name("file"))
         .arg(internal_icp_arg())
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(flag_arg("dry-run").long("dry-run"))
         .arg(flag_arg("execute").long("execute"))
@@ -313,7 +313,7 @@ pub(super) struct RestoreStatusOptions {
     pub(super) backup_ref: Option<String>,
     pub(super) journal: Option<PathBuf>,
     pub(super) icp: String,
-    pub(super) network: Option<String>,
+    pub(super) environment: Option<String>,
     pub(super) out: Option<PathBuf>,
     pub(super) require_ready: bool,
     pub(super) require_complete: bool,
@@ -332,7 +332,7 @@ impl RestoreStatusOptions {
             backup_ref: string_option(&matches, BACKUP_REF),
             journal: path_option(&matches, "journal"),
             icp: string_option_or_else(&matches, "icp", default_icp),
-            network: string_option(&matches, "network"),
+            environment: string_option(&matches, "environment"),
             out: path_option(&matches, "out"),
             require_ready: matches.get_flag("require-ready"),
             require_complete: matches.get_flag("require-complete"),
@@ -355,7 +355,7 @@ pub(super) fn restore_status_command() -> ClapCommand {
         .arg(value_arg(BACKUP_REF).value_name(BACKUP_REF))
         .arg(value_arg("journal").long("journal").value_name("file"))
         .arg(internal_icp_arg())
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(value_arg("out").long("out").value_name("file"))
         .arg(flag_arg("require-ready").long("require-ready"))
         .arg(flag_arg("require-complete").long("require-complete"))

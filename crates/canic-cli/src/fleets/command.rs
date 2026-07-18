@@ -6,7 +6,7 @@
 use crate::{
     cli::{
         clap::{flag_arg, passthrough_subcommand, render_usage, value_arg},
-        globals::internal_network_arg,
+        globals::internal_environment_arg,
     },
     scaffold,
 };
@@ -420,7 +420,7 @@ pub(super) fn fleet_list_command() -> ClapCommand {
         .bin_name("canic fleet list")
         .about("List config-defined Canic fleets")
         .disable_help_flag(true)
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .after_help(FLEET_LIST_HELP_AFTER)
 }
 

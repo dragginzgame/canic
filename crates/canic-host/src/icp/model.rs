@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-pub(super) const LOCAL_NETWORK: &str = "local";
+pub(super) const LOCAL_ICP_TARGET: &str = "local";
 pub const REQUIRED_ICP_CLI_VERSION: &str = "1.0.0";
 pub const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.0.0, <2.0.0";
 
@@ -33,7 +33,7 @@ pub struct IcpRawOutput {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IcpCli {
     pub(super) executable: String,
-    pub(super) network: Option<String>,
+    pub(super) environment: Option<String>,
     pub(super) cwd: Option<PathBuf>,
     pub(super) local_replica: Option<LocalReplicaTarget>,
 }

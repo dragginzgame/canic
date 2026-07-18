@@ -40,14 +40,14 @@ fn deploy_install_plan_builds_current_install_options_with_plan_override() {
     let options = deploy_install::DeployInstallPlanOptions {
         deployment: "demo-local".to_string(),
         plan: PathBuf::from("promoted-plan.json"),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         profile: Some(CanisterBuildProfile::Fast),
     }
     .into_install_root_options(input, Some(PathBuf::from("/tmp/icp")));
 
     assert_eq!(options.root_canister, "aaaaa-aa");
     assert_eq!(options.root_build_target, "root");
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert_eq!(options.deployment_name.as_deref(), Some("demo-local"));
     assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
     assert_eq!(

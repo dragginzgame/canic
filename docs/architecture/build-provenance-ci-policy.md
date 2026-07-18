@@ -47,7 +47,7 @@ CI policy should branch on the stable envelope plus the stable
 - `payload_schema.id == "canic.build_provenance.v1"`;
 - `payload_schema.stability == "stable"`;
 - `target.kind == "artifact"`;
-- `target.fleet`, `target.role`, `target.profile`, and `target.network`;
+- `target.fleet`, `target.role`, `target.profile`, and `target.environment`;
 - `exit_class`;
 - `summary.warnings[].code`;
 - `payload.source`;
@@ -55,12 +55,12 @@ CI policy should branch on the stable envelope plus the stable
 - `payload.transforms`;
 - `payload.artifacts`.
 
-The envelope target records the selected Canic network. Its inputs also
-contain one `build_network` entry whose note records both the selected network
+The envelope target records the selected Canic environment. Its inputs also
+contain one `build_network` entry whose note records both the selected environment
 and the resolved Canic build network, for example
-`network=staging;build_network=ic`. CI should retain this distinction: the
-selected network identifies deployment state, while the build network controls
-the runtime class baked into Wasm. Named networks are resolved through the
+`environment=staging;build_network=ic`. CI should retain this distinction: the
+selected environment identifies deployment state, while the build network controls
+the runtime class baked into Wasm. Named environments are resolved through the
 upstream `environments` section in `icp.yaml`.
 
 Do not treat timestamps as provenance. `generated_at` explains when Canic wrote

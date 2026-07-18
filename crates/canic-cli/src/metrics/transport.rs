@@ -51,7 +51,7 @@ pub(super) fn metrics_report(
 
     Ok(MetricsReport {
         deployment: options.deployment.clone(),
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         kind: options.kind,
         canisters,
     })
@@ -224,9 +224,9 @@ fn query_metrics(
         metrics_kind_candid_variant(options.kind),
         options.limit
     );
-    let mut icp = IcpCli::new(&options.icp, Some(options.network.clone()));
+    let mut icp = IcpCli::new(&options.icp, Some(options.environment.clone()));
     let root = resolve_metrics_icp_root();
-    let candid_path = registry_entry_candid_path(root.as_deref(), &options.network, entry);
+    let candid_path = registry_entry_candid_path(root.as_deref(), &options.environment, entry);
     if let Some(root) = root {
         icp = icp.with_cwd(root);
     }
@@ -248,7 +248,7 @@ fn resolve_metrics_deployment(
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),
-            network: options.network.clone(),
+            environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,
         },

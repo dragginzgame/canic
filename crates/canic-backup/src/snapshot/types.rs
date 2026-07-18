@@ -100,7 +100,7 @@ pub struct SnapshotDownloadConfig {
     pub created_at: String,
     pub tool_name: String,
     pub tool_version: String,
-    pub network: String,
+    pub environment: String,
 }
 
 ///
@@ -209,7 +209,7 @@ pub struct SnapshotManifestInput<'a> {
     pub created_at: String,
     pub tool_name: String,
     pub tool_version: String,
-    pub network: String,
+    pub environment: String,
     pub root_canister: String,
     pub selected_canister: String,
     pub include_children: bool,

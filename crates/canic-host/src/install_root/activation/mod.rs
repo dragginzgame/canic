@@ -23,13 +23,13 @@ pub(super) fn run_root_activation_phases(
     let mut timings = InstallTimingSummary::default();
     let root_wasm = root_wasm_for_install_plan(
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         &options.root_build_target,
         options.deployment_plan_override.as_ref(),
     )?;
     let install_operation = InstallRootWasmOperation::new(
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         root_canister_id,
         root_wasm,
         build_context.local_replica.as_ref(),
@@ -37,7 +37,7 @@ pub(super) fn run_root_activation_phases(
     timings.install_root = receipt_scope.run_operation(&install_operation)?;
     let pre_bootstrap_funding = EnsureRootCyclesOperation::new(
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         root_canister_id,
         InstallPhaseLabel::FUND_ROOT_PRE_BOOTSTRAP,
         "ensure local root minimum cycles before bootstrap",
@@ -48,7 +48,7 @@ pub(super) fn run_root_activation_phases(
     let manifest = load_root_release_set_manifest(manifest_path)?;
     let stage_operation = StageReleaseSetOperation::new(
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         root_canister_id,
         manifest_path,
         manifest,
@@ -57,14 +57,14 @@ pub(super) fn run_root_activation_phases(
     timings.stage_release_set = receipt_scope.run_operation(&stage_operation)?;
     let resume_operation = ResumeBootstrapOperation::new(
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         root_canister_id,
         build_context.local_replica.as_ref(),
     );
     timings.resume_bootstrap = receipt_scope.run_operation(&resume_operation)?;
     let wait_ready_operation = WaitRootReadyOperation::new(
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         root_canister_id,
         options.ready_timeout_seconds,
         build_context.local_replica.as_ref(),
@@ -79,7 +79,7 @@ pub(super) fn run_root_activation_phases(
     }
     let post_ready_funding = EnsureRootCyclesOperation::new(
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         root_canister_id,
         InstallPhaseLabel::FUND_ROOT_POST_READY,
         "ensure local root minimum cycles after ready",

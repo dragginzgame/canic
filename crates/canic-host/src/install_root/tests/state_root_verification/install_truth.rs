@@ -69,7 +69,7 @@ kind = "root"
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: Some("demo-local".to_string()),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
@@ -101,7 +101,7 @@ fn install_truth_state_write_receipt_records_local_state_path() {
     let execution_context = current_install_execution_context(&root, &root, "local");
     let scope = InstallReceiptScope {
         icp_root: &root,
-        network: "local",
+        environment: "local",
         deployment_name: "demo",
         check: &check,
         execution_context: Some(&execution_context),

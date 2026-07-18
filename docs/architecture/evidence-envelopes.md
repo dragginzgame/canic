@@ -62,7 +62,7 @@ stable outer contract should use `--evidence-envelope`.
 - envelope schema identity;
 - Canic version;
 - normalized command provenance;
-- target identity such as deployment, fleet, profile, network, or role;
+- target identity such as deployment, fleet, profile, environment, or role;
 - generation timestamp;
 - source config fingerprint when available;
 - supplied input fingerprints;
@@ -298,7 +298,7 @@ An envelope is evidence about one command invocation. It does not prove that
 deployment state is still fresh after the command exits.
 
 Envelope comparison also stays passive. Matching envelopes do not install,
-upgrade, verify, register, import, attach topology, or inspect the network.
+upgrade, verify, register, import, attach topology, or inspect live canisters.
 They only show that the stable envelope fields being compared match.
 
 Signing, external attestations, project CI locks, and provider-specific pipeline

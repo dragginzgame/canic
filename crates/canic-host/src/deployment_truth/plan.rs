@@ -16,8 +16,8 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalDeploymentPlanRequest {
     pub deployment_name: String,
-    pub network: String,
-    pub artifact_network: String,
+    pub environment: String,
+    pub artifact_environment: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
     pub config_path: Option<PathBuf>,
@@ -107,10 +107,9 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
             expected_pool: &expected_pool,
         },
     );
-
     DeploymentPlanV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        plan_id: format!("local:{}:{}:plan", request.network, request.deployment_name),
+        plan_id: local_plan_id(request),
         deployment_identity: identity,
         trust_domain: TrustDomainV1 {
             root_trust_anchor: root_canister_id,
@@ -130,6 +129,13 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
     }
 }
 
+fn local_plan_id(request: &LocalDeploymentPlanRequest) -> String {
+    format!(
+        "local:{}:{}:plan",
+        request.environment, request.deployment_name
+    )
+}
+
 struct PlanIdentityFacts<'a> {
     root_canister_id: Option<String>,
     deployment_manifest_digest: Option<String>,
@@ -145,8 +151,8 @@ fn local_artifact_manifest(
     config: PathBuf,
 ) -> RoleArtifactManifestV1 {
     collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
-        network: request.network.clone(),
-        artifact_network: request.artifact_network.clone(),
+        environment: request.environment.clone(),
+        artifact_environment: request.artifact_environment.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
         config_path: Some(config),
@@ -177,7 +183,7 @@ fn local_root_canister_id(
 ) -> Option<String> {
     match read_named_deployment_install_state_from_root(
         &request.icp_root,
-        &request.network,
+        &request.environment,
         &request.deployment_name,
     ) {
         Ok(Some(state)) if state.root_verification == RootVerificationStatus::Verified => {
@@ -193,15 +199,15 @@ fn local_root_canister_id(
             ));
             None
         }
-        Err(InstallStateError::NetworkMismatch {
-            state_network,
-            requested_network,
+        Err(InstallStateError::EnvironmentMismatch {
+            state_environment,
+            requested_environment,
         }) => {
             assumptions.push(assumption(
-                DeploymentAssumptionKindV1::LocalStateNetworkMismatch.key(),
+                DeploymentAssumptionKindV1::LocalStateEnvironmentMismatch.key(),
                 format!(
-                    "deployment state for {} has network {}, expected {}",
-                    request.deployment_name, state_network, requested_network
+                    "deployment state for {} has environment {}, expected {}",
+                    request.deployment_name, state_environment, requested_environment
                 ),
             ));
             None
@@ -245,7 +251,7 @@ fn local_deployment_identity(
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
         deployment_name: request.deployment_name.clone(),
-        network: request.network.clone(),
+        environment: request.environment.clone(),
         root_principal: input.root_canister_id,
         authority_profile_hash: input.authority_profile_hash,
         role_topology_hash: input.role_topology_hash,
@@ -266,7 +272,7 @@ fn local_authority_profile(
     AuthorityProfileV1 {
         profile_id: format!(
             "local:{}:{}:authority",
-            request.network, request.deployment_name
+            request.environment, request.deployment_name
         ),
         expected_controllers,
         staging_controllers: Vec::new(),
@@ -377,7 +383,7 @@ fn deployment_manifest_digest_assumption(
     let mut gaps = Vec::new();
     let digest = super::observe::release_set_manifest_digest(
         &request.icp_root,
-        &request.artifact_network,
+        &request.artifact_environment,
         &mut gaps,
     );
     assumptions.extend(

@@ -1,10 +1,10 @@
 use super::*;
 
 #[test]
-fn icp_canister_command_carries_selected_network() {
+fn icp_canister_command_carries_selected_environment() {
     let mut command = icp_canister_command(Path::new("/tmp/canic-icp-root"));
     command.args(["status", "root"]);
-    add_icp_network_target(&mut command, "ic", None);
+    add_icp_environment_target(&mut command, "ic", None);
 
     assert_eq!(command.get_program(), "icp");
     assert_eq!(
@@ -33,7 +33,7 @@ fn local_canister_command_uses_http_target_when_configured() {
     let mut command = icp_canister_command(Path::new("/tmp/canic-icp-root"));
     command.env("ICP_ENVIRONMENT", "local");
     command.args(["status", "root"]);
-    add_icp_network_target(&mut command, "local", Some(&target));
+    add_icp_environment_target(&mut command, "local", Some(&target));
 
     assert_eq!(
         command
@@ -85,7 +85,7 @@ fn local_http_fallback_creates_detached_root() {
 }
 
 #[test]
-fn network_create_uses_named_root() {
+fn environment_create_uses_named_root() {
     let mut command = icp_canister_command(Path::new("/tmp/canic-icp-root"));
     add_create_root_target(&mut command, "root", None);
 

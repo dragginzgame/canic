@@ -18,7 +18,7 @@ pub fn deployment_root_verification_report_text(
         format!("report_digest: {}", report.report_digest),
         format!("requested_at: {}", report.requested_at),
         format!("deployment: {}", report.deployment_name),
-        format!("network: {}", report.network),
+        format!("environment: {}", report.environment),
         format!("fleet_template: {}", report.expected_fleet_template),
         format!("root_principal: {}", report.expected_root_principal),
         format!(

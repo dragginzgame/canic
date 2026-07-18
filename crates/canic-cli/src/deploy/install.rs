@@ -5,8 +5,8 @@ use crate::{
             parse_matches, render_usage, required_path, required_string, string_option_or_else,
             typed_option,
         },
-        defaults::local_network,
-        globals::internal_network_arg,
+        defaults::local_environment,
+        globals::internal_environment_arg,
         help::print_help_or_version,
     },
     version_text,
@@ -26,7 +26,7 @@ use std::{ffi::OsString, fs, path::PathBuf};
 const DEPLOY_INSTALL_HELP_AFTER: &str = "\
 Examples:
   canic deploy install demo-local --plan promoted-plan.json
-  canic --network local deploy install demo-local --plan promoted-plan.json --profile fast
+  canic --environment local deploy install demo-local --plan promoted-plan.json --profile fast
 
 Installs through the current install runner using a supplied DeploymentPlanV1
 or ArtifactPromotionPlanV1. The deployment-truth/preflight gate runs before
@@ -44,7 +44,7 @@ const PROFILE_ARG: &str = "profile";
 pub(super) struct DeployInstallPlanOptions {
     pub(super) deployment: String,
     pub(super) plan: PathBuf,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) profile: Option<CanisterBuildProfile>,
 }
 
@@ -115,7 +115,7 @@ impl DeployInstallPlanOptions {
         Ok(Self {
             deployment: required_string(&matches, DEPLOYMENT_ARG),
             plan: required_path(&matches, PLAN_ARG),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, PROFILE_ARG),
         })
     }
@@ -129,7 +129,7 @@ impl DeployInstallPlanOptions {
         InstallRootOptions {
             root_canister: root_canister_for_plan(&plan.deployment_plan),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
-            network: self.network,
+            environment: self.environment,
             deployment_name: Some(self.deployment),
             icp_root,
             build_profile: self.profile,
@@ -170,7 +170,7 @@ pub(super) fn command() -> ClapCommand {
         .arg(deployment_arg())
         .arg(plan_arg())
         .arg(profile_arg())
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .after_help(DEPLOY_INSTALL_HELP_AFTER)
 }
 

@@ -26,7 +26,7 @@ pub(super) fn backup_status(
             plan_id: plan.plan_id.clone(),
             run_id: plan.run_id.clone(),
             deployment: plan.fleet,
-            network: plan.network,
+            environment: plan.environment,
             targets: plan.targets.len(),
             operations: plan.phases.len(),
             execution: journal.resume_summary(),

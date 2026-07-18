@@ -46,7 +46,7 @@ pub(super) fn pending_operation_input<'a>(
 ) -> PendingIcpRefillOperationInput<'a> {
     PendingIcpRefillOperationInput {
         icp_root: root,
-        network: &options.target.network,
+        environment: &options.target.environment,
         deployment: &options.deployment,
         source: source.role.as_deref(),
         source_canister_id: &source.canister_id,
@@ -251,7 +251,7 @@ mod tests {
     fn pending_input(root: &Path) -> PendingIcpRefillOperationInput<'_> {
         PendingIcpRefillOperationInput {
             icp_root: root,
-            network: "ic",
+            environment: "ic",
             deployment: "demo",
             source: Some("funding_hub"),
             source_canister_id: "source",

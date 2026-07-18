@@ -28,9 +28,9 @@ pub(super) fn write_cycles_report(
 fn render_cycles_report(report: &CyclesReport, verbose: bool) -> String {
     [
         format!(
-            "Deployment: {} (network {}, cycle balance since {})",
+            "Deployment: {} (environment {}, cycle balance since {})",
             report.deployment,
-            report.network,
+            report.environment,
             compact_duration(report.since_seconds)
         ),
         String::new(),

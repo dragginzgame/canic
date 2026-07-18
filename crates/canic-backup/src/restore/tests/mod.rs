@@ -66,7 +66,7 @@ fn valid_manifest(identity_mode: IdentityMode) -> DeploymentBackupManifest {
             version: "v1".to_string(),
         },
         source: SourceMetadata {
-            network: "local".to_string(),
+            environment: "local".to_string(),
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {

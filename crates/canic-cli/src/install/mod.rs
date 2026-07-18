@@ -15,8 +15,8 @@ use crate::{
         parse_matches, render_usage, required_string, string_option_or_else, typed_option,
         value_arg,
     },
-    cli::defaults::local_network,
-    cli::globals::internal_network_arg,
+    cli::defaults::local_environment,
+    cli::globals::internal_environment_arg,
     cli::help::print_help_or_version,
     version_text,
 };
@@ -80,7 +80,7 @@ pub enum InstallCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct InstallOptions {
     fleet: String,
-    network: String,
+    environment: String,
     profile: Option<CanisterBuildProfile>,
 }
 
@@ -95,7 +95,7 @@ impl InstallOptions {
 
         Ok(Self {
             fleet,
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, "profile"),
         })
     }
@@ -115,7 +115,7 @@ impl InstallOptions {
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
-            network: self.network,
+            environment: self.environment,
             deployment_name: None,
             icp_root,
             build_profile: self.profile,
@@ -149,7 +149,7 @@ fn install_command() -> ClapCommand {
                 .value_parser(clap::value_parser!(CanisterBuildProfile))
                 .help("Canister wasm build profile; defaults to release"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .after_help(INSTALL_HELP_AFTER)
 }
 
@@ -165,10 +165,10 @@ where
 
     let options = InstallOptions::parse(args)?;
     let fleet = options.fleet.clone();
-    let network = options.network.clone();
+    let environment = options.environment.clone();
     let icp_root = Some(resolve_current_canic_icp_root()?);
     install_root(options.into_install_root_options_with_icp_root(icp_root))
-        .map_err(|err| install_error_with_context(err, &fleet, &network))
+        .map_err(|err| install_error_with_context(err, &fleet, &environment))
 }
 
 fn default_fleet_config_path(fleet: &str) -> String {
@@ -182,13 +182,13 @@ fn usage() -> String {
 fn install_error_with_context(
     err: InstallRootError,
     fleet: &str,
-    network: &str,
+    environment: &str,
 ) -> InstallCommandError {
     if install_error_needs_existing_deployment_hint(&err) {
         return InstallCommandError::InstallHint {
             source: err,
             hint: format!(
-                "If this deployment or canister already exists, run `canic --network {network} info list {fleet}` and `canic --network {network} medic deployment {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
+                "If this deployment or canister already exists, run `canic --environment {environment} info list {fleet}` and `canic --environment {environment} medic deployment {fleet}` before retrying. For code-only changes, use the project upgrade flow instead of another fresh install."
             ),
         };
     }

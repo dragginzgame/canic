@@ -127,17 +127,17 @@ run_blob_storage_cli_probe_commands() {
     local proof_root="$2"
     local fake_icp="$3"
 
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage sync-gateways downstream app --dry-run --json \
         > "$proof_root/blob-storage-sync-dry-run.json"
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage fund downstream app --cycles 900 --dry-run --json \
         > "$proof_root/blob-storage-fund-dry-run.json"
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage status downstream app --json \
         > "$proof_root/blob-storage-status-before.json"
     set +e
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage status downstream app --check-ready --json \
         > "$proof_root/blob-storage-status-check-ready-blocked.json" \
         2> "$proof_root/blob-storage-status-check-ready-blocked.err"
@@ -149,16 +149,16 @@ run_blob_storage_cli_probe_commands() {
         sed -n '1,80p' "$proof_root/blob-storage-status-check-ready-blocked.err" >&2
         exit 1
     fi
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage sync-gateways downstream app --json \
         > "$proof_root/blob-storage-sync-live.json"
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage fund downstream app --cycles 900 --json \
         > "$proof_root/blob-storage-fund-live.json"
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage status downstream app --json \
         > "$proof_root/blob-storage-status-after.json"
-    "$runner" --network fixture --icp "$fake_icp" \
+    "$runner" --environment fixture --icp "$fake_icp" \
         blob-storage status downstream app --check-ready --json \
         > "$proof_root/blob-storage-status-check-ready-ready.json" \
         2> "$proof_root/blob-storage-status-check-ready-ready.err"

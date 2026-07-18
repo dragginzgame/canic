@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupCreateReport {
     pub deployment: String,
-    pub network: String,
+    pub environment: String,
     pub out: PathBuf,
     pub plan_id: String,
     pub run_id: String,
@@ -193,7 +193,7 @@ pub struct BackupDryRunStatusReport {
     pub plan_id: String,
     pub run_id: String,
     pub deployment: String,
-    pub network: String,
+    pub environment: String,
     pub targets: usize,
     pub operations: usize,
     pub execution: canic_backup::execution::BackupExecutionResumeSummary,
@@ -241,7 +241,7 @@ pub struct BackupInspectReport {
     pub plan_id: String,
     pub run_id: String,
     pub deployment: String,
-    pub network: String,
+    pub environment: String,
     pub scope: String,
     pub targets: Vec<BackupInspectTarget>,
     pub operations: Vec<BackupInspectOperation>,

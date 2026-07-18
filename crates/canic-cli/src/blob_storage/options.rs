@@ -11,8 +11,8 @@ use crate::{
             flag_arg, parse_matches, render_usage, required_string, string_option_or_else,
             value_arg,
         },
-        defaults::{default_icp, local_network},
-        globals::{internal_icp_arg, internal_network_arg},
+        defaults::{default_icp, local_environment},
+        globals::{internal_environment_arg, internal_icp_arg},
     },
 };
 use clap::Command as ClapCommand;
@@ -55,7 +55,7 @@ pub(super) enum BlobStorageCommand {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct CommonOptions {
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) icp: String,
 }
 
@@ -149,7 +149,7 @@ pub(super) fn usage() -> String {
 
 fn common_options(matches: &clap::ArgMatches) -> CommonOptions {
     CommonOptions {
-        network: string_option_or_else(matches, "network", local_network),
+        environment: string_option_or_else(matches, "environment", local_environment),
         icp: string_option_or_else(matches, "icp", default_icp),
     }
 }
@@ -223,7 +223,7 @@ fn command_with_target(name: &'static str, about: &'static str) -> ClapCommand {
                 .required(true)
                 .help("Canister principal or role name to target"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 

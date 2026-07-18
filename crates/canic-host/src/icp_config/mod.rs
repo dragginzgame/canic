@@ -128,22 +128,22 @@ pub fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpCo
     Ok(local_gateway_port_from_yaml(&source))
 }
 
-/// Resolve a selected Canic network to the build-time network class used by Canic.
+/// Resolve a selected ICP environment to the build-time network class used by Canic.
 ///
-/// The implicit `local` and `ic` networks resolve without project config.
+/// The implicit `local` and `ic` environments resolve without project config.
 /// Other names must exist under `environments` in `icp.yaml`; their declared
 /// ICP network decides whether Cargo builds a local/test or IC mainnet artifact.
 pub fn resolve_icp_build_network_from_root(
     root: &Path,
-    network: &str,
+    environment: &str,
 ) -> Result<IcpBuildNetwork, IcpConfigError> {
-    let network = network.trim();
-    if network.is_empty() {
+    let environment = environment.trim();
+    if environment.is_empty() {
         return Err(IcpConfigError::Config(
-            "ICP network name must not be empty".to_string(),
+            "ICP environment name must not be empty".to_string(),
         ));
     }
-    match network {
+    match environment {
         "local" => return Ok(IcpBuildNetwork::Local),
         "ic" => return Ok(IcpBuildNetwork::Ic),
         _ => {}
@@ -153,14 +153,14 @@ pub fn resolve_icp_build_network_from_root(
     let source = fs::read_to_string(&path).map_err(|err| {
         if err.kind() == std::io::ErrorKind::NotFound {
             IcpConfigError::Config(format!(
-                "ICP network '{network}' cannot be resolved because {} is missing",
+                "ICP environment '{environment}' cannot be resolved because {} is missing",
                 path.display()
             ))
         } else {
             IcpConfigError::Io(err)
         }
     })?;
-    resolve_icp_build_network_from_yaml(&source, network)
+    resolve_icp_build_network_from_yaml(&source, environment)
         .map_err(|message| IcpConfigError::Config(format!("{}: {message}", path.display())))
 }
 
@@ -318,18 +318,19 @@ fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
 
 fn resolve_icp_build_network_from_yaml(
     source: &str,
-    network: &str,
+    environment: &str,
 ) -> Result<IcpBuildNetwork, String> {
     let lines = source.lines().collect::<Vec<_>>();
     let (_, environment_start, environment_end) =
-        named_item_block(&lines, "environments:", network)?.ok_or_else(|| {
+        named_item_block(&lines, "environments:", environment)?.ok_or_else(|| {
             format!(
-                "ICP network '{network}' is not declared under environments; add it or use the implicit local/ic network"
+                "ICP environment '{environment}' is not declared under environments; add it or use the implicit local/ic environment"
             )
         })?;
     let configured_network =
-        item_scalar_field(&lines, environment_start, environment_end, "network")?
-            .ok_or_else(|| format!("ICP network '{network}' has no configured network"))?;
+        item_scalar_field(&lines, environment_start, environment_end, "network")?.ok_or_else(
+            || format!("ICP environment '{environment}' has no configured backing network"),
+        )?;
 
     match configured_network.as_str() {
         "ic" => Ok(IcpBuildNetwork::Ic),
@@ -338,7 +339,7 @@ fn resolve_icp_build_network_from_yaml(
             let (_, network_start, network_end) =
                 named_item_block(&lines, "networks:", &configured_network)?.ok_or_else(|| {
                     format!(
-                        "ICP target network '{network}' references undeclared backing network '{configured_network}'"
+                        "ICP environment '{environment}' references undeclared backing network '{configured_network}'"
                     )
                 })?;
             let mode = item_scalar_field(&lines, network_start, network_end, "mode")?

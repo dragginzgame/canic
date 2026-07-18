@@ -18,7 +18,7 @@ pub(super) struct MedicReport {
     pub(super) schema_version: u8,
     pub(super) command: String,
     pub(super) scope: MedicScope,
-    pub(super) network: Option<String>,
+    pub(super) environment: Option<String>,
     pub(super) deployment: Option<String>,
     pub(super) status: MedicStatus,
     pub(super) checks: Vec<MedicCheck>,
@@ -26,16 +26,16 @@ pub(super) struct MedicReport {
 
 impl MedicReport {
     pub(super) fn new(options: &MedicOptions, checks: Vec<MedicCheck>) -> Self {
-        let network = match options.scope {
-            MedicScope::Project => options.network.clone(),
-            MedicScope::Deployment => Some(options.deployment_network()),
+        let environment = match options.scope {
+            MedicScope::Project => options.environment.clone(),
+            MedicScope::Deployment => Some(options.deployment_environment()),
         };
-        Self::with_network(options, network, checks)
+        Self::with_environment(options, environment, checks)
     }
 
-    pub(super) fn with_network(
+    pub(super) fn with_environment(
         options: &MedicOptions,
-        network: Option<String>,
+        environment: Option<String>,
         checks: Vec<MedicCheck>,
     ) -> Self {
         let status = aggregate_status(&checks);
@@ -43,7 +43,7 @@ impl MedicReport {
             schema_version: SCHEMA_VERSION,
             command: options.command_label(),
             scope: options.scope,
-            network,
+            environment,
             deployment: options.deployment.clone(),
             status,
             checks: ordered_checks(&checks).into_iter().cloned().collect(),
@@ -231,7 +231,7 @@ impl MedicStatus {
 pub(super) enum MedicCategory {
     Environment,
     ProjectConfig,
-    Network,
+    TargetEnvironment,
     DeploymentState,
     Topology,
     Auth,
@@ -244,7 +244,7 @@ impl MedicCategory {
         match self {
             Self::Environment => "environment",
             Self::ProjectConfig => "project_config",
-            Self::Network => "network",
+            Self::TargetEnvironment => "target_environment",
             Self::DeploymentState => "deployment_state",
             Self::Topology => "topology",
             Self::Auth => "auth",
@@ -257,7 +257,7 @@ impl MedicCategory {
         match self {
             Self::Environment => 0,
             Self::ProjectConfig => 1,
-            Self::Network => 2,
+            Self::TargetEnvironment => 2,
             Self::DeploymentState => 3,
             Self::Topology => 4,
             Self::Auth => 5,

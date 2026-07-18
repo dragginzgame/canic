@@ -15,8 +15,8 @@ use crate::{
             flag_arg, parse_matches, render_usage, required_string, string_option_or_else,
             value_arg,
         },
-        defaults::{default_icp, local_network},
-        globals::{internal_icp_arg, internal_network_arg},
+        defaults::{default_icp, local_environment},
+        globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
     support::candid::role_candid_path,
@@ -166,7 +166,7 @@ enum AuthCommand {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CommonOptions {
-    network: String,
+    environment: String,
     icp: String,
 }
 
@@ -232,7 +232,7 @@ fn usage() -> String {
 
 fn common_options(matches: &clap::ArgMatches) -> CommonOptions {
     CommonOptions {
-        network: string_option_or_else(matches, "network", local_network),
+        environment: string_option_or_else(matches, "environment", local_environment),
         icp: string_option_or_else(matches, "icp", default_icp),
     }
 }
@@ -273,7 +273,7 @@ fn status_command() -> ClapCommand {
                 .help("Issuer canister principal"),
         )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 
@@ -292,7 +292,7 @@ fn run_renewal_status(options: &RenewalStatusOptions) -> Result<(), AuthCommandE
 pub fn renewal_medic_summary(
     deployment: &str,
     issuer: &str,
-    network: &str,
+    environment: &str,
     icp: &str,
 ) -> Result<AuthRenewalMedicSummary, AuthCommandError> {
     let runtime = LiveAuthRenewalRuntime;
@@ -303,7 +303,7 @@ pub fn renewal_medic_summary(
             issuer: issuer.to_string(),
             json: true,
             common: CommonOptions {
-                network: network.to_string(),
+                environment: environment.to_string(),
                 icp: icp.to_string(),
             },
         },
@@ -373,7 +373,7 @@ fn renewal_status_result_with_runtime(
         schema_version: AUTH_RENEWAL_STATUS_SCHEMA_VERSION,
         kind: AuthRenewalReportKind::Status,
         deployment: options.deployment.clone(),
-        network: options.common.network.clone(),
+        environment: options.common.environment.clone(),
         target: target.target,
         issuer_pid,
         status: renewal_status_code(&status, &issuer_observation),
@@ -618,7 +618,7 @@ struct AuthRenewalStatusResult {
     schema_version: u16,
     kind: AuthRenewalReportKind,
     deployment: String,
-    network: String,
+    environment: String,
     target: AuthRootTarget,
     issuer_pid: String,
     status: AuthRenewalStatusCode,
@@ -657,18 +657,16 @@ fn resolve_auth_root_call_target(
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
-            network: options.network.clone(),
+            environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
         },
         &icp_root,
     )
     .map_err(AuthCommandError::from)?;
-    let candid_path =
-        role_candid_path(Some(&icp_root), &options.network, ROOT_ROLE).ok_or_else(|| {
-            AuthCommandError::CandidUnavailable {
-                deployment: deployment.to_string(),
-            }
+    let candid_path = role_candid_path(Some(&icp_root), &options.environment, ROOT_ROLE)
+        .ok_or_else(|| AuthCommandError::CandidUnavailable {
+            deployment: deployment.to_string(),
         })?;
     let candid =
         fs::read_to_string(&candid_path).map_err(|source| AuthCommandError::CandidRead {
@@ -707,7 +705,8 @@ fn resolve_auth_issuer_call_target(
     let Some(role) = entry.role.as_deref() else {
         return Ok(None);
     };
-    let Some(candid_path) = role_candid_path(Some(&root_target.icp_root), &options.network, role)
+    let Some(candid_path) =
+        role_candid_path(Some(&root_target.icp_root), &options.environment, role)
     else {
         return Ok(None);
     };
@@ -774,7 +773,7 @@ fn validate_auth_method_mode(
 }
 
 fn icp_cli(options: &CommonOptions) -> IcpCli {
-    IcpCli::new(&options.icp, Some(options.network.clone()))
+    IcpCli::new(&options.icp, Some(options.environment.clone()))
 }
 
 fn live_query_output(

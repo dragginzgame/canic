@@ -5,7 +5,7 @@ use super::{
 use crate::{
     cli::{
         clap::{flag_arg, parse_matches, path_option, render_usage},
-        defaults::local_network,
+        defaults::local_environment,
         help::print_help_or_version,
     },
     evidence_support, version_text,
@@ -33,7 +33,7 @@ use std::{
 const DEPLOY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy check demo
-  canic --network local deploy check --profile fast demo
+  canic --environment local deploy check --profile fast demo
   canic deploy check demo --json
   canic deploy check demo --evidence-envelope
   canic deploy check demo --evidence-envelope --build-provenance build-provenance.json
@@ -107,7 +107,10 @@ pub(super) fn deployment_check_text(check: &DeploymentCheckV1) -> String {
             "deployment: {}",
             check.plan.deployment_identity.deployment_name
         ),
-        format!("network: {}", check.plan.deployment_identity.network),
+        format!(
+            "environment: {}",
+            check.plan.deployment_identity.environment
+        ),
         format!("fleet_template: {}", check.plan.fleet_template),
         String::new(),
         "counts:".to_string(),
@@ -195,7 +198,7 @@ pub(super) fn build_deployment_check_envelope(
                 .truth
                 .profile
                 .map(|profile| profile.target_dir_name().to_string()),
-            network: Some(check.plan.deployment_identity.network.clone()),
+            environment: Some(check.plan.deployment_identity.environment.clone()),
         },
         generated_at: check.inventory.observed_at.clone(),
         source_config,
@@ -223,9 +226,9 @@ fn deployment_check_command_provenance(
         argv_normalized.push("--profile".to_string());
         argv_normalized.push(profile.target_dir_name().to_string());
     }
-    if options.truth.network != local_network() {
-        argv_normalized.push("--network".to_string());
-        argv_normalized.push(options.truth.network.clone());
+    if options.truth.environment != local_environment() {
+        argv_normalized.push("--environment".to_string());
+        argv_normalized.push(options.truth.environment.clone());
     }
     let mut argv_redactions = Vec::new();
     evidence_support::push_optional_path_arg(

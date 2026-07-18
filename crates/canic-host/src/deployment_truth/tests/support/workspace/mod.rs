@@ -73,12 +73,12 @@ pub(in crate::deployment_truth::tests) fn write_release_set_manifest(icp_root: &
 
 pub(in crate::deployment_truth::tests) fn write_deployment_state_json(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     state: InstallState,
 ) {
     let path = icp_root
         .join(".canic")
-        .join(network)
+        .join(environment)
         .join("deployments")
         .join(format!("{}.json", state.deployment_name));
     fs::create_dir_all(path.parent().expect("state parent")).expect("create state dir");
@@ -99,7 +99,7 @@ pub(in crate::deployment_truth::tests) fn sample_install_state(
         fleet_template: "demo".to_string(),
         created_at_unix_secs: 1,
         updated_at_unix_secs: 1,
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_target: "root".to_string(),
         root_canister_id: root_canister_id.to_string(),
         root_verification: RootVerificationStatus::Verified,

@@ -44,7 +44,7 @@ Public thin-root flow:
 
 - build visible canister artifacts through the backend builder used by install
 - build the implicit bootstrap `wasm_store` through the same backend builder
-- emit the root staging manifest under `.icp/<network>/canisters/root/`
+- emit the root staging manifest under `.icp/<artifact-environment>/canisters/root/`
 - stage the ordinary fleet artifacts into `root`
 - resume root bootstrap
 - drive local root install, including one clean local `icp` restart attempt when `icp ping local` fails
@@ -71,7 +71,7 @@ fleet = "project"
 role = "project_ledger"
 ```
 
-For `canic install`, the implicit network default is always `local`; use
-`--network <name>` for one command against another network. The public CLI
+For `canic install`, the implicit environment default is always `local`; use
+`--environment <name>` for one command against another environment. The public CLI
 requires the fleet name as the first positional argument and uses
 `fleets/<name>/canic.toml`.

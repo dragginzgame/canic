@@ -22,17 +22,18 @@ use canic_core::protocol::{
 };
 use canic_host::{
     candid_endpoints::parse_candid_service_endpoints, icp::local_canister_candid_path,
+    release_set::artifact_root_path,
 };
 
 pub(super) fn check_blob_storage_billing(
     options: &MedicOptions,
     canister: &str,
-    network: &str,
+    environment: &str,
 ) -> MedicCheck {
     match blob_storage_api::medic_summary(
         options.deployment_name(),
         canister,
-        network,
+        environment,
         &options.icp,
     ) {
         Ok(summary) => blob_storage_medic_check_from_summary(summary),
@@ -43,11 +44,11 @@ pub(super) fn check_blob_storage_billing(
 pub(super) fn check_blob_storage_not_selected(
     options: &MedicOptions,
     icp_root: Option<&Path>,
-    network: &str,
+    environment: &str,
 ) -> MedicCheck {
     let next = icp_root
         .and_then(|root| {
-            blob_storage_billing_roles_from_candid_dir(root, network)
+            blob_storage_billing_roles_from_candid_dir(root, environment)
                 .into_iter()
                 .next()
         })
@@ -75,9 +76,9 @@ pub(super) fn check_blob_storage_not_selected(
 
 pub(super) fn blob_storage_billing_roles_from_candid_dir(
     icp_root: &Path,
-    network: &str,
+    artifact_environment: &str,
 ) -> Vec<String> {
-    let canisters_dir = icp_root.join(".icp").join(network).join("canisters");
+    let canisters_dir = artifact_root_path(icp_root, artifact_environment);
     let Ok(entries) = fs::read_dir(canisters_dir) else {
         return Vec::new();
     };
@@ -85,7 +86,7 @@ pub(super) fn blob_storage_billing_roles_from_candid_dir(
         .filter_map(Result::ok)
         .filter_map(|entry| entry.file_name().into_string().ok())
         .filter(|role| {
-            let candid_path = local_canister_candid_path(icp_root, network, role);
+            let candid_path = local_canister_candid_path(icp_root, artifact_environment, role);
             candid_path_declares_blob_storage_billing(&candid_path)
         })
         .collect::<Vec<_>>();

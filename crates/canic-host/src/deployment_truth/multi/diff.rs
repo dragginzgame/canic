@@ -32,9 +32,9 @@ fn compare_identity_names(
     );
     compare_value(
         DeploymentComparisonCategoryV1::Identity,
-        "network",
-        Some(left.plan.deployment_identity.network.as_str()),
-        Some(right.plan.deployment_identity.network.as_str()),
+        "environment",
+        Some(left.plan.deployment_identity.environment.as_str()),
+        Some(right.plan.deployment_identity.environment.as_str()),
         "deployment networks differ",
         diffs,
     );

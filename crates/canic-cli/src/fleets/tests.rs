@@ -8,16 +8,16 @@ use canic_host::release_set::{
 };
 use std::fs;
 
-// Ensure fleet listing options accept network selection.
+// Ensure fleet listing options accept environment selection.
 #[test]
 fn parses_fleet_options() {
     let options = FleetOptions::parse([
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("ic"),
     ])
     .expect("parse fleet options");
 
-    assert_eq!(options.network, "ic");
+    assert_eq!(options.environment, "ic");
 }
 
 // Ensure fleet delete options require exactly one fleet name.
@@ -435,13 +435,13 @@ fn renders_fleet_list_table() {
     let table = render_fleet_list_from_rows(vec![
         FleetListRow {
             fleet: "demo".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             config: "fleets/demo/canic.toml".to_string(),
             canisters: "4 (root, app, user_hub, user_shard)".to_string(),
         },
         FleetListRow {
             fleet: "staging".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             config: "fleets/staging/canic.toml".to_string(),
             canisters: "2 (root, app)".to_string(),
         },
@@ -450,10 +450,10 @@ fn renders_fleet_list_table() {
     assert_eq!(
         table,
         [
-            "FLEET     NETWORK   CONFIG                      CANISTERS",
-            "-------   -------   -------------------------   -----------------------------------",
-            "demo      local     fleets/demo/canic.toml      4 (root, app, user_hub, user_shard)",
-            "staging   local     fleets/staging/canic.toml   2 (root, app)",
+            "FLEET     ENVIRONMENT   CONFIG                      CANISTERS",
+            "-------   -----------   -------------------------   -----------------------------------",
+            "demo      local         fleets/demo/canic.toml      4 (root, app, user_hub, user_shard)",
+            "staging   local         fleets/staging/canic.toml   2 (root, app)",
         ]
         .join("\n")
     );
@@ -1122,7 +1122,7 @@ fn adoption_deployment_check_fixture() -> serde_json::Value {
         "check_id": "check-1",
         "plan": {
             "deployment_identity": {
-                "network": "local"
+                "environment": "local"
             },
             "role_artifacts": [adoption_role_artifact_fixture()]
         },
@@ -1167,7 +1167,7 @@ fn adoption_artifact_manifest_fixture() -> serde_json::Value {
     serde_json::json!({
         "schema_version": 1,
         "manifest_id": "manifest-1",
-        "network": "local",
+        "environment": "local",
         "artifact_root": null,
         "role_artifacts": [adoption_role_artifact_fixture()],
         "unresolved_artifacts": []
@@ -1310,7 +1310,7 @@ fn fleet_create_usage_lists_options_and_examples() {
     assert!(text.contains("Examples:"));
 }
 
-// Ensure fleet list help explains network selection.
+// Ensure fleet list help explains environment selection.
 #[test]
 fn fleet_list_usage_lists_options_and_examples() {
     let text = list_usage();

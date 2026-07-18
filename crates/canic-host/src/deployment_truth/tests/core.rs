@@ -50,7 +50,7 @@ fn inventory_round_trips_through_json() {
         observed_identity: Some(sample_identity()),
         observed_root: Some(DeploymentRootObservationV1 {
             deployment_name: "demo".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             fleet_template: "root".to_string(),
             root_principal: "aaaaa-aa".to_string(),
             observed_canister_id: "aaaaa-aa".to_string(),

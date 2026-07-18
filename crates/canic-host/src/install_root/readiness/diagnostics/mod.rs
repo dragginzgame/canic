@@ -9,9 +9,9 @@ mod tests;
 
 use crate::{
     icp::{self, LocalReplicaTarget, decode_json_result_response},
-    install_root::commands::add_icp_network_target,
+    install_root::commands::add_icp_environment_target,
     registry::parse_registry_entries,
-    release_set::icp_query_on_network,
+    release_set::icp_query_in_environment,
     replica_query,
 };
 use std::path::Path;
@@ -23,7 +23,7 @@ use canic_core::{
 
 pub(super) fn print_bootstrap_failure_diagnostics(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
     status: &BootstrapStatusResponse,
@@ -33,7 +33,7 @@ pub(super) fn print_bootstrap_failure_diagnostics(
         "root bootstrap reported failure during phase '{}' : {}",
         status.phase, last_error
     );
-    print_root_diagnostics(icp_root, network, root_canister, local_replica);
+    print_root_diagnostics(icp_root, environment, root_canister, local_replica);
 }
 
 pub(super) fn print_bootstrap_status(status: &BootstrapStatusResponse) {
@@ -51,12 +51,12 @@ pub(super) fn print_bootstrap_status(status: &BootstrapStatusResponse) {
 
 pub(super) fn print_current_registry_roles(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) {
     if let Some(registry_roles) =
-        current_registry_roles(icp_root, network, root_canister, local_replica)
+        current_registry_roles(icp_root, environment, root_canister, local_replica)
     {
         println!("Current subnet registry roles:");
         println!("  {registry_roles}");
@@ -65,61 +65,65 @@ pub(super) fn print_current_registry_roles(
 
 pub(super) fn print_root_diagnostics(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) {
-    eprintln!("Diagnostic: icp canister -n {network} call {root_canister} canic_bootstrap_status");
+    eprintln!(
+        "Diagnostic: icp canister -n {environment} call {root_canister} canic_bootstrap_status"
+    );
     print_raw_call(
         icp_root,
-        network,
+        environment,
         root_canister,
         local_replica,
         protocol::CANIC_BOOTSTRAP_STATUS,
     );
-    eprintln!("Diagnostic: icp canister -n {network} call {root_canister} canic_subnet_registry");
+    eprintln!(
+        "Diagnostic: icp canister -n {environment} call {root_canister} canic_subnet_registry"
+    );
     print_raw_call(
         icp_root,
-        network,
+        environment,
         root_canister,
         local_replica,
         "canic_subnet_registry",
     );
     eprintln!(
-        "Diagnostic: icp canister -n {network} call {root_canister} canic_wasm_store_bootstrap_debug"
+        "Diagnostic: icp canister -n {environment} call {root_canister} canic_wasm_store_bootstrap_debug"
     );
     print_raw_call(
         icp_root,
-        network,
+        environment,
         root_canister,
         local_replica,
         "canic_wasm_store_bootstrap_debug",
     );
     eprintln!(
-        "Diagnostic: icp canister -n {network} call {root_canister} canic_wasm_store_overview"
+        "Diagnostic: icp canister -n {environment} call {root_canister} canic_wasm_store_overview"
     );
     print_raw_call(
         icp_root,
-        network,
+        environment,
         root_canister,
         local_replica,
         "canic_wasm_store_overview",
     );
-    eprintln!("Diagnostic: icp canister -n {network} call {root_canister} canic_log");
-    print_recent_root_logs(icp_root, network, root_canister, local_replica);
+    eprintln!("Diagnostic: icp canister -n {environment} call {root_canister} canic_log");
+    print_recent_root_logs(icp_root, environment, root_canister, local_replica);
 }
 
 // Print recent structured root log entries without raw byte dumps.
 fn print_recent_root_logs(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) {
     let page_args = r"(null, null, null, record { limit = 8; offset = 0 })";
-    let Ok(output) = icp_query_on_network(
+    let Ok(output) = icp_query_in_environment(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         "canic_log",
@@ -152,13 +156,13 @@ fn print_recent_root_logs(
 
 fn current_registry_roles(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Option<String> {
-    if replica_query::should_use_local_replica_query(Some(network))
+    if replica_query::should_use_local_replica_query(Some(environment))
         && let Ok(roles) = replica_query::query_subnet_registry_roles_from_root(
-            Some(network),
+            Some(environment),
             root_canister,
             icp_root,
         )
@@ -166,9 +170,9 @@ fn current_registry_roles(
         return Some(render_registry_roles(&roles));
     }
 
-    let output = icp_query_on_network(
+    let output = icp_query_in_environment(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         "canic_subnet_registry",
@@ -195,7 +199,7 @@ fn render_registry_roles(roles: &[String]) -> String {
 // Print one raw `icp canister call` result to stderr for diagnostics.
 fn print_raw_call(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
     method: &str,
@@ -204,6 +208,6 @@ fn print_raw_call(
     command
         .arg("canister")
         .args(["call", root_canister, method, "()"]);
-    add_icp_network_target(&mut command, network, local_replica);
+    add_icp_environment_target(&mut command, environment, local_replica);
     let _ = command.status();
 }

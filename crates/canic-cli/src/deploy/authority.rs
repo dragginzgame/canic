@@ -40,7 +40,7 @@ Examples:
   canic deploy authority evidence demo
   canic deploy authority report demo
   canic deploy authority receipt demo
-  canic --network local deploy authority check --profile fast demo
+  canic --environment local deploy authority check --profile fast demo
 
 Authority commands are dry-run reports. They do not apply controller
 changes. A successful command means the local authority artifact was produced,
@@ -49,7 +49,7 @@ const DEPLOY_AUTHORITY_EVIDENCE_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority evidence demo
   canic deploy authority evidence --text demo
-  canic --network local deploy authority evidence --profile fast demo
+  canic --environment local deploy authority evidence --profile fast demo
 
 Prints AuthorityDryRunEvidenceV1 JSON by default, or a human-readable
 read-only summary with --text. No controller changes are attempted.
@@ -59,7 +59,7 @@ const DEPLOY_AUTHORITY_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority check demo
   canic deploy authority check --text demo
-  canic --network local deploy authority check --profile fast demo
+  canic --environment local deploy authority check --profile fast demo
 
 Prints the local AuthorityReconciliationPlanV1 JSON by default, or a
 human-readable read-only summary with --text. No controller changes are
@@ -68,7 +68,7 @@ const DEPLOY_AUTHORITY_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority report demo
   canic deploy authority report --text demo
-  canic --network local deploy authority report --profile fast demo
+  canic --environment local deploy authority report --profile fast demo
 
 Prints the local AuthorityReportV1 JSON by default, or a human-readable
 read-only summary with --text. No controller changes are attempted.
@@ -78,7 +78,7 @@ const DEPLOY_AUTHORITY_RECEIPT_HELP_AFTER: &str = "\
 Examples:
   canic deploy authority receipt demo
   canic deploy authority receipt --text demo
-  canic --network local deploy authority receipt --profile fast demo
+  canic --environment local deploy authority receipt --profile fast demo
 
 Prints an evidence-only AuthorityReceiptV1 JSON by default, or a human-readable
 read-only summary with --text. No controller changes are attempted.

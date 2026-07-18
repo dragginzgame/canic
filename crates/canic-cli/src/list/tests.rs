@@ -53,7 +53,7 @@ fn parses_live_list_options() {
         OsString::from("demo"),
         OsString::from("--subtree"),
         OsString::from(APP),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/bin/icp"),
@@ -63,7 +63,7 @@ fn parses_live_list_options() {
     assert_eq!(options.source, ListSource::RootRegistry);
     assert_eq!(options.target, "demo");
     assert_eq!(options.subtree, Some(APP.to_string()));
-    assert_eq!(options.network, Some("local".to_string()));
+    assert_eq!(options.environment, Some("local".to_string()));
     assert_eq!(options.icp, "/bin/icp");
     assert!(!options.verbose);
 }
@@ -71,14 +71,14 @@ fn parses_live_list_options() {
 #[test]
 fn missing_list_deployment_preserves_canonical_typed_error() {
     let error = ListCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment: "demo-local".to_string(),
     });
     let message = error.to_string();
 
     assert_eq!(
         message,
-        "deployment target demo-local is not installed on network local"
+        "deployment target demo-local is not installed on environment local"
     );
     std::assert_matches!(
         error,
@@ -119,7 +119,7 @@ fn list_preserves_fleet_config_causes() {
 fn parses_config_options() {
     let options = ListOptions::parse_config([
         OsString::from("demo"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from("-v"),
     ])
@@ -128,7 +128,7 @@ fn parses_config_options() {
     assert_eq!(options.source, ListSource::Config);
     assert_eq!(options.target, "demo");
     assert_eq!(options.subtree, None);
-    assert_eq!(options.network, Some("local".to_string()));
+    assert_eq!(options.environment, Some("local".to_string()));
     assert_eq!(options.icp, "icp");
     assert!(options.verbose);
 }
@@ -411,7 +411,7 @@ fn renders_list_output_with_deployment_title() {
     let title = ListTitle {
         source: ListTitleSource::Deployment,
         name: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
     };
     let readiness = readiness_map();
     let module_hashes = module_hash_map();
@@ -428,7 +428,7 @@ fn renders_list_output_with_deployment_title() {
     let output = render_list_output(&title, &registry, Some(APP), &columns, &[])
         .expect("render list output");
 
-    assert!(output.starts_with("Deployment: demo (network local)\n\nROLE"));
+    assert!(output.starts_with("Deployment: demo (environment local)\n\nROLE"));
     assert!(output.contains("CANISTER_ID"));
 }
 
@@ -438,7 +438,7 @@ fn renders_list_output_with_wasm_size_and_missing_roles() {
     let title = ListTitle {
         source: ListTitleSource::Deployment,
         name: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
     };
     let canic_versions = BTreeMap::from([(APP.to_string(), "0.33.6".to_string())]);
     let wasm_sizes = BTreeMap::from([("app".to_string(), "1.52 MiB (gz 811.20 KiB)".to_string())]);
@@ -472,7 +472,7 @@ fn renders_config_output_with_fleet_roles() {
     let title = ListTitle {
         source: ListTitleSource::FleetTemplate,
         name: "test_me".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
     };
     let rows = vec![
         ConfigRoleRow {
@@ -503,7 +503,7 @@ fn renders_config_output_with_fleet_roles() {
     assert_eq!(
         output,
         [
-            "Fleet template: test_me (network local)",
+            "Fleet template: test_me (environment local)",
             "",
             "ROLE   KIND        AUTO   CAPS             METRICS   TOPUP",
             "----   ---------   ----   --------------   -------   ------------------",

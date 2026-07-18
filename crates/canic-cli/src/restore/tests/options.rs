@@ -176,7 +176,7 @@ fn parses_restore_run_dry_run_options() {
         OsString::from("--dry-run"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from("--out"),
         OsString::from("restore-run-dry-run.json"),
@@ -193,7 +193,7 @@ fn parses_restore_run_dry_run_options() {
         Some(PathBuf::from("restore-apply-journal.json"))
     );
     assert_eq!(options.icp, "/tmp/icp");
-    assert_eq!(options.network.as_deref(), Some("local"));
+    assert_eq!(options.environment.as_deref(), Some("local"));
     assert_eq!(options.out, Some(PathBuf::from("restore-run-dry-run.json")));
     assert!(options.dry_run);
     assert!(!options.execute);
@@ -223,7 +223,7 @@ fn parses_restore_run_execute_options() {
         Some(PathBuf::from("restore-apply-journal.json"))
     );
     assert_eq!(options.icp, "/bin/true");
-    assert_eq!(options.network, None);
+    assert_eq!(options.environment, None);
     assert_eq!(options.out, None);
     assert!(!options.dry_run);
     assert!(options.execute);

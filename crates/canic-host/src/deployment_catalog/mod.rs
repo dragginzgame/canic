@@ -3,7 +3,7 @@ use crate::{
         EvidenceMessageSeverityV1, EvidenceMessageV1, InputFingerprintV1, file_input_fingerprint,
     },
     install_root::{
-        InstallStateError, RootVerificationStatus, decode_install_state, validate_network_name,
+        InstallStateError, RootVerificationStatus, decode_install_state, validate_environment_name,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -25,7 +25,7 @@ const MALFORMED_DEPLOYMENT_STATE_WARNING_CODE: &str = "catalog.malformed_deploym
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeploymentCatalogRequest {
     pub icp_root: PathBuf,
-    pub network: String,
+    pub environment: String,
     pub generated_at: String,
 }
 
@@ -48,7 +48,7 @@ pub struct DeploymentCatalogReportV1 {
 pub struct DeploymentCatalogEntryV1 {
     pub deployment: String,
     pub fleet: Option<String>,
-    pub network: Option<String>,
+    pub environment: Option<String>,
     pub root_principal: Option<String>,
     pub root_verification: DeploymentCatalogRootVerificationV1,
     pub local_state_ref: Option<InputFingerprintV1>,
@@ -74,8 +74,11 @@ pub enum DeploymentCatalogError {
     #[error(transparent)]
     InstallState(#[from] InstallStateError),
 
-    #[error("deployment target {deployment} is not known on network {network}")]
-    UnknownDeployment { network: String, deployment: String },
+    #[error("deployment target {deployment} is not known on environment {environment}")]
+    UnknownDeployment {
+        environment: String,
+        deployment: String,
+    },
 
     #[error("failed to read deployment catalog state directory {}: {source}", path.display())]
     StateDirectory { path: PathBuf, source: io::Error },
@@ -89,8 +92,8 @@ pub const fn deployment_catalog_report_schema_id() -> &'static str {
 pub fn build_deployment_catalog_report(
     request: &DeploymentCatalogRequest,
 ) -> Result<DeploymentCatalogReportV1, DeploymentCatalogError> {
-    validate_network_name(&request.network)?;
-    let deployments_dir = deployment_state_dir(&request.icp_root, &request.network);
+    validate_environment_name(&request.environment)?;
+    let deployments_dir = deployment_state_dir(&request.icp_root, &request.environment);
     let mut entries = Vec::new();
     let mut warnings = Vec::new();
 
@@ -98,8 +101,8 @@ pub fn build_deployment_catalog_report(
         warnings.push(catalog_warning(
             NO_DEPLOYMENT_STATE_WARNING_CODE,
             format!(
-                "no deployment-target state exists for network {}",
-                request.network
+                "no deployment-target state exists for environment {}",
+                request.environment
             ),
             Some(path_subject(&deployments_dir, &request.icp_root)),
         ));
@@ -126,7 +129,7 @@ pub fn build_deployment_catalog_report(
         if path.extension() != Some(OsStr::new("json")) {
             continue;
         }
-        match catalog_entry_from_path(&request.icp_root, &request.network, &path) {
+        match catalog_entry_from_path(&request.icp_root, &request.environment, &path) {
             Ok(entry) => entries.push(entry),
             Err(warning) => warnings.push(warning),
         }
@@ -152,7 +155,7 @@ pub fn inspect_deployment_catalog_report(
     }
 
     Err(DeploymentCatalogError::UnknownDeployment {
-        network: request.network.clone(),
+        environment: request.environment.clone(),
         deployment: deployment.to_string(),
     })
 }
@@ -183,8 +186,8 @@ pub fn deployment_catalog_report_text(report: &DeploymentCatalogReportV1) -> Str
         if let Some(fleet) = &entry.fleet {
             lines.push(format!("    fleet: {fleet}"));
         }
-        if let Some(network) = &entry.network {
-            lines.push(format!("    network: {network}"));
+        if let Some(environment) = &entry.environment {
+            lines.push(format!("    environment: {environment}"));
         }
         if let Some(root) = &entry.root_principal {
             lines.push(format!("    root_principal: {root}"));
@@ -220,7 +223,7 @@ fn report(
 
 fn catalog_entry_from_path(
     root: &Path,
-    network: &str,
+    environment: &str,
     path: &Path,
 ) -> Result<DeploymentCatalogEntryV1, EvidenceMessageV1> {
     let deployment = path
@@ -233,7 +236,7 @@ fn catalog_entry_from_path(
     let bytes = fs::read(path).map_err(|err| {
         malformed_state_warning(path, root, format!("failed to read state: {err}"))
     })?;
-    let state = decode_install_state(&bytes, path, network, &deployment)
+    let state = decode_install_state(&bytes, path, environment, &deployment)
         .map_err(|error| malformed_install_state_warning(path, root, error))?;
 
     let (local_state_ref, mut warnings) =
@@ -253,7 +256,7 @@ fn catalog_entry_from_path(
     Ok(DeploymentCatalogEntryV1 {
         deployment: state.deployment_name,
         fleet: Some(state.fleet_template),
-        network: Some(state.network),
+        environment: Some(state.environment),
         root_principal: Some(state.root_canister_id),
         root_verification: catalog_root_verification(&state.root_verification),
         local_state_ref,
@@ -274,19 +277,19 @@ fn malformed_install_state_warning(
         } => format!(
             "deployment state filename is {requested_deployment}, but state records {state_deployment}"
         ),
-        InstallStateError::NetworkMismatch {
-            state_network,
-            requested_network,
+        InstallStateError::EnvironmentMismatch {
+            state_environment,
+            requested_environment,
         } => format!(
-            "deployment state is for network {state_network}, but catalog network is {requested_network}"
+            "deployment state is for environment {state_environment}, but catalog environment is {requested_environment}"
         ),
         other => other.to_string(),
     };
     malformed_state_warning(path, root, message)
 }
 
-fn deployment_state_dir(root: &Path, network: &str) -> PathBuf {
-    root.join(".canic").join(network).join("deployments")
+fn deployment_state_dir(root: &Path, environment: &str) -> PathBuf {
+    root.join(".canic").join(environment).join("deployments")
 }
 
 const fn catalog_root_verification(

@@ -485,7 +485,7 @@ fn valid_manifest() -> DeploymentBackupManifest {
             version: "v1".to_string(),
         },
         source: SourceMetadata {
-            network: "local".to_string(),
+            environment: "local".to_string(),
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {
@@ -540,7 +540,7 @@ fn valid_backup_plan() -> BackupPlan {
         plan_id: "plan-001".to_string(),
         run_id: "run-001".to_string(),
         fleet: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_canister_id: ROOT.to_string(),
         selected_canister_id: Some(CHILD.to_string()),
         selected_scope_kind: BackupScopeKind::Subtree,

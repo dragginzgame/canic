@@ -9,7 +9,7 @@ use std::path::Path;
 
 pub(super) struct StageReleaseSetOperation<'a> {
     icp_root: &'a Path,
-    network: &'a str,
+    environment: &'a str,
     root_canister_id: &'a str,
     manifest_path: &'a Path,
     manifest: RootReleaseSetManifest,
@@ -19,7 +19,7 @@ pub(super) struct StageReleaseSetOperation<'a> {
 impl<'a> StageReleaseSetOperation<'a> {
     pub(super) const fn new(
         icp_root: &'a Path,
-        network: &'a str,
+        environment: &'a str,
         root_canister_id: &'a str,
         manifest_path: &'a Path,
         manifest: RootReleaseSetManifest,
@@ -27,7 +27,7 @@ impl<'a> StageReleaseSetOperation<'a> {
     ) -> Self {
         Self {
             icp_root,
-            network,
+            environment,
             root_canister_id,
             manifest_path,
             manifest,
@@ -52,7 +52,7 @@ impl InstallPhaseOperation for StageReleaseSetOperation<'_> {
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         stage_root_release_set(
             self.icp_root,
-            self.network,
+            self.environment,
             self.local_replica,
             self.root_canister_id,
             &self.manifest,

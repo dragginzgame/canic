@@ -4,10 +4,10 @@ use std::path::Path;
 
 pub(super) fn read_live_canister_status(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     canister_id: &str,
 ) -> Result<IcpCanisterStatusReport, crate::icp::IcpCommandError> {
-    IcpCli::new("icp", Some(network.to_string()))
+    IcpCli::new("icp", Some(environment.to_string()))
         .with_cwd(icp_root)
         .canister_status_report(canister_id)
 }

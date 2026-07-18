@@ -23,7 +23,7 @@ const STATUS_PENDING_SEND: &str = "pending_send";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct PendingIcpRefillOperationInput<'a> {
     pub(super) icp_root: &'a Path,
-    pub(super) network: &'a str,
+    pub(super) environment: &'a str,
     pub(super) deployment: &'a str,
     pub(super) source: Option<&'a str>,
     pub(super) source_canister_id: &'a str,
@@ -105,7 +105,7 @@ struct PendingOperationRecord {
     operation_id_source: String,
     status: String,
     cli_command: String,
-    network: String,
+    environment: String,
     deployment: String,
     source: Option<String>,
     source_canister_id: String,
@@ -190,7 +190,7 @@ pub(super) fn reserve_pending_icp_refill_operation(
         operation_id_source: OPERATION_ID_SOURCE_GENERATED.to_string(),
         status: STATUS_PENDING_SEND.to_string(),
         cli_command: CYCLES_CONVERT_COMMAND.to_string(),
-        network: input.network.to_string(),
+        environment: input.environment.to_string(),
         deployment: input.deployment.to_string(),
         source: input.source.map(ToOwned::to_owned),
         source_canister_id: input.source_canister_id.to_string(),
@@ -379,7 +379,7 @@ fn parse_logged_operation_id(
 fn icp_refill_operation_key(input: &PendingIcpRefillOperationInput<'_>) -> String {
     let mut bytes = Vec::new();
     extend_key_part(&mut bytes, b"canic:pending-operation:icp-refill:v1");
-    extend_key_part(&mut bytes, input.network.as_bytes());
+    extend_key_part(&mut bytes, input.environment.as_bytes());
     extend_key_part(&mut bytes, input.deployment.as_bytes());
     extend_key_part(&mut bytes, input.source_canister_id.as_bytes());
     extend_key_part(&mut bytes, input.target_canister_id.as_bytes());
@@ -447,7 +447,7 @@ mod tests {
         assert_eq!(record.operation_id_source, OPERATION_ID_SOURCE_GENERATED);
         assert_eq!(record.status, STATUS_PENDING_SEND);
         assert_eq!(record.cli_command, CYCLES_CONVERT_COMMAND);
-        assert_eq!(record.network, "ic");
+        assert_eq!(record.environment, "ic");
         assert_eq!(record.deployment, "demo");
         assert_eq!(record.source_canister_id, "source-canister");
         assert_eq!(record.target_canister_id, "target-canister");
@@ -538,7 +538,7 @@ mod tests {
     fn sample_input(root: &Path) -> PendingIcpRefillOperationInput<'_> {
         PendingIcpRefillOperationInput {
             icp_root: root,
-            network: "ic",
+            environment: "ic",
             deployment: "demo",
             source: Some("funding_hub"),
             source_canister_id: "source-canister",

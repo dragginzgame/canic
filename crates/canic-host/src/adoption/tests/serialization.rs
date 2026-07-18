@@ -5,7 +5,7 @@ fn adoption_report_round_trips_through_json() {
     let manifest = RoleArtifactManifestV1 {
         schema_version: 1,
         manifest_id: "manifest-1".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         artifact_root: None,
         role_artifacts: vec![RoleArtifactV1 {
             role: "api".to_string(),

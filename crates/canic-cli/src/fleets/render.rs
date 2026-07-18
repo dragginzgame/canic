@@ -14,7 +14,7 @@ use canic_host::{
 use std::path::{Path, PathBuf};
 
 const FLEET_HEADER: &str = "FLEET";
-const NETWORK_HEADER: &str = "NETWORK";
+const ENVIRONMENT_HEADER: &str = "ENVIRONMENT";
 const CONFIG_HEADER: &str = "CONFIG";
 const CANISTERS_HEADER: &str = "CANISTERS";
 const ROLE_PREVIEW_LIMIT: usize = 6;
@@ -26,7 +26,7 @@ const ROLE_PREVIEW_LIMIT: usize = 6;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FleetListRow {
     pub(super) fleet: String,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) config: String,
     pub(super) canisters: String,
 }
@@ -34,20 +34,20 @@ pub(super) struct FleetListRow {
 pub(super) fn render_fleet_list(
     workspace_root: &Path,
     choices: &[PathBuf],
-    network: &str,
+    environment: &str,
 ) -> String {
-    render_fleet_rows(fleet_list_rows(workspace_root, choices, network))
+    render_fleet_rows(fleet_list_rows(workspace_root, choices, environment))
 }
 
 pub(super) fn render_fleet_rows(rows: Vec<FleetListRow>) -> String {
     let rows = rows
         .into_iter()
-        .map(|row| [row.fleet, row.network, row.config, row.canisters])
+        .map(|row| [row.fleet, row.environment, row.config, row.canisters])
         .collect::<Vec<_>>();
     render_table(
         &[
             FLEET_HEADER,
-            NETWORK_HEADER,
+            ENVIRONMENT_HEADER,
             CONFIG_HEADER,
             CANISTERS_HEADER,
         ],
@@ -56,17 +56,21 @@ pub(super) fn render_fleet_rows(rows: Vec<FleetListRow>) -> String {
     )
 }
 
-fn fleet_list_rows(workspace_root: &Path, choices: &[PathBuf], network: &str) -> Vec<FleetListRow> {
+fn fleet_list_rows(
+    workspace_root: &Path,
+    choices: &[PathBuf],
+    environment: &str,
+) -> Vec<FleetListRow> {
     choices
         .iter()
-        .map(|path| fleet_list_row(workspace_root, path, network))
+        .map(|path| fleet_list_row(workspace_root, path, environment))
         .collect()
 }
 
-fn fleet_list_row(workspace_root: &Path, path: &Path, network: &str) -> FleetListRow {
+fn fleet_list_row(workspace_root: &Path, path: &Path, environment: &str) -> FleetListRow {
     let fleet = configured_fleet_name(path).unwrap_or_else(|_| "invalid config".to_string());
     FleetListRow {
-        network: network.to_string(),
+        environment: environment.to_string(),
         fleet,
         config: display_workspace_path(workspace_root, path),
         canisters: configured_deployable_roles(path).map_or_else(

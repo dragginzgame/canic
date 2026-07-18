@@ -20,13 +20,13 @@ use std::path::Path;
 pub(super) fn current_install_execution_context(
     workspace_root: &Path,
     icp_root: &Path,
-    artifact_network: &str,
+    artifact_environment: &str,
 ) -> DeploymentExecutionContextV1 {
     CurrentCliDeploymentExecutor::new(
         Some(workspace_root.display().to_string()),
         Some(icp_root.display().to_string()),
         vec![
-            artifact_root_path(icp_root, artifact_network)
+            artifact_root_path(icp_root, artifact_environment)
                 .display()
                 .to_string(),
         ],
@@ -92,7 +92,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     );
     let receipt_write = write_install_deployment_truth_receipt(
         icp_root,
-        &options.network,
+        &options.environment,
         deployment_name,
         &deployment_receipt,
     );
@@ -105,7 +105,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     receipt_write?;
     write_current_install_execution_preflight_receipt(
         icp_root,
-        &options.network,
+        &options.environment,
         deployment_name,
         &deployment_truth_check,
         execution_context,

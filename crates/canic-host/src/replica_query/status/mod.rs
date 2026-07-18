@@ -2,18 +2,22 @@ use super::{ReplicaQueryError, cbor::decode_status_root_key, transport};
 use std::path::Path;
 
 #[must_use]
-pub fn local_replica_status_reachable_from_root(network: Option<&str>, icp_root: &Path) -> bool {
+pub fn local_replica_status_reachable_from_root(
+    environment: Option<&str>,
+    icp_root: &Path,
+) -> bool {
     transport::get_http_status(&transport::local_replica_endpoint_from_root(
-        network, icp_root,
+        environment,
+        icp_root,
     ))
     .is_ok()
 }
 
 pub fn local_replica_root_key_from_root(
-    network: Option<&str>,
+    environment: Option<&str>,
     icp_root: &Path,
 ) -> Result<Option<String>, ReplicaQueryError> {
-    let endpoint = transport::local_replica_endpoint_from_root(network, icp_root);
+    let endpoint = transport::local_replica_endpoint_from_root(environment, icp_root);
     let body = transport::get_http_status(&endpoint)?;
     Ok(parse_local_replica_root_key(&body))
 }

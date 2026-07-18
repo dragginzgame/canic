@@ -37,7 +37,7 @@ impl ExecutionPreflightReceiptLabel {
 
 pub(super) fn write_current_install_execution_preflight_receipt(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
     check: &DeploymentCheckV1,
     execution_context: &DeploymentExecutionContextV1,
@@ -94,7 +94,7 @@ pub(super) fn write_current_install_execution_preflight_receipt(
         execution_context,
     );
     let path =
-        write_install_deployment_truth_receipt(icp_root, network, deployment_name, &receipt)?;
+        write_install_deployment_truth_receipt(icp_root, environment, deployment_name, &receipt)?;
     println!("Deployment truth receipt JSON: {}", path.display());
     if !blockers.is_empty() {
         let details = blockers

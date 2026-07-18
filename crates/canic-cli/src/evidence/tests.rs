@@ -373,7 +373,7 @@ fn sample_envelope() -> EvidenceEnvelopeV1 {
             fleet: Some("demo".to_string()),
             role: None,
             profile: Some("minimal".to_string()),
-            network: None,
+            environment: None,
         },
         generated_at: "2026-05-31T00:00:00Z".to_string(),
         source_config: None,

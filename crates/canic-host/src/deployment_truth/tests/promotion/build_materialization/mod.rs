@@ -57,7 +57,7 @@ fn build_materialization_input_round_trips_through_json() {
             "materialization_input_id",
             "build_recipe_id",
             "canonical_embedded_config_sha256",
-            "network",
+            "environment",
             "root_trust_anchor",
             "runtime_variant",
         ],

@@ -10,7 +10,7 @@ fn install_defaults_to_root_target() {
         .into_install_root_options_with_icp_root(None);
 
     assert_eq!(options.fleet, "demo");
-    assert_eq!(options.network, local_network());
+    assert_eq!(options.environment, local_environment());
     assert_eq!(options.profile, None);
     assert_eq!(install.root_canister, "root");
     assert_eq!(install.root_build_target, "root");
@@ -24,17 +24,17 @@ fn install_defaults_to_root_target() {
     assert_eq!(install.expected_fleet, Some("demo".to_string()));
 }
 
-// Ensure top-level dispatch can pass network selection internally.
+// Ensure top-level dispatch can pass environment selection internally.
 #[test]
-fn install_accepts_internal_network() {
+fn install_accepts_internal_environment() {
     let options = InstallOptions::parse([
         OsString::from("demo"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
     ])
-    .expect("parse internal network");
+    .expect("parse internal environment");
 
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
 }
 
 #[test]
@@ -112,8 +112,8 @@ fn install_existing_deployment_errors_get_action_hint() {
     );
     let message = err.to_string();
 
-    assert!(message.contains("canic --network academic info list demo"));
-    assert!(message.contains("canic --network academic medic deployment demo"));
+    assert!(message.contains("canic --environment academic info list demo"));
+    assert!(message.contains("canic --environment academic medic deployment demo"));
     assert!(message.contains("project upgrade flow"));
 
     std::assert_matches!(

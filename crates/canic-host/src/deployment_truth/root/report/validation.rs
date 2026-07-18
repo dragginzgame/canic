@@ -27,7 +27,7 @@ pub fn validate_deployment_root_verification_report(
     ensure_root_verification_sha256("report_digest", report.report_digest.as_str())?;
     ensure_root_verification_field("requested_at", report.requested_at.as_str())?;
     ensure_root_verification_field("deployment_name", report.deployment_name.as_str())?;
-    ensure_root_verification_field("network", report.network.as_str())?;
+    ensure_root_verification_field("environment", report.environment.as_str())?;
     ensure_root_verification_field(
         "expected_fleet_template",
         report.expected_fleet_template.as_str(),
@@ -90,11 +90,11 @@ fn ensure_root_verification_report_checks_consistent(
         &report.identity_checks,
         &[
             RootVerificationCheckName::DeploymentName,
-            RootVerificationCheckName::Network,
+            RootVerificationCheckName::Environment,
             RootVerificationCheckName::FleetTemplate,
             RootVerificationCheckName::RootPrincipal,
             RootVerificationCheckName::PlanDeploymentName,
-            RootVerificationCheckName::PlanNetwork,
+            RootVerificationCheckName::PlanEnvironment,
             RootVerificationCheckName::PlanFleetTemplate,
         ],
     )?;
@@ -125,9 +125,9 @@ fn ensure_root_verification_report_checks_consistent(
     )?;
     ensure_report_check_value(
         &report.identity_checks,
-        RootVerificationCheckName::Network,
-        Some(report.network.as_str()),
-        report.observed_network.as_deref(),
+        RootVerificationCheckName::Environment,
+        Some(report.environment.as_str()),
+        report.observed_environment.as_deref(),
     )?;
     ensure_report_check_value(
         &report.identity_checks,
@@ -142,7 +142,7 @@ fn ensure_root_verification_report_checks_consistent(
         report.observed_root_principal.as_deref(),
     )?;
     let observed_root_present = report.observed_deployment_name.is_some()
-        && report.observed_network.is_some()
+        && report.observed_environment.is_some()
         && report.observed_fleet_template.is_some()
         && report.observed_root_principal.is_some()
         && report.observed_root_canister_id.is_some()

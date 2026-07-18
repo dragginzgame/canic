@@ -1,4 +1,4 @@
-use super::state::{validate_network_name, validate_state_name};
+use super::state::{validate_environment_name, validate_state_name};
 use crate::{
     deployment_truth::{ArtifactPromotionExecutionReceiptV1, DeploymentReceiptV1},
     durable_io::write_bytes,
@@ -10,11 +10,12 @@ use std::{
 
 pub(super) fn write_install_deployment_truth_receipt(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
     receipt: &DeploymentReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let path = install_deployment_truth_receipt_path(icp_root, network, deployment_name, receipt)?;
+    let path =
+        install_deployment_truth_receipt_path(icp_root, environment, deployment_name, receipt)?;
     let mut bytes = serde_json::to_vec_pretty(receipt)?;
     bytes.push(b'\n');
     write_bytes(&path, &bytes)?;
@@ -23,12 +24,12 @@ pub(super) fn write_install_deployment_truth_receipt(
 
 pub(super) fn write_artifact_promotion_execution_receipt(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
     receipt: &ArtifactPromotionExecutionReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let path =
-        artifact_promotion_execution_receipt_path(icp_root, network, deployment_name, receipt)?;
+        artifact_promotion_execution_receipt_path(icp_root, environment, deployment_name, receipt)?;
     let mut bytes = serde_json::to_vec_pretty(receipt)?;
     bytes.push(b'\n');
     write_bytes(&path, &bytes)?;
@@ -37,11 +38,11 @@ pub(super) fn write_artifact_promotion_execution_receipt(
 
 fn artifact_promotion_execution_receipt_path(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
     receipt: &ArtifactPromotionExecutionReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_network_name(network)?;
+    validate_environment_name(environment)?;
     validate_state_name(deployment_name)?;
     let file_stem = format!(
         "{}-{}",
@@ -49,32 +50,32 @@ fn artifact_promotion_execution_receipt_path(
         safe_deployment_truth_path_label(&receipt.receipt_id)
     );
     Ok(
-        artifact_promotion_execution_receipts_dir(icp_root, network, deployment_name)?
+        artifact_promotion_execution_receipts_dir(icp_root, environment, deployment_name)?
             .join(format!("{file_stem}.json")),
     )
 }
 
 fn artifact_promotion_execution_receipts_dir(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_network_name(network)?;
+    validate_environment_name(environment)?;
     validate_state_name(deployment_name)?;
     Ok(icp_root
         .join(".canic")
-        .join(network)
+        .join(environment)
         .join("artifact-promotion-execution-receipts")
         .join(deployment_name))
 }
 
 pub(super) fn install_deployment_truth_receipt_path(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
     receipt: &DeploymentReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_network_name(network)?;
+    validate_environment_name(environment)?;
     validate_state_name(deployment_name)?;
     let file_stem = format!(
         "{}-{}",
@@ -82,7 +83,7 @@ pub(super) fn install_deployment_truth_receipt_path(
         safe_deployment_truth_path_label(&receipt.operation_id)
     );
     Ok(
-        install_deployment_truth_receipts_dir(icp_root, network, deployment_name)?
+        install_deployment_truth_receipts_dir(icp_root, environment, deployment_name)?
             .join(format!("{file_stem}.json")),
     )
 }
@@ -90,10 +91,10 @@ pub(super) fn install_deployment_truth_receipt_path(
 /// Find the latest persisted deployment-truth receipt for one local deployment target.
 pub fn latest_deployment_truth_receipt_path_from_root(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let dir = install_deployment_truth_receipts_dir(icp_root, network, deployment_name)?;
+    let dir = install_deployment_truth_receipts_dir(icp_root, environment, deployment_name)?;
     if !dir.is_dir() {
         return Ok(None);
     }
@@ -117,14 +118,14 @@ pub fn latest_deployment_truth_receipt_path_from_root(
 
 fn install_deployment_truth_receipts_dir(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_network_name(network)?;
+    validate_environment_name(environment)?;
     validate_state_name(deployment_name)?;
     Ok(icp_root
         .join(".canic")
-        .join(network)
+        .join(environment)
         .join("deployment-receipts")
         .join(deployment_name))
 }

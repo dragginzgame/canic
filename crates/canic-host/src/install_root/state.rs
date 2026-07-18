@@ -23,15 +23,15 @@ pub enum InstallStateError {
     #[error("invalid deployment/template name {name:?}; use letters, numbers, '-' or '_'")]
     InvalidStateName { name: String },
 
-    #[error("invalid network name {name:?}; use letters, numbers, '-' or '_'")]
-    InvalidNetworkName { name: String },
+    #[error("invalid environment name {name:?}; use letters, numbers, '-' or '_'")]
+    InvalidEnvironmentName { name: String },
 
     #[error(
-        "deployment state network mismatch: state is for {state_network}, requested {requested_network}"
+        "deployment state environment mismatch: state is for {state_environment}, requested {requested_environment}"
     )]
-    NetworkMismatch {
-        state_network: String,
-        requested_network: String,
+    EnvironmentMismatch {
+        state_environment: String,
+        requested_environment: String,
     },
 
     #[error(
@@ -101,7 +101,7 @@ pub struct InstallState {
     pub fleet_template: String,
     pub created_at_unix_secs: u64,
     pub updated_at_unix_secs: u64,
-    pub network: String,
+    pub environment: String,
     pub root_target: String,
     pub root_canister_id: String,
     pub root_verification: RootVerificationStatus,
@@ -112,15 +112,15 @@ pub struct InstallState {
     pub release_set_manifest_path: String,
 }
 
-/// Read deployment-target install state for one project/network when present.
+/// Read deployment-target install state for one project/environment when present.
 pub(super) fn read_deployment_install_state(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment: &str,
 ) -> Result<Option<InstallState>, InstallStateError> {
-    validate_network_name(network)?;
+    validate_environment_name(environment)?;
     validate_state_name(deployment)?;
-    let path = deployment_install_state_path(icp_root, network, deployment);
+    let path = deployment_install_state_path(icp_root, environment, deployment);
     let bytes = match fs::read(&path) {
         Ok(bytes) => bytes,
         Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -128,29 +128,29 @@ pub(super) fn read_deployment_install_state(
             return Err(InstallStateError::Read { path, source });
         }
     };
-    decode_install_state(&bytes, &path, network, deployment).map(Some)
+    decode_install_state(&bytes, &path, environment, deployment).map(Some)
 }
 
-/// Decode and validate install state against its canonical network/deployment path.
+/// Decode and validate install state against its canonical environment/deployment path.
 pub fn decode_install_state(
     bytes: &[u8],
     path: &Path,
-    network: &str,
+    environment: &str,
     deployment: &str,
 ) -> Result<InstallState, InstallStateError> {
-    validate_network_name(network)?;
+    validate_environment_name(environment)?;
     validate_state_name(deployment)?;
     let state = serde_json::from_slice(bytes).map_err(|source| InstallStateError::Decode {
         path: path.to_path_buf(),
         source,
     })?;
-    validate_loaded_install_state(&state, network, deployment)?;
+    validate_loaded_install_state(&state, environment, deployment)?;
     Ok(state)
 }
 
 /// Read deployment-target install state for the discovered current project.
 pub fn read_named_deployment_install_state(
-    network: &str,
+    environment: &str,
     deployment: &str,
 ) -> Result<Option<InstallState>, InstallStateError> {
     let start = PathBuf::from(".");
@@ -158,49 +158,52 @@ pub fn read_named_deployment_install_state(
         path: start,
         source,
     })?;
-    read_deployment_install_state(&icp_root, network, deployment)
+    read_deployment_install_state(&icp_root, environment, deployment)
 }
 
 /// Read deployment-target install state for an explicit ICP project root.
 pub fn read_named_deployment_install_state_from_root(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment: &str,
 ) -> Result<Option<InstallState>, InstallStateError> {
-    read_deployment_install_state(icp_root, network, deployment)
+    read_deployment_install_state(icp_root, environment, deployment)
 }
 
 /// Return the project-local state path for one deployment target.
 #[must_use]
 pub(super) fn deployment_install_state_path(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment: &str,
 ) -> PathBuf {
-    deployments_dir(icp_root, network).join(format!("{deployment}.json"))
+    deployments_dir(icp_root, environment).join(format!("{deployment}.json"))
 }
 
 // Return the directory that owns deployment-target state files.
-fn deployments_dir(icp_root: &Path, network: &str) -> PathBuf {
-    icp_root.join(".canic").join(network).join("deployments")
+fn deployments_dir(icp_root: &Path, environment: &str) -> PathBuf {
+    icp_root
+        .join(".canic")
+        .join(environment)
+        .join("deployments")
 }
 
 // Persist the completed install state under the project-local `.canic` directory.
 pub(super) fn write_install_state(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     state: &InstallState,
 ) -> Result<PathBuf, InstallStateError> {
-    validate_network_name(network)?;
+    validate_environment_name(environment)?;
     validate_state_name(&state.deployment_name)?;
     validate_schema_version(state.schema_version)?;
-    if state.network != network {
-        return Err(InstallStateError::NetworkMismatch {
-            state_network: state.network.clone(),
-            requested_network: network.to_string(),
+    if state.environment != environment {
+        return Err(InstallStateError::EnvironmentMismatch {
+            state_environment: state.environment.clone(),
+            requested_environment: environment.to_string(),
         });
     }
-    let path = deployment_install_state_path(icp_root, network, &state.deployment_name);
+    let path = deployment_install_state_path(icp_root, environment, &state.deployment_name);
     let bytes = serde_json::to_vec_pretty(state).map_err(|source| InstallStateError::Encode {
         path: path.clone(),
         source,
@@ -215,7 +218,7 @@ pub(super) fn write_install_state(
 // Reject state that does not belong to the requested canonical path.
 fn validate_loaded_install_state(
     state: &InstallState,
-    requested_network: &str,
+    requested_environment: &str,
     requested_deployment: &str,
 ) -> Result<(), InstallStateError> {
     validate_schema_version(state.schema_version)?;
@@ -225,10 +228,10 @@ fn validate_loaded_install_state(
             requested_deployment: requested_deployment.to_string(),
         });
     }
-    if state.network != requested_network {
-        return Err(InstallStateError::NetworkMismatch {
-            state_network: state.network.clone(),
-            requested_network: requested_network.to_string(),
+    if state.environment != requested_environment {
+        return Err(InstallStateError::EnvironmentMismatch {
+            state_environment: state.environment.clone(),
+            requested_environment: requested_environment.to_string(),
         });
     }
     Ok(())
@@ -261,8 +264,8 @@ pub(super) fn validate_state_name(name: &str) -> Result<(), InstallStateError> {
     }
 }
 
-// Keep network names safe for `.canic/<network>` state paths.
-pub fn validate_network_name(name: &str) -> Result<(), InstallStateError> {
+// Keep environment names safe for `.canic/<environment>` state paths.
+pub fn validate_environment_name(name: &str) -> Result<(), InstallStateError> {
     let valid = !name.is_empty()
         && name
             .bytes()
@@ -270,7 +273,7 @@ pub fn validate_network_name(name: &str) -> Result<(), InstallStateError> {
     if valid {
         Ok(())
     } else {
-        Err(InstallStateError::InvalidNetworkName {
+        Err(InstallStateError::InvalidEnvironmentName {
             name: name.to_string(),
         })
     }

@@ -37,7 +37,7 @@ fn retains_install_state_decode_error() {
 fn retains_replica_query_error() {
     let request = InstalledDeploymentRequest {
         deployment: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         icp: "icp".to_string(),
         detect_lost_local_root: false,
     };

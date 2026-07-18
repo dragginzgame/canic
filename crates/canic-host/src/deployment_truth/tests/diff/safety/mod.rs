@@ -73,7 +73,7 @@ fn mainnet_deployment_check_blocks_cloud_engine_root_auth_signer() {
         .observed_root
         .as_mut()
         .expect("sample has observed root");
-    observed_root.network = "ic".to_string();
+    observed_root.environment = "ic".to_string();
     observed_root.observed_canister_id = root_canister.to_string();
     let mut diff = compare_plan_to_inventory(&sample_plan(), &sample_matching_inventory());
     let source = FixtureRootSubnetEvidenceSource {

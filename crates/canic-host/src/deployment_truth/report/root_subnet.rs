@@ -9,7 +9,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const MAINNET_NETWORK: &str = "ic";
+const MAINNET_ENVIRONMENT: &str = "ic";
 const CLOUD_ENGINE_SUBNET_KIND: &str = "cloud_engine";
 const ROOT_AUTH_SUBNET_EVIDENCE_MISSING_CODE: &str = "root_auth_subnet_evidence_missing";
 pub(in crate::deployment_truth) const ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE: &str =
@@ -18,13 +18,13 @@ pub(in crate::deployment_truth) const ROOT_AUTH_CLOUD_ENGINE_SUBNET_CODE: &str =
 pub(in crate::deployment_truth) fn apply_root_auth_signer_subnet_check(
     diff: &mut DeploymentDiffV1,
     inventory: &DeploymentInventoryV1,
-    network: &str,
+    environment: &str,
     icp_root: &Path,
 ) {
     apply_root_auth_signer_subnet_check_with_source(
         diff,
         inventory,
-        network,
+        environment,
         icp_root,
         &LiveSubnetCatalogRootSubnetEvidenceSource,
     );
@@ -33,18 +33,21 @@ pub(in crate::deployment_truth) fn apply_root_auth_signer_subnet_check(
 pub(in crate::deployment_truth) fn apply_root_auth_signer_subnet_check_with_source(
     diff: &mut DeploymentDiffV1,
     inventory: &DeploymentInventoryV1,
-    network: &str,
+    environment: &str,
     icp_root: &Path,
     source: &dyn RootSubnetEvidenceSource,
 ) {
-    if network != MAINNET_NETWORK {
+    if environment != MAINNET_ENVIRONMENT {
         return;
     }
     let Some(root) = &inventory.observed_root else {
         return;
     };
-    let evidence = match source.root_subnet_evidence(network, icp_root, &root.observed_canister_id)
-    {
+    let evidence = match source.root_subnet_evidence(
+        environment,
+        icp_root,
+        &root.observed_canister_id,
+    ) {
         Ok(evidence) => evidence,
         Err(err) => {
             diff.hard_failures.push(finding(
@@ -86,7 +89,7 @@ pub(in crate::deployment_truth) struct RootSubnetEvidence {
 pub(in crate::deployment_truth) trait RootSubnetEvidenceSource {
     fn root_subnet_evidence(
         &self,
-        network: &str,
+        environment: &str,
         icp_root: &Path,
         canister_id: &str,
     ) -> Result<RootSubnetEvidence, String>;
@@ -100,13 +103,14 @@ struct LiveSubnetCatalogRootSubnetEvidenceSource;
 impl RootSubnetEvidenceSource for LiveSubnetCatalogRootSubnetEvidenceSource {
     fn root_subnet_evidence(
         &self,
-        network: &str,
+        environment: &str,
         icp_root: &Path,
         canister_id: &str,
     ) -> Result<RootSubnetEvidence, String> {
         let request = SubnetCatalogCacheRequest {
             icp_root: icp_root.to_path_buf(),
-            network: network.to_string(),
+            // `ic-query` names its ICP environment selector `network`.
+            network: environment.to_string(),
         };
         let cached = load_or_refresh_subnet_catalog(
             &request,
@@ -149,7 +153,7 @@ mod tests {
     #[test]
     fn subnet_catalog_source_resolves_cached_canister_without_icq_process() {
         let root = temp_root("root-subnet-catalog-source");
-        let path = subnet_catalog_path(&root, MAINNET_NETWORK);
+        let path = subnet_catalog_path(&root, MAINNET_ENVIRONMENT);
         fs::create_dir_all(path.parent().expect("catalog has parent"))
             .expect("create catalog parent");
         fs::write(
@@ -159,7 +163,7 @@ mod tests {
         .expect("write catalog");
 
         let evidence = LiveSubnetCatalogRootSubnetEvidenceSource
-            .root_subnet_evidence(MAINNET_NETWORK, &root, CANISTER)
+            .root_subnet_evidence(MAINNET_ENVIRONMENT, &root, CANISTER)
             .expect("resolve cached canister");
 
         let _ = fs::remove_dir_all(root);
@@ -177,7 +181,7 @@ mod tests {
     fn fixture_catalog() -> SubnetCatalog {
         SubnetCatalog {
             catalog_schema_version: CATALOG_SCHEMA_VERSION,
-            network: MAINNET_NETWORK.to_string(),
+            network: MAINNET_ENVIRONMENT.to_string(),
             registry_canister_id: MAINNET_REGISTRY_CANISTER_ID.to_string(),
             registry_version: 123_456,
             fetched_at: "2026-06-26T00:00:00Z".to_string(),

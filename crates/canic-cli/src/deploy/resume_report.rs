@@ -21,11 +21,11 @@ const DEPLOY_RESUME_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect resume-report demo
   canic deploy inspect resume-report --receipt receipt.json demo
-  canic --network local deploy inspect resume-report --receipt receipt.json --profile fast demo
+  canic --environment local deploy inspect resume-report --receipt receipt.json --profile fast demo
 
 Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
 and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
-latest local receipt under .canic/<network>/deployment-receipts/<deployment>. It
+latest local receipt under .canic/<environment>/deployment-receipts/<deployment>. It
 does not resume, install, or mutate state.";
 
 const RECEIPT_ARG: &str = "receipt";
@@ -83,7 +83,7 @@ impl DeployResumeReportOptions {
 
         latest_deployment_truth_receipt_path_from_root(
             &icp_root,
-            &self.truth.network,
+            &self.truth.environment,
             &self.truth.deployment,
         )
         .map_err(DeployCommandError::from)?
@@ -92,7 +92,7 @@ impl DeployResumeReportOptions {
                 "no deployment receipt found under {} for deployment {}; pass --receipt <file>",
                 icp_root
                     .join(".canic")
-                    .join(&self.truth.network)
+                    .join(&self.truth.environment)
                     .join("deployment-receipts")
                     .join(&self.truth.deployment)
                     .display(),

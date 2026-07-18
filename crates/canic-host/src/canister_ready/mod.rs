@@ -62,16 +62,16 @@ impl From<IcpJsonResponseError> for CanisterReadyQueryError {
     }
 }
 
-/// Query `canic_ready`, using the local replica API for local network targets.
+/// Query `canic_ready`, using the local replica API for local environment targets.
 pub fn query_canister_ready(
     icp: &IcpCli,
     canister_id: &str,
-    network: &str,
+    environment: &str,
     icp_root: Option<&Path>,
     candid_path: Option<&Path>,
 ) -> Result<bool, CanisterReadyQueryError> {
-    if replica_query::should_use_local_replica_query(Some(network)) {
-        return query_local_canister_ready(network, canister_id, icp_root).map_err(Into::into);
+    if replica_query::should_use_local_replica_query(Some(environment)) {
+        return query_local_canister_ready(environment, canister_id, icp_root).map_err(Into::into);
     }
 
     query_canister_ready_with_icp(icp, canister_id, candid_path)
@@ -79,13 +79,13 @@ pub fn query_canister_ready(
 
 /// Query `canic_ready` directly through the local replica API.
 pub fn query_local_canister_ready(
-    network: &str,
+    environment: &str,
     canister_id: &str,
     icp_root: Option<&Path>,
 ) -> Result<bool, ReplicaQueryError> {
     icp_root.map_or_else(
-        || replica_query::query_ready(Some(network), canister_id),
-        |root| replica_query::query_ready_from_root(Some(network), canister_id, root),
+        || replica_query::query_ready(Some(environment), canister_id),
+        |root| replica_query::query_ready_from_root(Some(environment), canister_id, root),
     )
 }
 

@@ -32,7 +32,7 @@ pub struct BuildMaterializationInputV1 {
     pub materialization_input_id: String,
     pub build_recipe_id: String,
     pub canonical_embedded_config_sha256: String,
-    pub network: String,
+    pub environment: String,
     pub root_trust_anchor: String,
     pub runtime_variant: String,
 }
@@ -95,7 +95,7 @@ pub struct RolePromotionMaterializationIdentityV1 {
     pub materialization_result_id: String,
     pub materialization_input_digest: String,
     pub canonical_embedded_config_sha256: String,
-    pub network: String,
+    pub environment: String,
     pub root_trust_anchor: String,
     pub runtime_variant: String,
     pub wasm_sha256: String,

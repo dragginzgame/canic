@@ -13,11 +13,11 @@ use std::path::{Path, PathBuf};
 
 pub(super) fn write_install_state_with_deployment_truth_receipt(
     receipt_scope: InstallReceiptScope<'_>,
-    network: &str,
+    environment: &str,
     state: &InstallState,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let started_at = current_unix_timestamp_label()?;
-    let state_path = write_install_state(receipt_scope.icp_root, network, state)?;
+    let state_path = write_install_state(receipt_scope.icp_root, environment, state)?;
     let completed = CompletedInstallPhase {
         phase: InstallPhaseLabel::WRITE_INSTALL_STATE,
         attempted_action: "write local install state",
@@ -53,7 +53,7 @@ pub(super) fn build_install_state(
         fleet_template: fleet_name.to_string(),
         created_at_unix_secs: timestamp,
         updated_at_unix_secs: timestamp,
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         root_target: options.root_canister.clone(),
         root_canister_id: root_canister_id.to_string(),
         root_verification: RootVerificationStatus::Verified,

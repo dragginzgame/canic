@@ -1,5 +1,5 @@
 use crate::{
-    cli::defaults::local_network,
+    cli::defaults::local_environment,
     endpoints::{
         CANDID_SERVICE_METADATA, EndpointsCommandError, EndpointsOptions,
         model::{EndpointReport, EndpointTarget},
@@ -7,7 +7,7 @@ use crate::{
 };
 use canic_host::{
     candid_endpoints::parse_candid_service_endpoints,
-    icp::IcpCli,
+    icp::{IcpCli, local_canister_candid_path},
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{InstalledDeploymentRequest, resolve_installed_deployment_from_root},
     registry::RegistryEntry,
@@ -40,7 +40,7 @@ pub(super) fn endpoint_report(
             canister: options.canister.clone(),
         });
     };
-    let path = resolve_role_did(options, &role)?;
+    let path = resolve_role_did(&role)?;
     let candid = read_did(&path)?;
     Ok(EndpointReport {
         source: path.display().to_string(),
@@ -53,7 +53,7 @@ fn read_live_candid(
     target: &EndpointTarget,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let root = resolve_endpoint_icp_root()?;
-    Ok(IcpCli::new(&options.icp, options.network.clone())
+    Ok(IcpCli::new(&options.icp, options.environment.clone())
         .with_cwd(root)
         .canister_metadata_output(&target.canister, CANDID_SERVICE_METADATA)?)
 }
@@ -96,7 +96,7 @@ fn load_fleet_registry(
 ) -> Result<Vec<RegistryEntry>, Box<dyn std::error::Error>> {
     let request = InstalledDeploymentRequest {
         deployment: options.deployment.clone(),
-        network: state_network(options),
+        environment: state_environment(options),
         icp: options.icp.clone(),
         detect_lost_local_root: false,
     };
@@ -106,26 +106,16 @@ fn load_fleet_registry(
         .entries)
 }
 
-fn resolve_role_did(
-    options: &EndpointsOptions,
-    role: &str,
-) -> Result<PathBuf, EndpointsCommandError> {
-    let root = resolve_endpoint_icp_root().unwrap_or_else(|_| PathBuf::from("."));
-    for network in artifact_network_candidates(options) {
-        let path = root
-            .join(".icp")
-            .join(&network)
-            .join("canisters")
-            .join(role)
-            .join(format!("{role}.did"));
-        if path.is_file() {
-            return Ok(path);
-        }
+fn resolve_role_did(role: &str) -> Result<PathBuf, EndpointsCommandError> {
+    let root = resolve_current_canic_icp_root()?;
+    let path = local_canister_candid_path(&root, &local_environment(), role);
+    if path.is_file() {
+        return Ok(path);
     }
 
     Err(EndpointsCommandError::MissingRoleArtifact {
         role: role.to_string(),
-        root: root.display().to_string(),
+        path: path.display().to_string(),
     })
 }
 
@@ -133,19 +123,11 @@ fn resolve_endpoint_icp_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
     resolve_current_canic_icp_root().map_err(Into::into)
 }
 
-fn artifact_network_candidates(options: &EndpointsOptions) -> Vec<String> {
-    let mut networks = Vec::new();
-    if let Some(network) = &options.network {
-        networks.push(network.clone());
-    }
-    networks.push(local_network());
-    networks.sort();
-    networks.dedup();
-    networks
-}
-
-fn state_network(options: &EndpointsOptions) -> String {
-    options.network.clone().unwrap_or_else(local_network)
+fn state_environment(options: &EndpointsOptions) -> String {
+    options
+        .environment
+        .clone()
+        .unwrap_or_else(local_environment)
 }
 
 fn read_did(path: &Path) -> Result<String, EndpointsCommandError> {

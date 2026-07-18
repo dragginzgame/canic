@@ -398,7 +398,7 @@ where
     }
     println!(
         "{}",
-        render_fleet_list(&project_root, &choices, &options.network)
+        render_fleet_list(&project_root, &choices, &options.environment)
     );
     Ok(())
 }

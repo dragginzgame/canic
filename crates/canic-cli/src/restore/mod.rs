@@ -252,10 +252,10 @@ impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
     }
 }
 
-fn restore_command_config(program: &str, network: Option<&str>) -> RestoreApplyCommandConfig {
+fn restore_command_config(program: &str, environment: Option<&str>) -> RestoreApplyCommandConfig {
     RestoreApplyCommandConfig {
         program: program.to_string(),
-        network: network.map(str::to_string),
+        environment: environment.map(str::to_string),
     }
 }
 
@@ -267,7 +267,7 @@ fn restore_runner_config(
 
     Ok(RestoreRunnerConfig {
         journal,
-        command: restore_command_config(&options.icp, options.network.as_deref()),
+        command: restore_command_config(&options.icp, options.environment.as_deref()),
         max_steps: options.max_steps,
         updated_at: None,
     })
@@ -281,7 +281,7 @@ fn restore_status_runner_config(
 
     Ok(RestoreRunnerConfig {
         journal,
-        command: restore_command_config(&options.icp, options.network.as_deref()),
+        command: restore_command_config(&options.icp, options.environment.as_deref()),
         max_steps: None,
         updated_at: None,
     })

@@ -49,7 +49,7 @@ pub fn build_provenance_envelope(
             fleet: Some(request.fleet.clone()),
             role: Some(request.role.clone()),
             profile: Some(request.profile.target_dir_name().to_string()),
-            network: Some(request.network.clone()),
+            environment: Some(request.environment.clone()),
         },
         generated_at,
         source_config: Some(file_input_fingerprint(

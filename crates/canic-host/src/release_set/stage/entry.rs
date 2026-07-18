@@ -10,7 +10,7 @@ use crate::{
         ReleaseSetEntry,
         stage::{
             artifact::{read_release_artifact, resolve_release_artifact_path},
-            call::icp_call_on_network,
+            call::icp_call_in_environment,
             progress::StageProgress,
         },
     },
@@ -131,7 +131,7 @@ impl ValidatedReleaseArtifact {
 )]
 pub(super) fn stage_release_entry(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     release_version: &str,
@@ -147,7 +147,7 @@ pub(super) fn stage_release_entry(
 
     stage_release_manifest(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         &identity,
@@ -157,7 +157,7 @@ pub(super) fn stage_release_entry(
 
     prepare_release_chunks(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         &identity,
@@ -167,7 +167,7 @@ pub(super) fn stage_release_entry(
     progress.start_entry(entry, chunk_count)?;
     publish_release_chunks(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         &identity,
@@ -183,7 +183,7 @@ pub(super) fn stage_release_entry(
 // Stage one approved manifest into root before any chunk preparation/upload begins.
 fn stage_release_manifest(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     identity: &StagedReleaseIdentity,
@@ -203,9 +203,9 @@ fn stage_release_manifest(
         created_at: now_secs,
     };
     let argument = candid::encode_one(&manifest)?;
-    let _ = icp_call_on_network(
+    let _ = icp_call_in_environment(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         protocol::CANIC_TEMPLATE_STAGE_MANIFEST_ADMIN,
@@ -218,7 +218,7 @@ fn stage_release_manifest(
 // Prepare the root-local chunk set metadata before sending any chunk bytes.
 fn prepare_release_chunks(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     identity: &StagedReleaseIdentity,
@@ -232,9 +232,9 @@ fn prepare_release_chunks(
         chunk_hashes: artifact.chunk_hashes.clone(),
     };
     let argument = candid::encode_one(&prepare)?;
-    let _ = icp_call_on_network(
+    let _ = icp_call_in_environment(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         protocol::CANIC_TEMPLATE_PREPARE_ADMIN,
@@ -251,7 +251,7 @@ fn prepare_release_chunks(
 )]
 fn publish_release_chunks(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     identity: &StagedReleaseIdentity,
@@ -268,9 +268,9 @@ fn publish_release_chunks(
             bytes: chunk.to_vec(),
         };
         let argument = candid::encode_one(&request)?;
-        let _ = icp_call_on_network(
+        let _ = icp_call_in_environment(
             icp_root,
-            network,
+            environment,
             local_replica,
             root_canister,
             protocol::CANIC_TEMPLATE_PUBLISH_CHUNK_ADMIN,

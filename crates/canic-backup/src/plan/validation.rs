@@ -14,7 +14,7 @@ impl BackupPlan {
         validate_nonempty("plan_id", &self.plan_id)?;
         validate_nonempty("run_id", &self.run_id)?;
         validate_nonempty("fleet", &self.fleet)?;
-        validate_nonempty("network", &self.network)?;
+        validate_nonempty("environment", &self.environment)?;
         validate_principal("root_canister_id", &self.root_canister_id)?;
         validate_optional_principal(
             "selected_subtree_root",

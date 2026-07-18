@@ -59,7 +59,7 @@ pub(in crate::deploy) struct DeploymentPlanReport {
     pub(super) schema_version: u16,
     pub(super) command: &'static str,
     pub(super) target: String,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) build_profile: String,
     pub(super) config_path: String,
     pub(super) status: PlanStatus,

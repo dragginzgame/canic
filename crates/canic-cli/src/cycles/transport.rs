@@ -49,7 +49,7 @@ const CYCLES_WORKER_PANIC: &str = "cycles query worker panicked";
 struct CycleQueryTarget {
     icp: IcpCli,
     canister_id: String,
-    network: String,
+    environment: String,
     icp_root: Option<PathBuf>,
     candid_path: Option<PathBuf>,
 }
@@ -79,7 +79,7 @@ pub(super) fn cycles_report(options: &CyclesOptions) -> Result<CyclesReport, Cyc
 
     Ok(CyclesReport {
         deployment: options.deployment.clone(),
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         since_seconds: options.since_seconds,
         generated_at_secs,
         canisters,
@@ -339,7 +339,7 @@ fn query_live_cycle_balance(target: &CycleQueryTarget) -> Result<u128, CycleObse
     query_cycle_balance(
         &target.icp,
         &target.canister_id,
-        &target.network,
+        &target.environment,
         target.icp_root.as_deref(),
         target.candid_path.as_deref(),
     )
@@ -446,14 +446,14 @@ fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQu
     CycleQueryTarget {
         icp: cycles_icp(options, root.as_deref()),
         canister_id: entry.pid.clone(),
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         icp_root: root.clone(),
-        candid_path: registry_entry_candid_path(root.as_deref(), &options.network, entry),
+        candid_path: registry_entry_candid_path(root.as_deref(), &options.environment, entry),
     }
 }
 
 fn cycles_icp(options: &CyclesOptions, root: Option<&Path>) -> IcpCli {
-    let icp = IcpCli::new(&options.icp, Some(options.network.clone()));
+    let icp = IcpCli::new(&options.icp, Some(options.environment.clone()));
     if let Some(root) = root {
         return icp.with_cwd(root);
     }
@@ -521,7 +521,7 @@ fn resolve_cycles_deployment(
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),
-            network: options.network.clone(),
+            environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,
         },

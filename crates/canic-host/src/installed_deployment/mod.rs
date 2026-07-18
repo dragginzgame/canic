@@ -20,7 +20,7 @@ const IC_REJECT_CODE_DESTINATION_INVALID: u64 = 3;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstalledDeploymentRequest {
     pub deployment: String,
-    pub network: String,
+    pub environment: String,
     pub icp: String,
     pub detect_lost_local_root: bool,
 }
@@ -74,8 +74,11 @@ pub struct ResolvedDeploymentTopology {
 
 #[derive(Debug, ThisError)]
 pub enum InstalledDeploymentError {
-    #[error("deployment target {deployment} is not installed on network {network}")]
-    NoInstalledDeployment { network: String, deployment: String },
+    #[error("deployment target {deployment} is not installed on environment {environment}")]
+    NoInstalledDeployment {
+        environment: String,
+        deployment: String,
+    },
 
     #[error("failed to read canic deployment state: {0}")]
     InstallState(#[from] InstallStateError),
@@ -87,11 +90,11 @@ pub enum InstalledDeploymentError {
     Icp(#[from] IcpCommandError),
 
     #[error(
-        "deployment target {deployment} points to root {root}, but that canister is not present on network {network}"
+        "deployment target {deployment} points to root {root}, but that canister is not present on environment {environment}"
     )]
     LostLocalDeployment {
         deployment: String,
-        network: String,
+        environment: String,
         root: String,
     },
 
@@ -105,7 +108,7 @@ pub enum InstalledDeploymentError {
 pub fn resolve_installed_deployment(
     request: &InstalledDeploymentRequest,
 ) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
-    let state = read_installed_deployment_state(&request.network, &request.deployment)?;
+    let state = read_installed_deployment_state(&request.environment, &request.deployment)?;
     let (source, entries) = query_registry(request, &state.root_canister_id)?;
     Ok(installed_deployment_resolution(state, source, entries))
 }
@@ -114,8 +117,11 @@ pub fn resolve_installed_deployment_from_root(
     request: &InstalledDeploymentRequest,
     icp_root: &Path,
 ) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
-    let state =
-        read_installed_deployment_state_from_root(&request.network, &request.deployment, icp_root)?;
+    let state = read_installed_deployment_state_from_root(
+        &request.environment,
+        &request.deployment,
+        icp_root,
+    )?;
     let (source, entries) = query_registry_from_root(request, &state.root_canister_id, icp_root)?;
     Ok(installed_deployment_resolution(state, source, entries))
 }
@@ -139,26 +145,26 @@ fn installed_deployment_resolution(
 }
 
 pub fn read_installed_deployment_state(
-    network: &str,
+    environment: &str,
     deployment: &str,
 ) -> Result<InstallState, InstalledDeploymentError> {
-    read_named_deployment_install_state(network, deployment)
+    read_named_deployment_install_state(environment, deployment)
         .map_err(InstalledDeploymentError::InstallState)?
         .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
-            network: network.to_string(),
+            environment: environment.to_string(),
             deployment: deployment.to_string(),
         })
 }
 
 pub fn read_installed_deployment_state_from_root(
-    network: &str,
+    environment: &str,
     deployment: &str,
     icp_root: &Path,
 ) -> Result<InstallState, InstalledDeploymentError> {
-    read_named_deployment_install_state_from_root(icp_root, network, deployment)
+    read_named_deployment_install_state_from_root(icp_root, environment, deployment)
         .map_err(InstalledDeploymentError::InstallState)?
         .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
-            network: network.to_string(),
+            environment: environment.to_string(),
             deployment: deployment.to_string(),
         })
 }
@@ -191,8 +197,8 @@ fn query_registry(
     request: &InstalledDeploymentRequest,
     root: &str,
 ) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
-    let icp = IcpCli::new(&request.icp, Some(request.network.clone()));
-    let query = query_subnet_registry(&icp, root, &request.network, None, None)
+    let icp = IcpCli::new(&request.icp, Some(request.environment.clone()));
+    let query = query_subnet_registry(&icp, root, &request.environment, None, None)
         .map_err(|err| installed_deployment_registry_error(request, root, err))?;
     Ok((installed_deployment_source(query.source), query.entries))
 }
@@ -202,12 +208,12 @@ fn query_registry_from_root(
     root: &str,
     icp_root: &Path,
 ) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
-    let icp = IcpCli::new(&request.icp, Some(request.network.clone())).with_cwd(icp_root);
-    let candid_path = existing_local_canister_candid_path(icp_root, &request.network, "root");
+    let icp = IcpCli::new(&request.icp, Some(request.environment.clone())).with_cwd(icp_root);
+    let candid_path = existing_local_canister_candid_path(icp_root, &request.environment, "root");
     let query = query_subnet_registry(
         &icp,
         root,
-        &request.network,
+        &request.environment,
         Some(icp_root),
         candid_path.as_deref(),
     )
@@ -244,7 +250,7 @@ fn local_registry_error(
     if request.detect_lost_local_root && is_missing_destination_error(&error) {
         return InstalledDeploymentError::LostLocalDeployment {
             deployment: request.deployment.clone(),
-            network: request.network.clone(),
+            environment: request.environment.clone(),
             root: root.to_string(),
         };
     }

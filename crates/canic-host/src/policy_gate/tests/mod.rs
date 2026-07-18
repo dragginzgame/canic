@@ -122,7 +122,7 @@ fn sample_envelope_with_payload(payload: serde_json::Value) -> EvidenceEnvelopeV
             fleet: Some("demo".to_string()),
             role: Some("app".to_string()),
             profile: None,
-            network: None,
+            environment: None,
         },
         generated_at: "unix:1".to_string(),
         source_config: None,

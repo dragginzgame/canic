@@ -109,7 +109,7 @@ fn adoption_report_marks_reverse_conflicting_artifact_evidence() {
     let manifest = RoleArtifactManifestV1 {
         schema_version: 1,
         manifest_id: "local-manifest-1".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         artifact_root: None,
         role_artifacts: vec![RoleArtifactV1 {
             source: ArtifactSourceV1::LocalBuild,

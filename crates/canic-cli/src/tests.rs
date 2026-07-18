@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    cli::globals::{INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION},
+    cli::globals::{INTERNAL_ENVIRONMENT_OPTION, INTERNAL_ICP_OPTION},
     info::InfoCommandError,
 };
 
@@ -58,7 +58,7 @@ fn usage_lists_command_families() {
     assert!(plain.find("    backup") < plain.find("    restore"));
     assert!(plain.contains("Options:"));
     assert!(plain.contains("--icp <path>"));
-    assert!(plain.contains("--network <name>"));
+    assert!(plain.contains("--environment <name>"));
     assert!(plain.contains("Diagnose project and deployment preflight readiness"));
     assert!(plain.contains("Audit declared Canic state metadata"));
     assert!(plain.contains("    scaffold"));
@@ -72,7 +72,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("Check, inspect, register, and install deployments"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
     assert!(!plain.contains("Check deployment truth before mutation"));
-    assert!(!plain.contains("    network"));
+    assert!(!plain.contains("    environment"));
     assert!(!plain.contains("    defaults"));
     assert!(plain.contains("    status"));
     assert!(plain.contains("    medic"));
@@ -605,22 +605,22 @@ fn global_icp_is_forwarded_only_to_active_auth_renewal_status() {
 }
 
 #[test]
-fn global_network_is_forwarded_to_commands_that_use_network() {
+fn global_environment_is_forwarded_to_commands_that_use_environment() {
     let mut tail = vec![OsString::from("test")];
     let mut cycles_tail = vec![OsString::from("balance")];
     let mut medic_tail = Vec::new();
     let mut token_tail = vec![OsString::from("balance")];
 
-    apply_global_network("install", &mut tail, Some("ic".to_string()));
-    apply_global_network("cycles", &mut cycles_tail, Some("ic".to_string()));
-    apply_global_network("medic", &mut medic_tail, Some("ic".to_string()));
-    apply_global_network("token", &mut token_tail, Some("ic".to_string()));
+    apply_global_environment("install", &mut tail, Some("ic".to_string()));
+    apply_global_environment("cycles", &mut cycles_tail, Some("ic".to_string()));
+    apply_global_environment("medic", &mut medic_tail, Some("ic".to_string()));
+    apply_global_environment("token", &mut token_tail, Some("ic".to_string()));
 
     assert_eq!(
         tail,
         vec![
             OsString::from("test"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("ic")
         ]
     );
@@ -628,14 +628,14 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
         cycles_tail,
         vec![
             OsString::from("balance"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("ic")
         ]
     );
     assert_eq!(
         medic_tail,
         vec![
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("ic")
         ]
     );
@@ -643,14 +643,14 @@ fn global_network_is_forwarded_to_commands_that_use_network() {
         token_tail,
         vec![
             OsString::from("balance"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("ic")
         ]
     );
 }
 
 #[test]
-fn global_network_is_forwarded_to_deploy() {
+fn global_environment_is_forwarded_to_deploy() {
     for raw_tail in [
         &["check", "demo"][..],
         &["inspect", "diff", "demo"],
@@ -661,31 +661,31 @@ fn global_network_is_forwarded_to_deploy() {
         &["inspect", "report", "demo"],
         &["inspect", "resume-report", "demo"],
     ] {
-        assert_global_network_forwarded_to_deploy_tail(raw_tail);
+        assert_global_environment_forwarded_to_deploy_tail(raw_tail);
     }
 
     let mut family_tail = Vec::new();
-    apply_global_network("deploy", &mut family_tail, Some("ic".to_string()));
+    apply_global_environment("deploy", &mut family_tail, Some("ic".to_string()));
     assert!(family_tail.is_empty());
 }
 
-fn assert_global_network_forwarded_to_deploy_tail(raw_tail: &[&str]) {
+fn assert_global_environment_forwarded_to_deploy_tail(raw_tail: &[&str]) {
     let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
-    apply_global_network("deploy", &mut tail, Some("ic".to_string()));
+    apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
 
     assert_eq!(
         tail,
         raw_tail
             .iter()
             .copied()
-            .chain([INTERNAL_NETWORK_OPTION, "ic"])
+            .chain([INTERNAL_ENVIRONMENT_OPTION, "ic"])
             .map(OsString::from)
             .collect::<Vec<_>>()
     );
 }
 
 #[test]
-fn global_network_is_forwarded_to_nested_deploy_network_leaves() {
+fn global_environment_is_forwarded_to_nested_deploy_environment_leaves() {
     for raw_tail in [
         &["authority", "check", "demo"][..],
         &["authority", "evidence", "demo"],
@@ -702,17 +702,17 @@ fn global_network_is_forwarded_to_nested_deploy_network_leaves() {
         &["root", "verify", "demo"],
     ] {
         let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
-        apply_global_network("deploy", &mut tail, Some("ic".to_string()));
+        apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
 
         assert!(tail.ends_with(&[
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("ic")
         ]));
     }
 }
 
 #[test]
-fn global_network_is_not_forwarded_to_request_only_deploy_leaves() {
+fn global_environment_is_not_forwarded_to_request_only_deploy_leaves() {
     for raw_tail in [
         &[
             "inspect", "compare", "--left", "a.json", "--right", "b.json",
@@ -730,72 +730,72 @@ fn global_network_is_not_forwarded_to_request_only_deploy_leaves() {
     ] {
         let mut tail = raw_tail.iter().map(OsString::from).collect::<Vec<_>>();
         let original = tail.clone();
-        apply_global_network("deploy", &mut tail, Some("ic".to_string()));
+        apply_global_environment("deploy", &mut tail, Some("ic".to_string()));
 
         assert_eq!(tail, original);
     }
 }
 
 #[test]
-fn global_network_does_not_override_internal_forwarded_network() {
+fn global_environment_does_not_override_internal_forwarded_environment() {
     let mut tail = vec![
         OsString::from("test"),
-        OsString::from(INTERNAL_NETWORK_OPTION),
+        OsString::from(INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
     ];
 
-    apply_global_network("install", &mut tail, Some("ic".to_string()));
+    apply_global_environment("install", &mut tail, Some("ic".to_string()));
 
     assert_eq!(
         tail,
         vec![
             OsString::from("test"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("local")
         ]
     );
 }
 
 #[test]
-fn global_network_is_forwarded_only_to_restore_run() {
+fn global_environment_is_forwarded_only_to_restore_run() {
     let mut plan_tail = vec![OsString::from("plan")];
     let mut run_tail = vec![OsString::from("run")];
 
-    apply_global_network("restore", &mut plan_tail, Some("ic".to_string()));
-    apply_global_network("restore", &mut run_tail, Some("ic".to_string()));
+    apply_global_environment("restore", &mut plan_tail, Some("ic".to_string()));
+    apply_global_environment("restore", &mut run_tail, Some("ic".to_string()));
 
     assert_eq!(plan_tail, vec![OsString::from("plan")]);
     assert_eq!(
         run_tail,
         vec![
             OsString::from("run"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("ic")
         ]
     );
 }
 
 #[test]
-fn global_network_is_forwarded_only_to_fleet_list() {
+fn global_environment_is_forwarded_only_to_fleet_list() {
     let mut create_tail = vec![OsString::from("create")];
     let mut list_tail = vec![OsString::from("list")];
 
-    apply_global_network("fleet", &mut create_tail, Some("local".to_string()));
-    apply_global_network("fleet", &mut list_tail, Some("local".to_string()));
+    apply_global_environment("fleet", &mut create_tail, Some("local".to_string()));
+    apply_global_environment("fleet", &mut list_tail, Some("local".to_string()));
 
     assert_eq!(create_tail, vec![OsString::from("create")]);
     assert_eq!(
         list_tail,
         vec![
             OsString::from("list"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("local")
         ]
     );
 }
 
 #[test]
-fn global_network_is_forwarded_to_info_query_commands() {
+fn global_environment_is_forwarded_to_info_query_commands() {
     let mut list_tail = vec![OsString::from("list"), OsString::from("test")];
     let mut cycles_tail = vec![OsString::from("cycles"), OsString::from("test")];
     let mut metrics_tail = vec![OsString::from("metrics"), OsString::from("test")];
@@ -807,19 +807,19 @@ fn global_network_is_forwarded_to_info_query_commands() {
     let mut env_tail = vec![OsString::from("env"), OsString::from("test")];
     let mut help_tail = vec![OsString::from("--help")];
 
-    apply_global_network("info", &mut list_tail, Some("local".to_string()));
-    apply_global_network("info", &mut cycles_tail, Some("local".to_string()));
-    apply_global_network("info", &mut metrics_tail, Some("local".to_string()));
-    apply_global_network("info", &mut endpoints_tail, Some("local".to_string()));
-    apply_global_network("info", &mut env_tail, Some("local".to_string()));
-    apply_global_network("info", &mut help_tail, Some("local".to_string()));
+    apply_global_environment("info", &mut list_tail, Some("local".to_string()));
+    apply_global_environment("info", &mut cycles_tail, Some("local".to_string()));
+    apply_global_environment("info", &mut metrics_tail, Some("local".to_string()));
+    apply_global_environment("info", &mut endpoints_tail, Some("local".to_string()));
+    apply_global_environment("info", &mut env_tail, Some("local".to_string()));
+    apply_global_environment("info", &mut help_tail, Some("local".to_string()));
 
     assert_eq!(
         list_tail,
         vec![
             OsString::from("list"),
             OsString::from("test"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("local")
         ]
     );
@@ -828,7 +828,7 @@ fn global_network_is_forwarded_to_info_query_commands() {
         vec![
             OsString::from("cycles"),
             OsString::from("test"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("local")
         ]
     );
@@ -837,7 +837,7 @@ fn global_network_is_forwarded_to_info_query_commands() {
         vec![
             OsString::from("metrics"),
             OsString::from("test"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("local")
         ]
     );
@@ -847,7 +847,7 @@ fn global_network_is_forwarded_to_info_query_commands() {
             OsString::from("endpoints"),
             OsString::from("test"),
             OsString::from("app"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("local")
         ]
     );
@@ -856,7 +856,7 @@ fn global_network_is_forwarded_to_info_query_commands() {
         vec![
             OsString::from("env"),
             OsString::from("test"),
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("local")
         ]
     );
@@ -864,7 +864,7 @@ fn global_network_is_forwarded_to_info_query_commands() {
 }
 
 #[test]
-fn global_network_is_forwarded_only_to_active_auth_renewal_status() {
+fn global_environment_is_forwarded_only_to_active_auth_renewal_status() {
     let mut status_tail = vec![
         OsString::from("renewal"),
         OsString::from("status"),
@@ -874,11 +874,11 @@ fn global_network_is_forwarded_only_to_active_auth_renewal_status() {
     ];
     let mut help_tail = vec![OsString::from("--help")];
 
-    apply_global_network("auth", &mut status_tail, Some("fixture".to_string()));
-    apply_global_network("auth", &mut help_tail, Some("fixture".to_string()));
+    apply_global_environment("auth", &mut status_tail, Some("fixture".to_string()));
+    apply_global_environment("auth", &mut help_tail, Some("fixture".to_string()));
 
     assert!(status_tail.ends_with(&[
-        OsString::from(INTERNAL_NETWORK_OPTION),
+        OsString::from(INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("fixture")
     ]));
     assert_eq!(help_tail, vec![OsString::from("--help")]);
@@ -889,7 +889,7 @@ fn command_local_global_options_are_hard_rejected() {
     std::assert_matches!(
         run([
             OsString::from("status"),
-            OsString::from("--network"),
+            OsString::from("--environment"),
             OsString::from("local")
         ]),
         Err(CliError::Usage(_))

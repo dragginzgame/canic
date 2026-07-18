@@ -11,7 +11,7 @@ pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
     let summary_rows = [[
         report.layout_status.label().to_string(),
         report.deployment.clone(),
-        report.network.clone(),
+        report.environment.clone(),
         report.scope.clone(),
         report.targets.len().to_string(),
         report.operations.len().to_string(),
@@ -57,7 +57,7 @@ pub(super) fn render_inspect_report(report: &BackupInspectReport) -> String {
             &[
                 "STATUS",
                 "DEPLOYMENT",
-                "NETWORK",
+                "ENVIRONMENT",
                 "SCOPE",
                 "TARGETS",
                 "OPERATIONS",
@@ -136,7 +136,7 @@ mod tests {
             plan_id: "plan-test".to_string(),
             run_id: "run-test".to_string(),
             deployment: "demo".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             scope: "non-root-deployment".to_string(),
             targets: vec![BackupInspectTarget {
                 role: "child".to_string(),

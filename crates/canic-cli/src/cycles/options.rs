@@ -3,8 +3,8 @@ use crate::{
         flag_arg, parse_matches, parse_positive_u64, path_option, render_usage, required_string,
         required_typed, string_option, string_option_or_else, value_arg,
     },
-    cli::defaults::{default_icp, local_network},
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::defaults::{default_icp, local_environment},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     cycles::CyclesCommandError,
 };
 use clap::Command as ClapCommand;
@@ -35,7 +35,7 @@ pub(super) struct CyclesOptions {
     pub(super) json: bool,
     pub(super) verbose: bool,
     pub(super) out: Option<PathBuf>,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) icp: String,
 }
 
@@ -69,7 +69,7 @@ impl CyclesOptions {
             json: matches.get_flag(JSON_ARG),
             verbose: matches.get_flag(VERBOSE_ARG),
             out: path_option(matches, OUT_ARG),
-            network: string_option_or_else(matches, "network", local_network),
+            environment: string_option_or_else(matches, "environment", local_environment),
             icp: string_option_or_else(matches, "icp", default_icp),
         }
     }
@@ -148,6 +148,6 @@ fn cycles_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
             ),
         )
         .arg(value_arg(OUT_ARG).long(OUT_ARG).value_name("file"))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }

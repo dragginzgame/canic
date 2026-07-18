@@ -12,9 +12,10 @@ use super::{
 use crate::{
     cli::{
         clap::{flag_arg, parse_matches, render_usage, required_string, string_option, value_arg},
-        defaults::{default_icp, local_network},
+        defaults::{default_icp, local_environment},
         globals::{
-            INTERNAL_ICP_OPTION, INTERNAL_NETWORK_OPTION, internal_icp_arg, internal_network_arg,
+            INTERNAL_ENVIRONMENT_OPTION, INTERNAL_ICP_OPTION, internal_environment_arg,
+            internal_icp_arg,
         },
         help::print_help_or_version,
     },
@@ -76,7 +77,7 @@ pub(super) struct MedicOptions {
     pub(super) auth_renewal: Option<String>,
     pub(super) json: bool,
     pub(super) ci: bool,
-    pub(super) network: Option<String>,
+    pub(super) environment: Option<String>,
     pub(super) icp: String,
 }
 
@@ -89,11 +90,11 @@ impl MedicOptions {
             parse_matches(medic_command(), args).map_err(|_| MedicCommandError::Usage(usage()))?;
         let json = matches.get_flag(JSON_ARG);
         let ci = matches.get_flag(CI_ARG);
-        let network = string_option(&matches, "network");
+        let environment = string_option(&matches, "environment");
         let icp = string_option(&matches, "icp").unwrap_or_else(default_icp);
 
         match matches.subcommand() {
-            None | Some((PROJECT_COMMAND, _)) => Ok(Self::project(json, ci, network, icp)),
+            None | Some((PROJECT_COMMAND, _)) => Ok(Self::project(json, ci, environment, icp)),
             Some((DEPLOYMENT_COMMAND, matches)) => Ok(Self {
                 scope: MedicScope::Deployment,
                 deployment: Some(required_string(matches, DEPLOYMENT_ARG)),
@@ -101,7 +102,7 @@ impl MedicOptions {
                 auth_renewal: string_option(matches, AUTH_RENEWAL_ARG),
                 json,
                 ci,
-                network,
+                environment,
                 icp,
             }),
             Some(_) => Err(MedicCommandError::Usage(usage())),
@@ -111,7 +112,7 @@ impl MedicOptions {
     pub(super) const fn project(
         json: bool,
         ci: bool,
-        network: Option<String>,
+        environment: Option<String>,
         icp: String,
     ) -> Self {
         Self {
@@ -121,7 +122,7 @@ impl MedicOptions {
             auth_renewal: None,
             json,
             ci,
-            network,
+            environment,
             icp,
         }
     }
@@ -142,8 +143,8 @@ impl MedicOptions {
             .expect("deployment scope requires deployment name")
     }
 
-    pub(super) fn deployment_network(&self) -> String {
-        self.network.clone().unwrap_or_else(local_network)
+    pub(super) fn deployment_environment(&self) -> String {
+        self.environment.clone().unwrap_or_else(local_environment)
     }
 }
 
@@ -189,7 +190,7 @@ fn skip_medic_options(args: &[OsString], mut index: usize) -> usize {
     while let Some(arg) = args.get(index).and_then(|arg| arg.to_str()) {
         match arg {
             "--json" | "--ci" => index += 1,
-            INTERNAL_ICP_OPTION | INTERNAL_NETWORK_OPTION => index += 2,
+            INTERNAL_ICP_OPTION | INTERNAL_ENVIRONMENT_OPTION => index += 2,
             _ => break,
         }
     }
@@ -217,7 +218,7 @@ fn medic_command() -> ClapCommand {
                 .global(true)
                 .help("Print concise fail-only text output for CI logs"),
         )
-        .arg(internal_network_arg().global(true))
+        .arg(internal_environment_arg().global(true))
         .arg(internal_icp_arg().global(true))
         .subcommand(project_command())
         .subcommand(deployment_command())

@@ -38,14 +38,14 @@ fn backup_create_usage_uses_deployment_target_wording() {
 #[test]
 fn missing_backup_deployment_preserves_canonical_typed_error() {
     let error = BackupCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment: "demo-local".to_string(),
     });
     let message = error.to_string();
 
     assert_eq!(
         message,
-        "deployment target demo-local is not installed on network local"
+        "deployment target demo-local is not installed on environment local"
     );
     std::assert_matches!(
         error,

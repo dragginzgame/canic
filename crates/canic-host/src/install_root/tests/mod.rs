@@ -1,7 +1,7 @@
 use super::build_network::resolve_install_build_context;
 use super::build_snapshot::InstallBuildTarget;
 use super::commands::{
-    add_create_root_target, add_icp_network_target, icp_canister_command, root_init_args,
+    add_create_root_target, add_icp_environment_target, icp_canister_command, root_init_args,
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
@@ -34,7 +34,8 @@ use super::root_verification::write_verified_root_state_if_unchanged;
 use super::staging::{StageReleaseSetOperation, current_install_staging_evidence};
 use super::state::{
     INSTALL_STATE_SCHEMA_VERSION, InstallStateError, deployment_install_state_path,
-    read_deployment_install_state, validate_network_name, validate_state_name, write_install_state,
+    read_deployment_install_state, validate_environment_name, validate_state_name,
+    write_install_state,
 };
 use super::timing::InstallTimingSummary;
 use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_fleet_name};
@@ -92,7 +93,7 @@ fn public_install_error_preserves_phase_and_typed_source() {
 }
 
 #[test]
-fn named_ic_network_is_explicit_for_cargo_builds() {
+fn named_ic_environment_is_explicit_for_cargo_builds() {
     let root = temp_dir("canic-install-build-environment");
     fs::create_dir_all(&root).expect("create root");
     fs::write(
@@ -113,7 +114,7 @@ fn named_ic_network_is_explicit_for_cargo_builds() {
     let mut command = std::process::Command::new("cargo");
     context.apply_to_command(&mut command);
 
-    assert_eq!(context.network, "staging");
+    assert_eq!(context.environment, "staging");
     assert_eq!(context.build_network, "ic");
     assert!(command.get_envs().any(|(key, value)| {
         key == "ICP_ENVIRONMENT" && value.is_some_and(|value| value == "ic")
@@ -146,7 +147,7 @@ fn sample_install_state(root: &Path, deployment_name: &str, fleet_template: &str
         fleet_template: fleet_template.to_string(),
         created_at_unix_secs: 42,
         updated_at_unix_secs: 42,
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_target: "root".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
         root_verification: RootVerificationStatus::Verified,
@@ -230,7 +231,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
     InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
@@ -345,7 +346,7 @@ kind = "root"
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
@@ -445,7 +446,7 @@ fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: Some("demo-local".to_string()),
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),

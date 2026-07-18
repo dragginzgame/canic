@@ -7,8 +7,8 @@ use crate::{
             flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, path_option,
             render_usage, required_string, string_option_or_else,
         },
-        defaults::local_network,
-        globals::internal_network_arg,
+        defaults::local_environment,
+        globals::internal_environment_arg,
         help::print_help_or_version,
     },
     output, version_text,
@@ -37,17 +37,17 @@ const DEPLOY_CATALOG_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
   canic deploy inspect catalog inspect demo-local
-  canic --network local deploy inspect catalog list --json --output catalog.json
+  canic --environment local deploy inspect catalog list --json --output catalog.json
 
 Catalog commands are read-only local-state reports. They list or inspect
-deployment targets recorded under .canic/<network>/deployments and do not query
+deployment targets recorded under .canic/<environment>/deployments and do not query
 live deployments, create deployment truth, mutate topology, change
 controllers, install Wasm, or infer deployments from fleet-template names.";
 const DEPLOY_CATALOG_LIST_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
   canic deploy inspect catalog list --json
-  canic --network local deploy inspect catalog list --json --output catalog.json
+  canic --environment local deploy inspect catalog list --json --output catalog.json
 
 Lists deployment targets from existing local deployment-target state only. This
 does not refresh live state or infer deployments from fleet-template names.";
@@ -55,7 +55,7 @@ const DEPLOY_CATALOG_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog inspect demo-local
   canic deploy inspect catalog inspect demo-local --json
-  canic --network local deploy inspect catalog inspect demo-local --json --output demo-local.json
+  canic --environment local deploy inspect catalog inspect demo-local --json --output demo-local.json
 
 Inspects one deployment target from existing local deployment-target state
 only. The deployment argument is a deployment target, not a fleet template.";
@@ -80,7 +80,7 @@ const INSPECT_COMMAND: CatalogCommand = CatalogCommand {
 #[derive(Debug)]
 pub(super) struct DeployCatalogOptions {
     pub(super) deployment: Option<String>,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) format: JsonTextOutputFormat,
     pub(super) output: Option<PathBuf>,
 }
@@ -166,7 +166,7 @@ fn request(options: &DeployCatalogOptions) -> Result<DeploymentCatalogRequest, D
         .map_err(DeployCommandError::from)?;
     Ok(DeploymentCatalogRequest {
         icp_root,
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         generated_at: current_observed_at()?,
     })
 }
@@ -196,7 +196,7 @@ impl DeployCatalogOptions {
             .map_err(|_| DeployCommandError::Usage(list_usage()))?;
         Ok(Self {
             deployment: None,
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             format: JsonTextOutputFormat::from_json_flag(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
         })
@@ -210,7 +210,7 @@ impl DeployCatalogOptions {
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
             deployment: Some(required_string(&matches, "deployment")),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             format: JsonTextOutputFormat::from_json_flag(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
         })
@@ -270,7 +270,7 @@ fn catalog_leaf_command(spec: CatalogCommand) -> ClapCommand {
         .disable_help_flag(true)
         .arg(json_arg())
         .arg(output_arg())
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .after_help(spec.help_after)
 }
 

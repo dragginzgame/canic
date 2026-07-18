@@ -17,7 +17,7 @@ pub(super) fn install_state_observations(
     let mut observed_canisters = install_state_observed_canisters(
         state,
         &request.icp_root,
-        &request.network,
+        &request.environment,
         unresolved_observations,
     );
     let observed_pool = install_state_registry_observations(
@@ -41,7 +41,7 @@ pub(super) fn observed_root_observation(
         .find(|canister| canister.canister_id == state.root_canister_id)?;
     Some(DeploymentRootObservationV1 {
         deployment_name: request.deployment_name.clone(),
-        network: request.network.clone(),
+        environment: request.environment.clone(),
         fleet_template: fleet_name.to_string(),
         root_principal: state.root_canister_id.clone(),
         observed_canister_id: observed.canister_id.clone(),
@@ -69,10 +69,10 @@ fn root_observation_source(observed: &ObservedCanisterV1) -> DeploymentRootObser
 fn install_state_observed_canisters(
     state: &crate::install_root::InstallState,
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedCanisterV1> {
-    match read_live_canister_status(icp_root, network, &state.root_canister_id) {
+    match read_live_canister_status(icp_root, environment, &state.root_canister_id) {
         Ok(report) => vec![observed_root_from_status(state, &report)],
         Err(err) => {
             gaps.push(observation_gap(

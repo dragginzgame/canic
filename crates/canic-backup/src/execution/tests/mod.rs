@@ -78,7 +78,7 @@ fn plan() -> BackupPlan {
         plan_id: "plan-001".to_string(),
         run_id: "run-001".to_string(),
         fleet: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_canister_id: ROOT.to_string(),
         selected_canister_id: Some(APP.to_string()),
         selected_scope_kind: BackupScopeKind::Subtree,

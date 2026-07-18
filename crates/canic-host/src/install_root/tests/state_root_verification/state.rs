@@ -7,7 +7,7 @@ fn install_rejects_config_identity_mismatch() {
 }
 
 #[test]
-fn deployment_state_path_is_scoped_by_network() {
+fn deployment_state_path_is_scoped_by_environment() {
     assert_eq!(
         deployment_install_state_path(&PathBuf::from("/tmp/canic-project"), "local", "demo"),
         PathBuf::from("/tmp/canic-project/.canic/local/deployments/demo.json")
@@ -41,8 +41,8 @@ fn install_state_validation_failures_are_typed() {
         Err(InstallStateError::InvalidStateName { name }) if name == "bad/name"
     );
     std::assert_matches!(
-        validate_network_name("bad/network"),
-        Err(InstallStateError::InvalidNetworkName { name }) if name == "bad/network"
+        validate_environment_name("bad/environment"),
+        Err(InstallStateError::InvalidEnvironmentName { name }) if name == "bad/environment"
     );
 }
 
@@ -122,18 +122,18 @@ fn install_state_read_rejects_schema_and_path_identity_mismatches() {
     );
 
     state.deployment_name = "demo".to_string();
-    state.network = "staging".to_string();
+    state.environment = "staging".to_string();
     fs::write(
         &path,
-        serde_json::to_vec_pretty(&state).expect("encode wrong-network state"),
+        serde_json::to_vec_pretty(&state).expect("encode wrong-environment state"),
     )
-    .expect("write wrong-network state");
+    .expect("write wrong-environment state");
     std::assert_matches!(
         read_deployment_install_state(&root, "local", "demo"),
-        Err(InstallStateError::NetworkMismatch {
-            state_network,
-            requested_network,
-        }) if state_network == "staging" && requested_network == "local"
+        Err(InstallStateError::EnvironmentMismatch {
+            state_environment,
+            requested_environment,
+        }) if state_environment == "staging" && requested_environment == "local"
     );
 
     fs::remove_dir_all(root).expect("clean temp dir");
@@ -141,7 +141,7 @@ fn install_state_read_rejects_schema_and_path_identity_mismatches() {
 
 #[test]
 fn install_state_write_retains_mismatch_and_io_failures() {
-    let mismatch_root = temp_dir("canic-install-state-network-mismatch");
+    let mismatch_root = temp_dir("canic-install-state-environment-mismatch");
     let mut mismatch_state = sample_install_state(&mismatch_root, "demo", "demo");
     mismatch_state.schema_version = INSTALL_STATE_SCHEMA_VERSION + 1;
     std::assert_matches!(
@@ -156,10 +156,10 @@ fn install_state_write_retains_mismatch_and_io_failures() {
     mismatch_state.schema_version = INSTALL_STATE_SCHEMA_VERSION;
     std::assert_matches!(
         write_install_state(&mismatch_root, "staging", &mismatch_state),
-        Err(InstallStateError::NetworkMismatch {
-            state_network,
-            requested_network,
-        }) if state_network == "local" && requested_network == "staging"
+        Err(InstallStateError::EnvironmentMismatch {
+            state_environment,
+            requested_environment,
+        }) if state_environment == "local" && requested_environment == "staging"
     );
 
     let write_root = temp_dir("canic-install-state-write-error");
@@ -188,7 +188,7 @@ fn deploy_register_writes_minimal_unverified_deployment_state() {
         deployment_name: "demo-local".to_string(),
         fleet_template: "demo".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         allow_unverified: true,
         icp_root: Some(root.clone()),
         workspace_root: Some(root.clone()),
@@ -216,7 +216,7 @@ fn deploy_register_requires_explicit_unverified_acknowledgement() {
         deployment_name: "demo-local".to_string(),
         fleet_template: "demo".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         allow_unverified: false,
         icp_root: Some(root.clone()),
         workspace_root: Some(root.clone()),

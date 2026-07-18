@@ -73,7 +73,7 @@ pub(in crate::deploy) fn render_text(report: &DeploymentPlanReport) -> String {
         format!("status: {}", report.status.as_str()),
         format!("comparison: {}", report.comparison_status.as_str()),
         format!("target: {}", report.target),
-        format!("network: {}", report.network),
+        format!("environment: {}", report.environment),
         format!("config: {}", report.config_path),
         format!("build_profile: {}", report.build_profile),
         String::new(),

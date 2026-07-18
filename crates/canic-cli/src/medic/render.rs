@@ -20,8 +20,8 @@ pub(super) fn render_medic_text(report: &MedicReport) -> String {
         report.command.clone(),
         format!("status: {}", report.status.label()),
         format!(
-            "network: {}",
-            report.network.as_deref().unwrap_or("not selected")
+            "environment: {}",
+            report.environment.as_deref().unwrap_or("not selected")
         ),
         format!(
             "deployment: {}",

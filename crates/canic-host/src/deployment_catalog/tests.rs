@@ -20,7 +20,7 @@ fn catalog_lists_deployment_target_state_sorted_by_deployment() {
         vec!["alpha", "zeta"]
     );
     assert_eq!(report.entries[0].fleet.as_deref(), Some("demo"));
-    assert_eq!(report.entries[0].network.as_deref(), Some("local"));
+    assert_eq!(report.entries[0].environment.as_deref(), Some("local"));
     assert_eq!(report.entries[0].root_principal.as_deref(), Some("root-a"));
     assert_eq!(
         report.entries[0].root_verification,
@@ -56,18 +56,18 @@ fn catalog_returns_empty_warning_when_deployment_state_is_missing() {
 }
 
 #[test]
-fn catalog_rejects_path_like_network_before_directory_access() {
-    let root = temp_dir("canic-catalog-invalid-network");
+fn catalog_rejects_path_like_environment_before_directory_access() {
+    let root = temp_dir("canic-catalog-invalid-environment");
     fs::create_dir_all(&root).expect("create temp root");
     let mut request = request(&root);
-    request.network = "../outside".to_string();
+    request.environment = "../outside".to_string();
 
-    let error = build_deployment_catalog_report(&request).expect_err("reject invalid network");
+    let error = build_deployment_catalog_report(&request).expect_err("reject invalid environment");
 
     fs::remove_dir_all(root).expect("clean");
     std::assert_matches!(
         error,
-        DeploymentCatalogError::InstallState(InstallStateError::InvalidNetworkName { name })
+        DeploymentCatalogError::InstallState(InstallStateError::InvalidEnvironmentName { name })
             if name == "../outside"
     );
 }
@@ -163,15 +163,15 @@ fn catalog_text_uses_deployment_target_terms() {
 fn request(root: &Path) -> DeploymentCatalogRequest {
     DeploymentCatalogRequest {
         icp_root: root.to_path_buf(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         generated_at: "unix:54".to_string(),
     }
 }
 
-fn write_state(root: &Path, network: &str, state: InstallState) {
+fn write_state(root: &Path, environment: &str, state: InstallState) {
     let path = root
         .join(".canic")
-        .join(network)
+        .join(environment)
         .join("deployments")
         .join(format!("{}.json", state.deployment_name));
     fs::create_dir_all(path.parent().expect("state parent")).expect("state dir");
@@ -185,7 +185,7 @@ fn sample_state(deployment: &str, fleet: &str, root: &str) -> InstallState {
         fleet_template: fleet.to_string(),
         created_at_unix_secs: 1,
         updated_at_unix_secs: 2,
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_target: "root".to_string(),
         root_canister_id: root.to_string(),
         root_verification: RootVerificationStatus::Verified,

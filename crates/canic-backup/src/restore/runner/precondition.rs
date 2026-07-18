@@ -52,9 +52,9 @@ fn stopped_canister_status_command(
     args.push("status".to_string());
     args.push(operation.target_canister.clone());
     args.push("--json".to_string());
-    if let Some(network) = &config.command.network {
+    if let Some(environment) = &config.command.environment {
         args.push("-e".to_string());
-        args.push(network.clone());
+        args.push(environment.clone());
     }
 
     RestoreApplyRunnerCommand {

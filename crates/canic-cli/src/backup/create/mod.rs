@@ -35,7 +35,7 @@ pub(super) fn backup_create(
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),
-            network: options.network.clone(),
+            environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
         },
@@ -64,7 +64,7 @@ pub(super) fn backup_create(
         plan_id,
         run_id,
         fleet: options.deployment.clone(),
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         root_canister_id: installed.state.root_canister_id,
         selected_canister_id,
         selected_scope_kind,
@@ -102,7 +102,7 @@ pub(super) fn backup_create(
 
     Ok(BackupCreateReport {
         deployment: plan.fleet.clone(),
-        network: plan.network.clone(),
+        environment: plan.environment.clone(),
         out,
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),

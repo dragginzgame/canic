@@ -115,10 +115,13 @@ fn plan_context_facts(
         },
         PlanDiagnostic {
             category: CATEGORY_DEPLOYMENT_IDENTITY,
-            code: "network_resolved".to_string(),
+            code: "environment_resolved".to_string(),
             severity: SEVERITY_INFO,
             subject: subject.clone(),
-            detail: format!("network resolved: {}", plan.deployment_identity.network),
+            detail: format!(
+                "environment resolved: {}",
+                plan.deployment_identity.environment
+            ),
             next: None,
             source: SOURCE_DEPLOYMENT_PLAN_BUILDER,
         },

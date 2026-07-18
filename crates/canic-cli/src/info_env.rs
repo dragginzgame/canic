@@ -10,8 +10,8 @@ use crate::{
             flag_arg, parse_matches, path_option, render_usage, required_string,
             string_option_or_else, value_arg,
         },
-        defaults::{default_icp, local_network},
-        globals::{internal_icp_arg, internal_network_arg},
+        defaults::{default_icp, local_environment},
+        globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
     output, version_text,
@@ -37,7 +37,7 @@ use thiserror::Error as ThisError;
 const HELP_AFTER: &str = "\
 Examples:
   canic info env demo-local
-  canic --network academic info env demo-local > scripts/canister_ids.sh
+  canic --environment academic info env demo-local > scripts/canister_ids.sh
   canic info env demo-local --json";
 
 ///
@@ -76,7 +76,7 @@ pub enum InfoEnvCommandError {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct InfoEnvReport {
     deployment: String,
-    network: String,
+    environment: String,
     bindings: Vec<InfoEnvBinding>,
 }
 
@@ -98,7 +98,7 @@ struct InfoEnvOptions {
     deployment: String,
     json: bool,
     out: Option<PathBuf>,
-    network: String,
+    environment: String,
     icp: String,
 }
 
@@ -114,7 +114,7 @@ impl InfoEnvOptions {
             deployment: required_string(&matches, "deployment"),
             json: matches.get_flag("json"),
             out: path_option(&matches, "out"),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
@@ -148,7 +148,7 @@ fn resolve_info_env_deployment(
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),
-            network: options.network.clone(),
+            environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: false,
         },
@@ -163,7 +163,7 @@ fn env_report(
 ) -> InfoEnvReport {
     InfoEnvReport {
         deployment: options.deployment.clone(),
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         bindings: env_bindings(
             &resolution.registry.root_canister_id,
             &resolution.registry.entries,
@@ -289,7 +289,7 @@ fn write_env_report(
 fn render_shell_exports(report: &InfoEnvReport) -> String {
     let mut lines = vec![
         format!("# canic info env {}", report.deployment),
-        format!("# network: {}", report.network),
+        format!("# environment: {}", report.environment),
     ];
     lines.extend(report.bindings.iter().map(|binding| {
         format!(
@@ -322,7 +322,7 @@ fn info_env_command() -> ClapCommand {
         )
         .arg(flag_arg("json").long("json"))
         .arg(value_arg("out").long("out").value_name("file"))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .after_help(HELP_AFTER)
 }
@@ -355,7 +355,7 @@ mod tests {
             OsString::from("--json"),
             OsString::from("--out"),
             OsString::from("ids.json"),
-            OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+            OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("academic"),
             OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
             OsString::from("/bin/icp"),
@@ -365,7 +365,7 @@ mod tests {
         assert_eq!(options.deployment, "demo-local");
         assert!(options.json);
         assert_eq!(options.out, Some(PathBuf::from("ids.json")));
-        assert_eq!(options.network, "academic");
+        assert_eq!(options.environment, "academic");
         assert_eq!(options.icp, "/bin/icp");
     }
 
@@ -424,7 +424,7 @@ mod tests {
     fn render_shell_exports_is_sourceable() {
         let report = InfoEnvReport {
             deployment: "demo-local".to_string(),
-            network: "academic".to_string(),
+            environment: "academic".to_string(),
             bindings: vec![InfoEnvBinding {
                 variable: "CANIC_ROOT".to_string(),
                 role: Some("root".to_string()),
@@ -436,7 +436,7 @@ mod tests {
 
         assert_eq!(
             render_shell_exports(&report),
-            "# canic info env demo-local\n# network: academic\nexport CANIC_ROOT='abc'\"'\"'def'"
+            "# canic info env demo-local\n# environment: academic\nexport CANIC_ROOT='abc'\"'\"'def'"
         );
     }
 }

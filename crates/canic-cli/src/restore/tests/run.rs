@@ -119,7 +119,7 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
         OsString::from("--dry-run"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from("--out"),
         OsString::from(out_path.as_os_str()),

@@ -14,8 +14,8 @@ pub const DISPATCH_ARGS: &str = "args";
 /// Hidden per-command ICP executable option injected from top-level `--icp`.
 pub const INTERNAL_ICP_OPTION: &str = "--__canic-icp";
 
-/// Hidden per-command network option injected from top-level `--network`.
-pub const INTERNAL_NETWORK_OPTION: &str = "--__canic-network";
+/// Hidden per-command environment option injected from top-level `--environment`.
+pub const INTERNAL_ENVIRONMENT_OPTION: &str = "--__canic-environment";
 
 /// Build the public top-level ICP executable option.
 pub fn icp_arg() -> Arg {
@@ -30,17 +30,19 @@ pub fn internal_icp_arg() -> Arg {
     value_arg("icp").long("__canic-icp").hide(true)
 }
 
-/// Build the public top-level ICP network option.
-pub fn network_arg() -> Arg {
-    value_arg("network")
-        .long("network")
+/// Build the public top-level ICP environment option.
+pub fn environment_arg() -> Arg {
+    value_arg("environment")
+        .long("environment")
         .value_name("name")
-        .help("ICP CLI network for networked commands")
+        .help("ICP environment for ICP-backed commands")
 }
 
-/// Build the hidden per-command ICP network option.
-pub fn internal_network_arg() -> Arg {
-    value_arg("network").long("__canic-network").hide(true)
+/// Build the hidden per-command ICP environment option.
+pub fn internal_environment_arg() -> Arg {
+    value_arg("environment")
+        .long("__canic-environment")
+        .hide(true)
 }
 
 /// Build the top-level dispatch parser used before command-specific parsing.
@@ -56,7 +58,7 @@ pub fn top_level_dispatch_command() -> Command {
         );
     let command = command
         .arg(icp_arg().global(true))
-        .arg(network_arg().global(true));
+        .arg(environment_arg().global(true));
 
     COMMAND_SPECS.iter().fold(command, |command, spec| {
         command.subcommand(dispatch_subcommand(spec.name))
@@ -84,7 +86,7 @@ pub fn command_local_global_option(args: &[OsString]) -> Option<&'static str> {
                 .filter_map(|arg| arg.to_str())
                 .find_map(global_option_name);
         }
-        index += if matches!(arg, "--icp" | "--network") {
+        index += if matches!(arg, "--icp" | "--environment") {
             2
         } else {
             1
@@ -96,9 +98,9 @@ pub fn command_local_global_option(args: &[OsString]) -> Option<&'static str> {
 fn global_option_name(arg: &str) -> Option<&'static str> {
     match arg {
         "--icp" => Some("--icp"),
-        "--network" => Some("--network"),
+        "--environment" => Some("--environment"),
         _ if arg.starts_with("--icp=") => Some("--icp"),
-        _ if arg.starts_with("--network=") => Some("--network"),
+        _ if arg.starts_with("--environment=") => Some("--environment"),
         _ => None,
     }
 }
@@ -119,24 +121,24 @@ pub fn apply_global_icp(command: &str, tail: &mut Vec<OsString>, global_icp: Opt
     tail.push(OsString::from(global_icp));
 }
 
-/// Inject top-level `--network` into commands that accept network selection.
-pub fn apply_global_network(
+/// Inject top-level `--environment` into commands that accept environment selection.
+pub fn apply_global_environment(
     command: &str,
     tail: &mut Vec<OsString>,
-    global_network: Option<String>,
+    global_environment: Option<String>,
 ) {
-    let Some(global_network) = global_network else {
+    let Some(global_environment) = global_environment else {
         return;
     };
-    if tail_has_option(tail, INTERNAL_NETWORK_OPTION) {
+    if tail_has_option(tail, INTERNAL_ENVIRONMENT_OPTION) {
         return;
     }
-    if !command_accepts_global_network(command, tail) {
+    if !command_accepts_global_environment(command, tail) {
         return;
     }
 
-    tail.push(OsString::from(INTERNAL_NETWORK_OPTION));
-    tail.push(OsString::from(global_network));
+    tail.push(OsString::from(INTERNAL_ENVIRONMENT_OPTION));
+    tail.push(OsString::from(global_environment));
 }
 
 fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
@@ -155,12 +157,12 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
     }
 }
 
-fn command_accepts_global_network(command: &str, tail: &[OsString]) -> bool {
+fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool {
     match command {
         "blob-storage" | "build" | "cycles" | "inspect" | "install" | "medic" | "status"
         | "token" => true,
         "auth" => auth_leaf_accepts_globals(tail),
-        "deploy" => deploy_leaf_accepts_global_network(tail),
+        "deploy" => deploy_leaf_accepts_global_environment(tail),
         "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
@@ -185,7 +187,7 @@ fn info_leaf_accepts_globals(tail: &[OsString]) -> bool {
     )
 }
 
-fn deploy_leaf_accepts_global_network(tail: &[OsString]) -> bool {
+fn deploy_leaf_accepts_global_environment(tail: &[OsString]) -> bool {
     let first = tail.first().and_then(|arg| arg.to_str());
     let second = tail.get(1).and_then(|arg| arg.to_str());
     let third = tail.get(2).and_then(|arg| arg.to_str());
@@ -223,10 +225,10 @@ mod tests {
         assert_eq!(
             command_local_global_option(&[
                 OsString::from("status"),
-                OsString::from("--network"),
+                OsString::from("--environment"),
                 OsString::from("ic")
             ]),
-            Some("--network")
+            Some("--environment")
         );
         assert_eq!(
             command_local_global_option(&[OsString::from("status"), OsString::from("--icp=icp")]),
@@ -237,27 +239,27 @@ mod tests {
     #[test]
     fn global_forwarding_does_not_duplicate_hidden_options() {
         let mut tail = vec![
-            OsString::from(INTERNAL_NETWORK_OPTION),
+            OsString::from(INTERNAL_ENVIRONMENT_OPTION),
             OsString::from("ic"),
         ];
 
-        apply_global_network("status", &mut tail, Some("local".to_string()));
+        apply_global_environment("status", &mut tail, Some("local".to_string()));
 
         assert_eq!(
             tail,
             [
-                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from(INTERNAL_ENVIRONMENT_OPTION),
                 OsString::from("ic")
             ]
         );
     }
 
     #[test]
-    fn inspect_accepts_global_icp_and_network() {
+    fn inspect_accepts_global_icp_and_environment() {
         let mut tail = vec![OsString::from("canister"), OsString::from("aaaaa-aa")];
 
         apply_global_icp("inspect", &mut tail, Some("icp".to_string()));
-        apply_global_network("inspect", &mut tail, Some("local".to_string()));
+        apply_global_environment("inspect", &mut tail, Some("local".to_string()));
 
         assert_eq!(
             tail,
@@ -266,7 +268,7 @@ mod tests {
                 OsString::from("aaaaa-aa"),
                 OsString::from(INTERNAL_ICP_OPTION),
                 OsString::from("icp"),
-                OsString::from(INTERNAL_NETWORK_OPTION),
+                OsString::from(INTERNAL_ENVIRONMENT_OPTION),
                 OsString::from("local"),
             ]
         );

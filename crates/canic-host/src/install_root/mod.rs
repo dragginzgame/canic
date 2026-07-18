@@ -68,7 +68,7 @@ pub use state::{
     InstallState, InstallStateError, RootVerificationStatus, read_named_deployment_install_state,
     read_named_deployment_install_state_from_root,
 };
-pub(crate) use state::{decode_install_state, validate_network_name};
+pub(crate) use state::{decode_install_state, validate_environment_name};
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 
@@ -226,9 +226,12 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
             .map_err(InstallRootError::in_phase(InstallRootPhase::Identity))?;
     let total_started_at = Instant::now();
     let mut timings = CurrentInstallTimingSummary::default();
-    let network = options.network.as_str();
-    let execution_context =
-        current_install_execution_context(&workspace_root, &icp_root, options.artifact_network());
+    let environment = options.environment.as_str();
+    let execution_context = current_install_execution_context(
+        &workspace_root,
+        &icp_root,
+        options.artifact_environment(),
+    );
 
     println!("Installing deployment {deployment_name}");
     println!("Fleet template {fleet_name}");
@@ -260,7 +263,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     let activation_timings = run_root_activation_phases(
         InstallReceiptScope {
             icp_root: &icp_root,
-            network,
+            environment,
             deployment_name: &deployment_name,
             check: &prepared.deployment_truth_check,
             execution_context: Some(&execution_context),
@@ -283,7 +286,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     persist_install_result(
         InstallReceiptScope {
             icp_root: &icp_root,
-            network,
+            environment,
             deployment_name: &deployment_name,
             check: &prepared.deployment_truth_check,
             execution_context: Some(&execution_context),
@@ -320,15 +323,18 @@ fn persist_install_result(
     .map_err(InstallRootError::in_phase(
         InstallRootPhase::StatePersistence,
     ))?;
-    let state_path =
-        write_install_state_with_deployment_truth_receipt(receipt_scope, &options.network, &state)
-            .map_err(InstallRootError::in_phase(
-                InstallRootPhase::StatePersistence,
-            ))?;
+    let state_path = write_install_state_with_deployment_truth_receipt(
+        receipt_scope,
+        &options.environment,
+        &state,
+    )
+    .map_err(InstallRootError::in_phase(
+        InstallRootPhase::StatePersistence,
+    ))?;
     write_artifact_promotion_execution_receipt_for_install(
         options,
         receipt_scope.icp_root,
-        receipt_scope.network,
+        receipt_scope.environment,
         receipt_scope.deployment_name,
         receipt_scope.check,
         completion.execution_context,
@@ -337,7 +343,7 @@ fn persist_install_result(
         InstallRootPhase::ArtifactPromotion,
     ))?;
     print_install_result_summary(
-        receipt_scope.network,
+        receipt_scope.environment,
         &state.deployment_name,
         &state.fleet_template,
         &state_path,
@@ -361,7 +367,7 @@ fn current_install_build_inputs(
         workspace_root,
         icp_root,
         config_path,
-        &options.network,
+        &options.environment,
         &options.root_build_target,
         options.build_profile,
     )?;

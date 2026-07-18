@@ -1,4 +1,4 @@
-use crate::{cli::defaults::local_network, cli::help::print_help_or_version, version_text};
+use crate::{cli::defaults::local_environment, cli::help::print_help_or_version, version_text};
 mod config;
 mod live;
 mod options;
@@ -154,12 +154,15 @@ fn list_title(options: &ListOptions) -> ListTitle {
     ListTitle {
         source,
         name: options.target.clone(),
-        network: state_network(options),
+        environment: state_environment(options),
     }
 }
 
-fn state_network(options: &ListOptions) -> String {
-    options.network.clone().unwrap_or_else(local_network)
+fn state_environment(options: &ListOptions) -> String {
+    options
+        .environment
+        .clone()
+        .unwrap_or_else(local_environment)
 }
 
 fn should_color_list_output() -> bool {

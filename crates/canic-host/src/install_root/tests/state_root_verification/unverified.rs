@@ -68,7 +68,7 @@ kind = "root"
         deployment_name: "demo-local".to_string(),
         fleet_template: "demo".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         allow_unverified: true,
         icp_root: Some(icp_root.clone()),
         workspace_root: Some(workspace_root.clone()),
@@ -78,8 +78,8 @@ kind = "root"
     let plan = crate::deployment_truth::build_local_deployment_plan(
         &crate::deployment_truth::LocalDeploymentPlanRequest {
             deployment_name: "demo-local".to_string(),
-            network: "local".to_string(),
-            artifact_network: "local".to_string(),
+            environment: "local".to_string(),
+            artifact_environment: "local".to_string(),
             workspace_root,
             icp_root,
             config_path: None,
@@ -169,7 +169,7 @@ kind = "root"
         deployment_name: "demo-local".to_string(),
         fleet_template: "demo".to_string(),
         root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         allow_unverified: true,
         icp_root: Some(icp_root.clone()),
         workspace_root: Some(workspace_root.clone()),
@@ -178,7 +178,7 @@ kind = "root"
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: Some("demo-local".to_string()),
         icp_root: Some(icp_root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),

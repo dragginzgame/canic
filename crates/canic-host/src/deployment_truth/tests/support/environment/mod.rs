@@ -47,7 +47,7 @@ pub(in crate::deployment_truth::tests) struct FixtureRootSubnetEvidenceSource {
 impl RootSubnetEvidenceSource for FixtureRootSubnetEvidenceSource {
     fn root_subnet_evidence(
         &self,
-        _network: &str,
+        _environment: &str,
         _icp_root: &std::path::Path,
         _canister_id: &str,
     ) -> Result<RootSubnetEvidence, String> {
