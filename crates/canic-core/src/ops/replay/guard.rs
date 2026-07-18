@@ -130,6 +130,9 @@ pub fn evaluate_root_replay(
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
             ReplayGuardError::ReceiptDecodeFailed(message)
         }
+        ReplayReceiptStoreError::ReceiptTokenMismatch => ReplayGuardError::ReceiptDecodeFailed(
+            "replay receipt token no longer matches persisted receipt identity".to_string(),
+        ),
         ReplayReceiptStoreError::StagedResponseMissing => ReplayGuardError::ReceiptDecodeFailed(
             "replay receipt is missing staged response data".to_string(),
         ),

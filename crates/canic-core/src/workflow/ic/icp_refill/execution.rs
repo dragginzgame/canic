@@ -17,7 +17,7 @@ use crate::{
     ops::{
         cost_guard::CostGuardPermit,
         ic::{IcOps, icp_refill::IcpRefillOps},
-        replay::receipt::ReplayReceiptToken,
+        replay::receipt::{ReplayReceiptToken, validate_receipt_token},
         runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{
             children::CanisterChildrenOps,
@@ -35,8 +35,9 @@ use crate::{
         },
         policy_denied, prepare_context,
         replay::{
-            finish_icp_refill_replay, mark_icp_refill_notify_effect,
-            mark_icp_refill_transfer_effect, preserve_icp_refill_recovery_required,
+            finish_icp_refill_replay, map_icp_refill_replay_store_error,
+            mark_icp_refill_notify_effect, mark_icp_refill_transfer_effect,
+            preserve_icp_refill_recovery_required,
         },
     },
     workflow::replay::abort_reserved_receipt_after_failure,
@@ -90,6 +91,7 @@ async fn execute_manual_refill_operation(
     }
 
     let context = prepare_context(&request, RateQueryMode::WhenGateConfigured).await?;
+    validate_receipt_token(token).map_err(map_icp_refill_replay_store_error)?;
     let cmc_account =
         IcpRefillOps::cmc_topup_account(context.cmc_canister_id, request.target_canister)?;
     let operation = create_or_get_operation(IcpRefillOperationCreateInput {

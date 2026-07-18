@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.20`.
-- The latest published release is `v0.93.20` at
-  `454d191f9fd8742a4a54ed3c94e34ff57a690a56`.
-- The `v0.93.20` source tree is
-  `ffa0c280bfb3bbfd58cfec86b492d042941166c0`; its product-tree hash is
-  `ca239b58611753f3d08d613696c5ad703bb3f51204b68b1a88de853883749140`.
+- The workspace package version is `0.93.21`.
+- The latest published release is `v0.93.21` at
+  `e2140c4d70023970337d45e59ec14727433b96c5`.
+- The `v0.93.21` source tree is
+  `411c98ec1be82720e7b45edf5735f6b1a0a8fff6`; its product-tree hash is
+  `e67810284cf769efa6d52ee2d7beb762f92c247f6f613fd1a73beb4a8bc479c3`.
   Its Cargo.lock SHA-256 is
-  `d4484263577a5ddba0698572b600abc5476b9a5d7a1d9571093b7c55ec19acab`.
+  `5b20864240978817e71bea9367bc40be4961357c909d5b017488acb749c337f9`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -119,10 +119,16 @@ Historical detail is archived at:
   rollback, cumulative budget, or cooldown accounting. Failure to persist the
   pre-transfer replay marker also settles the cost guard without losing the
   typed replay cause or retaining an unused cycle reservation.
-- Current `0.93.21` development routes workflow test fixtures through ops,
+- Released `v0.93.21` routes workflow test fixtures through ops,
   prepares the complete locked dependency graph before offline role-package
   and dependency-risk inspection, and activates the dependency-risk rejection
   fixtures in CI, making layering and fresh-cache validation deterministic.
+- Current `0.93.22` development binds every token-backed replay transition to
+  the complete immutable receipt identity, so an expired asynchronous
+  continuation cannot mutate or abort a newer request that reused its stable
+  slot. ICP-refill context lookup and delegated-token lazy repair revalidate
+  that ownership before post-await local mutation. Ordinary receipt collection
+  now matches admission at the exact expiry boundary.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

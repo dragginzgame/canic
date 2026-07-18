@@ -151,6 +151,9 @@ pub enum ReplayReceiptStoreError {
     #[error("failed to decode replay receipt: {0}")]
     ReceiptDecodeFailed(String),
 
+    #[error("replay receipt token no longer matches persisted receipt identity")]
+    ReceiptTokenMismatch,
+
     #[error("replay receipt is missing staged response data")]
     StagedResponseMissing,
 
@@ -256,6 +259,11 @@ pub fn reserve_receipt_token(token: &ReplayReceiptToken) {
         token.key,
         ReplayReceiptRecord::from_receipt(token.receipt.clone()),
     );
+}
+
+/// Confirm that a token still owns the persisted receipt identity.
+pub fn validate_receipt_token(token: &ReplayReceiptToken) -> Result<(), ReplayReceiptStoreError> {
+    latest_receipt_for_token(token).map(|_| ())
 }
 
 fn pending_receipt_quota_decision(
@@ -388,12 +396,7 @@ pub fn mark_recovery_required(
 }
 
 pub fn abort_reserved_receipt(token: &ReplayReceiptToken) -> Result<(), ReplayReceiptStoreError> {
-    let Some(record) = ReplayReceiptOps::get(token.key) else {
-        return Err(ReplayReceiptStoreError::ReceiptMissing);
-    };
-    let receipt = record
-        .into_receipt()
-        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
+    let receipt = latest_receipt_for_token(token)?;
     if receipt.status == ReplayReceiptStatus::Reserved {
         let _ = ReplayReceiptOps::remove(token.key);
     }
@@ -403,12 +406,7 @@ pub fn abort_reserved_receipt(token: &ReplayReceiptToken) -> Result<(), ReplayRe
 pub fn abort_uncommitted_receipt(
     token: &ReplayReceiptToken,
 ) -> Result<(), ReplayReceiptStoreError> {
-    let Some(record) = ReplayReceiptOps::get(token.key) else {
-        return Err(ReplayReceiptStoreError::ReceiptMissing);
-    };
-    let receipt = record
-        .into_receipt()
-        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
+    let receipt = latest_receipt_for_token(token)?;
     if matches!(
         receipt.status,
         ReplayReceiptStatus::Reserved | ReplayReceiptStatus::ExternalEffectInFlight
@@ -424,9 +422,24 @@ fn latest_receipt_for_token(
     let Some(record) = ReplayReceiptOps::get(token.key) else {
         return Err(ReplayReceiptStoreError::ReceiptMissing);
     };
-    record
+    let receipt = record
         .into_receipt()
-        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)
+        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
+    if !same_receipt_identity(&receipt, &token.receipt) {
+        return Err(ReplayReceiptStoreError::ReceiptTokenMismatch);
+    }
+    Ok(receipt)
+}
+
+fn same_receipt_identity(current: &ReplayReceipt, token: &ReplayReceipt) -> bool {
+    current.schema_version == token.schema_version
+        && current.command_kind == token.command_kind
+        && current.operation_id == token.operation_id
+        && current.actor == token.actor
+        && current.payload_hash_schema_version == token.payload_hash_schema_version
+        && current.payload_hash == token.payload_hash
+        && current.created_at_ns == token.created_at_ns
+        && current.expires_at_ns == token.expires_at_ns
 }
 
 fn classify_existing_receipt(
@@ -932,6 +945,68 @@ mod tests {
         assert_eq!(committed.status, ReplayReceiptStatus::Committed);
         assert_eq!(committed.response_bytes.as_deref(), Some(&[1, 2, 3][..]));
         assert!(committed.staged_response_bytes.is_none());
+    }
+
+    #[test]
+    fn stale_token_cannot_mutate_or_abort_a_reused_receipt_slot() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let stale_token = match reserve_or_replay_receipt(input().with_expires_at_ns(120))
+            .expect("reserve original receipt")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh original receipt, got {other:?}"),
+        };
+        ReplayReceiptOps::remove(stale_token.key()).expect("purge original receipt");
+
+        let mut replacement_input =
+            input_with("test.command.v1", p(2), [7; 32], 200).with_expires_at_ns(220);
+        replacement_input.payload_hash = [8; 32];
+        let replacement_token = match reserve_or_replay_receipt(replacement_input)
+            .expect("reserve replacement receipt")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh replacement receipt, got {other:?}"),
+        };
+        let replacement =
+            ReplayReceiptOps::get(replacement_token.key()).expect("replacement receipt is stored");
+        let effect = ExternalEffectDescriptor::ManagementCall {
+            canister: p(8),
+            method: "deposit_cycles".to_string(),
+        };
+        let settlement = ReplayCostGuardSettlement {
+            quota_intent_id: crate::ids::IntentId(41),
+            reservation_intent_id: crate::ids::IntentId(42),
+        };
+
+        for result in [
+            validate_receipt_token(&stale_token),
+            mark_external_effect_in_flight(&stale_token, effect.clone(), 205),
+            mark_costed_external_effect_in_flight(&stale_token, effect, settlement, 205),
+            record_cost_guard_settlement(&stale_token, settlement, 205),
+            stage_receipt_response(&stale_token, 1, vec![1, 2, 3], 205),
+            mark_recovery_required(&stale_token, RecoveryReason::ResponseCommitFailed, 205),
+            abort_reserved_receipt(&stale_token),
+            abort_uncommitted_receipt(&stale_token),
+        ] {
+            assert_eq!(result, Err(ReplayReceiptStoreError::ReceiptTokenMismatch));
+            assert_eq!(
+                ReplayReceiptOps::get(replacement_token.key()),
+                Some(replacement.clone())
+            );
+        }
+        assert_eq!(
+            commit_staged_receipt_response(&stale_token, 205),
+            Err(ReplayReceiptStoreError::ReceiptTokenMismatch)
+        );
+        assert_eq!(
+            replay_cost_guard_settlement(&stale_token),
+            Err(ReplayReceiptStoreError::ReceiptTokenMismatch)
+        );
+        assert_eq!(
+            ReplayReceiptOps::get(replacement_token.key()),
+            Some(replacement)
+        );
     }
 
     #[test]
