@@ -201,8 +201,8 @@ mod tests {
         assert!(SubnetRegistryOps::unregister(&pid));
         mark_pool_recycle_pending(pid, &metadata, 202);
 
-        let selected = PoolOps::oldest_pending_reset_pids(usize::MAX);
-        assert!(selected.contains(&pid));
+        let selected = PoolOps::pending_reset_page(None, usize::MAX);
+        assert!(selected.pids.contains(&pid));
 
         let pending = PoolQuery::pool_entry(pid).expect("pending pool entry retained");
         assert_eq!(pending.status, CanisterPoolStatus::PendingReset);

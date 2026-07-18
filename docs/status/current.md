@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.17`.
-- The latest published release is `v0.93.17` at
-  `d10379d044f714ea77cefa53ff35b91a76a4a3ed`.
-- The `v0.93.17` source tree is
-  `4085660ade7eae47150ee24ce6e00e4e9405fa13`; its product-tree hash is
-  `c41dc21d80470b06cba5a6b95423b78c1b6f159fa2ebf1f2c9ae417dc9bdda4a`.
+- The workspace package version is `0.93.18`.
+- The latest published release is `v0.93.18` at
+  `8db9706db18c393d8c977f0cbf78179e04e66fe9`.
+- The `v0.93.18` source tree is
+  `a771e8589b531be2369f742f7cd00d29f2cca6c9`; its product-tree hash is
+  `773f6d6fe222a7e38c820622d48f91e1f948baed3c9c135646162befe075f456`.
   Its Cargo.lock SHA-256 is
-  `5706fa74fa3a9c512472753d56a2834f33e590e2ba08bdc79f547d489bb841d3`.
+  `93c70d42b1f602c30482cf61f016f8cc481da7beea2c2d18891a9f81003fde7b`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -104,11 +104,15 @@ Historical detail is archived at:
   fail closed on that namespace; placement acknowledgement accepts only its
   canonical reserved resource shape, and cost-guard plus pool-import intents
   use the same boundary.
-- Current `0.93.18` development makes placement and pool-import recovery
+- Released `v0.93.18` makes placement and pool-import recovery
   interruption-safe, gives terminal placement receipt cleanup one durable
   owner, and makes expired-intent cleanup use the checked abort authority.
   The pre-`0.93.17` cost namespace remains a documented hard cut with no old-key
   read, alias, or migration path.
+- Current `0.93.19` development gives pending pool reset recovery one bounded
+  cursor sweep so blocked oldest rows neither spin nor starve later work. It
+  also makes sharding assignment and release accounting reject dangling
+  references, counter underflow, and counter overflow before stable mutation.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
