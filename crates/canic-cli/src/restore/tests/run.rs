@@ -182,7 +182,7 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
             "--input",
             "/tmp/canic-cli-restore-artifacts/artifacts/root",
             "--json",
-            "-n",
+            "-e",
             "local"
         ])
     );

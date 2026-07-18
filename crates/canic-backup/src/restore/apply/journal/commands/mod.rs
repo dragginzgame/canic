@@ -226,7 +226,7 @@ fn icp_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) 
     let mut args = vec!["canister".to_string()];
     args.append(&mut tail);
     if let Some(network) = &config.network {
-        args.push("-n".to_string());
+        args.push("-e".to_string());
         args.push(network.clone());
     }
     args

@@ -36,15 +36,15 @@ pub(super) fn build_input_fingerprints(
         )?);
     }
     inputs.push(InputFingerprintV1 {
-        kind: "build_environment".to_string(),
+        kind: "build_network".to_string(),
         path: None,
         path_display: InputPathDisplayV1::Omitted,
         sha256: None,
         size_bytes: None,
         modified_unix_secs: None,
-        schema: Some(PayloadSchemaRefV1::internal("canic.build_environment", "1")),
+        schema: Some(PayloadSchemaRefV1::internal("canic.build_network", "1")),
         note: Some(format!(
-            "environment={};build_network={}",
+            "network={};build_network={}",
             request.network, request.build_network
         )),
     });

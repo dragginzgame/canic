@@ -611,7 +611,7 @@ fn with_post_status_diagnostic(
 }
 
 fn icp_cli(options: &options::CommonOptions) -> IcpCli {
-    IcpCli::new(&options.icp, None, Some(options.network.clone()))
+    IcpCli::new(&options.icp, Some(options.network.clone()))
 }
 
 fn dry_run_call_display(

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.22`.
-- The latest published release is `v0.93.22` at
-  `0f2b7f192fd4e60503a8ef9c7c175d7509663eb1`.
-- The `v0.93.22` source tree is
-  `7fee6161c24e2c473f5c7a38f45e40e3ddde93eb`; its product-tree hash is
-  `4eee9658af2cbe7a577d51fe67c6643caabe8d37858e0889db8dce05caf7cff6`.
+- The workspace package version is `0.93.23`.
+- The latest published release is `v0.93.23` at
+  `1c3857691f4b351f5bdbf81750e9f50c2e1c942f`.
+- The `v0.93.23` source tree is
+  `91fe318f2ea55d4c627105763dd2be027ee1ae05`; its product-tree hash is
+  `89181d1bea1f97d4914ffc1c689f691bc91107f07ecb60385c892449e3ca4e56`.
   Its Cargo.lock SHA-256 is
-  `229ca275da295cb92d406631e504150fd86bd3d88b1649a41f76a293f15d00ce`.
+  `35e44c1489dc11f23cc89439ed5428ec9dcde644ec200419da38097bef214cf9`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -129,10 +129,16 @@ Historical detail is archived at:
   slot. ICP-refill context lookup and delegated-token lazy repair revalidate
   that ownership before post-await local mutation. Ordinary receipt collection
   now matches admission at the exact expiry boundary.
-- Current `0.93.23` development makes release-set artifact and root-manifest
+- Released `v0.93.23` makes release-set artifact and root-manifest
   path projection pure and canonical. Deployment registration no longer
   follows duplicate error-swallowing branches or creates artifact directories;
   the durable writer remains the sole filesystem-mutation authority.
+- Current `0.93.24` development distinguishes selected, build, and artifact
+  networks across ICP command routing, build evidence, deployment truth,
+  backup, and restore. Normal named installs verify their fresh local build
+  outputs, supplied plans retain exact artifact-network lookup, and missing
+  roots preserve expected role rows so the artifact gate fails closed instead
+  of accepting empty evidence.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -197,9 +203,9 @@ by the maintainer after closeout.
 
 Pre-1.0 removals remain hard cuts. Do not add aliases, compatibility wrappers,
 duplicate command paths, deprecated APIs, anti-resurrection tests, or fallback
-behavior unless the maintainer explicitly requests it. Named build
-environments resolve through `icp.yaml`; only `local` and `ic` are
-implicit, and no staging/mainnet aliases exist.
+behavior unless the maintainer explicitly requests it. Named Canic networks
+resolve through the upstream `environments` section in `icp.yaml`; only
+`local` and `ic` are implicit, and no staging/mainnet aliases exist.
 
 Toko mint remains downstream-owned. Canic provides generic primitives only;
 automated work must not edit the Toko repository or move mint-specific
@@ -669,17 +675,19 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.22` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.23` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
-metadata/Candid behavior. The current `.23` slice removes the remaining
-side-effecting release-set path projection and duplicate registration
-fallbacks. Continue the hard-cut audit from the resulting clean selected-
-environment artifact boundary; do not reopen released compatibility paths or
-merge domain-specific recovery owners merely because their orchestration has
-similar structure.
+metadata/Candid behavior. The current `.24` slice makes the artifact network
+explicit, fails closed when an artifact root is missing, and completes the
+partial network-naming transition across ICP command targeting, build context,
+provenance, backup, and restore. Keep `network`, `build_network`,
+`artifact_network`, backing network, and `runtime_variant` distinct as defined
+in the active build-artifact vocabulary; do not reopen removed environment or
+direct named-network paths.
 
-Focused release-set and deployment-registration tests, targeted strict host
-Clippy, formatting, changelog governance, and diff hygiene pass for `.23`.
-Broad deployment, package, publish, and release validation remains
-maintainer-owned.
+Focused host ICP/config/build/provenance/deployment/install, backup
+manifest/snapshot/restore, and CLI build/backup/snapshot/restore tests pass.
+Targeted host, CLI, and backup checks and strict Clippy, formatting, changelog
+governance, naming-residue, and diff-hygiene gates pass for `.24`. Broad
+deployment, package, publish, and release validation remains maintainer-owned.

@@ -17,6 +17,7 @@ use thiserror::Error as ThisError;
 pub struct LocalInventoryRequest {
     pub deployment_name: String,
     pub network: String,
+    pub artifact_network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
     pub config_path: Option<PathBuf>,
@@ -51,12 +52,12 @@ pub fn collect_local_deployment_inventory(
         observe_canonical_runtime_config_digest(&config, &mut unresolved_observations);
     let deployment_manifest_digest = observe_deployment_manifest_digest(
         &request.icp_root,
-        &request.network,
+        &request.artifact_network,
         &mut unresolved_observations,
     );
     let observed_artifacts = collect_observed_artifacts(
         &request.icp_root,
-        &request.network,
+        &request.artifact_network,
         &local_config_facts.roles,
         &mut unresolved_observations,
     );

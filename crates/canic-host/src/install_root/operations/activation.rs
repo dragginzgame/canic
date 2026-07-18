@@ -1,5 +1,5 @@
 use super::super::commands::{
-    add_icp_environment_target, icp_canister_command_in_network, root_init_args, run_command,
+    add_icp_network_target, icp_canister_command, root_init_args, run_command,
 };
 use super::super::readiness::wait_for_root_ready;
 use super::super::root_cycles::ensure_local_root_min_cycles;
@@ -227,10 +227,10 @@ fn reinstall_root_wasm(
     root_wasm: &Path,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut install = icp_canister_command_in_network(icp_root);
+    let mut install = icp_canister_command(icp_root);
     install.args(["install", root_canister, "--mode=reinstall", "-y", "--wasm"]);
     install.arg(root_wasm);
     install.args(["--args", &root_init_args(root_wasm)?]);
-    add_icp_environment_target(&mut install, network, local_replica);
+    add_icp_network_target(&mut install, network, local_replica);
     run_command(&mut install)
 }

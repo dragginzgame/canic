@@ -8,8 +8,8 @@
 mod tests;
 
 use crate::{
-    icp::{LocalReplicaTarget, decode_json_result_response},
-    install_root::commands::{add_icp_environment_target, icp_command_in_network},
+    icp::{self, LocalReplicaTarget, decode_json_result_response},
+    install_root::commands::add_icp_network_target,
     registry::parse_registry_entries,
     release_set::icp_query_on_network,
     replica_query,
@@ -200,10 +200,10 @@ fn print_raw_call(
     local_replica: Option<&LocalReplicaTarget>,
     method: &str,
 ) {
-    let mut command = icp_command_in_network(icp_root, network);
+    let mut command = icp::default_command_in(icp_root);
     command
         .arg("canister")
         .args(["call", root_canister, method, "()"]);
-    add_icp_environment_target(&mut command, network, local_replica);
+    add_icp_network_target(&mut command, network, local_replica);
     let _ = command.status();
 }

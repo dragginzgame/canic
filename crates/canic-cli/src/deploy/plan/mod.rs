@@ -116,6 +116,7 @@ fn build_plan(
     canic_host::deployment_truth::build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: options.deployment.clone(),
         network: options.network.clone(),
+        artifact_network: options.network.clone(),
         workspace_root: roots.workspace_root.clone(),
         icp_root: roots.icp_root.clone(),
         config_path: Some(config_path.to_path_buf()),

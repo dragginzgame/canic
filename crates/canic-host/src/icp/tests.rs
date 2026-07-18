@@ -84,10 +84,10 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     fs::remove_dir_all(root).expect("remove temp dir");
 }
 
-// Keep generated commands tied to ICP CLI environments when one is selected.
+// Keep generated commands tied to the selected Canic network.
 #[test]
-fn renders_environment_target() {
-    let icp = IcpCli::new("icp", Some("staging".to_string()), Some("ic".to_string()));
+fn renders_named_network_target() {
+    let icp = IcpCli::new("icp", Some("staging".to_string()));
 
     assert_eq!(
         icp.snapshot_download_display("root", "snap-1", Path::new("backups/root")),
@@ -103,32 +103,31 @@ fn unique_temp_dir(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("{label}-{}-{nanos}", std::process::id()))
 }
 
-// Keep direct network targeting available for local and ad hoc command contexts.
 #[test]
-fn renders_network_target() {
-    let icp = IcpCli::new("icp", None, Some("ic".to_string()));
+fn renders_implicit_ic_network_target() {
+    let icp = IcpCli::new("icp", Some("ic".to_string()));
 
     assert_eq!(
         icp.snapshot_create_display("aaaaa-aa"),
-        "icp canister snapshot create aaaaa-aa --json -n ic"
+        "icp canister snapshot create aaaaa-aa --json -e ic"
     );
 }
 
 // Keep explicit project roots visible instead of relying only on current_dir.
 #[test]
 fn renders_project_root_override_for_rooted_context() {
-    let icp = IcpCli::new("icp", None, Some("ic".to_string())).with_cwd("/workspace/app");
+    let icp = IcpCli::new("icp", Some("ic".to_string())).with_cwd("/workspace/app");
 
     assert_eq!(
         icp.canister_top_up_display("aaaaa-aa", 4_000_000_000_000),
-        "icp --project-root-override /workspace/app canister top-up --amount 4000000000000 aaaaa-aa -n ic"
+        "icp --project-root-override /workspace/app canister top-up --amount 4000000000000 aaaaa-aa -e ic"
     );
 }
 
 // Ensure query-call previews preserve the explicit Candid argument.
 #[test]
 fn renders_argument_query_call_with_local_candid() {
-    let icp = IcpCli::new("icp", None, Some("local".to_string()));
+    let icp = IcpCli::new("icp", Some("local".to_string()));
 
     assert_eq!(
         icp.canister_query_arg_output_display_with_candid(
@@ -138,14 +137,14 @@ fn renders_argument_query_call_with_local_candid() {
             Some("json"),
             Some(Path::new(".icp/local/canisters/root/root.did"))
         ),
-        "icp canister call root get_blob_storage_status (record { sync_gateway_principals = false }) --query --candid .icp/local/canisters/root/root.did --json -n local"
+        "icp canister call root get_blob_storage_status (record { sync_gateway_principals = false }) --query --candid .icp/local/canisters/root/root.did --json -e local"
     );
 }
 
 // Ensure update-call previews preserve the explicit Candid argument.
 #[test]
 fn renders_argument_update_call() {
-    let icp = IcpCli::new("icp", None, Some("ic".to_string()));
+    let icp = IcpCli::new("icp", Some("ic".to_string()));
 
     assert_eq!(
         icp.canister_call_arg_output_display(
@@ -154,14 +153,14 @@ fn renders_argument_update_call() {
             "(record { dry_run = true })",
             Some("json")
         ),
-        "icp canister call root canic_icp_refill (record { dry_run = true }) --json -n ic"
+        "icp canister call root canic_icp_refill (record { dry_run = true }) --json -e ic"
     );
 }
 
 // Ensure local Candid support is available to update-call helpers.
 #[test]
 fn renders_argument_update_call_with_local_candid() {
-    let icp = IcpCli::new("icp", None, Some("local".to_string()));
+    let icp = IcpCli::new("icp", Some("local".to_string()));
 
     assert_eq!(
         icp.canister_call_arg_output_display_with_candid(
@@ -171,7 +170,7 @@ fn renders_argument_update_call_with_local_candid() {
             Some("json"),
             Some(Path::new(".icp/local/canisters/root/root.did"))
         ),
-        "icp canister call root canic_icp_refill (record { dry_run = true }) --candid .icp/local/canisters/root/root.did --json -n local"
+        "icp canister call root canic_icp_refill (record { dry_run = true }) --candid .icp/local/canisters/root/root.did --json -e local"
     );
 }
 
@@ -199,11 +198,11 @@ fn resolves_existing_local_canister_candid_path() {
 // Ensure manual top-ups use the ICP CLI top-up command and selected network.
 #[test]
 fn renders_canister_top_up() {
-    let icp = IcpCli::new("icp", None, Some("ic".to_string()));
+    let icp = IcpCli::new("icp", Some("ic".to_string()));
 
     assert_eq!(
         icp.canister_top_up_display("aaaaa-aa", 4_000_000_000_000),
-        "icp canister top-up --amount 4000000000000 aaaaa-aa -n ic"
+        "icp canister top-up --amount 4000000000000 aaaaa-aa -e ic"
     );
 }
 

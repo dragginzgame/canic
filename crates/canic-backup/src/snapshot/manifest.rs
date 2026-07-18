@@ -32,7 +32,7 @@ pub fn build_snapshot_manifest(
             version: input.tool_version,
         },
         source: SourceMetadata {
-            environment: input.environment,
+            network: input.network,
             root_canister: input.root_canister.clone(),
         },
         consistency: ConsistencySection {

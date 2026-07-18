@@ -16,6 +16,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: "demo-local".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -149,6 +150,7 @@ kind = "root"
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: "demo-local".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -197,6 +199,7 @@ fn local_plan_uses_install_state_root_as_expected_canister() {
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: "demo-local".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -276,6 +279,7 @@ kind = "shard"
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: "demo-local".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,

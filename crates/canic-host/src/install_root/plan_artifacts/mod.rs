@@ -8,8 +8,9 @@ use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::canister_build::CurrentCanisterArtifactBuildOutput;
 use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentPlanV1};
 use crate::release_set::{
-    ReleaseSetEntry, RootReleaseSetManifest, resolve_artifact_root, resolve_release_artifact_path,
-    root_release_set_manifest_path, validate_root_release_set_manifest,
+    ReleaseSetEntry, RootReleaseSetManifest, artifact_root_path, resolve_artifact_root,
+    resolve_release_artifact_path, root_release_set_manifest_path,
+    validate_root_release_set_manifest,
 };
 use canic_core::CANIC_WASM_CHUNK_BYTES;
 use canic_core::cdk::utils::hash::wasm_hash_hex;
@@ -107,8 +108,7 @@ pub(super) fn root_wasm_for_install_plan(
         return Ok(plan_role_wasm_path(icp_root, &artifact_root, root_artifact));
     }
 
-    Ok(icp_root
-        .join(".icp/local/canisters")
+    Ok(artifact_root_path(icp_root, "local")
         .join(root_build_target)
         .join(format!("{root_build_target}.wasm")))
 }

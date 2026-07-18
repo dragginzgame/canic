@@ -170,14 +170,14 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
 }
 
 fn load_icp_cli_version(options: &StatusOptions) -> String {
-    match IcpCli::new(&options.icp, None, None).compatible_version() {
+    match IcpCli::new(&options.icp, None).compatible_version() {
         Ok(version) => version,
         Err(err) => format!("unavailable ({err})"),
     }
 }
 
 fn load_replica_status(options: &StatusOptions, icp_root: &Path) -> ReplicaStatus {
-    match IcpCli::new(&options.icp, None, None).local_replica_project_running_in(icp_root, false) {
+    match IcpCli::new(&options.icp, None).local_replica_project_running_in(icp_root, false) {
         Ok(true) => ReplicaStatus::Running,
         Ok(false)
             if replica_query::should_use_local_replica_query(Some(&options.network))

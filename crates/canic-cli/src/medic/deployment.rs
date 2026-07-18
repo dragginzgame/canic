@@ -625,7 +625,7 @@ fn check_root_ready(
     network: &str,
 ) -> MedicCheck {
     let source = root_readiness_source(network);
-    let mut icp = IcpCli::new(&options.icp, None, Some(network.to_string()));
+    let mut icp = IcpCli::new(&options.icp, Some(network.to_string()));
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }

@@ -222,7 +222,7 @@ where
     ensure_replica_project_config(&report)?;
     let icp_root = report.icp_root;
     ensure_requested_replica_port(&icp_root, options.port)?;
-    let icp = IcpCli::new(options.icp, None, None);
+    let icp = IcpCli::new(options.icp, None);
     let icp_cli_running = icp
         .local_replica_project_running_in(&icp_root, options.debug)
         .map_err(replica_icp_error)?;
@@ -269,7 +269,7 @@ where
     let options = ReplicaOptions::parse_status(args)?;
     let icp_root = resolve_current_canic_icp_root()?;
     let port = replica_port_label(&icp_root);
-    let icp = IcpCli::new(options.icp, None, None);
+    let icp = IcpCli::new(options.icp, None);
     if options.json {
         return run_status_json(&icp, &icp_root, &port, options.debug);
     }
@@ -354,7 +354,7 @@ where
 
     let options = ReplicaOptions::parse_stop(args)?;
     let icp_root = resolve_current_canic_icp_root()?;
-    let icp = IcpCli::new(options.icp, None, None);
+    let icp = IcpCli::new(options.icp, None);
     match icp.local_replica_stop_in(&icp_root, options.debug) {
         Ok(output) => {
             print_command_output(&output);

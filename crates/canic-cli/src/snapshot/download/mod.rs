@@ -139,7 +139,7 @@ pub(super) fn download_snapshots(
         created_at: current_timestamp_marker(),
         tool_name: "canic-cli".to_string(),
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
-        environment: request
+        network: request
             .network
             .clone()
             .unwrap_or_else(|| "local".to_string()),
@@ -373,7 +373,7 @@ fn driver_error(error: SnapshotCommandError) -> SnapshotDriverError {
 }
 
 fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
-    IcpCli::new(&request.icp, None, request.network.clone()).with_cwd(&request.icp_root)
+    IcpCli::new(&request.icp, request.network.clone()).with_cwd(&request.icp_root)
 }
 
 fn call_subnet_registry(

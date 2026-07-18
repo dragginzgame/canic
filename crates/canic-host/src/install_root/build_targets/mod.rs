@@ -4,6 +4,7 @@ use crate::canister_build::{
     build_workspace_canister_artifact_from_spec, workspace_build_context_once,
 };
 use crate::format::wasm_size_label;
+use crate::release_set::artifact_root_path;
 use crate::table::{ColumnAlign, render_separator, render_table_row, table_widths};
 use std::{
     fs,
@@ -79,7 +80,7 @@ pub(super) fn run_canic_build_targets(
 }
 
 pub(super) fn planned_build_artifact_root(icp_root: &Path) -> PathBuf {
-    icp_root.join(".icp/local/canisters")
+    artifact_root_path(icp_root, "local")
 }
 
 fn wasm_artifact_size(

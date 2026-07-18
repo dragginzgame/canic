@@ -237,7 +237,7 @@ fn canic_version_label_endpoint(
 }
 
 fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpCli {
-    let icp = IcpCli::new(icp, None, network);
+    let icp = IcpCli::new(icp, network);
     if let Some(root) = icp_root {
         icp.with_cwd(root)
     } else {

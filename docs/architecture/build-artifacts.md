@@ -9,6 +9,27 @@ interfaces after the 0.33 ICP CLI hard cut.
 - `.canic/` is Canic operator state. Deployment-target install state lives under
   `.canic/<network>/deployments/<deployment>.json`.
 
+## Network Vocabulary
+
+Canic uses one name for each distinct target concept:
+
+- `network` is the target selected by Canic's `--network <name>` option. It may
+  be the implicit `local` or `ic` network, or a named entry resolved through the
+  upstream `environments` section in `icp.yaml`.
+- `build_network` is the `local` or `ic` compile-time class baked into Wasm.
+- `artifact_network` is the exact `.icp/<name>/canisters` namespace read or
+  written by an artifact operation; it can differ from the deployment network
+  when a named deployment installs artifacts built under `local`.
+- An ICP backing network is the entry referenced by an `icp.yaml` environment.
+  This upstream configuration term is not another Canic target selector.
+- `runtime_variant` is target-specific materialization identity, not a network
+  alias.
+
+Canic maps its selected network to ICP CLI's `-e/--environment` selector. The
+upstream `ICP_ENVIRONMENT` variable remains the child-build contract. Direct
+`-n/--network` targeting is reserved for an explicit local replica URL plus
+root key and is not a second named-target path.
+
 ## Canister Build Contract
 
 Every Canic-managed canister package declares its runtime role in Cargo
@@ -69,7 +90,7 @@ and artifact hashes.
 - Canic release artifacts are gzip-compressed `.wasm.gz` files owned by the
   Canic build scripts.
 - ICP CLI-visible canister artifacts live under
-  `.icp/<environment>/canisters/<role>/`.
+  `.icp/<artifact-network>/canisters/<role>/`.
 
 ## Candid Extraction
 
@@ -99,8 +120,8 @@ report a version or complete the requested transform fails the build.
 ## Audit Usage
 
 Recurring audits should use this vocabulary instead of restating tool-specific
-paths inline. When an audit needs a concrete local environment path, use
-`local` unless the report preamble names another environment.
+paths inline. When an audit needs a concrete local artifact-network path, use
+`local` unless the report preamble names another network.
 
 Ignored `.icp/local/**` Candid sidecars are local build artifacts, not release
 evidence. Before release closeout, either regenerate them from the current

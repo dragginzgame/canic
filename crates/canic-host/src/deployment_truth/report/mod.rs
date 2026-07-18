@@ -151,6 +151,7 @@ struct DuplicateEvidenceGroup {
 pub struct LocalDeploymentCheckRequest {
     pub deployment_name: String,
     pub network: String,
+    pub artifact_network: String,
     pub workspace_root: std::path::PathBuf,
     pub icp_root: std::path::PathBuf,
     pub config_path: Option<std::path::PathBuf>,
@@ -166,6 +167,7 @@ pub fn check_local_deployment(
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: request.deployment_name.clone(),
         network: request.network.clone(),
+        artifact_network: request.artifact_network.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
         config_path: request.config_path.clone(),
@@ -175,6 +177,7 @@ pub fn check_local_deployment(
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: request.deployment_name.clone(),
         network: request.network.clone(),
+        artifact_network: request.artifact_network.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
         config_path: request.config_path.clone(),

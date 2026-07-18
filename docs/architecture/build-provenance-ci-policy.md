@@ -55,12 +55,13 @@ CI policy should branch on the stable envelope plus the stable
 - `payload.transforms`;
 - `payload.artifacts`.
 
-The envelope target records the selected ICP environment name. Its inputs also
-contain one `build_environment` entry whose note records both that environment
+The envelope target records the selected Canic network. Its inputs also
+contain one `build_network` entry whose note records both the selected network
 and the resolved Canic build network, for example
-`environment=staging;build_network=ic`. CI should retain this distinction:
-environment names select deployment state, while the build network controls
-the runtime class baked into Wasm.
+`network=staging;build_network=ic`. CI should retain this distinction: the
+selected network identifies deployment state, while the build network controls
+the runtime class baked into Wasm. Named networks are resolved through the
+upstream `environments` section in `icp.yaml`.
 
 Do not treat timestamps as provenance. `generated_at` explains when Canic wrote
 the envelope; it does not prove that source, Cargo inputs, or produced bytes are

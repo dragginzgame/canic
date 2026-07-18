@@ -403,12 +403,8 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
         &installed.state.root_canister_id,
         &installed.registry.entries,
     )?;
-    let icp = IcpCli::new(
-        &options.target.icp,
-        None,
-        Some(options.target.network.clone()),
-    )
-    .with_cwd(&root);
+    let icp =
+        IcpCli::new(&options.target.icp, Some(options.target.network.clone())).with_cwd(&root);
     if options.dry_run {
         println!(
             "{}",
@@ -558,12 +554,12 @@ fn resolved_target_from_entry(entry: &RegistryEntry) -> ResolvedCanisterTarget {
 }
 
 fn icp_command(target: &IcpTargetOptions, root: &Path) -> std::process::Command {
-    let icp = IcpCli::new(&target.icp, None, Some(target.network.clone())).with_cwd(root);
+    let icp = IcpCli::new(&target.icp, Some(target.network.clone())).with_cwd(root);
     icp.command()
 }
 
 fn append_target_args(command: &mut std::process::Command, target: &IcpTargetOptions) {
-    canic_host::icp::add_target_args(command, None, Some(&target.network), None);
+    canic_host::icp::add_target_args(command, Some(&target.network), None);
 }
 
 fn run_or_print_command(

@@ -1,7 +1,7 @@
 use crate::{
     canister_build::{CanisterBuildProfile, WorkspaceBuildContext},
     icp::{self, LocalReplicaTarget},
-    icp_config::resolve_icp_build_environment_from_root,
+    icp_config::resolve_icp_build_network_from_root,
     replica_query,
 };
 use std::path::Path;
@@ -15,12 +15,12 @@ pub(super) fn resolve_install_build_context(
     build_profile: Option<CanisterBuildProfile>,
 ) -> Result<WorkspaceBuildContext, Box<dyn std::error::Error>> {
     let profile = build_profile.unwrap_or(CanisterBuildProfile::Release);
-    let build_network = resolve_icp_build_environment_from_root(icp_root, network)?;
+    let build_network = resolve_icp_build_network_from_root(icp_root, network)?;
 
     Ok(WorkspaceBuildContext {
         role: role.to_string(),
         profile,
-        environment: network.to_string(),
+        network: network.to_string(),
         build_network: build_network.as_str().to_string(),
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
@@ -49,7 +49,7 @@ pub(super) fn local_replica_icp_target(
     })
 }
 
-pub(super) fn ensure_icp_environment_ready(
+pub(super) fn ensure_icp_network_ready(
     icp_root: &Path,
     network: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -67,7 +67,7 @@ pub(super) fn ensure_icp_environment_ready(
     }
 
     Err(format!(
-        "icp environment is not running for network '{network}'\nStart the target replica in another terminal with `canic replica start` and rerun."
+        "ICP network '{network}' is not running\nStart the target replica in another terminal with `canic replica start` and rerun."
     )
     .into())
 }

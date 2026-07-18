@@ -361,7 +361,7 @@ fn resolve_deployment_target(
 }
 
 fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, InspectCommandError> {
-    let mut icp = IcpCli::new(&target.icp, None, Some(target.network.clone()));
+    let mut icp = IcpCli::new(&target.icp, Some(target.network.clone()));
     if let Some(root) = &target.icp_root {
         icp = icp.with_cwd(root);
     }

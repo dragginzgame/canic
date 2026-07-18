@@ -53,7 +53,7 @@ fn read_live_candid(
     target: &EndpointTarget,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let root = resolve_endpoint_icp_root()?;
-    Ok(IcpCli::new(&options.icp, None, options.network.clone())
+    Ok(IcpCli::new(&options.icp, options.network.clone())
         .with_cwd(root)
         .canister_metadata_output(&target.canister, CANDID_SERVICE_METADATA)?)
 }

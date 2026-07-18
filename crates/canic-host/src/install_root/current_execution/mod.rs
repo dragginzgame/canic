@@ -1,4 +1,3 @@
-use super::build_targets::planned_build_artifact_root;
 use super::deployment_truth_gate::{
     enforce_install_deployment_truth_gate, install_deployment_truth_gate_receipt,
     print_install_deployment_truth_gate,
@@ -15,18 +14,22 @@ use crate::deployment_truth::{
     DeploymentExecutor, DeploymentExecutorCapabilityV1, artifact_gate_phase_receipt,
     artifact_gate_role_phase_receipts, missing_executor_capabilities,
 };
-use crate::release_set::resolve_artifact_root;
+use crate::release_set::artifact_root_path;
 use std::path::Path;
 
 pub(super) fn current_install_execution_context(
     workspace_root: &Path,
     icp_root: &Path,
-    network: &str,
+    artifact_network: &str,
 ) -> DeploymentExecutionContextV1 {
     CurrentCliDeploymentExecutor::new(
         Some(workspace_root.display().to_string()),
         Some(icp_root.display().to_string()),
-        current_install_artifact_roots(icp_root, network),
+        vec![
+            artifact_root_path(icp_root, artifact_network)
+                .display()
+                .to_string(),
+        ],
     )
     .execution_context()
 }
@@ -108,15 +111,4 @@ pub(super) fn run_install_deployment_truth_safety_gate(
         execution_context,
     )?;
     Ok(deployment_truth_check)
-}
-
-fn current_install_artifact_roots(icp_root: &Path, network: &str) -> Vec<String> {
-    let planned_root = planned_build_artifact_root(icp_root);
-    let mut roots = vec![planned_root.display().to_string()];
-    if let Ok(resolved_root) = resolve_artifact_root(icp_root, network)
-        && resolved_root != planned_root
-    {
-        roots.push(resolved_root.display().to_string());
-    }
-    roots
 }

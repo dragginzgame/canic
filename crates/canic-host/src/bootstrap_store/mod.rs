@@ -7,6 +7,7 @@ use crate::{
     },
     cargo_command,
     cargo_metadata::{CargoMetadata, cargo_metadata},
+    release_set::artifact_root_path,
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RolePackageValidation, finding_detail,
@@ -22,7 +23,6 @@ use std::{
 };
 
 const WASM_STORE_ROLE: &str = "wasm_store";
-const WASM_STORE_ARTIFACTS_RELATIVE: &str = ".icp/local/canisters/wasm_store";
 const GENERATED_WRAPPER_RELATIVE: &str = ".icp/local/generated/canic-wasm-store";
 const CANONICAL_WASM_STORE_MANIFEST_RELATIVE: &str = "crates/canic-wasm-store/Cargo.toml";
 const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
@@ -84,7 +84,7 @@ pub fn build_bootstrap_wasm_store_artifact(
 ) -> Result<BootstrapWasmStoreBuildOutput, Box<dyn std::error::Error>> {
     let source = resolve_bootstrap_wasm_store_source(&context.workspace_root, &context.icp_root)?;
     require_built_in_wasm_store_contract(&source.manifest_path)?;
-    let artifact_root = context.icp_root.join(WASM_STORE_ARTIFACTS_RELATIVE);
+    let artifact_root = artifact_root_path(&context.icp_root, "local").join(WASM_STORE_ROLE);
     fs::create_dir_all(&artifact_root)?;
 
     run_wasm_store_cargo_build(context, &source.manifest_path)?;

@@ -58,7 +58,7 @@ pub fn check_install_execution_preflight(
     let execution_context = current_install_execution_context(
         &inputs.workspace_root,
         &inputs.icp_root,
-        &options.network,
+        options.artifact_network(),
     );
     let executor = CurrentCliDeploymentExecutor::new(
         execution_context.workspace_root,
@@ -104,6 +104,7 @@ pub(super) fn current_install_deployment_truth_check_at(
     check_local_deployment(&LocalDeploymentCheckRequest {
         deployment_name: deployment_name.to_string(),
         network: options.network.clone(),
+        artifact_network: options.artifact_network().to_string(),
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
         config_path: Some(config_path.to_path_buf()),
@@ -205,6 +206,7 @@ fn current_install_deployment_truth_check_for_plan(
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: deployment_name.to_string(),
         network: network.to_string(),
+        artifact_network: network.to_string(),
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
         config_path: Some(config_path.to_path_buf()),
