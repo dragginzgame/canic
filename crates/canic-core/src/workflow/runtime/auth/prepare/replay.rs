@@ -214,26 +214,33 @@ pub(super) fn map_token_prepare_replay_decision(
 }
 
 pub(super) fn map_token_prepare_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
+    map_auth_prepare_replay_store_error(err, "delegated token prepare")
+}
+
+fn map_auth_prepare_replay_store_error(
+    err: ReplayReceiptStoreError,
+    label: &'static str,
+) -> InternalError {
     match err {
         ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
             InternalErrorOrigin::Workflow,
-            "delegated token prepare replay receipt is missing",
+            format!("{label} replay receipt is missing"),
         ),
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
             InternalErrorOrigin::Workflow,
-            format!("failed to decode delegated token prepare replay receipt: {message}"),
+            format!("failed to decode {label} replay receipt: {message}"),
         ),
         ReplayReceiptStoreError::ReceiptTokenMismatch => InternalError::workflow(
             InternalErrorOrigin::Workflow,
-            "delegated token prepare replay receipt token is stale",
+            format!("{label} replay receipt token is stale"),
         ),
         ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
             InternalErrorOrigin::Workflow,
-            "delegated token prepare replay receipt is missing staged response data",
+            format!("{label} replay receipt is missing staged response data"),
         ),
         ReplayReceiptStoreError::CostGuardSettlementMissing => InternalError::workflow(
             InternalErrorOrigin::Workflow,
-            "delegated token prepare replay receipt is missing cost guard settlement identity",
+            format!("{label} replay receipt is missing cost guard settlement identity"),
         ),
     }
 }
@@ -315,28 +322,7 @@ pub(super) fn map_role_attestation_replay_decision(
 pub(super) fn map_role_attestation_replay_store_error(
     err: ReplayReceiptStoreError,
 ) -> InternalError {
-    match err {
-        ReplayReceiptStoreError::ReceiptMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "role attestation replay receipt is missing",
-        ),
-        ReplayReceiptStoreError::ReceiptDecodeFailed(message) => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            format!("failed to decode role attestation replay receipt: {message}"),
-        ),
-        ReplayReceiptStoreError::ReceiptTokenMismatch => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "role attestation replay receipt token is stale",
-        ),
-        ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "role attestation replay receipt is missing staged response data",
-        ),
-        ReplayReceiptStoreError::CostGuardSettlementMissing => InternalError::workflow(
-            InternalErrorOrigin::Workflow,
-            "role attestation replay receipt is missing cost guard settlement identity",
-        ),
-    }
+    map_auth_prepare_replay_store_error(err, "role attestation")
 }
 
 pub(super) fn encode_role_attestation_prepare_response(
