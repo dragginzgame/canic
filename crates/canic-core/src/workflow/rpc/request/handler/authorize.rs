@@ -43,7 +43,12 @@ pub(super) fn authorize(
 
     let descriptor = capability.descriptor();
     let decision = match capability {
-        RootCapability::ProvisionCanister(req) => authorize_provision(ctx, req),
+        RootCapability::AcknowledgePlacementReceipt(_) => {
+            authorize_placement_receipt_acknowledgement(ctx)
+        }
+        RootCapability::AllocatePlacementChild(req) | RootCapability::ProvisionCanister(req) => {
+            authorize_provision(ctx, req)
+        }
         RootCapability::UpgradeCanister(req) => {
             authorize_root_only(ctx).and_then(|()| authorize_upgrade(ctx, req))
         }
@@ -87,6 +92,24 @@ pub(super) fn authorize(
     }
 
     decision
+}
+
+fn authorize_placement_receipt_acknowledgement(ctx: &RootContext) -> Result<(), InternalError> {
+    if ctx.caller == ctx.self_pid {
+        return Ok(());
+    }
+
+    if !ctx.is_root_env {
+        return EnvOps::require_root();
+    }
+
+    if !SubnetRegistryOps::is_registered(ctx.caller) {
+        return Err(InternalError::public(Error::forbidden(
+            "placement receipt acknowledgement requires caller to be registered in subnet registry",
+        )));
+    }
+
+    Ok(())
 }
 
 fn authorize_provision(

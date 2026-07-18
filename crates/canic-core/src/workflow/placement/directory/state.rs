@@ -71,17 +71,25 @@ pub(super) enum DirectoryEntryClassification {
         bound_at: u64,
     },
     PendingFresh {
+        claim_id: u64,
         owner_pid: Principal,
         created_at: u64,
         provisional_pid: Option<Principal>,
     },
     Repairable {
         claim_id: u64,
+        owner_pid: Principal,
         provisional_pid: Principal,
+    },
+    Resumable {
+        claim_id: u64,
+        owner_pid: Principal,
+        created_at: u64,
     },
     NeedsCleanup {
         claim_id: u64,
-        provisional_pid: Option<Principal>,
+        owner_pid: Principal,
+        provisional_pid: Principal,
     },
 }
 

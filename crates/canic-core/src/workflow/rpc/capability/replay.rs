@@ -2,16 +2,14 @@
 //!
 //! Responsibility: project capability metadata into replay request metadata.
 //! Does not own: replay storage, request dispatch, or capability proof validation.
-//! Boundary: validates metadata freshness and derives replay request identifiers.
+//! Boundary: validates metadata freshness and preserves durable replay identifiers.
 
 use crate::{
     dto::{capability::CapabilityRequestMetadata, error::Error, rpc::RootRequestMetadata},
     workflow::rpc::{
-        capability::{MAX_CAPABILITY_CLOCK_SKEW_NS, REPLAY_REQUEST_ID_DOMAIN_V1},
-        request::handler::capability::RootCapability,
+        capability::MAX_CAPABILITY_CLOCK_SKEW_NS, request::handler::capability::RootCapability,
     },
 };
-use sha2::{Digest, Sha256};
 
 pub(super) const fn with_root_request_metadata(
     request: RootCapability,
@@ -48,15 +46,7 @@ pub(super) fn project_replay_metadata(
     }
 
     Ok(RootRequestMetadata {
-        request_id: replay_request_id(metadata.request_id, metadata.nonce),
+        request_id: metadata.request_id,
         ttl_ns: metadata.ttl_ns,
     })
-}
-
-pub(super) fn replay_request_id(request_id: [u8; 16], nonce: [u8; 16]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(REPLAY_REQUEST_ID_DOMAIN_V1);
-    hasher.update(request_id);
-    hasher.update(nonce);
-    hasher.finalize().into()
 }

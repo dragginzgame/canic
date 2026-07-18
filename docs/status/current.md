@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.14`.
-- The latest published release is `v0.93.14` at
-  `1c908216ef6e5e64e4d5bc4ca3db2d655864f723`.
-- The `v0.93.14` source tree is
-  `7e486edc15ca2b083ec35e7b3f91a17db49facdc`; its product-tree hash is
-  `f4c432ff04182aefb972c2d54573f50aeef2b7fb378fe6f59cfc2defd143343c`.
+- The workspace package version is `0.93.15`.
+- The latest published release is `v0.93.15` at
+  `537ab8b07d919e9225aef210dde9b9a90f23832c`.
+- The `v0.93.15` source tree is
+  `7fdc69bdc73e77806c48e0f8cc2e85abd0426820`; its product-tree hash is
+  `7deb5bc22b97f82a737d2dff6e712da4c9bb6e5583058b969a3e5c4eb7d353d9`.
   Its Cargo.lock SHA-256 is
-  `4d4c2a8f9a9fae2e3fe5b392f44d289ab3f9aa02c9e82814821737e0138cef5f`.
+  `2d0b6f3d442ddfc0c95fa9326fc8acce58229e776057a65d29130fdad8801c2a`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -85,10 +85,18 @@ Historical detail is archived at:
   creation, ICP refill, and authentication preparation. It also keeps pending
   pool-reset records authoritative through asynchronous recovery so recycled
   canister metadata and duplicate-work exclusion survive the transition.
-- Current development fails delegated-token verification closed when required
+- Released `v0.93.15` fails delegated-token verification closed when required
   local subnet state is absent, returns typed state-cascade partial failures,
   and binds prevalidated shard allocation to one deterministic root replay
   identity per owner, pool, and slot.
+- Current `0.93.16` development replaces the separate scaling, directory, and
+  sharding create flows with one receipt-backed placement-allocation authority.
+  Unknown directory outcomes retain their claims, tracked retries replay the
+  exact root placement operation, capability transport preserves its full
+  32-byte identity, and committed placement receipts remain recoverable until
+  response-idempotent acknowledgement completes. Terminal placement intents
+  own bounded acknowledgement retry across init and upgrade without retaining
+  redundant terminal intent records after cleanup.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

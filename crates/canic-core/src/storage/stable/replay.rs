@@ -13,6 +13,7 @@ use crate::{
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
         ReplayActor, ReplayCostGuardSettlement, ReplayReceipt, ReplayReceiptStatus,
+        placement_receipt_requires_acknowledgement,
     },
     role_contract::allocation::memory::auth::REPLAY_RECEIPTS_ID,
     storage::prelude::*,
@@ -301,18 +302,20 @@ impl ReplayReceiptStore {
 }
 
 fn record_is_pending(record: &ReplayReceiptRecord, now_ns: u64) -> bool {
-    record_survives_replay_expiry(record)
-        || (record
-            .expires_at_ns
-            .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
-            && matches!(record.status, ReplayReceiptStatus::Reserved))
-}
-
-const fn record_survives_replay_expiry(record: &ReplayReceiptRecord) -> bool {
     matches!(
         record.status,
         ReplayReceiptStatus::ExternalEffectInFlight | ReplayReceiptStatus::RecoveryRequired { .. }
-    )
+    ) || (record
+        .expires_at_ns
+        .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
+        && matches!(record.status, ReplayReceiptStatus::Reserved))
+}
+
+fn record_survives_replay_expiry(record: &ReplayReceiptRecord) -> bool {
+    matches!(
+        record.status,
+        ReplayReceiptStatus::ExternalEffectInFlight | ReplayReceiptStatus::RecoveryRequired { .. }
+    ) || placement_receipt_requires_acknowledgement(&record.status, record.effect.as_ref())
 }
 
 #[cfg(test)]
@@ -516,6 +519,30 @@ mod tests {
         assert!(ReplayReceiptStore::collect_expired(300, 10).is_empty());
         assert!(ReplayReceiptStore::get(recovery_key).is_some());
         assert!(ReplayReceiptStore::get(effect_key).is_some());
+
+        ReplayReceiptStore::reset_for_tests();
+    }
+
+    #[test]
+    fn committed_placement_receipt_survives_expiry_without_counting_as_pending() {
+        ReplayReceiptStore::reset_for_tests();
+        let key = ReplayReceiptSlotKey([46; 32]);
+        let mut record = receipt_record_fixture();
+        record.command_kind = crate::model::replay::PLACEMENT_CHILD_REPLAY_COMMAND_KIND.to_string();
+        record.status = ReplayReceiptStatus::Committed;
+        record.effect = Some(ExternalEffectDescriptor::ManagementCreateCanister {
+            command_kind: CommandKind::new(
+                crate::model::replay::PLACEMENT_CHILD_REPLAY_COMMAND_KIND,
+            )
+            .expect("command"),
+        });
+        let actor = record.actor;
+        ReplayReceiptStore::upsert(key, record);
+
+        assert_eq!(ReplayReceiptStore::active_len_for_actor(actor, 300), 1);
+        assert_eq!(ReplayReceiptStore::pending_len_for_actor(actor, 300), 0);
+        assert!(ReplayReceiptStore::collect_expired(300, 10).is_empty());
+        assert!(ReplayReceiptStore::get(key).is_some());
 
         ReplayReceiptStore::reset_for_tests();
     }

@@ -4,11 +4,14 @@
 //! Does not own: command authorization, response encoding, or stable schemas.
 //! Boundary: workflow and replay guards call this API for receipt lifecycle.
 
+#[cfg(test)]
+use crate::model::replay::ROOT_PROVISION_REPLAY_COMMAND_KIND;
 use crate::{
     model::replay::{
-        CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_PAYLOAD_HASH_SCHEMA_VERSION,
-        REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayActor, ReplayCostGuardSettlement,
-        ReplayReceipt, ReplayReceiptStatus,
+        CommandKind, ExternalEffectDescriptor, OperationId, PLACEMENT_CHILD_REPLAY_COMMAND_KIND,
+        REPLAY_PAYLOAD_HASH_SCHEMA_VERSION, REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason,
+        ReplayActor, ReplayCostGuardSettlement, ReplayReceipt, ReplayReceiptStatus,
+        placement_receipt_requires_acknowledgement,
     },
     ops::storage::replay::ReplayReceiptOps,
     storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptSlotKey},
@@ -119,6 +122,21 @@ pub enum ReplayReceiptDecision {
 }
 
 ///
+/// PlacementReceiptAcknowledgementDecision
+///
+/// Mechanical result of releasing one caller-owned committed placement receipt.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PlacementReceiptAcknowledgementDecision {
+    Acknowledged,
+    AlreadyAbsent,
+    ActorMismatch,
+    NotCommitted,
+    NotPlacementEffect,
+}
+
+///
 /// ReplayReceiptStoreError
 ///
 /// Storage adapter failure while decoding shared replay receipts.
@@ -202,6 +220,35 @@ pub fn prepare_replay_receipt(
         .into_receipt()
         .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
     Ok(classify_existing_receipt(&input, key, existing))
+}
+
+/// Remove one committed placement-child receipt after its caller durably consumed the result.
+pub fn acknowledge_placement_receipt(
+    operation_id: OperationId,
+    actor: ReplayActor,
+) -> Result<PlacementReceiptAcknowledgementDecision, ReplayReceiptStoreError> {
+    let command_kind = CommandKind::new(PLACEMENT_CHILD_REPLAY_COMMAND_KIND)
+        .expect("placement child command kind is a valid static label");
+    let key = ReplayReceiptOps::slot_key(&command_kind, operation_id);
+    let Some(record) = ReplayReceiptOps::get(key) else {
+        return Ok(PlacementReceiptAcknowledgementDecision::AlreadyAbsent);
+    };
+    let receipt = record
+        .into_receipt()
+        .map_err(ReplayReceiptStoreError::ReceiptDecodeFailed)?;
+
+    if receipt.actor != actor {
+        return Ok(PlacementReceiptAcknowledgementDecision::ActorMismatch);
+    }
+    if receipt.status != ReplayReceiptStatus::Committed {
+        return Ok(PlacementReceiptAcknowledgementDecision::NotCommitted);
+    }
+    if !placement_receipt_requires_acknowledgement(&receipt.status, receipt.effect.as_ref()) {
+        return Ok(PlacementReceiptAcknowledgementDecision::NotPlacementEffect);
+    }
+
+    let _ = ReplayReceiptOps::remove(key);
+    Ok(PlacementReceiptAcknowledgementDecision::Acknowledged)
 }
 
 pub fn reserve_receipt_token(token: &ReplayReceiptToken) {
@@ -411,9 +458,10 @@ fn classify_existing_receipt(
         return ReplayReceiptDecision::OperationInProgress;
     }
 
-    if existing
-        .expires_at_ns
-        .is_some_and(|expires_at_ns| input.now_ns >= expires_at_ns)
+    if !placement_receipt_requires_acknowledgement(&existing.status, existing.effect.as_ref())
+        && existing
+            .expires_at_ns
+            .is_some_and(|expires_at_ns| input.now_ns >= expires_at_ns)
     {
         return ReplayReceiptDecision::Expired;
     }
@@ -704,6 +752,137 @@ mod tests {
             .expect("receipt decodes");
         assert_eq!(receipt.status, ReplayReceiptStatus::Committed);
         assert_eq!(receipt.effect, Some(effect));
+    }
+
+    #[test]
+    fn committed_placement_receipt_replays_past_expiry_until_caller_acknowledges() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let original_input = input_with(PLACEMENT_CHILD_REPLAY_COMMAND_KIND, p(1), [31; 32], 100)
+            .with_expires_at_ns(120);
+        let token = match reserve_or_replay_receipt(original_input.clone()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        mark_external_effect_in_flight(
+            &token,
+            ExternalEffectDescriptor::ManagementCreateCanister {
+                command_kind: CommandKind::new(PLACEMENT_CHILD_REPLAY_COMMAND_KIND)
+                    .expect("command"),
+            },
+            105,
+        )
+        .expect("mark provision effect");
+        commit_response(&token, 1, vec![1, 2, 3], 110).expect("commit response");
+
+        let mut expired_retry = original_input;
+        expired_retry.now_ns = 200;
+        assert!(matches!(
+            reserve_or_replay_receipt(expired_retry).expect("replay retained receipt"),
+            ReplayReceiptDecision::ReturnCommitted(_)
+        ));
+        assert_eq!(
+            acknowledge_placement_receipt(
+                OperationId::from_bytes([31; 32]),
+                ReplayActor::direct_caller(p(2)),
+            )
+            .expect("wrong caller decision"),
+            PlacementReceiptAcknowledgementDecision::ActorMismatch
+        );
+        assert_eq!(ReplayReceiptOps::len(), 1);
+        assert_eq!(
+            acknowledge_placement_receipt(
+                OperationId::from_bytes([31; 32]),
+                ReplayActor::direct_caller(p(1)),
+            )
+            .expect("acknowledge receipt"),
+            PlacementReceiptAcknowledgementDecision::Acknowledged
+        );
+        assert_eq!(ReplayReceiptOps::len(), 0);
+        assert_eq!(
+            acknowledge_placement_receipt(
+                OperationId::from_bytes([31; 32]),
+                ReplayActor::direct_caller(p(1)),
+            )
+            .expect("repeat acknowledgement"),
+            PlacementReceiptAcknowledgementDecision::AlreadyAbsent
+        );
+    }
+
+    #[test]
+    fn placement_receipt_acknowledgement_rejects_uncommitted_or_wrong_effect() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let pending = match reserve_or_replay_receipt(input_with(
+            PLACEMENT_CHILD_REPLAY_COMMAND_KIND,
+            p(1),
+            [32; 32],
+            100,
+        ))
+        .expect("reserve pending")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        assert_eq!(
+            acknowledge_placement_receipt(
+                pending.receipt.operation_id,
+                ReplayActor::direct_caller(p(1)),
+            )
+            .expect("pending decision"),
+            PlacementReceiptAcknowledgementDecision::NotCommitted
+        );
+
+        let wrong_effect = match reserve_or_replay_receipt(input_with(
+            PLACEMENT_CHILD_REPLAY_COMMAND_KIND,
+            p(1),
+            [33; 32],
+            100,
+        ))
+        .expect("reserve wrong effect")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        commit_response(&wrong_effect, 1, vec![4], 110).expect("commit without effect");
+        assert_eq!(
+            acknowledge_placement_receipt(
+                wrong_effect.receipt.operation_id,
+                ReplayActor::direct_caller(p(1)),
+            )
+            .expect("wrong effect decision"),
+            PlacementReceiptAcknowledgementDecision::NotPlacementEffect
+        );
+        assert_eq!(ReplayReceiptOps::len(), 2);
+    }
+
+    #[test]
+    fn committed_generic_provision_receipt_expires_without_acknowledgement() {
+        ReplayReceiptOps::reset_for_tests();
+
+        let original_input = input_with(ROOT_PROVISION_REPLAY_COMMAND_KIND, p(1), [34; 32], 100)
+            .with_expires_at_ns(120);
+        let token = match reserve_or_replay_receipt(original_input.clone()).expect("reserve") {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        mark_external_effect_in_flight(
+            &token,
+            ExternalEffectDescriptor::ManagementCreateCanister {
+                command_kind: CommandKind::new(ROOT_PROVISION_REPLAY_COMMAND_KIND)
+                    .expect("command"),
+            },
+            105,
+        )
+        .expect("mark generic provision effect");
+        commit_response(&token, 1, vec![1, 2, 3], 110).expect("commit response");
+
+        let mut expired_retry = original_input;
+        expired_retry.now_ns = 200;
+        assert!(matches!(
+            reserve_or_replay_receipt(expired_retry).expect("classify expired receipt"),
+            ReplayReceiptDecision::Expired
+        ));
     }
 
     #[test]

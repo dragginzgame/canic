@@ -20,6 +20,8 @@ thread_local! {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[remain::sorted]
 pub enum RootCapabilityMetricKey {
+    AcknowledgePlacementReceipt,
+    AllocatePlacementChild,
     Provision,
     RecycleCanister,
     RequestCycles,
@@ -30,6 +32,8 @@ impl RootCapabilityMetricKey {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
+            Self::AcknowledgePlacementReceipt => "AcknowledgePlacementReceipt",
+            Self::AllocatePlacementChild => "AllocatePlacementChild",
             Self::Provision => "Provision",
             Self::RecycleCanister => "RecycleCanister",
             Self::RequestCycles => "RequestCycles",

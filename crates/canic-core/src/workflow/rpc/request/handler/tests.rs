@@ -5,9 +5,9 @@ use crate::{
     dto::{
         error::ErrorCode,
         rpc::{
-            CreateCanisterParent, CreateCanisterRequest, CyclesRequest, CyclesResponse,
-            RecycleCanisterRequest, RecycleCanisterResponse, Request, RootRequestMetadata,
-            UpgradeCanisterRequest, UpgradeCanisterResponse,
+            AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
+            CyclesRequest, CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse,
+            Request, RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
         },
     },
     ids::CanisterRole,
@@ -137,7 +137,43 @@ fn root_capability_from_request_maps_provision() {
     });
 
     let mapped = RootCapability::from_request(req);
-    assert_eq!(mapped.capability_name(), "Provision");
+    assert_eq!(mapped.descriptor().name, "Provision");
+    assert_eq!(mapped.descriptor().command_kind, "root.provision");
+}
+
+#[test]
+fn root_capability_from_request_maps_placement_receipt_acknowledgement() {
+    let mapped = RootCapability::from_request(Request::AcknowledgePlacementReceipt(
+        AcknowledgePlacementReceiptRequest {
+            operation_id: [1; 32],
+            metadata: None,
+        },
+    ));
+
+    assert_eq!(mapped.descriptor().name, "AcknowledgePlacementReceipt");
+    assert_eq!(
+        mapped.descriptor().command_kind,
+        "root.acknowledge_placement_receipt"
+    );
+    assert!(mapped.replay_input().is_none());
+}
+
+#[test]
+fn root_capability_from_request_maps_placement_allocation() {
+    let mapped =
+        RootCapability::from_request(Request::AllocatePlacementChild(CreateCanisterRequest {
+            canister_role: CanisterRole::new("placement"),
+            parent: CreateCanisterParent::ThisCanister,
+            extra_arg: None,
+            metadata: None,
+        }));
+
+    assert_eq!(mapped.descriptor().name, "AllocatePlacementChild");
+    assert_eq!(
+        mapped.descriptor().command_kind,
+        "root.allocate_placement_child"
+    );
+    assert!(mapped.replay_input().is_none());
 }
 
 #[test]
@@ -148,7 +184,7 @@ fn root_capability_from_request_maps_upgrade() {
     });
 
     let mapped = RootCapability::from_request(req);
-    assert_eq!(mapped.capability_name(), "Upgrade");
+    assert_eq!(mapped.descriptor().name, "Upgrade");
 }
 
 #[test]
@@ -159,7 +195,7 @@ fn root_capability_from_request_maps_recycle_canister() {
     });
 
     let mapped = RootCapability::from_request(req);
-    assert_eq!(mapped.capability_name(), "RecycleCanister");
+    assert_eq!(mapped.descriptor().name, "RecycleCanister");
 }
 
 #[test]
@@ -170,13 +206,19 @@ fn root_capability_from_request_maps_cycles() {
     });
 
     let mapped = RootCapability::from_request(req);
-    assert_eq!(mapped.capability_name(), "RequestCycles");
+    assert_eq!(mapped.descriptor().name, "RequestCycles");
 }
 
 #[test]
-fn root_capability_metadata_projection_covers_every_family() {
+fn root_capability_metadata_projection_covers_replay_protected_families() {
     let expected = meta(7, secs_to_ns(60));
     let requests = [
+        Request::AllocatePlacementChild(CreateCanisterRequest {
+            canister_role: CanisterRole::new("placement"),
+            parent: CreateCanisterParent::ThisCanister,
+            extra_arg: None,
+            metadata: None,
+        }),
         Request::CreateCanister(CreateCanisterRequest {
             canister_role: CanisterRole::new("app"),
             parent: CreateCanisterParent::Root,
@@ -204,6 +246,15 @@ fn root_capability_metadata_projection_covers_every_family() {
             .expect("projected metadata must produce replay input");
         assert_eq!(replay.metadata, expected);
     }
+
+    let acknowledgement = RootCapability::from_request(Request::AcknowledgePlacementReceipt(
+        AcknowledgePlacementReceiptRequest {
+            operation_id: [1; 32],
+            metadata: None,
+        },
+    ))
+    .with_metadata(expected);
+    assert!(acknowledgement.replay_input().is_none());
 }
 
 #[test]
@@ -406,10 +457,11 @@ fn root_provision_cost_guard_request_uses_deployment_policy() {
         subnet_id: p(2),
         now: 9_500,
     };
-    let guard_request = execute::root_provision_cost_guard_request(&ctx, 5 * TC, 100 * TC);
+    let guard_request =
+        execute::root_provision_cost_guard_request(&ctx, 5 * TC, 100 * TC, "root.provision");
 
     assert_eq!(guard_request.cost_class, CostClass::ManagementDeployment);
-    assert_eq!(guard_request.command_kind.as_str(), "root.provision.v1");
+    assert_eq!(guard_request.command_kind.as_str(), "root.provision");
     assert_eq!(guard_request.quota_subject, ctx.caller);
     assert_eq!(guard_request.payer, ctx.self_pid);
     assert_eq!(guard_request.now_secs, ctx.now);
@@ -449,10 +501,18 @@ fn root_provision_marks_create_external_effect() {
         &ctx,
         5 * TC,
         10 * TC,
+        "root.provision",
     ))
     .expect("cost permit");
-    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42), &permit)
-        .expect("mark provision effect");
+    execute::mark_root_provision_external_effect(
+        &pending,
+        &ctx,
+        &req,
+        p(42),
+        &permit,
+        "root.provision",
+    )
+    .expect("mark provision effect");
 
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
         .expect("receipt")
@@ -466,7 +526,7 @@ fn root_provision_marks_create_external_effect() {
     assert_eq!(
         receipt.effect,
         Some(ExternalEffectDescriptor::ManagementCreateCanister {
-            command_kind: CommandKind::new("root.provision.v1").expect("command kind"),
+            command_kind: CommandKind::new("root.provision").expect("command kind"),
         })
     );
 
@@ -1080,10 +1140,18 @@ fn check_replay_finishes_cost_settlement_without_reexecuting_capability() {
         &ctx,
         5 * TC,
         10 * TC,
+        "root.provision",
     ))
     .expect("cost permit");
-    execute::mark_root_provision_external_effect(&pending, &ctx, &req, p(42), &permit)
-        .expect("mark costed effect");
+    execute::mark_root_provision_external_effect(
+        &pending,
+        &ctx,
+        &req,
+        p(42),
+        &permit,
+        "root.provision",
+    )
+    .expect("mark costed effect");
     let response = Response::CreateCanister(crate::dto::rpc::CreateCanisterResponse {
         new_canister_pid: p(99),
     });
@@ -1412,6 +1480,36 @@ fn check_replay_rejects_when_capacity_reached() {
     });
     RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect_err("reservation must fail when store is at capacity");
+}
+
+#[test]
+fn placement_receipt_acknowledgement_does_not_reserve_replay_capacity() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let response_bytes = encode_one(Response::Cycles(CyclesResponse {
+        cycles_transferred: 1,
+    }))
+    .expect("encode");
+    for i in 0..MAX_ROOT_REPLAY_ENTRIES {
+        let mut request_id = [0u8; 32];
+        request_id[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        seed_root_replay_receipt(
+            "root.request_cycles.v1",
+            p(u8::try_from(i % 250).expect("modulo keeps caller byte below u8 max")),
+            request_id,
+            [0; 32],
+            5_000,
+            Some(response_bytes.clone()),
+        );
+    }
+
+    let acknowledgement =
+        RootCapability::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest {
+            operation_id: [1; 32],
+            metadata: Some(meta(7, secs_to_ns(60))),
+        });
+    assert!(acknowledgement.replay_input().is_none());
+    assert_eq!(ReplayReceiptOps::len(), MAX_ROOT_REPLAY_ENTRIES);
 }
 
 #[test]

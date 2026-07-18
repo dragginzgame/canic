@@ -13,13 +13,11 @@ use crate::{
     domain::policy::pure::placement::scaling::{
         ScalingPlan, ScalingPolicy, ScalingPolicyInput, ScalingPoolPolicyInput,
     },
-    dto::rpc::CreateCanisterParent,
     log::Topic,
-    model::placement::scaling::ScalingWorkerEntry,
+    model::placement::{allocation::PlacementAllocationIdentity, scaling::ScalingWorkerEntry},
     ops::{
         config::ConfigOps,
         ic::IcOps,
-        rpc::request::RequestOps,
         runtime::metrics::{
             recording::ScalingMetricEvent as MetricEvent,
             scaling::{
@@ -29,6 +27,7 @@ use crate::{
         },
         storage::placement::scaling::ScalingRegistryOps,
     },
+    workflow::placement::allocation::{PlacementAllocationRequest, PlacementAllocationWorkflow},
 };
 
 ///
@@ -123,7 +122,18 @@ impl ScalingWorkflow {
             MetricOperation::PlanCreate,
             MetricReason::from_plan_reason(plan_reason),
         );
-        Self::create_worker_from_plan(entry_plan).await
+        let pool_cfg = scaling
+            .as_ref()
+            .and_then(|config| config.pools.get(pool))
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    format!("scaling plan admitted missing pool '{pool}'"),
+                )
+            })?;
+        let available_capacity =
+            available_worker_capacity(pool_cfg.policy.max_workers, worker_count);
+        Self::create_worker_from_plan(entry_plan, available_capacity).await
     }
 
     /// Plan whether a worker should be created according to policy.
@@ -204,7 +214,8 @@ impl ScalingWorkflow {
                 pool: BoundedString64::new(pool),
                 canister_role: pool_cfg.canister_role.clone(),
             };
-            let pid = match Self::create_worker_from_plan(entry_plan).await {
+            let available_capacity = u64::from(target.saturating_sub(current));
+            let pid = match Self::create_worker_from_plan(entry_plan, available_capacity).await {
                 Ok(pid) => pid,
                 Err(err) => {
                     MetricEvent::failed(MetricOperation::BootstrapPool, &err);
@@ -226,35 +237,60 @@ impl ScalingWorkflow {
     // Create and register a worker from a policy-approved or bootstrap-approved plan.
     async fn create_worker_from_plan(
         entry_plan: ScalingWorkerEntry,
+        available_capacity: u64,
     ) -> Result<Principal, InternalError> {
         let role = entry_plan.canister_role.clone();
+        let pool = entry_plan.pool.as_ref();
+        let owner = IcOps::canister_self();
+        let identity_probe = PlacementAllocationIdentity::scaling(owner, pool, 0, &role, None);
+        let sequence = PlacementAllocationWorkflow::next_sequence(&identity_probe);
+        let identity = PlacementAllocationIdentity::scaling(owner, pool, sequence, &role, None);
+        let reservation_limit =
+            PlacementAllocationWorkflow::reservation_limit_for_available_capacity(
+                &identity,
+                available_capacity,
+            );
 
         MetricEvent::started(MetricOperation::CreateWorker);
-        let pid = match RequestOps::create_canister::<()>(
-            &role,
-            CreateCanisterParent::ThisCanister,
-            None,
-        )
-        .await
-        {
-            Ok(response) => {
-                MetricEvent::completed(MetricOperation::CreateWorker, MetricReason::Ok);
-                response.new_canister_pid
-            }
-            Err(err) => {
-                MetricEvent::failed(MetricOperation::CreateWorker, &err);
-                return Err(err);
-            }
-        };
+        let (permit, pid) =
+            match PlacementAllocationWorkflow::create_child(PlacementAllocationRequest {
+                identity,
+                canister_role: role,
+                extra_arg: None,
+                reservation_limit,
+            })
+            .await
+            {
+                Ok(result) => {
+                    MetricEvent::completed(MetricOperation::CreateWorker, MetricReason::Ok);
+                    result
+                }
+                Err(err) => {
+                    MetricEvent::failed(MetricOperation::CreateWorker, &err);
+                    return Err(err);
+                }
+            };
         crate::perf!("create_canister");
 
         MetricEvent::started(MetricOperation::RegisterWorker);
         let created_at_secs = IcOps::now_secs();
         ScalingRegistryOps::upsert(pid, entry_plan, created_at_secs);
+        if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid).await {
+            MetricEvent::failed(MetricOperation::RegisterWorker, &err);
+            return Err(err);
+        }
         MetricEvent::completed(MetricOperation::RegisterWorker, MetricReason::Ok);
         crate::perf!("register_worker");
 
         Ok(pid)
+    }
+}
+
+fn available_worker_capacity(max_workers: u32, worker_count: u32) -> u64 {
+    if max_workers == 0 {
+        u64::MAX
+    } else {
+        u64::from(max_workers.saturating_sub(worker_count))
     }
 }
 

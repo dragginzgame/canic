@@ -14,6 +14,7 @@ use crate::{
         },
         storage::registry::subnet::SubnetRegistryOps,
     },
+    storage::stable::intent::{IntentStore, ReceiptBackedIntentStore},
     test::{
         config::ConfigTestBuilder,
         seams::{lock, p},
@@ -78,6 +79,8 @@ fn install_directory_test_context(child_role: &CanisterRole, child_pid: Principa
 
     clear_subnet_registry();
     DirectoryRegistryOps::clear_for_test();
+    IntentStore::reset_for_tests();
+    ReceiptBackedIntentStore::reset_for_tests();
     CanisterChildrenOps::import_direct_children(hub_pid, vec![(child_pid, child_role.clone())]);
 
     let created_at = 0;
@@ -257,7 +260,7 @@ fn classify_entry_returns_none_for_missing_key() {
 }
 
 #[test]
-fn classify_entry_marks_stale_pending_without_provisional_for_cleanup() {
+fn classify_entry_marks_stale_pending_without_provisional_for_resume() {
     let _guard = lock();
     let child_role = CanisterRole::new("project_instance");
     let child_pid = p(3);
@@ -272,9 +275,10 @@ fn classify_entry_marks_stale_pending_without_provisional_for_cleanup() {
 
     assert_eq!(
         classification,
-        Some(DirectoryEntryClassification::NeedsCleanup {
+        Some(DirectoryEntryClassification::Resumable {
             claim_id: claim_id(1),
-            provisional_pid: None
+            owner_pid: p(7),
+            created_at: 1,
         })
     );
 }
@@ -307,13 +311,14 @@ fn classify_entry_marks_invalid_provisional_child_for_cleanup() {
         classification,
         Some(DirectoryEntryClassification::NeedsCleanup {
             claim_id: claim_id(1),
-            provisional_pid: Some(p(8))
+            owner_pid: p(7),
+            provisional_pid: p(8),
         })
     );
 }
 
 #[test]
-fn recover_entry_releases_stale_pending_without_provisional_child() {
+fn stale_pending_without_provisional_child_remains_claimed_for_exact_resume() {
     let _guard = lock();
     let child_role = CanisterRole::new("project_instance");
     let child_pid = p(3);
@@ -321,22 +326,23 @@ fn recover_entry_releases_stale_pending_without_provisional_child() {
     DirectoryRegistryOps::claim_pending("projects", "alpha", p(7), claim_id(1), 1)
         .expect("seed stale pending entry");
 
-    let result = block_on(DirectoryWorkflow::recover_entry("projects", "alpha"))
-        .expect("stale dead key should be released");
-
+    let pool_cfg =
+        DirectoryWorkflow::get_directory_pool_cfg("projects").expect("pool config should exist");
     assert_eq!(
-        result,
-        DirectoryRecoveryResponse::ReleasedStalePending {
+        DirectoryWorkflow::classify_entry("projects", "alpha", &pool_cfg, IcOps::now_secs(),),
+        Some(DirectoryEntryClassification::Resumable {
+            claim_id: claim_id(1),
             owner_pid: p(7),
             created_at: 1,
-            provisional_pid: None,
-            released_at: IcOps::now_secs(),
-        }
+        })
     );
+    let error = block_on(DirectoryWorkflow::recover_entry("projects", "alpha"))
+        .expect_err("untracked stale claim must remain fail-closed");
     assert_eq!(
-        DirectoryRegistryOps::lookup_entry("projects", "alpha"),
-        None
+        error.public_error().map(|error| error.code),
+        Some(crate::dto::error::ErrorCode::Conflict)
     );
+    assert!(DirectoryRegistryOps::lookup_entry("projects", "alpha").is_some());
 }
 
 #[test]

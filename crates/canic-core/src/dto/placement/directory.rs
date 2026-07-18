@@ -55,6 +55,10 @@ pub enum DirectoryRecoveryResponse {
         instance_pid: Principal,
         bound_at: u64,
     },
+    ResumedToBound {
+        instance_pid: Principal,
+        bound_at: u64,
+    },
     ReleasedStalePending {
         owner_pid: Principal,
         created_at: u64,

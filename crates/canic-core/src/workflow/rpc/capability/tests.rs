@@ -3,8 +3,9 @@ use crate::dto::{
     capability::{CAPABILITY_VERSION_V1, CapabilityProof},
     error::ErrorCode,
     rpc::{
-        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest,
-        Request, RootRequestMetadata, UpgradeCanisterRequest,
+        AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
+        CyclesRequest, RecycleCanisterRequest, Request, RootRequestMetadata,
+        UpgradeCanisterRequest,
     },
 };
 use crate::ids::CanisterRole;
@@ -22,15 +23,9 @@ fn sample_request(cycles: u128) -> Request {
     })
 }
 
-fn sample_metadata(
-    request_id: u8,
-    nonce: u8,
-    issued_at_ns: u64,
-    ttl_ns: u64,
-) -> CapabilityRequestMetadata {
+fn sample_metadata(request_id: u8, issued_at_ns: u64, ttl_ns: u64) -> CapabilityRequestMetadata {
     CapabilityRequestMetadata {
-        request_id: [request_id; 16],
-        nonce: [nonce; 16],
+        request_id: [request_id; 32],
         issued_at_ns,
         ttl_ns,
     }
@@ -72,6 +67,30 @@ fn root_capability_hash_ignores_request_metadata() {
         ttl_ns: 120 * NS_PER_SEC,
     };
     let pairs = [
+        (
+            Request::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest {
+                operation_id: [9; 32],
+                metadata: Some(metadata_a),
+            }),
+            Request::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest {
+                operation_id: [9; 32],
+                metadata: Some(metadata_b),
+            }),
+        ),
+        (
+            Request::AllocatePlacementChild(CreateCanisterRequest {
+                canister_role: CanisterRole::new("placement"),
+                parent: CreateCanisterParent::ThisCanister,
+                extra_arg: Some(vec![1, 2, 3]),
+                metadata: Some(metadata_a),
+            }),
+            Request::AllocatePlacementChild(CreateCanisterRequest {
+                canister_role: CanisterRole::new("placement"),
+                parent: CreateCanisterParent::ThisCanister,
+                extra_arg: Some(vec![1, 2, 3]),
+                metadata: Some(metadata_b),
+            }),
+        ),
         (
             Request::CreateCanister(CreateCanisterRequest {
                 canister_role: CanisterRole::new("app"),
@@ -128,7 +147,7 @@ fn root_capability_hash_ignores_request_metadata() {
 #[test]
 fn project_replay_metadata_rejects_expired_metadata() {
     let err = project_replay_metadata(
-        sample_metadata(1, 2, 900 * NS_PER_SEC, 50 * NS_PER_SEC),
+        sample_metadata(1, 900 * NS_PER_SEC, 50 * NS_PER_SEC),
         1_000 * NS_PER_SEC,
     )
     .expect_err("expired metadata must fail");
@@ -138,7 +157,7 @@ fn project_replay_metadata_rejects_expired_metadata() {
 #[test]
 fn project_replay_metadata_rejects_expiry_boundary() {
     let err = project_replay_metadata(
-        sample_metadata(1, 2, 900 * NS_PER_SEC, 50 * NS_PER_SEC),
+        sample_metadata(1, 900 * NS_PER_SEC, 50 * NS_PER_SEC),
         950 * NS_PER_SEC,
     )
     .expect_err("metadata at expiry boundary must fail");
@@ -148,7 +167,7 @@ fn project_replay_metadata_rejects_expiry_boundary() {
 #[test]
 fn project_replay_metadata_rejects_future_metadata_beyond_skew() {
     let err = project_replay_metadata(
-        sample_metadata(1, 2, 1_031 * NS_PER_SEC, 60 * NS_PER_SEC),
+        sample_metadata(1, 1_031 * NS_PER_SEC, 60 * NS_PER_SEC),
         1_000 * NS_PER_SEC,
     )
     .expect_err("future metadata must fail");
@@ -156,18 +175,13 @@ fn project_replay_metadata_rejects_future_metadata_beyond_skew() {
 }
 
 #[test]
-fn project_replay_metadata_binds_nonce_into_request_id() {
-    let a = project_replay_metadata(
-        sample_metadata(3, 1, 1_000 * NS_PER_SEC, 60 * NS_PER_SEC),
+fn project_replay_metadata_preserves_durable_request_id() {
+    let projected = project_replay_metadata(
+        sample_metadata(3, 1_000 * NS_PER_SEC, 60 * NS_PER_SEC),
         1_000 * NS_PER_SEC,
     )
-    .expect("a");
-    let b = project_replay_metadata(
-        sample_metadata(3, 2, 1_000 * NS_PER_SEC, 60 * NS_PER_SEC),
-        1_000 * NS_PER_SEC,
-    )
-    .expect("b");
-    assert_ne!(a.request_id, b.request_id);
+    .expect("metadata must project");
+    assert_eq!(projected.request_id, [3; 32]);
 }
 
 #[test]

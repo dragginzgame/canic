@@ -39,6 +39,10 @@ pub struct DirectoryWorkflow;
 
 impl DirectoryWorkflow {
     /// Resolve a bound instance for one key or create and bind a new one.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the exhaustive directory state-machine loop is clearer in one owner"
+    )]
     pub async fn resolve_or_create(
         pool: &str,
         key_value: &str,
@@ -69,6 +73,7 @@ impl DirectoryWorkflow {
                 }
 
                 Some(DirectoryEntryClassification::PendingFresh {
+                    claim_id: _,
                     owner_pid,
                     created_at,
                     provisional_pid,
@@ -83,20 +88,62 @@ impl DirectoryWorkflow {
 
                 Some(DirectoryEntryClassification::Repairable {
                     claim_id,
+                    owner_pid,
                     provisional_pid,
                 }) => {
-                    let repaired =
-                        Self::repair_stale_entry(pool, key_value, claim_id, provisional_pid, now)?;
+                    let repaired = Self::repair_stale_entry(
+                        pool,
+                        key_value,
+                        &pool_cfg,
+                        claim_id,
+                        owner_pid,
+                        provisional_pid,
+                        now,
+                    )
+                    .await?;
                     MetricEvent::completed(MetricOperation::Resolve, MetricReason::StaleRepairable);
                     return Ok(repaired);
                 }
 
+                Some(DirectoryEntryClassification::Resumable {
+                    claim_id,
+                    owner_pid,
+                    created_at,
+                }) => {
+                    let status = Self::resume_pending_instance(
+                        pool,
+                        key_value,
+                        &pool_cfg,
+                        crate::ops::storage::placement::directory::DirectoryPendingClaim {
+                            claim_id,
+                            owner_pid,
+                            created_at,
+                        },
+                    )
+                    .await?;
+                    if let Some(status) = status {
+                        MetricEvent::completed(
+                            MetricOperation::Resolve,
+                            MetricReason::ResumedPending,
+                        );
+                        return Ok(status);
+                    }
+                }
+
                 Some(DirectoryEntryClassification::NeedsCleanup {
                     claim_id,
+                    owner_pid,
                     provisional_pid,
                 }) => {
-                    if let Err(err) =
-                        Self::cleanup_stale_entry(pool, key_value, claim_id, provisional_pid).await
+                    if let Err(err) = Self::cleanup_stale_entry(
+                        pool,
+                        key_value,
+                        &pool_cfg,
+                        claim_id,
+                        owner_pid,
+                        provisional_pid,
+                    )
+                    .await
                     {
                         MetricEvent::failed(MetricOperation::Resolve, &err);
                         return Err(err);
@@ -126,6 +173,10 @@ impl DirectoryWorkflow {
 
     /// Recover one directory entry by repairing a valid stale provisional child or
     /// releasing a dead pending claim.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the exhaustive directory recovery state machine has one orchestration owner"
+    )]
     pub async fn recover_entry(
         pool: &str,
         key_value: &str,
@@ -159,6 +210,7 @@ impl DirectoryWorkflow {
                 }
 
                 Some(DirectoryEntryClassification::PendingFresh {
+                    claim_id: _,
                     owner_pid,
                     created_at,
                     provisional_pid,
@@ -173,10 +225,19 @@ impl DirectoryWorkflow {
 
                 Some(DirectoryEntryClassification::Repairable {
                     claim_id,
+                    owner_pid,
                     provisional_pid,
                 }) => {
-                    let repaired =
-                        Self::repair_stale_entry(pool, key_value, claim_id, provisional_pid, now)?;
+                    let repaired = Self::repair_stale_entry(
+                        pool,
+                        key_value,
+                        &pool_cfg,
+                        claim_id,
+                        owner_pid,
+                        provisional_pid,
+                        now,
+                    )
+                    .await?;
 
                     let DirectoryEntryStatusResponse::Bound {
                         instance_pid,
@@ -196,14 +257,47 @@ impl DirectoryWorkflow {
                     });
                 }
 
+                Some(DirectoryEntryClassification::Resumable {
+                    claim_id,
+                    owner_pid,
+                    created_at,
+                }) => {
+                    let status = Self::resume_pending_instance(
+                        pool,
+                        key_value,
+                        &pool_cfg,
+                        crate::ops::storage::placement::directory::DirectoryPendingClaim {
+                            claim_id,
+                            owner_pid,
+                            created_at,
+                        },
+                    )
+                    .await?;
+                    let Some(DirectoryEntryStatusResponse::Bound {
+                        instance_pid,
+                        bound_at,
+                    }) = status
+                    else {
+                        continue;
+                    };
+                    MetricEvent::completed(MetricOperation::Recover, MetricReason::ResumedPending);
+                    return Ok(DirectoryRecoveryResponse::ResumedToBound {
+                        instance_pid,
+                        bound_at,
+                    });
+                }
+
                 Some(DirectoryEntryClassification::NeedsCleanup {
                     claim_id,
+                    owner_pid,
                     provisional_pid,
                 }) => {
                     if let Some(response) = Self::recover_cleanup_stale_entry(
                         pool,
                         key_value,
+                        &pool_cfg,
                         claim_id,
+                        owner_pid,
                         provisional_pid,
                     )
                     .await?

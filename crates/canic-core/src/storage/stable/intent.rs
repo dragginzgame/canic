@@ -241,7 +241,7 @@ impl_storable_bounded!(
     false
 );
 
-/// Stable representation of one permanently retained receipt-backed intent.
+/// Stable representation of one durable receipt-backed intent.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ReceiptBackedIntentRecord {
     pub schema_version: u32,
@@ -489,6 +489,22 @@ impl ReceiptBackedIntentStore {
     pub(crate) fn insert(record: ReceiptBackedIntentRecord) -> Option<ReceiptBackedIntentRecord> {
         RECEIPT_BACKED_INTENT_RECORDS
             .with_borrow_mut(|records| records.insert(record.operation_id, record))
+    }
+
+    pub(crate) fn remove(operation_id: OperationId) -> Option<ReceiptBackedIntentRecord> {
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(|records| records.remove(&operation_id))
+    }
+
+    pub(crate) fn with_records<R>(
+        f: impl FnOnce(
+            &StableBtreeMap<
+                OperationId,
+                ReceiptBackedIntentRecord,
+                VirtualMemory<DefaultMemoryImpl>,
+            >,
+        ) -> R,
+    ) -> R {
+        RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| f(records))
     }
 }
 

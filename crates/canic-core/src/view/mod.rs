@@ -7,4 +7,5 @@
 #[cfg(feature = "blob-storage-billing")]
 pub mod blob_storage;
 pub mod icp_refill;
+pub mod intent;
 pub mod topology;

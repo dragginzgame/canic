@@ -44,11 +44,12 @@ impl DirectoryWorkflow {
             },
 
             DirectoryEntryState::Pending {
-                claim_id: _,
+                claim_id,
                 owner_pid,
                 created_at,
                 provisional_pid,
             } if !pending_is_stale(now, created_at) => DirectoryEntryClassification::PendingFresh {
+                claim_id,
                 owner_pid,
                 created_at,
                 provisional_pid,
@@ -56,21 +57,36 @@ impl DirectoryWorkflow {
 
             DirectoryEntryState::Pending {
                 claim_id,
+                owner_pid,
+                created_at,
+                provisional_pid: None,
+            } => DirectoryEntryClassification::Resumable {
+                claim_id,
+                owner_pid,
+                created_at,
+            },
+
+            DirectoryEntryState::Pending {
+                claim_id,
+                owner_pid,
                 provisional_pid: Some(pid),
                 ..
             } if validate_bind_target_with_reason(pid, &pool_cfg.canister_role).is_ok() => {
                 DirectoryEntryClassification::Repairable {
                     claim_id,
+                    owner_pid,
                     provisional_pid: pid,
                 }
             }
 
             DirectoryEntryState::Pending {
                 claim_id,
-                provisional_pid,
+                owner_pid,
+                provisional_pid: Some(provisional_pid),
                 ..
             } => DirectoryEntryClassification::NeedsCleanup {
                 claim_id,
+                owner_pid,
                 provisional_pid,
             },
         };
@@ -88,6 +104,7 @@ impl DirectoryWorkflow {
             DirectoryEntryClassification::Bound { .. } => MetricReason::AlreadyBound,
             DirectoryEntryClassification::PendingFresh { .. } => MetricReason::PendingFresh,
             DirectoryEntryClassification::Repairable { .. } => MetricReason::StaleRepairable,
+            DirectoryEntryClassification::Resumable { .. } => MetricReason::ResumedPending,
             DirectoryEntryClassification::NeedsCleanup { .. } => MetricReason::StaleCleanup,
         }
     }

@@ -10,8 +10,8 @@ use canic::{
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
         rpc::{
-            CreateCanisterParent, CreateCanisterRequest, CyclesRequest, Request, Response,
-            RootRequestMetadata, UpgradeCanisterRequest,
+            AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
+            CyclesRequest, Request, Response, RootRequestMetadata, UpgradeCanisterRequest,
         },
         topology::IndexEntryResponse,
     },
@@ -131,7 +131,6 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
         .get(&canister::SCALE_HUB)
         .copied()
         .expect("scale_hub canister must exist");
-
     let request = Request::Cycles(CyclesRequest {
         cycles: 1_111_000,
         metadata: Some(metadata([36u8; 32], 120_000_000_000)),
@@ -161,6 +160,90 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
     assert_eq!(
         metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
         1
+    );
+}
+
+#[test]
+fn placement_retry_reuses_exact_root_receipt_and_acknowledgement_is_not_replayed() {
+    let setup = setup_cached_root(RootSetupProfile::Scaling);
+    let caller = setup
+        .subnet_index
+        .get(&canister::SCALE_HUB)
+        .copied()
+        .expect("scale_hub canister must exist");
+    let baseline_metrics = root_capability_metrics(&setup);
+    let operation_id = [83u8; 32];
+    let allocation = Request::AllocatePlacementChild(CreateCanisterRequest {
+        canister_role: canister::SCALE_REPLICA,
+        parent: CreateCanisterParent::ThisCanister,
+        extra_arg: None,
+        metadata: Some(metadata(operation_id, 120_000_000_000)),
+    });
+
+    let first_pid = match root_response_as(&setup, caller, allocation.clone())
+        .expect("first placement allocation must succeed")
+    {
+        Response::CreateCanister(response) => response.new_canister_pid,
+        other => panic!("expected placement create response, got: {other:?}"),
+    };
+    let replayed_pid = match root_response_as(&setup, caller, allocation)
+        .expect("placement retry must return the retained result")
+    {
+        Response::CreateCanister(response) => response.new_canister_pid,
+        other => panic!("expected cached placement response, got: {other:?}"),
+    };
+    assert_eq!(replayed_pid, first_pid);
+
+    let acknowledgement =
+        Request::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest {
+            operation_id,
+            metadata: Some(metadata(operation_id, 120_000_000_000)),
+        });
+    for _ in 0..2 {
+        assert!(matches!(
+            root_response_as(&setup, caller, acknowledgement.clone())
+                .expect("placement acknowledgement must be response-idempotent"),
+            Response::AcknowledgePlacementReceipt(_)
+        ));
+    }
+
+    let metrics = root_capability_metrics(&setup);
+    drop(setup);
+    assert_eq!(
+        metric_count(&metrics, "AllocatePlacementChild", "ReplayAccepted")
+            - metric_count(
+                &baseline_metrics,
+                "AllocatePlacementChild",
+                "ReplayAccepted",
+            ),
+        1
+    );
+    assert_eq!(
+        metric_count(&metrics, "AllocatePlacementChild", "ReplayDuplicateSame")
+            - metric_count(
+                &baseline_metrics,
+                "AllocatePlacementChild",
+                "ReplayDuplicateSame"
+            ),
+        1
+    );
+    assert_eq!(
+        metric_count(&metrics, "AcknowledgePlacementReceipt", "ReplayAccepted")
+            - metric_count(
+                &baseline_metrics,
+                "AcknowledgePlacementReceipt",
+                "ReplayAccepted"
+            ),
+        0
+    );
+    assert_eq!(
+        metric_count(&metrics, "AcknowledgePlacementReceipt", "ExecutionSuccess")
+            - metric_count(
+                &baseline_metrics,
+                "AcknowledgePlacementReceipt",
+                "ExecutionSuccess"
+            ),
+        2
     );
 }
 
@@ -618,7 +701,7 @@ fn capability_response_as(
     caller: Principal,
     request: Request,
 ) -> Result<Response, Error> {
-    let (request_id, nonce, ttl_ns) = capability_metadata_from_request(&request);
+    let (request_id, ttl_ns) = capability_metadata_from_request(&request);
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
@@ -626,7 +709,6 @@ fn capability_response_as(
         proof: CapabilityProof::Structural,
         metadata: CapabilityRequestMetadata {
             request_id,
-            nonce,
             issued_at_ns: target_now_ns(setup, target_pid),
             ttl_ns,
         },
@@ -782,23 +864,18 @@ fn target_now_ns(setup: &RootSetup, canister_id: Principal) -> u64 {
     setup.pic.current_time_nanos()
 }
 
-fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u64) {
+const fn capability_metadata_from_request(request: &Request) -> ([u8; 32], u64) {
     let metadata = match request {
-        Request::CreateCanister(req) => req.metadata,
+        Request::AcknowledgePlacementReceipt(req) => req.metadata,
+        Request::AllocatePlacementChild(req) | Request::CreateCanister(req) => req.metadata,
         Request::UpgradeCanister(req) => req.metadata,
         Request::RecycleCanister(req) => req.metadata,
         Request::Cycles(req) => req.metadata,
     };
 
     match metadata {
-        Some(meta) => {
-            let mut request_id = [0u8; 16];
-            request_id.copy_from_slice(&meta.request_id[..16]);
-            let mut nonce = [0u8; 16];
-            nonce.copy_from_slice(&meta.request_id[16..]);
-            (request_id, nonce, meta.ttl_ns)
-        }
-        None => ([0u8; 16], [0u8; 16], 60_000_000_000),
+        Some(meta) => (meta.request_id, meta.ttl_ns),
+        None => ([0u8; 32], 60_000_000_000),
     }
 }
 

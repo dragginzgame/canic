@@ -67,12 +67,10 @@ fn attestation_request_id(caller: Principal, ttl_ns: u64, audience: Principal) -
 pub const fn capability_metadata(
     issued_at_ns: u64,
     request_id_seed: u8,
-    nonce_seed: u8,
     ttl_ns: u64,
 ) -> CapabilityRequestMetadata {
     CapabilityRequestMetadata {
-        request_id: [request_id_seed; 16],
-        nonce: [nonce_seed; 16],
+        request_id: [request_id_seed; 32],
         issued_at_ns,
         ttl_ns,
     }

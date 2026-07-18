@@ -30,8 +30,9 @@ pub(super) fn verify_root_structural_proof(capability: &RootCapability) -> Resul
     }
 
     match capability {
-        RootCapability::RequestCycles(_) => Ok(()),
-        RootCapability::ProvisionCanister(request) => verify_root_structural_create(request),
+        RootCapability::AcknowledgePlacementReceipt(_) | RootCapability::RequestCycles(_) => Ok(()),
+        RootCapability::AllocatePlacementChild(request)
+        | RootCapability::ProvisionCanister(request) => verify_root_structural_create(request),
         RootCapability::UpgradeCanister(request) => {
             verify_root_structural_child_target(caller, request.canister_pid, "upgrade")
         }

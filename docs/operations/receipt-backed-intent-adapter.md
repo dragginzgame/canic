@@ -83,14 +83,42 @@ The seed-based fixture endpoints are test scaffolding, not a downstream API.
 Downstream code should use the typed Canic facade operations directly and keep
 its domain receipt types in its own repository.
 
+## Canonical Placement Consumer
+
+Canic's placement workflow is the first in-repository consumer. Scaling,
+directory, and sharding all use one `PlacementAllocationWorkflow` that:
+
+- derives a deterministic operation, payload binding, and capacity resource;
+- reserves live capacity through `ReceiptBackedIntent` before root RPC;
+- reuses that operation as the root provision replay identity;
+- settles only after the owning placement registry records the child;
+- rolls back only after a known provisional child is disposed; and
+- acknowledges the committed root placement receipt after local settlement;
+- carries the exact 32-byte operation ID through capability transport; and
+- retains terminal intent evidence as a bounded durable acknowledgement queue
+  until the response-idempotent root acknowledgement succeeds.
+
+Committed root placement receipts survive request expiry until that
+acknowledgement. The queue drain resumes after init and upgrade and deletes only
+the exact terminal intent after receipt release; settled aggregate capacity is
+unchanged. A directory claim with no known child is never released on age
+alone. Recovery resumes only when the matching durable intent exists; untracked
+uncertainty remains fail closed.
+
+Other Canic systems may use this adapter when they allocate a child through
+root and have one authoritative registry transition that can prove membership
+or disposal. Systems that transfer value, upgrade or recycle existing
+canisters, or already own a domain-specific replay/cost receipt do not fit this
+contract and must retain their existing authority.
+
 ## Downstream Adoption
 
-Toko is the first planned consumer. Its developers can implement the mint
-adapter after the compatible Canic release is published. That implementation
+Toko is the first planned downstream consumer. Its developers can implement
+the mint adapter after the Canic release is published. That implementation
 must remain Toko-owned and add focused tests for caller-scoped receipts,
-receipt validation, deterministic no-effect evidence, ambiguous-call
-recovery, cancellation fencing, and retirement of any co-authoritative local
-settlement row.
+receipt validation, deterministic no-effect evidence, ambiguous-call recovery,
+cancellation fencing, and retirement of any co-authoritative local settlement
+row.
 
 Canic publication does not certify those downstream properties. It provides
 and tests the generic reservation and settlement contract on which they rely.
