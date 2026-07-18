@@ -292,6 +292,15 @@ application scopes such as `read`, `write`, `admin`, or application-specific
 admin labels must be issued by a separate caller-authorized path instead of
 being accepted from open caller-supplied prepare payloads.
 
+Fresh preparation is bounded by both durable replay retention and issuer-local
+prepared-token retention. Each authority admits at most 64 active entries per
+caller and 512 globally; expired entries are pruned at the exact expiry
+boundary before admission. Durable replay counts unexpired committed responses
+as well as pending work, so sequential successful requests cannot evade the
+quota. An exact committed replay remains available at capacity and returns the
+original response. A fresh request over either limit fails closed with typed
+`ResourceExhausted`.
+
 `canic_upsert_root_issuer_policy` is a root controller update that registers
 or updates the issuer policy used by batch prepare. It records the issuer
 principal, enabled state, allowed audiences, allowed grants, maximum
@@ -320,6 +329,13 @@ The issuer `SignatureMap` stores the domain-separated claims hash under seed
 `domain_len || domain || claims_hash` to `verify_canister_sig`, checks the
 issuer proof public key DER embeds `cert.issuer_pid` and the expected seed, and
 uses the configured raw IC root key.
+
+One caller-bound retained-token record owns the prepared claims and one-minute
+retrieval expiry. No second issuer-proof metadata map competes for caller or
+expiry authority. `SignatureMap` owns only the certified cryptographic witness
+and uses its bounded expiry pruning during additions. Query retrieval rejects
+missing, pruned, wrong-caller, and boundary-expired preparations with their
+typed auth classification.
 
 Management-canister ECDSA is limited to root renewal and lazy-repair batch
 boundaries. `prepare_delegated_token` and delegated-token endpoint verification

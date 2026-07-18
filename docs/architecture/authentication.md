@@ -381,8 +381,10 @@ Entrypoint path:
 
 ```text
 AuthApi::prepare_delegated_token
-  -> reserve auth.prepare_delegated_token.v1 replay receipt
+  -> prune expired and reserve bounded auth.prepare_delegated_token.v1 replay receipt
+  -> prune expired and admit bounded caller-owned prepared-token metadata
   -> add issuer canister-signature map entry
+  -> retain caller binding and retrieval expiry with the prepared token
   -> set_certified_data(labeled_hash("sig", SIGNATURES.root_hash()))
 
 AuthApi::get_delegated_token
@@ -393,13 +395,19 @@ Issuer issuance steps:
 
 1. Require caller-provided replay metadata.
 2. Return the committed prepare response for the same operation id, actor, and
-   payload.
+   payload, including when fresh admission is at capacity.
 3. Reject the same operation id with a different actor or payload.
-4. Require an installed `ActiveDelegationProof` whose cert issuer is this
+4. Before fresh admission, remove a bounded batch of expired receipts for this
+   exact command and count every remaining unexpired response, including
+   committed responses. Reject above 64 retained responses per caller or 512
+   globally.
+5. Prune expired prepared-token metadata at its exact retrieval boundary and
+   reject above the same 64-per-caller and 512-global limits.
+6. Require an installed `ActiveDelegationProof` whose cert issuer is this
    canister.
-5. Prepare `DelegatedTokenClaims`, including deterministic issuer-generated
+7. Prepare `DelegatedTokenClaims`, including deterministic issuer-generated
    nonce material.
-6. Enforce:
+8. Enforce:
    - root proof verifies
    - cert is currently valid
    - token TTL is greater than zero
@@ -408,9 +416,12 @@ Issuer issuance steps:
    - token audience is a subset of cert audience
    - token grants are a subset of cert grants
    - claims are canonical
-7. Add an issuer canister-signature entry for the canonical claims hash.
-8. Commit the exact prepare response.
-9. Query retrieval is caller-bound and returns the self-contained
+9. Add an issuer canister-signature entry for the canonical claims hash.
+10. Retain the prepared token, caller binding, and one-minute retrieval expiry
+    in one issuer-local record. The signature map owns only the cryptographic
+    witness and prunes expired witnesses during subsequent additions.
+11. Commit the exact prepare response.
+12. Query retrieval is caller-bound and returns the self-contained
    `DelegatedToken`.
 
 The normal auth surface has no single-call token issuance path. Fleet, CLI, and
@@ -419,6 +430,9 @@ auth does not call `management_canister.sign_with_ecdsa`, `raw_rand`, or any
 management-canister method during the login hot path. Only root renewal and
 lazy-repair batch creation may call management-canister signing, and repeated
 logins under a fresh active proof must require zero root threshold signatures.
+The retained replay response and prepared-token limits make the public prepare
+surface fail closed with `ResourceExhausted` rather than growing stable memory,
+heap metadata, or canister-signature witnesses without bound.
 
 ## 7. Verifier Algorithm
 

@@ -5,6 +5,7 @@
 //! Boundary: auth ops facade for delegated-token workflows, config, metrics, and proof helpers.
 
 mod error;
+mod retention;
 mod verification;
 mod verifier_config;
 
@@ -60,7 +61,6 @@ use error::{
     active_delegation_proof_unavailable_error, delegated_auth_reason_from_verify_error,
     map_prepare_delegated_token_error, map_verify_delegated_token_error,
 };
-use std::{cell::RefCell, collections::BTreeMap};
 #[cfg(test)]
 use verification::map_chain_key_root_proof_error;
 use verification::{
@@ -74,27 +74,12 @@ use verifier_config::{
     configured_ic_root_public_key_raw, configured_root_canister_id, configured_root_proof_mode,
 };
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct PendingDelegatedTokenKey {
-    claims_hash: [u8; 32],
-    prepared_by: Vec<u8>,
-}
-
-impl PendingDelegatedTokenKey {
-    fn new(claims_hash: [u8; 32], prepared_by: Principal) -> Self {
-        Self {
-            claims_hash,
-            prepared_by: prepared_by.as_slice().to_vec(),
-        }
-    }
-}
-
-thread_local! {
-    static PENDING_DELEGATED_TOKENS: RefCell<BTreeMap<PendingDelegatedTokenKey, crate::ops::auth::delegated::prepare::PreparedDelegatedToken>> =
-        const { RefCell::new(BTreeMap::new()) };
-}
-
 impl AuthOps {
+    pub(crate) const fn delegated_token_replay_retention_limits()
+    -> crate::ops::replay::receipt::ReplayReceiptRetentionLimits {
+        retention::DELEGATED_TOKEN_REPLAY_RETENTION_LIMITS
+    }
+
     /// Prepare delegated-token claims before issuer canister-signature retrieval.
     pub(crate) fn prepare_delegated_token_issuer_proof(
         input: PrepareDelegatedTokenIssuerProofInput,
@@ -110,6 +95,7 @@ impl AuthOps {
 
         let local = IcOps::canister_self();
         let now_ns = IcOps::now_nanos();
+        retention::prune_and_admit(prepared_by, now_ns)?;
         let active_proof = Self::active_delegation_proof(now_ns)
             .ok_or_else(|| active_delegation_proof_unavailable_error(now_ns))?;
 
@@ -137,18 +123,17 @@ impl AuthOps {
         let claims_hash = prepared.claims_hash;
         let issuer_proof_prepare = Self::prepare_issuer_canister_signature(
             IssuerPayloadKind::DelegatedTokenClaims,
-            operation_id,
             claims_hash,
-            prepared_by,
             now_ns,
         )?;
 
-        PENDING_DELEGATED_TOKENS.with_borrow_mut(|pending| {
-            pending.insert(
-                PendingDelegatedTokenKey::new(claims_hash, prepared_by),
-                prepared.clone(),
-            );
-        });
+        retention::insert(
+            retention::RetainedDelegatedTokenKey::new(claims_hash, prepared_by),
+            retention::RetainedDelegatedToken {
+                prepared: prepared.clone(),
+                retrieval_expires_at_ns: issuer_proof_prepare.retrieval_expires_at_ns,
+            },
+        );
 
         Ok(PreparedDelegatedTokenIssuerProof {
             prepared,
@@ -162,22 +147,18 @@ impl AuthOps {
         claims_hash: [u8; 32],
         prepared_by: Principal,
     ) -> Result<DelegatedToken, InternalError> {
-        let key = PendingDelegatedTokenKey::new(claims_hash, prepared_by);
-        let prepared = PENDING_DELEGATED_TOKENS.with_borrow(|pending| pending.get(&key).cloned());
-        let prepared = prepared.ok_or_else(|| {
-            AuthValidationError::Auth(
-                "delegated token was not prepared or has been pruned".to_string(),
-            )
-        })?;
+        let retained = retention::get(
+            &retention::RetainedDelegatedTokenKey::new(claims_hash, prepared_by),
+            IcOps::now_nanos(),
+        )
+        .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
         let issuer_proof = Self::get_issuer_canister_signature_proof(
             IssuerPayloadKind::DelegatedTokenClaims,
             claims_hash,
-            prepared_by,
             IcOps::canister_self(),
-            IcOps::now_nanos(),
         )?;
 
-        Ok(finish_delegated_token(prepared, issuer_proof))
+        Ok(finish_delegated_token(retained.prepared, issuer_proof))
     }
 
     /// Resolve verifier-local trust anchors for canister-signature auth proofs.

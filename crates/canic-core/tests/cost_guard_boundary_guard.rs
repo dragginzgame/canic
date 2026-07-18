@@ -50,7 +50,7 @@ fn production_cost_guard_call_sites_match_reviewed_inventory() {
         ),
         (
             "src/workflow/rpc/request/handler/nonroot_cycles.rs".to_string(),
-            (1, 2, 0, 1),
+            (1, 2, 0, 2),
         ),
     ]);
 

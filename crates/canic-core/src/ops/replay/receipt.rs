@@ -21,6 +21,33 @@ use thiserror::Error as ThisError;
 pub const MAX_PENDING_REPLAY_RECEIPTS_PER_ACTOR: usize = 64;
 pub const MAX_PENDING_REPLAY_RECEIPTS_PER_COMMAND_KIND: usize = 512;
 
+/// Active replay-receipt retention limits for one bounded command family.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ReplayReceiptRetentionLimits {
+    pub max_active_per_actor: usize,
+    pub max_active_per_command_kind: usize,
+    pub purge_scan_limit: usize,
+}
+
+/// Rejection from command-specific retained-response admission.
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
+pub enum ReplayReceiptRetentionError {
+    #[error("actor retained replay response quota exceeded")]
+    ActorQuotaExceeded {
+        actor: ReplayActor,
+        max_retained: usize,
+    },
+
+    #[error("command retained replay response quota exceeded")]
+    CommandQuotaExceeded {
+        command_kind: CommandKind,
+        max_retained: usize,
+    },
+
+    #[error(transparent)]
+    Store(#[from] ReplayReceiptStoreError),
+}
+
 ///
 /// ReplayReceiptReserveInput
 ///
@@ -171,6 +198,27 @@ pub fn reserve_or_replay_receipt(
     )
 }
 
+/// Reserve or replay one receipt while bounding all unexpired responses for its command family.
+pub fn reserve_or_replay_receipt_with_retention(
+    input: ReplayReceiptReserveInput,
+    limits: ReplayReceiptRetentionLimits,
+) -> Result<ReplayReceiptDecision, ReplayReceiptRetentionError> {
+    let decision = prepare_replay_receipt(input)?;
+    if let ReplayReceiptDecision::Fresh(token) = &decision {
+        let receipt = token.receipt();
+        let _ = ReplayReceiptOps::purge_expired_for_command_kind(
+            &receipt.command_kind,
+            receipt.created_at_ns,
+            limits.purge_scan_limit,
+        );
+        if let Some(quota_error) = retained_receipt_quota_error(receipt, limits) {
+            return Err(quota_error);
+        }
+        reserve_receipt_token(token);
+    }
+    Ok(decision)
+}
+
 fn reserve_or_replay_receipt_with_limits(
     input: ReplayReceiptReserveInput,
     max_pending_per_actor: usize,
@@ -286,6 +334,34 @@ fn pending_receipt_quota_decision(
         return Some(ReplayReceiptDecision::PendingCommandQuotaExceeded {
             command_kind: receipt.command_kind.clone(),
             max_pending: max_pending_per_command_kind,
+        });
+    }
+
+    None
+}
+
+fn retained_receipt_quota_error(
+    receipt: &ReplayReceipt,
+    limits: ReplayReceiptRetentionLimits,
+) -> Option<ReplayReceiptRetentionError> {
+    if ReplayReceiptOps::active_len_for_actor_command_kind(
+        receipt.actor,
+        &receipt.command_kind,
+        receipt.created_at_ns,
+    ) >= limits.max_active_per_actor
+    {
+        return Some(ReplayReceiptRetentionError::ActorQuotaExceeded {
+            actor: receipt.actor,
+            max_retained: limits.max_active_per_actor,
+        });
+    }
+
+    if ReplayReceiptOps::active_len_for_command_kind(&receipt.command_kind, receipt.created_at_ns)
+        >= limits.max_active_per_command_kind
+    {
+        return Some(ReplayReceiptRetentionError::CommandQuotaExceeded {
+            command_kind: receipt.command_kind.clone(),
+            max_retained: limits.max_active_per_command_kind,
         });
     }
 
@@ -738,6 +814,106 @@ mod tests {
 
         let duplicate =
             reserve_or_replay_receipt_with_limits(input(), 1, 10).expect("committed duplicate");
+        assert!(matches!(
+            duplicate,
+            ReplayReceiptDecision::ReturnCommitted(_)
+        ));
+    }
+
+    #[test]
+    fn retained_receipt_quota_counts_committed_responses() {
+        ReplayReceiptOps::reset_for_tests();
+        let limits = ReplayReceiptRetentionLimits {
+            max_active_per_actor: 1,
+            max_active_per_command_kind: 10,
+            purge_scan_limit: 10,
+        };
+        let first_input = input().with_expires_at_ns(200);
+        let token = match reserve_or_replay_receipt_with_retention(first_input, limits)
+            .expect("reserve first")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        commit_response(&token, 1, vec![1], 110).expect("commit first");
+
+        let second = reserve_or_replay_receipt_with_retention(
+            input_with("test.command.v1", p(1), [8; 32], 120).with_expires_at_ns(220),
+            limits,
+        )
+        .expect_err("retention quota must reject");
+
+        assert_eq!(
+            second,
+            ReplayReceiptRetentionError::ActorQuotaExceeded {
+                actor: ReplayActor::direct_caller(p(1)),
+                max_retained: 1,
+            }
+        );
+        assert_eq!(ReplayReceiptOps::len(), 1);
+    }
+
+    #[test]
+    fn retained_receipt_admission_purges_expired_same_command_at_boundary() {
+        ReplayReceiptOps::reset_for_tests();
+        let limits = ReplayReceiptRetentionLimits {
+            max_active_per_actor: 1,
+            max_active_per_command_kind: 1,
+            purge_scan_limit: 10,
+        };
+        let expired = match reserve_or_replay_receipt_with_retention(
+            input_with("test.command.v1", p(1), [7; 32], 90).with_expires_at_ns(100),
+            limits,
+        )
+        .expect("reserve expiring receipt")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        commit_response(&expired, 1, vec![1], 95).expect("commit expiring receipt");
+        let unrelated = match reserve_or_replay_receipt(
+            input_with("other.command.v1", p(2), [8; 32], 90).with_expires_at_ns(100),
+        )
+        .expect("reserve unrelated")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        commit_response(&unrelated, 1, vec![2], 95).expect("commit unrelated");
+
+        let admitted = reserve_or_replay_receipt_with_retention(
+            input_with("test.command.v1", p(1), [9; 32], 100).with_expires_at_ns(200),
+            limits,
+        )
+        .expect("admit after expiry");
+
+        assert!(matches!(admitted, ReplayReceiptDecision::Fresh(_)));
+        assert_eq!(
+            ReplayReceiptOps::len(),
+            2,
+            "same-command expiry is purged without deleting another command"
+        );
+    }
+
+    #[test]
+    fn retained_receipt_quota_does_not_block_exact_committed_replay() {
+        ReplayReceiptOps::reset_for_tests();
+        let limits = ReplayReceiptRetentionLimits {
+            max_active_per_actor: 1,
+            max_active_per_command_kind: 1,
+            purge_scan_limit: 10,
+        };
+        let original = input().with_expires_at_ns(200);
+        let token = match reserve_or_replay_receipt_with_retention(original.clone(), limits)
+            .expect("reserve")
+        {
+            ReplayReceiptDecision::Fresh(token) => token,
+            other => panic!("expected fresh, got {other:?}"),
+        };
+        commit_response(&token, 1, vec![1], 110).expect("commit");
+
+        let duplicate = reserve_or_replay_receipt_with_retention(original, limits).expect("replay");
+
         assert!(matches!(
             duplicate,
             ReplayReceiptDecision::ReturnCommitted(_)

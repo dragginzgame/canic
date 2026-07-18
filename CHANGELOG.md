@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.26` bounds public delegated-token preparation and retained replay
+  responses per caller and globally, pruning expired state while preserving
+  exact committed replay at capacity.
+
 - `0.93.25` is potentially breaking: selected ICP targets now use the
   canonical environment vocabulary across CLI, host, evidence, deployment,
   backup, restore, diagnostics, and JSON contracts, while backing and build

@@ -71,6 +71,20 @@ impl ReplayReceiptOps {
     }
 
     #[must_use]
+    pub fn active_len_for_actor_command_kind(
+        actor: ReplayActor,
+        command_kind: &CommandKind,
+        now_ns: u64,
+    ) -> usize {
+        ReplayReceiptStore::active_len_for_actor_command_kind(actor, command_kind.as_str(), now_ns)
+    }
+
+    #[must_use]
+    pub fn active_len_for_command_kind(command_kind: &CommandKind, now_ns: u64) -> usize {
+        ReplayReceiptStore::active_len_for_command_kind(command_kind.as_str(), now_ns)
+    }
+
+    #[must_use]
     pub fn pending_len_for_actor(actor: ReplayActor, now_ns: u64) -> usize {
         ReplayReceiptStore::pending_len_for_actor(actor, now_ns)
     }
@@ -97,6 +111,22 @@ impl ReplayReceiptOps {
 
     pub fn purge_expired(now_ns: u64, limit: usize) -> usize {
         let expired = ReplayReceiptStore::collect_expired(now_ns, limit);
+        for key in &expired {
+            let _ = ReplayReceiptStore::remove(*key);
+        }
+        expired.len()
+    }
+
+    pub fn purge_expired_for_command_kind(
+        command_kind: &CommandKind,
+        now_ns: u64,
+        limit: usize,
+    ) -> usize {
+        let expired = ReplayReceiptStore::collect_expired_for_command_kind(
+            command_kind.as_str(),
+            now_ns,
+            limit,
+        );
         for key in &expired {
             let _ = ReplayReceiptStore::remove(*key);
         }

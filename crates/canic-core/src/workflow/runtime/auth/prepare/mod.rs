@@ -28,8 +28,9 @@ use crate::{
             DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             receipt::{
-                ReplayReceiptDecision, ReplayReceiptStoreError, ReplayReceiptToken,
-                commit_staged_receipt_response, mark_recovery_required, reserve_or_replay_receipt,
+                ReplayReceiptDecision, ReplayReceiptRetentionError, ReplayReceiptStoreError,
+                ReplayReceiptToken, commit_staged_receipt_response, mark_recovery_required,
+                reserve_or_replay_receipt, reserve_or_replay_receipt_with_retention,
                 stage_receipt_response, validate_receipt_token,
             },
         },
@@ -73,11 +74,27 @@ impl RuntimeAuthWorkflow {
         )?;
         crate::perf!("delegated_token_validate_request");
 
-        let token = match reserve_or_replay_receipt(replay_input)
-            .map_err(map_token_prepare_replay_store_error)?
-        {
-            ReplayReceiptDecision::Fresh(token) => token,
-            decision => return map_token_prepare_replay_decision(decision),
+        let token = match reserve_or_replay_receipt_with_retention(
+            replay_input,
+            AuthOps::delegated_token_replay_retention_limits(),
+        ) {
+            Ok(ReplayReceiptDecision::Fresh(token)) => token,
+            Ok(decision) => {
+                return map_token_prepare_replay_decision(decision);
+            }
+            Err(ReplayReceiptRetentionError::ActorQuotaExceeded { max_retained, .. }) => {
+                return Err(InternalError::resource_exhausted(format!(
+                    "delegated token prepare retained replay response quota exceeded for caller; max_retained={max_retained}"
+                )));
+            }
+            Err(ReplayReceiptRetentionError::CommandQuotaExceeded { max_retained, .. }) => {
+                return Err(InternalError::resource_exhausted(format!(
+                    "delegated token prepare retained replay response quota exceeded globally; max_retained={max_retained}"
+                )));
+            }
+            Err(ReplayReceiptRetentionError::Store(err)) => {
+                return Err(map_token_prepare_replay_store_error(err));
+            }
         };
         crate::perf!("delegated_token_reserve_replay");
 
