@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.19` is potentially breaking: pool reset recovery now completes one
+  bounded ordered sweep before retrying blocked work, and sharding assignment
+  accounting rejects corrupt counters or dangling references without mutation.
+
 - `0.93.18` is potentially breaking: durable placement and pool-import
   recovery now settle through one interruption-safe authority, while intent
   cleanup rejects corrupt accounting instead of normalizing it.

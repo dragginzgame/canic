@@ -98,8 +98,19 @@ fn pending_reset_selection_is_ordered_bounded_and_non_destructive() {
         9,
     );
 
-    assert_eq!(PoolOps::oldest_pending_reset_pids(2), vec![pid_a, pid_b]);
-    assert!(PoolOps::oldest_pending_reset_pids(0).is_empty());
+    let first = PoolOps::pending_reset_page(None, 1);
+    assert_eq!(first.pids, vec![pid_a]);
+
+    let second = PoolOps::pending_reset_page(first.next_cursor.as_ref(), 1);
+    assert_eq!(second.pids, vec![pid_b]);
+
+    let third = PoolOps::pending_reset_page(second.next_cursor.as_ref(), 1);
+    assert_eq!(third.pids, vec![pid_c]);
+    assert!(third.next_cursor.is_none());
+
+    let empty = PoolOps::pending_reset_page(None, 0);
+    assert!(empty.pids.is_empty());
+    assert!(empty.next_cursor.is_none());
     assert!(PoolOps::contains(&pid_a));
     assert!(PoolOps::contains(&pid_b));
     assert!(PoolOps::contains(&pid_c));

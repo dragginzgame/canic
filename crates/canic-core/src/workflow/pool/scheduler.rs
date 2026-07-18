@@ -22,13 +22,17 @@ use crate::{
         },
         storage::pool::PoolOps,
     },
+    view::pool::PoolPendingResetCursor,
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_POOL_CHECK_INTERVAL},
         pool::{PoolWorkflow, admissibility::check_can_enter_pool, metric_reason_for_policy},
         runtime::timer::TimerWorkflow,
     },
 };
-use std::{cell::RefCell, time::Duration};
+use std::{
+    cell::{Cell, RefCell},
+    time::Duration,
+};
 
 /// Default batch size for resetting pending pool entries.
 pub const POOL_RESET_BATCH_SIZE: usize = 10;
@@ -49,6 +53,7 @@ thread_local! {
     static RESET_IN_PROGRESS: RefCell<bool> = const { RefCell::new(false) };
     static RESET_RESCHEDULE: RefCell<bool> = const { RefCell::new(false) };
     static RESET_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
+    static RESET_CURSOR: Cell<Option<PoolPendingResetCursor>> = const { Cell::new(None) };
 }
 
 ///
@@ -101,14 +106,14 @@ impl PoolSchedulerWorkflow {
         });
     }
 
-    fn maybe_reschedule() {
+    fn maybe_reschedule(has_more: bool) {
         let reschedule = RESET_RESCHEDULE.with_borrow_mut(|flag| {
             let v = *flag;
             *flag = false;
             v
         });
 
-        if reschedule || Self::has_pending_reset() {
+        if should_reschedule(reschedule, has_more) {
             Self::schedule();
         }
     }
@@ -138,18 +143,24 @@ impl PoolSchedulerWorkflow {
         let result = Self::run_batch(limit).await;
 
         RESET_IN_PROGRESS.with_borrow_mut(|flag| *flag = false);
-        Self::maybe_reschedule();
+
+        let next_cursor = result.as_ref().ok().copied().flatten();
+        RESET_CURSOR.set(next_cursor);
+        Self::maybe_reschedule(next_cursor.is_some());
 
         match &result {
-            Ok(()) => MetricEvent::completed(MetricOperation::Scheduler, MetricReason::Ok),
+            Ok(_) => MetricEvent::completed(MetricOperation::Scheduler, MetricReason::Ok),
             Err(err) => MetricEvent::failed(MetricOperation::Scheduler, err),
         }
 
-        result
+        result.map(|_| ())
     }
 
-    async fn run_batch(limit: usize) -> Result<(), InternalError> {
-        for pid in PoolOps::oldest_pending_reset_pids(limit) {
+    async fn run_batch(limit: usize) -> Result<Option<PoolPendingResetCursor>, InternalError> {
+        let after = RESET_CURSOR.get();
+        let page = PoolOps::pending_reset_page(after.as_ref(), limit);
+
+        for pid in page.pids {
             match check_can_enter_pool(pid).await {
                 Ok(()) => {}
 
@@ -208,7 +219,7 @@ impl PoolSchedulerWorkflow {
             }
         }
 
-        Ok(())
+        Ok(page.next_cursor)
     }
 
     fn has_pending_reset() -> bool {
@@ -216,12 +227,20 @@ impl PoolSchedulerWorkflow {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Test Hooks
-// -----------------------------------------------------------------------------
-//
+#[must_use]
+const fn should_reschedule(requested: bool, has_more: bool) -> bool {
+    requested || has_more
+}
 
 #[cfg(test)]
-thread_local! {
-    static RESET_SCHEDULED: RefCell<bool> = const { RefCell::new(false) };
+mod tests {
+    use super::should_reschedule;
+
+    #[test]
+    fn reset_worker_only_reschedules_for_more_sweep_work_or_a_new_request() {
+        assert!(!should_reschedule(false, false));
+        assert!(should_reschedule(false, true));
+        assert!(should_reschedule(true, false));
+        assert!(should_reschedule(true, true));
+    }
 }

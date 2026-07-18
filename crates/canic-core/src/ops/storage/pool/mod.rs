@@ -13,6 +13,7 @@ use crate::{
         canister::CanisterRecord,
         stable::pool::{CanisterPoolData, PoolRecord, PoolStatus, PoolStore},
     },
+    view::pool::{PoolPendingResetCursor, PoolPendingResetPage},
 };
 
 ///
@@ -177,15 +178,21 @@ impl PoolOps {
         Self::pop_oldest_by_status(PoolStatus::Ready)
     }
 
-    /// Return the oldest pending reset identifiers without removing their records.
+    /// Return one ordered page of pending reset identifiers without removing records.
     ///
     /// Pending records remain authoritative while the scheduler performs async
     /// admission and reset work, so duplicate workflows still observe the work
     /// in progress and later state transitions retain stored metadata.
     #[must_use]
-    pub fn oldest_pending_reset_pids(limit: usize) -> Vec<Principal> {
+    pub fn pending_reset_page(
+        after: Option<&PoolPendingResetCursor>,
+        limit: usize,
+    ) -> PoolPendingResetPage {
         if limit == 0 {
-            return Vec::new();
+            return PoolPendingResetPage {
+                pids: Vec::new(),
+                next_cursor: None,
+            };
         }
 
         let mut pending = PoolStore::export()
@@ -203,11 +210,31 @@ impl PoolOps {
             },
         );
 
-        pending
-            .into_iter()
-            .take(limit)
-            .map(|(pid, _)| pid)
-            .collect()
+        if let Some(after) = after {
+            pending.retain(|(pid, created_at)| {
+                *created_at > after.created_at
+                    || (*created_at == after.created_at && pid.as_slice() > after.pid.as_slice())
+            });
+        }
+
+        let has_more = pending.len() > limit;
+        pending.truncate(limit);
+
+        let next_cursor = if has_more {
+            pending
+                .last()
+                .map(|(pid, created_at)| PoolPendingResetCursor {
+                    created_at: *created_at,
+                    pid: *pid,
+                })
+        } else {
+            None
+        };
+
+        PoolPendingResetPage {
+            pids: pending.into_iter().map(|(pid, _)| pid).collect(),
+            next_cursor,
+        }
     }
 
     // -------------------------------------------------------------------------
