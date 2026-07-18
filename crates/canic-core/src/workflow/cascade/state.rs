@@ -11,7 +11,7 @@
 //! - Persistence and mutation live in ops
 
 use crate::{
-    InternalError, InternalErrorOrigin,
+    InternalError,
     cdk::types::Principal,
     dto::cascade::StateSnapshotInput,
     log,
@@ -48,6 +48,28 @@ use crate::{
 /// Orchestrates state snapshot propagation and local application.
 ///
 pub struct StateCascadeWorkflow;
+
+#[derive(Default)]
+struct FanoutFailures {
+    count: usize,
+    first: Option<InternalError>,
+}
+
+impl FanoutFailures {
+    fn push(&mut self, pid: Principal, error: InternalError) {
+        self.count += 1;
+        self.first = Some(match self.first.take() {
+            None => error.with_diagnostic_context(format!("state cascade child {pid} failed")),
+            Some(first) => first.with_diagnostic_context(format!(
+                "additional state cascade child {pid} failure: {error}"
+            )),
+        });
+    }
+
+    fn into_error(self) -> Option<InternalError> {
+        self.first
+    }
+}
 
 impl StateCascadeWorkflow {
     // ───────────────────────── Root cascade ─────────────────────────
@@ -91,40 +113,44 @@ impl StateCascadeWorkflow {
         let children = SubnetRegistryOps::children(root_pid);
         warn_if_large("root state cascade", children.len());
 
-        let mut failures = 0;
+        let mut failures = FanoutFailures::default();
 
         for entry in children {
-            if let Err(err) = Self::send_snapshot(entry.pid, snapshot).await {
-                failures += 1;
+            let pid = entry.pid;
+            if let Err(err) = Self::send_snapshot(pid, snapshot).await {
                 log!(
                     Topic::Sync,
                     Warn,
-                    "sync.state: failed to cascade to {}: {err}",
-                    entry.pid,
+                    "sync.state: failed to cascade to {pid}: {err}",
                 );
+                failures.push(pid, err);
             }
         }
 
-        let completion_reason = if failures > 0 {
-            MetricReason::PartialFailure
-        } else {
-            MetricReason::Ok
-        };
+        if failures.count > 0 {
+            CascadeMetrics::record(
+                MetricOperation::RootFanout,
+                MetricSnapshot::State,
+                MetricOutcome::Failed,
+                MetricReason::PartialFailure,
+            );
+            log!(
+                Topic::Sync,
+                Warn,
+                "sync.state: {} child cascade(s) failed",
+                failures.count,
+            );
+            return Err(failures
+                .into_error()
+                .expect("positive failure count must retain first cause"));
+        }
+
         CascadeMetrics::record(
             MetricOperation::RootFanout,
             MetricSnapshot::State,
             MetricOutcome::Completed,
-            completion_reason,
+            MetricReason::Ok,
         );
-
-        if failures > 0 {
-            log!(
-                Topic::Sync,
-                Warn,
-                "sync.state: {failures} child cascade(s) failed; continuing"
-            );
-        }
-
         Ok(())
     }
 
@@ -200,39 +226,43 @@ impl StateCascadeWorkflow {
         let child_pids = CanisterChildrenOps::pids();
         warn_if_large("non-root state cascade", child_pids.len());
 
-        let mut failures = 0;
+        let mut failures = FanoutFailures::default();
 
         for pid in child_pids {
             if let Err(err) = Self::send_snapshot(pid, &snapshot).await {
-                failures += 1;
                 log!(
                     Topic::Sync,
                     Warn,
                     "sync.state: failed to cascade to {pid}: {err}",
                 );
+                failures.push(pid, err);
             }
         }
 
-        let completion_reason = if failures > 0 {
-            MetricReason::PartialFailure
-        } else {
-            MetricReason::Ok
-        };
+        if failures.count > 0 {
+            CascadeMetrics::record(
+                MetricOperation::NonrootFanout,
+                MetricSnapshot::State,
+                MetricOutcome::Failed,
+                MetricReason::PartialFailure,
+            );
+            log!(
+                Topic::Sync,
+                Warn,
+                "sync.state: {} child cascade(s) failed",
+                failures.count,
+            );
+            return Err(failures
+                .into_error()
+                .expect("positive failure count must retain first cause"));
+        }
+
         CascadeMetrics::record(
             MetricOperation::NonrootFanout,
             MetricSnapshot::State,
             MetricOutcome::Completed,
-            completion_reason,
+            MetricReason::Ok,
         );
-
-        if failures > 0 {
-            log!(
-                Topic::Sync,
-                Warn,
-                "sync.state: {failures} child cascade(s) failed; continuing"
-            );
-        }
-
         Ok(())
     }
 
@@ -297,11 +327,35 @@ impl StateCascadeWorkflow {
                     MetricOutcome::Failed,
                     MetricReason::SendFailed,
                 );
-                Err(InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!("state cascade rejected by child {pid}: {err}"),
-                ))
+                Err(err.with_diagnostic_context(format!("state cascade rejected by child {pid}")))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{InternalErrorOrigin, dto::error::ErrorCode};
+
+    #[test]
+    fn fanout_failures_preserve_first_typed_cause() {
+        let mut failures = FanoutFailures::default();
+        failures.push(
+            Principal::from_slice(&[1; 29]),
+            InternalError::auth_material_stale("child auth state is stale"),
+        );
+        failures.push(
+            Principal::from_slice(&[2; 29]),
+            InternalError::workflow(InternalErrorOrigin::Workflow, "transport failed"),
+        );
+
+        let err = failures.into_error().expect("failure must be retained");
+        assert_eq!(err.class(), crate::InternalErrorClass::Domain);
+        assert_eq!(err.origin(), InternalErrorOrigin::Domain);
+        assert_eq!(
+            err.public_error().map(|public| public.code),
+            Some(ErrorCode::AuthMaterialStale)
+        );
     }
 }

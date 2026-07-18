@@ -12,7 +12,7 @@ use super::{
 
 pub(super) struct DelegatedTokenLocalContext {
     local_canister: Principal,
-    local_canic_subnet: Option<Principal>,
+    local_canic_subnet: Principal,
     local_role: CanisterRole,
     local_project: Option<String>,
 }
@@ -81,10 +81,17 @@ pub(super) fn delegated_token_local_context() -> Result<DelegatedTokenLocalConte
             return Err(err);
         }
     };
+    let local_canic_subnet = match EnvOps::subnet_pid() {
+        Ok(pid) => pid,
+        Err(err) => {
+            DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
+            return Err(err);
+        }
+    };
 
     Ok(DelegatedTokenLocalContext {
         local_canister: IcOps::canister_self(),
-        local_canic_subnet: EnvOps::subnet_pid().ok(),
+        local_canic_subnet,
         local_role,
         local_project,
     })
@@ -97,7 +104,7 @@ fn delegated_token_verify_input<'a>(
     VerifyDelegatedTokenInput {
         token: input.token,
         local_canister: ctx.local_canister,
-        local_canic_subnet: ctx.local_canic_subnet,
+        local_canic_subnet: Some(ctx.local_canic_subnet),
         local_role: Some(&ctx.local_role),
         local_project: ctx.local_project.as_deref(),
         ttl_limits: DelegatedAuthTtlLimits {

@@ -44,6 +44,9 @@ pub enum ShardingRegistryOpsError {
 
     #[error("partition_key '{partition_key}' is not assigned to any shard in pool '{pool}'")]
     PartitionKeyNotAssigned { pool: String, partition_key: String },
+
+    #[error("shard {pid} conflicts with its existing registry entry")]
+    ShardConflict { pid: Principal },
 }
 
 impl From<ShardingRegistryOpsError> for InternalError {
@@ -61,6 +64,25 @@ impl From<ShardingRegistryOpsError> for InternalError {
 pub struct ShardingRegistryOps;
 
 impl ShardingRegistryOps {
+    /// Validate a partition assignment key before workflow performs external effects.
+    pub fn validate_assignment_key(pool: &str, partition_key: &str) -> Result<(), InternalError> {
+        ShardKey::try_new(pool, partition_key)
+            .map(|_| ())
+            .map_err(|err| ShardingRegistryOpsError::InvalidKey(err).into())
+    }
+
+    /// Validate a prospective shard record before workflow performs external effects.
+    pub fn validate_new_shard(
+        pool: &str,
+        slot: u32,
+        canister_role: &CanisterRole,
+        capacity: u32,
+    ) -> Result<(), InternalError> {
+        ShardEntryRecord::try_new(pool, slot, canister_role.clone(), capacity, 0)
+            .map(|_| ())
+            .map_err(|err| ShardingRegistryOpsError::InvalidKey(err).into())
+    }
+
     /// Create a new shard entry in the registry.
     pub fn create(
         pid: Principal,
@@ -73,6 +95,18 @@ impl ShardingRegistryOps {
         // NOTE: Slot uniqueness is enforced by linear scan.
         // Shard counts are expected to be small and bounded.
         ShardingRegistry::with_mut(|core| {
+            if let Some(existing) = core.get_entry(&pid) {
+                if existing.pool.as_ref() == pool
+                    && existing.slot == slot
+                    && existing.canister_role == *canister_role
+                    && existing.capacity == capacity
+                {
+                    return Ok(());
+                }
+
+                return Err(ShardingRegistryOpsError::ShardConflict { pid }.into());
+            }
+
             if slot != ShardEntryRecord::UNASSIGNED_SLOT {
                 for record in core.all_entries() {
                     if record.pid != pid
@@ -274,5 +308,44 @@ mod tests {
         // Releasing an unknown key is a no-op returning None.
         assert_eq!(ShardingRegistryOps::release("poolA", "pk1").unwrap(), None);
         assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 0);
+    }
+
+    #[test]
+    fn repeated_create_preserves_existing_shard_state() {
+        ShardingRegistryOps::clear_for_test();
+        let role = CanisterRole::new("alpha");
+        let shard_pid = p(1);
+
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 10).unwrap();
+        ShardingRegistryOps::assign("poolA", "pk1", shard_pid).unwrap();
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 20).unwrap();
+
+        let entry = ShardingRegistryOps::get(shard_pid).unwrap();
+        assert_eq!(entry.count, 1);
+        assert_eq!(entry.created_at, 10);
+    }
+
+    #[test]
+    fn repeated_create_rejects_conflicting_shard_identity() {
+        ShardingRegistryOps::clear_for_test();
+        let role = CanisterRole::new("alpha");
+        let shard_pid = p(1);
+
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 10).unwrap();
+        let err = ShardingRegistryOps::create(shard_pid, "poolA", 1, &role, 2, 20)
+            .expect_err("same shard principal with a different slot must reject");
+
+        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
+        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+        assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().slot, 0);
+    }
+
+    #[test]
+    fn assignment_key_validation_rejects_oversized_partition_key() {
+        let err = ShardingRegistryOps::validate_assignment_key("poolA", &"x".repeat(129))
+            .expect_err("oversized partition keys must reject before assignment");
+
+        assert_eq!(err.class(), crate::InternalErrorClass::Ops);
+        assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
     }
 }

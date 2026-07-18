@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Purpose
 
@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.13`.
-- The latest published release is `v0.93.13` at
-  `4c62084f59648833cbf5a278478c941239771f63`.
-- The `v0.93.13` source tree is
-  `efe09bf22abecaaabbdd18abff9b952a6c3bb00b`; its product-tree hash is
-  `dd7a895494cc4d300e5f386e0332e06e1255560cbd3ce7fd6583bfc6e9f1232e`.
+- The workspace package version is `0.93.14`.
+- The latest published release is `v0.93.14` at
+  `1c908216ef6e5e64e4d5bc4ca3db2d655864f723`.
+- The `v0.93.14` source tree is
+  `7e486edc15ca2b083ec35e7b3f91a17db49facdc`; its product-tree hash is
+  `f4c432ff04182aefb972c2d54573f50aeef2b7fb378fe6f59cfc2defd143343c`.
   Its Cargo.lock SHA-256 is
-  `b347582d1a36056071e16a9eec52c8263708b85f7e07426a110f37778ca3e49b`.
+  `4d4c2a8f9a9fae2e3fe5b392f44d289ab3f9aa02c9e82814821737e0138cef5f`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -80,11 +80,15 @@ Historical detail is archived at:
   staged replay response, removes the duplicate direct response-commit and
   cycles-specific replay paths, and makes the reviewed production cost-flow
   inventory executable.
-- Current development prevents replay cleanup or recovery-marker failures from
+- Released `v0.93.14` prevents replay cleanup or recovery-marker failures from
   replacing the primary typed failure across root RPC, cycles funding, pool
   creation, ICP refill, and authentication preparation. It also keeps pending
   pool-reset records authoritative through asynchronous recovery so recycled
   canister metadata and duplicate-work exclusion survive the transition.
+- Current development fails delegated-token verification closed when required
+  local subnet state is absent, returns typed state-cascade partial failures,
+  and binds prevalidated shard allocation to one deterministic root replay
+  identity per owner, pool, and slot.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

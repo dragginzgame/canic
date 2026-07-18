@@ -66,6 +66,10 @@ impl ShardingWorkflow {
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
         MetricEvent::started(MetricOperation::Assign);
+        if let Err(err) = ShardingRegistryOps::validate_assignment_key(pool, partition_key) {
+            MetricEvent::failed(MetricOperation::Assign, &err);
+            return Err(err);
+        }
         let active = ShardingLifecycleOps::active_shards();
         crate::perf!("load_active_shards");
         if active.is_empty() {
@@ -226,6 +230,7 @@ impl ShardingWorkflow {
     ) -> Result<ShardingPlanStateResponse, InternalError> {
         let pool_cfg = Self::get_shard_pool_cfg(pool)?;
         let partition_key = partition_key.as_ref();
+        ShardingRegistryOps::validate_assignment_key(pool, partition_key)?;
 
         let active = ShardingLifecycleOps::active_shards();
         if active.is_empty() {

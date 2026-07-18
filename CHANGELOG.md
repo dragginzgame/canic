@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.15` is potentially breaking: delegated-token verification and state
+  cascades now fail closed on incomplete runtime state or partial fanout, and
+  shard creation is prevalidated and bound to one replay identity.
+
 - `0.93.14` is potentially breaking: replay cleanup now preserves primary
   typed failures, and pool recovery retains pending authority and metadata
   throughout asynchronous resets.
