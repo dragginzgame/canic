@@ -40,7 +40,7 @@ pub(super) fn sample_root_verification_request() -> DeploymentRootVerificationRe
     let mut check = sample_authority_check();
     check.inventory.observed_root = Some(DeploymentRootObservationV1 {
         deployment_name: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         fleet_template: "demo".to_string(),
         root_principal: "aaaaa-aa".to_string(),
         observed_canister_id: "aaaaa-aa".to_string(),
@@ -74,7 +74,7 @@ pub(super) fn sample_root_verification_request() -> DeploymentRootVerificationRe
         report_id: "root-verification-report-1".to_string(),
         requested_at: "2026-05-27T00:00:00Z".to_string(),
         deployment_name: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         expected_fleet_template: "demo".to_string(),
         expected_root_principal: "aaaaa-aa".to_string(),
         current_root_verification: DeploymentRootVerificationStateV1::NotVerified,
@@ -86,7 +86,7 @@ pub(super) fn sample_root_verification_request() -> DeploymentRootVerificationRe
 pub(super) fn sample_deployment_identity() -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
         deployment_name: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_principal: Some("aaaaa-aa".to_string()),
         authority_profile_hash: Some("authority".to_string()),
         role_topology_hash: None,
@@ -255,7 +255,7 @@ pub(super) fn sample_catalog_report() -> canic_host::deployment_catalog::Deploym
         entries: vec![canic_host::deployment_catalog::DeploymentCatalogEntryV1 {
             deployment: "demo-local".to_string(),
             fleet: Some("demo".to_string()),
-            network: Some("local".to_string()),
+            environment: Some("local".to_string()),
             root_principal: Some("aaaaa-aa".to_string()),
             root_verification:
                 canic_host::deployment_catalog::DeploymentCatalogRootVerificationV1::Verified,

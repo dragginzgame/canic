@@ -218,5 +218,5 @@ fn diagnostic_code(key: &str) -> String {
 }
 
 pub(super) fn is_observed_state_drift_assumption(assumption: &DeploymentAssumptionV1) -> bool {
-    assumption.has_kind(DeploymentAssumptionKindV1::LocalStateNetworkMismatch)
+    assumption.has_kind(DeploymentAssumptionKindV1::LocalStateEnvironmentMismatch)
 }

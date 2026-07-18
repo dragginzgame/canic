@@ -1,7 +1,7 @@
 use super::value_arg;
 use crate::cli::{
     clap::{passthrough_subcommand, render_usage},
-    globals::internal_network_arg,
+    globals::internal_environment_arg,
 };
 use canic_host::canister_build::CanisterBuildProfile;
 use clap::Command as ClapCommand;
@@ -120,7 +120,7 @@ pub(super) fn deploy_truth_leaf_command_with_bin_name(
                 .value_parser(clap::value_parser!(CanisterBuildProfile))
                 .help("Expected canister wasm build profile"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
 }
 
 pub fn usage() -> String {

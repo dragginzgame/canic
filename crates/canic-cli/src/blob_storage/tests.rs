@@ -22,7 +22,7 @@ fn parses_status_options_with_required_target() {
         OsString::from("local"),
         OsString::from("backend"),
         OsString::from("--json"),
-        OsString::from(globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from(globals::INTERNAL_ICP_OPTION),
         OsString::from("/bin/icp"),
@@ -36,7 +36,7 @@ fn parses_status_options_with_required_target() {
 
     assert_eq!(options.deployment, "local");
     assert_eq!(options.canister, "backend");
-    assert_eq!(options.common.network, "local");
+    assert_eq!(options.common.environment, "local");
     assert_eq!(options.common.icp, "/bin/icp");
     assert!(options.json);
     assert!(!options.check_ready);
@@ -130,11 +130,11 @@ fn rejects_non_decimal_cycle_syntax() {
 }
 
 #[test]
-fn top_level_forwards_global_icp_and_network() {
+fn top_level_forwards_global_icp_and_environment() {
     let err = run([
         OsString::from("--icp"),
         OsString::from("/bin/icp"),
-        OsString::from("--network"),
+        OsString::from("--environment"),
         OsString::from("local"),
         OsString::from("blob-storage"),
         OsString::from("fund"),
@@ -200,7 +200,7 @@ fn json_error_codes_distinguish_candid_and_transport_failures() {
     .with_json_report("local", "backend");
     let transport = BlobStorageCommandError::Icp(IcpCommandError::Failed {
         command: "icp canister call".to_string(),
-        stderr: "network unavailable".to_string(),
+        stderr: "environment unavailable".to_string(),
     })
     .with_json_report("local", "backend");
 
@@ -766,7 +766,7 @@ fn sample_status_result() -> model::BlobStorageStatusResult {
 
 fn common_options() -> options::CommonOptions {
     options::CommonOptions {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         icp: "icp".to_string(),
     }
 }

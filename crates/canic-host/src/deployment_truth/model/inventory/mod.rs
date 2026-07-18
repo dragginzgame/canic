@@ -26,7 +26,7 @@ pub struct DeploymentInventoryV1 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeploymentRootObservationV1 {
     pub deployment_name: String,
-    pub network: String,
+    pub environment: String,
     pub fleet_template: String,
     pub root_principal: String,
     pub observed_canister_id: String,

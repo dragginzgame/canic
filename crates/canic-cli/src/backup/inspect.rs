@@ -33,7 +33,7 @@ pub(super) fn backup_inspect(
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
         deployment: plan.fleet.clone(),
-        network: plan.network.clone(),
+        environment: plan.environment.clone(),
         scope: backup_scope_label(&plan),
         targets: plan.targets.iter().map(inspect_target).collect(),
         operations: journal.operations.iter().map(inspect_operation).collect(),

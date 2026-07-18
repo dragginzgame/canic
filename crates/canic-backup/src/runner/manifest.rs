@@ -25,7 +25,7 @@ pub(super) fn build_manifest(
             version: config.tool_version.clone(),
         },
         source: SourceMetadata {
-            network: plan.network.clone(),
+            environment: plan.environment.clone(),
             root_canister: plan.root_canister_id.clone(),
         },
         consistency: ConsistencySection {

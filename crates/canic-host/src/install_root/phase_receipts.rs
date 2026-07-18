@@ -47,7 +47,7 @@ impl InstallPhaseFailureError {
 #[derive(Clone, Copy)]
 pub(super) struct InstallReceiptScope<'a> {
     pub(super) icp_root: &'a Path,
-    pub(super) network: &'a str,
+    pub(super) environment: &'a str,
     pub(super) deployment_name: &'a str,
     pub(super) check: &'a DeploymentCheckV1,
     pub(super) execution_context: Option<&'a DeploymentExecutionContextV1>,
@@ -272,7 +272,7 @@ impl InstallReceiptScope<'_> {
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let path = write_install_deployment_truth_receipt(
             self.icp_root,
-            self.network,
+            self.environment,
             self.deployment_name,
             receipt,
         )?;

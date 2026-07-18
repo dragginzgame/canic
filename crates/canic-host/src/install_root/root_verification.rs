@@ -11,7 +11,7 @@ use std::{fs, path::Path};
 
 pub(super) struct RootVerificationReceiptInput {
     pub(super) deployment_name: String,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) fleet_template: String,
     pub(super) root_principal: String,
     pub(super) previous_root_verification: DeploymentRootVerificationStateV1,
@@ -38,11 +38,11 @@ pub(super) fn root_verification_receipt_from_report(
         schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         receipt_id: format!(
             "local:{}:{}:root-verification-receipt",
-            input.network, input.deployment_name
+            input.environment, input.deployment_name
         ),
         receipt_digest: String::new(),
         deployment_name: input.deployment_name,
-        network: input.network,
+        environment: input.environment,
         fleet_template: input.fleet_template,
         root_principal: input.root_principal,
         previous_root_verification: input.previous_root_verification,
@@ -98,11 +98,11 @@ pub(super) const fn verified_root_state_transition(
 
 pub(super) fn write_verified_root_state_if_unchanged(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     state: &InstallState,
     expected_digest_before: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let path = deployment_install_state_path(icp_root, network, &state.deployment_name);
+    let path = deployment_install_state_path(icp_root, environment, &state.deployment_name);
     let current_digest = file_sha256_hex(&path)?;
     if current_digest != expected_digest_before {
         return Err(format!(
@@ -110,7 +110,7 @@ pub(super) fn write_verified_root_state_if_unchanged(
         )
         .into());
     }
-    write_install_state(icp_root, network, state)?;
+    write_install_state(icp_root, environment, state)?;
     file_sha256_hex(&path)
 }
 

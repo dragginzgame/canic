@@ -2,16 +2,20 @@ use std::path::{Path, PathBuf};
 
 use canic_host::{icp::existing_local_canister_candid_path, registry::RegistryEntry};
 
-pub fn role_candid_path(icp_root: Option<&Path>, network: &str, role: &str) -> Option<PathBuf> {
-    existing_local_canister_candid_path(icp_root?, network, role)
+pub fn role_candid_path(
+    icp_root: Option<&Path>,
+    artifact_environment: &str,
+    role: &str,
+) -> Option<PathBuf> {
+    existing_local_canister_candid_path(icp_root?, artifact_environment, role)
 }
 
 pub fn registry_entry_candid_path(
     icp_root: Option<&Path>,
-    network: &str,
+    artifact_environment: &str,
     entry: &RegistryEntry,
 ) -> Option<PathBuf> {
-    role_candid_path(icp_root, network, entry.role.as_deref()?)
+    role_candid_path(icp_root, artifact_environment, entry.role.as_deref()?)
 }
 
 // -----------------------------------------------------------------------------

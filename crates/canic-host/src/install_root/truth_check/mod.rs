@@ -58,7 +58,7 @@ pub fn check_install_execution_preflight(
     let execution_context = current_install_execution_context(
         &inputs.workspace_root,
         &inputs.icp_root,
-        options.artifact_network(),
+        options.artifact_environment(),
     );
     let executor = CurrentCliDeploymentExecutor::new(
         execution_context.workspace_root,
@@ -83,7 +83,7 @@ pub(super) fn current_install_deployment_truth_check_at(
     observed_at: String,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
     if let Some(plan) = &options.deployment_plan_override {
-        validate_current_install_plan_override(plan, &options.network, deployment_name)?;
+        validate_current_install_plan_override(plan, &options.environment, deployment_name)?;
         return current_install_deployment_truth_check_for_plan(
             plan,
             workspace_root,
@@ -91,7 +91,7 @@ pub(super) fn current_install_deployment_truth_check_at(
             config_path,
             deployment_name,
             observed_at,
-            &options.network,
+            &options.environment,
         );
     }
 
@@ -103,13 +103,13 @@ pub(super) fn current_install_deployment_truth_check_at(
 
     check_local_deployment(&LocalDeploymentCheckRequest {
         deployment_name: deployment_name.to_string(),
-        network: options.network.clone(),
-        artifact_network: options.artifact_network().to_string(),
+        environment: options.environment.clone(),
+        artifact_environment: options.artifact_environment().to_string(),
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
         config_path: Some(config_path.to_path_buf()),
         observed_at,
-        runtime_variant: options.network.clone(),
+        runtime_variant: options.environment.clone(),
         build_profile,
     })
     .map_err(Into::into)
@@ -141,9 +141,11 @@ fn resolve_current_install_truth_inputs(
         None => icp_root()?,
     };
     let state = match options.deployment_name.as_deref() {
-        Some(deployment) => {
-            read_named_deployment_install_state_from_root(&icp_root, &options.network, deployment)?
-        }
+        Some(deployment) => read_named_deployment_install_state_from_root(
+            &icp_root,
+            &options.environment,
+            deployment,
+        )?,
         None => None,
     };
     let config_path = match (options.config_path.as_deref(), state.as_ref()) {
@@ -201,12 +203,12 @@ fn current_install_deployment_truth_check_for_plan(
     config_path: &Path,
     deployment_name: &str,
     observed_at: String,
-    network: &str,
+    environment: &str,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: deployment_name.to_string(),
-        network: network.to_string(),
-        artifact_network: network.to_string(),
+        environment: environment.to_string(),
+        artifact_environment: environment.to_string(),
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
         config_path: Some(config_path.to_path_buf()),
@@ -214,14 +216,14 @@ fn current_install_deployment_truth_check_for_plan(
     })?;
     let diff = compare_plan_to_inventory(plan, &inventory);
     let report = safety_report_from_diff(
-        format!("local:{network}:{deployment_name}:report"),
-        Some(format!("local:{network}:{deployment_name}:diff")),
+        format!("local:{environment}:{deployment_name}:report"),
+        Some(format!("local:{environment}:{deployment_name}:diff")),
         &diff,
     );
 
     Ok(DeploymentCheckV1 {
         schema_version: crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        check_id: format!("local:{network}:{deployment_name}:check"),
+        check_id: format!("local:{environment}:{deployment_name}:check"),
         plan: plan.clone(),
         inventory,
         diff,
@@ -231,7 +233,7 @@ fn current_install_deployment_truth_check_for_plan(
 
 fn validate_current_install_plan_override(
     plan: &DeploymentPlanV1,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if plan.schema_version != crate::deployment_truth::DEPLOYMENT_TRUTH_SCHEMA_VERSION {
@@ -242,10 +244,10 @@ fn validate_current_install_plan_override(
         )
         .into());
     }
-    if plan.deployment_identity.network != network {
+    if plan.deployment_identity.environment != environment {
         return Err(format!(
-            "deployment plan network mismatch: install network {network}, plan network {}",
-            plan.deployment_identity.network
+            "deployment plan environment mismatch: install environment {environment}, plan environment {}",
+            plan.deployment_identity.environment
         )
         .into());
     }

@@ -17,7 +17,7 @@ fn parses_backup_create_options() {
         OsString::from("--out"),
         OsString::from("backups/plan"),
         OsString::from("--dry-run"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/bin/icp"),
@@ -28,7 +28,7 @@ fn parses_backup_create_options() {
     assert_eq!(options.subtree, Some("app".to_string()));
     assert_eq!(options.out, Some(PathBuf::from("backups/plan")));
     assert!(options.dry_run);
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert_eq!(options.icp, "/bin/icp");
 }
 

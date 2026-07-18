@@ -36,18 +36,18 @@ fn deploy_check_parses_required_deployment() {
     .expect("parse deploy check");
 
     assert_eq!(options.deployment, "demo");
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert_eq!(options.profile, None);
 }
 
 #[test]
-fn deploy_check_accepts_internal_network_and_profile() {
+fn deploy_check_accepts_internal_environment_and_profile() {
     let options = DeployTruthOptions::parse(
         [
             OsString::from("--profile"),
             OsString::from("fast"),
             OsString::from("demo"),
-            OsString::from("--__canic-network"),
+            OsString::from("--__canic-environment"),
             OsString::from("ic"),
         ],
         deploy_check::command,
@@ -55,7 +55,7 @@ fn deploy_check_accepts_internal_network_and_profile() {
     )
     .expect("parse deploy check");
 
-    assert_eq!(options.network, "ic");
+    assert_eq!(options.environment, "ic");
     assert_eq!(options.profile, Some(CanisterBuildProfile::Fast));
 }
 
@@ -213,7 +213,7 @@ fn deployment_check_envelope_wraps_raw_payload() {
     let options = deploy_check::DeployCheckOptions {
         truth: DeployTruthOptions {
             deployment: "demo".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             profile: Some(CanisterBuildProfile::Fast),
         },
         format: CheckOutputFormat::EnvelopeJson,
@@ -286,7 +286,7 @@ fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
     let options = deploy_check::DeployCheckOptions {
         truth: DeployTruthOptions {
             deployment: "demo".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             profile: None,
         },
         format: CheckOutputFormat::EnvelopeJson,
@@ -311,14 +311,14 @@ fn deployment_check_envelope_prefers_evidence_conflict_exit_class() {
 fn deploy_check_builds_current_install_options() {
     let options = DeployTruthOptions {
         deployment: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         profile: Some(CanisterBuildProfile::Fast),
     }
     .into_install_root_options_with_icp_root(Some(std::path::PathBuf::from("/tmp/icp")));
 
     assert_eq!(options.root_canister, "root");
     assert_eq!(options.root_build_target, "root");
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
     assert_eq!(options.deployment_name.as_deref(), Some("demo"));
     assert_eq!(options.config_path, None);

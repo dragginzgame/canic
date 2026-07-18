@@ -12,7 +12,7 @@ mod progress;
 use super::{RootReleaseSetManifest, root_time_secs, validate_root_release_set_manifest};
 use crate::icp::LocalReplicaTarget;
 
-use call::icp_call_on_network;
+use call::icp_call_in_environment;
 use entry::stage_release_entry;
 use progress::StageProgress;
 
@@ -25,7 +25,7 @@ pub(super) use artifact::read_release_artifact;
 // Stage one emitted release-set manifest into root and resume bootstrap-ready state.
 pub fn stage_root_release_set(
     icp_root: &std::path::Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
     manifest: &RootReleaseSetManifest,
@@ -39,7 +39,7 @@ pub fn stage_root_release_set(
     for entry in &manifest.entries {
         stage_release_entry(
             icp_root,
-            network,
+            environment,
             local_replica,
             root_canister,
             &manifest.release_version,
@@ -56,13 +56,13 @@ pub fn stage_root_release_set(
 // Trigger root bootstrap resume after the ordinary release set is fully staged.
 pub fn resume_root_bootstrap(
     icp_root: &std::path::Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     root_canister: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let _ = icp_call_on_network(
+    let _ = icp_call_in_environment(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         canic_core::protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
@@ -73,18 +73,18 @@ pub fn resume_root_bootstrap(
 }
 
 // Run one query-only `icp canister call` and return stdout, preserving stderr on failure.
-pub fn icp_query_on_network(
+pub fn icp_query_in_environment(
     icp_root: &std::path::Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    call::icp_query_on_network(
+    call::icp_query_in_environment(
         icp_root,
-        network,
+        environment,
         local_replica,
         canister,
         method,

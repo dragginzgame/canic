@@ -124,9 +124,9 @@ fn read_deployment_check_artifact_manifest(
         .get("role_artifacts")
         .cloned()
         .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
-    let network = plan
+    let environment = plan
         .get("deployment_identity")
-        .and_then(|identity| identity.get("network"))
+        .and_then(|identity| identity.get("environment"))
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default()
         .to_string();
@@ -138,7 +138,7 @@ fn read_deployment_check_artifact_manifest(
     Ok(Some(RoleArtifactManifestV1 {
         schema_version: 1,
         manifest_id: format!("deployment-check:{check_id}:role-artifacts"),
-        network,
+        environment,
         artifact_root: None,
         role_artifacts: serde_json::from_value::<Vec<RoleArtifactV1>>(role_artifacts)?,
         unresolved_artifacts: Vec::new(),
@@ -300,7 +300,7 @@ fn build_adoption_report_envelope(
             fleet: Some(report.fleet.clone()),
             role: None,
             profile: Some(adoption_profile_label(report.profile).to_string()),
-            network: None,
+            environment: None,
         },
         generated_at: report.generated_at.clone(),
         source_config: Some(file_input_fingerprint(

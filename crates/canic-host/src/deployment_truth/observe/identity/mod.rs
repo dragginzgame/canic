@@ -41,7 +41,7 @@ fn local_deployment_identity(
 ) -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
         deployment_name: request.deployment_name.clone(),
-        network: request.network.clone(),
+        environment: request.environment.clone(),
         root_principal: input.root_principal,
         authority_profile_hash: None,
         role_topology_hash: input.role_topology_hash,

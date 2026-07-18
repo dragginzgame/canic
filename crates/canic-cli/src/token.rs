@@ -9,8 +9,8 @@ use crate::{
         flag_arg, parse_matches, render_usage, required_string, string_option,
         string_option_or_else, value_arg,
     },
-    cli::defaults::{default_icp, local_network},
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::defaults::{default_icp, local_environment},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     version_text,
 };
@@ -87,7 +87,7 @@ pub enum TokenCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct IcpTargetOptions {
-    network: String,
+    environment: String,
     icp: String,
 }
 
@@ -208,7 +208,7 @@ fn split_token_command(args: Vec<OsString>) -> Result<TokenCommandRequest, Token
 impl IcpTargetOptions {
     fn parse(matches: &clap::ArgMatches) -> Self {
         Self {
-            network: string_option_or_else(matches, "network", local_network),
+            environment: string_option_or_else(matches, "environment", local_environment),
             icp: string_option_or_else(matches, "icp", default_icp),
         }
     }
@@ -298,7 +298,7 @@ fn transfer_receiver(
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
-            network: target.network.clone(),
+            environment: target.environment.clone(),
             icp: target.icp.clone(),
             detect_lost_local_root: true,
         },
@@ -361,12 +361,12 @@ fn resolve_role_principal(
 }
 
 fn icp_command(target: &IcpTargetOptions, root: &Path) -> std::process::Command {
-    let icp = IcpCli::new(&target.icp, Some(target.network.clone())).with_cwd(root);
+    let icp = IcpCli::new(&target.icp, Some(target.environment.clone())).with_cwd(root);
     icp.command()
 }
 
 fn append_target_args(command: &mut std::process::Command, target: &IcpTargetOptions) {
-    canic_host::icp::add_target_args(command, Some(&target.network), None);
+    canic_host::icp::add_target_args(command, Some(&target.environment), None);
 }
 
 fn run_or_print_command(
@@ -413,7 +413,7 @@ fn balance_command() -> ClapCommand {
                 .long("of-principal")
                 .value_name("principal"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 
@@ -447,7 +447,7 @@ fn transfer_command() -> ClapCommand {
         .arg(flag_arg("json").long("json"))
         .arg(flag_arg("quiet").long("quiet").short('q'))
         .arg(flag_arg("dry-run").long("dry-run"))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 

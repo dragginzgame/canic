@@ -5,7 +5,7 @@ use crate::{
         required_string, string_option, value_arg,
     },
     cli::defaults::default_icp,
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
 };
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
@@ -29,7 +29,7 @@ pub(super) struct ListOptions {
     pub(super) source: ListSource,
     pub(super) target: String,
     pub(super) subtree: Option<String>,
-    pub(super) network: Option<String>,
+    pub(super) environment: Option<String>,
     pub(super) icp: String,
     pub(super) verbose: bool,
 }
@@ -62,7 +62,7 @@ impl ListOptions {
             source,
             target: required_string(matches, target_arg),
             subtree: defined_string_option(matches, "subtree"),
-            network: string_option(matches, "network"),
+            environment: string_option(matches, "environment"),
             icp: defined_string_or_else(matches, "icp", default_icp),
             verbose: matches.get_flag("verbose"),
         }
@@ -127,7 +127,9 @@ fn config_command() -> ClapCommand {
 }
 
 fn base_list_options(command: ClapCommand) -> ClapCommand {
-    command.disable_help_flag(true).arg(internal_network_arg())
+    command
+        .disable_help_flag(true)
+        .arg(internal_environment_arg())
 }
 
 pub(super) fn info_usage() -> String {

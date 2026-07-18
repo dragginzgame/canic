@@ -6,7 +6,7 @@ fn verify_registered_deployment_root_promotes_unverified_state() {
 
     let receipt = verify_registered_deployment_root(VerifyDeploymentRootOptions {
         deployment_name: "demo-local".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_check: check,
         verified_at_unix_secs: Some(100),
         icp_root: Some(root.clone()),
@@ -59,7 +59,7 @@ fn verify_registered_deployment_root_reverifies_same_root_without_state_write() 
 
     let receipt = verify_registered_deployment_root(VerifyDeploymentRootOptions {
         deployment_name: "demo-local".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_check: check,
         verified_at_unix_secs: Some(200),
         icp_root: Some(root.clone()),
@@ -112,7 +112,7 @@ fn verify_registered_deployment_root_rejects_verified_root_replacement() {
 
     verify_registered_deployment_root(VerifyDeploymentRootOptions {
         deployment_name: "demo-local".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_check: check,
         verified_at_unix_secs: Some(200),
         icp_root: Some(root.clone()),
@@ -147,7 +147,7 @@ fn verify_registered_deployment_root_rejects_local_state_only_evidence() {
 
     verify_registered_deployment_root(VerifyDeploymentRootOptions {
         deployment_name: "demo-local".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_check: check,
         verified_at_unix_secs: Some(100),
         icp_root: Some(root.clone()),

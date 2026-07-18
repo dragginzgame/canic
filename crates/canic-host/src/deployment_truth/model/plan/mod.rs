@@ -29,7 +29,7 @@ pub struct DeploymentPlanV1 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DeploymentIdentityV1 {
     pub deployment_name: String,
-    pub network: String,
+    pub environment: String,
     pub root_principal: Option<String>,
     pub authority_profile_hash: Option<String>,
     pub role_topology_hash: Option<String>,
@@ -87,7 +87,7 @@ impl DeploymentAssumptionV1 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DeploymentAssumptionKindV1 {
     LocalStateMissing,
-    LocalStateNetworkMismatch,
+    LocalStateEnvironmentMismatch,
     LocalStateReadFailed,
 }
 
@@ -96,7 +96,9 @@ impl DeploymentAssumptionKindV1 {
     pub const fn key(self) -> &'static str {
         match self {
             Self::LocalStateMissing => "local_state.root_canister_id.missing",
-            Self::LocalStateNetworkMismatch => "local_state.root_canister_id.network_mismatch",
+            Self::LocalStateEnvironmentMismatch => {
+                "local_state.root_canister_id.environment_mismatch"
+            }
             Self::LocalStateReadFailed => "local_state.root_canister_id.read_failed",
         }
     }

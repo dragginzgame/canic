@@ -74,7 +74,7 @@ pub(in crate::deployment_truth::promotion) fn role_materialization_identity_from
             .materialization_input
             .canonical_embedded_config_sha256
             .clone(),
-        network: evidence.materialization_input.network.clone(),
+        environment: evidence.materialization_input.environment.clone(),
         root_trust_anchor: evidence.materialization_input.root_trust_anchor.clone(),
         runtime_variant: evidence.materialization_input.runtime_variant.clone(),
         wasm_sha256: evidence.materialization_result.wasm_sha256.clone(),

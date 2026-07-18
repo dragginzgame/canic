@@ -11,8 +11,8 @@ use crate::{
         clap::{
             flag_arg, path_option, required_string, string_option, string_option_or_else, value_arg,
         },
-        defaults::{default_icp, local_network},
-        globals::{internal_icp_arg, internal_network_arg},
+        defaults::{default_icp, local_environment},
+        globals::{internal_environment_arg, internal_icp_arg},
     },
 };
 use clap::Command as ClapCommand;
@@ -28,7 +28,7 @@ pub(in crate::backup) struct BackupCreateOptions {
     pub(in crate::backup) subtree: Option<String>,
     pub(in crate::backup) out: Option<PathBuf>,
     pub(in crate::backup) dry_run: bool,
-    pub(in crate::backup) network: String,
+    pub(in crate::backup) environment: String,
     pub(in crate::backup) icp: String,
 }
 
@@ -44,7 +44,7 @@ impl BackupCreateOptions {
             subtree: string_option(&matches, "subtree"),
             out: path_option(&matches, "out"),
             dry_run: matches.get_flag("dry-run"),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
@@ -77,6 +77,6 @@ pub(in crate::backup) fn backup_create_command() -> ClapCommand {
                 .long("dry-run")
                 .help("Write the backup plan and execution journal without running it"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }

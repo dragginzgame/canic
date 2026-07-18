@@ -113,8 +113,8 @@ replica, backup, and restore commands.
 Show local test-fleet canisters that already have ids:
 
 ```bash
-canic --network local info list test
-canic --network local info env test
+canic --environment local info list test
+canic --environment local info env test
 ```
 
 `canic info list <name>` reads the installed root registry for that fleet.
@@ -127,7 +127,7 @@ Live list sources call `canic_ready` for each listed canister and include a
 
 If the list only shows the `root` row, the project has reserved a local root id
 but has not installed the tree. Run `canic install test`, then use
-`canic --network local info list test` to read the installed root registry.
+`canic --environment local info list test` to read the installed root registry.
 
 Install and bootstrap the local fleet:
 
@@ -150,14 +150,14 @@ name = "test"
 ```
 
 Successful installs write
-`.canic/<network>/deployments/<deployment>.json` with the deployment name, fleet
+`.canic/<environment>/deployments/<deployment>.json` with the deployment name, fleet
 template, root target, resolved root principal, build target, config path, root
 verification state, and staging manifest path. `canic fleet config <name>` shows the
 selected fleet declaration, including opt-in role features such as auth,
 sharding, and scaling, while `canic info list <name>` queries the deployed root
 registry for that target.
-Commands use network `local` unless you pass
-`--network <name>`.
+Commands use environment `local` unless you pass
+`--environment <name>`.
 
 The local ICP CLI replica does not persist canister state across stop/start.
 If `canic status` reports a local fleet as `lost`, reinstall the fleet before
@@ -175,7 +175,7 @@ List saved fleet configs:
 ```bash
 canic fleet list
 canic fleet delete demo
-canic --network ic fleet list
+canic --environment ic fleet list
 ```
 
 Create a new root-plus-app fleet:
@@ -301,7 +301,7 @@ guarded runner.
 Preview the maintained runner path without calling `icp`:
 
 ```bash
-canic --network local restore run \
+canic --environment local restore run \
   1 \
   --dry-run \
   --out restore-run-dry-run.json
@@ -310,7 +310,7 @@ canic --network local restore run \
 Execute a cautious one-step batch:
 
 ```bash
-canic --network local restore run \
+canic --environment local restore run \
   1 \
   --execute \
   --max-steps 1 \

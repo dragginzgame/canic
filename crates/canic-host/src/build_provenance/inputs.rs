@@ -44,8 +44,8 @@ pub(super) fn build_input_fingerprints(
         modified_unix_secs: None,
         schema: Some(PayloadSchemaRefV1::internal("canic.build_network", "1")),
         note: Some(format!(
-            "network={};build_network={}",
-            request.network, request.build_network
+            "environment={};build_network={}",
+            request.environment, request.build_network
         )),
     });
     inputs.extend(cargo_config_fingerprints(&request.workspace_root)?);

@@ -42,12 +42,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let workspace_root = PathBuf::from(workspace_root).canonicalize()?;
     let icp_root = PathBuf::from(icp_root).canonicalize()?;
     let config_path = resolve_path(&workspace_root, &config_path).canonicalize()?;
-    let network = std::env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string());
-    let build_network = resolve_icp_build_network_from_root(&icp_root, &network)?;
+    let environment = std::env::var("ICP_ENVIRONMENT").unwrap_or_else(|_| "local".to_string());
+    let build_network = resolve_icp_build_network_from_root(&icp_root, &environment)?;
     let context = WorkspaceBuildContext {
         role: canister_name.clone(),
         profile,
-        network,
+        environment,
         build_network: build_network.as_str().to_string(),
         config_path,
         workspace_root,

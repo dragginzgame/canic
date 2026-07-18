@@ -71,10 +71,10 @@ pub(super) fn icp_canister_command(icp_root: &Path) -> Command {
     command
 }
 
-pub(super) fn add_icp_network_target(
+pub(super) fn add_icp_environment_target(
     command: &mut Command,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) {
-    icp::add_target_args(command, Some(network), local_replica);
+    icp::add_target_args(command, Some(environment), local_replica);
 }

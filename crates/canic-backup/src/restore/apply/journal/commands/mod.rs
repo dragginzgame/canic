@@ -82,7 +82,7 @@ impl RestoreApplyCommandPreview {
 #[serde(deny_unknown_fields)]
 pub struct RestoreApplyCommandConfig {
     pub program: String,
-    pub network: Option<String>,
+    pub environment: Option<String>,
 }
 
 impl Default for RestoreApplyCommandConfig {
@@ -90,7 +90,7 @@ impl Default for RestoreApplyCommandConfig {
     fn default() -> Self {
         Self {
             program: "icp".to_string(),
-            network: None,
+            environment: None,
         }
     }
 }
@@ -225,9 +225,9 @@ const fn verification_command_note(
 fn icp_canister_args(config: &RestoreApplyCommandConfig, mut tail: Vec<String>) -> Vec<String> {
     let mut args = vec!["canister".to_string()];
     args.append(&mut tail);
-    if let Some(network) = &config.network {
+    if let Some(environment) = &config.environment {
         args.push("-e".to_string());
-        args.push(network.clone());
+        args.push(environment.clone());
     }
     args
 }

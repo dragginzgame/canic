@@ -7,8 +7,8 @@
 use crate::{
     cli::{
         clap::{flag_arg, parse_matches, render_usage, required_string, string_option_or_else},
-        defaults::{default_icp, local_network},
-        globals::{internal_icp_arg, internal_network_arg},
+        defaults::{default_icp, local_environment},
+        globals::{internal_environment_arg, internal_icp_arg},
         help::print_help_or_version,
     },
     support::candid::registry_entry_candid_path,
@@ -103,14 +103,14 @@ impl InspectCommandError {
 enum InspectOptions {
     Canister {
         canister: String,
-        network: String,
+        environment: String,
         icp: String,
         json: bool,
     },
     Deployment {
         deployment: String,
         role: String,
-        network: String,
+        environment: String,
         icp: String,
         json: bool,
     },
@@ -122,7 +122,7 @@ struct ResolvedInspectTarget {
     deployment: Option<String>,
     role: Option<String>,
     canister_id: String,
-    network: String,
+    environment: String,
     icp: String,
     source: InspectSource,
     candid_path: Option<PathBuf>,
@@ -212,7 +212,7 @@ struct TargetResolution {
     deployment: Option<String>,
     role: Option<String>,
     canister_id: String,
-    network: String,
+    environment: String,
     source: InspectSource,
 }
 
@@ -260,7 +260,7 @@ impl InspectOptions {
                 validate_principal(&canister)?;
                 Ok(Self::Canister {
                     canister,
-                    network: string_option_or_else(matches, "network", local_network),
+                    environment: string_option_or_else(matches, "environment", local_environment),
                     icp: string_option_or_else(matches, "icp", default_icp),
                     json: matches.get_flag("json"),
                 })
@@ -268,7 +268,7 @@ impl InspectOptions {
             Some(("deployment", matches)) => Ok(Self::Deployment {
                 deployment: required_string(matches, "deployment"),
                 role: required_string(matches, "role"),
-                network: string_option_or_else(matches, "network", local_network),
+                environment: string_option_or_else(matches, "environment", local_environment),
                 icp: string_option_or_else(matches, "icp", default_icp),
                 json: matches.get_flag("json"),
             }),
@@ -281,7 +281,7 @@ fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, Ins
     match options {
         InspectOptions::Canister {
             canister,
-            network,
+            environment,
             icp,
             json,
         } => Ok(ResolvedInspectTarget {
@@ -289,7 +289,7 @@ fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, Ins
             deployment: None,
             role: None,
             canister_id: canister.clone(),
-            network: network.clone(),
+            environment: environment.clone(),
             icp: icp.clone(),
             source: InspectSource::CliArg,
             candid_path: None,
@@ -299,17 +299,17 @@ fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, Ins
         InspectOptions::Deployment {
             deployment,
             role,
-            network,
+            environment,
             icp,
             json,
-        } => resolve_deployment_target(deployment, role, network, icp, *json),
+        } => resolve_deployment_target(deployment, role, environment, icp, *json),
     }
 }
 
 fn resolve_deployment_target(
     deployment: &str,
     role: &str,
-    network: &str,
+    environment: &str,
     icp: &str,
     json: bool,
 ) -> Result<ResolvedInspectTarget, InspectCommandError> {
@@ -317,7 +317,7 @@ fn resolve_deployment_target(
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
-            network: network.to_string(),
+            environment: environment.to_string(),
             icp: icp.to_string(),
             detect_lost_local_root: false,
         },
@@ -351,17 +351,17 @@ fn resolve_deployment_target(
         deployment: Some(deployment.to_string()),
         role: Some(role.to_string()),
         canister_id: entry.pid.clone(),
-        network: network.to_string(),
+        environment: environment.to_string(),
         icp: icp.to_string(),
         source: InspectSource::DeploymentRecord,
-        candid_path: registry_entry_candid_path(Some(root.as_path()), network, entry),
+        candid_path: registry_entry_candid_path(Some(root.as_path()), environment, entry),
         icp_root: Some(root),
         json,
     })
 }
 
 fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, InspectCommandError> {
-    let mut icp = IcpCli::new(&target.icp, Some(target.network.clone()));
+    let mut icp = IcpCli::new(&target.icp, Some(target.environment.clone()));
     if let Some(root) = &target.icp_root {
         icp = icp.with_cwd(root);
     }
@@ -381,7 +381,7 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
             deployment: target.deployment.clone(),
             role: target.role.clone(),
             canister_id: target.canister_id.clone(),
-            network: target.network.clone(),
+            environment: target.environment.clone(),
             source: target.source,
         },
         endpoint: InspectEndpoint::RuntimeStatus,
@@ -420,7 +420,7 @@ fn render_text_report(report: &InspectReport) -> String {
         format!("status: {}", report.status.label()),
         format!("endpoint: {}", report.endpoint.label()),
         format!("canister: {}", report.target_resolution.canister_id),
-        format!("network: {}", report.target_resolution.network),
+        format!("environment: {}", report.target_resolution.environment),
         format!("source: {}", report.target_resolution.source.label()),
     ];
     if let Some(deployment) = &report.target_resolution.deployment {
@@ -578,7 +578,7 @@ fn canister_command() -> ClapCommand {
                 .num_args(1)
                 .required(true),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .arg(flag_arg("json").long("json").help("Print JSON output"))
 }
@@ -600,7 +600,7 @@ fn deployment_command() -> ClapCommand {
                 .num_args(1)
                 .required(true),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .arg(flag_arg("json").long("json").help("Print JSON output"))
 }
@@ -663,7 +663,7 @@ mod tests {
             options,
             InspectOptions::Canister {
                 canister: "aaaaa-aa".to_string(),
-                network: local_network(),
+                environment: local_environment(),
                 icp: default_icp(),
                 json: true,
             }
@@ -685,7 +685,7 @@ mod tests {
             InspectOptions::Deployment {
                 deployment: "demo-local".to_string(),
                 role: "root".to_string(),
-                network: local_network(),
+                environment: local_environment(),
                 icp: default_icp(),
                 json: false,
             }
@@ -901,7 +901,7 @@ mod tests {
                 deployment: None,
                 role: None,
                 canister_id: "aaaaa-aa".to_string(),
-                network: "local".to_string(),
+                environment: "local".to_string(),
                 source: InspectSource::CliArg,
             },
             endpoint: InspectEndpoint::RuntimeStatus,

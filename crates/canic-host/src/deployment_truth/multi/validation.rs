@@ -17,7 +17,7 @@ impl DeploymentComparisonFieldLabel {
     const LEFT_INVENTORY_DIGEST: Self = Self("left.inventory_digest");
     const LEFT_INVENTORY_ID: Self = Self("left.inventory_id");
     const LEFT_LABEL: Self = Self("left.label");
-    const LEFT_NETWORK: Self = Self("left.deployment_identity.network");
+    const LEFT_NETWORK: Self = Self("left.deployment_identity.environment");
     const LEFT_PLAN_DIGEST: Self = Self("left.plan_digest");
     const LEFT_PLAN_ID: Self = Self("left.plan_id");
     const REPORT_DIGEST: Self = Self("report_digest");
@@ -28,7 +28,7 @@ impl DeploymentComparisonFieldLabel {
     const RIGHT_INVENTORY_DIGEST: Self = Self("right.inventory_digest");
     const RIGHT_INVENTORY_ID: Self = Self("right.inventory_id");
     const RIGHT_LABEL: Self = Self("right.label");
-    const RIGHT_NETWORK: Self = Self("right.deployment_identity.network");
+    const RIGHT_NETWORK: Self = Self("right.deployment_identity.environment");
     const RIGHT_PLAN_DIGEST: Self = Self("right.plan_digest");
     const RIGHT_PLAN_ID: Self = Self("right.plan_id");
 
@@ -52,7 +52,7 @@ enum DeploymentComparisonTargetField {
     InventoryDigest,
     InventoryId,
     Label,
-    Network,
+    Environment,
     PlanDigest,
     PlanId,
 }
@@ -129,8 +129,8 @@ fn validate_comparison_target(
         target.deployment_identity.deployment_name.as_str(),
     )?;
     ensure_comparison_field(
-        comparison_target_field_label(side, DeploymentComparisonTargetField::Network),
-        target.deployment_identity.network.as_str(),
+        comparison_target_field_label(side, DeploymentComparisonTargetField::Environment),
+        target.deployment_identity.environment.as_str(),
     )?;
     Ok(())
 }
@@ -159,7 +159,7 @@ const fn comparison_target_field_label(
         (DeploymentComparisonTargetSide::Left, DeploymentComparisonTargetField::Label) => {
             DeploymentComparisonFieldLabel::LEFT_LABEL
         }
-        (DeploymentComparisonTargetSide::Left, DeploymentComparisonTargetField::Network) => {
+        (DeploymentComparisonTargetSide::Left, DeploymentComparisonTargetField::Environment) => {
             DeploymentComparisonFieldLabel::LEFT_NETWORK
         }
         (DeploymentComparisonTargetSide::Left, DeploymentComparisonTargetField::PlanDigest) => {
@@ -188,7 +188,7 @@ const fn comparison_target_field_label(
         (DeploymentComparisonTargetSide::Right, DeploymentComparisonTargetField::Label) => {
             DeploymentComparisonFieldLabel::RIGHT_LABEL
         }
-        (DeploymentComparisonTargetSide::Right, DeploymentComparisonTargetField::Network) => {
+        (DeploymentComparisonTargetSide::Right, DeploymentComparisonTargetField::Environment) => {
             DeploymentComparisonFieldLabel::RIGHT_NETWORK
         }
         (DeploymentComparisonTargetSide::Right, DeploymentComparisonTargetField::PlanDigest) => {

@@ -17,12 +17,12 @@ pub(super) fn call_subnet_registry(
     icp_root: &Path,
     root: &str,
 ) -> Result<Vec<RegistryEntry>, BackupCommandError> {
-    let icp = IcpCli::new(&options.icp, Some(options.network.clone())).with_cwd(icp_root);
-    let candid_path = role_candid_path(Some(icp_root), &options.network, "root");
+    let icp = IcpCli::new(&options.icp, Some(options.environment.clone())).with_cwd(icp_root);
+    let candid_path = role_candid_path(Some(icp_root), &options.environment, "root");
     query_subnet_registry(
         &icp,
         root,
-        &options.network,
+        &options.environment,
         Some(icp_root),
         candid_path.as_deref(),
     )

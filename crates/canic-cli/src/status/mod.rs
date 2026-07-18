@@ -9,8 +9,8 @@ mod tests;
 
 use crate::{
     cli::clap::{parse_matches, render_usage, string_option_or_else},
-    cli::defaults::{default_icp, local_network},
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::defaults::{default_icp, local_environment},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     version_text,
 };
@@ -74,7 +74,7 @@ pub enum StatusCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusOptions {
-    network: String,
+    environment: String,
     icp: String,
 }
 
@@ -82,7 +82,7 @@ struct StatusOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusReport {
-    network: String,
+    environment: String,
     replica: ReplicaStatus,
     replica_port: String,
     icp_cli: String,
@@ -135,7 +135,7 @@ impl StatusOptions {
             .map_err(|_| StatusCommandError::Usage(usage()))?;
 
         Ok(Self {
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
@@ -148,7 +148,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     let icp_cli = load_icp_cli_version(options);
     let icp_project = load_icp_project_config_status(&icp_root, &choices);
     let replica = load_replica_status(options, &icp_root);
-    let verify_local_roots = options.network == local_network()
+    let verify_local_roots = options.environment == local_environment()
         && matches!(
             replica,
             ReplicaStatus::Running | ReplicaStatus::RunningHttpFallback
@@ -160,7 +160,7 @@ fn load_status_report(options: &StatusOptions) -> Result<StatusReport, StatusCom
     deployments.sort_by(|left, right| left.deployment.cmp(&right.deployment));
 
     Ok(StatusReport {
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         replica,
         replica_port: load_replica_port(&icp_root),
         icp_cli,
@@ -180,9 +180,9 @@ fn load_replica_status(options: &StatusOptions, icp_root: &Path) -> ReplicaStatu
     match IcpCli::new(&options.icp, None).local_replica_project_running_in(icp_root, false) {
         Ok(true) => ReplicaStatus::Running,
         Ok(false)
-            if replica_query::should_use_local_replica_query(Some(&options.network))
+            if replica_query::should_use_local_replica_query(Some(&options.environment))
                 && replica_query::local_replica_status_reachable_from_root(
-                    Some(&options.network),
+                    Some(&options.environment),
                     icp_root,
                 ) =>
         {
@@ -232,14 +232,14 @@ fn status_deployment_row(
         };
     };
     let install_state =
-        read_installed_deployment_state_from_root(&options.network, &deployment, icp_root);
+        read_installed_deployment_state_from_root(&options.environment, &deployment, icp_root);
     let configured_roles = configured_deployable_roles(path);
     let bootstrap_roles = configured_bootstrap_roles(path);
     let (deployed, root) = match install_state {
         Ok(state) => (
             deployed_label(
                 &deployment,
-                &options.network,
+                &options.environment,
                 &options.icp,
                 icp_root,
                 &state.root_canister_id,
@@ -266,14 +266,14 @@ fn status_deployment_row(
 
 fn deployed_label(
     deployment: &str,
-    network: &str,
+    environment: &str,
     icp: &str,
     icp_root: &Path,
     root: &str,
     verify_local_root: bool,
     configured_roles: &[String],
 ) -> String {
-    if network != local_network() {
+    if environment != local_environment() {
         return "yes".to_string();
     }
     if !verify_local_root {
@@ -283,7 +283,7 @@ fn deployed_label(
     match resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
-            network: network.to_string(),
+            environment: environment.to_string(),
             icp: icp.to_string(),
             detect_lost_local_root: true,
         },
@@ -329,8 +329,8 @@ fn render_status_report(report: &StatusReport) -> String {
         format!("ICP CLI: {}", report.icp_cli),
         format!("ICP project: {}", report.icp_project),
         format!(
-            "Deployments: {deployed}/{configured} deployed (network {})",
-            report.network
+            "Deployments: {deployed}/{configured} deployed (environment {})",
+            report.environment
         ),
     ];
 
@@ -347,7 +347,7 @@ fn render_status_report(report: &StatusReport) -> String {
 }
 
 fn has_lost_local_deployment_target(report: &StatusReport) -> bool {
-    report.network == "local"
+    report.environment == "local"
         && report
             .deployments
             .iter()
@@ -403,7 +403,7 @@ fn status_command() -> ClapCommand {
         .bin_name("canic status")
         .about("Show quick Canic project status")
         .disable_help_flag(true)
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .after_help(STATUS_HELP_AFTER)
 }

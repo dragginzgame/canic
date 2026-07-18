@@ -3,8 +3,8 @@ use crate::{
         flag_arg, parse_matches, passthrough_subcommand, render_usage, required_string,
         required_typed, string_option, string_option_or_else, value_arg,
     },
-    cli::defaults::{default_icp, local_network},
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::defaults::{default_icp, local_environment},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     cycles::{CyclesCommandError, convert},
     version_text,
@@ -120,7 +120,7 @@ Examples:
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct IcpTargetOptions {
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) icp: String,
 }
 
@@ -254,7 +254,7 @@ fn wallet_passthrough_command(spec: WalletCommand) -> ClapCommand {
 impl IcpTargetOptions {
     pub(super) fn parse(matches: &clap::ArgMatches) -> Self {
         Self {
-            network: string_option_or_else(matches, "network", local_network),
+            environment: string_option_or_else(matches, "environment", local_environment),
             icp: string_option_or_else(matches, "icp", default_icp),
         }
     }
@@ -403,8 +403,11 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
         &installed.state.root_canister_id,
         &installed.registry.entries,
     )?;
-    let icp =
-        IcpCli::new(&options.target.icp, Some(options.target.network.clone())).with_cwd(&root);
+    let icp = IcpCli::new(
+        &options.target.icp,
+        Some(options.target.environment.clone()),
+    )
+    .with_cwd(&root);
     if options.dry_run {
         println!(
             "{}",
@@ -488,7 +491,7 @@ pub(super) fn resolve_deployment(
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
-            network: target.network.clone(),
+            environment: target.environment.clone(),
             icp: target.icp.clone(),
             detect_lost_local_root: true,
         },
@@ -554,12 +557,12 @@ fn resolved_target_from_entry(entry: &RegistryEntry) -> ResolvedCanisterTarget {
 }
 
 fn icp_command(target: &IcpTargetOptions, root: &Path) -> std::process::Command {
-    let icp = IcpCli::new(&target.icp, Some(target.network.clone())).with_cwd(root);
+    let icp = IcpCli::new(&target.icp, Some(target.environment.clone())).with_cwd(root);
     icp.command()
 }
 
 fn append_target_args(command: &mut std::process::Command, target: &IcpTargetOptions) {
-    canic_host::icp::add_target_args(command, Some(&target.network), None);
+    canic_host::icp::add_target_args(command, Some(&target.environment), None);
 }
 
 fn run_or_print_command(
@@ -647,7 +650,7 @@ fn balance_command() -> ClapCommand {
                 .long(OF_PRINCIPAL_ARG)
                 .value_name("principal"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 
@@ -673,7 +676,7 @@ fn mint_command() -> ClapCommand {
                 .value_name(SUBACCOUNT_ARG),
         )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 
@@ -707,7 +710,7 @@ fn transfer_command() -> ClapCommand {
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))
         .arg(flag_arg(QUIET_ARG).long(QUIET_ARG).short('q'))
         .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 
@@ -734,7 +737,7 @@ fn topup_command() -> ClapCommand {
         )
         .arg(flag_arg(JSON_ARG).long(JSON_ARG))
         .arg(flag_arg(DRY_RUN_ARG).long(DRY_RUN_ARG))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 

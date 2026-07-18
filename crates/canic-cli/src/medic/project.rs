@@ -120,34 +120,34 @@ pub(super) fn project_config_checks(root: &Path, options: &MedicOptions) -> Vec<
         )),
     }
 
-    if let Some(network) = project_network_selection_check(options) {
-        checks.push(network);
+    if let Some(environment) = project_environment_selection_check(options) {
+        checks.push(environment);
     }
 
     checks
 }
 
-pub(super) fn project_network_selection_check(options: &MedicOptions) -> Option<MedicCheck> {
+pub(super) fn project_environment_selection_check(options: &MedicOptions) -> Option<MedicCheck> {
     if options.scope != MedicScope::Project {
         return None;
     }
 
-    Some(if options.network.is_some() {
+    Some(if options.environment.is_some() {
         MedicCheck::pass(
             MedicCategory::ProjectConfig,
-            "local_network_explicit",
-            "network",
-            "network selected explicitly",
+            "local_environment_explicit",
+            "environment",
+            "environment selected explicitly",
             "none",
             MedicSource::IcpConfig,
         )
     } else {
         MedicCheck::warn(
             MedicCategory::ProjectConfig,
-            "local_network_implicit",
-            "network",
-            "no network was selected for project-level checks",
-            "select an explicit network before deployment checks",
+            "local_environment_implicit",
+            "environment",
+            "no environment was selected for project-level checks",
+            "select an explicit environment before deployment checks",
             MedicSource::IcpConfig,
         )
     })

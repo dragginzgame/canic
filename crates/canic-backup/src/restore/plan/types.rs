@@ -56,7 +56,7 @@ pub struct RestoreMappingEntry {
 #[serde(deny_unknown_fields)]
 pub struct RestorePlan {
     pub backup_id: String,
-    pub source_network: String,
+    pub source_environment: String,
     pub source_root_canister: String,
     pub topology_hash: String,
     pub member_count: usize,

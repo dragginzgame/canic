@@ -20,7 +20,7 @@ pub fn validate_deployment_root_verification_receipt(
     ensure_root_verification_receipt_field("receipt_id", receipt.receipt_id.as_str())?;
     ensure_root_verification_receipt_sha256("receipt_digest", receipt.receipt_digest.as_str())?;
     ensure_root_verification_receipt_field("deployment_name", receipt.deployment_name.as_str())?;
-    ensure_root_verification_receipt_field("network", receipt.network.as_str())?;
+    ensure_root_verification_receipt_field("environment", receipt.environment.as_str())?;
     ensure_root_verification_receipt_field("fleet_template", receipt.fleet_template.as_str())?;
     ensure_root_verification_receipt_field("root_principal", receipt.root_principal.as_str())?;
     ensure_root_verification_receipt_field("source_report_id", receipt.source_report_id.as_str())?;

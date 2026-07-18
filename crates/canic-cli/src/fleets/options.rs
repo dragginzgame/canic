@@ -5,7 +5,7 @@
 
 use crate::cli::{
     clap::{parse_matches, path_option, required_string, required_typed, string_option_or_else},
-    defaults::local_network,
+    defaults::local_environment,
 };
 use canic_host::adoption::AdoptionProfileV1;
 use std::{ffi::OsString, path::PathBuf};
@@ -28,7 +28,7 @@ use super::{
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct FleetOptions {
-    pub(super) network: String,
+    pub(super) environment: String,
 }
 
 ///
@@ -144,7 +144,7 @@ impl FleetOptions {
             .map_err(|_| FleetCommandError::Usage(list_usage()))?;
 
         Ok(Self {
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
         })
     }
 }

@@ -105,8 +105,8 @@ pub fn build_workspace_canister_artifact_from_spec(
     write_wasm_artifact(&release_wasm_path, &spec.wasm_path)?;
     transforms.push(maybe_shrink_wasm_artifact(canister_name, &spec.wasm_path)?);
 
-    let network = &context.build_network;
-    if should_export_candid_artifacts(network) {
+    let build_network = &context.build_network;
+    if should_export_candid_artifacts(build_network) {
         let debug_context = context.with_profile(CanisterBuildProfile::Debug);
         let debug_wasm_path = run_canister_build(
             &debug_context,

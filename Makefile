@@ -288,8 +288,8 @@ test-cli:
 test-runtime-fast: test-unit-fast
 
 test-canisters: test-fleet-install
-	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" icp canister -n "$(ICP_ENVIRONMENT)" call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \
-	TMPDIR="$(TEST_TMPDIR)" icp canister -n "$(ICP_ENVIRONMENT)" call "$$test_pid" test
+	test_pid="$$(TMPDIR="$(TEST_TMPDIR)" icp canister -e "$(ICP_ENVIRONMENT)" call root canic_subnet_registry --output json | jq -er '.Ok[] | select(.role == "test") | .pid' | head -n1)"; \
+	TMPDIR="$(TEST_TMPDIR)" icp canister -e "$(ICP_ENVIRONMENT)" call "$$test_pid" test
 
 #
 # Development commands

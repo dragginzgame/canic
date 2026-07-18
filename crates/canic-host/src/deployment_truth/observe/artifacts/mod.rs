@@ -15,8 +15,8 @@ use std::{
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalArtifactManifestRequest {
-    pub network: String,
-    pub artifact_network: String,
+    pub environment: String,
+    pub artifact_environment: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
     pub config_path: Option<PathBuf>,
@@ -51,20 +51,22 @@ pub fn collect_local_role_artifact_manifest(
         },
         deployment_truth_roles_with_implicit_wasm_store,
     );
-    let projected_artifact_root = artifact_root_path(&request.icp_root, &request.artifact_network);
-    let artifact_root = match resolve_artifact_root(&request.icp_root, &request.artifact_network) {
-        Ok(root) => Some(root),
-        Err(err) => {
-            unresolved_artifacts.push(observation_gap(
-                "local_artifacts.root",
-                format!(
-                    "could not resolve artifact root for network {}: {err}",
-                    request.artifact_network
-                ),
-            ));
-            None
-        }
-    };
+    let projected_artifact_root =
+        artifact_root_path(&request.icp_root, &request.artifact_environment);
+    let artifact_root =
+        match resolve_artifact_root(&request.icp_root, &request.artifact_environment) {
+            Ok(root) => Some(root),
+            Err(err) => {
+                unresolved_artifacts.push(observation_gap(
+                    "local_artifacts.root",
+                    format!(
+                        "could not resolve artifact root for environment {}: {err}",
+                        request.artifact_environment
+                    ),
+                ));
+                None
+            }
+        };
     let release_entries = artifact_root
         .as_ref()
         .and_then(|root| load_release_entries(root, &mut unresolved_artifacts));
@@ -82,8 +84,8 @@ pub fn collect_local_role_artifact_manifest(
 
     RoleArtifactManifestV1 {
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
-        manifest_id: format!("local:{}:{fleet_name}:artifacts", request.network),
-        network: request.network.clone(),
+        manifest_id: format!("local:{}:{fleet_name}:artifacts", request.environment),
+        environment: request.environment.clone(),
         artifact_root: artifact_root.map(|root| root.display().to_string()),
         role_artifacts,
         unresolved_artifacts,
@@ -92,16 +94,18 @@ pub fn collect_local_role_artifact_manifest(
 
 pub(super) fn collect_observed_artifacts(
     icp_root: &Path,
-    artifact_network: &str,
+    artifact_environment: &str,
     roles: &[String],
     unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
 ) -> Vec<ObservedArtifactV1> {
-    let artifact_root = match resolve_artifact_root(icp_root, artifact_network) {
+    let artifact_root = match resolve_artifact_root(icp_root, artifact_environment) {
         Ok(root) => root,
         Err(err) => {
             unresolved_observations.push(observation_gap(
                 "local_artifacts.root",
-                format!("could not resolve artifact root for network {artifact_network}: {err}"),
+                format!(
+                    "could not resolve artifact root for environment {artifact_environment}: {err}"
+                ),
             ));
             return Vec::new();
         }
@@ -173,10 +177,10 @@ fn load_release_entries(
 
 pub(in crate::deployment_truth) fn release_set_manifest_digest(
     icp_root: &Path,
-    artifact_network: &str,
+    artifact_environment: &str,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Option<String> {
-    let artifact_root = match resolve_artifact_root(icp_root, artifact_network) {
+    let artifact_root = match resolve_artifact_root(icp_root, artifact_environment) {
         Ok(root) => root,
         Err(err) => {
             gaps.push(observation_gap(
@@ -296,10 +300,10 @@ pub(super) fn observe_config_sha256(
 
 pub(super) fn observe_deployment_manifest_digest(
     icp_root: &Path,
-    artifact_network: &str,
+    artifact_environment: &str,
     gaps: &mut Vec<DeploymentObservationGapV1>,
 ) -> Option<String> {
-    release_set_manifest_digest(icp_root, artifact_network, gaps)
+    release_set_manifest_digest(icp_root, artifact_environment, gaps)
 }
 
 pub(super) fn observe_canonical_runtime_config_digest(

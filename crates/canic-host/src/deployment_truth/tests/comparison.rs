@@ -11,7 +11,7 @@ fn deployment_comparison_report_detects_cross_deployment_drift() {
     let mut right_plan = sample_plan();
     right_plan.plan_id = "plan-prod-root".to_string();
     right_plan.deployment_identity.deployment_name = "prod".to_string();
-    right_plan.deployment_identity.network = "ic".to_string();
+    right_plan.deployment_identity.environment = "ic".to_string();
     right_plan.trust_domain.root_trust_anchor = Some("prod-root".to_string());
     right_plan.role_artifacts[0].wasm_sha256 = Some(sample_sha256("b"));
     let mut right_inventory = sample_matching_inventory();

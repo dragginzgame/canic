@@ -7,7 +7,7 @@ use std::path::Path;
 
 pub(in crate::install_root) struct ResolveRootCanisterOperation<'a> {
     icp_root: &'a Path,
-    network: &'a str,
+    environment: &'a str,
     root_canister: &'a str,
     config_path: &'a Path,
     local_replica: Option<&'a LocalReplicaTarget>,
@@ -16,14 +16,14 @@ pub(in crate::install_root) struct ResolveRootCanisterOperation<'a> {
 impl<'a> ResolveRootCanisterOperation<'a> {
     pub(in crate::install_root) const fn new(
         icp_root: &'a Path,
-        network: &'a str,
+        environment: &'a str,
         root_canister: &'a str,
         config_path: &'a Path,
         local_replica: Option<&'a LocalReplicaTarget>,
     ) -> Self {
         Self {
             icp_root,
-            network,
+            environment,
             root_canister,
             config_path,
             local_replica,
@@ -40,7 +40,7 @@ impl<'a> ResolveRootCanisterOperation<'a> {
     pub(in crate::install_root) fn execute(&self) -> Result<String, Box<dyn std::error::Error>> {
         ensure_root_canister_id(
             self.icp_root,
-            self.network,
+            self.environment,
             self.root_canister,
             self.config_path,
             self.local_replica,

@@ -1,5 +1,5 @@
-use super::{ListCommandError, options::ListOptions, render::ReadyStatus, state_network};
-use crate::cli::defaults::local_network;
+use super::{ListCommandError, options::ListOptions, render::ReadyStatus, state_environment};
+use crate::cli::defaults::local_environment;
 use crate::support::candid::registry_entry_candid_path;
 use crate::support::registry_tree::visible_entries;
 use canic_host::{
@@ -14,6 +14,7 @@ use canic_host::{
         read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
+    release_set::artifact_root_path,
     replica_query,
 };
 use std::{
@@ -46,7 +47,7 @@ pub(super) fn list_ready_statuses(
     registry: &[RegistryEntry],
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
-    if replica_query::should_use_local_replica_query(options.network.as_deref()) {
+    if replica_query::should_use_local_replica_query(options.environment.as_deref()) {
         return local_ready_statuses(options, registry, canister);
     }
 
@@ -67,13 +68,15 @@ pub(super) fn list_cycle_balances(
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
-    let network = options.network.clone();
+    let environment = options.environment.clone();
     let icp_root = resolve_live_icp_root()?;
     collect_visible_entry_values(
         registry,
         canister,
         OBSERVATION_ERROR.to_string(),
-        move |entry| cycle_balance_label_endpoint(&icp, network.clone(), Some(&icp_root), &entry),
+        move |entry| {
+            cycle_balance_label_endpoint(&icp, environment.clone(), Some(&icp_root), &entry)
+        },
     )
 }
 
@@ -83,13 +86,15 @@ pub(super) fn list_canic_versions(
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let icp = options.icp.clone();
-    let network = options.network.clone();
+    let environment = options.environment.clone();
     let icp_root = resolve_live_icp_root()?;
     collect_visible_entry_values(
         registry,
         canister,
         OBSERVATION_ERROR.to_string(),
-        move |entry| canic_version_label_endpoint(&icp, network.clone(), Some(&icp_root), &entry),
+        move |entry| {
+            canic_version_label_endpoint(&icp, environment.clone(), Some(&icp_root), &entry)
+        },
     )
 }
 
@@ -113,18 +118,15 @@ pub(super) fn resolve_wasm_sizes(
     registry: &[RegistryEntry],
 ) -> Result<BTreeMap<String, String>, ListCommandError> {
     let root = resolve_icp_artifact_root(options)?;
-    let network = state_network(options);
+    let artifact_environment = state_environment(options);
+    let artifact_root = artifact_root_path(&root, &artifact_environment);
     Ok(registry
         .iter()
         .filter_map(|entry| entry.role.as_deref())
         .collect::<BTreeSet<_>>()
         .into_iter()
         .filter_map(|role| {
-            let artifact_dir = root
-                .join(".icp")
-                .join(&network)
-                .join("canisters")
-                .join(role);
+            let artifact_dir = artifact_root.join(role);
             let wasm_bytes = fs::metadata(artifact_dir.join(format!("{role}.wasm")))
                 .ok()
                 .map(|metadata| metadata.len());
@@ -145,12 +147,12 @@ fn check_ready_status(
     icp_root: Option<&Path>,
     entry: &RegistryEntry,
 ) -> ReadyStatus {
-    let icp = live_icp(&options.icp, options.network.clone(), icp_root);
-    let candid_path = registry_entry_candid_path(icp_root, &state_network(options), entry);
+    let icp = live_icp(&options.icp, options.environment.clone(), icp_root);
+    let candid_path = registry_entry_candid_path(icp_root, &state_environment(options), entry);
     let Ok(ready) = query_canister_ready(
         &icp,
         &entry.pid,
-        &state_network(options),
+        &state_environment(options),
         icp_root,
         candid_path.as_deref(),
     ) else {
@@ -168,11 +170,11 @@ fn local_ready_statuses(
     registry: &[RegistryEntry],
     canister: Option<&str>,
 ) -> Result<BTreeMap<String, ReadyStatus>, ListCommandError> {
-    let network = options.network.clone();
+    let environment = options.environment.clone();
     let icp_root = resolve_live_icp_root()?;
     collect_visible_entry_values(registry, canister, ReadyStatus::Error, move |entry| {
         match query_local_canister_ready(
-            network.as_deref().unwrap_or("local"),
+            environment.as_deref().unwrap_or("local"),
             &entry.pid,
             Some(&icp_root),
         ) {
@@ -212,32 +214,38 @@ where
 
 fn cycle_balance_label_endpoint(
     icp: &str,
-    network: Option<String>,
+    environment: Option<String>,
     icp_root: Option<&Path>,
     entry: &RegistryEntry,
 ) -> String {
-    let network = network.unwrap_or_else(local_network);
-    let candid_path = registry_entry_candid_path(icp_root, &network, entry);
-    let icp = live_icp(icp, Some(network.clone()), icp_root);
-    query_cycle_balance(&icp, &entry.pid, &network, icp_root, candid_path.as_deref())
-        .map_or_else(|_| OBSERVATION_ERROR.to_string(), cycles_tc)
+    let environment = environment.unwrap_or_else(local_environment);
+    let candid_path = registry_entry_candid_path(icp_root, &environment, entry);
+    let icp = live_icp(icp, Some(environment.clone()), icp_root);
+    query_cycle_balance(
+        &icp,
+        &entry.pid,
+        &environment,
+        icp_root,
+        candid_path.as_deref(),
+    )
+    .map_or_else(|_| OBSERVATION_ERROR.to_string(), cycles_tc)
 }
 
 fn canic_version_label_endpoint(
     icp: &str,
-    network: Option<String>,
+    environment: Option<String>,
     icp_root: Option<&Path>,
     entry: &RegistryEntry,
 ) -> String {
-    let network = network.unwrap_or_else(local_network);
-    let candid_path = registry_entry_candid_path(icp_root, &network, entry);
-    let icp = live_icp(icp, Some(network), icp_root);
+    let environment = environment.unwrap_or_else(local_environment);
+    let candid_path = registry_entry_candid_path(icp_root, &environment, entry);
+    let icp = live_icp(icp, Some(environment), icp_root);
     query_canic_metadata_version(&icp, &entry.pid, candid_path.as_deref())
         .unwrap_or_else(|_| OBSERVATION_ERROR.to_string())
 }
 
-fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpCli {
-    let icp = IcpCli::new(icp, network);
+fn live_icp(icp: &str, environment: Option<String>, icp_root: Option<&Path>) -> IcpCli {
+    let icp = IcpCli::new(icp, environment);
     if let Some(root) = icp_root {
         icp.with_cwd(root)
     } else {
@@ -248,7 +256,7 @@ fn live_icp(icp: &str, network: Option<String>, icp_root: Option<&Path>) -> IcpC
 fn resolve_icp_artifact_root(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
     let icp_root = resolve_live_icp_root()?;
     if let Ok(state) = read_installed_deployment_state_from_root(
-        &state_network(options),
+        &state_environment(options),
         &options.target,
         &icp_root,
     ) {
@@ -264,7 +272,7 @@ fn resolve_list_deployment(
     resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.target.clone(),
-            network: state_network(options),
+            environment: state_environment(options),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
         },

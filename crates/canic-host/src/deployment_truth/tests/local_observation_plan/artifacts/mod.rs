@@ -6,8 +6,8 @@ fn local_inventory_reports_missing_config_as_observation_gap() {
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "demo".to_string(),
-        network: "local".to_string(),
-        artifact_network: "local".to_string(),
+        environment: "local".to_string(),
+        artifact_environment: "local".to_string(),
         workspace_root: temp.path().join("workspace"),
         icp_root: temp.path().join("icp"),
         config_path: None,
@@ -44,8 +44,8 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
     write_release_set_manifest(&icp_root);
 
     let manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
-        network: "local".to_string(),
-        artifact_network: "local".to_string(),
+        environment: "local".to_string(),
+        artifact_environment: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -105,8 +105,8 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
 }
 
 #[test]
-fn local_artifact_manifest_requires_selected_network_artifact_root() {
-    let temp = TempWorkspace::new("canic-host-local-artifact-manifest-network-root");
+fn local_artifact_manifest_requires_selected_environment_artifact_root() {
+    let temp = TempWorkspace::new("canic-host-local-artifact-manifest-environment-root");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
     let config_dir = workspace_root.join("fleets");
@@ -115,8 +115,8 @@ fn local_artifact_manifest_requires_selected_network_artifact_root() {
     write_artifact(&icp_root, "root", b"root-artifact");
 
     let manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
-        network: "ic".to_string(),
-        artifact_network: "ic".to_string(),
+        environment: "ic".to_string(),
+        artifact_environment: "ic".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -141,7 +141,7 @@ fn local_artifact_manifest_requires_selected_network_artifact_root() {
         manifest
             .unresolved_artifacts
             .iter()
-            .all(|gap| gap.key != "local_artifacts.network_fallback")
+            .all(|gap| gap.key != "local_artifacts.environment_fallback")
     );
 }
 
@@ -156,8 +156,8 @@ fn local_deployment_check_rejects_missing_exact_artifact_root() {
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
         deployment_name: "demo".to_string(),
-        network: "ic".to_string(),
-        artifact_network: "ic".to_string(),
+        environment: "ic".to_string(),
+        artifact_environment: "ic".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -175,7 +175,7 @@ fn local_deployment_check_rejects_missing_exact_artifact_root() {
 }
 
 #[test]
-fn local_deployment_check_separates_target_network_from_artifact_network() {
+fn local_deployment_check_separates_target_environment_from_artifact_environment() {
     let temp = TempWorkspace::new("canic-host-local-check-explicit-artifact-environment");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
@@ -189,8 +189,8 @@ fn local_deployment_check_separates_target_network_from_artifact_network() {
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
         deployment_name: "demo".to_string(),
-        network: "staging".to_string(),
-        artifact_network: "local".to_string(),
+        environment: "staging".to_string(),
+        artifact_environment: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -200,7 +200,7 @@ fn local_deployment_check_separates_target_network_from_artifact_network() {
     })
     .expect("check local deployment");
 
-    assert_eq!(check.plan.deployment_identity.network, "staging");
+    assert_eq!(check.plan.deployment_identity.environment, "staging");
     assert_eq!(check.plan.role_artifacts.len(), 3);
     assert_eq!(check.inventory.observed_artifacts.len(), 3);
     assert!(check.report.hard_failures.iter().all(|finding| {
@@ -222,8 +222,8 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
     write_artifact(&icp_root, "root", b"root-artifact");
 
     let manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
-        network: "local".to_string(),
-        artifact_network: "local".to_string(),
+        environment: "local".to_string(),
+        artifact_environment: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,

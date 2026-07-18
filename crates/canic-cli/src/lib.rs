@@ -31,7 +31,7 @@ mod token;
 use crate::cli::{
     clap::parse_matches,
     globals::{
-        DISPATCH_ARGS, apply_global_icp, apply_global_network, command_local_global_option,
+        DISPATCH_ARGS, apply_global_environment, apply_global_icp, command_local_global_option,
         top_level_dispatch_command,
     },
     help::{first_arg_is_help, usage},
@@ -138,7 +138,7 @@ where
         return Ok(());
     }
     let global_icp = cli::clap::string_option(&matches, "icp");
-    let global_network = cli::clap::string_option(&matches, "network");
+    let global_environment = cli::clap::string_option(&matches, "environment");
 
     let Some((command, subcommand_matches)) = matches.subcommand() else {
         return Err(CliError::Usage(usage()));
@@ -148,7 +148,7 @@ where
         .map(|values| values.cloned().collect::<Vec<_>>())
         .unwrap_or_default();
     apply_global_icp(command, &mut tail, global_icp);
-    apply_global_network(command, &mut tail, global_network);
+    apply_global_environment(command, &mut tail, global_environment);
     let tail = tail.into_iter();
 
     match command {

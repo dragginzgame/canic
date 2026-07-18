@@ -23,7 +23,7 @@ pub(super) enum MetricsKind {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(super) struct MetricsReport {
     pub(super) deployment: String,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) kind: MetricsKind,
     pub(super) canisters: Vec<MetricsCanisterReport>,
 }

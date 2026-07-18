@@ -109,12 +109,12 @@ before running their release gates.
 
 Tags are immutable.
 
-## Network Selection
+## Environment Selection
 
 - `ICP_ENVIRONMENT` selects the target ICP CLI environment.
 - If unset, it defaults to `local`.
 - Canic automation should target environments declared in `icp.yaml`.
-- Use `ICP_ENVIRONMENT` for Make/script defaults and `canic --network <name>`
+- Use `ICP_ENVIRONMENT` for Make/script defaults and `canic --environment <name>`
   for one-off CLI commands.
 - Do not use DFX-era network variables as the Canic automation selector.
 

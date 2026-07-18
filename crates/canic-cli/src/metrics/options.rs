@@ -3,8 +3,8 @@ use crate::{
         flag_arg, parse_matches, parse_positive_u64, path_option, render_usage, required_string,
         required_typed, string_option, string_option_or_else, value_arg,
     },
-    cli::defaults::{default_icp, local_network},
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::defaults::{default_icp, local_environment},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     metrics::{MetricsCommandError, model::MetricsKind},
 };
 use clap::Command as ClapCommand;
@@ -28,7 +28,7 @@ pub(super) struct MetricsOptions {
     pub(super) json: bool,
     pub(super) verbose: bool,
     pub(super) out: Option<PathBuf>,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) icp: String,
 }
 
@@ -60,7 +60,7 @@ impl MetricsOptions {
             json: matches.get_flag("json"),
             verbose: matches.get_flag("verbose"),
             out: path_option(&matches, "out"),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
@@ -122,6 +122,6 @@ fn metrics_command_with_bin_name(bin_name: &'static str) -> ClapCommand {
                 .help("Show canister ids, principal dimensions, and raw metric totals"),
         )
         .arg(value_arg("out").long("out").value_name("file"))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }

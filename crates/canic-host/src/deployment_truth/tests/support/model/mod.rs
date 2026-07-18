@@ -3,7 +3,7 @@ use super::*;
 pub(in crate::deployment_truth::tests) fn sample_identity() -> DeploymentIdentityV1 {
     DeploymentIdentityV1 {
         deployment_name: "local-root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_principal: Some("aaaaa-aa".to_string()),
         authority_profile_hash: Some("authority".to_string()),
         role_topology_hash: Some("topology".to_string()),
@@ -132,7 +132,7 @@ pub(in crate::deployment_truth::tests) fn sample_matching_inventory() -> Deploym
 pub(in crate::deployment_truth::tests) fn sample_root_observation() -> DeploymentRootObservationV1 {
     DeploymentRootObservationV1 {
         deployment_name: "demo".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         fleet_template: "root".to_string(),
         root_principal: "aaaaa-aa".to_string(),
         observed_canister_id: "aaaaa-aa".to_string(),

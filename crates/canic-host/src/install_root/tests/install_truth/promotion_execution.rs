@@ -29,7 +29,7 @@ fn install_writes_artifact_promotion_execution_receipt_for_promotion_plan() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),

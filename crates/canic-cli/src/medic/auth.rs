@@ -15,10 +15,14 @@ use crate::{
 pub(super) fn check_auth_renewal(
     options: &MedicOptions,
     issuer: &str,
-    network: &str,
+    environment: &str,
 ) -> MedicCheck {
-    match auth_api::renewal_medic_summary(options.deployment_name(), issuer, network, &options.icp)
-    {
+    match auth_api::renewal_medic_summary(
+        options.deployment_name(),
+        issuer,
+        environment,
+        &options.icp,
+    ) {
         Ok(summary) => auth_renewal_medic_check_from_summary(summary),
         Err(err) => auth_renewal_medic_error_check(err, options.deployment_name(), issuer),
     }

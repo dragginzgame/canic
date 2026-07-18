@@ -15,7 +15,7 @@ pub fn deployment_root_verification_receipt_text(
         format!("receipt_id: {}", receipt.receipt_id),
         format!("receipt_digest: {}", receipt.receipt_digest),
         format!("deployment: {}", receipt.deployment_name),
-        format!("network: {}", receipt.network),
+        format!("environment: {}", receipt.environment),
         format!("fleet_template: {}", receipt.fleet_template),
         format!("root_principal: {}", receipt.root_principal),
         format!(

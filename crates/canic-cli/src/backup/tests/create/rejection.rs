@@ -17,7 +17,7 @@ fn backup_create_persistence_rejects_incompatible_existing_layout() {
     let plan = valid_backup_plan();
     persist_backup_create_dry_run(&root, &plan).expect("persist initial plan");
     let mut requested = valid_backup_plan();
-    requested.network = "ic".to_string();
+    requested.environment = "ic".to_string();
 
     let err = persist_backup_create_dry_run(&root, &requested)
         .expect_err("incompatible existing layout rejects");
@@ -26,7 +26,7 @@ fn backup_create_persistence_rejects_incompatible_existing_layout() {
     std::assert_matches!(
         err,
         BackupCommandError::BackupLayoutMismatch {
-            field: "network",
+            field: "environment",
             existing,
             requested,
         } if existing == "local" && requested == "ic"

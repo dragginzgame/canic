@@ -41,7 +41,7 @@ fn resolves_implicit_build_networks_without_project_config() {
 }
 
 #[test]
-fn resolves_named_target_network_from_declared_backing_network() {
+fn resolves_named_environment_from_declared_backing_network() {
     let source = r"
 networks:
   - name: local
@@ -94,7 +94,7 @@ environments:
 #[test]
 fn build_network_resolution_rejects_incomplete_config() {
     let missing_target = resolve_icp_build_network_from_yaml("environments: []\n", "staging")
-        .expect_err("missing target network should fail");
+        .expect_err("missing target environment should fail");
     let missing_backing_network = resolve_icp_build_network_from_yaml(
         "environments:\n  - name: staging\n    network: private\n",
         "staging",

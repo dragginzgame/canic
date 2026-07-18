@@ -28,7 +28,7 @@ impl ToolMetadata {
 
 impl SourceMetadata {
     pub(super) fn validate(&self) -> Result<(), ManifestValidationError> {
-        validate_nonempty("source.network", &self.network)?;
+        validate_nonempty("source.environment", &self.environment)?;
         validate_principal("source.root_canister", &self.root_canister)
     }
 }

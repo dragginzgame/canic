@@ -86,7 +86,7 @@ fn metrics_usage_uses_deployment_target_wording() {
 fn metrics_report_json_uses_deployment_identity_field() {
     let value = serde_json::to_value(MetricsReport {
         deployment: "demo-local".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         kind: MetricsKind::Core,
         canisters: Vec::new(),
     })
@@ -99,14 +99,14 @@ fn metrics_report_json_uses_deployment_identity_field() {
 #[test]
 fn missing_metrics_deployment_preserves_canonical_typed_error() {
     let error = MetricsCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment: "demo-local".to_string(),
     });
     let message = error.to_string();
 
     assert_eq!(
         message,
-        "deployment target demo-local is not installed on network local"
+        "deployment target demo-local is not installed on environment local"
     );
     std::assert_matches!(
         error,

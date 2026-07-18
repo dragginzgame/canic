@@ -20,18 +20,18 @@ enum CallArgument<'a> {
 }
 
 // Run one binary-Candid `icp canister call` and return stdout, preserving stderr on failure.
-pub(super) fn icp_call_on_network(
+pub(super) fn icp_call_in_environment(
     icp_root: &std::path::Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
     argument: Option<&[u8]>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    icp_call_on_network_with_mode(
+    icp_call_in_environment_with_mode(
         icp_root,
-        network,
+        environment,
         local_replica,
         canister,
         method,
@@ -42,18 +42,18 @@ pub(super) fn icp_call_on_network(
 }
 
 // Run one query-only `icp canister call` and return stdout, preserving stderr on failure.
-pub(super) fn icp_query_on_network(
+pub(super) fn icp_query_in_environment(
     icp_root: &std::path::Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
     argument: Option<&str>,
     output: Option<&str>,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    icp_call_on_network_with_mode(
+    icp_call_in_environment_with_mode(
         icp_root,
-        network,
+        environment,
         local_replica,
         canister,
         method,
@@ -67,9 +67,9 @@ pub(super) fn icp_query_on_network(
     clippy::too_many_arguments,
     reason = "the ICP target and call request stay explicit at this command boundary"
 )]
-fn icp_call_on_network_with_mode(
+fn icp_call_in_environment_with_mode(
     icp_root: &std::path::Path,
-    network: &str,
+    environment: &str,
     local_replica: Option<&LocalReplicaTarget>,
     canister: &str,
     method: &str,
@@ -89,7 +89,7 @@ fn icp_call_on_network_with_mode(
     if query {
         command.arg("--query");
     }
-    icp::add_target_args(&mut command, Some(network), local_replica);
+    icp::add_target_args(&mut command, Some(environment), local_replica);
 
     icp::ensure_command_compatible(&command)?;
     let result = command_output(&mut command, stdin)?;

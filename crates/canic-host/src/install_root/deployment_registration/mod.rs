@@ -6,7 +6,7 @@ use super::root_verification::{
 };
 use super::state::{
     INSTALL_STATE_SCHEMA_VERSION, InstallState, RootVerificationStatus,
-    deployment_install_state_path, read_deployment_install_state, validate_network_name,
+    deployment_install_state_path, read_deployment_install_state, validate_environment_name,
     validate_state_name, write_install_state,
 };
 use crate::deployment_truth::{
@@ -30,7 +30,7 @@ pub struct RegisterDeploymentStateOptions {
     pub deployment_name: String,
     pub fleet_template: String,
     pub root_canister_id: String,
-    pub network: String,
+    pub environment: String,
     pub allow_unverified: bool,
     pub icp_root: Option<PathBuf>,
     pub workspace_root: Option<PathBuf>,
@@ -43,7 +43,7 @@ pub struct RegisterDeploymentStateOptions {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VerifyDeploymentRootOptions {
     pub deployment_name: String,
-    pub network: String,
+    pub environment: String,
     pub deployment_check: DeploymentCheckV1,
     pub verified_at_unix_secs: Option<u64>,
     pub icp_root: Option<PathBuf>,
@@ -58,7 +58,7 @@ pub fn register_deployment_state(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_state_name(&options.deployment_name)?;
     validate_state_name(&options.fleet_template)?;
-    validate_network_name(&options.network)?;
+    validate_environment_name(&options.environment)?;
     if !options.allow_unverified {
         return Err(
             "deployment registration requires explicit unverified-root acknowledgement; pass --allow-unverified"
@@ -81,7 +81,7 @@ pub fn register_deployment_state(
         None => icp_root()?,
     };
     let release_set_manifest_path =
-        registered_deployment_release_set_manifest_path(&icp_root, &options.network);
+        registered_deployment_release_set_manifest_path(&icp_root, &options.environment);
     let timestamp = current_unix_secs()?;
     let state = InstallState {
         schema_version: INSTALL_STATE_SCHEMA_VERSION,
@@ -89,7 +89,7 @@ pub fn register_deployment_state(
         fleet_template: options.fleet_template.clone(),
         created_at_unix_secs: timestamp,
         updated_at_unix_secs: timestamp,
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         root_target: options.root_canister_id.clone(),
         root_canister_id: options.root_canister_id,
         root_verification: RootVerificationStatus::NotVerified,
@@ -105,7 +105,11 @@ pub fn register_deployment_state(
         release_set_manifest_path: release_set_manifest_path.display().to_string(),
     };
 
-    Ok(write_install_state(&icp_root, &options.network, &state)?)
+    Ok(write_install_state(
+        &icp_root,
+        &options.environment,
+        &state,
+    )?)
 }
 
 /// Promote an explicitly registered deployment root from `not_verified` to
@@ -114,7 +118,7 @@ pub fn verify_registered_deployment_root(
     options: VerifyDeploymentRootOptions,
 ) -> Result<DeploymentRootVerificationReceiptV1, Box<dyn std::error::Error>> {
     validate_state_name(&options.deployment_name)?;
-    validate_network_name(&options.network)?;
+    validate_environment_name(&options.environment)?;
     let verified_at_unix_secs = match options.verified_at_unix_secs {
         Some(value) => value,
         None => current_unix_secs()?,
@@ -124,15 +128,15 @@ pub fn verify_registered_deployment_root(
         None => icp_root()?,
     };
     let state_path =
-        deployment_install_state_path(&icp_root, &options.network, &options.deployment_name);
+        deployment_install_state_path(&icp_root, &options.environment, &options.deployment_name);
     let state =
-        read_deployment_install_state(&icp_root, &options.network, &options.deployment_name)?
+        read_deployment_install_state(&icp_root, &options.environment, &options.deployment_name)?
             .ok_or_else(|| {
-                format!(
-                    "no local deployment state exists for {}; run canic deploy register first",
-                    options.deployment_name
-                )
-            })?;
+            format!(
+                "no local deployment state exists for {}; run canic deploy register first",
+                options.deployment_name
+            )
+        })?;
     let state_fleet_template = state.fleet_template.clone();
     let state_root_canister_id = state.root_canister_id.clone();
     let local_state_digest_before = file_sha256_hex(&state_path)?;
@@ -141,11 +145,11 @@ pub fn verify_registered_deployment_root(
         deployment_root_verification_report_from_check(DeploymentRootVerificationRequestV1 {
             report_id: format!(
                 "local:{}:{}:root-verification-report",
-                options.network, options.deployment_name
+                options.environment, options.deployment_name
             ),
             requested_at: format!("unix:{verified_at_unix_secs}"),
             deployment_name: options.deployment_name.clone(),
-            network: options.network.clone(),
+            environment: options.environment.clone(),
             expected_fleet_template: state.fleet_template.clone(),
             expected_root_principal: state.root_canister_id.clone(),
             current_root_verification: previous_root_verification,
@@ -169,7 +173,7 @@ pub fn verify_registered_deployment_root(
             verified_state.updated_at_unix_secs = verified_at_unix_secs;
             write_verified_root_state_if_unchanged(
                 &icp_root,
-                &options.network,
+                &options.environment,
                 &verified_state,
                 &local_state_digest_before,
             )?
@@ -179,7 +183,7 @@ pub fn verify_registered_deployment_root(
 
     root_verification_receipt_from_report(RootVerificationReceiptInput {
         deployment_name: options.deployment_name,
-        network: options.network,
+        environment: options.environment,
         fleet_template: state_fleet_template,
         root_principal: state_root_canister_id,
         previous_root_verification,
@@ -192,6 +196,6 @@ pub fn verify_registered_deployment_root(
     })
 }
 
-fn registered_deployment_release_set_manifest_path(icp_root: &Path, network: &str) -> PathBuf {
-    root_release_set_manifest_path(&artifact_root_path(icp_root, network))
+fn registered_deployment_release_set_manifest_path(icp_root: &Path, environment: &str) -> PathBuf {
+    root_release_set_manifest_path(&artifact_root_path(icp_root, environment))
 }

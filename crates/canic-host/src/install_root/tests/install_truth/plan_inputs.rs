@@ -104,7 +104,7 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
@@ -131,15 +131,15 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
 }
 
 #[test]
-fn install_truth_check_rejects_supplied_plan_network_mismatch() {
+fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
     let (root, mut check) =
-        demo_install_deployment_truth_check("canic-install-truth-plan-network-mismatch");
-    check.plan.deployment_identity.network = "ic".to_string();
+        demo_install_deployment_truth_check("canic-install-truth-plan-environment-mismatch");
+    check.plan.deployment_identity.environment = "ic".to_string();
     let config_path = root.join("fleets/demo/canic.toml");
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
@@ -159,7 +159,7 @@ fn install_truth_check_rejects_supplied_plan_network_mismatch() {
         "demo",
         "2026-05-22T00:00:00Z".to_string(),
     )
-    .expect_err("network mismatch should fail");
+    .expect_err("environment mismatch should fail");
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -173,7 +173,7 @@ fn install_truth_check_rejects_supplied_plan_deployment_target_mismatch() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),

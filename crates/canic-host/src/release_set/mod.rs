@@ -25,15 +25,14 @@ pub(crate) use manifest::{
     RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
     emit_root_release_set_manifest_from_build, validate_root_release_set_manifest,
 };
-pub(crate) use paths::artifact_root_path;
 pub use paths::{
-    ArtifactRootError, CanisterManifestError, WorkspaceDiscoveryError, canister_manifest_path,
-    canisters_root, config_path, display_workspace_path, icp_root, load_root_package_version,
-    load_workspace_package_version, resolve_artifact_root, root_manifest_path,
-    root_release_set_manifest_path, workspace_manifest_path, workspace_root,
+    ArtifactRootError, CanisterManifestError, WorkspaceDiscoveryError, artifact_root_path,
+    canister_manifest_path, canisters_root, config_path, display_workspace_path, icp_root,
+    load_root_package_version, load_workspace_package_version, resolve_artifact_root,
+    root_manifest_path, root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };
 use stage::{build_release_set_entry, validate_release_artifact_relative_path};
-pub(crate) use stage::{icp_query_on_network, resolve_release_artifact_path};
+pub(crate) use stage::{icp_query_in_environment, resolve_release_artifact_path};
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";

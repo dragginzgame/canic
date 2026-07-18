@@ -7,28 +7,29 @@ interfaces after the 0.33 ICP CLI hard cut.
 
 - `.icp/` is the local ICP CLI project state root.
 - `.canic/` is Canic operator state. Deployment-target install state lives under
-  `.canic/<network>/deployments/<deployment>.json`.
+  `.canic/<environment>/deployments/<deployment>.json`.
 
-## Network Vocabulary
+## Environment and Network Vocabulary
 
 Canic uses one name for each distinct target concept:
 
-- `network` is the target selected by Canic's `--network <name>` option. It may
-  be the implicit `local` or `ic` network, or a named entry resolved through the
-  upstream `environments` section in `icp.yaml`.
+- `environment` is the target selected by Canic's `--environment <name>`
+  option. It may be the implicit `local` or `ic` environment, or a named entry
+  such as `staging` declared under `environments` in `icp.yaml`.
 - `build_network` is the `local` or `ic` compile-time class baked into Wasm.
-- `artifact_network` is the exact `.icp/<name>/canisters` namespace read or
-  written by an artifact operation; it can differ from the deployment network
-  when a named deployment installs artifacts built under `local`.
+- `artifact_environment` is the exact `.icp/<name>/canisters` namespace read
+  or written by an artifact operation; it can differ from the deployment
+  environment when a named deployment installs artifacts built under `local`.
 - An ICP backing network is the entry referenced by an `icp.yaml` environment.
   This upstream configuration term is not another Canic target selector.
 - `runtime_variant` is target-specific materialization identity, not a network
   alias.
 
-Canic maps its selected network to ICP CLI's `-e/--environment` selector. The
-upstream `ICP_ENVIRONMENT` variable remains the child-build contract. Direct
-`-n/--network` targeting is reserved for an explicit local replica URL plus
-root key and is not a second named-target path.
+Canic maps its selected environment to ICP CLI's `-e/--environment` selector.
+The upstream `ICP_ENVIRONMENT` variable remains the child-build contract and
+carries the resolved `build_network` (`local` or `ic`) into Wasm compilation.
+Direct `-n/--network` targeting is reserved for an explicit local replica URL
+plus root key and is not a second named-environment path.
 
 ## Canister Build Contract
 
@@ -90,7 +91,7 @@ and artifact hashes.
 - Canic release artifacts are gzip-compressed `.wasm.gz` files owned by the
   Canic build scripts.
 - ICP CLI-visible canister artifacts live under
-  `.icp/<artifact-network>/canisters/<role>/`.
+  `.icp/<artifact-environment>/canisters/<role>/`.
 
 ## Candid Extraction
 
@@ -120,8 +121,8 @@ report a version or complete the requested transform fails the build.
 ## Audit Usage
 
 Recurring audits should use this vocabulary instead of restating tool-specific
-paths inline. When an audit needs a concrete local artifact-network path, use
-`local` unless the report preamble names another network.
+paths inline. When an audit needs a concrete local artifact-environment path,
+use `local` unless the report preamble names another environment.
 
 Ignored `.icp/local/**` Candid sidecars are local build artifacts, not release
 evidence. Before release closeout, either regenerate them from the current

@@ -51,8 +51,11 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         &installed.state.root_canister_id,
         &installed.registry.entries,
     )?;
-    let icp =
-        IcpCli::new(&options.target.icp, Some(options.target.network.clone())).with_cwd(&root);
+    let icp = IcpCli::new(
+        &options.target.icp,
+        Some(options.target.environment.clone()),
+    )
+    .with_cwd(&root);
 
     if options.fabricate {
         return run_fabricate(options, &icp, &target);
@@ -83,7 +86,8 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         amount_e8s,
         options.dry_run,
     );
-    let source_candid_path = canister_target_candid_path(&root, &options.target.network, &source);
+    let source_candid_path =
+        canister_target_candid_path(&root, &options.target.environment, &source);
     if options.dry_run {
         let command = icp.canister_call_arg_output_display_with_candid(
             &source.canister_id,
@@ -128,10 +132,10 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
 
 fn canister_target_candid_path(
     root: &Path,
-    network: &str,
+    environment: &str,
     target: &ResolvedCanisterTarget,
 ) -> Option<PathBuf> {
-    role_candid_path(Some(root), network, target.role.as_deref()?)
+    role_candid_path(Some(root), environment, target.role.as_deref()?)
 }
 
 fn run_fabricate(
@@ -139,7 +143,7 @@ fn run_fabricate(
     icp: &IcpCli,
     target: &ResolvedCanisterTarget,
 ) -> Result<(), CyclesCommandError> {
-    ensure_fabricate_local_network(&options.target.network)?;
+    ensure_fabricate_local_environment(&options.target.environment)?;
     let amount_cycles = required_cycles_amount(options)?;
     let request_arg = provisional_top_up_arg(&target.canister_id, amount_cycles);
     let command = icp.canister_call_arg_output_display(
@@ -188,12 +192,12 @@ fn run_fabricate(
     Ok(())
 }
 
-fn ensure_fabricate_local_network(network: &str) -> Result<(), CyclesCommandError> {
-    if network == "local" {
+fn ensure_fabricate_local_environment(environment: &str) -> Result<(), CyclesCommandError> {
+    if environment == "local" {
         Ok(())
     } else {
         Err(CyclesCommandError::FabricationRequiresLocal {
-            network: network.to_string(),
+            environment: environment.to_string(),
         })
     }
 }
@@ -282,11 +286,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fabricate_requires_local_network() {
+    fn fabricate_requires_local_environment() {
         std::assert_matches!(
-            ensure_fabricate_local_network("ic"),
+            ensure_fabricate_local_environment("ic"),
             Err(CyclesCommandError::FabricationRequiresLocal { .. })
         );
-        assert!(ensure_fabricate_local_network("local").is_ok());
+        assert!(ensure_fabricate_local_environment("local").is_ok());
     }
 }

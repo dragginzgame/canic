@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct RoleArtifactManifestV1 {
     pub schema_version: u32,
     pub manifest_id: String,
-    pub network: String,
+    pub environment: String,
     pub artifact_root: Option<String>,
     pub role_artifacts: Vec<RoleArtifactV1>,
     pub unresolved_artifacts: Vec<DeploymentObservationGapV1>,

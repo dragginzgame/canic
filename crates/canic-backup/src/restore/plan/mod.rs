@@ -57,7 +57,7 @@ impl RestorePlanner {
 
         Ok(RestorePlan {
             backup_id: manifest.backup_id.clone(),
-            source_network: manifest.source.network.clone(),
+            source_environment: manifest.source.environment.clone(),
             source_root_canister: manifest.source.root_canister.clone(),
             topology_hash: manifest.deployment.topology_hash.clone(),
             member_count: manifest.deployment.members.len(),

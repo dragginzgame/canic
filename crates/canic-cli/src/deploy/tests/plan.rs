@@ -159,13 +159,13 @@ fn deploy_plan_options_parse_supported_surface() {
         OsString::from("fleets/demo/canic.toml"),
         OsString::from("--build-profile"),
         OsString::from("fast"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
     ])
     .expect("parse deploy plan options");
 
     assert_eq!(options.deployment, "demo-local");
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert!(options.json);
     assert_eq!(options.out, Some(PathBuf::from("deployment-plan.json")));
     assert_eq!(
@@ -486,10 +486,11 @@ fn deploy_plan_report_blocks_unverified_installed_root_state() {
 }
 
 #[test]
-fn deploy_plan_report_marks_installed_network_mismatch_as_drift() {
-    let (_temp, workspace_root, icp_root) = temp_plan_workspace("canic-deploy-plan-network-drift");
+fn deploy_plan_report_marks_installed_environment_mismatch_as_drift() {
+    let (_temp, workspace_root, icp_root) =
+        temp_plan_workspace("canic-deploy-plan-environment-drift");
     let mut state = sample_install_state("demo-local", "aaaaa-aa");
-    state.network = "mainnet".to_string();
+    state.environment = "mainnet".to_string();
     write_install_state(&icp_root, "local", state);
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
@@ -761,7 +762,7 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
             "schema_version",
             "command",
             "target",
-            "network",
+            "environment",
             "build_profile",
             "config_path",
             "status",
@@ -828,10 +829,10 @@ fn temp_plan_workspace_with_config(prefix: &str, config: &str) -> (TempDir, Path
     (temp, workspace_root, icp_root)
 }
 
-fn write_install_state(icp_root: &std::path::Path, network: &str, state: InstallState) {
+fn write_install_state(icp_root: &std::path::Path, environment: &str, state: InstallState) {
     let path = icp_root
         .join(".canic")
-        .join(network)
+        .join(environment)
         .join("deployments")
         .join(format!("{}.json", state.deployment_name));
     fs::create_dir_all(path.parent().expect("state parent")).expect("create state dir");
@@ -895,7 +896,7 @@ fn sample_install_state(deployment_name: &str, root_canister_id: &str) -> Instal
         fleet_template: "demo".to_string(),
         created_at_unix_secs: 1,
         updated_at_unix_secs: 1,
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_target: "root".to_string(),
         root_canister_id: root_canister_id.to_string(),
         root_verification: RootVerificationStatus::Verified,
@@ -1020,7 +1021,11 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
             "deployment_plan_builder",
         ),
         ("fleet_template_resolved", "demo-local", "fleet_config"),
-        ("network_resolved", "demo-local", "deployment_plan_builder"),
+        (
+            "environment_resolved",
+            "demo-local",
+            "deployment_plan_builder",
+        ),
         (
             "pool_identity_set_resolved",
             "demo-local",

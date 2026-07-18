@@ -15,7 +15,7 @@ use self::diagnostics::{
 use crate::{
     canister_ready::query_canister_ready,
     icp::{IcpCli, LocalReplicaTarget, decode_json_response},
-    release_set::icp_query_on_network,
+    release_set::icp_query_in_environment,
     replica_query,
 };
 use std::{path::Path, thread, time::Duration};
@@ -25,7 +25,7 @@ use canic_core::{dto::state::BootstrapStatusResponse, protocol};
 // Wait until root reports ready, printing periodic progress and diagnostics.
 pub(super) fn wait_for_root_ready(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     timeout_seconds: u64,
     local_replica: Option<&LocalReplicaTarget>,
@@ -36,7 +36,7 @@ pub(super) fn wait_for_root_ready(
     println!("Waiting for {root_canister} to report canic_ready (timeout {timeout_seconds}s)");
 
     loop {
-        if root_ready(icp_root, network, root_canister, local_replica)? {
+        if root_ready(icp_root, environment, root_canister, local_replica)? {
             println!(
                 "{root_canister} reported canic_ready after {}s",
                 start.elapsed().as_secs()
@@ -44,11 +44,11 @@ pub(super) fn wait_for_root_ready(
             return Ok(());
         }
 
-        let status = root_bootstrap_status(icp_root, network, root_canister, local_replica)?;
+        let status = root_bootstrap_status(icp_root, environment, root_canister, local_replica)?;
         if let Some(last_error) = status.last_error.as_deref() {
             print_bootstrap_failure_diagnostics(
                 icp_root,
-                network,
+                environment,
                 root_canister,
                 local_replica,
                 &status,
@@ -64,14 +64,14 @@ pub(super) fn wait_for_root_ready(
         let elapsed = start.elapsed().as_secs();
         if elapsed >= timeout_seconds {
             eprintln!("root did not report canic_ready within {timeout_seconds}s");
-            print_root_diagnostics(icp_root, network, root_canister, local_replica);
+            print_root_diagnostics(icp_root, environment, root_canister, local_replica);
             return Err("root did not become ready".into());
         }
 
         if elapsed >= next_report {
             println!("Still waiting for {root_canister} canic_ready ({elapsed}s elapsed)");
-            print_current_bootstrap_status(icp_root, network, root_canister, local_replica)?;
-            print_current_registry_roles(icp_root, network, root_canister, local_replica);
+            print_current_bootstrap_status(icp_root, environment, root_canister, local_replica)?;
+            print_current_registry_roles(icp_root, environment, root_canister, local_replica);
             next_report = elapsed + 5;
         }
 
@@ -82,35 +82,35 @@ pub(super) fn wait_for_root_ready(
 // Return true once root reports `canic_ready == true`.
 fn root_ready(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let icp = IcpCli::new("icp", Some(network.to_string()))
+    let icp = IcpCli::new("icp", Some(environment.to_string()))
         .with_cwd(icp_root)
         .with_local_replica(local_replica.cloned());
-    query_canister_ready(&icp, root_canister, network, Some(icp_root), None).map_err(Into::into)
+    query_canister_ready(&icp, root_canister, environment, Some(icp_root), None).map_err(Into::into)
 }
 
 // Return the current root bootstrap diagnostic state when the query is available.
 fn root_bootstrap_status(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<BootstrapStatusResponse, Box<dyn std::error::Error>> {
-    if replica_query::should_use_local_replica_query(Some(network)) {
+    if replica_query::should_use_local_replica_query(Some(environment)) {
         return replica_query::query_bootstrap_status_from_root(
-            Some(network),
+            Some(environment),
             root_canister,
             icp_root,
         )
         .map_err(Into::into);
     }
 
-    let output = icp_query_on_network(
+    let output = icp_query_in_environment(
         icp_root,
-        network,
+        environment,
         local_replica,
         root_canister,
         protocol::CANIC_BOOTSTRAP_STATUS,
@@ -122,11 +122,11 @@ fn root_bootstrap_status(
 
 fn print_current_bootstrap_status(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let status = root_bootstrap_status(icp_root, network, root_canister, local_replica)?;
+    let status = root_bootstrap_status(icp_root, environment, root_canister, local_replica)?;
     print_bootstrap_status(&status);
     Ok(())
 }

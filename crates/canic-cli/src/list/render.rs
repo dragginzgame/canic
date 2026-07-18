@@ -70,7 +70,7 @@ const REGISTRY_ALIGNMENTS: [ColumnAlign; 7] = [
 pub(super) struct ListTitle {
     pub(super) source: ListTitleSource,
     pub(super) name: String,
-    pub(super) network: String,
+    pub(super) environment: String,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -162,7 +162,10 @@ fn render_list_title(title: &ListTitle) -> String {
         ListTitleSource::Deployment => "Deployment",
         ListTitleSource::FleetTemplate => "Fleet template",
     };
-    format!("{label}: {} (network {})", title.name, title.network)
+    format!(
+        "{label}: {} (environment {})",
+        title.name, title.environment
+    )
 }
 
 ///

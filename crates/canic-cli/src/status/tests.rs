@@ -2,21 +2,21 @@ use super::*;
 use crate::test_support::temp_dir;
 use std::fs;
 
-// Ensure status defaults to the local network and ordinary `icp` binary.
+// Ensure status defaults to the local environment and ordinary `icp` binary.
 #[test]
 fn parses_status_options() {
     let default_options = StatusOptions::parse([]).expect("parse default options");
-    assert_eq!(default_options.network, "local");
+    assert_eq!(default_options.environment, "local");
     assert_eq!(default_options.icp, "icp");
 
     let options = StatusOptions::parse([
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("ic"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
     ])
     .expect("parse explicit options");
-    assert_eq!(options.network, "ic");
+    assert_eq!(options.environment, "ic");
     assert_eq!(options.icp, "/tmp/icp");
 }
 
@@ -24,7 +24,7 @@ fn parses_status_options() {
 #[test]
 fn renders_status_report() {
     let report = StatusReport {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         replica: ReplicaStatus::Running,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
@@ -53,7 +53,7 @@ fn renders_status_report() {
             "Replica: running (local, port 8000)",
             "ICP CLI: icp 0.2.5",
             "ICP project: ok (icp.yaml)",
-            "Deployments: 1/2 deployed (network local)",
+            "Deployments: 1/2 deployed (environment local)",
             "",
             "DEPLOYMENT   DEPLOYED   CONFIG                   CANISTERS   ROOT",
             "----------   --------   ----------------------   ---------   --------",
@@ -68,7 +68,7 @@ fn renders_status_report() {
 #[test]
 fn renders_empty_status_report() {
     let report = StatusReport {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         replica: ReplicaStatus::Stopped,
         replica_port: "8001".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
@@ -78,7 +78,7 @@ fn renders_empty_status_report() {
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic fleet configs)\nDeployments: 0/0 deployed (network local)"
+        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic fleet configs)\nDeployments: 0/0 deployed (environment local)"
     );
 }
 
@@ -87,7 +87,7 @@ fn renders_empty_status_report() {
 #[test]
 fn renders_http_fallback_replica_status() {
     let report = StatusReport {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         replica: ReplicaStatus::RunningHttpFallback,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
@@ -97,7 +97,7 @@ fn renders_http_fallback_replica_status() {
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nICP project: ok (icp.yaml)\nDeployments: 0/0 deployed (network local)"
+        "Replica: running (local, port 8000, HTTP reachable; ICP CLI status stopped)\nICP CLI: icp 0.2.6\nICP project: ok (icp.yaml)\nDeployments: 0/0 deployed (environment local)"
     );
 }
 
@@ -105,7 +105,7 @@ fn renders_http_fallback_replica_status() {
 #[test]
 fn renders_lost_local_deployment_target_note() {
     let report = StatusReport {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         replica: ReplicaStatus::Running,
         replica_port: "8000".to_string(),
         icp_cli: "icp 0.2.6".to_string(),
@@ -160,7 +160,7 @@ kind = "service"
     )
     .expect("write config");
     let options = StatusOptions {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         icp: "icp".to_string(),
     };
 
@@ -233,7 +233,7 @@ fn status_usage_lists_options_and_examples() {
 
     assert!(text.contains("Show quick Canic project status"));
     assert!(text.contains("Usage: canic status"));
-    assert!(!text.contains("--network"));
+    assert!(!text.contains("--environment"));
     assert!(!text.contains("--icp"));
     assert!(text.contains("Examples:"));
     assert!(text.contains("does not persist canister state"));

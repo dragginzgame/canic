@@ -7,13 +7,13 @@ use super::*;
 #[test]
 fn deploy_catalog_options_parse_list_defaults_to_text() {
     let options = deploy_catalog::DeployCatalogOptions::parse_list_test([
-        OsString::from("--__canic-network"),
+        OsString::from("--__canic-environment"),
         OsString::from("local"),
     ])
     .expect("parse catalog list");
 
     assert_eq!(options.deployment, None);
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert_eq!(options.format, JsonTextOutputFormat::Text);
     assert_eq!(options.output, None);
 }
@@ -29,7 +29,7 @@ fn deploy_catalog_options_parse_inspect_json_output() {
     .expect("parse catalog inspect");
 
     assert_eq!(options.deployment.as_deref(), Some("demo-local"));
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert_eq!(options.format, JsonTextOutputFormat::Json);
     assert_eq!(options.output, Some(PathBuf::from("catalog.json")));
 }
@@ -46,7 +46,7 @@ fn deploy_catalog_help_documents_passive_deployment_target_scope() {
     let list_help = deploy_catalog::list_usage();
     let inspect_help = deploy_catalog::inspect_usage();
 
-    assert!(help.contains("deployment targets recorded under .canic/<network>/deployments"));
+    assert!(help.contains("deployment targets recorded under .canic/<environment>/deployments"));
     assert!(help.contains("canic deploy inspect catalog list"));
     assert!(help.contains("do not query"));
     assert!(help.contains("infer deployments from fleet-template names"));
@@ -60,7 +60,7 @@ fn writes_catalog_json_output_file() {
     let out = temp_json_path("deploy-catalog-output.json");
     let options = deploy_catalog::DeployCatalogOptions {
         deployment: None,
-        network: "local".to_string(),
+        environment: "local".to_string(),
         format: JsonTextOutputFormat::Json,
         output: Some(out.clone()),
     };

@@ -17,8 +17,8 @@ use crate::{
         flag_arg, parse_matches, path_option, render_usage, required_string, string_option,
         string_option_or_else, value_arg,
     },
-    cli::defaults::{default_icp, local_network},
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::defaults::{default_icp, local_environment},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     support::candid::role_candid_path,
 };
 use canic_backup::{
@@ -60,7 +60,7 @@ pub(super) struct SnapshotDownloadOptions {
     recursive: bool,
     dry_run: bool,
     lifecycle: SnapshotLifecycleMode,
-    network: Option<String>,
+    environment: Option<String>,
     icp: String,
 }
 
@@ -85,7 +85,7 @@ impl SnapshotDownloadOptions {
             lifecycle: SnapshotLifecycleMode::from_resume_flag(
                 matches.get_flag("resume-after-snapshot"),
             ),
-            network: string_option(&matches, "network"),
+            environment: string_option(&matches, "environment"),
             icp: string_option_or_else(&matches, "icp", default_icp),
         })
     }
@@ -113,7 +113,7 @@ fn snapshot_download_command() -> ClapCommand {
         .arg(flag_arg("recursive").long("recursive"))
         .arg(flag_arg("dry-run").long("dry-run"))
         .arg(flag_arg("resume-after-snapshot").long("resume-after-snapshot"))
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
 
@@ -139,8 +139,8 @@ pub(super) fn download_snapshots(
         created_at: current_timestamp_marker(),
         tool_name: "canic-cli".to_string(),
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
-        network: request
-            .network
+        environment: request
+            .environment
             .clone()
             .unwrap_or_else(|| "local".to_string()),
     };
@@ -167,7 +167,7 @@ struct ResolvedSnapshotDownload {
     recursive: bool,
     dry_run: bool,
     lifecycle: SnapshotLifecycleMode,
-    network: Option<String>,
+    environment: Option<String>,
     icp: String,
     icp_root: PathBuf,
     registry_entries: Option<Vec<HostRegistryEntry>>,
@@ -177,12 +177,12 @@ struct ResolvedSnapshotDownload {
 fn resolve_snapshot_download_request(
     options: &SnapshotDownloadOptions,
 ) -> Result<ResolvedSnapshotDownload, SnapshotCommandError> {
-    let network = state_network(options.network.as_deref());
+    let environment = state_environment(options.environment.as_deref());
     let icp_root = resolve_current_canic_icp_root().map_err(SnapshotCommandError::IcpRoot)?;
     let installed = match resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: options.deployment.clone(),
-            network,
+            environment,
             icp: options.icp.clone(),
             detect_lost_local_root: false,
         },
@@ -225,7 +225,7 @@ fn resolve_snapshot_download_request(
         recursive,
         dry_run: options.dry_run,
         lifecycle: options.lifecycle,
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         icp: options.icp.clone(),
         icp_root,
         registry_entries: installed.map(|installed| installed.registry.entries),
@@ -297,8 +297,8 @@ fn default_snapshot_output_path(deployment: &str) -> PathBuf {
     ))
 }
 
-fn state_network(network: Option<&str>) -> String {
-    network.map_or_else(local_network, str::to_string)
+fn state_environment(environment: Option<&str>) -> String {
+    environment.map_or_else(local_environment, str::to_string)
 }
 
 ///
@@ -373,19 +373,19 @@ fn driver_error(error: SnapshotCommandError) -> SnapshotDriverError {
 }
 
 fn icp(request: &ResolvedSnapshotDownload) -> IcpCli {
-    IcpCli::new(&request.icp, request.network.clone()).with_cwd(&request.icp_root)
+    IcpCli::new(&request.icp, request.environment.clone()).with_cwd(&request.icp_root)
 }
 
 fn call_subnet_registry(
     request: &ResolvedSnapshotDownload,
     root: &str,
 ) -> Result<Vec<HostRegistryEntry>, SnapshotCommandError> {
-    let network = state_network(request.network.as_deref());
-    let candid_path = role_candid_path(Some(&request.icp_root), &network, "root");
+    let environment = state_environment(request.environment.as_deref());
+    let candid_path = role_candid_path(Some(&request.icp_root), &environment, "root");
     query_subnet_registry(
         &icp(request),
         root,
-        &network,
+        &environment,
         Some(&request.icp_root),
         candid_path.as_deref(),
     )

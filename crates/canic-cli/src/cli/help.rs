@@ -4,7 +4,7 @@
 //! Does not own: command execution, command-specific help text, or global option forwarding.
 //! Boundary: defines the top-level command catalog shared by help and dispatch.
 
-use crate::cli::globals::{icp_arg, network_arg};
+use crate::cli::globals::{environment_arg, icp_arg};
 use clap::{Arg, ArgAction, Command};
 use std::ffi::OsString;
 
@@ -196,7 +196,7 @@ pub fn top_level_command() -> Command {
                 .help("Print version"),
         )
         .arg(icp_arg().global(true))
-        .arg(network_arg().global(true))
+        .arg(environment_arg().global(true))
         .subcommand_help_heading("Commands")
         .help_template(TOP_LEVEL_HELP_TEMPLATE)
         .before_help(grouped_command_section(COMMAND_SPECS).join("\n"))
@@ -224,7 +224,7 @@ pub fn usage() -> String {
         String::new(),
         color(COLOR_HEADING, "Options:"),
         "      --icp <path>      Path to the icp executable for ICP-backed commands".to_string(),
-        "      --network <name>  ICP CLI network for networked commands".to_string(),
+        "      --environment <name>  ICP environment for ICP-backed commands".to_string(),
         "  -V, --version  Print version".to_string(),
         "  -h, --help     Print help".to_string(),
         String::new(),

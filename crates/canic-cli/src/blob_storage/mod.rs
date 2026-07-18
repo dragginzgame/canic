@@ -306,11 +306,11 @@ impl BlobStorageMedicSummary {
 pub fn medic_summary(
     deployment: &str,
     canister: &str,
-    network: &str,
+    environment: &str,
     icp: &str,
 ) -> Result<BlobStorageMedicSummary, BlobStorageCommandError> {
     let options = options::CommonOptions {
-        network: network.to_string(),
+        environment: environment.to_string(),
         icp: icp.to_string(),
     };
     live_status_result(&options, deployment, canister)
@@ -611,7 +611,7 @@ fn with_post_status_diagnostic(
 }
 
 fn icp_cli(options: &options::CommonOptions) -> IcpCli {
-    IcpCli::new(&options.icp, Some(options.network.clone()))
+    IcpCli::new(&options.icp, Some(options.environment.clone()))
 }
 
 fn dry_run_call_display(

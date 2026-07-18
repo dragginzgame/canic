@@ -12,7 +12,7 @@ use std::path::PathBuf;
 pub struct InstallRootOptions {
     pub root_canister: String,
     pub root_build_target: String,
-    pub network: String,
+    pub environment: String,
     pub deployment_name: Option<String>,
     pub icp_root: Option<PathBuf>,
     pub build_profile: Option<CanisterBuildProfile>,
@@ -25,10 +25,10 @@ pub struct InstallRootOptions {
 }
 
 impl InstallRootOptions {
-    /// Return the exact ICP artifact network owned by this install mode.
-    pub(super) fn artifact_network(&self) -> &str {
+    /// Return the exact ICP artifact environment owned by this install mode.
+    pub(super) fn artifact_environment(&self) -> &str {
         if self.deployment_plan_override.is_some() {
-            &self.network
+            &self.environment
         } else {
             "local"
         }

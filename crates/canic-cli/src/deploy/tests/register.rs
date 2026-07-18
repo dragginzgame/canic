@@ -36,7 +36,7 @@ fn deploy_register_builds_minimal_registration_options() {
         deployment: "demo-local".to_string(),
         fleet_template: "demo".to_string(),
         root: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         allow_unverified: true,
     }
     .into_register_options(Some(PathBuf::from("/tmp/icp")));
@@ -44,7 +44,7 @@ fn deploy_register_builds_minimal_registration_options() {
     assert_eq!(options.deployment_name, "demo-local");
     assert_eq!(options.fleet_template, "demo");
     assert_eq!(options.root_canister_id, "uxrrr-q7777-77774-qaaaq-cai");
-    assert_eq!(options.network, "local");
+    assert_eq!(options.environment, "local");
     assert!(options.allow_unverified);
     assert_eq!(options.icp_root, Some(PathBuf::from("/tmp/icp")));
     assert_eq!(options.workspace_root, None);

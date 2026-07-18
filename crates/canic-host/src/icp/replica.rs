@@ -1,7 +1,7 @@
 use std::{path::Path, process::Command};
 
 use super::{
-    command::add_debug_arg,
+    command::{add_debug_arg, add_local_network_target},
     error::IcpCommandError,
     model::IcpCli,
     run::{run_json, run_output_with_stderr, run_status_inherit, run_success},
@@ -74,14 +74,14 @@ impl IcpCli {
     fn local_replica_command(&self, action: &str) -> Command {
         let mut command = self.command();
         command.args(["network", action]);
-        self.add_local_network_target(&mut command);
+        add_local_network_target(&mut command);
         command
     }
 
     fn local_replica_command_in(&self, action: &str, cwd: &Path) -> Command {
         let mut command = self.command_in(cwd);
         command.args(["network", action]);
-        self.add_local_network_target(&mut command);
+        add_local_network_target(&mut command);
         command
     }
 }

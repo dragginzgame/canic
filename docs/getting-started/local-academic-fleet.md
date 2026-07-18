@@ -16,9 +16,9 @@ installed registry and medic checks:
 
 ```bash
 canic status
-canic --network academic info list <deployment>
-canic --network academic info env <deployment>
-canic --network academic medic deployment <deployment>
+canic --environment academic info list <deployment>
+canic --environment academic info env <deployment>
+canic --environment academic medic deployment <deployment>
 ```
 
 Use `canic fleet config <fleet>` to inspect what is configured and
@@ -29,7 +29,7 @@ topology.
 
 ## ICP Target Hygiene
 
-Canic commands take a top-level `--network <name>` for networked operations.
+Canic commands take a top-level `--environment <name>` for ICP-backed operations.
 Before debugging target selection, confirm the shell resolves the expected ICP
 CLI binary:
 
@@ -44,7 +44,7 @@ CLI, use the upgrade command in [INSTALLING.md](../../INSTALLING.md#icp-cli-comp
 or pass top-level `--icp /path/to/icp` for a single Canic command.
 
 Raw `icp` commands still need the ICP CLI target shape expected by your
-project. In academic local scripts, prefer clearing stale shell network
+project. In academic local scripts, prefer clearing stale shell target
 selection before passing the explicit ICP environment:
 
 ```bash
@@ -65,7 +65,7 @@ Use role-scoped names:
 
 ```bash
 mkdir -p scripts
-canic --network academic info env <deployment> > scripts/canister_ids.sh
+canic --environment academic info env <deployment> > scripts/canister_ids.sh
 source scripts/canister_ids.sh
 ```
 
@@ -106,10 +106,10 @@ run `canic info list` plus `canic medic deployment` before and after the
 upgrade.
 
 ```bash
-canic --network academic info list <deployment>
-canic --network academic medic deployment <deployment>
+canic --environment academic info list <deployment>
+canic --environment academic medic deployment <deployment>
 env -u ICP_NETWORK icp canister install <canister> --mode=upgrade --wasm <path> -e academic
-canic --network academic info list <deployment>
+canic --environment academic info list <deployment>
 ```
 
 If `canic install` is blocked on an existing local deployment, do not keep
@@ -153,8 +153,8 @@ three states before changing code:
 
 ```bash
 canic fleet config <fleet> --verbose
-canic --network academic info list <deployment> --verbose
-canic --network academic info metrics <deployment> --kind core
+canic --environment academic info list <deployment> --verbose
+canic --environment academic info metrics <deployment> --kind core
 ```
 
 The likely causes are: the role profile does not enable that tier, the deployed
@@ -169,10 +169,10 @@ code:
 ```bash
 canic status
 canic fleet config <fleet> --verbose
-canic --network academic info list <deployment> --verbose
-canic --network academic info env <deployment>
-canic --network academic medic deployment <deployment>
-canic --network academic info metrics <deployment> --kind core --nonzero
+canic --environment academic info list <deployment> --verbose
+canic --environment academic info env <deployment>
+canic --environment academic medic deployment <deployment>
+canic --environment academic info metrics <deployment> --kind core --nonzero
 ```
 
 This separates configured intent, deployed registry state, replica health,

@@ -18,7 +18,7 @@ impl BackupPlan {
             plan_id: self.plan_id.clone(),
             run_id: self.run_id.clone(),
             fleet: self.fleet.clone(),
-            network: self.network.clone(),
+            environment: self.environment.clone(),
             root_canister_id: self.root_canister_id.clone(),
             requires_root_controller: self.requires_root_controller,
             targets: self
@@ -38,7 +38,7 @@ impl BackupPlan {
             plan_id: self.plan_id.clone(),
             run_id: self.run_id.clone(),
             fleet: self.fleet.clone(),
-            network: self.network.clone(),
+            environment: self.environment.clone(),
             root_canister_id: self.root_canister_id.clone(),
             targets: self
                 .targets
@@ -55,7 +55,7 @@ impl BackupPlan {
             plan_id: self.plan_id.clone(),
             run_id: self.run_id.clone(),
             fleet: self.fleet.clone(),
-            network: self.network.clone(),
+            environment: self.environment.clone(),
             root_canister_id: self.root_canister_id.clone(),
             selected_subtree_root: self.selected_subtree_root.clone(),
             selected_scope_kind: self.selected_scope_kind.clone(),
@@ -75,7 +75,7 @@ impl BackupPlan {
             plan_id: self.plan_id.clone(),
             run_id: self.run_id.clone(),
             fleet: self.fleet.clone(),
-            network: self.network.clone(),
+            environment: self.environment.clone(),
             root_canister_id: self.root_canister_id.clone(),
             selected_subtree_root: self.selected_subtree_root.clone(),
             quiescence_policy: self.quiescence_policy.clone(),

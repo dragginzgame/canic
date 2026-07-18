@@ -55,14 +55,14 @@ fn parses_duration_selectors() {
 #[test]
 fn missing_cycles_deployment_preserves_canonical_typed_error() {
     let error = CyclesCommandError::from(InstalledDeploymentError::NoInstalledDeployment {
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment: "demo-local".to_string(),
     });
     let message = error.to_string();
 
     assert_eq!(
         message,
-        "deployment target demo-local is not installed on network local"
+        "deployment target demo-local is not installed on environment local"
     );
     std::assert_matches!(
         error,
@@ -108,7 +108,7 @@ fn cycles_usage_uses_deployment_target_wording() {
 fn cycles_report_json_uses_deployment_identity_field() {
     let value = serde_json::to_value(CyclesReport {
         deployment: "demo-local".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         since_seconds: 86_400,
         generated_at_secs: 1_777_000_000,
         canisters: Vec::new(),

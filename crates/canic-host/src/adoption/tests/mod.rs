@@ -133,7 +133,7 @@ fn external_api_artifact_manifest() -> RoleArtifactManifestV1 {
     RoleArtifactManifestV1 {
         schema_version: 1,
         manifest_id: "external-manifest-1".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         artifact_root: None,
         role_artifacts: vec![external_api_role_artifact()],
         unresolved_artifacts: Vec::new(),
@@ -193,7 +193,7 @@ fn inventory(observed_canisters: Vec<ObservedCanisterV1>) -> DeploymentInventory
         observed_identity: None,
         observed_root: Some(DeploymentRootObservationV1 {
             deployment_name: "demo-dev".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             fleet_template: "demo".to_string(),
             root_principal: "aaaaa-aa".to_string(),
             observed_canister_id: "aaaaa-aa".to_string(),

@@ -7,11 +7,11 @@ pub(in crate::deployment_truth) const ROOT_VERIFICATION_CHECK_FAILED_CODE: &str 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RootVerificationCheckName {
     DeploymentName,
-    Network,
+    Environment,
     FleetTemplate,
     RootPrincipal,
     PlanDeploymentName,
-    PlanNetwork,
+    PlanEnvironment,
     PlanFleetTemplate,
     ExplicitObservedRoot,
     RootObservationSource,
@@ -25,11 +25,11 @@ impl RootVerificationCheckName {
     pub(super) const fn label(self) -> &'static str {
         match self {
             Self::DeploymentName => "deployment_name",
-            Self::Network => "network",
+            Self::Environment => "environment",
             Self::FleetTemplate => "fleet_template",
             Self::RootPrincipal => "root_principal",
             Self::PlanDeploymentName => "plan_deployment_name",
-            Self::PlanNetwork => "plan_network",
+            Self::PlanEnvironment => "plan_environment",
             Self::PlanFleetTemplate => "plan_fleet_template",
             Self::ExplicitObservedRoot => "explicit_observed_root",
             Self::RootObservationSource => "root_observation_source",
@@ -55,9 +55,9 @@ pub(super) fn root_verification_identity_checks(
     );
     push_check(
         &mut checks,
-        RootVerificationCheckName::Network,
-        Some(request.network.as_str()),
-        observed_root.map(|root| root.network.as_str()),
+        RootVerificationCheckName::Environment,
+        Some(request.environment.as_str()),
+        observed_root.map(|root| root.environment.as_str()),
     );
     push_check(
         &mut checks,
@@ -79,9 +79,9 @@ pub(super) fn root_verification_identity_checks(
     );
     push_check(
         &mut checks,
-        RootVerificationCheckName::PlanNetwork,
-        Some(request.network.as_str()),
-        Some(check.plan.deployment_identity.network.as_str()),
+        RootVerificationCheckName::PlanEnvironment,
+        Some(request.environment.as_str()),
+        Some(check.plan.deployment_identity.environment.as_str()),
     );
     push_check(
         &mut checks,

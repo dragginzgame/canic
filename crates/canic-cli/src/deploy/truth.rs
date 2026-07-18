@@ -20,25 +20,25 @@ struct TruthCommand {
 const DEPLOY_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect plan demo
-  canic --network local deploy inspect plan --profile fast demo
+  canic --environment local deploy inspect plan --profile fast demo
 
 Prints the local DeploymentPlanV1 JSON without installing or mutating state.";
 const DEPLOY_INVENTORY_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect inventory demo
-  canic --network local deploy inspect inventory --profile fast demo
+  canic --environment local deploy inspect inventory --profile fast demo
 
 Prints the local DeploymentInventoryV1 JSON without installing or mutating state.";
 const DEPLOY_DIFF_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect diff demo
-  canic --network local deploy inspect diff --profile fast demo
+  canic --environment local deploy inspect diff --profile fast demo
 
 Prints the local DeploymentDiffV1 JSON without installing or mutating state.";
 const DEPLOY_REPORT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect report demo
-  canic --network local deploy inspect report --profile fast demo
+  canic --environment local deploy inspect report --profile fast demo
 
 Prints the local SafetyReportV1 JSON without installing or mutating state.";
 

@@ -93,7 +93,7 @@ pub(super) fn build_report(
         schema_version: REPORT_SCHEMA_VERSION,
         command: REPORT_COMMAND,
         target: options.deployment.clone(),
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         build_profile: build_profile_name(options),
         config_path: display_path(&config_path),
         status,
@@ -115,12 +115,12 @@ fn build_plan(
 ) -> DeploymentPlanV1 {
     canic_host::deployment_truth::build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: options.deployment.clone(),
-        network: options.network.clone(),
-        artifact_network: options.network.clone(),
+        environment: options.environment.clone(),
+        artifact_environment: options.environment.clone(),
         workspace_root: roots.workspace_root.clone(),
         icp_root: roots.icp_root.clone(),
         config_path: Some(config_path.to_path_buf()),
-        runtime_variant: options.network.clone(),
+        runtime_variant: options.environment.clone(),
         build_profile: build_profile_name(options),
     })
 }
@@ -471,7 +471,7 @@ mod tests {
             schema_version: REPORT_SCHEMA_VERSION,
             command: REPORT_COMMAND,
             target: "demo-local".to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             build_profile: "debug".to_string(),
             config_path: "fleets/demo/canic.toml".to_string(),
             status,
@@ -494,7 +494,7 @@ mod tests {
             plan_id: "local:demo-local:plan".to_string(),
             deployment_identity: DeploymentIdentityV1 {
                 deployment_name: "demo-local".to_string(),
-                network: "local".to_string(),
+                environment: "local".to_string(),
                 root_principal: None,
                 authority_profile_hash: None,
                 role_topology_hash: None,

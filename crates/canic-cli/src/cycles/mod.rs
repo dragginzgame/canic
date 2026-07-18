@@ -56,8 +56,10 @@ pub enum CyclesCommandError {
     )]
     AmbiguousRole { deployment: String, role: String },
 
-    #[error("canic cycles convert --fabricate only supports the local network, got {network}")]
-    FabricationRequiresLocal { network: String },
+    #[error(
+        "canic cycles convert --fabricate only supports the local environment, got {environment}"
+    )]
+    FabricationRequiresLocal { environment: String },
 
     #[error("failed to update pending operation log: {0}")]
     PendingOperationLog(String),

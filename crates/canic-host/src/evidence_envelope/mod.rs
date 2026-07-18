@@ -48,7 +48,7 @@ pub struct EvidenceTargetV1 {
     pub fleet: Option<String>,
     pub role: Option<String>,
     pub profile: Option<String>,
-    pub network: Option<String>,
+    pub environment: Option<String>,
 }
 
 ///

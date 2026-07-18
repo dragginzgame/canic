@@ -24,7 +24,7 @@ use crate::{
         clap::{
             parse_matches, parse_subcommand, required_string, string_option_or_else, typed_option,
         },
-        defaults::local_network,
+        defaults::local_environment,
         help::print_help_or_version,
     },
     version_text,
@@ -98,7 +98,7 @@ impl DeployCommandError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DeployTruthOptions {
     pub deployment: String,
-    pub network: String,
+    pub environment: String,
     pub profile: Option<CanisterBuildProfile>,
 }
 
@@ -197,7 +197,7 @@ impl DeployTruthOptions {
     pub(super) fn from_matches(matches: &clap::ArgMatches) -> Self {
         Self {
             deployment: required_string(matches, DEPLOYMENT_ARG),
-            network: string_option_or_else(matches, "network", local_network),
+            environment: string_option_or_else(matches, "environment", local_environment),
             profile: typed_option(matches, PROFILE_ARG),
         }
     }
@@ -209,7 +209,7 @@ impl DeployTruthOptions {
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
-            network: self.network,
+            environment: self.environment,
             deployment_name: Some(self.deployment),
             icp_root,
             build_profile: self.profile,

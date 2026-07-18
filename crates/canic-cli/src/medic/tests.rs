@@ -7,12 +7,12 @@ use super::{
     },
     command::{medic_subcommand_help_requested, usage},
     deployment::{
-        check_deployment_network, check_deployment_registry_not_evaluated,
+        check_deployment_environment, check_deployment_registry_not_evaluated,
         check_deployment_truth_receipt, check_root_canister_id, check_root_readiness_not_evaluated,
-        deployment_name_conflation_checks, deployment_network_selection,
+        deployment_environment_selection, deployment_name_conflation_checks,
         deployment_registry_observed_check, root_readiness_source,
     },
-    project::project_network_selection_check,
+    project::project_environment_selection_check,
     render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
     report::{MedicStatus, aggregate_status},
     role_contract::project_config_quality_checks,
@@ -51,7 +51,7 @@ fn parses_bare_project_medic_options() {
 
     assert_eq!(options.scope, MedicScope::Project);
     assert_eq!(options.deployment, None);
-    assert_eq!(options.network, None);
+    assert_eq!(options.environment, None);
     assert_eq!(options.icp, "/tmp/icp");
     assert!(!options.ci);
 }
@@ -80,13 +80,13 @@ fn parses_project_medic_ci_options() {
     assert_eq!(options.deployment, None);
 }
 
-// Ensure deployment medic parses target, network, and ICP selectors.
+// Ensure deployment medic parses target, environment, and ICP selectors.
 #[test]
 fn parses_deployment_medic_options() {
     let options = MedicOptions::parse([
         OsString::from("deployment"),
         OsString::from("demo"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
         OsString::from("/tmp/icp"),
@@ -95,7 +95,7 @@ fn parses_deployment_medic_options() {
 
     assert_eq!(options.scope, MedicScope::Deployment);
     assert_eq!(options.deployment.as_deref(), Some("demo"));
-    assert_eq!(options.network.as_deref(), Some("local"));
+    assert_eq!(options.environment.as_deref(), Some("local"));
     assert_eq!(options.icp, "/tmp/icp");
     assert!(!options.ci);
 }
@@ -188,7 +188,7 @@ fn medic_subcommand_help_requests_are_not_targets() {
         OsString::from("--help")
     ]));
     assert!(medic_subcommand_help_requested(&[
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from("deployment"),
         OsString::from("--help")
@@ -201,7 +201,7 @@ fn medic_subcommand_help_requests_are_not_targets() {
     ]));
     assert!(medic_subcommand_help_requested(&[
         OsString::from("deployment"),
-        OsString::from(crate::cli::globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from("--help")
     ]));
@@ -267,10 +267,10 @@ fn renders_medic_text_report() {
         vec![
             MedicCheck::warn(
                 MedicCategory::ProjectConfig,
-                "local_network_implicit",
-                "network",
-                "no network was selected",
-                "select an explicit network before deployment checks",
+                "local_environment_implicit",
+                "environment",
+                "no environment was selected",
+                "select an explicit environment before deployment checks",
                 MedicSource::IcpConfig,
             ),
             MedicCheck::pass(
@@ -286,11 +286,11 @@ fn renders_medic_text_report() {
     let rendered = render_medic_text(&report);
 
     assert!(rendered.starts_with("canic medic project\nstatus: warn"));
-    assert!(rendered.contains("network: not selected"));
+    assert!(rendered.contains("environment: not selected"));
     assert!(rendered.contains("environment [pass] icp_cli_ok"));
-    assert!(rendered.contains("project_config [warn] local_network_implicit"));
-    assert!(rendered.contains("  detail: no network was selected"));
-    assert!(rendered.contains("  next: select an explicit network"));
+    assert!(rendered.contains("project_config [warn] local_environment_implicit"));
+    assert!(rendered.contains("  detail: no environment was selected"));
+    assert!(rendered.contains("  next: select an explicit environment"));
     assert!(rendered.contains("  source: icp_config"));
 }
 
@@ -311,7 +311,7 @@ fn renders_medic_json_report() {
     assert_eq!(value["schema_version"], 1);
     assert_eq!(value["command"], "canic medic project");
     assert_eq!(value["scope"], "project");
-    assert_eq!(value["network"], JsonValue::Null);
+    assert_eq!(value["environment"], JsonValue::Null);
     assert_eq!(value["deployment"], JsonValue::Null);
     assert_eq!(value["status"], "pass");
     assert!(value["checks"].is_array());
@@ -361,10 +361,10 @@ fn renders_medic_ci_report_with_fail_only_rows() {
             ),
             MedicCheck::warn(
                 MedicCategory::ProjectConfig,
-                "local_network_implicit",
-                "network",
-                "no network was selected",
-                "select an explicit network before deployment checks",
+                "local_environment_implicit",
+                "environment",
+                "no environment was selected",
+                "select an explicit environment before deployment checks",
                 MedicSource::IcpConfig,
             ),
             MedicCheck::fail(
@@ -385,7 +385,7 @@ fn renders_medic_ci_report_with_fail_only_rows() {
     );
     assert!(rendered.contains("  next: edit runtime [dependencies].canic"));
     assert!(!rendered.contains("icp_cli_ok"));
-    assert!(!rendered.contains("local_network_implicit"));
+    assert!(!rendered.contains("local_environment_implicit"));
 }
 
 // Ensure CI text output remains explicit when no failing checks exist.
@@ -438,9 +438,9 @@ fn medic_usage_and_internal_errors_render_cli_stderr() {
     assert!(render_cli_error(&json).contains("medic: failed to render medic JSON output"));
 }
 
-// Ensure deployment reports include the effective network while project reports may omit it.
+// Ensure deployment reports include the effective environment while project reports may omit it.
 #[test]
-fn deployment_report_includes_effective_network() {
+fn deployment_report_includes_effective_environment() {
     let report = MedicReport::new(
         &MedicOptions {
             scope: MedicScope::Deployment,
@@ -449,23 +449,23 @@ fn deployment_report_includes_effective_network() {
             auth_renewal: None,
             json: false,
             ci: false,
-            network: None,
+            environment: None,
             icp: "icp".to_string(),
         },
         vec![sample_check(MedicStatus::Pass)],
     );
 
-    assert_eq!(report.network.as_deref(), Some("local"));
+    assert_eq!(report.environment.as_deref(), Some("local"));
     assert_eq!(report.deployment.as_deref(), Some("demo"));
 }
 
-// Ensure deployment medic uses a unique installed deployment record network when
-// the operator does not pass an explicit network.
+// Ensure deployment medic uses a unique installed deployment record environment when
+// the operator does not pass an explicit environment.
 #[test]
-fn deployment_network_selection_uses_recorded_network_before_local_default() {
-    let root = temp_dir("canic-cli-medic-recorded-network");
+fn deployment_environment_selection_uses_recorded_environment_before_local_default() {
+    let root = temp_dir("canic-cli-medic-recorded-environment");
     let mut state = sample_install_state();
-    state.network = "ic".to_string();
+    state.environment = "ic".to_string();
     write_medic_install_state(&root, "ic", &state);
     let options = MedicOptions {
         scope: MedicScope::Deployment,
@@ -474,32 +474,32 @@ fn deployment_network_selection_uses_recorded_network_before_local_default() {
         auth_renewal: None,
         json: false,
         ci: false,
-        network: None,
+        environment: None,
         icp: "icp".to_string(),
     };
 
-    let (network, check) = deployment_network_selection(&options, Some(&root));
-    let report = MedicReport::with_network(
+    let (environment, check) = deployment_environment_selection(&options, Some(&root));
+    let report = MedicReport::with_environment(
         &options,
-        Some(network.clone()),
+        Some(environment.clone()),
         vec![sample_check(MedicStatus::Pass)],
     );
 
-    assert_eq!(network, "ic");
-    assert_eq!(check.code, "deployment_network_from_record");
+    assert_eq!(environment, "ic");
+    assert_eq!(check.code, "deployment_environment_from_record");
     assert_eq!(check.source, MedicSource::InstalledDeployment);
-    assert_eq!(report.network.as_deref(), Some("ic"));
+    assert_eq!(report.environment.as_deref(), Some("ic"));
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure an explicit operator network still wins over discovered deployment
+// Ensure an explicit operator environment still wins over discovered deployment
 // records.
 #[test]
-fn deployment_network_selection_prefers_explicit_network() {
-    let root = temp_dir("canic-cli-medic-explicit-network");
+fn deployment_environment_selection_prefers_explicit_environment() {
+    let root = temp_dir("canic-cli-medic-explicit-environment");
     let mut state = sample_install_state();
-    state.network = "ic".to_string();
+    state.environment = "ic".to_string();
     write_medic_install_state(&root, "ic", &state);
     let options = MedicOptions {
         scope: MedicScope::Deployment,
@@ -508,14 +508,14 @@ fn deployment_network_selection_prefers_explicit_network() {
         auth_renewal: None,
         json: false,
         ci: false,
-        network: Some("local".to_string()),
+        environment: Some("local".to_string()),
         icp: "icp".to_string(),
     };
 
-    let (network, check) = deployment_network_selection(&options, Some(&root));
+    let (environment, check) = deployment_environment_selection(&options, Some(&root));
 
-    assert_eq!(network, "local");
-    assert_eq!(check.code, "local_network_explicit");
+    assert_eq!(environment, "local");
+    assert_eq!(check.code, "local_environment_explicit");
     assert_eq!(check.source, MedicSource::Command);
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -533,16 +533,16 @@ fn deployment_target_missing_points_to_deploy_plan() {
         auth_renewal: None,
         json: false,
         ci: false,
-        network: Some("local".to_string()),
+        environment: Some("local".to_string()),
         icp: "icp".to_string(),
     };
     let context = DeploymentMedicContext {
         icp_root: Some(root.clone()),
-        network: "local".to_string(),
-        network_check: MedicCheck::pass(
-            MedicCategory::Network,
-            "local_network_explicit",
-            "network",
+        environment: "local".to_string(),
+        environment_check: MedicCheck::pass(
+            MedicCategory::TargetEnvironment,
+            "local_environment_explicit",
+            "environment",
             "local",
             "none",
             MedicSource::Command,
@@ -562,9 +562,9 @@ fn deployment_target_missing_points_to_deploy_plan() {
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure project-only network warnings do not duplicate deployment-scoped network checks.
+// Ensure project-only environment warnings do not duplicate deployment-scoped environment checks.
 #[test]
-fn project_network_selection_check_is_project_only() {
+fn project_environment_selection_check_is_project_only() {
     let project = MedicOptions::project(false, false, None, "icp".to_string());
     let deployment = MedicOptions {
         scope: MedicScope::Deployment,
@@ -573,32 +573,33 @@ fn project_network_selection_check_is_project_only() {
         auth_renewal: None,
         json: false,
         ci: false,
-        network: None,
+        environment: None,
         icp: "icp".to_string(),
     };
 
-    let project_check = project_network_selection_check(&project).expect("project network check");
+    let project_check =
+        project_environment_selection_check(&project).expect("project environment check");
 
-    assert_eq!(project_check.code, "local_network_implicit");
+    assert_eq!(project_check.code, "local_environment_implicit");
     assert_eq!(project_check.status, MedicStatus::Warn);
-    assert!(project_network_selection_check(&deployment).is_none());
+    assert!(project_environment_selection_check(&deployment).is_none());
 }
 
-// Ensure deployment-state network drift is classified before live readiness probes.
+// Ensure deployment-state environment drift is classified before live readiness probes.
 #[test]
-fn deployment_network_check_classifies_match_and_mismatch() {
+fn deployment_environment_check_classifies_match_and_mismatch() {
     let mut state = sample_install_state();
-    let matched = check_deployment_network(&state, "local");
+    let matched = check_deployment_environment(&state, "local");
 
     assert_eq!(matched.status, MedicStatus::Pass);
-    assert_eq!(matched.code, "deployment_network_match");
+    assert_eq!(matched.code, "deployment_environment_match");
     assert_eq!(matched.category, MedicCategory::DeploymentState);
 
-    state.network = "ic".to_string();
-    let mismatched = check_deployment_network(&state, "local");
+    state.environment = "ic".to_string();
+    let mismatched = check_deployment_environment(&state, "local");
 
     assert_eq!(mismatched.status, MedicStatus::Fail);
-    assert_eq!(mismatched.code, "deployment_network_mismatch");
+    assert_eq!(mismatched.code, "deployment_environment_mismatch");
     assert!(mismatched.detail.contains("scoped to ic"));
     assert!(mismatched.detail.contains("selected local"));
 }
@@ -628,11 +629,15 @@ fn root_canister_id_check_classifies_present_and_missing_ids() {
 // Ensure skipped root readiness is explicit when local deployment-state gates fail.
 #[test]
 fn root_readiness_not_evaluated_explains_skipped_live_query() {
-    let network_mismatch = check_root_readiness_not_evaluated(false, true);
+    let environment_mismatch = check_root_readiness_not_evaluated(false, true);
 
-    assert_eq!(network_mismatch.status, MedicStatus::NotEvaluated);
-    assert_eq!(network_mismatch.code, "root_readiness_not_evaluated");
-    assert!(network_mismatch.detail.contains("network does not match"));
+    assert_eq!(environment_mismatch.status, MedicStatus::NotEvaluated);
+    assert_eq!(environment_mismatch.code, "root_readiness_not_evaluated");
+    assert!(
+        environment_mismatch
+            .detail
+            .contains("environment does not match")
+    );
 
     let missing_root = check_root_readiness_not_evaluated(true, false);
 
@@ -643,7 +648,7 @@ fn root_readiness_not_evaluated_explains_skipped_live_query() {
 
 // Ensure readiness diagnostics identify local replica versus ICP CLI sources.
 #[test]
-fn root_readiness_source_tracks_selected_network() {
+fn root_readiness_source_tracks_selected_environment() {
     assert_eq!(root_readiness_source("local"), MedicSource::LocalReplica);
     assert_eq!(root_readiness_source("ic"), MedicSource::IcpCli);
 }
@@ -651,11 +656,18 @@ fn root_readiness_source_tracks_selected_network() {
 // Ensure deployment registry smoke checks are skipped behind local state gates.
 #[test]
 fn deployment_registry_not_evaluated_explains_skipped_live_query() {
-    let network_mismatch = check_deployment_registry_not_evaluated(false, true);
+    let environment_mismatch = check_deployment_registry_not_evaluated(false, true);
 
-    assert_eq!(network_mismatch.status, MedicStatus::NotEvaluated);
-    assert_eq!(network_mismatch.code, "deployment_registry_not_evaluated");
-    assert!(network_mismatch.detail.contains("network does not match"));
+    assert_eq!(environment_mismatch.status, MedicStatus::NotEvaluated);
+    assert_eq!(
+        environment_mismatch.code,
+        "deployment_registry_not_evaluated"
+    );
+    assert!(
+        environment_mismatch
+            .detail
+            .contains("environment does not match")
+    );
 
     let missing_root = check_deployment_registry_not_evaluated(true, false);
 
@@ -1385,7 +1397,7 @@ fn passive_blob_storage_hint_uses_local_candid_only() {
         auth_renewal: None,
         json: false,
         ci: false,
-        network: Some("local".to_string()),
+        environment: Some("local".to_string()),
         icp: "icp".to_string(),
     };
     let check = check_blob_storage_not_selected(&options, Some(&root), "local");
@@ -1512,7 +1524,7 @@ fn sample_install_state() -> InstallState {
         fleet_template: "demo".to_string(),
         created_at_unix_secs: 1,
         updated_at_unix_secs: 1,
-        network: "local".to_string(),
+        environment: "local".to_string(),
         root_target: "root".to_string(),
         root_canister_id: "aaaaa-aa".to_string(),
         root_verification: canic_host::install_root::RootVerificationStatus::Verified,
@@ -1559,8 +1571,8 @@ fn registry_entry(pid: &str, role: Option<&str>) -> canic_host::registry::Regist
     }
 }
 
-fn write_candid(root: &std::path::Path, network: &str, role: &str, candid: &str) {
-    let path = local_canister_candid_path(root, network, role);
+fn write_candid(root: &std::path::Path, environment: &str, role: &str, candid: &str) {
+    let path = local_canister_candid_path(root, environment, role);
     fs::create_dir_all(path.parent().expect("candid parent")).expect("create candid parent");
     fs::write(path, candid).expect("write candid");
 }
@@ -1732,13 +1744,13 @@ fn generate_medic_fixture_lockfile(root: &std::path::Path) {
 
 fn write_medic_deployment_receipt(
     root: &std::path::Path,
-    network: &str,
+    environment: &str,
     deployment: &str,
     receipt: DeploymentReceiptV1,
 ) {
     let receipt_dir = root
         .join(".canic")
-        .join(network)
+        .join(environment)
         .join("deployment-receipts")
         .join(deployment);
     fs::create_dir_all(&receipt_dir).expect("create receipt dir");
@@ -1749,8 +1761,8 @@ fn write_medic_deployment_receipt(
     .expect("write receipt");
 }
 
-fn write_medic_install_state(root: &std::path::Path, network: &str, state: &InstallState) {
-    let state_dir = root.join(".canic").join(network).join("deployments");
+fn write_medic_install_state(root: &std::path::Path, environment: &str, state: &InstallState) {
+    let state_dir = root.join(".canic").join(environment).join("deployments");
     fs::create_dir_all(&state_dir).expect("create state dir");
     fs::write(
         state_dir.join(format!("{}.json", state.deployment_name)),

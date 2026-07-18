@@ -17,7 +17,7 @@ fn backup_dry_run_status_json_uses_deployment_identity_field() {
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
         deployment: plan.fleet.clone(),
-        network: plan.network.clone(),
+        environment: plan.environment.clone(),
         targets: plan.targets.len(),
         operations: plan.phases.len(),
         execution: BackupExecutionJournal::from_plan(&plan)

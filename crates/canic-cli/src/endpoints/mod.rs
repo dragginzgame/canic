@@ -8,16 +8,16 @@ use crate::{
         string_option_or_else, value_arg,
     },
     cli::defaults::default_icp,
-    cli::globals::{internal_icp_arg, internal_network_arg},
+    cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     endpoints::{render::render_plain_endpoints, transport::endpoint_report},
     version_text,
 };
-use canic_host::candid_endpoints::CandidEndpointError;
 #[cfg(test)]
 use canic_host::candid_endpoints::{
     EndpointCardinality, EndpointEntry, EndpointMode, EndpointType,
 };
+use canic_host::{candid_endpoints::CandidEndpointError, icp_config::IcpConfigError};
 use clap::Command as ClapCommand;
 use std::ffi::OsString;
 use thiserror::Error as ThisError;
@@ -49,8 +49,11 @@ pub enum EndpointsCommandError {
         canister: String,
     },
 
-    #[error("local Candid artifact not found for role {role}; looked under {root}")]
-    MissingRoleArtifact { role: String, root: String },
+    #[error("local Candid artifact not found for role {role}: {path}")]
+    MissingRoleArtifact { role: String, path: String },
+
+    #[error(transparent)]
+    IcpConfig(#[from] IcpConfigError),
 
     #[error("failed to read local Candid artifact {path}: {source}")]
     ReadDid {
@@ -70,7 +73,7 @@ pub enum EndpointsCommandError {
 struct EndpointsOptions {
     deployment: String,
     canister: String,
-    network: Option<String>,
+    environment: Option<String>,
     icp: String,
     json: bool,
 }
@@ -97,7 +100,7 @@ impl EndpointsOptions {
         Ok(Self {
             deployment: required_string(&matches, target_arg),
             canister: required_string(&matches, "canister"),
-            network: string_option(&matches, "network"),
+            environment: string_option(&matches, "environment"),
             icp: string_option_or_else(&matches, "icp", default_icp),
             json: matches.get_flag("json"),
         })
@@ -159,7 +162,7 @@ fn endpoint_command(
                 .required(true)
                 .help("Canister principal or role name to inspect"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .arg(flag_arg("json").long("json").help("Print JSON output"))
         .after_help(help_after)

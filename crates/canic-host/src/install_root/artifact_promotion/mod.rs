@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 pub(super) fn write_artifact_promotion_execution_receipt_for_install(
     options: &InstallRootOptions,
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     deployment_name: &str,
     check: &DeploymentCheckV1,
     execution_context: &DeploymentExecutionContextV1,
@@ -37,8 +37,12 @@ pub(super) fn write_artifact_promotion_execution_receipt_for_install(
         provenance_report,
         deployment_receipt,
     })?;
-    let path =
-        write_artifact_promotion_execution_receipt(icp_root, network, deployment_name, &receipt)?;
+    let path = write_artifact_promotion_execution_receipt(
+        icp_root,
+        environment,
+        deployment_name,
+        &receipt,
+    )?;
     println!(
         "Artifact promotion execution receipt JSON: {}",
         path.display()

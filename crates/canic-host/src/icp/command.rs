@@ -3,19 +3,21 @@ use std::{
     process::Command,
 };
 
+use crate::release_set::artifact_root_path;
+
 use super::{
     error::IcpCommandError,
-    model::{IcpCli, LOCAL_NETWORK, LocalReplicaTarget},
+    model::{IcpCli, LOCAL_ICP_TARGET, LocalReplicaTarget},
     version::compatible_version_output,
 };
 
 impl IcpCli {
-    /// Build an ICP CLI command context from an executable path and optional Canic network.
+    /// Build an ICP CLI command context from an executable path and optional ICP environment.
     #[must_use]
-    pub fn new(executable: impl Into<String>, network: Option<String>) -> Self {
+    pub fn new(executable: impl Into<String>, environment: Option<String>) -> Self {
         Self {
             executable: executable.into(),
-            network,
+            environment,
             cwd: None,
             local_replica: None,
         }
@@ -35,10 +37,10 @@ impl IcpCli {
         self
     }
 
-    /// Return the optional Canic network carried by this command context.
+    /// Return the optional ICP environment carried by this command context.
     #[must_use]
-    pub fn network(&self) -> Option<&str> {
-        self.network.as_deref()
+    pub fn environment(&self) -> Option<&str> {
+        self.environment.as_deref()
     }
 
     /// Build a base ICP CLI command from this context.
@@ -61,7 +63,7 @@ impl IcpCli {
         command
     }
 
-    /// Build an `icp canister ...` command with optional network selection applied.
+    /// Build an `icp canister ...` command with optional environment selection applied.
     #[must_use]
     pub fn canister_command(&self) -> Command {
         let mut command = self.command();
@@ -70,16 +72,12 @@ impl IcpCli {
     }
 
     pub(super) fn add_target_args(&self, command: &mut Command) {
-        add_target_args(command, self.network(), self.local_replica.as_ref());
+        add_target_args(command, self.environment(), self.local_replica.as_ref());
     }
+}
 
-    pub(super) fn add_local_network_target(&self, command: &mut Command) {
-        if let Some(network) = self.network() {
-            command.arg(network);
-        } else {
-            command.arg(LOCAL_NETWORK);
-        }
-    }
+pub(super) fn add_local_network_target(command: &mut Command) {
+    command.arg(LOCAL_ICP_TARGET);
 }
 
 /// Build a base `icp` command with the default executable.
@@ -94,14 +92,14 @@ pub fn default_command_in(cwd: &Path) -> Command {
     IcpCli::new("icp", None).command_in(cwd)
 }
 
-/// Add the selected Canic network through ICP CLI's named-environment selector.
+/// Add the selected ICP environment through ICP CLI's named-environment selector.
 pub fn add_target_args(
     command: &mut Command,
-    network: Option<&str>,
+    environment: Option<&str>,
     local_replica: Option<&LocalReplicaTarget>,
 ) {
-    if let Some(network) = network {
-        if network == LOCAL_NETWORK
+    if let Some(environment) = environment {
+        if environment == LOCAL_ICP_TARGET
             && let Some(local_replica) = local_replica
         {
             command.env_remove("ICP_ENVIRONMENT");
@@ -112,7 +110,7 @@ pub fn add_target_args(
                 .arg(&local_replica.root_key);
             return;
         }
-        command.args(["-e", network]);
+        command.args(["-e", environment]);
     }
 }
 
@@ -134,11 +132,12 @@ pub fn add_candid_arg(command: &mut Command, candid_path: Option<&Path>) {
 
 /// Return Canic's local ICP CLI Candid sidecar path for one role.
 #[must_use]
-pub fn local_canister_candid_path(icp_root: &Path, network: &str, role: &str) -> PathBuf {
-    icp_root
-        .join(".icp")
-        .join(network)
-        .join("canisters")
+pub fn local_canister_candid_path(
+    icp_root: &Path,
+    artifact_environment: &str,
+    role: &str,
+) -> PathBuf {
+    artifact_root_path(icp_root, artifact_environment)
         .join(role)
         .join(format!("{role}.did"))
 }
@@ -147,10 +146,10 @@ pub fn local_canister_candid_path(icp_root: &Path, network: &str, role: &str) ->
 #[must_use]
 pub fn existing_local_canister_candid_path(
     icp_root: &Path,
-    network: &str,
+    artifact_environment: &str,
     role: &str,
 ) -> Option<PathBuf> {
-    let path = local_canister_candid_path(icp_root, network, role);
+    let path = local_canister_candid_path(icp_root, artifact_environment, role);
     path.is_file().then_some(path)
 }
 

@@ -2,8 +2,8 @@ use super::{DeployCommandError, value_arg};
 use crate::{
     cli::{
         clap::{parse_matches, render_usage, required_string, string_option_or_else},
-        defaults::local_network,
-        globals::internal_network_arg,
+        defaults::local_environment,
+        globals::internal_environment_arg,
         help::print_help_or_version,
     },
     version_text,
@@ -15,7 +15,7 @@ use std::{ffi::OsString, path::PathBuf};
 const DEPLOY_REGISTER_HELP_AFTER: &str = "\
 Examples:
   canic deploy register demo --fleet-template demo --root aaaaa-aa --allow-unverified
-  canic --network local deploy register demo --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai --allow-unverified
+  canic --environment local deploy register demo --fleet-template demo --root uxrrr-q7777-77774-qaaaq-cai --allow-unverified
 
 Registers minimal deployment-target local state for an existing root canister.
 It does not query live inventory, copy receipts, record artifact/controller
@@ -37,7 +37,7 @@ pub(super) struct DeployRegisterOptions {
     pub(super) deployment: String,
     pub(super) fleet_template: String,
     pub(super) root: String,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) allow_unverified: bool,
 }
 
@@ -69,7 +69,7 @@ impl DeployRegisterOptions {
             deployment: required_string(&matches, DEPLOYMENT_ARG),
             fleet_template: required_string(&matches, FLEET_TEMPLATE_ARG),
             root: required_string(&matches, ROOT_ARG),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             allow_unverified: matches.get_flag(ALLOW_UNVERIFIED_ARG),
         })
     }
@@ -82,7 +82,7 @@ impl DeployRegisterOptions {
             deployment_name: self.deployment,
             fleet_template: self.fleet_template,
             root_canister_id: self.root,
-            network: self.network,
+            environment: self.environment,
             allow_unverified: self.allow_unverified,
             icp_root,
             workspace_root: None,
@@ -102,7 +102,7 @@ pub(super) fn command() -> ClapCommand {
         .arg(fleet_template_arg())
         .arg(root_arg())
         .arg(allow_unverified_arg())
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .after_help(DEPLOY_REGISTER_HELP_AFTER)
 }
 

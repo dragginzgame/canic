@@ -494,7 +494,7 @@ fn apply_journal_command_preview_reports_upload_command() {
     assert!(!command.requires_stopped_canister);
 }
 
-// Ensure command previews carry configured ICP CLI program and network.
+// Ensure command previews carry configured ICP CLI program and environment.
 #[test]
 fn apply_journal_command_preview_honors_command_config() {
     let root = temp_dir("canic-restore-apply-command-config");
@@ -521,7 +521,7 @@ fn apply_journal_command_preview_honors_command_config() {
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
     let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
         program: "/tmp/icp".to_string(),
-        network: Some("local".to_string()),
+        environment: Some("local".to_string()),
     });
     let expected_artifact_path = root.join("artifacts/root").to_string_lossy().to_string();
 

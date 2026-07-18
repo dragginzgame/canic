@@ -175,9 +175,9 @@ fn render_target(target: &EvidenceTargetV1) -> String {
             .as_ref()
             .map(|value| format!("profile={value}")),
         target
-            .network
+            .environment
             .as_ref()
-            .map(|value| format!("network={value}")),
+            .map(|value| format!("environment={value}")),
     ]
     .into_iter()
     .flatten()

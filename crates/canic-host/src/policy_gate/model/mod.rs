@@ -209,7 +209,7 @@ pub struct ProjectEvidenceManifestTargetV1 {
     pub fleet: Option<String>,
     pub role: Option<String>,
     pub profile: Option<String>,
-    pub network: Option<String>,
+    pub environment: Option<String>,
 }
 
 ///
@@ -317,7 +317,7 @@ impl ProjectEvidenceManifestTargetV1 {
             || self.fleet.is_some()
             || self.role.is_some()
             || self.profile.is_some()
-            || self.network.is_some()
+            || self.environment.is_some()
     }
 
     pub(super) fn matches_envelope_target(&self, target: &EvidenceTargetV1) -> bool {
@@ -337,9 +337,9 @@ impl ProjectEvidenceManifestTargetV1 {
                 .as_ref()
                 .is_none_or(|expected| target.profile.as_ref() == Some(expected))
             && self
-                .network
+                .environment
                 .as_ref()
-                .is_none_or(|expected| target.network.as_ref() == Some(expected))
+                .is_none_or(|expected| target.environment.as_ref() == Some(expected))
     }
 }
 

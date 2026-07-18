@@ -1,4 +1,4 @@
-use super::build_network::ensure_icp_network_ready;
+use super::build_network::ensure_icp_environment_ready;
 use super::build_snapshot::ValidatedInstallSnapshot;
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
@@ -36,7 +36,7 @@ pub(super) fn prepare_install_deployment_truth(
 ) -> Result<PreparedInstallTruth, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
     ensure_current_install_executor_capabilities(execution_context)?;
-    ensure_icp_network_ready(icp_root, &options.network)?;
+    ensure_icp_environment_ready(icp_root, &options.environment)?;
     let (root_canister_id, create_phase, create_duration) =
         resolve_root_canister_with_phase(options, icp_root, config_path, build_context)?;
     timings.create_canisters = create_duration;
@@ -55,7 +55,7 @@ pub(super) fn prepare_install_deployment_truth(
     )?;
     let receipt_scope = InstallReceiptScope {
         icp_root,
-        network: &options.network,
+        environment: &options.environment,
         deployment_name,
         check: &deployment_truth_check,
         execution_context: Some(execution_context),
@@ -79,7 +79,7 @@ fn resolve_root_canister_with_phase(
 ) -> Result<(String, CompletedInstallPhase, Duration), Box<dyn std::error::Error>> {
     let operation = ResolveRootCanisterOperation::new(
         icp_root,
-        &options.network,
+        &options.environment,
         &options.root_canister,
         config_path,
         build_context.local_replica.as_ref(),
@@ -114,7 +114,7 @@ fn build_install_targets_with_phase(
 > {
     if let Some(plan) = &options.deployment_plan_override {
         let (phase, duration) =
-            validate_plan_artifacts_with_phase(plan, icp_root, &options.network)?;
+            validate_plan_artifacts_with_phase(plan, icp_root, &options.environment)?;
         return Ok((phase, duration, Vec::new()));
     }
 

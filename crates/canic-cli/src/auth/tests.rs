@@ -29,7 +29,7 @@ fn parses_renewal_status_options() {
         OsString::from("--issuer"),
         OsString::from("rrkah-fqaaa-aaaaa-aaaaq-cai"),
         OsString::from("--json"),
-        OsString::from(globals::INTERNAL_NETWORK_OPTION),
+        OsString::from(globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
         OsString::from(globals::INTERNAL_ICP_OPTION),
         OsString::from("/bin/icp"),
@@ -39,7 +39,7 @@ fn parses_renewal_status_options() {
     let AuthCommand::RenewalStatus(options) = command;
     assert_eq!(options.deployment, "local");
     assert_eq!(options.issuer, "rrkah-fqaaa-aaaaa-aaaaq-cai");
-    assert_eq!(options.common.network, "local");
+    assert_eq!(options.common.environment, "local");
     assert_eq!(options.common.icp, "/bin/icp");
     assert!(options.json);
 }
@@ -53,11 +53,11 @@ fn renewal_help_names_chain_key_status_surface() {
 }
 
 #[test]
-fn top_level_forwards_auth_global_icp_and_network() {
+fn top_level_forwards_auth_global_icp_and_environment() {
     let err = run([
         OsString::from("--icp"),
         OsString::from("/bin/icp"),
-        OsString::from("--network"),
+        OsString::from("--environment"),
         OsString::from("local"),
         OsString::from("auth"),
         OsString::from("renewal"),
@@ -84,7 +84,7 @@ fn renewal_status_queries_root_status_endpoint() {
             issuer: issuer.to_string(),
             json: true,
             common: CommonOptions {
-                network: "local".to_string(),
+                environment: "local".to_string(),
                 icp: "icp".to_string(),
             },
         },
@@ -236,7 +236,7 @@ fn renewal_status_rejects_invalid_issuer_principal() {
             issuer: "not a principal".to_string(),
             json: false,
             common: CommonOptions {
-                network: "local".to_string(),
+                environment: "local".to_string(),
                 icp: "icp".to_string(),
             },
         },
@@ -364,7 +364,7 @@ fn renewal_status_options(issuer: &str) -> RenewalStatusOptions {
         issuer: issuer.to_string(),
         json: true,
         common: CommonOptions {
-            network: "local".to_string(),
+            environment: "local".to_string(),
             icp: "icp".to_string(),
         },
     }

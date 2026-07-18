@@ -83,13 +83,13 @@ pub fn promotion_materialization_identity_report_text(
         lines.push("roles:".to_string());
         for role in &report.roles {
             lines.push(format!(
-                "  {} evidence={} recipe={} input={} result={} network={} runtime={}",
+                "  {} evidence={} recipe={} input={} result={} environment={} runtime={}",
                 role.role,
                 role.evidence_id,
                 role.recipe_id,
                 role.materialization_input_id,
                 role.materialization_result_id,
-                role.network,
+                role.environment,
                 role.runtime_variant
             ));
         }

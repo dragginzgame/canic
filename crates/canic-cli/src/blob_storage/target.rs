@@ -56,7 +56,7 @@ pub(super) fn resolve_blob_storage_call_target(
     let installed = resolve_installed_deployment_from_root(
         &InstalledDeploymentRequest {
             deployment: deployment.to_string(),
-            network: options.network.clone(),
+            environment: options.environment.clone(),
             icp: options.icp.clone(),
             detect_lost_local_root: true,
         },
@@ -72,7 +72,7 @@ pub(super) fn resolve_blob_storage_call_target(
     let candid_path = resolved
         .role
         .as_deref()
-        .and_then(|role| role_candid_path(Some(&icp_root), &options.network, role))
+        .and_then(|role| role_candid_path(Some(&icp_root), &options.environment, role))
         .ok_or_else(|| BlobStorageCommandError::CandidUnavailable {
             deployment: deployment.to_string(),
             target: selector.to_string(),

@@ -13,15 +13,15 @@ use std::{
 };
 
 pub(super) fn local_query(
-    network: Option<&str>,
+    environment: Option<&str>,
     canister: &str,
     method: &str,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
-    local_query_with_endpoint(canister, method, local_replica_endpoint(network))
+    local_query_with_endpoint(canister, method, local_replica_endpoint(environment))
 }
 
 pub(super) fn local_query_from_root(
-    network: Option<&str>,
+    environment: Option<&str>,
     canister: &str,
     method: &str,
     icp_root: &Path,
@@ -29,14 +29,14 @@ pub(super) fn local_query_from_root(
     local_query_with_endpoint(
         canister,
         method,
-        local_replica_endpoint_from_root(network, icp_root),
+        local_replica_endpoint_from_root(environment, icp_root),
     )
 }
 
 #[must_use]
-pub fn local_replica_endpoint_from_root(network: Option<&str>, icp_root: &Path) -> String {
+pub fn local_replica_endpoint_from_root(environment: Option<&str>, icp_root: &Path) -> String {
     local_replica_endpoint_with_port(
-        network,
+        environment,
         configured_local_gateway_port_from_root(icp_root).ok(),
     )
 }
@@ -80,13 +80,17 @@ fn local_query_with_endpoint(
     }
 }
 
-fn local_replica_endpoint(network: Option<&str>) -> String {
-    local_replica_endpoint_with_port(network, configured_local_gateway_port().ok())
+fn local_replica_endpoint(environment: Option<&str>) -> String {
+    local_replica_endpoint_with_port(environment, configured_local_gateway_port().ok())
 }
 
-fn local_replica_endpoint_with_port(network: Option<&str>, configured_port: Option<u16>) -> String {
-    if let Some(network) = network.filter(|network| network.starts_with("http://")) {
-        return network.trim_end_matches('/').to_string();
+fn local_replica_endpoint_with_port(
+    environment: Option<&str>,
+    configured_port: Option<u16>,
+) -> String {
+    if let Some(environment) = environment.filter(|environment| environment.starts_with("http://"))
+    {
+        return environment.trim_end_matches('/').to_string();
     }
 
     let port = configured_port.unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT);

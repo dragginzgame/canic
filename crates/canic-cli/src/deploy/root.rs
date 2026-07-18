@@ -8,8 +8,8 @@ use crate::{
             flag_arg, parse_matches, parse_subcommand, passthrough_subcommand, render_usage,
             required_path, required_string, string_option_or_else,
         },
-        defaults::local_network,
-        globals::internal_network_arg,
+        defaults::local_environment,
+        globals::internal_environment_arg,
         help::print_help_or_version,
     },
     version_text,
@@ -97,7 +97,7 @@ pub(super) struct DeployRootInspectOptions {
 pub(super) struct DeployRootVerifyOptions {
     pub(super) deployment: String,
     pub(super) from_check: PathBuf,
-    pub(super) network: String,
+    pub(super) environment: String,
     pub(super) format: JsonTextOutputFormat,
 }
 
@@ -151,7 +151,7 @@ where
     let check = read_json_file::<DeploymentCheckV1>(&options.from_check)?;
     let receipt = verify_registered_deployment_root(VerifyDeploymentRootOptions {
         deployment_name: options.deployment,
-        network: options.network,
+        environment: options.environment,
         deployment_check: check,
         verified_at_unix_secs: None,
         icp_root: Some(resolve_current_canic_icp_root()?),
@@ -197,7 +197,7 @@ impl DeployRootVerifyOptions {
         Ok(Self {
             deployment: required_string(&matches, "deployment"),
             from_check: required_path(&matches, "from-check"),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             format: JsonTextOutputFormat::from_text_flag(matches.get_flag(TEXT_ARG)),
         })
     }
@@ -241,7 +241,7 @@ fn verify_command() -> ClapCommand {
                 .required(true)
                 .help("DeploymentCheckV1 JSON artifact carrying explicit root evidence"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
 }
 
 fn text_arg() -> clap::Arg {

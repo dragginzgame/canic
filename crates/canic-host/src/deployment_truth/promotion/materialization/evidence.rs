@@ -133,7 +133,7 @@ pub fn validate_build_materialization_input(
         "canonical_embedded_config_sha256",
         &input.canonical_embedded_config_sha256,
     )?;
-    ensure_materialization_field("network", &input.network)?;
+    ensure_materialization_field("environment", &input.environment)?;
     ensure_materialization_field("root_trust_anchor", &input.root_trust_anchor)?;
     ensure_materialization_field("runtime_variant", &input.runtime_variant)?;
     Ok(())

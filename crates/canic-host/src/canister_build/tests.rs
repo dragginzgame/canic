@@ -36,11 +36,11 @@ fn remove_stale_icp_candid_sidecars_keeps_primary_role_did() {
 }
 
 #[test]
-fn build_context_distinguishes_network_from_build_network() {
+fn build_context_distinguishes_environment_from_build_network() {
     let context = WorkspaceBuildContext {
         role: "app".to_string(),
         profile: super::CanisterBuildProfile::Fast,
-        network: "staging".to_string(),
+        environment: "staging".to_string(),
         build_network: "ic".to_string(),
         workspace_root: "/workspace".into(),
         icp_root: "/workspace".into(),
@@ -51,7 +51,7 @@ fn build_context_distinguishes_network_from_build_network() {
 
     let lines = context.lines();
 
-    assert!(lines.contains(&"network: staging".to_string()));
+    assert!(lines.contains(&"environment: staging".to_string()));
     assert!(lines.contains(&"build network: ic".to_string()));
 }
 
@@ -60,7 +60,7 @@ fn build_context_applies_exact_child_build_network() {
     let context = WorkspaceBuildContext {
         role: "app".to_string(),
         profile: super::CanisterBuildProfile::Fast,
-        network: "staging".to_string(),
+        environment: "staging".to_string(),
         build_network: "ic".to_string(),
         workspace_root: "/workspace".into(),
         icp_root: "/project".into(),

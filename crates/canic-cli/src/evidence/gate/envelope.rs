@@ -142,7 +142,7 @@ fn policy_gate_target(report: &EvidenceGateReport) -> EvidenceTargetV1 {
             fleet: report.evaluated_target.fleet.clone(),
             role: report.evaluated_target.role.clone(),
             profile: report.evaluated_target.profile.clone(),
-            network: report.evaluated_target.network.clone(),
+            environment: report.evaluated_target.environment.clone(),
         },
         EvidenceGateReport::Manifest(report) => EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::PolicyGate,
@@ -150,7 +150,7 @@ fn policy_gate_target(report: &EvidenceGateReport) -> EvidenceTargetV1 {
             fleet: None,
             role: None,
             profile: Some(report.project_name.clone()),
-            network: None,
+            environment: None,
         },
     }
 }

@@ -10,8 +10,8 @@ fn in_place_plan_orders_parent_before_child() {
     let value = serde_json::to_value(&plan).expect("serialize restore plan");
 
     assert_eq!(plan.backup_id, "fbk_test_001");
-    assert_eq!(plan.source_network, "local");
-    assert_eq!(value["source_network"], "local");
+    assert_eq!(plan.source_environment, "local");
+    assert_eq!(value["source_environment"], "local");
     assert_eq!(plan.source_root_canister, ROOT);
     assert_eq!(plan.topology_hash, HASH);
     assert_eq!(plan.member_count, 2);

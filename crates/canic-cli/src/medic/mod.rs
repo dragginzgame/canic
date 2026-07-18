@@ -50,8 +50,12 @@ fn build_medic_report(options: &MedicOptions) -> MedicReport {
         MedicScope::Project => MedicReport::new(options, run_project_checks(options)),
         MedicScope::Deployment => {
             let context = deployment_medic_context(options);
-            let network = Some(context.network.clone());
-            MedicReport::with_network(options, network, run_deployment_checks(options, &context))
+            let environment = Some(context.environment.clone());
+            MedicReport::with_environment(
+                options,
+                environment,
+                run_deployment_checks(options, &context),
+            )
         }
     }
 }
@@ -129,14 +133,14 @@ fn run_deployment_checks(
         .into_iter()
         .filter(|check| check.code != DEPLOYMENT_NOT_SELECTED_CHECK_CODE)
         .collect::<Vec<_>>();
-    let network = &context.network;
+    let environment = &context.environment;
     let icp_root = context.icp_root.as_deref();
 
-    checks.push(context.network_check.clone());
+    checks.push(context.environment_check.clone());
 
     let state_result = match icp_root {
         Some(root) => {
-            read_installed_deployment_state_from_root(network, options.deployment_name(), root)
+            read_installed_deployment_state_from_root(environment, options.deployment_name(), root)
                 .map_err(Some)
         }
         None => Err(None),
@@ -195,18 +199,25 @@ fn run_deployment_checks(
 
     if let Some(state) = state.as_ref() {
         checks.extend(installed_deployment_state_checks(
-            options, icp_root, state, network,
+            options,
+            icp_root,
+            state,
+            environment,
         ));
     }
 
     if let Some(canister) = &options.blob_storage {
-        checks.push(check_blob_storage_billing(options, canister, network));
+        checks.push(check_blob_storage_billing(options, canister, environment));
     } else {
-        checks.push(check_blob_storage_not_selected(options, icp_root, network));
+        checks.push(check_blob_storage_not_selected(
+            options,
+            icp_root,
+            environment,
+        ));
     }
 
     if let Some(issuer) = &options.auth_renewal {
-        checks.push(check_auth_renewal(options, issuer, network));
+        checks.push(check_auth_renewal(options, issuer, environment));
     } else {
         checks.push(MedicCheck::not_evaluated(
             MedicCategory::Auth,
@@ -222,8 +233,8 @@ fn run_deployment_checks(
 }
 
 fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
-    let network = options.network.clone();
-    match IcpCli::new(&options.icp, network).compatible_version() {
+    let environment = options.environment.clone();
+    match IcpCli::new(&options.icp, environment).compatible_version() {
         Ok(version) => MedicCheck::pass(
             MedicCategory::Environment,
             "icp_cli_ok",

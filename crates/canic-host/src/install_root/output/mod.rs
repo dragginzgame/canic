@@ -50,7 +50,7 @@ fn timing_row(label: InstallTimingLabel, duration: Duration) -> [String; 2] {
 }
 
 pub(super) fn print_install_result_summary(
-    network: &str,
+    environment: &str,
     deployment: &str,
     fleet_template: &str,
     state_path: &Path,
@@ -61,7 +61,7 @@ pub(super) fn print_install_result_summary(
     println!("{:<14} {}", "fleet_template", fleet_template);
     println!("{:<14} {}", "install_state", state_path.display());
     println!(
-        "{:<14} canic list {} --network {}",
-        "smoke_check", deployment, network
+        "{:<14} canic list {} --environment {}",
+        "smoke_check", deployment, environment
     );
 }

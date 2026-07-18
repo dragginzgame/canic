@@ -68,7 +68,7 @@ pub fn download_snapshots(
             created_at: config.created_at.clone(),
             tool_name: config.tool_name.clone(),
             tool_version: config.tool_version.clone(),
-            network: config.network.clone(),
+            environment: config.environment.clone(),
             root_canister: config
                 .root
                 .clone()

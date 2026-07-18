@@ -89,7 +89,7 @@ fn build_provenance_envelope_wraps_stable_payload() {
     let request = BuildProvenanceRequest {
         fleet: "demo".to_string(),
         role: "app".to_string(),
-        network: "staging".to_string(),
+        environment: "staging".to_string(),
         build_network: "ic".to_string(),
         profile: CanisterBuildProfile::Fast,
         workspace_root: root.clone(),
@@ -108,10 +108,10 @@ fn build_provenance_envelope_wraps_stable_payload() {
     assert_eq!(envelope.target.kind, EvidenceTargetKindV1::Artifact);
     assert_eq!(envelope.target.fleet.as_deref(), Some("demo"));
     assert_eq!(envelope.target.role.as_deref(), Some("app"));
-    assert_eq!(envelope.target.network.as_deref(), Some("staging"));
+    assert_eq!(envelope.target.environment.as_deref(), Some("staging"));
     assert!(envelope.inputs.iter().any(|input| {
         input.kind == "build_network"
-            && input.note.as_deref() == Some("network=staging;build_network=ic")
+            && input.note.as_deref() == Some("environment=staging;build_network=ic")
     }));
     assert_eq!(envelope.payload_schema, build_provenance_schema());
     assert_eq!(payload.cargo.package_metadata_fleet, "demo");
@@ -157,7 +157,7 @@ fn sample_request(root: &Path, output: CanisterArtifactBuildOutput) -> BuildProv
     BuildProvenanceRequest {
         fleet: "demo".to_string(),
         role: "app".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         build_network: "local".to_string(),
         profile: CanisterBuildProfile::Fast,
         workspace_root: root.to_path_buf(),

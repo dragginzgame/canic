@@ -87,12 +87,12 @@ impl From<ReplicaQueryError> for SubnetRegistryQueryError {
 pub fn query_subnet_registry(
     icp: &IcpCli,
     root: &str,
-    network: &str,
+    environment: &str,
     icp_root: Option<&Path>,
     candid_path: Option<&Path>,
 ) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
-    if replica_query::should_use_local_replica_query(Some(network)) {
-        return query_local_subnet_registry(root, network, icp_root);
+    if replica_query::should_use_local_replica_query(Some(environment)) {
+        return query_local_subnet_registry(root, environment, icp_root);
     }
 
     let output = icp.canister_query_output_with_candid(
@@ -109,13 +109,17 @@ pub fn query_subnet_registry(
 
 fn query_local_subnet_registry(
     root: &str,
-    network: &str,
+    environment: &str,
     icp_root: Option<&Path>,
 ) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
     let entries = icp_root.map_or_else(
-        || replica_query::query_subnet_registry_entries(Some(network), root),
+        || replica_query::query_subnet_registry_entries(Some(environment), root),
         |root_path| {
-            replica_query::query_subnet_registry_entries_from_root(Some(network), root, root_path)
+            replica_query::query_subnet_registry_entries_from_root(
+                Some(environment),
+                root,
+                root_path,
+            )
         },
     )?;
     Ok(SubnetRegistryQuery {

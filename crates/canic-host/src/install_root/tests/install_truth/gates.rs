@@ -1,14 +1,14 @@
 use super::*;
 
 #[test]
-fn normal_named_network_install_checks_fresh_local_build_artifacts() {
+fn normal_named_environment_install_checks_fresh_local_build_artifacts() {
     let root = temp_dir("canic-install-truth-named-environment-artifacts");
     let config_path = root.join("fleets/demo/canic.toml");
     write_demo_root_only_config(&config_path);
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
     let mut options = local_demo_install_options(&root);
-    options.network = "staging".to_string();
+    options.environment = "staging".to_string();
 
     let check = current_install_deployment_truth_check_at(
         &options,
@@ -20,7 +20,7 @@ fn normal_named_network_install_checks_fresh_local_build_artifacts() {
     )
     .expect("deployment truth check");
 
-    assert_eq!(check.plan.deployment_identity.network, "staging");
+    assert_eq!(check.plan.deployment_identity.environment, "staging");
     assert!(check.plan.role_artifacts.iter().all(|artifact| {
         artifact
             .wasm_gz_path
@@ -105,7 +105,7 @@ fn install_truth_gate_blocks_observed_controller_drift() {
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
@@ -201,7 +201,7 @@ kind = "root"
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
-        network: "local".to_string(),
+        environment: "local".to_string(),
         deployment_name: None,
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),

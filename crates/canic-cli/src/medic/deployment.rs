@@ -5,7 +5,7 @@
 //! Boundary: maps local and runtime deployment evidence into Medic checks.
 
 use crate::{
-    cli::defaults::local_network,
+    cli::defaults::local_environment,
     medic::{
         command::MedicOptions,
         display_medic_path,
@@ -42,88 +42,89 @@ use canic_host::{
 
 pub(super) struct DeploymentMedicContext {
     pub(super) icp_root: Option<PathBuf>,
-    pub(super) network: String,
-    pub(super) network_check: MedicCheck,
+    pub(super) environment: String,
+    pub(super) environment_check: MedicCheck,
 }
 
 pub(super) fn deployment_medic_context(options: &MedicOptions) -> DeploymentMedicContext {
     let icp_root = resolve_current_canic_icp_root().ok();
-    let (network, network_check) = deployment_network_selection(options, icp_root.as_deref());
+    let (environment, environment_check) =
+        deployment_environment_selection(options, icp_root.as_deref());
     DeploymentMedicContext {
         icp_root,
-        network,
-        network_check,
+        environment,
+        environment_check,
     }
 }
 
-pub(super) fn deployment_network_selection(
+pub(super) fn deployment_environment_selection(
     options: &MedicOptions,
     icp_root: Option<&Path>,
 ) -> (String, MedicCheck) {
-    if let Some(network) = &options.network {
+    if let Some(environment) = &options.environment {
         return (
-            network.clone(),
+            environment.clone(),
             MedicCheck::pass(
-                MedicCategory::Network,
-                "local_network_explicit",
-                "network",
-                network.clone(),
+                MedicCategory::TargetEnvironment,
+                "local_environment_explicit",
+                "environment",
+                environment.clone(),
                 "none",
                 MedicSource::Command,
             ),
         );
     }
 
-    if let Some(network) =
-        icp_root.and_then(|root| recorded_deployment_network(root, options.deployment_name()))
+    if let Some(environment) =
+        icp_root.and_then(|root| recorded_deployment_environment(root, options.deployment_name()))
     {
         return (
-            network.clone(),
+            environment.clone(),
             MedicCheck::pass(
-                MedicCategory::Network,
-                "deployment_network_from_record",
-                "network",
-                network,
-                "override with top-level --network <name>",
+                MedicCategory::TargetEnvironment,
+                "deployment_environment_from_record",
+                "environment",
+                environment,
+                "override with top-level --environment <name>",
                 MedicSource::InstalledDeployment,
             ),
         );
     }
 
-    let network = local_network();
+    let environment = local_environment();
     (
-        network.clone(),
+        environment.clone(),
         MedicCheck::pass(
-            MedicCategory::Network,
-            "local_network_implicit",
-            "network",
-            network,
-            "override with top-level --network <name>",
+            MedicCategory::TargetEnvironment,
+            "local_environment_implicit",
+            "environment",
+            environment,
+            "override with top-level --environment <name>",
             MedicSource::Command,
         ),
     )
 }
 
-fn recorded_deployment_network(icp_root: &Path, deployment: &str) -> Option<String> {
+fn recorded_deployment_environment(icp_root: &Path, deployment: &str) -> Option<String> {
     let canic_dir = icp_root.join(".canic");
-    let mut networks = fs::read_dir(canic_dir)
+    let mut environments = fs::read_dir(canic_dir)
         .ok()?
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
         .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|network| {
+        .filter(|environment| {
             icp_root
                 .join(".canic")
-                .join(network)
+                .join(environment)
                 .join("deployments")
                 .join(format!("{deployment}.json"))
                 .is_file()
         })
         .collect::<Vec<_>>();
-    networks.sort();
-    networks.dedup();
-    match networks.as_slice() {
-        [network] => Some(network.clone()),
+    environments.sort();
+    environments.dedup();
+    match environments.as_slice() {
+        [environment] => Some(environment.clone()),
         _ => None,
     }
 }
@@ -184,29 +185,29 @@ pub(super) fn installed_deployment_state_checks(
     options: &MedicOptions,
     icp_root: Option<&Path>,
     state: &InstallState,
-    network: &str,
+    environment: &str,
 ) -> Vec<MedicCheck> {
-    let deployment_network = check_deployment_network(state, network);
-    let deployment_network_matches = deployment_network.status != MedicStatus::Fail;
+    let deployment_environment = check_deployment_environment(state, environment);
+    let deployment_environment_matches = deployment_environment.status != MedicStatus::Fail;
     let root_canister = check_root_canister_id(state);
     let root_canister_present = root_canister.status != MedicStatus::Fail;
-    let root_readiness = if deployment_network_matches && root_canister_present {
-        check_root_ready(options, icp_root, state, network)
+    let root_readiness = if deployment_environment_matches && root_canister_present {
+        check_root_ready(options, icp_root, state, environment)
     } else {
-        check_root_readiness_not_evaluated(deployment_network_matches, root_canister_present)
+        check_root_readiness_not_evaluated(deployment_environment_matches, root_canister_present)
     };
 
     vec![
-        deployment_network,
+        deployment_environment,
         check_config_path(state),
-        check_deployment_truth_receipt(icp_root, state, network),
+        check_deployment_truth_receipt(icp_root, state, environment),
         root_canister,
         check_deployment_registry_observation(
             options,
             icp_root,
             state,
-            network,
-            deployment_network_matches,
+            environment,
+            deployment_environment_matches,
             root_canister_present,
         ),
         root_readiness,
@@ -238,7 +239,7 @@ fn check_config_path(state: &InstallState) -> MedicCheck {
 pub(super) fn check_deployment_truth_receipt(
     icp_root: Option<&Path>,
     state: &InstallState,
-    network: &str,
+    environment: &str,
 ) -> MedicCheck {
     let Some(root) = icp_root else {
         return MedicCheck::not_evaluated(
@@ -253,7 +254,7 @@ pub(super) fn check_deployment_truth_receipt(
 
     let receipt_path = match latest_deployment_truth_receipt_path_from_root(
         root,
-        network,
+        environment,
         &state.deployment_name,
     ) {
         Ok(Some(path)) => path,
@@ -263,7 +264,7 @@ pub(super) fn check_deployment_truth_receipt(
                 "deployment_truth_incomplete",
                 "deployment_truth",
                 format!(
-                    "no deployment-truth receipt found for {} on {network}",
+                    "no deployment-truth receipt found for {} on {environment}",
                     state.deployment_name
                 ),
                 format!(
@@ -380,13 +381,13 @@ fn check_deployment_registry_observation(
     options: &MedicOptions,
     icp_root: Option<&Path>,
     state: &InstallState,
-    network: &str,
-    deployment_network_matches: bool,
+    environment: &str,
+    deployment_environment_matches: bool,
     root_canister_present: bool,
 ) -> MedicCheck {
-    if !deployment_network_matches || !root_canister_present {
+    if !deployment_environment_matches || !root_canister_present {
         return check_deployment_registry_not_evaluated(
-            deployment_network_matches,
+            deployment_environment_matches,
             root_canister_present,
         );
     }
@@ -404,7 +405,7 @@ fn check_deployment_registry_observation(
 
     let request = InstalledDeploymentRequest {
         deployment: state.deployment_name.clone(),
-        network: network.to_string(),
+        environment: environment.to_string(),
         icp: options.icp.clone(),
         detect_lost_local_root: true,
     };
@@ -416,11 +417,11 @@ fn check_deployment_registry_observation(
 }
 
 pub(super) fn check_deployment_registry_not_evaluated(
-    deployment_network_matches: bool,
+    deployment_environment_matches: bool,
     root_canister_present: bool,
 ) -> MedicCheck {
-    let detail = if !deployment_network_matches {
-        "deployment registry observation skipped because the deployment record network does not match the selected network"
+    let detail = if !deployment_environment_matches {
+        "deployment registry observation skipped because the deployment record environment does not match the selected environment"
     } else if !root_canister_present {
         "deployment registry observation skipped because the deployment record has no root canister id"
     } else {
@@ -549,26 +550,29 @@ fn deployment_registry_error_check(error: InstalledDeploymentError) -> MedicChec
     )
 }
 
-pub(super) fn check_deployment_network(state: &InstallState, selected_network: &str) -> MedicCheck {
-    if state.network == selected_network {
+pub(super) fn check_deployment_environment(
+    state: &InstallState,
+    selected_environment: &str,
+) -> MedicCheck {
+    if state.environment == selected_environment {
         MedicCheck::pass(
             MedicCategory::DeploymentState,
-            "deployment_network_match",
-            "network",
-            format!("deployment record is scoped to {selected_network}"),
+            "deployment_environment_match",
+            "environment",
+            format!("deployment record is scoped to {selected_environment}"),
             "none",
             MedicSource::InstalledDeployment,
         )
     } else {
         MedicCheck::fail(
             MedicCategory::DeploymentState,
-            "deployment_network_mismatch",
-            "network",
+            "deployment_environment_mismatch",
+            "environment",
             format!(
-                "deployment record is scoped to {}, but medic selected {selected_network}",
-                state.network
+                "deployment record is scoped to {}, but medic selected {selected_environment}",
+                state.environment
             ),
-            "select the deployment record network or repair the installed deployment state",
+            "select the deployment record environment or repair the installed deployment state",
             MedicSource::InstalledDeployment,
         )
     }
@@ -597,11 +601,11 @@ pub(super) fn check_root_canister_id(state: &InstallState) -> MedicCheck {
 }
 
 pub(super) fn check_root_readiness_not_evaluated(
-    deployment_network_matches: bool,
+    deployment_environment_matches: bool,
     root_canister_present: bool,
 ) -> MedicCheck {
-    let detail = if !deployment_network_matches {
-        "root readiness skipped because the deployment record network does not match the selected network"
+    let detail = if !deployment_environment_matches {
+        "root readiness skipped because the deployment record environment does not match the selected environment"
     } else if !root_canister_present {
         "root readiness skipped because the deployment record has no root canister id"
     } else {
@@ -622,18 +626,18 @@ fn check_root_ready(
     options: &MedicOptions,
     icp_root: Option<&Path>,
     state: &InstallState,
-    network: &str,
+    environment: &str,
 ) -> MedicCheck {
-    let source = root_readiness_source(network);
-    let mut icp = IcpCli::new(&options.icp, Some(network.to_string()));
+    let source = root_readiness_source(environment);
+    let mut icp = IcpCli::new(&options.icp, Some(environment.to_string()));
     if let Some(root) = icp_root {
         icp = icp.with_cwd(root);
     }
-    let candid_path = role_candid_path(icp_root, network, "root");
+    let candid_path = role_candid_path(icp_root, environment, "root");
     let ready = query_canister_ready(
         &icp,
         &state.root_canister_id,
-        network,
+        environment,
         icp_root,
         candid_path.as_deref(),
     )
@@ -667,8 +671,8 @@ fn check_root_ready(
     }
 }
 
-pub(super) fn root_readiness_source(network: &str) -> MedicSource {
-    if network == local_network() {
+pub(super) fn root_readiness_source(environment: &str) -> MedicSource {
+    if environment == local_environment() {
         MedicSource::LocalReplica
     } else {
         MedicSource::IcpCli

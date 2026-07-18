@@ -10,8 +10,8 @@ use crate::{
             flag_arg, parse_matches, path_option, render_usage, required_string,
             string_option_or_else, typed_option,
         },
-        defaults::local_network,
-        globals::internal_network_arg,
+        defaults::local_environment,
+        globals::internal_environment_arg,
     },
     deploy::{DeployCommandError, value_arg},
 };
@@ -49,7 +49,7 @@ the requested path already exists or its parent directory is missing.";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::deploy) struct DeployPlanOptions {
     pub(in crate::deploy) deployment: String,
-    pub(in crate::deploy) network: String,
+    pub(in crate::deploy) environment: String,
     pub(in crate::deploy) json: bool,
     pub(in crate::deploy) out: Option<PathBuf>,
     pub(in crate::deploy) config: Option<PathBuf>,
@@ -71,7 +71,7 @@ impl DeployPlanOptions {
             parse_matches(command(), args).map_err(|_| DeployCommandError::Usage(usage()))?;
         Ok(Self {
             deployment: required_string(&matches, DEPLOYMENT_ARG),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             json: matches.get_flag(JSON_ARG),
             out: path_option(&matches, OUT_ARG),
             config: path_option(&matches, CONFIG_ARG),
@@ -102,7 +102,7 @@ pub(in crate::deploy) fn command() -> ClapCommand {
         .arg(out_arg())
         .arg(config_arg())
         .arg(build_profile_arg())
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .after_help(DEPLOY_PLAN_HELP_AFTER)
 }
 

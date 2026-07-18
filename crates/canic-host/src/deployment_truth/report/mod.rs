@@ -108,7 +108,7 @@ pub(in crate::deployment_truth) const UNVERIFIED_DEPLOYMENT_ROOT_CODE: &str =
     "unverified_deployment_root";
 pub(in crate::deployment_truth) const PLAN_ASSUMPTION_CODE: &str = "plan_assumption";
 pub(in crate::deployment_truth) const IDENTITY_UNOBSERVED_CODE: &str = "identity_unobserved";
-pub(in crate::deployment_truth) const NETWORK_MISMATCH_CODE: &str = "network_mismatch";
+pub(in crate::deployment_truth) const ENVIRONMENT_MISMATCH_CODE: &str = "environment_mismatch";
 pub(in crate::deployment_truth) const ROOT_TRUST_ANCHOR_MISMATCH_CODE: &str =
     "root_trust_anchor_mismatch";
 pub(in crate::deployment_truth) const DEPLOYMENT_MANIFEST_UNOBSERVED_CODE: &str =
@@ -150,8 +150,8 @@ struct DuplicateEvidenceGroup {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalDeploymentCheckRequest {
     pub deployment_name: String,
-    pub network: String,
-    pub artifact_network: String,
+    pub environment: String,
+    pub artifact_environment: String,
     pub workspace_root: std::path::PathBuf,
     pub icp_root: std::path::PathBuf,
     pub config_path: Option<std::path::PathBuf>,
@@ -166,8 +166,8 @@ pub fn check_local_deployment(
 ) -> Result<DeploymentCheckV1, DeploymentTruthError> {
     let plan = build_local_deployment_plan(&LocalDeploymentPlanRequest {
         deployment_name: request.deployment_name.clone(),
-        network: request.network.clone(),
-        artifact_network: request.artifact_network.clone(),
+        environment: request.environment.clone(),
+        artifact_environment: request.artifact_environment.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
         config_path: request.config_path.clone(),
@@ -176,23 +176,28 @@ pub fn check_local_deployment(
     });
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: request.deployment_name.clone(),
-        network: request.network.clone(),
-        artifact_network: request.artifact_network.clone(),
+        environment: request.environment.clone(),
+        artifact_environment: request.artifact_environment.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
         config_path: request.config_path.clone(),
         observed_at: request.observed_at.clone(),
     })?;
     let mut diff = compare_plan_to_inventory(&plan, &inventory);
-    apply_root_auth_signer_subnet_check(&mut diff, &inventory, &request.network, &request.icp_root);
+    apply_root_auth_signer_subnet_check(
+        &mut diff,
+        &inventory,
+        &request.environment,
+        &request.icp_root,
+    );
     let report = safety_report_from_diff(
         format!(
             "local:{}:{}:report",
-            request.network, request.deployment_name
+            request.environment, request.deployment_name
         ),
         Some(format!(
             "local:{}:{}:diff",
-            request.network, request.deployment_name
+            request.environment, request.deployment_name
         )),
         &diff,
     );
@@ -201,7 +206,7 @@ pub fn check_local_deployment(
         schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
         check_id: format!(
             "local:{}:{}:check",
-            request.network, request.deployment_name
+            request.environment, request.deployment_name
         ),
         plan,
         inventory,
@@ -357,15 +362,15 @@ fn compare_identity(
         return;
     };
 
-    if observed.network != plan.deployment_identity.network {
+    if observed.environment != plan.deployment_identity.environment {
         hard_failures.push(finding(
-            NETWORK_MISMATCH_CODE,
+            ENVIRONMENT_MISMATCH_CODE,
             format!(
-                "plan network {} differs from observed network {}",
-                plan.deployment_identity.network, observed.network
+                "plan environment {} differs from observed environment {}",
+                plan.deployment_identity.environment, observed.environment
             ),
             SafetySeverityV1::HardFailure,
-            Some("deployment_identity.network".to_string()),
+            Some("deployment_identity.environment".to_string()),
         ));
     }
     if let (Some(expected), Some(actual)) = (

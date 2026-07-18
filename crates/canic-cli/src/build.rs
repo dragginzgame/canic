@@ -10,8 +10,8 @@ use crate::{
             parse_matches, render_usage, required_string, string_option, string_option_or_else,
             typed_option, value_arg,
         },
-        defaults::local_network,
-        globals::internal_network_arg,
+        defaults::local_environment,
+        globals::internal_environment_arg,
         help::print_help_or_version,
     },
     output, version_text,
@@ -48,7 +48,7 @@ const BUILD_HELP_AFTER: &str = "\
 Examples:
   canic build demo app
   canic build demo app --provenance artifacts/app-provenance.json
-  canic --network local build demo root
+  canic --environment local build demo root
   canic build --profile fast --workspace backend --icp-root . --config backend/fleets/demo/canic.toml demo root
 
 The selected fleet must have a matching canic.toml, and the selected role must
@@ -100,7 +100,7 @@ pub enum BuildCommandError {
 struct BuildOptions {
     fleet: String,
     role: String,
-    network: String,
+    environment: String,
     profile: Option<CanisterBuildProfile>,
     workspace: Option<String>,
     icp_root: Option<String>,
@@ -119,7 +119,7 @@ impl BuildOptions {
         Ok(Self {
             fleet: required_string(&matches, "fleet"),
             role: required_string(&matches, "role"),
-            network: string_option_or_else(&matches, "network", local_network),
+            environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, "profile"),
             workspace: string_option(&matches, "workspace"),
             icp_root: string_option(&matches, "icp-root"),
@@ -204,7 +204,7 @@ fn build_command() -> ClapCommand {
                 .num_args(1)
                 .help("Write an EvidenceEnvelopeV1 build provenance artifact to this file"),
         )
-        .arg(internal_network_arg())
+        .arg(internal_environment_arg())
         .after_help(BUILD_HELP_AFTER)
 }
 
@@ -246,7 +246,7 @@ fn write_build_provenance_if_requested(
     let request = BuildProvenanceRequest {
         fleet: options.fleet.clone(),
         role: options.role.clone(),
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         build_network: context.build_network.clone(),
         profile: context.profile,
         workspace_root: context.workspace_root.clone(),
@@ -286,9 +286,9 @@ fn build_command_provenance(options: &BuildOptions, workspace_root: &Path) -> Co
     if let Some(config) = &options.config {
         push_path_arg(&mut argv_normalized, "--config", config, workspace_root);
     }
-    if options.network != local_network() {
-        argv_normalized.push("--network".to_string());
-        argv_normalized.push(options.network.clone());
+    if options.environment != local_environment() {
+        argv_normalized.push("--environment".to_string());
+        argv_normalized.push(options.environment.clone());
     }
     if let Some(provenance) = &options.provenance {
         argv_normalized.push("--provenance".to_string());
@@ -372,13 +372,13 @@ fn resolve_build_context(
         None => resolve_current_canic_icp_root()
             .map_err(|err| BuildCommandError::Build(Box::new(err)))?,
     };
-    let build_network = resolve_build_network(&options.network, &icp_root)?;
+    let build_network = resolve_build_network(&options.environment, &icp_root)?;
     let profile = options.profile.unwrap_or(CanisterBuildProfile::Release);
 
     Ok(WorkspaceBuildContext {
         role: options.role.clone(),
         profile,
-        network: options.network.clone(),
+        environment: options.environment.clone(),
         build_network: build_network.as_str().to_string(),
         workspace_root,
         icp_root,
@@ -389,10 +389,10 @@ fn resolve_build_context(
 }
 
 fn resolve_build_network(
-    network: &str,
+    environment: &str,
     icp_root: &Path,
 ) -> Result<IcpBuildNetwork, BuildCommandError> {
-    resolve_icp_build_network_from_root(icp_root, network)
+    resolve_icp_build_network_from_root(icp_root, environment)
         .map_err(|err| BuildCommandError::Build(Box::new(err)))
 }
 
@@ -412,7 +412,7 @@ mod tests {
 
         assert_eq!(options.fleet, "demo");
         assert_eq!(options.role, "app");
-        assert_eq!(options.network, "local");
+        assert_eq!(options.environment, "local");
         assert_eq!(options.profile, None);
         assert_eq!(options.workspace, None);
         assert_eq!(options.icp_root, None);
@@ -421,21 +421,21 @@ mod tests {
     }
 
     #[test]
-    fn build_accepts_internal_network() {
+    fn build_accepts_internal_environment() {
         let options = BuildOptions::parse([
             OsString::from("demo"),
             OsString::from("app"),
-            OsString::from("--__canic-network"),
+            OsString::from("--__canic-environment"),
             OsString::from("localnet"),
         ])
         .expect("parse build options");
 
-        assert_eq!(options.network, "localnet");
+        assert_eq!(options.environment, "localnet");
     }
 
     #[test]
     fn build_resolves_named_ic_build_network_from_icp_yaml() {
-        let root = temp_dir("canic-cli-build-network");
+        let root = temp_dir("canic-cli-build-environment");
         fs::create_dir_all(&root).expect("create root");
         fs::write(
             root.join("icp.yaml"),
@@ -443,27 +443,27 @@ mod tests {
         )
         .expect("write icp yaml");
         let mut options = build_options(&root, "demo", "app");
-        options.network = "staging".to_string();
+        options.environment = "staging".to_string();
         options.icp_root = Some(root.display().to_string());
 
         let build_network =
-            resolve_build_network(&options.network, &root).expect("resolve build network");
+            resolve_build_network(&options.environment, &root).expect("resolve build network");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert_eq!(build_network, IcpBuildNetwork::Ic);
     }
 
     #[test]
-    fn build_rejects_undeclared_named_network() {
-        let root = temp_dir("canic-cli-build-network-missing");
+    fn build_rejects_undeclared_named_environment() {
+        let root = temp_dir("canic-cli-build-environment-missing");
         fs::create_dir_all(&root).expect("create root");
         fs::write(root.join("icp.yaml"), "environments: []\n").expect("write icp yaml");
         let mut options = build_options(&root, "demo", "app");
-        options.network = "staging".to_string();
+        options.environment = "staging".to_string();
         options.icp_root = Some(root.display().to_string());
 
-        let err = resolve_build_network(&options.network, &root)
-            .expect_err("missing network should fail");
+        let err = resolve_build_network(&options.environment, &root)
+            .expect_err("missing environment should fail");
 
         fs::remove_dir_all(root).expect("remove temp root");
         assert!(err.to_string().contains("is not declared"));
@@ -617,7 +617,7 @@ mod tests {
         BuildOptions {
             fleet: fleet.to_string(),
             role: role.to_string(),
-            network: "local".to_string(),
+            environment: "local".to_string(),
             profile: None,
             workspace: Some(root.display().to_string()),
             icp_root: None,

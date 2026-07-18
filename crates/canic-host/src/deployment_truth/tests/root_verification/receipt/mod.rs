@@ -26,7 +26,7 @@ fn root_verification_receipt_json_shape_is_stable() {
             "receipt_id",
             "receipt_digest",
             "deployment_name",
-            "network",
+            "environment",
             "fleet_template",
             "root_principal",
             "previous_root_verification",
@@ -56,7 +56,7 @@ fn root_verification_receipt_json_shape_is_stable() {
     );
     assert_eq!(value["schema_version"], DEPLOYMENT_TRUTH_SCHEMA_VERSION);
     assert_eq!(value["deployment_name"], "demo");
-    assert_eq!(value["network"], "local");
+    assert_eq!(value["environment"], "local");
     assert_eq!(value["fleet_template"], "root");
     assert_eq!(value["root_principal"], "aaaaa-aa");
     assert_eq!(value["previous_root_verification"], "NotVerified");
@@ -102,7 +102,7 @@ fn root_verification_receipt_text_distinguishes_local_state_write_from_canister_
 #[test]
 fn root_verification_receipt_validation_rejects_digest_drift() {
     let mut receipt = sample_root_verification_receipt();
-    receipt.network = "other-network".to_string();
+    receipt.environment = "other-environment".to_string();
 
     let err = validate_deployment_root_verification_receipt(&receipt)
         .expect_err("receipt digest drift should fail");

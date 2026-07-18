@@ -1,5 +1,5 @@
 use super::super::commands::{
-    add_icp_network_target, icp_canister_command, root_init_args, run_command,
+    add_icp_environment_target, icp_canister_command, root_init_args, run_command,
 };
 use super::super::readiness::wait_for_root_ready;
 use super::super::root_cycles::ensure_local_root_min_cycles;
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 pub(in crate::install_root) struct InstallRootWasmOperation<'a> {
     icp_root: &'a Path,
-    network: &'a str,
+    environment: &'a str,
     root_canister_id: &'a str,
     root_wasm: PathBuf,
     local_replica: Option<&'a LocalReplicaTarget>,
@@ -19,14 +19,14 @@ pub(in crate::install_root) struct InstallRootWasmOperation<'a> {
 impl<'a> InstallRootWasmOperation<'a> {
     pub(in crate::install_root) const fn new(
         icp_root: &'a Path,
-        network: &'a str,
+        environment: &'a str,
         root_canister_id: &'a str,
         root_wasm: PathBuf,
         local_replica: Option<&'a LocalReplicaTarget>,
     ) -> Self {
         Self {
             icp_root,
-            network,
+            environment,
             root_canister_id,
             root_wasm,
             local_replica,
@@ -53,7 +53,7 @@ impl InstallPhaseOperation for InstallRootWasmOperation<'_> {
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         reinstall_root_wasm(
             self.icp_root,
-            self.network,
+            self.environment,
             self.root_canister_id,
             &self.root_wasm,
             self.local_replica,
@@ -63,7 +63,7 @@ impl InstallPhaseOperation for InstallRootWasmOperation<'_> {
 
 pub(in crate::install_root) struct EnsureRootCyclesOperation<'a> {
     icp_root: &'a Path,
-    network: &'a str,
+    environment: &'a str,
     root_canister_id: &'a str,
     phase: InstallPhaseLabel,
     attempted_action: &'static str,
@@ -74,7 +74,7 @@ pub(in crate::install_root) struct EnsureRootCyclesOperation<'a> {
 impl<'a> EnsureRootCyclesOperation<'a> {
     pub(in crate::install_root) const fn new(
         icp_root: &'a Path,
-        network: &'a str,
+        environment: &'a str,
         root_canister_id: &'a str,
         phase: InstallPhaseLabel,
         attempted_action: &'static str,
@@ -83,7 +83,7 @@ impl<'a> EnsureRootCyclesOperation<'a> {
     ) -> Self {
         Self {
             icp_root,
-            network,
+            environment,
             root_canister_id,
             phase,
             attempted_action,
@@ -113,7 +113,7 @@ impl InstallPhaseOperation for EnsureRootCyclesOperation<'_> {
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         ensure_local_root_min_cycles(
             self.icp_root,
-            self.network,
+            self.environment,
             self.root_canister_id,
             self.phase_label,
             self.local_replica,
@@ -123,7 +123,7 @@ impl InstallPhaseOperation for EnsureRootCyclesOperation<'_> {
 
 pub(in crate::install_root) struct ResumeBootstrapOperation<'a> {
     icp_root: &'a Path,
-    network: &'a str,
+    environment: &'a str,
     root_canister_id: &'a str,
     local_replica: Option<&'a LocalReplicaTarget>,
 }
@@ -131,13 +131,13 @@ pub(in crate::install_root) struct ResumeBootstrapOperation<'a> {
 impl<'a> ResumeBootstrapOperation<'a> {
     pub(in crate::install_root) const fn new(
         icp_root: &'a Path,
-        network: &'a str,
+        environment: &'a str,
         root_canister_id: &'a str,
         local_replica: Option<&'a LocalReplicaTarget>,
     ) -> Self {
         Self {
             icp_root,
-            network,
+            environment,
             root_canister_id,
             local_replica,
         }
@@ -160,7 +160,7 @@ impl InstallPhaseOperation for ResumeBootstrapOperation<'_> {
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         resume_root_bootstrap(
             self.icp_root,
-            self.network,
+            self.environment,
             self.local_replica,
             self.root_canister_id,
         )
@@ -169,7 +169,7 @@ impl InstallPhaseOperation for ResumeBootstrapOperation<'_> {
 
 pub(in crate::install_root) struct WaitRootReadyOperation<'a> {
     icp_root: &'a Path,
-    network: &'a str,
+    environment: &'a str,
     root_canister_id: &'a str,
     timeout_seconds: u64,
     local_replica: Option<&'a LocalReplicaTarget>,
@@ -178,14 +178,14 @@ pub(in crate::install_root) struct WaitRootReadyOperation<'a> {
 impl<'a> WaitRootReadyOperation<'a> {
     pub(in crate::install_root) const fn new(
         icp_root: &'a Path,
-        network: &'a str,
+        environment: &'a str,
         root_canister_id: &'a str,
         timeout_seconds: u64,
         local_replica: Option<&'a LocalReplicaTarget>,
     ) -> Self {
         Self {
             icp_root,
-            network,
+            environment,
             root_canister_id,
             timeout_seconds,
             local_replica,
@@ -212,7 +212,7 @@ impl InstallPhaseOperation for WaitRootReadyOperation<'_> {
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         wait_for_root_ready(
             self.icp_root,
-            self.network,
+            self.environment,
             self.root_canister_id,
             self.timeout_seconds,
             self.local_replica,
@@ -222,7 +222,7 @@ impl InstallPhaseOperation for WaitRootReadyOperation<'_> {
 
 fn reinstall_root_wasm(
     icp_root: &Path,
-    network: &str,
+    environment: &str,
     root_canister: &str,
     root_wasm: &Path,
     local_replica: Option<&LocalReplicaTarget>,
@@ -231,6 +231,6 @@ fn reinstall_root_wasm(
     install.args(["install", root_canister, "--mode=reinstall", "-y", "--wasm"]);
     install.arg(root_wasm);
     install.args(["--args", &root_init_args(root_wasm)?]);
-    add_icp_network_target(&mut install, network, local_replica);
+    add_icp_environment_target(&mut install, environment, local_replica);
     run_command(&mut install)
 }

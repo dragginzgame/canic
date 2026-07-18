@@ -96,7 +96,7 @@ Examples:
   canic deploy external verify --request external-verification.json
   canic deploy external plan --text demo
   canic deploy external verify --request external-verification.json --text
-  canic --network local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
+  canic --environment local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
 
 External lifecycle commands are passive reports. They do not request
 consent, execute external upgrades, install code, or mutate deployment state.";
@@ -156,7 +156,7 @@ const DEPLOY_EXTERNAL_PLAN_HELP_AFTER: &str = "\
 Examples:
   canic deploy external plan demo
   canic deploy external plan --text demo
-  canic --network local deploy external plan --profile fast demo
+  canic --environment local deploy external plan --profile fast demo
 
 Prints ExternalLifecyclePlanV1 JSON by default, or host-owned passive text with
 --text. No consent delivery, external execution, install, or mutation is
@@ -165,7 +165,7 @@ const DEPLOY_EXTERNAL_CHECK_HELP_AFTER: &str = "\
 Examples:
   canic deploy external check demo
   canic deploy external check --text demo
-  canic --network local deploy external check --profile fast demo
+  canic --environment local deploy external check --profile fast demo
 
 Prints ExternalLifecycleCheckV1 JSON by default, or host-owned passive text
 with --text. External lifecycle checks summarize direct, pending,
@@ -175,7 +175,7 @@ const DEPLOY_EXTERNAL_HANDOFF_HELP_AFTER: &str = "\
 Examples:
   canic deploy external handoff demo
   canic deploy external handoff --text demo
-  canic --network local deploy external handoff --profile fast demo
+  canic --environment local deploy external handoff --profile fast demo
 
 Prints ExternalLifecycleHandoffV1 JSON by default, or host-owned passive text
 with --text. Handoff packets package pending external proposals into
@@ -185,7 +185,7 @@ const DEPLOY_EXTERNAL_PROPOSALS_HELP_AFTER: &str = "\
 Examples:
   canic deploy external proposals demo
   canic deploy external proposals --text demo
-  canic --network local deploy external proposals --profile fast demo
+  canic --environment local deploy external proposals --profile fast demo
 
 Prints ExternalUpgradeProposalReportV1 JSON by default, or host-owned passive
 text with --text. Proposals are derived from the local lifecycle plan
@@ -194,7 +194,7 @@ const DEPLOY_EXTERNAL_PENDING_HELP_AFTER: &str = "\
 Examples:
   canic deploy external pending demo
   canic deploy external pending --text demo
-  canic --network local deploy external pending --profile fast demo
+  canic --environment local deploy external pending --profile fast demo
 
 Prints ExternalLifecyclePendingReportV1 JSON by default, or host-owned passive
 text with --text. Pending reports summarize unresolved external actions,
@@ -204,7 +204,7 @@ const DEPLOY_EXTERNAL_CRITICAL_FIX_HELP_AFTER: &str = "\
 Examples:
   canic deploy external critical-fix --fix-id fix-2026-05 --severity critical demo
   canic deploy external critical-fix --fix-id fix-2026-05 --severity critical --text demo
-  canic --network local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
+  canic --environment local deploy external critical-fix --fix-id fix-2026-05 --severity high --profile fast demo
 
 Prints CriticalExternalFixReportV1 JSON by default, or host-owned passive text
 with --text. Critical-fix reports summarize directly patchable roles,

@@ -34,16 +34,16 @@ pub enum CycleBalanceQueryError {
     Response(#[from] IcpJsonResponseError),
 }
 
-/// Query `canic_cycle_balance` through the transport selected by the network.
+/// Query `canic_cycle_balance` through the transport selected by the environment.
 pub fn query_cycle_balance(
     icp: &IcpCli,
     canister_id: &str,
-    network: &str,
+    environment: &str,
     icp_root: Option<&Path>,
     candid_path: Option<&Path>,
 ) -> Result<u128, CycleBalanceQueryError> {
-    if replica_query::should_use_local_replica_query(Some(network)) {
-        return query_local_cycle_balance(network, canister_id, icp_root).map_err(Into::into);
+    if replica_query::should_use_local_replica_query(Some(environment)) {
+        return query_local_cycle_balance(environment, canister_id, icp_root).map_err(Into::into);
     }
 
     let output = icp.canister_query_output_with_candid(
@@ -56,12 +56,12 @@ pub fn query_cycle_balance(
 }
 
 fn query_local_cycle_balance(
-    network: &str,
+    environment: &str,
     canister_id: &str,
     icp_root: Option<&Path>,
 ) -> Result<u128, ReplicaQueryError> {
     icp_root.map_or_else(
-        || replica_query::query_cycle_balance(Some(network), canister_id),
-        |root| replica_query::query_cycle_balance_from_root(Some(network), canister_id, root),
+        || replica_query::query_cycle_balance(Some(environment), canister_id),
+        |root| replica_query::query_cycle_balance_from_root(Some(environment), canister_id, root),
     )
 }

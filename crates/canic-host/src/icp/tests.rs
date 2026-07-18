@@ -84,9 +84,9 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     fs::remove_dir_all(root).expect("remove temp dir");
 }
 
-// Keep generated commands tied to the selected Canic network.
+// Keep generated commands tied to the selected ICP environment.
 #[test]
-fn renders_named_network_target() {
+fn renders_named_environment_target() {
     let icp = IcpCli::new("icp", Some("staging".to_string()));
 
     assert_eq!(
@@ -104,7 +104,7 @@ fn unique_temp_dir(label: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn renders_implicit_ic_network_target() {
+fn renders_implicit_ic_environment_target() {
     let icp = IcpCli::new("icp", Some("ic".to_string()));
 
     assert_eq!(
@@ -195,7 +195,7 @@ fn resolves_existing_local_canister_candid_path() {
     std::fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure manual top-ups use the ICP CLI top-up command and selected network.
+// Ensure manual top-ups use the ICP CLI top-up command and selected environment.
 #[test]
 fn renders_canister_top_up() {
     let icp = IcpCli::new("icp", Some("ic".to_string()));

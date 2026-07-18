@@ -109,7 +109,7 @@ fn valid_manifest() -> DeploymentBackupManifest {
             version: "0.30.1".to_string(),
         },
         source: SourceMetadata {
-            network: "local".to_string(),
+            environment: "local".to_string(),
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {

@@ -15,7 +15,7 @@ fn valid_manifest() -> DeploymentBackupManifest {
             version: "v1".to_string(),
         },
         source: SourceMetadata {
-            network: "local".to_string(),
+            environment: "local".to_string(),
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {
@@ -54,10 +54,10 @@ fn valid_manifest_passes_validation() {
 }
 
 #[test]
-fn manifest_json_records_source_network() {
+fn manifest_json_records_source_environment() {
     let value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
 
-    assert_eq!(value["source"]["network"], "local");
+    assert_eq!(value["source"]["environment"], "local");
 }
 
 // Ensure manifests fail closed when a source snapshot carries unknown fields.

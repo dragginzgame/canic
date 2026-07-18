@@ -43,14 +43,14 @@ pub struct ToolMetadata {
 ///
 /// SourceMetadata
 ///
-/// Source network identity recorded for a backup bundle.
+/// Source environment identity recorded for a backup bundle.
 /// Owned by backup manifest contracts and used by restore validation.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourceMetadata {
-    pub network: String,
+    pub environment: String,
     pub root_canister: String,
 }
 

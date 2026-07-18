@@ -274,7 +274,7 @@ For downstream repos where the Rust workspace and ICP project root differ, pass
 both paths explicitly:
 
 ```bash
-canic --network local build \
+canic --environment local build \
   --workspace /path/to/cargo-workspace \
   --icp-root /path/to/icp-project \
   --config /path/to/cargo-workspace/fleets/<fleet>/canic.toml \
@@ -293,7 +293,7 @@ metadata, and lower-level build/install commands, see
 For downstream projects that use a named local ICP CLI target such as
 `academic`, use
 [`docs/getting-started/local-academic-fleet.md`](docs/getting-started/local-academic-fleet.md)
-for the short runbook on `canic --network ...`, raw `icp` target hygiene,
+for the short runbook on `canic --environment ...`, raw `icp` target hygiene,
 `canic info env` / `CANIC_ROOT`-style canister ID variables, sourced shell
 helpers, sharded calls, metrics checks, and install versus upgrade decisions.
 
@@ -307,7 +307,7 @@ argument to deployed-fleet commands.
 canic fleet config test
 canic info list test
 canic status
-canic --network local fleet list
+canic --environment local fleet list
 canic fleet create demo --yes
 canic fleet delete demo
 ```
@@ -327,7 +327,7 @@ prints sourceable `CANIC_<ROLE>` canister ID exports, and `fleet config` shows
 configured intent.
 
 Named-fleet commands default to the local ICP CLI environment. Pass top-level
-`--network <name>` for one command against another configured ICP CLI
+`--environment <name>` for one command against another configured ICP CLI
 environment. Nonlocal targets must be managed externally.
 
 The local ICP CLI replica does not persist canister state across stop/start. If
@@ -344,8 +344,8 @@ directories discover the outer project root and keep ICP project config plus
 Show installed canisters:
 
 ```bash
-canic --network local info list test
-canic --network local info list test --subtree app
+canic --environment local info list test
+canic --environment local info list test --subtree app
 ```
 
 Create and verify a topology-aware backup:

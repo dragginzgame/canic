@@ -37,14 +37,14 @@ fn deploy_root_verify_parses_deployment_check_and_text_flag() {
         OsString::from("--from-check"),
         OsString::from("deployment-check.json"),
         OsString::from("--text"),
-        OsString::from("--__canic-network"),
+        OsString::from("--__canic-environment"),
         OsString::from("ic"),
     ])
     .expect("parse deploy root verify");
 
     assert_eq!(options.deployment, "demo-local");
     assert_eq!(options.from_check, PathBuf::from("deployment-check.json"));
-    assert_eq!(options.network, "ic");
+    assert_eq!(options.environment, "ic");
     assert_eq!(options.format, output_format::JsonTextOutputFormat::Text);
 }
 
