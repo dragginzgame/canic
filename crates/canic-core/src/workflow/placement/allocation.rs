@@ -68,6 +68,7 @@ pub struct PlacementAllocationRequest {
 pub struct PlacementAllocationPermit {
     identity: PlacementAllocationIdentity,
     revision: u64,
+    root_receipt_may_exist: bool,
 }
 
 ///
@@ -103,7 +104,7 @@ impl PlacementAllocationWorkflow {
     pub async fn create_child(
         request: PlacementAllocationRequest,
     ) -> Result<(PlacementAllocationPermit, Principal), InternalError> {
-        let permit = begin_allocation(&request)?;
+        let mut permit = begin_allocation(&request)?;
         let response = RequestOps::allocate_placement_child::<Vec<u8>>(
             &request.canister_role,
             CreateCanisterParent::ThisCanister,
@@ -111,6 +112,7 @@ impl PlacementAllocationWorkflow {
             permit.identity.operation_id,
         )
         .await?;
+        permit.root_receipt_may_exist = true;
 
         Ok((permit, response.new_canister_pid))
     }
@@ -155,7 +157,9 @@ impl PlacementAllocationWorkflow {
     pub async fn acknowledge_root_receipt(
         permit: &PlacementAllocationPermit,
     ) -> Result<(), InternalError> {
-        RequestOps::acknowledge_placement_receipt(permit.identity.operation_id).await?;
+        if permit.root_receipt_may_exist {
+            RequestOps::acknowledge_placement_receipt(permit.identity.operation_id).await?;
+        }
         remove_terminal_intent(
             permit.identity.operation_id,
             permit.identity.payload_binding,
@@ -405,9 +409,11 @@ fn begin_allocation(
         quantity: 1,
         reservation_limit: request.reservation_limit,
     };
-    let revision = match ReceiptBackedIntentWorkflow::begin_or_load(&input)? {
-        BeginReceiptBackedIntentResult::Created { revision }
-        | BeginReceiptBackedIntentResult::ExistingPending { revision } => revision,
+    let (revision, root_receipt_may_exist) = match ReceiptBackedIntentWorkflow::begin_or_load(
+        &input,
+    )? {
+        BeginReceiptBackedIntentResult::Created { revision } => (revision, false),
+        BeginReceiptBackedIntentResult::ExistingPending { revision } => (revision, true),
         BeginReceiptBackedIntentResult::ExistingCommitted { .. } => {
             return Err(InternalError::invariant(
                 InternalErrorOrigin::Workflow,
@@ -454,6 +460,7 @@ fn begin_allocation(
     Ok(PlacementAllocationPermit {
         identity: request.identity.clone(),
         revision,
+        root_receipt_may_exist,
     })
 }
 
@@ -529,6 +536,8 @@ mod tests {
         let first_permit = begin_allocation(&first).expect("first allocation reserves");
         let replay_permit = begin_allocation(&first).expect("same allocation reloads");
         assert_eq!(first_permit.revision, replay_permit.revision);
+        assert!(!first_permit.root_receipt_may_exist);
+        assert!(replay_permit.root_receipt_may_exist);
 
         let error = begin_allocation(&request(1, 1)).expect_err("second allocation exceeds cap");
         assert!(error.is_public_resource_exhausted());
