@@ -96,7 +96,9 @@ Historical detail is archived at:
   32-byte identity, and committed placement receipts remain recoverable until
   response-idempotent acknowledgement completes. Terminal placement intents
   own bounded acknowledgement retry across init and upgrade without retaining
-  redundant terminal intent records after cleanup.
+  redundant terminal intent records after cleanup. Evidence-backed directory
+  repair and disposal skip nonexistent root acknowledgement while still
+  removing their terminal local intent.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
