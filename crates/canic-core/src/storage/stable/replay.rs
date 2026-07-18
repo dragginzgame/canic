@@ -280,6 +280,24 @@ impl ReplayReceiptStore {
         })
     }
 
+    #[must_use]
+    pub(crate) fn has_pending_for_actor_command_excluding_operation(
+        actor: ReplayActor,
+        command_kind: &str,
+        excluded_operation_id: [u8; 32],
+        now_ns: u64,
+    ) -> bool {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter().any(|entry| {
+                let record = entry.value();
+                record.actor == actor
+                    && record.command_kind == command_kind
+                    && record.operation_id != excluded_operation_id
+                    && record_is_pending(&record, now_ns)
+            })
+        })
+    }
+
     pub(crate) fn collect_expired(now_ns: u64, limit: usize) -> Vec<ReplayReceiptSlotKey> {
         let mut expired = Vec::new();
         REPLAY_RECEIPTS.with_borrow(|map| {
@@ -519,6 +537,52 @@ mod tests {
         assert!(ReplayReceiptStore::collect_expired(300, 10).is_empty());
         assert!(ReplayReceiptStore::get(recovery_key).is_some());
         assert!(ReplayReceiptStore::get(effect_key).is_some());
+
+        ReplayReceiptStore::reset_for_tests();
+    }
+
+    #[test]
+    fn pending_actor_command_query_excludes_only_the_current_operation() {
+        ReplayReceiptStore::reset_for_tests();
+        let key = ReplayReceiptSlotKey([47; 32]);
+        let record = receipt_record_fixture();
+        let actor = record.actor;
+        let command_kind = record.command_kind.clone();
+        let operation_id = record.operation_id;
+        ReplayReceiptStore::upsert(key, record);
+
+        assert!(
+            !ReplayReceiptStore::has_pending_for_actor_command_excluding_operation(
+                actor,
+                &command_kind,
+                operation_id,
+                150,
+            )
+        );
+        assert!(
+            ReplayReceiptStore::has_pending_for_actor_command_excluding_operation(
+                actor,
+                &command_kind,
+                [8; 32],
+                150,
+            )
+        );
+        assert!(
+            !ReplayReceiptStore::has_pending_for_actor_command_excluding_operation(
+                actor,
+                "other.command.v1",
+                [8; 32],
+                150,
+            )
+        );
+        assert!(
+            !ReplayReceiptStore::has_pending_for_actor_command_excluding_operation(
+                actor,
+                &command_kind,
+                [8; 32],
+                201,
+            )
+        );
 
         ReplayReceiptStore::reset_for_tests();
     }

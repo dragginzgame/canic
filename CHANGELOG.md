@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.20` is potentially breaking: child cycles funding now admits only one
+  pending operation per child, using durable replay identity to prevent stale
+  rollback from erasing concurrent accounting; pre-effect marking failures now
+  settle their cost reservations deterministically.
+
 - `0.93.19` is potentially breaking: pool reset recovery now completes one
   bounded ordered sweep before retrying blocked work, and sharding assignment
   accounting rejects corrupt counters or dangling references without mutation.

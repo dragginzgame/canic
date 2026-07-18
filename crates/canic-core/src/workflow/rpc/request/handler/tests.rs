@@ -28,7 +28,8 @@ use crate::{
             },
         },
         storage::{
-            registry::subnet::SubnetRegistryOps, replay::ReplayReceiptOps, state::app::AppStateOps,
+            intent::IntentStoreOps, registry::subnet::SubnetRegistryOps, replay::ReplayReceiptOps,
+            state::app::AppStateOps,
         },
     },
     replay_policy::CostClass,
@@ -767,6 +768,76 @@ fn authorize_request_cycles_uses_configured_child_funding_policy() {
 }
 
 #[test]
+fn authorize_request_cycles_rejects_a_competing_pending_child_operation() {
+    ReplayReceiptOps::reset_for_tests();
+    CyclesFundingMetrics::reset();
+    CyclesFundingLedgerOps::reset_for_tests();
+
+    let self_pid = p(97);
+    let child = p(98);
+    let child_role = CanisterRole::new("concurrent_funded_child");
+    let _restore = configure_root_env(self_pid);
+
+    let mut child_cfg = ConfigTestBuilder::canister_config(CanisterKind::Singleton);
+    child_cfg.cycles_funding = CyclesFundingPolicyConfig {
+        max_per_request: Cycles::new(10),
+        max_per_child: Cycles::new(30),
+        cooldown_secs: 1,
+    };
+    let _config = ConfigTestBuilder::new()
+        .with_prime_canister(child_role.clone(), child_cfg)
+        .install();
+
+    SubnetRegistryOps::register_root(self_pid, 1);
+    SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
+        .expect("register child");
+    AppStateOps::import(AppStateData {
+        record: AppStateRecord {
+            mode: AppMode::Enabled,
+            cycles_funding_enabled: true,
+        },
+    });
+
+    seed_root_replay_receipt("root.request_cycles.v1", child, [40; 32], [4; 32], 60, None);
+    let ctx = RootContext {
+        caller: child,
+        self_pid,
+        is_root_env: true,
+        subnet_id: p(2),
+        now: 5,
+    };
+    let req = CyclesRequest {
+        cycles: 5,
+        metadata: Some(meta(41, secs_to_ns(60))),
+    };
+
+    let err = nonroot_cycles::authorize_root_request_cycles_plan(&ctx, &req)
+        .expect_err("a second child funding operation must reject before ledger mutation");
+
+    assert_eq!(
+        err.public_error()
+            .expect("concurrent funding denial is public")
+            .code,
+        ErrorCode::Conflict
+    );
+    assert_eq!(
+        CyclesFundingLedgerOps::snapshot(child),
+        crate::model::cycles_funding::FundingLedgerSnapshot::default()
+    );
+    let metrics = cycles_funding_snapshot_map();
+    assert_eq!(
+        metrics.get(&(
+            CyclesFundingMetricKey::DeniedToChild,
+            Some(child),
+            Some(CyclesFundingDeniedReason::OperationInProgress),
+        )),
+        Some(&5)
+    );
+
+    ReplayReceiptOps::reset_for_tests();
+}
+
+#[test]
 fn request_cycles_cost_guard_request_uses_value_transfer_policy() {
     let ctx = RootContext {
         caller: p(92),
@@ -876,6 +947,75 @@ fn request_cycles_marks_deposit_external_effect() {
 
     replay::abort_replay(pending).expect("abort replay");
     CostGuardOps::abort(&permit).expect("abort cost permit");
+    CostGuardOps::reset_for_tests();
+}
+
+#[test]
+fn request_cycles_releases_cost_reservation_when_effect_marking_fails() {
+    ReplayReceiptOps::reset_for_tests();
+    CostGuardOps::reset_for_tests();
+
+    let now = crate::ops::ic::IcOps::now_secs();
+    let ctx = RootContext {
+        caller: p(94),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(2),
+        now,
+    };
+    let capability = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 77,
+        metadata: Some(meta(30, secs_to_ns(60))),
+    });
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    let permit = CostGuardOps::reserve(nonroot_cycles::request_cycles_cost_guard_request(
+        &ctx,
+        77,
+        10 * TC,
+    ))
+    .expect("cost permit");
+    let settlement = permit.replay_settlement();
+    assert_eq!(
+        IntentStoreOps::expirable_pending_total().expect("pending intents"),
+        2
+    );
+
+    ReplayReceiptOps::remove(pending.receipt_token.key()).expect("remove replay receipt");
+    let err = nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77, &permit)
+        .expect_err("missing replay receipt must reject before the external effect");
+
+    assert_eq!(
+        err.log_fields(),
+        (
+            crate::InternalErrorClass::Workflow,
+            crate::InternalErrorOrigin::Workflow,
+        )
+    );
+    assert_eq!(
+        IntentStoreOps::expirable_pending_total().expect("pending intents"),
+        0
+    );
+    assert_eq!(
+        IntentStoreOps::load(settlement.quota_intent_id)
+            .expect("load quota intent")
+            .expect("quota intent")
+            .state,
+        crate::storage::stable::intent::IntentState::Committed
+    );
+    assert_eq!(
+        IntentStoreOps::load(settlement.reservation_intent_id)
+            .expect("load cycle reservation intent")
+            .expect("cycle reservation intent")
+            .state,
+        crate::storage::stable::intent::IntentState::Aborted
+    );
+
+    ReplayReceiptOps::reset_for_tests();
     CostGuardOps::reset_for_tests();
 }
 

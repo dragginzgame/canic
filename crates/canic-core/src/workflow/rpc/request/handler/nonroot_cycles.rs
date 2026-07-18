@@ -13,7 +13,9 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
-    model::replay::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
+    model::replay::{
+        CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
+    },
     ops::{
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
@@ -29,7 +31,10 @@ use crate::{
                 },
             },
         },
-        storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
+        storage::{
+            children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps,
+            replay::ReplayReceiptOps,
+        },
     },
     replay_policy::CostClass,
     workflow::{
@@ -279,6 +284,8 @@ pub(super) fn authorize_request_cycles_inner(
         return Err(RpcWorkflowError::CyclesFundingDisabled.into());
     }
 
+    reject_competing_funding_operation(ctx, req)?;
+
     let limits = ConfigOps::cycles_funding_limits_for_child_role(&child.role)?;
     let ledger = CyclesFundingLedgerOps::snapshot(ctx.caller);
     let decision = match evaluate(limits, ledger, req.cycles, ctx.now) {
@@ -316,6 +323,36 @@ pub(super) fn authorize_request_cycles_inner(
     Ok(AuthorizedCyclesGrant {
         approved_cycles: decision.approved_cycles,
     })
+}
+
+fn reject_competing_funding_operation(
+    ctx: &RootContext,
+    req: &CyclesRequest,
+) -> Result<(), InternalError> {
+    // Replay is the durable in-flight authority. Excluding this request's own
+    // operation keeps first admission valid while another pending operation
+    // for the same child blocks stale whole-ledger rollback across an await.
+    let Some(metadata) = req.metadata else {
+        return Ok(());
+    };
+    let command_kind = root_request_cycles_command_kind()
+        .expect("root request cycles command kind is a valid static label");
+    let operation_id = OperationId::from_bytes(metadata.request_id);
+    if !ReplayReceiptOps::has_pending_for_actor_command_excluding_operation(
+        ReplayActor::direct_caller(ctx.caller),
+        &command_kind,
+        operation_id,
+        replay_ops::guard::secs_to_ns(ctx.now),
+    ) {
+        return Ok(());
+    }
+
+    CyclesFundingMetrics::record_denied(
+        ctx.caller,
+        req.cycles,
+        CyclesFundingDeniedReason::OperationInProgress,
+    );
+    Err(RpcWorkflowError::FundingOperationInProgress { child: ctx.caller }.into())
 }
 
 /// Execute the approved cycles transfer and return the canonical cycles response.
@@ -492,7 +529,7 @@ pub(super) fn mark_request_cycles_external_effect(
     approved_cycles: u128,
     cost_permit: &CostGuardPermit,
 ) -> Result<(), InternalError> {
-    replay_ops::mark_root_replay_costed_external_effect(
+    if let Err(err) = replay_ops::mark_root_replay_costed_external_effect(
         pending,
         ExternalEffectDescriptor::ManagementCall {
             canister: ctx.caller,
@@ -501,7 +538,14 @@ pub(super) fn mark_request_cycles_external_effect(
         cost_permit,
         replay_ops::guard::secs_to_ns(IcOps::now_secs()),
     )
-    .map_err(replay::map_replay_store_error)?;
+    .map_err(replay::map_replay_store_error)
+    {
+        return Err(CostGuardOps::recover_after_failure(
+            cost_permit,
+            IcOps::now_secs(),
+            err,
+        ));
+    }
     log!(
         Topic::Rpc,
         Info,

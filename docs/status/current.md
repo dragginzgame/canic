@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.18`.
-- The latest published release is `v0.93.18` at
-  `8db9706db18c393d8c977f0cbf78179e04e66fe9`.
-- The `v0.93.18` source tree is
-  `a771e8589b531be2369f742f7cd00d29f2cca6c9`; its product-tree hash is
-  `773f6d6fe222a7e38c820622d48f91e1f948baed3c9c135646162befe075f456`.
+- The workspace package version is `0.93.19`.
+- The latest published release is `v0.93.19` at
+  `c9e1a115f705b261be1b65456869b541e401c6d4`.
+- The `v0.93.19` source tree is
+  `b5c654b88273c6256a612ebafe6f81d133ad27f1`; its product-tree hash is
+  `d0ca6c02b05d9f0bfe97618cb7d90c979a9e2d2d14538cc6d00e9fd7b212e113`.
   Its Cargo.lock SHA-256 is
-  `93c70d42b1f602c30482cf61f016f8cc481da7beea2c2d18891a9f81003fde7b`.
+  `d6a17e14a6df9476db40b46f8978a186c6688039781e57f6d5e270baa3da0625`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -109,10 +109,16 @@ Historical detail is archived at:
   owner, and makes expired-intent cleanup use the checked abort authority.
   The pre-`0.93.17` cost namespace remains a documented hard cut with no old-key
   read, alias, or migration path.
-- Current `0.93.19` development gives pending pool reset recovery one bounded
+- Released `v0.93.19` gives pending pool reset recovery one bounded
   cursor sweep so blocked oldest rows neither spin nor starve later work. It
   also makes sharding assignment and release accounting reject dangling
   references, counter underflow, and counter overflow before stable mutation.
+- Current `0.93.20` development serializes child cycles funding through the
+  existing durable replay authority. A competing pending `RequestCycles`
+  operation now fails with a typed conflict before it can race whole-ledger
+  rollback, cumulative budget, or cooldown accounting. Failure to persist the
+  pre-transfer replay marker also settles the cost guard without losing the
+  typed replay cause or retaining an unused cycle reservation.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
