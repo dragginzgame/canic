@@ -439,7 +439,6 @@ mod tests {
             intent::{PayloadBinding, TerminalEvidence},
             replay::OperationId,
         },
-        storage::stable::intent::{IntentStore, ReceiptBackedIntentStore},
         test::seams,
     };
 
@@ -463,7 +462,7 @@ mod tests {
     #[test]
     fn consumer_begin_rejects_canic_owned_resource_namespace() {
         let _guard = seams::lock();
-        IntentStore::reset_for_tests();
+        IntentStoreOps::reset_for_tests();
 
         let local_error = LocalIntentWorkflow::begin(BeginLocalIntentInput {
             resource_key: IntentResourceKey::new("canic:consumer"),
@@ -477,13 +476,17 @@ mod tests {
         let receipt_error = ReceiptBackedIntentWorkflow::begin_or_load(&canic_receipt_input())
             .expect_err("consumer receipt intent must not enter Canic namespace");
         assert_reserved_namespace_error(&receipt_error);
-        assert_eq!(ReceiptBackedIntentStore::len(), 0);
+        assert!(
+            ReceiptBackedIntentOps::load(canic_receipt_input().operation_id)
+                .expect("load receipt-backed intent")
+                .is_none()
+        );
     }
 
     #[test]
     fn consumer_cannot_commit_or_rollback_canic_owned_local_intent() {
         let _guard = seams::lock();
-        IntentStore::reset_for_tests();
+        IntentStoreOps::reset_for_tests();
         let intent_id = IntentStoreOps::allocate_intent_id().expect("allocate internal intent");
         IntentStoreOps::try_reserve(
             intent_id,
@@ -501,19 +504,16 @@ mod tests {
         let rollback_error = LocalIntentWorkflow::rollback(intent_id)
             .expect_err("consumer rollback must reject Canic-owned intent");
         assert_reserved_namespace_error(&rollback_error);
-        assert_eq!(
-            IntentStoreOps::load(intent_id)
-                .expect("load internal intent")
-                .expect("internal intent remains pending")
-                .state,
-            crate::storage::stable::intent::IntentState::Pending
+        assert!(
+            IntentStoreOps::is_pending_for_tests(intent_id)
+                .expect("internal intent state remains readable")
         );
     }
 
     #[test]
     fn consumer_receipt_operations_cannot_observe_or_settle_canic_owned_intent() {
         let _guard = seams::lock();
-        IntentStore::reset_for_tests();
+        IntentStoreOps::reset_for_tests();
         let input = canic_receipt_input();
 
         assert!(matches!(
@@ -549,7 +549,7 @@ mod tests {
     #[test]
     fn consumer_receipt_namespace_remains_available_outside_canic_prefix() {
         let _guard = seams::lock();
-        IntentStore::reset_for_tests();
+        IntentStoreOps::reset_for_tests();
         let mut input = canic_receipt_input();
         input.resource_key = IntentResourceKey::new("app:placement");
 

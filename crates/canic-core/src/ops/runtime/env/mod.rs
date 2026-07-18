@@ -167,6 +167,14 @@ impl EnvOps {
         Env::set_subnet_pid(pid);
     }
 
+    /// Set the root identity through the ops boundary for isolated unit tests.
+    #[cfg(test)]
+    pub(crate) fn set_root_pid_for_tests(pid: Principal) {
+        let mut data = Env::export();
+        data.record.root_pid = Some(pid);
+        Env::import(data);
+    }
+
     // ---------------------------------------------------------------------
     // Data / Import
     // ---------------------------------------------------------------------

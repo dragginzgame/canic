@@ -368,6 +368,31 @@ impl IntentStoreOps {
         IntentStore::get_totals(resource_key).unwrap_or_default()
     }
 
+    /// Reset both intent stores through the ops authority for isolated unit tests.
+    #[cfg(test)]
+    pub(crate) fn reset_for_tests() {
+        IntentStore::reset_for_tests();
+        ReceiptBackedIntentStore::reset_for_tests();
+    }
+
+    /// Return whether one local intent remains pending without exposing its storage record.
+    #[cfg(test)]
+    pub(crate) fn is_pending_for_tests(intent_id: IntentId) -> Result<bool, InternalError> {
+        Ok(Self::load(intent_id)?.is_some_and(|record| record.state == IntentState::Pending))
+    }
+
+    /// Return whether one local intent committed without exposing its storage record.
+    #[cfg(test)]
+    pub(crate) fn is_committed_for_tests(intent_id: IntentId) -> Result<bool, InternalError> {
+        Ok(Self::load(intent_id)?.is_some_and(|record| record.state == IntentState::Committed))
+    }
+
+    /// Return whether one local intent aborted without exposing its storage record.
+    #[cfg(test)]
+    pub(crate) fn is_aborted_for_tests(intent_id: IntentId) -> Result<bool, InternalError> {
+        Ok(Self::load(intent_id)?.is_some_and(|record| record.state == IntentState::Aborted))
+    }
+
     #[cfg(test)]
     pub fn pending_entries_at(now: u64) -> Vec<IntentPendingIndexEntryRecord> {
         let mut entries = Vec::new();

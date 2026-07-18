@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.21` makes offline validation deterministic on fresh Cargo caches,
+  activates dependency-risk rejection proofs, and routes workflow test setup
+  through the canonical ops layering boundary.
+
 - `0.93.20` is potentially breaking: child cycles funding now admits only one
   pending operation per child, using durable replay identity to prevent stale
   rollback from erasing concurrent accounting; pre-effect marking failures now

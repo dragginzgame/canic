@@ -106,6 +106,9 @@ jobs:
       - name: Check dependency risk inventory
         shell: bash
         run: bash scripts/ci/check-dependency-risk-inventory.sh
+      - name: Check dependency risk rejection cases
+        shell: bash
+        run: bash scripts/ci/test-dependency-risk-inventory.sh
       - name: Install IC CLI tools
         shell: bash
         run: |
