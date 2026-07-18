@@ -25,6 +25,7 @@ pub(crate) use manifest::{
     RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
     emit_root_release_set_manifest_from_build, validate_root_release_set_manifest,
 };
+pub(crate) use paths::artifact_root_path;
 pub use paths::{
     ArtifactRootError, CanisterManifestError, WorkspaceDiscoveryError, canister_manifest_path,
     canisters_root, config_path, display_workspace_path, icp_root, load_root_package_version,

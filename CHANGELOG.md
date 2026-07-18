@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.23` is potentially breaking: release-set path projection is now pure
+  and canonical, leaving directory creation and I/O failure ownership to the
+  durable writer instead of hidden resolver side effects or fallback branches.
+
 - `0.93.22` binds replay mutations and cleanup to the exact reserved receipt
   identity, preventing expired async continuations from altering a reused
   operation slot.
