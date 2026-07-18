@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.15`.
-- The latest published release is `v0.93.15` at
-  `537ab8b07d919e9225aef210dde9b9a90f23832c`.
-- The `v0.93.15` source tree is
-  `7fdc69bdc73e77806c48e0f8cc2e85abd0426820`; its product-tree hash is
-  `7deb5bc22b97f82a737d2dff6e712da4c9bb6e5583058b969a3e5c4eb7d353d9`.
+- The workspace package version is `0.93.16`.
+- The latest published release is `v0.93.16` at
+  `03973547251678757ccced6ffd69ba1dff3998a3`.
+- The `v0.93.16` source tree is
+  `2b5b11a01998a1723f9443e0dad33c8e7eeaec9d`; its product-tree hash is
+  `aae209d267cc43f191c2434163de8f27a6714fe37b200b94cca74117f4747d15`.
   Its Cargo.lock SHA-256 is
-  `2d0b6f3d442ddfc0c95fa9326fc8acce58229e776057a65d29130fdad8801c2a`.
+  `0f724fbebbd9687ec8f3faf78f3164a3d77653dfc0ef6e6be454deea7f6ecd06`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -89,7 +89,7 @@ Historical detail is archived at:
   local subnet state is absent, returns typed state-cascade partial failures,
   and binds prevalidated shard allocation to one deterministic root replay
   identity per owner, pool, and slot.
-- Current `0.93.16` development replaces the separate scaling, directory, and
+- Released `v0.93.16` replaces the separate scaling, directory, and
   sharding create flows with one receipt-backed placement-allocation authority.
   Unknown directory outcomes retain their claims, tracked retries replay the
   exact root placement operation, capability transport preserves its full
@@ -99,6 +99,11 @@ Historical detail is archived at:
   redundant terminal intent records after cleanup. Evidence-backed directory
   repair and disposal skip nonexistent root acknowledgement while still
   removing their terminal local intent.
+- Current `0.93.17` development reserves `canic:` intent resource keys for one
+  runtime authority. Consumer begin, lookup, settlement, commit, and rollback
+  fail closed on that namespace; placement acknowledgement accepts only its
+  canonical reserved resource shape, and cost-guard plus pool-import intents
+  use the same boundary.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

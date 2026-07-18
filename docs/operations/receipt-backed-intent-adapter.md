@@ -29,6 +29,18 @@ For every first entrance or retry, the adapter must:
 There is no `await` inside either Canic mutation. The adapter performs the
 external call between begin and settlement.
 
+## Resource Namespace Ownership
+
+Application-owned local and receipt-backed intent resource keys must not begin
+with `canic:`. That prefix is reserved for Canic runtime authority, including
+placement allocation, cost guards, and pool import. Consumer begin operations
+reject reserved keys with `InvalidInput`; consumer load, settlement, commit,
+and rollback also reject an existing Canic-owned record before mutation.
+
+Use a domain-owned prefix such as `mint:`, `uploads:`, or `app:placement:`.
+Ordinary words such as `placement:`, `cost:`, and `pool_import:` are not
+reserved without the leading `canic:` namespace.
+
 ## Begin Decisions
 
 | Canic result | Adapter decision |
@@ -104,6 +116,11 @@ the exact terminal intent after receipt release; settled aggregate capacity is
 unchanged. A directory claim with no known child is never released on age
 alone. Recovery resumes only when the matching durable intent exists; untracked
 uncertainty remains fail closed.
+
+Placement resources use the exact internal shape
+`canic:placement:<64 lowercase hex>`. The acknowledgement drain accepts only
+that shape; a consumer resource with a similar ordinary prefix is never part
+of the placement queue.
 
 Other Canic systems may use this adapter when they allocate a child through
 root and have one authoritative registry transition that can prove membership

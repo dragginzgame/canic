@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 
 const ALLOCATION_OPERATION_COMMAND: &str = "placement.allocate_child";
 const ALLOCATION_RESOURCE_DOMAIN: &[u8] = b"canic-placement-allocation-resource";
+const PLACEMENT_RESOURCE_PREFIX: &str = "canic:placement:";
 
 ///
 /// PlacementAllocationIdentity
@@ -148,8 +149,10 @@ impl PlacementAllocationIdentity {
             hash_bytes(&mut resource_hasher, subject);
         }
         let resource_digest: [u8; 32] = resource_hasher.finalize().into();
-        let resource_key =
-            IntentResourceKey::new(format!("placement:{}", hex_encode(&resource_digest)));
+        let resource_key = IntentResourceKey::new(format!(
+            "{PLACEMENT_RESOURCE_PREFIX}{}",
+            hex_encode(&resource_digest)
+        ));
 
         Self {
             operation_id,
@@ -157,6 +160,20 @@ impl PlacementAllocationIdentity {
             resource_key,
         }
     }
+}
+
+#[must_use]
+pub fn is_placement_resource_key(resource_key: &IntentResourceKey) -> bool {
+    let Some(digest) = resource_key
+        .as_ref()
+        .strip_prefix(PLACEMENT_RESOURCE_PREFIX)
+    else {
+        return false;
+    };
+    digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn hash_bytes(hasher: &mut Sha256, bytes: &[u8]) {
@@ -226,6 +243,28 @@ mod tests {
             PlacementAllocationIdentity::scaling(p(1), "pool", 3, &role, Some(&[1])),
             expected
         );
+    }
+
+    #[test]
+    fn placement_resource_keys_use_only_the_reserved_canonical_shape() {
+        let identity = PlacementAllocationIdentity::scaling(
+            p(1),
+            "pool",
+            3,
+            &CanisterRole::new("worker"),
+            None,
+        );
+
+        assert!(is_placement_resource_key(&identity.resource_key));
+        assert!(!is_placement_resource_key(&IntentResourceKey::new(
+            "placement:test"
+        )));
+        assert!(!is_placement_resource_key(&IntentResourceKey::new(
+            "canic:placement:test"
+        )));
+        assert!(!is_placement_resource_key(&IntentResourceKey::new(
+            format!("canic:placement:{}", "A".repeat(64))
+        )));
     }
 
     #[test]

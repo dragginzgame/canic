@@ -427,12 +427,12 @@ fn receipt_backed_rejects_unsupported_schemas_without_mutation() {
 #[test]
 fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
     reset();
-    let mut placement = receipt_input(20);
-    placement.resource_key = IntentResourceKey::new("placement:test");
+    let mut target = receipt_input(20);
+    target.resource_key = IntentResourceKey::new("target:test");
     let mut other = receipt_input(21);
     other.resource_key = IntentResourceKey::new("other:test");
 
-    for input in [&placement, &other] {
+    for input in [&target, &other] {
         ReceiptBackedIntentOps::begin_or_load(input, 100).expect("create intent");
         ReceiptBackedIntentOps::settle_if_pending(
             &SettleReceiptBackedIntentInput {
@@ -450,8 +450,8 @@ fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
     assert_eq!(listed.intents.len(), 2);
     assert_eq!(listed.next_cursor, None);
     assert!(listed.intents.iter().any(|intent| {
-        intent.operation_id == placement.operation_id
-            && intent.resource_key.starts_with("placement:")
+        intent.operation_id == target.operation_id
+            && intent.resource_key == target.resource_key
             && !matches!(intent.state, ReceiptBackedIntentState::Pending)
     }));
     let first_page = ReceiptBackedIntentOps::list_page(None, 1).expect("first bounded page");
@@ -469,10 +469,10 @@ fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
     );
     assert_eq!(second_page.next_cursor, None);
 
-    let totals_before = totals(&placement.resource_key);
+    let totals_before = totals(&target.resource_key);
     assert_eq!(
         ReceiptBackedIntentOps::remove_terminal(&RemoveTerminalReceiptBackedIntentInput {
-            operation_id: placement.operation_id,
+            operation_id: target.operation_id,
             expected_revision: 2,
             expected_payload_binding: PayloadBinding::new([99; 32]),
         })
@@ -481,16 +481,16 @@ fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
     );
     assert_eq!(
         ReceiptBackedIntentOps::remove_terminal(&RemoveTerminalReceiptBackedIntentInput {
-            operation_id: placement.operation_id,
+            operation_id: target.operation_id,
             expected_revision: 2,
-            expected_payload_binding: placement.payload_binding,
+            expected_payload_binding: target.payload_binding,
         })
         .expect("terminal removal succeeds"),
         RemoveTerminalReceiptBackedIntentResult::Removed
     );
-    assert_eq!(totals(&placement.resource_key), totals_before);
+    assert_eq!(totals(&target.resource_key), totals_before);
     assert!(
-        ReceiptBackedIntentOps::load(placement.operation_id)
+        ReceiptBackedIntentOps::load(target.operation_id)
             .expect("load removed intent")
             .is_none()
     );

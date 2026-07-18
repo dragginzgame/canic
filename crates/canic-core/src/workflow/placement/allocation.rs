@@ -18,7 +18,7 @@ use crate::{
             RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
             SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
         },
-        placement::allocation::PlacementAllocationIdentity,
+        placement::allocation::{PlacementAllocationIdentity, is_placement_resource_key},
         replay::{OperationId, ReplayPayloadHasher},
     },
     ops::{
@@ -34,7 +34,6 @@ use std::{
 };
 
 const ALLOCATION_RESULT_COMMAND: &str = "placement.allocate_child.result";
-const PLACEMENT_RESOURCE_PREFIX: &str = "placement:";
 const ROOT_RECEIPT_ACK_BATCH_SIZE: usize = 32;
 const ROOT_RECEIPT_ACK_RETRY_DELAY: Duration = Duration::from_mins(1);
 
@@ -198,12 +197,14 @@ fn settle_allocation(
     decision: TerminalEvidenceDecision,
 ) -> Result<(), InternalError> {
     let evidence = allocation_terminal_evidence(&permit.identity, child_pid, decision)?;
-    let result = ReceiptBackedIntentWorkflow::settle_if_pending(&SettleReceiptBackedIntentInput {
-        operation_id: permit.identity.operation_id,
-        expected_revision: permit.revision,
-        expected_payload_binding: permit.identity.payload_binding,
-        evidence,
-    })?;
+    let result = ReceiptBackedIntentWorkflow::settle_canic_owned_if_pending(
+        &SettleReceiptBackedIntentInput {
+            operation_id: permit.identity.operation_id,
+            expected_revision: permit.revision,
+            expected_payload_binding: permit.identity.payload_binding,
+            evidence,
+        },
+    )?;
 
     match result {
         SettleReceiptBackedIntentResult::Settled { state, .. }
@@ -314,7 +315,7 @@ async fn drain_root_receipt_acknowledgements() -> Option<Duration> {
 
     for intent in page.intents.into_iter().filter(|intent| {
         !matches!(intent.state, ReceiptBackedIntentState::Pending)
-            && intent.resource_key.starts_with(PLACEMENT_RESOURCE_PREFIX)
+            && is_placement_resource_key(&intent.resource_key)
     }) {
         let operation_id = intent.operation_id;
         let result = async {
@@ -409,9 +410,8 @@ fn begin_allocation(
         quantity: 1,
         reservation_limit: request.reservation_limit,
     };
-    let (revision, root_receipt_may_exist) = match ReceiptBackedIntentWorkflow::begin_or_load(
-        &input,
-    )? {
+    let begin_result = ReceiptBackedIntentWorkflow::begin_canic_owned_or_load(&input)?;
+    let (revision, root_receipt_may_exist) = match begin_result {
         BeginReceiptBackedIntentResult::Created { revision } => (revision, false),
         BeginReceiptBackedIntentResult::ExistingPending { revision } => (revision, true),
         BeginReceiptBackedIntentResult::ExistingCommitted { .. } => {
