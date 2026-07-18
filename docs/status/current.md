@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.24`.
-- The latest published release is `v0.93.24` at
-  `ae963d55a54cd8b069ee2d6376c40cfc382f5ad8`.
-- The `v0.93.24` source tree is
-  `d6999ec84538cc1cbb49f1d6a721e8b2b9bf21e0`; its product-tree hash is
-  `e1db8d6cf47063d18b3618537490cb8d2d730454347184d3f3b3e18df2cefcca`.
+- The workspace package version is `0.93.25`.
+- The latest published release is `v0.93.25` at
+  `bd1b7578fd4a5c2b9d8c0acf74f59d9b866e2d1c`.
+- The `v0.93.25` source tree is
+  `f340baf5f5b61aa5e2526d03f744084c3fedf30f`; its product-tree hash is
+  `153c08f11d25bfee071a862d800ed28ed4e3d088d2e4f4bce4291386200e9ff5`.
   Its Cargo.lock SHA-256 is
-  `8f54b9f8d64dc57dddcdc7e5b4e9f505bc3d30aa1c3ca4d3381e7fb85020f3bb`.
+  `38ba97c63e0bb295e9f0be984afb103d19df9402dff1b973b84d7d499fe4a9f9`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -139,11 +139,16 @@ Historical detail is archived at:
   outputs, supplied plans retain exact artifact lookup, and missing roots
   preserve expected role rows so the artifact gate fails closed instead of
   accepting empty evidence.
-- Current `0.93.25` development corrects the selected-target name to
+- Released `v0.93.25` corrects the selected-target name to
   `environment` across CLI, host, evidence, deployment, backup, restore,
   diagnostics, and JSON. `build_network` remains the local/IC compile class,
   `artifact_environment` remains the exact `.icp` artifact namespace, and an
   `icp.yaml` environment may separately reference a backing network.
+- Current `0.93.26` development bounds the public delegated-token preparation
+  surface at 64 active entries per caller and 512 globally for both durable
+  replay responses and caller-bound prepared-token metadata. Expired entries
+  release capacity, exact committed replay remains available at saturation,
+  and the duplicate issuer-proof metadata authority is removed.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -681,22 +686,22 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.24` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.25` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
-metadata/Candid behavior. The current `.25` slice corrects `.24`'s selected
-target terminology: `staging`, `local`, and `ic` are environments selected by
+metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
+terminology: `staging`, `local`, and `ic` are environments selected by
 `canic --environment` and ICP CLI `-e`; they are not direct network arguments.
 Keep `environment`, `artifact_environment`, `build_network`, backing network,
 and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Focused host, CLI, and backup compilation passes across libraries, examples,
-and tests, and the downstream `canic-tests` test surface compiles. The 814
-host, 617 CLI, and 198 backup unit tests pass, followed by the focused
-deployment-plan, named-environment ping, and table-rendering checks after final
-cleanup. Strict affected-package Clippy, formatting, changelog governance,
-changed-shell syntax, CLI help, naming residue, and diff hygiene pass for
-`.25`. Broad deployment, package, publish, and release validation remains
-maintainer-owned.
+Current `.26` development fixes the unbounded public delegated-token prepare
+finding. Stable replay counts retained committed responses, prepared-token
+metadata has one caller/expiry authority, and both stores reject new work at
+64 entries per caller or 512 globally while exact replay remains idempotent.
+The issuer signature map remains only the cryptographic-witness authority and
+uses its own bounded expiry pruning. Focused core and PocketIC validation
+covers saturation, boundary pruning, typed rejection, and exact replay. Broad
+deployment, package, publish, and release validation remains maintainer-owned.

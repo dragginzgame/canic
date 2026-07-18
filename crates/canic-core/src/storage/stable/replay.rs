@@ -246,11 +246,37 @@ impl ReplayReceiptStore {
             map.iter()
                 .filter(|entry| {
                     let record = entry.value();
+                    record.actor == actor && record_is_active(&record, now_ns)
+                })
+                .count()
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn active_len_for_actor_command_kind(
+        actor: ReplayActor,
+        command_kind: &str,
+        now_ns: u64,
+    ) -> usize {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter()
+                .filter(|entry| {
+                    let record = entry.value();
                     record.actor == actor
-                        && (record_survives_replay_expiry(&record)
-                            || record
-                                .expires_at_ns
-                                .is_none_or(|expires_at_ns| now_ns < expires_at_ns))
+                        && record.command_kind == command_kind
+                        && record_is_active(&record, now_ns)
+                })
+                .count()
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn active_len_for_command_kind(command_kind: &str, now_ns: u64) -> usize {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter()
+                .filter(|entry| {
+                    let record = entry.value();
+                    record.command_kind == command_kind && record_is_active(&record, now_ns)
                 })
                 .count()
         })
@@ -317,6 +343,41 @@ impl ReplayReceiptStore {
         });
         expired
     }
+
+    pub(crate) fn collect_expired_for_command_kind(
+        command_kind: &str,
+        now_ns: u64,
+        limit: usize,
+    ) -> Vec<ReplayReceiptSlotKey> {
+        if limit == 0 {
+            return Vec::new();
+        }
+        let mut expired = Vec::new();
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            for entry in map.iter() {
+                let record = entry.value();
+                if record.command_kind == command_kind
+                    && !record_survives_replay_expiry(&record)
+                    && record
+                        .expires_at_ns
+                        .is_some_and(|expires_at_ns| expires_at_ns <= now_ns)
+                {
+                    expired.push(*entry.key());
+                    if expired.len() >= limit {
+                        break;
+                    }
+                }
+            }
+        });
+        expired
+    }
+}
+
+fn record_is_active(record: &ReplayReceiptRecord, now_ns: u64) -> bool {
+    record_survives_replay_expiry(record)
+        || record
+            .expires_at_ns
+            .is_none_or(|expires_at_ns| now_ns < expires_at_ns)
 }
 
 fn record_is_pending(record: &ReplayReceiptRecord, now_ns: u64) -> bool {

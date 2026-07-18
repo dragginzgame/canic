@@ -262,6 +262,71 @@ fn delegated_auth_session_bootstrap_is_subject_bound_and_replay_safe() {
 }
 
 #[test]
+fn delegated_auth_prepare_retention_rejects_caller_growth_and_preserves_exact_replay() {
+    let setup = setup_root(RootSetupProfile::Sharding);
+    let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
+    let subject = Principal::from_slice(&[94; 29]);
+    let issuer_pid = create_user_shard(&setup.pic, user_hub_pid, subject);
+
+    upsert_root_issuer_policy(&setup, issuer_pid);
+    upsert_root_issuer_renewal_template(&setup, issuer_pid);
+    let provisioned: Result<(), Error> = setup.pic.update_call_or_panic(
+        setup.root_id,
+        TEST_PROVISION_CHAIN_KEY_DELEGATION_PROOF,
+        (issuer_pid,),
+    );
+    provisioned.expect("root issuer-readiness provisioning failed");
+
+    let token_ttl_ns = 10 * SECOND_NS;
+    let first_request = delegated_token_prepare_request(issuer_pid, subject, token_ttl_ns, 0);
+    let mut first_response = None;
+    for nonce in 0..64 {
+        let request = delegated_token_prepare_request(issuer_pid, subject, token_ttl_ns, nonce);
+        let prepared: Result<DelegatedTokenPrepareResponse, Error> =
+            setup.pic.update_call_as_or_panic(
+                issuer_pid,
+                subject,
+                protocol::CANIC_PREPARE_DELEGATED_TOKEN,
+                (request,),
+            );
+        let prepared = prepared.expect("retained delegated-token preparation should succeed");
+        if nonce == 0 {
+            first_response = Some(prepared);
+        }
+    }
+
+    let rejected: Result<DelegatedTokenPrepareResponse, Error> = setup.pic.update_call_as_or_panic(
+        issuer_pid,
+        subject,
+        protocol::CANIC_PREPARE_DELEGATED_TOKEN,
+        (delegated_token_prepare_request(
+            issuer_pid,
+            subject,
+            token_ttl_ns,
+            64,
+        ),),
+    );
+    assert_eq!(
+        rejected
+            .expect_err("the sixty-fifth live caller preparation must reject")
+            .code,
+        ErrorCode::ResourceExhausted,
+    );
+
+    let replayed: Result<DelegatedTokenPrepareResponse, Error> = setup.pic.update_call_as_or_panic(
+        issuer_pid,
+        subject,
+        protocol::CANIC_PREPARE_DELEGATED_TOKEN,
+        (first_request,),
+    );
+    drop(setup);
+    assert_eq!(
+        replayed.expect("exact committed replay must remain available at capacity"),
+        first_response.expect("first response must be recorded"),
+    );
+}
+
+#[test]
 fn delegated_auth_lazy_repair_uses_cached_batch_and_does_not_sign_per_login() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
