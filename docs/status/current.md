@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.25`.
-- The latest published release is `v0.93.25` at
-  `bd1b7578fd4a5c2b9d8c0acf74f59d9b866e2d1c`.
-- The `v0.93.25` source tree is
-  `f340baf5f5b61aa5e2526d03f744084c3fedf30f`; its product-tree hash is
-  `153c08f11d25bfee071a862d800ed28ed4e3d088d2e4f4bce4291386200e9ff5`.
+- The workspace package version is `0.93.26`.
+- The latest published release is `v0.93.26` at
+  `e12af0d72f36c43248e828f1e2c1f84131353004`.
+- The `v0.93.26` source tree is
+  `f01c1b778fbddb97a5d86e243dcf606b8995d8f1`; its product-tree hash is
+  `a8cf40a3e5d2aa0324348f7bac5e5d7177e75e60a2ba0443d2b424ab22239581`.
   Its Cargo.lock SHA-256 is
-  `38ba97c63e0bb295e9f0be984afb103d19df9402dff1b973b84d7d499fe4a9f9`.
+  `6d7c9b56b54427f4da0a0fdd4003886c1ac7b160e79cdbf3e6c2e1db6ced4ae7`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -144,11 +144,16 @@ Historical detail is archived at:
   diagnostics, and JSON. `build_network` remains the local/IC compile class,
   `artifact_environment` remains the exact `.icp` artifact namespace, and an
   `icp.yaml` environment may separately reference a backing network.
-- Current `0.93.26` development bounds the public delegated-token preparation
+- Released `v0.93.26` bounds the public delegated-token preparation
   surface at 64 active entries per caller and 512 globally for both durable
   replay responses and caller-bound prepared-token metadata. Expired entries
   release capacity, exact committed replay remains available at saturation,
   and the duplicate issuer-proof metadata authority is removed.
+- Current `0.93.27` development gives supplied deployment plans one prepared
+  artifact authority. Digest-pinned raw and gzip sources normalize under the
+  selected ICP environment, deployment truth, release publication, and root
+  activation consume those same revalidated bytes, and root resolution waits
+  until the safety and preflight gates pass.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -686,7 +691,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.25` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.26` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -697,11 +702,12 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.26` development fixes the unbounded public delegated-token prepare
-finding. Stable replay counts retained committed responses, prepared-token
-metadata has one caller/expiry authority, and both stores reject new work at
-64 entries per caller or 512 globally while exact replay remains idempotent.
-The issuer signature map remains only the cryptographic-witness authority and
-uses its own bounded expiry pruning. Focused core and PocketIC validation
-covers saturation, boundary pruning, typed rejection, and exact replay. Broad
-deployment, package, publish, and release validation remains maintainer-owned.
+Current `.27` development fixes the split deployment-artifact authority.
+Supplied raw-only, gzip-only, or paired sources must be digest pinned and
+normalize to one canonical pair inside the selected ICP project. Unsafe paths,
+symlinks, invalid Wasm, unequal representations, duplicate roles, and drift
+fail closed with typed causes. Deployment truth, release-set emission, and
+activation share and revalidate the prepared bytes, while root resolution or
+creation occurs only after the gates pass. Focused host and CLI validation
+covers the maintained deployment path. Broad deployment, package, publish,
+and release validation remains maintainer-owned.

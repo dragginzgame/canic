@@ -25,7 +25,9 @@ use super::phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, install_deployment_truth_phase_receipt,
     write_completed_install_phase_receipt,
 };
-use super::plan_artifacts::validate_plan_artifacts_with_phase;
+use super::plan_artifacts::{
+    PlanArtifactError, PreparedPlanArtifacts, prepare_plan_artifacts_with_phase,
+};
 use super::receipt_io::{
     install_deployment_truth_receipt_path, write_install_deployment_truth_receipt,
 };

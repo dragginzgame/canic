@@ -30,12 +30,47 @@ fn promoted_deployment_plan_applies_sealed_wasm_role_identity() {
         artifact.wasm_gz_path.as_deref(),
         Some("promoted/root.wasm.gz")
     );
+    assert_eq!(artifact.wasm_path, None);
     assert_eq!(artifact.wasm_sha256, Some(sample_sha256("d")));
     assert_eq!(artifact.wasm_gz_sha256, Some(sample_sha256("a")));
+    assert_eq!(
+        artifact.observed_wasm_gz_file_sha256,
+        Some(sample_sha256("a"))
+    );
+    assert_eq!(
+        artifact.installed_module_hash,
+        request.target_plan.role_artifacts[0].installed_module_hash
+    );
     assert_eq!(
         artifact.canonical_embedded_config_sha256,
         Some(sample_sha256("c"))
     );
+}
+
+#[test]
+fn promoted_raw_wasm_hard_cuts_the_previous_gzip_representation() {
+    let mut input = sample_role_promotion_input(PromotionArtifactLevelV1::SealedWasm);
+    input.source.kind = RoleArtifactSourceKindV1::LocalWasm;
+    input.source.locator = Some("promoted/root.wasm".to_string());
+    input.source.expected_wasm_gz_sha256 = None;
+    let request = PromotionPlanTransformRequest {
+        promoted_plan_id: "promoted-plan-raw".to_string(),
+        target_plan: sample_promotion_target_plan(),
+        inputs: vec![input],
+    };
+
+    let promoted =
+        promoted_deployment_plan_from_inputs(&request).expect("promoted plan should be produced");
+    let artifact = promoted
+        .role_artifacts
+        .iter()
+        .find(|artifact| artifact.role == "root")
+        .expect("root artifact");
+
+    assert_eq!(artifact.wasm_path.as_deref(), Some("promoted/root.wasm"));
+    assert_eq!(artifact.wasm_gz_path, None);
+    assert_eq!(artifact.wasm_gz_sha256, None);
+    assert_eq!(artifact.observed_wasm_gz_file_sha256, None);
 }
 
 #[test]

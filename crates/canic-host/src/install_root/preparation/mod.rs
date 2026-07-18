@@ -8,7 +8,7 @@ use super::operations::{BuildInstallTargetsOperation, ResolveRootCanisterOperati
 use super::phase_receipts::{
     CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
 };
-use super::plan_artifacts::validate_plan_artifacts_with_phase;
+use super::plan_artifacts::{PreparedPlanArtifacts, prepare_plan_artifacts_with_phase};
 use super::timing::InstallTimingSummary;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::canister_build::{CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext};
@@ -23,6 +23,14 @@ pub(super) struct PreparedInstallTruth {
     pub(super) deployment_truth_check: DeploymentCheckV1,
     pub(super) timings: InstallTimingSummary,
     pub(super) build_outputs: Vec<CurrentCanisterArtifactBuildOutput>,
+    pub(super) plan_artifacts: Option<PreparedPlanArtifacts>,
+}
+
+struct PreparedInstallBuild {
+    phase: CompletedInstallPhase,
+    duration: Duration,
+    outputs: Vec<CurrentCanisterArtifactBuildOutput>,
+    plan_artifacts: Option<PreparedPlanArtifacts>,
 }
 
 pub(super) fn prepare_install_deployment_truth(
@@ -37,13 +45,9 @@ pub(super) fn prepare_install_deployment_truth(
     let mut timings = InstallTimingSummary::default();
     ensure_current_install_executor_capabilities(execution_context)?;
     ensure_icp_environment_ready(icp_root, &options.environment)?;
-    let (root_canister_id, create_phase, create_duration) =
-        resolve_root_canister_with_phase(options, icp_root, config_path, build_context)?;
-    timings.create_canisters = create_duration;
-
-    let (build_phase, build_duration, build_outputs) =
+    let build =
         build_install_targets_with_phase(options, build_context, icp_root, install_snapshot)?;
-    timings.build_all = build_duration;
+    timings.build_all = build.duration;
 
     let deployment_truth_check = run_install_deployment_truth_safety_gate(
         options,
@@ -52,7 +56,14 @@ pub(super) fn prepare_install_deployment_truth(
         config_path,
         deployment_name,
         execution_context,
+        build
+            .plan_artifacts
+            .as_ref()
+            .map(PreparedPlanArtifacts::plan),
     )?;
+    let (root_canister_id, create_phase, create_duration) =
+        resolve_root_canister_with_phase(options, icp_root, config_path, build_context)?;
+    timings.create_canisters = create_duration;
     let receipt_scope = InstallReceiptScope {
         icp_root,
         environment: &options.environment,
@@ -61,13 +72,14 @@ pub(super) fn prepare_install_deployment_truth(
         execution_context: Some(execution_context),
     };
     write_completed_install_phase_receipt(receipt_scope, create_phase)?;
-    write_completed_install_phase_receipt(receipt_scope, build_phase)?;
+    write_completed_install_phase_receipt(receipt_scope, build.phase)?;
 
     Ok(PreparedInstallTruth {
         root_canister_id,
         deployment_truth_check,
         timings,
-        build_outputs,
+        build_outputs: build.outputs,
+        plan_artifacts: build.plan_artifacts,
     })
 }
 
@@ -104,18 +116,16 @@ fn build_install_targets_with_phase(
     build_context: &WorkspaceBuildContext,
     icp_root: &Path,
     install_snapshot: &ValidatedInstallSnapshot,
-) -> Result<
-    (
-        CompletedInstallPhase,
-        Duration,
-        Vec<CurrentCanisterArtifactBuildOutput>,
-    ),
-    Box<dyn std::error::Error>,
-> {
+) -> Result<PreparedInstallBuild, Box<dyn std::error::Error>> {
     if let Some(plan) = &options.deployment_plan_override {
-        let (phase, duration) =
-            validate_plan_artifacts_with_phase(plan, icp_root, &options.environment)?;
-        return Ok((phase, duration, Vec::new()));
+        let (plan_artifacts, phase, duration) =
+            prepare_plan_artifacts_with_phase(plan, icp_root, &options.environment)?;
+        return Ok(PreparedInstallBuild {
+            phase,
+            duration,
+            outputs: Vec::new(),
+            plan_artifacts: Some(plan_artifacts),
+        });
     }
 
     let complete_build = install_snapshot
@@ -135,5 +145,10 @@ fn build_install_targets_with_phase(
         evidence: operation.evidence(),
         role_names: operation.role_names(),
     };
-    Ok((phase, duration, outputs))
+    Ok(PreparedInstallBuild {
+        phase,
+        duration,
+        outputs,
+        plan_artifacts: None,
+    })
 }

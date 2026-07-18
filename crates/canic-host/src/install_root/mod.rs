@@ -257,6 +257,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &execution_context,
         &install_snapshot,
         &prepared.build_outputs,
+        prepared.plan_artifacts.as_ref(),
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;
     timings.emit_manifest = emit_manifest_duration;
@@ -273,6 +274,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &manifest_path,
         total_started_at,
         &build_context,
+        prepared.plan_artifacts.as_ref(),
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     timings.install_root = activation_timings.install_root;

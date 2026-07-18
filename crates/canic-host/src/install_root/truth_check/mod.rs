@@ -82,7 +82,27 @@ pub(super) fn current_install_deployment_truth_check_at(
     deployment_name: &str,
     observed_at: String,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
-    if let Some(plan) = &options.deployment_plan_override {
+    current_install_deployment_truth_check_at_with_plan(
+        options,
+        workspace_root,
+        icp_root,
+        config_path,
+        deployment_name,
+        observed_at,
+        None,
+    )
+}
+
+pub(super) fn current_install_deployment_truth_check_at_with_plan(
+    options: &InstallRootOptions,
+    workspace_root: &Path,
+    icp_root: &Path,
+    config_path: &Path,
+    deployment_name: &str,
+    observed_at: String,
+    prepared_plan: Option<&DeploymentPlanV1>,
+) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+    if let Some(plan) = prepared_plan.or(options.deployment_plan_override.as_ref()) {
         validate_current_install_plan_override(plan, &options.environment, deployment_name)?;
         return current_install_deployment_truth_check_for_plan(
             plan,

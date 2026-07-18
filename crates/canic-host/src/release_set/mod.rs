@@ -31,8 +31,8 @@ pub use paths::{
     load_root_package_version, load_workspace_package_version, resolve_artifact_root,
     root_manifest_path, root_release_set_manifest_path, workspace_manifest_path, workspace_root,
 };
+pub(crate) use stage::icp_query_in_environment;
 use stage::{build_release_set_entry, validate_release_artifact_relative_path};
-pub(crate) use stage::{icp_query_in_environment, resolve_release_artifact_path};
 pub use stage::{resume_root_bootstrap, stage_root_release_set};
 
 pub(super) const CANISTERS_ROOT_RELATIVE: &str = "fleets";

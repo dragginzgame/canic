@@ -16,11 +16,10 @@ use call::icp_call_in_environment;
 use entry::stage_release_entry;
 use progress::StageProgress;
 
-pub use artifact::resolve_release_artifact_path;
 pub(super) use artifact::{build_release_set_entry, validate_release_artifact_relative_path};
 
 #[cfg(test)]
-pub(super) use artifact::read_release_artifact;
+pub(super) use artifact::{read_release_artifact, resolve_release_artifact_path};
 
 // Stage one emitted release-set manifest into root and resume bootstrap-ready state.
 pub fn stage_root_release_set(

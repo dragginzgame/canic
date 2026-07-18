@@ -19,6 +19,11 @@ fn current_install_records_gates_before_activation_mutation() {
         "ensure_current_install_executor_capabilities(execution_context)?",
         "run_install_deployment_truth_safety_gate(",
     );
+    assert_before(
+        prepare,
+        "run_install_deployment_truth_safety_gate(",
+        "resolve_root_canister_with_phase(",
+    );
 
     let gate = include_str!("../../current_execution/mod.rs");
     assert_before(

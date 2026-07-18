@@ -65,16 +65,19 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     config_path: &Path,
     deployment_name: &str,
     execution_context: &DeploymentExecutionContextV1,
+    prepared_plan: Option<&crate::deployment_truth::DeploymentPlanV1>,
 ) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
     let truth_gate_started_at = current_unix_timestamp_label()?;
-    let deployment_truth_check = super::truth_check::current_install_deployment_truth_check_at(
-        options,
-        workspace_root,
-        icp_root,
-        config_path,
-        deployment_name,
-        truth_gate_started_at.clone(),
-    )?;
+    let deployment_truth_check =
+        super::truth_check::current_install_deployment_truth_check_at_with_plan(
+            options,
+            workspace_root,
+            icp_root,
+            config_path,
+            deployment_name,
+            truth_gate_started_at.clone(),
+            prepared_plan,
+        )?;
     let artifact_gate_receipt = artifact_gate_phase_receipt(
         &deployment_truth_check,
         truth_gate_started_at.clone(),

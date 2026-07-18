@@ -5,7 +5,7 @@ use super::operations::{
 use super::options::InstallRootOptions;
 use super::output::print_install_timing_summary;
 use super::phase_receipts::InstallReceiptScope;
-use super::plan_artifacts::root_wasm_for_install_plan;
+use super::plan_artifacts::{PreparedPlanArtifacts, normal_install_root_wasm};
 use super::staging::StageReleaseSetOperation;
 use super::timing::InstallTimingSummary;
 use crate::canister_build::WorkspaceBuildContext;
@@ -19,14 +19,13 @@ pub(super) fn run_root_activation_phases(
     manifest_path: &Path,
     total_started_at: Instant,
     build_context: &WorkspaceBuildContext,
+    plan_artifacts: Option<&PreparedPlanArtifacts>,
 ) -> Result<InstallTimingSummary, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
-    let root_wasm = root_wasm_for_install_plan(
-        receipt_scope.icp_root,
-        receipt_scope.environment,
-        &options.root_build_target,
-        options.deployment_plan_override.as_ref(),
-    )?;
+    let root_wasm = match plan_artifacts {
+        Some(artifacts) => artifacts.verified_root_wasm_path()?,
+        None => normal_install_root_wasm(receipt_scope.icp_root, &options.root_build_target),
+    };
     let install_operation = InstallRootWasmOperation::new(
         receipt_scope.icp_root,
         receipt_scope.environment,
