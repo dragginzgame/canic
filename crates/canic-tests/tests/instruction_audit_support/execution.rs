@@ -646,7 +646,7 @@ fn root_capability_response_as(
     caller: Principal,
     request: Request,
 ) -> Result<Response, Error> {
-    let (request_id, nonce, ttl_ns) = capability_metadata_from_request(&request);
+    let (request_id, ttl_ns) = capability_metadata_from_request(&request);
     let envelope = RootCapabilityEnvelopeV1 {
         service: CapabilityService::Root,
         capability_version: CAPABILITY_VERSION_V1,
@@ -654,7 +654,6 @@ fn root_capability_response_as(
         proof: CapabilityProof::Structural,
         metadata: CapabilityRequestMetadata {
             request_id,
-            nonce,
             issued_at_ns: target_now_ns(setup, target_pid),
             ttl_ns,
         },
@@ -678,23 +677,18 @@ fn target_now_ns(setup: &root::harness::RootSetup, canister_id: Principal) -> u6
 }
 
 // Rebuild the capability metadata tuple that the structural envelope expects.
-fn capability_metadata_from_request(request: &Request) -> ([u8; 16], [u8; 16], u64) {
+const fn capability_metadata_from_request(request: &Request) -> ([u8; 32], u64) {
     let metadata = match request {
-        Request::CreateCanister(req) => req.metadata,
+        Request::AcknowledgePlacementReceipt(req) => req.metadata,
+        Request::AllocatePlacementChild(req) | Request::CreateCanister(req) => req.metadata,
         Request::UpgradeCanister(req) => req.metadata,
         Request::RecycleCanister(req) => req.metadata,
         Request::Cycles(req) => req.metadata,
     };
 
     match metadata {
-        Some(meta) => {
-            let mut request_id = [0u8; 16];
-            request_id.copy_from_slice(&meta.request_id[..16]);
-            let mut nonce = [0u8; 16];
-            nonce.copy_from_slice(&meta.request_id[16..]);
-            (request_id, nonce, meta.ttl_ns)
-        }
-        None => ([0u8; 16], [0u8; 16], 60_000_000_000),
+        Some(meta) => (meta.request_id, meta.ttl_ns),
+        None => ([0u8; 32], 60_000_000_000),
     }
 }
 

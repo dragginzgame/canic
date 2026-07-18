@@ -28,44 +28,6 @@ fn claim_pending_returns_bound_when_key_is_already_bound() {
 }
 
 #[test]
-fn claim_pending_reclaims_stale_pending_entries() {
-    DirectoryRegistryOps::clear_for_test();
-
-    let owner_pid = p(1);
-    let new_owner_pid = p(2);
-
-    let first =
-        DirectoryRegistryOps::claim_pending("projects", "alpha", owner_pid, claim_id(1), 10)
-            .expect("initial claim");
-    assert_eq!(
-        first,
-        DirectoryClaimResult::Claimed(DirectoryPendingClaim {
-            claim_id: claim_id(1),
-            owner_pid,
-            created_at: 10,
-        })
-    );
-
-    let reclaimed = DirectoryRegistryOps::claim_pending(
-        "projects",
-        "alpha",
-        new_owner_pid,
-        claim_id(2),
-        10 + DirectoryRegistryOps::PENDING_TTL_SECS + 1,
-    )
-    .expect("stale claim should be reclaimed");
-
-    assert_eq!(
-        reclaimed,
-        DirectoryClaimResult::Claimed(DirectoryPendingClaim {
-            claim_id: claim_id(2),
-            owner_pid: new_owner_pid,
-            created_at: 10 + DirectoryRegistryOps::PENDING_TTL_SECS + 1,
-        })
-    );
-}
-
-#[test]
 fn bind_promotes_matching_pending_provisional_child() {
     DirectoryRegistryOps::clear_for_test();
 
@@ -197,7 +159,7 @@ fn release_stale_pending_keeps_fresh_entry_in_place() {
 
     assert_eq!(
         result,
-        DirectoryReleaseResult::PendingCurrent {
+        DirectoryReleaseResult::PendingRetained {
             owner_pid,
             created_at: 10,
             provisional_pid: None,
@@ -210,7 +172,38 @@ fn release_stale_pending_keeps_fresh_entry_in_place() {
 }
 
 #[test]
-fn claim_matched_writes_reject_late_claim_owner() {
+fn release_stale_pending_retains_unknown_child_outcome() {
+    DirectoryRegistryOps::clear_for_test();
+
+    let owner_pid = p(1);
+    let claim =
+        DirectoryRegistryOps::claim_pending("projects", "alpha", owner_pid, claim_id(1), 10)
+            .expect("initial claim");
+    let DirectoryClaimResult::Claimed(claim) = claim else {
+        panic!("expected new claim");
+    };
+
+    let result = DirectoryRegistryOps::release_stale_pending_if_claim_matches(
+        "projects",
+        "alpha",
+        claim.claim_id,
+        10 + DirectoryRegistryOps::PENDING_TTL_SECS + 1,
+    )
+    .expect("unknown child outcome must remain retained");
+
+    assert_eq!(
+        result,
+        DirectoryReleaseResult::PendingRetained {
+            owner_pid,
+            created_at: 10,
+            provisional_pid: None,
+        }
+    );
+    assert!(DirectoryRegistryOps::lookup_entry("projects", "alpha").is_some());
+}
+
+#[test]
+fn pending_claim_cannot_be_stolen_after_ttl_without_explicit_recovery() {
     DirectoryRegistryOps::clear_for_test();
 
     let first = DirectoryRegistryOps::claim_pending("projects", "alpha", p(1), claim_id(1), 10)
@@ -226,10 +219,16 @@ fn claim_matched_writes_reject_late_claim_owner() {
         claim_id(2),
         10 + DirectoryRegistryOps::PENDING_TTL_SECS + 1,
     )
-    .expect("stale claim should be reclaimed");
-    let DirectoryClaimResult::Claimed(second_claim) = second else {
-        panic!("expected reclaimed claim");
-    };
+    .expect("existing claim should be returned");
+    assert_eq!(
+        second,
+        DirectoryClaimResult::PendingExisting {
+            claim_id: first_claim.claim_id,
+            owner_pid: first_claim.owner_pid,
+            created_at: first_claim.created_at,
+            provisional_pid: None,
+        }
+    );
 
     let attach_ok = DirectoryRegistryOps::set_provisional_pid_if_claim_matches(
         "projects",
@@ -237,8 +236,8 @@ fn claim_matched_writes_reject_late_claim_owner() {
         first_claim.claim_id,
         p(9),
     )
-    .expect("late claim owner should lose provisional attach cleanly");
-    assert!(!attach_ok);
+    .expect("original claim owner should retain provisional attach authority");
+    assert!(attach_ok);
 
     let bind_ok = DirectoryRegistryOps::bind_if_claim_matches(
         "projects",
@@ -247,12 +246,11 @@ fn claim_matched_writes_reject_late_claim_owner() {
         p(9),
         20,
     )
-    .expect("late claim owner should lose bind cleanly");
-    assert!(!bind_ok);
+    .expect("original claim owner should retain bind authority");
+    assert!(bind_ok);
 
     std::assert_matches!(
         DirectoryRegistryOps::lookup_state("projects", "alpha"),
-        Some(DirectoryEntryState::Pending { claim_id, owner_pid, .. })
-            if claim_id == second_claim.claim_id && owner_pid == p(2)
+        Some(DirectoryEntryState::Bound { instance_pid, .. }) if instance_pid == p(9)
     );
 }

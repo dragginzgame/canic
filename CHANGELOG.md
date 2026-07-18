@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.16` is potentially breaking: scaling, directory, and sharding now use
+  one receipt-backed child-allocation authority, and unknown directory create
+  outcomes remain recoverable or fail closed instead of being released by age.
+  Capability transport now preserves the exact 32-byte operation ID, while
+  placement acknowledgement is response-idempotent and durably retried without
+  consuming replay capacity.
+
 - `0.93.15` is potentially breaking: delegated-token verification and state
   cascades now fail closed on incomplete runtime state or partial fanout, and
   shard creation is prevalidated and bound to one replay identity.

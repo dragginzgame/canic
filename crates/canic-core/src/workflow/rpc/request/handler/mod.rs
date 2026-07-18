@@ -95,8 +95,51 @@ impl RootResponseWorkflow {
             let response = nonroot_cycles::response_replay_first_root(req).await?;
             return Ok(Response::Cycles(response));
         }
+        if matches!(capability, RootCapability::AcknowledgePlacementReceipt(_)) {
+            return Self::response_idempotent(capability);
+        }
 
         Self::response(capability).await
+    }
+
+    fn response_idempotent(capability: RootCapability) -> Result<Response, InternalError> {
+        let ctx = Self::extract_root_context()?;
+        crate::perf!("extract_context");
+        let descriptor = capability.descriptor();
+        crate::perf!("map_request");
+        Self::authorize(&ctx, &capability)?;
+        crate::perf!("authorize");
+
+        let RootCapability::AcknowledgePlacementReceipt(req) = capability else {
+            unreachable!("only receipt acknowledgement is response-idempotent")
+        };
+        let result = execute::execute_placement_receipt_acknowledgement(&ctx, &req);
+        crate::perf!("execute_capability");
+        match result {
+            Ok(response) => {
+                RootCapabilityMetrics::record_execution(
+                    descriptor.key,
+                    RootCapabilityMetricOutcome::Success,
+                );
+                Ok(response)
+            }
+            Err(err) => {
+                log!(
+                    Topic::Rpc,
+                    Warn,
+                    "execute response-idempotent capability failed (capability={}, caller={}, subnet={}, now={}): {err}",
+                    descriptor.name,
+                    ctx.caller,
+                    ctx.subnet_id,
+                    ctx.now
+                );
+                RootCapabilityMetrics::record_execution(
+                    descriptor.key,
+                    RootCapabilityMetricOutcome::Error,
+                );
+                Err(err)
+            }
+        }
     }
 
     async fn response(capability: RootCapability) -> Result<Response, InternalError> {

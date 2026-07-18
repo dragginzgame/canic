@@ -8,10 +8,10 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     config::schema::DirectoryPool,
-    dto::{placement::directory::DirectoryEntryStatusResponse, rpc::CreateCanisterParent},
+    dto::placement::directory::DirectoryEntryStatusResponse,
+    model::placement::allocation::PlacementAllocationIdentity,
     ops::{
         ic::IcOps,
-        rpc::request::RequestOps,
         runtime::metrics::{
             directory::{
                 DirectoryMetricOperation as MetricOperation, DirectoryMetricReason as MetricReason,
@@ -22,7 +22,12 @@ use crate::{
             DirectoryClaimResult, DirectoryPendingClaim, DirectoryRegistryOps,
         },
     },
-    workflow::placement::directory::{DirectoryWorkflow, state::new_claim_id},
+    workflow::placement::{
+        allocation::{
+            PlacementAllocationPermit, PlacementAllocationRequest, PlacementAllocationWorkflow,
+        },
+        directory::{DirectoryWorkflow, state::new_claim_id},
+    },
 };
 
 impl DirectoryWorkflow {
@@ -33,6 +38,7 @@ impl DirectoryWorkflow {
         key_value: &str,
         claim: DirectoryPendingClaim,
         pid: Principal,
+        permit: &PlacementAllocationPermit,
     ) -> Result<Option<DirectoryEntryStatusResponse>, InternalError> {
         MetricEvent::started(MetricOperation::Finalize);
         if !DirectoryRegistryOps::set_provisional_pid_if_claim_matches(
@@ -42,6 +48,7 @@ impl DirectoryWorkflow {
             pid,
         )? {
             Self::recycle_abandoned_child(pid).await?;
+            PlacementAllocationWorkflow::finish_disposed_child(permit, pid).await?;
             MetricEvent::skipped(MetricOperation::Finalize, MetricReason::ClaimLost);
             return Ok(None);
         }
@@ -67,6 +74,7 @@ impl DirectoryWorkflow {
                 "directory claim lost between provisional attach and final bind",
             ));
         }
+        PlacementAllocationWorkflow::finish_registered_child(permit, pid).await?;
 
         MetricEvent::completed(MetricOperation::Finalize, MetricReason::Ok);
         Ok(Some(DirectoryEntryStatusResponse::Bound {
@@ -105,7 +113,7 @@ impl DirectoryWorkflow {
                     bound_at,
                 }));
             }
-            DirectoryClaimResult::PendingFresh {
+            DirectoryClaimResult::PendingExisting {
                 claim_id: _,
                 owner_pid,
                 created_at,
@@ -124,17 +132,23 @@ impl DirectoryWorkflow {
             }
         };
 
+        Self::create_and_finalize_claim(pool, key_value, pool_cfg, claim).await
+    }
+
+    // Resume the exact durable create operation owned by an existing pending claim.
+    pub(super) async fn resume_pending_instance(
+        pool: &str,
+        key_value: &str,
+        pool_cfg: &DirectoryPool,
+        claim: DirectoryPendingClaim,
+    ) -> Result<Option<DirectoryEntryStatusResponse>, InternalError> {
+        let request = directory_allocation_request(pool, key_value, pool_cfg, claim);
+
         MetricEvent::started(MetricOperation::CreateInstance);
-        let pid = match RequestOps::create_canister::<()>(
-            &pool_cfg.canister_role,
-            CreateCanisterParent::ThisCanister,
-            None,
-        )
-        .await
-        {
-            Ok(response) => {
+        let (permit, pid) = match PlacementAllocationWorkflow::recover_child(request).await {
+            Ok(result) => {
                 MetricEvent::completed(MetricOperation::CreateInstance, MetricReason::Ok);
-                response.new_canister_pid
+                result
             }
             Err(err) => {
                 MetricEvent::failed(MetricOperation::CreateInstance, &err);
@@ -142,6 +156,54 @@ impl DirectoryWorkflow {
             }
         };
 
-        Self::finalize_created_instance(pool, key_value, claim, pid).await
+        Self::finalize_created_instance(pool, key_value, claim, pid, &permit).await
+    }
+
+    async fn create_and_finalize_claim(
+        pool: &str,
+        key_value: &str,
+        pool_cfg: &DirectoryPool,
+        claim: DirectoryPendingClaim,
+    ) -> Result<Option<DirectoryEntryStatusResponse>, InternalError> {
+        let request = directory_allocation_request(pool, key_value, pool_cfg, claim);
+
+        MetricEvent::started(MetricOperation::CreateInstance);
+        let (permit, pid) = match PlacementAllocationWorkflow::create_child(request).await {
+            Ok(result) => {
+                MetricEvent::completed(MetricOperation::CreateInstance, MetricReason::Ok);
+                result
+            }
+            Err(err) => {
+                MetricEvent::failed(MetricOperation::CreateInstance, &err);
+                return Err(err);
+            }
+        };
+
+        Self::finalize_created_instance(pool, key_value, claim, pid, &permit).await
+    }
+}
+
+pub(super) fn directory_allocation_request(
+    pool: &str,
+    key_value: &str,
+    pool_cfg: &DirectoryPool,
+    claim: DirectoryPendingClaim,
+) -> PlacementAllocationRequest {
+    let identity = PlacementAllocationIdentity::directory(
+        claim.owner_pid,
+        pool,
+        key_value,
+        claim.claim_id,
+        &pool_cfg.canister_role,
+        None,
+    );
+    let reservation_limit =
+        PlacementAllocationWorkflow::reservation_limit_for_available_capacity(&identity, 1);
+
+    PlacementAllocationRequest {
+        identity,
+        canister_role: pool_cfg.canister_role.clone(),
+        extra_arg: None,
+        reservation_limit,
     }
 }

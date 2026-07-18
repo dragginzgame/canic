@@ -6,9 +6,11 @@
 
 use crate::{
     dto::rpc::{
-        CreateCanisterParent, CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest,
-        Request, RootRequestMetadata, UpgradeCanisterRequest,
+        AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
+        CyclesRequest, RecycleCanisterRequest, Request, RootRequestMetadata,
+        UpgradeCanisterRequest,
     },
+    model::replay::{PLACEMENT_CHILD_REPLAY_COMMAND_KIND, ROOT_PROVISION_REPLAY_COMMAND_KIND},
     ops::runtime::metrics::root_capability::RootCapabilityMetricKey,
 };
 
@@ -19,6 +21,8 @@ use crate::{
 ///
 #[derive(Clone, Debug)]
 pub(in crate::workflow::rpc) enum RootCapability {
+    AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest),
+    AllocatePlacementChild(CreateCanisterRequest),
     ProvisionCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
@@ -54,6 +58,10 @@ impl RootCapability {
     #[must_use]
     pub(in crate::workflow::rpc) fn from_request(request: Request) -> Self {
         match request {
+            Request::AcknowledgePlacementReceipt(request) => {
+                Self::AcknowledgePlacementReceipt(request)
+            }
+            Request::AllocatePlacementChild(request) => Self::AllocatePlacementChild(request),
             Request::CreateCanister(request) => Self::ProvisionCanister(request),
             Request::UpgradeCanister(request) => Self::UpgradeCanister(request),
             Request::RecycleCanister(request) => Self::RecycleCanister(request),
@@ -68,7 +76,10 @@ impl RootCapability {
         metadata: RootRequestMetadata,
     ) -> Self {
         match &mut self {
-            Self::ProvisionCanister(request) => request.metadata = Some(metadata),
+            Self::AcknowledgePlacementReceipt(request) => request.metadata = Some(metadata),
+            Self::AllocatePlacementChild(request) | Self::ProvisionCanister(request) => {
+                request.metadata = Some(metadata);
+            }
             Self::UpgradeCanister(request) => request.metadata = Some(metadata),
             Self::RecycleCanister(request) => request.metadata = Some(metadata),
             Self::RequestCycles(request) => request.metadata = Some(metadata),
@@ -78,9 +89,19 @@ impl RootCapability {
 
     pub(in crate::workflow::rpc) const fn descriptor(&self) -> RootCapabilityDescriptor {
         match self {
+            Self::AcknowledgePlacementReceipt(_) => RootCapabilityDescriptor {
+                name: "AcknowledgePlacementReceipt",
+                command_kind: "root.acknowledge_placement_receipt",
+                key: RootCapabilityMetricKey::AcknowledgePlacementReceipt,
+            },
+            Self::AllocatePlacementChild(_) => RootCapabilityDescriptor {
+                name: "AllocatePlacementChild",
+                command_kind: PLACEMENT_CHILD_REPLAY_COMMAND_KIND,
+                key: RootCapabilityMetricKey::AllocatePlacementChild,
+            },
             Self::ProvisionCanister(_) => RootCapabilityDescriptor {
                 name: "Provision",
-                command_kind: "root.provision.v1",
+                command_kind: ROOT_PROVISION_REPLAY_COMMAND_KIND,
                 key: RootCapabilityMetricKey::Provision,
             },
             Self::UpgradeCanister(_) => RootCapabilityDescriptor {
@@ -101,16 +122,18 @@ impl RootCapability {
         }
     }
 
-    pub(super) const fn capability_name(&self) -> &'static str {
-        self.descriptor().name
-    }
-
     pub(super) fn replay_input(&self) -> Option<RootReplayInput> {
         match self {
+            Self::AcknowledgePlacementReceipt(_) => None,
+            Self::AllocatePlacementChild(req) => req.metadata.map(|metadata| RootReplayInput {
+                descriptor: self.descriptor(),
+                metadata,
+                payload_hash: hash_create_canister_payload(req, "AllocatePlacementChild"),
+            }),
             Self::ProvisionCanister(req) => req.metadata.map(|metadata| RootReplayInput {
                 descriptor: self.descriptor(),
                 metadata,
-                payload_hash: hash_provision_payload(req),
+                payload_hash: hash_create_canister_payload(req, "ProvisionCanister"),
             }),
             Self::UpgradeCanister(req) => req.metadata.map(|metadata| RootReplayInput {
                 descriptor: self.descriptor(),
@@ -133,7 +156,13 @@ impl RootCapability {
     #[cfg(test)]
     pub(super) fn payload_hash(&self) -> [u8; 32] {
         match self {
-            Self::ProvisionCanister(req) => hash_provision_payload(req),
+            Self::AcknowledgePlacementReceipt(_) => {
+                unreachable!("receipt acknowledgement is not replay protected")
+            }
+            Self::AllocatePlacementChild(req) => {
+                hash_create_canister_payload(req, "AllocatePlacementChild")
+            }
+            Self::ProvisionCanister(req) => hash_create_canister_payload(req, "ProvisionCanister"),
             Self::UpgradeCanister(req) => hash_upgrade_payload(req),
             Self::RecycleCanister(req) => hash_recycle_payload(req),
             Self::RequestCycles(req) => hash_request_cycles_payload(req),
@@ -158,9 +187,9 @@ fn hash_create_canister_parent(hasher: &mut sha2::Sha256, parent: &CreateCaniste
     }
 }
 
-fn hash_provision_payload(req: &CreateCanisterRequest) -> [u8; 32] {
+fn hash_create_canister_payload(req: &CreateCanisterRequest, family: &str) -> [u8; 32] {
     let mut hasher = super::replay::payload_hasher();
-    super::replay::hash_str(&mut hasher, "ProvisionCanister");
+    super::replay::hash_str(&mut hasher, family);
     super::replay::hash_role(&mut hasher, &req.canister_role);
     hash_create_canister_parent(&mut hasher, &req.parent);
     super::replay::hash_optional_bytes(&mut hasher, req.extra_arg.as_deref());

@@ -32,7 +32,6 @@ use crate::{
     workflow::rpc::request::handler::capability::RootCapability,
 };
 
-const REPLAY_REQUEST_ID_DOMAIN_V1: &[u8] = b"CANIC_REPLAY_REQUEST_ID_V1";
 const MAX_CAPABILITY_CLOCK_SKEW_NS: u64 = 30_000_000_000;
 
 ///

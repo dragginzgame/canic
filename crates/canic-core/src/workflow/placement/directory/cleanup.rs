@@ -7,6 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
+    config::schema::DirectoryPool,
     dto::placement::directory::{DirectoryEntryStatusResponse, DirectoryRecoveryResponse},
     ops::{
         ic::IcOps,
@@ -18,11 +19,16 @@ use crate::{
             recording::DirectoryMetricEvent as MetricEvent,
         },
         storage::{
-            placement::directory::{DirectoryRegistryOps, DirectoryReleaseResult},
+            placement::directory::{
+                DirectoryPendingClaim, DirectoryRegistryOps, DirectoryReleaseResult,
+            },
             registry::subnet::SubnetRegistryOps,
         },
     },
-    workflow::placement::directory::DirectoryWorkflow,
+    workflow::placement::{
+        allocation::PlacementAllocationWorkflow,
+        directory::{DirectoryWorkflow, create::directory_allocation_request},
+    },
 };
 
 impl DirectoryWorkflow {
@@ -31,13 +37,20 @@ impl DirectoryWorkflow {
     pub(super) async fn cleanup_stale_entry(
         pool: &str,
         key_value: &str,
+        pool_cfg: &DirectoryPool,
         claim_id: u64,
-        provisional_pid: Option<Principal>,
+        owner_pid: Principal,
+        provisional_pid: Principal,
     ) -> Result<(), InternalError> {
         MetricEvent::started(MetricOperation::CleanupStale);
-        if let Some(pid) = provisional_pid
-            && let Err(err) = Self::recycle_abandoned_child(pid).await
-        {
+        let claim = DirectoryPendingClaim {
+            claim_id,
+            owner_pid,
+            created_at: 0,
+        };
+        let request = directory_allocation_request(pool, key_value, pool_cfg, claim);
+        let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
+        if let Err(err) = Self::recycle_abandoned_child(provisional_pid).await {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
             return Err(err);
         }
@@ -51,6 +64,7 @@ impl DirectoryWorkflow {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
             return Err(err);
         }
+        PlacementAllocationWorkflow::finish_disposed_child(&permit, provisional_pid).await?;
         MetricEvent::completed(MetricOperation::CleanupStale, MetricReason::ReleasedStale);
         Ok(())
     }
@@ -79,26 +93,42 @@ impl DirectoryWorkflow {
     pub(super) async fn recover_cleanup_stale_entry(
         pool: &str,
         key_value: &str,
+        pool_cfg: &DirectoryPool,
         claim_id: u64,
-        provisional_pid: Option<Principal>,
+        owner_pid: Principal,
+        provisional_pid: Principal,
     ) -> Result<Option<DirectoryRecoveryResponse>, InternalError> {
         MetricEvent::started(MetricOperation::CleanupStale);
-        if let Some(pid) = provisional_pid
-            && let Err(err) = Self::recycle_abandoned_child(pid).await
-        {
+        let claim = DirectoryPendingClaim {
+            claim_id,
+            owner_pid,
+            created_at: 0,
+        };
+        let request = directory_allocation_request(pool, key_value, pool_cfg, claim);
+        let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
+        if let Err(err) = Self::recycle_abandoned_child(provisional_pid).await {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
             return Err(err);
         }
 
         let now = IcOps::now_secs();
-        match DirectoryRegistryOps::release_stale_pending_if_claim_matches(
+        let result = DirectoryRegistryOps::release_stale_pending_if_claim_matches(
             pool, key_value, claim_id, now,
-        ) {
-            Ok(DirectoryReleaseResult::ReleasedStalePending {
+        );
+        let result = match result {
+            Ok(result) => result,
+            Err(err) => {
+                MetricEvent::failed(MetricOperation::CleanupStale, &err);
+                return Err(err);
+            }
+        };
+        PlacementAllocationWorkflow::finish_disposed_child(&permit, provisional_pid).await?;
+        match result {
+            DirectoryReleaseResult::ReleasedStalePending {
                 owner_pid,
                 created_at,
                 provisional_pid,
-            }) => {
+            } => {
                 MetricEvent::completed(MetricOperation::CleanupStale, MetricReason::ReleasedStale);
                 Ok(Some(DirectoryRecoveryResponse::ReleasedStalePending {
                     owner_pid,
@@ -107,40 +137,45 @@ impl DirectoryWorkflow {
                     released_at: now,
                 }))
             }
-            Ok(DirectoryReleaseResult::Missing) => {
+            DirectoryReleaseResult::Missing => {
                 MetricEvent::skipped(MetricOperation::CleanupStale, MetricReason::Missing);
                 Ok(Some(DirectoryRecoveryResponse::Missing))
             }
-            Ok(DirectoryReleaseResult::Bound {
+            DirectoryReleaseResult::Bound {
                 instance_pid,
                 bound_at,
-            }) => {
+            } => {
                 MetricEvent::skipped(MetricOperation::CleanupStale, MetricReason::AlreadyBound);
                 Ok(Some(DirectoryRecoveryResponse::Bound {
                     instance_pid,
                     bound_at,
                 }))
             }
-            Ok(DirectoryReleaseResult::PendingCurrent { .. }) => {
+            DirectoryReleaseResult::PendingRetained { .. } => {
                 MetricEvent::skipped(MetricOperation::CleanupStale, MetricReason::PendingCurrent);
                 Ok(None)
-            }
-            Err(err) => {
-                MetricEvent::failed(MetricOperation::CleanupStale, &err);
-                Err(err)
             }
         }
     }
 
     // Repair a stale valid provisional child only if its original claim is still current.
-    pub(super) fn repair_stale_entry(
+    pub(super) async fn repair_stale_entry(
         pool: &str,
         key_value: &str,
+        pool_cfg: &DirectoryPool,
         claim_id: u64,
+        owner_pid: Principal,
         provisional_pid: Principal,
         now: u64,
     ) -> Result<DirectoryEntryStatusResponse, InternalError> {
         MetricEvent::started(MetricOperation::RepairStale);
+        let claim = DirectoryPendingClaim {
+            claim_id,
+            owner_pid,
+            created_at: 0,
+        };
+        let request = directory_allocation_request(pool, key_value, pool_cfg, claim);
+        let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
         let repaired = match DirectoryRegistryOps::bind_if_claim_matches(
             pool,
             key_value,
@@ -161,6 +196,7 @@ impl DirectoryWorkflow {
                 "directory claim lost during stale repair without an await boundary",
             ));
         }
+        PlacementAllocationWorkflow::finish_registered_child(&permit, provisional_pid).await?;
 
         MetricEvent::completed(MetricOperation::RepairStale, MetricReason::Ok);
         Ok(DirectoryEntryStatusResponse::Bound {

@@ -5,11 +5,11 @@
 //! Boundary: delegates transport to `RpcOps` after attaching request metadata.
 
 use super::RequestOpsError;
-#[cfg(feature = "sharding")]
 use crate::model::replay::OperationId;
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::rpc::{
+        AcknowledgePlacementReceiptRequest, AcknowledgePlacementReceiptResponse,
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
         CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse, Request, Response,
         RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
@@ -51,9 +51,8 @@ impl RequestOps {
             .await
     }
 
-    /// Dispatch a create-canister request under a caller-owned durable operation identity.
-    #[cfg(feature = "sharding")]
-    pub(crate) async fn create_canister_for_operation<A>(
+    /// Dispatch a placement-child request under a caller-owned durable operation identity.
+    pub(crate) async fn allocate_placement_child<A>(
         canister_role: &CanisterRole,
         parent: CreateCanisterParent,
         extra: Option<A>,
@@ -62,11 +61,26 @@ impl RequestOps {
     where
         A: CandidType + Send + Sync,
     {
-        Self::create_canister_with_metadata(
+        Self::allocate_placement_child_with_metadata(
             canister_role,
             parent,
             extra,
             operation_request_metadata(operation_id),
+        )
+        .await
+    }
+
+    /// Acknowledge a placement-child response after the caller durably owns its result.
+    pub(crate) async fn acknowledge_placement_receipt(
+        operation_id: OperationId,
+    ) -> Result<AcknowledgePlacementReceiptResponse, InternalError> {
+        let root_pid = EnvOps::root_pid()?;
+        RpcOps::execute_response_rpc(
+            root_pid,
+            AcknowledgePlacementReceiptRpc {
+                operation_id,
+                metadata: Some(operation_request_metadata(operation_id)),
+            },
         )
         .await
     }
@@ -91,6 +105,37 @@ impl RequestOps {
         RpcOps::execute_response_rpc(
             root_pid,
             CreateCanisterRpc {
+                command: CreateCanisterCommand::Generic,
+                canister_role: canister_role.clone(),
+                parent,
+                extra_arg,
+                metadata: Some(metadata),
+            },
+        )
+        .await
+    }
+
+    async fn allocate_placement_child_with_metadata<A>(
+        canister_role: &CanisterRole,
+        parent: CreateCanisterParent,
+        extra: Option<A>,
+        metadata: RootRequestMetadata,
+    ) -> Result<CreateCanisterResponse, InternalError>
+    where
+        A: CandidType + Send + Sync,
+    {
+        let extra_arg = extra.map(encode_one).transpose().map_err(|err| {
+            InternalError::invariant(
+                InternalErrorOrigin::Ops,
+                format!("failed to encode placement child extra arg: {err}"),
+            )
+        })?;
+
+        let root_pid = EnvOps::root_pid()?;
+        RpcOps::execute_response_rpc(
+            root_pid,
+            CreateCanisterRpc {
+                command: CreateCanisterCommand::Placement,
                 canister_role: canister_role.clone(),
                 parent,
                 extra_arg,
@@ -145,12 +190,47 @@ impl RequestOps {
 }
 
 ///
+/// AcknowledgePlacementReceiptRpc
+///
+/// Internal command adapter for placement-receipt acknowledgement RPCs.
+///
+
+struct AcknowledgePlacementReceiptRpc {
+    operation_id: OperationId,
+    metadata: Option<RootRequestMetadata>,
+}
+
+impl Rpc for AcknowledgePlacementReceiptRpc {
+    type Response = AcknowledgePlacementReceiptResponse;
+
+    fn into_request(self) -> Request {
+        Request::acknowledge_placement_receipt(AcknowledgePlacementReceiptRequest {
+            operation_id: self.operation_id.into_bytes(),
+            metadata: self.metadata,
+        })
+    }
+
+    fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
+        match resp {
+            Response::AcknowledgePlacementReceipt(response) => Ok(response),
+            _ => Err(RequestOpsError::InvalidResponseType.into()),
+        }
+    }
+}
+
+///
 /// CreateCanisterRpc
 ///
 /// Internal command adapter for create-canister RPCs.
 ///
 
+enum CreateCanisterCommand {
+    Generic,
+    Placement,
+}
+
 struct CreateCanisterRpc {
+    command: CreateCanisterCommand,
     canister_role: CanisterRole,
     parent: CreateCanisterParent,
     extra_arg: Option<Vec<u8>>,
@@ -161,12 +241,16 @@ impl Rpc for CreateCanisterRpc {
     type Response = CreateCanisterResponse;
 
     fn into_request(self) -> Request {
-        Request::create_canister(CreateCanisterRequest {
+        let request = CreateCanisterRequest {
             canister_role: self.canister_role,
             parent: self.parent,
             extra_arg: self.extra_arg,
             metadata: self.metadata,
-        })
+        };
+        match self.command {
+            CreateCanisterCommand::Generic => Request::create_canister(request),
+            CreateCanisterCommand::Placement => Request::allocate_placement_child(request),
+        }
     }
 
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
@@ -271,7 +355,6 @@ fn new_request_metadata() -> RootRequestMetadata {
     }
 }
 
-#[cfg(feature = "sharding")]
 const fn operation_request_metadata(operation_id: OperationId) -> RootRequestMetadata {
     RootRequestMetadata {
         request_id: operation_id.into_bytes(),
@@ -373,7 +456,6 @@ mod tests {
         assert_eq!(cycles_request.metadata, Some(cycles_metadata));
     }
 
-    #[cfg(feature = "sharding")]
     #[test]
     fn operation_metadata_preserves_caller_owned_request_id() {
         let operation_id = OperationId::from_bytes([11; 32]);
@@ -382,5 +464,41 @@ mod tests {
 
         assert_eq!(metadata.request_id, operation_id.into_bytes());
         assert_eq!(metadata.ttl_ns, DEFAULT_ROOT_REQUEST_TTL_NS);
+    }
+
+    #[test]
+    fn operation_bound_create_uses_the_placement_command() {
+        let metadata = operation_request_metadata(OperationId::from_bytes([11; 32]));
+        let request = CreateCanisterRpc {
+            command: CreateCanisterCommand::Placement,
+            canister_role: CanisterRole::new("worker"),
+            parent: CreateCanisterParent::ThisCanister,
+            extra_arg: None,
+            metadata: Some(metadata),
+        }
+        .into_request();
+
+        let Request::AllocatePlacementChild(request) = request else {
+            panic!("operation-bound create must use the placement command");
+        };
+        assert_eq!(request.metadata, Some(metadata));
+    }
+
+    #[test]
+    fn placement_receipt_acknowledgement_carries_the_target_operation_id() {
+        let operation_id = OperationId::from_bytes([12; 32]);
+        let metadata = operation_request_metadata(operation_id);
+
+        let request = AcknowledgePlacementReceiptRpc {
+            operation_id,
+            metadata: Some(metadata),
+        }
+        .into_request();
+        let Request::AcknowledgePlacementReceipt(request) = request else {
+            panic!("acknowledgement RPC must encode its request variant");
+        };
+        assert_eq!(request.operation_id, operation_id.into_bytes());
+        assert_eq!(request.metadata, Some(metadata));
+        assert_eq!(metadata.request_id, operation_id.into_bytes());
     }
 }

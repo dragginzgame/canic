@@ -30,7 +30,7 @@ fn capability_endpoint_policy_and_structural_paths() {
         capability_version: CAPABILITY_VERSION_V1,
         capability: cycles_request,
         proof: CapabilityProof::Structural,
-        metadata: capability_metadata(issued_at_ns, 7, 3, TEST_ROLE_ATTESTATION_TTL_NS),
+        metadata: capability_metadata(issued_at_ns, 7, TEST_ROLE_ATTESTATION_TTL_NS),
     };
     let response: Result<RootCapabilityResponseV1, Error> = pic.update_call_as_or_panic(
         root_id,

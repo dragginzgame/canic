@@ -24,8 +24,7 @@ pub enum CapabilityService {
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
 pub struct CapabilityRequestMetadata {
-    pub request_id: [u8; 16],
-    pub nonce: [u8; 16],
+    pub request_id: [u8; 32],
     pub issued_at_ns: u64,
     pub ttl_ns: u64,
 }

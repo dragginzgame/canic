@@ -22,7 +22,6 @@ type CapabilityRequestMetadata = record {
   request_id : blob;
   ttl_ns : nat64;
   issued_at_ns : nat64;
-  nonce : blob;
 };
 type CapabilityService = variant { Root };
 type CycleTopupEvent = record {

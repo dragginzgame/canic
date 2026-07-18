@@ -16,7 +16,8 @@ use crate::{
         intent::{
             BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
             PAYLOAD_BINDING_SCHEMA_VERSION, PayloadBinding, RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
-            ReceiptBackedIntent, ReceiptBackedIntentState, SettleReceiptBackedIntentInput,
+            ReceiptBackedIntent, ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
+            RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
             SettleReceiptBackedIntentResult, TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence,
         },
         replay::OperationId,
@@ -27,8 +28,10 @@ use crate::{
         IntentResourceTotalsRecord, IntentState, IntentStore, IntentStoreMetaRecord,
         ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
+    view::intent::ReceiptBackedIntentPage,
 };
 use std::collections::BTreeMap;
+use std::ops::Bound;
 use thiserror::Error as ThisError;
 
 pub const RECEIPT_BACKED_INTENT_RECORD_LIMIT: u64 = 100_000;
@@ -686,6 +689,65 @@ impl ReceiptBackedIntentOps {
         ReceiptBackedIntentStore::insert(updated);
 
         Ok(SettleReceiptBackedIntentResult::Settled { revision, state })
+    }
+
+    /// Return one bounded page of receipt-backed intents after an exact map cursor.
+    pub(crate) fn list_page(
+        cursor: Option<OperationId>,
+        limit: usize,
+    ) -> Result<ReceiptBackedIntentPage, InternalError> {
+        ReceiptBackedIntentStore::with_records(|records| {
+            let mut entries = match cursor {
+                Some(cursor) => records.range((Bound::Excluded(cursor), Bound::Unbounded)),
+                None => records.iter(),
+            };
+            let mut intents = Vec::with_capacity(limit);
+            for entry in entries.by_ref().take(limit) {
+                let record = entry.value();
+                ensure_receipt_backed_record_schema(&record)?;
+                intents.push(record.into_intent());
+            }
+            let next_cursor = entries
+                .next()
+                .and_then(|_| intents.last().map(|intent| intent.operation_id));
+            Ok::<ReceiptBackedIntentPage, IntentStoreOpsError>(ReceiptBackedIntentPage {
+                intents,
+                next_cursor,
+            })
+        })
+        .map_err(InternalError::from)
+    }
+
+    /// Delete one exact terminal record without changing its already-settled totals.
+    pub(crate) fn remove_terminal(
+        input: &RemoveTerminalReceiptBackedIntentInput,
+    ) -> Result<RemoveTerminalReceiptBackedIntentResult, InternalError> {
+        validate_payload_binding(input.expected_payload_binding)?;
+        let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) else {
+            return Ok(RemoveTerminalReceiptBackedIntentResult::NotFound);
+        };
+        ensure_receipt_backed_record_schema(&record)?;
+
+        if record.payload_binding != input.expected_payload_binding {
+            return Ok(RemoveTerminalReceiptBackedIntentResult::BindingConflict);
+        }
+        if record.revision != input.expected_revision {
+            return Ok(RemoveTerminalReceiptBackedIntentResult::RevisionConflict {
+                actual_revision: record.revision,
+            });
+        }
+        if matches!(record.state, ReceiptBackedIntentState::Pending) {
+            return Ok(RemoveTerminalReceiptBackedIntentResult::NotTerminal);
+        }
+
+        let removed = ReceiptBackedIntentStore::remove(input.operation_id).ok_or(
+            IntentStoreOpsError::ReceiptBackedConflict(input.operation_id),
+        )?;
+        if removed != record {
+            return Err(IntentStoreOpsError::ReceiptBackedConflict(input.operation_id).into());
+        }
+
+        Ok(RemoveTerminalReceiptBackedIntentResult::Removed)
     }
 }
 

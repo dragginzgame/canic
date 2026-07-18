@@ -8,6 +8,8 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub enum Request {
+    AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest),
+    AllocatePlacementChild(CreateCanisterRequest),
     CreateCanister(CreateCanisterRequest),
     UpgradeCanister(UpgradeCanisterRequest),
     RecycleCanister(RecycleCanisterRequest),
@@ -15,6 +17,24 @@ pub enum Request {
 }
 
 impl Request {
+    // acknowledge_placement_receipt
+    //
+    // Build a root request that releases one durably consumed placement receipt.
+    #[must_use]
+    pub const fn acknowledge_placement_receipt(
+        request: AcknowledgePlacementReceiptRequest,
+    ) -> Self {
+        Self::AcknowledgePlacementReceipt(request)
+    }
+
+    // allocate_placement_child
+    //
+    // Build a retained root request for receipt-backed placement allocation.
+    #[must_use]
+    pub const fn allocate_placement_child(request: CreateCanisterRequest) -> Self {
+        Self::AllocatePlacementChild(request)
+    }
+
     // create_canister
     //
     // Build a root request for canister provisioning.
@@ -46,6 +66,19 @@ impl Request {
     pub const fn cycles(request: CyclesRequest) -> Self {
         Self::Cycles(request)
     }
+}
+
+//
+// AcknowledgePlacementReceiptRequest
+//
+// Placement-receipt acknowledgement payload.
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct AcknowledgePlacementReceiptRequest {
+    pub operation_id: [u8; 32],
+    #[serde(default)]
+    pub metadata: Option<RootRequestMetadata>,
 }
 
 //
@@ -139,11 +172,20 @@ pub struct CyclesRequest {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Response {
+    AcknowledgePlacementReceipt(AcknowledgePlacementReceiptResponse),
     CreateCanister(CreateCanisterResponse),
     UpgradeCanister(UpgradeCanisterResponse),
     RecycleCanister(RecycleCanisterResponse),
     Cycles(CyclesResponse),
 }
+
+//
+// AcknowledgePlacementReceiptResponse
+// Placement receipt acknowledgement result.
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
+pub struct AcknowledgePlacementReceiptResponse {}
 
 //
 // CreateCanisterResponse

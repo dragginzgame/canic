@@ -11,19 +11,25 @@ use crate::{
     InternalError,
     cdk::types::{Principal, TC},
     domain::policy::pure::topology::TopologyPolicyError,
+    dto::error::Error,
     dto::rpc::{
+        AcknowledgePlacementReceiptRequest, AcknowledgePlacementReceiptResponse,
         CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
         RecycleCanisterRequest, RecycleCanisterResponse, Response, UpgradeCanisterRequest,
         UpgradeCanisterResponse,
     },
     log,
     log::Topic,
-    model::replay::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
+    model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
     ops::{
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::IcOps,
-        replay::guard::{ReplayPending, secs_to_ns},
+        replay::{
+            acknowledge_root_placement_receipt,
+            guard::{ReplayPending, secs_to_ns},
+            receipt::PlacementReceiptAcknowledgementDecision,
+        },
         storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,
@@ -38,7 +44,6 @@ use crate::{
     },
 };
 
-const ROOT_PROVISION_COMMAND_KIND: &str = "root.provision.v1";
 const ROOT_PROVISION_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_ROOT_PROVISION_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 10;
 const MIN_ROOT_PROVISION_CYCLES_AFTER_RESERVATION: u128 = TC;
@@ -49,10 +54,16 @@ pub(super) async fn execute_root_capability(
     capability: RootCapability,
     authorized_cycles: Option<AuthorizedCyclesGrant>,
 ) -> Result<Response, InternalError> {
-    let capability_name = capability.capability_name();
+    let descriptor = capability.descriptor();
+    let capability_name = descriptor.name;
 
     let result = match capability {
-        RootCapability::ProvisionCanister(req) => execute_provision(ctx, pending, &req).await,
+        RootCapability::AcknowledgePlacementReceipt(_) => {
+            unreachable!("receipt acknowledgement bypasses replay execution")
+        }
+        RootCapability::AllocatePlacementChild(req) | RootCapability::ProvisionCanister(req) => {
+            execute_provision(ctx, pending, &req, descriptor.command_kind).await
+        }
         RootCapability::UpgradeCanister(req) => execute_upgrade(ctx, pending, &req).await,
         RootCapability::RecycleCanister(req) => execute_recycle(pending, &req).await,
         RootCapability::RequestCycles(req) => {
@@ -81,18 +92,55 @@ pub(super) async fn execute_root_capability(
     result
 }
 
+pub(super) fn execute_placement_receipt_acknowledgement(
+    ctx: &RootContext,
+    req: &AcknowledgePlacementReceiptRequest,
+) -> Result<Response, InternalError> {
+    let operation_id = OperationId::from_bytes(req.operation_id);
+    match acknowledge_root_placement_receipt(operation_id, ctx.caller)
+        .map_err(replay::map_replay_store_error)?
+    {
+        PlacementReceiptAcknowledgementDecision::Acknowledged
+        | PlacementReceiptAcknowledgementDecision::AlreadyAbsent => {}
+        PlacementReceiptAcknowledgementDecision::ActorMismatch => {
+            return Err(InternalError::public(Error::forbidden(format!(
+                "placement receipt {operation_id} is not owned by caller",
+            ))));
+        }
+        PlacementReceiptAcknowledgementDecision::NotCommitted => {
+            return Err(InternalError::public(Error::conflict(format!(
+                "placement receipt {operation_id} is not committed",
+            ))));
+        }
+        PlacementReceiptAcknowledgementDecision::NotPlacementEffect => {
+            return Err(InternalError::public(Error::conflict(format!(
+                "placement receipt {operation_id} does not contain a placement-child effect",
+            ))));
+        }
+    }
+
+    let response = Response::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptResponse {});
+    Ok(response)
+}
+
 async fn execute_provision(
     ctx: &RootContext,
     pending: &ReplayPending,
     req: &CreateCanisterRequest,
+    command_kind: &'static str,
 ) -> Result<Response, InternalError> {
     let parent_pid = resolve_provision_parent(ctx, req)?;
     preflight_provision_parent_registered(parent_pid)?;
     let reservation_cycles = root_provision_cycle_reservation_cycles(req)?;
-    let cost_permit = reserve_root_provision_cost_guard(ctx, reservation_cycles)?;
-    if let Err(err) =
-        mark_root_provision_external_effect(pending, ctx, req, parent_pid, &cost_permit)
-    {
+    let cost_permit = reserve_root_provision_cost_guard(ctx, reservation_cycles, command_kind)?;
+    if let Err(err) = mark_root_provision_external_effect(
+        pending,
+        ctx,
+        req,
+        parent_pid,
+        &cost_permit,
+        command_kind,
+    ) {
         return Err(CostGuardOps::recover_after_failure(
             &cost_permit,
             IcOps::now_secs(),
@@ -112,7 +160,12 @@ async fn execute_provision(
         Err(err) => {
             let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
             return Err(preserve_root_provision_recovery_required(
-                pending, ctx, req, parent_pid, err,
+                pending,
+                ctx,
+                req,
+                parent_pid,
+                err,
+                command_kind,
             ));
         }
     };
@@ -120,7 +173,12 @@ async fn execute_provision(
         let err: InternalError = RpcWorkflowError::MissingNewCanisterPid.into();
         let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
         return Err(preserve_root_provision_recovery_required(
-            pending, ctx, req, parent_pid, err,
+            pending,
+            ctx,
+            req,
+            parent_pid,
+            err,
+            command_kind,
         ));
     };
 
@@ -191,11 +249,13 @@ fn root_provision_cycle_reservation_cycles(
 fn reserve_root_provision_cost_guard(
     ctx: &RootContext,
     reservation_cycles: u128,
+    command_kind: &'static str,
 ) -> Result<CostGuardPermit, InternalError> {
     CostGuardOps::reserve(root_provision_cost_guard_request(
         ctx,
         reservation_cycles,
         IcOps::canister_cycle_balance().to_u128(),
+        command_kind,
     ))
     .map_err(map_cost_guard_reserve_error)
 }
@@ -204,10 +264,11 @@ pub(super) fn root_provision_cost_guard_request(
     ctx: &RootContext,
     reservation_cycles: u128,
     current_cycle_balance: u128,
+    command_kind: &'static str,
 ) -> CostGuardRequest {
     CostGuardRequest {
         cost_class: CostClass::ManagementDeployment,
-        command_kind: root_provision_command_kind(),
+        command_kind: root_provision_command_kind(command_kind),
         quota_subject: ctx.caller,
         payer: ctx.self_pid,
         now_secs: ctx.now,
@@ -219,9 +280,8 @@ pub(super) fn root_provision_cost_guard_request(
     }
 }
 
-fn root_provision_command_kind() -> CommandKind {
-    CommandKind::new(ROOT_PROVISION_COMMAND_KIND)
-        .expect("root provision command kind is a valid static label")
+fn root_provision_command_kind(command_kind: &'static str) -> CommandKind {
+    CommandKind::new(command_kind).expect("root provision command kind is a valid static label")
 }
 
 pub(super) fn mark_root_provision_external_effect(
@@ -230,11 +290,12 @@ pub(super) fn mark_root_provision_external_effect(
     req: &CreateCanisterRequest,
     parent_pid: Principal,
     cost_permit: &CostGuardPermit,
+    command_kind: &'static str,
 ) -> Result<(), InternalError> {
     replay::mark_costed_external_effect_in_flight(
         pending,
         ExternalEffectDescriptor::ManagementCreateCanister {
-            command_kind: root_provision_command_kind(),
+            command_kind: root_provision_command_kind(command_kind),
         },
         cost_permit,
     )?;
@@ -242,7 +303,7 @@ pub(super) fn mark_root_provision_external_effect(
         Topic::Rpc,
         Info,
         "root provision replay effect marked effect=provision_canister command_kind={} caller={} role={} parent={}",
-        ROOT_PROVISION_COMMAND_KIND,
+        command_kind,
         ctx.caller,
         req.canister_role,
         parent_pid
@@ -256,6 +317,7 @@ fn preserve_root_provision_recovery_required(
     req: &CreateCanisterRequest,
     parent_pid: Principal,
     err: InternalError,
+    command_kind: &'static str,
 ) -> InternalError {
     let (error_class, error_origin) = err.log_fields();
     let err = mark_recovery_required_after_failure(
@@ -269,7 +331,7 @@ fn preserve_root_provision_recovery_required(
         Topic::Rpc,
         Error,
         "root provision replay recovery required effect=provision_canister command_kind={} caller={} role={} parent={} error_class={} error_origin={}",
-        ROOT_PROVISION_COMMAND_KIND,
+        command_kind,
         ctx.caller,
         req.canister_role,
         parent_pid,

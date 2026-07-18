@@ -5,8 +5,8 @@
 //! Boundary: workflow and RPC ops use this single mechanical wire-shape adapter.
 
 use crate::dto::rpc::{
-    CreateCanisterRequest, CyclesRequest, RecycleCanisterRequest, Request, RootRequestMetadata,
-    UpgradeCanisterRequest,
+    AcknowledgePlacementReceiptRequest, CreateCanisterRequest, CyclesRequest,
+    RecycleCanisterRequest, Request, RootRequestMetadata, UpgradeCanisterRequest,
 };
 
 /// Replay metadata extracted from a boundary request before capability projection.
@@ -24,6 +24,8 @@ impl RequestConversionOps {
     #[must_use]
     pub(in crate::ops::rpc) const fn diagnostic_variant_label(request: &Request) -> &'static str {
         match request {
+            Request::AcknowledgePlacementReceipt(_) => "AcknowledgePlacementReceipt",
+            Request::AllocatePlacementChild(_) => "AllocatePlacementChild",
             Request::CreateCanister(_) => "Provision",
             Request::UpgradeCanister(_) => "Upgrade",
             Request::RecycleCanister(_) => "RecycleCanister",
@@ -37,7 +39,10 @@ impl RequestConversionOps {
         request: &Request,
     ) -> Option<CapabilitySourceMetadata> {
         let metadata = match request {
-            Request::CreateCanister(request) => request.metadata,
+            Request::AcknowledgePlacementReceipt(request) => request.metadata,
+            Request::AllocatePlacementChild(request) | Request::CreateCanister(request) => {
+                request.metadata
+            }
             Request::UpgradeCanister(request) => request.metadata,
             Request::RecycleCanister(request) => request.metadata,
             Request::Cycles(request) => request.metadata,
@@ -55,6 +60,20 @@ impl RequestConversionOps {
     #[must_use]
     pub(in crate::ops::rpc) fn canonical_capability_payload(request: &Request) -> Request {
         match request {
+            Request::AcknowledgePlacementReceipt(request) => {
+                Request::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest {
+                    operation_id: request.operation_id,
+                    metadata: None,
+                })
+            }
+            Request::AllocatePlacementChild(request) => {
+                Request::AllocatePlacementChild(CreateCanisterRequest {
+                    canister_role: request.canister_role.clone(),
+                    parent: request.parent.clone(),
+                    extra_arg: request.extra_arg.clone(),
+                    metadata: None,
+                })
+            }
             Request::CreateCanister(request) => Request::CreateCanister(CreateCanisterRequest {
                 canister_role: request.canister_role.clone(),
                 parent: request.parent.clone(),
@@ -93,6 +112,16 @@ mod tests {
     fn source_metadata_covers_every_request_variant() {
         let expected = metadata(7);
         let requests = [
+            Request::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest {
+                operation_id: [1; 32],
+                metadata: Some(expected),
+            }),
+            Request::AllocatePlacementChild(CreateCanisterRequest {
+                canister_role: CanisterRole::new("placement"),
+                parent: crate::dto::rpc::CreateCanisterParent::ThisCanister,
+                extra_arg: None,
+                metadata: Some(expected),
+            }),
             Request::CreateCanister(CreateCanisterRequest {
                 canister_role: CanisterRole::new("app"),
                 parent: crate::dto::rpc::CreateCanisterParent::Root,
@@ -127,6 +156,16 @@ mod tests {
     #[test]
     fn canonical_capability_payload_strips_metadata_from_every_variant() {
         let requests = [
+            Request::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptRequest {
+                operation_id: [1; 32],
+                metadata: Some(metadata(1)),
+            }),
+            Request::AllocatePlacementChild(CreateCanisterRequest {
+                canister_role: CanisterRole::new("placement"),
+                parent: crate::dto::rpc::CreateCanisterParent::ThisCanister,
+                extra_arg: Some(vec![1, 2, 3]),
+                metadata: Some(metadata(1)),
+            }),
             Request::CreateCanister(CreateCanisterRequest {
                 canister_role: CanisterRole::new("app"),
                 parent: crate::dto::rpc::CreateCanisterParent::Root,

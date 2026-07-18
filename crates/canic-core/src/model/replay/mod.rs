@@ -14,6 +14,8 @@ use sha2::{Digest, Sha256};
 
 pub const REPLAY_RECEIPT_SCHEMA_VERSION: u32 = 1;
 pub const REPLAY_PAYLOAD_HASH_SCHEMA_VERSION: u32 = 1;
+pub const PLACEMENT_CHILD_REPLAY_COMMAND_KIND: &str = "root.allocate_placement_child";
+pub const ROOT_PROVISION_REPLAY_COMMAND_KIND: &str = "root.provision";
 
 const REPLAY_PAYLOAD_HASH_DOMAIN: &[u8] = b"canic-replay-payload-hash:v1";
 
@@ -290,6 +292,20 @@ pub enum ExternalEffectDescriptor {
     ManagementCreateCanister { command_kind: CommandKind },
     ManagementCall { canister: Principal, method: String },
     IcpTransfer { operation_id: OperationId },
+}
+
+/// Whether a committed placement-child receipt must remain until its caller acknowledges it.
+#[must_use]
+pub fn placement_receipt_requires_acknowledgement(
+    status: &ReplayReceiptStatus,
+    effect: Option<&ExternalEffectDescriptor>,
+) -> bool {
+    *status == ReplayReceiptStatus::Committed
+        && matches!(
+            effect,
+            Some(ExternalEffectDescriptor::ManagementCreateCanister { command_kind })
+                if command_kind.as_str() == PLACEMENT_CHILD_REPLAY_COMMAND_KIND
+        )
 }
 
 ///

@@ -10,8 +10,8 @@ use canic::{
     },
     dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
     dto::rpc::{
-        CreateCanisterResponse, CyclesResponse, RecycleCanisterResponse, Request, Response,
-        UpgradeCanisterResponse,
+        AcknowledgePlacementReceiptResponse, CreateCanisterResponse, CyclesResponse,
+        RecycleCanisterResponse, Request, Response, UpgradeCanisterResponse,
     },
 };
 
@@ -71,7 +71,10 @@ async fn canic_response_capability_v1(
 
 async fn handle_request(request: Request) -> Result<Response, Error> {
     match request {
-        Request::CreateCanister(_) => {
+        Request::AcknowledgePlacementReceipt(_) => Ok(Response::AcknowledgePlacementReceipt(
+            AcknowledgePlacementReceiptResponse {},
+        )),
+        Request::AllocatePlacementChild(_) | Request::CreateCanister(_) => {
             let pid = create_canister().await?;
             Ok(Response::CreateCanister(CreateCanisterResponse {
                 new_canister_pid: pid,

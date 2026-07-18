@@ -156,3 +156,21 @@ pub enum SettleReceiptBackedIntentResult {
     },
     BindingConflict,
 }
+
+/// Complete input for deleting terminal evidence after its external receipt is released.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RemoveTerminalReceiptBackedIntentInput {
+    pub operation_id: OperationId,
+    pub expected_revision: u64,
+    pub expected_payload_binding: PayloadBinding,
+}
+
+/// Outcome of deleting one exact terminal receipt-backed intent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RemoveTerminalReceiptBackedIntentResult {
+    Removed,
+    NotFound,
+    NotTerminal,
+    RevisionConflict { actual_revision: u64 },
+    BindingConflict,
+}

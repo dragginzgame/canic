@@ -4,8 +4,9 @@ use crate::{
     cdk::types::Principal,
     model::intent::{
         BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, PayloadBinding,
-        ReceiptBackedIntentState, SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult,
-        TerminalEvidence, TerminalEvidenceDecision,
+        ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
+        RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
+        SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
     },
     storage::stable::intent::{IntentStore, ReceiptBackedIntentStore},
 };
@@ -421,6 +422,83 @@ fn receipt_backed_rejects_unsupported_schemas_without_mutation() {
         ReceiptBackedIntentState::Pending
     );
     assert_eq!(totals(&input.resource_key).reserved_qty, input.quantity);
+}
+
+#[test]
+fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
+    reset();
+    let mut placement = receipt_input(20);
+    placement.resource_key = IntentResourceKey::new("placement:test");
+    let mut other = receipt_input(21);
+    other.resource_key = IntentResourceKey::new("other:test");
+
+    for input in [&placement, &other] {
+        ReceiptBackedIntentOps::begin_or_load(input, 100).expect("create intent");
+        ReceiptBackedIntentOps::settle_if_pending(
+            &SettleReceiptBackedIntentInput {
+                operation_id: input.operation_id,
+                expected_revision: 1,
+                expected_payload_binding: input.payload_binding,
+                evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 22),
+            },
+            200,
+        )
+        .expect("settle intent");
+    }
+
+    let listed = ReceiptBackedIntentOps::list_page(None, 10).expect("list intent page");
+    assert_eq!(listed.intents.len(), 2);
+    assert_eq!(listed.next_cursor, None);
+    assert!(listed.intents.iter().any(|intent| {
+        intent.operation_id == placement.operation_id
+            && intent.resource_key.starts_with("placement:")
+            && !matches!(intent.state, ReceiptBackedIntentState::Pending)
+    }));
+    let first_page = ReceiptBackedIntentOps::list_page(None, 1).expect("first bounded page");
+    let first_cursor = first_page
+        .next_cursor
+        .expect("another record must require a continuation cursor");
+    assert_eq!(first_page.intents.len(), 1);
+    assert_eq!(first_page.intents[0].operation_id, first_cursor);
+    let second_page =
+        ReceiptBackedIntentOps::list_page(Some(first_cursor), 1).expect("second bounded page");
+    assert_eq!(second_page.intents.len(), 1);
+    assert_ne!(
+        second_page.intents[0].operation_id,
+        first_page.intents[0].operation_id
+    );
+    assert_eq!(second_page.next_cursor, None);
+
+    let totals_before = totals(&placement.resource_key);
+    assert_eq!(
+        ReceiptBackedIntentOps::remove_terminal(&RemoveTerminalReceiptBackedIntentInput {
+            operation_id: placement.operation_id,
+            expected_revision: 2,
+            expected_payload_binding: PayloadBinding::new([99; 32]),
+        })
+        .expect("binding conflict is typed"),
+        RemoveTerminalReceiptBackedIntentResult::BindingConflict
+    );
+    assert_eq!(
+        ReceiptBackedIntentOps::remove_terminal(&RemoveTerminalReceiptBackedIntentInput {
+            operation_id: placement.operation_id,
+            expected_revision: 2,
+            expected_payload_binding: placement.payload_binding,
+        })
+        .expect("terminal removal succeeds"),
+        RemoveTerminalReceiptBackedIntentResult::Removed
+    );
+    assert_eq!(totals(&placement.resource_key), totals_before);
+    assert!(
+        ReceiptBackedIntentOps::load(placement.operation_id)
+            .expect("load removed intent")
+            .is_none()
+    );
+    assert!(
+        ReceiptBackedIntentOps::load(other.operation_id)
+            .expect("load unrelated intent")
+            .is_some()
+    );
 }
 
 #[test]

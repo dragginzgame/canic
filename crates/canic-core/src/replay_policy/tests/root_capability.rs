@@ -53,11 +53,16 @@ fn root_capability_command_blockers_are_explicit() {
 }
 
 #[test]
-fn root_capability_implemented_commands_are_replay_protected() {
+fn root_capability_implemented_effect_commands_are_replay_protected() {
     for (variant, command_kind, cost_class) in [
         (
+            "AllocatePlacementChild",
+            "root.allocate_placement_child",
+            CostClass::ManagementDeployment,
+        ),
+        (
             "ProvisionCanister",
-            "root.provision.v1",
+            "root.provision",
             CostClass::ManagementDeployment,
         ),
         (
@@ -94,4 +99,22 @@ fn root_capability_implemented_commands_are_replay_protected() {
         );
         assert_eq!(entry.cost_class, cost_class);
     }
+}
+
+#[test]
+fn root_capability_acknowledgement_is_response_idempotent() {
+    let entry = ROOT_CAPABILITY_COMMAND_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.variant == "AcknowledgePlacementReceipt")
+        .expect("acknowledgement policy entry");
+
+    assert_eq!(
+        entry.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("root.acknowledge_placement_receipt"),
+        }
+    );
+    assert_eq!(entry.cost_class, CostClass::None);
+    assert_eq!(entry.quota_policy, None);
+    assert_eq!(entry.cycle_reserve_policy, None);
 }

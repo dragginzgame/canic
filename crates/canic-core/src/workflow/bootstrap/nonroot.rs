@@ -8,8 +8,10 @@
 use crate::workflow::placement::sharding::ShardingWorkflow;
 use crate::workflow::runtime::auth::RuntimeAuthWorkflow;
 use crate::{
-    InternalError, log, log::Topic, ops::runtime::ready::ReadyOps,
-    workflow::placement::scaling::ScalingWorkflow,
+    InternalError, log,
+    log::Topic,
+    ops::runtime::ready::ReadyOps,
+    workflow::placement::{allocation::PlacementAllocationWorkflow, scaling::ScalingWorkflow},
 };
 
 ///
@@ -34,6 +36,8 @@ use crate::{
 ///
 pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
+
+    PlacementAllocationWorkflow::schedule_root_receipt_acknowledgement_drain();
 
     #[cfg(feature = "sharding")]
     ShardingWorkflow::bootstrap_configured_initial_shards().await?;
@@ -64,6 +68,7 @@ pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(
 ///
 pub async fn bootstrap_post_upgrade_nonroot_canister() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): post-upgrade start");
+    PlacementAllocationWorkflow::schedule_root_receipt_acknowledgement_drain();
     RuntimeAuthWorkflow::check_issuer_canister_signature_support().await?;
     log!(
         Topic::Init,

@@ -105,7 +105,7 @@ pub enum DirectoryClaimResult {
         instance_pid: Principal,
         bound_at: u64,
     },
-    PendingFresh {
+    PendingExisting {
         claim_id: u64,
         owner_pid: Principal,
         created_at: u64,
@@ -127,7 +127,7 @@ pub enum DirectoryReleaseResult {
         instance_pid: Principal,
         bound_at: u64,
     },
-    PendingCurrent {
+    PendingRetained {
         owner_pid: Principal,
         created_at: u64,
         provisional_pid: Option<Principal>,
@@ -167,16 +167,14 @@ impl DirectoryRegistryOps {
                 owner_pid: existing_owner_pid,
                 created_at: existing_created_at,
                 provisional_pid,
-            }) if !is_pending_stale(created_at, existing_created_at) => {
-                Ok(DirectoryClaimResult::PendingFresh {
-                    claim_id,
-                    owner_pid: existing_owner_pid,
-                    created_at: existing_created_at,
-                    provisional_pid,
-                })
-            }
+            }) => Ok(DirectoryClaimResult::PendingExisting {
+                claim_id,
+                owner_pid: existing_owner_pid,
+                created_at: existing_created_at,
+                provisional_pid,
+            }),
 
-            Some(DirectoryEntryRecord::Pending { .. }) | None => {
+            None => {
                 DirectoryRegistry::insert(
                     key,
                     DirectoryEntryRecord::Pending {
@@ -284,8 +282,11 @@ impl DirectoryRegistryOps {
                 owner_pid,
                 created_at,
                 provisional_pid,
-            } if claim_id != expected_claim_id || !is_pending_stale(now, created_at) => {
-                Ok(DirectoryReleaseResult::PendingCurrent {
+            } if claim_id != expected_claim_id
+                || !is_pending_stale(now, created_at)
+                || provisional_pid.is_none() =>
+            {
+                Ok(DirectoryReleaseResult::PendingRetained {
                     owner_pid,
                     created_at,
                     provisional_pid,

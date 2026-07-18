@@ -20,7 +20,8 @@ use crate::{
     ops::replay::{
         guard::ReplayPending,
         receipt::{
-            ReplayReceiptStoreError, abort_reserved_receipt, commit_staged_receipt_response,
+            PlacementReceiptAcknowledgementDecision, ReplayReceiptStoreError,
+            abort_reserved_receipt, acknowledge_placement_receipt, commit_staged_receipt_response,
             mark_costed_external_effect_in_flight, mark_recovery_required,
             replay_cost_guard_settlement, reserve_receipt_token, stage_receipt_response,
         },
@@ -117,6 +118,14 @@ pub fn reserve_root_replay(
 
     reserve_receipt_token(&pending.receipt_token);
     Ok(())
+}
+
+/// Release one committed placement-child receipt owned by the direct caller.
+pub fn acknowledge_root_placement_receipt(
+    operation_id: crate::model::replay::OperationId,
+    caller: Principal,
+) -> Result<PlacementReceiptAcknowledgementDecision, ReplayReceiptStoreError> {
+    acknowledge_placement_receipt(operation_id, ReplayActor::direct_caller(caller))
 }
 
 /// Persist a root external-effect boundary together with its durable cost settlement identity.
