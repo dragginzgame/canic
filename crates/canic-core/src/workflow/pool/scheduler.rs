@@ -140,7 +140,10 @@ impl PoolSchedulerWorkflow {
         RESET_IN_PROGRESS.with_borrow_mut(|flag| *flag = false);
         Self::maybe_reschedule();
 
-        MetricEvent::completed(MetricOperation::Scheduler, MetricReason::Ok);
+        match &result {
+            Ok(()) => MetricEvent::completed(MetricOperation::Scheduler, MetricReason::Ok),
+            Err(err) => MetricEvent::failed(MetricOperation::Scheduler, err),
+        }
 
         result
     }
@@ -151,6 +154,14 @@ impl PoolSchedulerWorkflow {
                 Ok(()) => {}
 
                 Err(PoolPolicyError::RegisteredInSubnet(_)) => {
+                    if let Err(err) = PoolWorkflow::abort_pending_pool_import_intent(pid) {
+                        log!(
+                            Topic::CanisterPool,
+                            Warn,
+                            "pool reset rejection could not abort import intent for {pid}: {err}"
+                        );
+                        return Err(err);
+                    }
                     PoolOps::remove(&pid);
                     MetricEvent::skipped(MetricOperation::Reset, MetricReason::RegisteredInSubnet);
                     continue;
@@ -178,6 +189,7 @@ impl PoolSchedulerWorkflow {
 
             match PoolWorkflow::reset_into_pool(pid).await {
                 Ok(cycles) => {
+                    PoolWorkflow::commit_pending_pool_import_intent(pid)?;
                     PoolWorkflow::mark_ready(pid, cycles);
                 }
                 Err(err) => {
@@ -186,6 +198,11 @@ impl PoolSchedulerWorkflow {
                         Warn,
                         "pool reset failed for {pid}: {err}"
                     );
+                    if let Err(abort_err) = PoolWorkflow::abort_pending_pool_import_intent(pid) {
+                        return Err(err.with_diagnostic_context(format!(
+                            "pool import intent abort failed for {pid}: {abort_err}"
+                        )));
+                    }
                     PoolWorkflow::mark_failed(pid, &err);
                 }
             }

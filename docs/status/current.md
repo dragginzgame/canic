@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.16`.
-- The latest published release is `v0.93.16` at
-  `03973547251678757ccced6ffd69ba1dff3998a3`.
-- The `v0.93.16` source tree is
-  `2b5b11a01998a1723f9443e0dad33c8e7eeaec9d`; its product-tree hash is
-  `aae209d267cc43f191c2434163de8f27a6714fe37b200b94cca74117f4747d15`.
+- The workspace package version is `0.93.17`.
+- The latest published release is `v0.93.17` at
+  `d10379d044f714ea77cefa53ff35b91a76a4a3ed`.
+- The `v0.93.17` source tree is
+  `4085660ade7eae47150ee24ce6e00e4e9405fa13`; its product-tree hash is
+  `c41dc21d80470b06cba5a6b95423b78c1b6f159fa2ebf1f2c9ae417dc9bdda4a`.
   Its Cargo.lock SHA-256 is
-  `0f724fbebbd9687ec8f3faf78f3164a3d77653dfc0ef6e6be454deea7f6ecd06`.
+  `5706fa74fa3a9c512472753d56a2834f33e590e2ba08bdc79f547d489bb841d3`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -99,11 +99,16 @@ Historical detail is archived at:
   redundant terminal intent records after cleanup. Evidence-backed directory
   repair and disposal skip nonexistent root acknowledgement while still
   removing their terminal local intent.
-- Current `0.93.17` development reserves `canic:` intent resource keys for one
+- Released `v0.93.17` reserves `canic:` intent resource keys for one
   runtime authority. Consumer begin, lookup, settlement, commit, and rollback
   fail closed on that namespace; placement acknowledgement accepts only its
   canonical reserved resource shape, and cost-guard plus pool-import intents
   use the same boundary.
+- Current `0.93.18` development makes placement and pool-import recovery
+  interruption-safe, gives terminal placement receipt cleanup one durable
+  owner, and makes expired-intent cleanup use the checked abort authority.
+  The pre-`0.93.17` cost namespace remains a documented hard cut with no old-key
+  read, alias, or migration path.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

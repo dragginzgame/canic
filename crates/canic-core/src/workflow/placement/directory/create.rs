@@ -48,7 +48,7 @@ impl DirectoryWorkflow {
             pid,
         )? {
             Self::recycle_abandoned_child(pid).await?;
-            PlacementAllocationWorkflow::finish_disposed_child(permit, pid).await?;
+            PlacementAllocationWorkflow::finish_disposed_child(permit, pid)?;
             MetricEvent::skipped(MetricOperation::Finalize, MetricReason::ClaimLost);
             return Ok(None);
         }
@@ -74,7 +74,7 @@ impl DirectoryWorkflow {
                 "directory claim lost between provisional attach and final bind",
             ));
         }
-        PlacementAllocationWorkflow::finish_registered_child(permit, pid).await?;
+        PlacementAllocationWorkflow::finish_registered_child(permit, pid)?;
 
         MetricEvent::completed(MetricOperation::Finalize, MetricReason::Ok);
         Ok(Some(DirectoryEntryStatusResponse::Bound {

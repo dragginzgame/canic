@@ -64,7 +64,7 @@ impl DirectoryWorkflow {
             MetricEvent::failed(MetricOperation::CleanupStale, &err);
             return Err(err);
         }
-        PlacementAllocationWorkflow::finish_disposed_child(&permit, provisional_pid).await?;
+        PlacementAllocationWorkflow::finish_disposed_child(&permit, provisional_pid)?;
         MetricEvent::completed(MetricOperation::CleanupStale, MetricReason::ReleasedStale);
         Ok(())
     }
@@ -122,7 +122,7 @@ impl DirectoryWorkflow {
                 return Err(err);
             }
         };
-        PlacementAllocationWorkflow::finish_disposed_child(&permit, provisional_pid).await?;
+        PlacementAllocationWorkflow::finish_disposed_child(&permit, provisional_pid)?;
         match result {
             DirectoryReleaseResult::ReleasedStalePending {
                 owner_pid,
@@ -159,7 +159,7 @@ impl DirectoryWorkflow {
     }
 
     // Repair a stale valid provisional child only if its original claim is still current.
-    pub(super) async fn repair_stale_entry(
+    pub(super) fn repair_stale_entry(
         pool: &str,
         key_value: &str,
         pool_cfg: &DirectoryPool,
@@ -196,7 +196,7 @@ impl DirectoryWorkflow {
                 "directory claim lost during stale repair without an await boundary",
             ));
         }
-        PlacementAllocationWorkflow::finish_registered_child(&permit, provisional_pid).await?;
+        PlacementAllocationWorkflow::finish_registered_child(&permit, provisional_pid)?;
 
         MetricEvent::completed(MetricOperation::RepairStale, MetricReason::Ok);
         Ok(DirectoryEntryStatusResponse::Bound {

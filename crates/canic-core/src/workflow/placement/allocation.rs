@@ -152,42 +152,27 @@ impl PlacementAllocationWorkflow {
         settle_allocation(permit, child_pid, TerminalEvidenceDecision::RolledBack)
     }
 
-    /// Release the root replay response after local membership and intent settlement succeed.
-    pub async fn acknowledge_root_receipt(
-        permit: &PlacementAllocationPermit,
-    ) -> Result<(), InternalError> {
-        if permit.root_receipt_may_exist {
-            RequestOps::acknowledge_placement_receipt(permit.identity.operation_id).await?;
-        }
-        remove_terminal_intent(
-            permit.identity.operation_id,
-            permit.identity.payload_binding,
-        )
-    }
-
     /// Schedule a bounded drain of durable terminal placement acknowledgements.
     pub fn schedule_root_receipt_acknowledgement_drain() {
         schedule_root_receipt_acknowledgement_drain(Duration::ZERO);
     }
 
-    /// Commit registered membership, then best-effort release its retained root receipt.
-    pub async fn finish_registered_child(
+    /// Commit registered membership, then hand retained receipt release to the durable drain.
+    pub fn finish_registered_child(
         permit: &PlacementAllocationPermit,
         child_pid: Principal,
     ) -> Result<(), InternalError> {
         Self::commit_registered_child(permit, child_pid)?;
-        acknowledge_root_receipt_best_effort(permit, child_pid).await;
-        Ok(())
+        finish_terminal_allocation(permit)
     }
 
-    /// Roll back a disposed child, then best-effort release its retained root receipt.
-    pub async fn finish_disposed_child(
+    /// Roll back a disposed child, then hand retained receipt release to the durable drain.
+    pub fn finish_disposed_child(
         permit: &PlacementAllocationPermit,
         child_pid: Principal,
     ) -> Result<(), InternalError> {
         Self::rollback_disposed_child(permit, child_pid)?;
-        acknowledge_root_receipt_best_effort(permit, child_pid).await;
-        Ok(())
+        finish_terminal_allocation(permit)
     }
 }
 
@@ -265,20 +250,15 @@ const fn state_matches_decision(
     )
 }
 
-async fn acknowledge_root_receipt_best_effort(
-    permit: &PlacementAllocationPermit,
-    child_pid: Principal,
-) {
-    if let Err(err) = PlacementAllocationWorkflow::acknowledge_root_receipt(permit).await {
-        log!(
-            Topic::Rpc,
-            Warn,
-            "settled placement child but root placement receipt acknowledgement failed operation_id={} child={}: {err}",
+fn finish_terminal_allocation(permit: &PlacementAllocationPermit) -> Result<(), InternalError> {
+    if permit.root_receipt_may_exist {
+        schedule_root_receipt_acknowledgement_drain(Duration::ZERO);
+        Ok(())
+    } else {
+        remove_terminal_intent(
             permit.identity.operation_id,
-            child_pid
-        );
-        ROOT_RECEIPT_ACK_RETRY_NEEDED.set(true);
-        schedule_root_receipt_acknowledgement_drain(ROOT_RECEIPT_ACK_RETRY_DELAY);
+            permit.identity.payload_binding,
+        )
     }
 }
 

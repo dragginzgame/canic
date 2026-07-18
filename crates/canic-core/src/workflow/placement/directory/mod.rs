@@ -99,8 +99,7 @@ impl DirectoryWorkflow {
                         owner_pid,
                         provisional_pid,
                         now,
-                    )
-                    .await?;
+                    )?;
                     MetricEvent::completed(MetricOperation::Resolve, MetricReason::StaleRepairable);
                     return Ok(repaired);
                 }
@@ -236,8 +235,7 @@ impl DirectoryWorkflow {
                         owner_pid,
                         provisional_pid,
                         now,
-                    )
-                    .await?;
+                    )?;
 
                     let DirectoryEntryStatusResponse::Bound {
                         instance_pid,
