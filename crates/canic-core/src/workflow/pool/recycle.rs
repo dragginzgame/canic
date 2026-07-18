@@ -5,7 +5,7 @@
 //! Boundary: workflow helper coordinating topology removal, reset, storage, scheduling, and metrics.
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     domain::pool::CanisterPoolStatus,
     ops::{
@@ -43,7 +43,14 @@ impl PoolWorkflow {
 
         // Remove from topology and record the pending pool entry before the
         // destructive reset, so duplicate retries cannot re-enter the reset path.
-        let _ = SubnetRegistryOps::unregister(&pid);
+        if !SubnetRegistryOps::unregister(&pid) {
+            let err = InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("pool recycle topology removal missing for {pid}"),
+            );
+            MetricEvent::failed(MetricOperation::Recycle, &err);
+            return Err(err);
+        }
         mark_pool_recycle_pending(pid, &metadata, IcOps::now_secs());
 
         // Destructive reset
@@ -169,6 +176,57 @@ mod tests {
             1,
             "recycle preparation must keep one pool entry"
         );
+
+        PoolOps::remove(&pid);
+        let _ = SubnetRegistryOps::unregister(&pid);
+        let _ = SubnetRegistryOps::unregister(&root);
+    }
+
+    #[test]
+    fn pool_recovery_selection_retains_pending_metadata_until_transition() {
+        let root = p(54);
+        let pid = p(55);
+        let role = CanisterRole::new("recovery_metadata");
+        let module_hash = vec![5, 4, 3, 2];
+
+        PoolOps::remove(&pid);
+        let _ = SubnetRegistryOps::unregister(&pid);
+        let _ = SubnetRegistryOps::unregister(&root);
+        SubnetRegistryOps::register_root(root, 200);
+        SubnetRegistryOps::register_unchecked(pid, &role, root, module_hash.clone(), 201)
+            .expect("child registered");
+
+        let metadata =
+            PoolRegistrationMetadata::from_subnet_registry(pid).expect("registry metadata");
+        assert!(SubnetRegistryOps::unregister(&pid));
+        mark_pool_recycle_pending(pid, &metadata, 202);
+
+        let selected = PoolOps::oldest_pending_reset_pids(usize::MAX);
+        assert!(selected.contains(&pid));
+
+        let pending = PoolQuery::pool_entry(pid).expect("pending pool entry retained");
+        assert_eq!(pending.status, CanisterPoolStatus::PendingReset);
+        assert_eq!(pending.role, Some(role.clone()));
+        assert_eq!(pending.parent, Some(root));
+        assert_eq!(pending.module_hash, Some(module_hash.clone()));
+
+        PoolWorkflow::mark_ready(pid, Cycles::new(500));
+
+        let ready = PoolQuery::pool_entry(pid).expect("ready pool entry");
+        assert_eq!(ready.status, CanisterPoolStatus::Ready);
+        assert_eq!(ready.cycles, Cycles::new(500));
+        assert_eq!(ready.role, Some(role.clone()));
+        assert_eq!(ready.parent, Some(root));
+        assert_eq!(ready.module_hash, Some(module_hash.clone()));
+
+        let failure = InternalError::workflow(InternalErrorOrigin::Workflow, "reset failed");
+        PoolWorkflow::mark_failed(pid, &failure);
+
+        let failed = PoolQuery::pool_entry(pid).expect("failed pool entry");
+        assert!(matches!(failed.status, CanisterPoolStatus::Failed { .. }));
+        assert_eq!(failed.role, Some(role));
+        assert_eq!(failed.parent, Some(root));
+        assert_eq!(failed.module_hash, Some(module_hash));
 
         PoolOps::remove(&pid);
         let _ = SubnetRegistryOps::unregister(&pid);

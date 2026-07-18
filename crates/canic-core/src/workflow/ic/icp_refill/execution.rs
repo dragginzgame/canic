@@ -17,7 +17,7 @@ use crate::{
     ops::{
         cost_guard::CostGuardPermit,
         ic::{IcOps, icp_refill::IcpRefillOps},
-        replay::receipt::{ReplayReceiptToken, abort_reserved_receipt},
+        replay::receipt::ReplayReceiptToken,
         runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{
             children::CanisterChildrenOps,
@@ -35,11 +35,11 @@ use crate::{
         },
         policy_denied, prepare_context,
         replay::{
-            finish_icp_refill_replay, map_icp_refill_replay_store_error,
-            mark_icp_refill_notify_effect, mark_icp_refill_recovery_required,
-            mark_icp_refill_transfer_effect,
+            finish_icp_refill_replay, mark_icp_refill_notify_effect,
+            mark_icp_refill_transfer_effect, preserve_icp_refill_recovery_required,
         },
     },
+    workflow::replay::abort_reserved_receipt_after_failure,
 };
 
 pub(super) async fn execute_fresh_manual_refill(
@@ -58,15 +58,21 @@ pub(super) async fn execute_fresh_manual_refill(
                         "ICP refill cost guard recovery failed: {recovery_error}"
                     )));
                 }
-                abort_reserved_receipt(token).map_err(map_icp_refill_replay_store_error)?;
-                return Err(err);
+                return Err(abort_reserved_receipt_after_failure(
+                    token,
+                    err,
+                    "ICP refill replay reservation cleanup failed",
+                ));
             }
         };
     let response = IcpRefillStoreOps::to_response(&operation);
 
     if let Err(err) = finish_icp_refill_replay(token, &operation, &response, cost_permit.as_ref()) {
-        abort_reserved_receipt(token).map_err(map_icp_refill_replay_store_error)?;
-        return Err(err);
+        return Err(abort_reserved_receipt_after_failure(
+            token,
+            err,
+            "ICP refill replay reservation cleanup failed",
+        ));
     }
 
     Ok(response)
@@ -139,10 +145,12 @@ async fn transfer_operation(
     match IcpRefillOps::icrc1_transfer(cost_permit, operation.ledger_canister_id, transfer_arg)
         .await
     {
-        Err(err) => {
-            mark_icp_refill_recovery_required(token, &operation, "ledger_transfer", &err)?;
-            Err(err)
-        }
+        Err(err) => Err(preserve_icp_refill_recovery_required(
+            token,
+            &operation,
+            "ledger_transfer",
+            err,
+        )),
         Ok(Ok(block_index)) => {
             let block_index = match IcpRefillOps::checked_block_index(block_index) {
                 Ok(block_index) => block_index,
@@ -234,10 +242,12 @@ async fn notify_operation(
             Ok(operation)
         }
         Ok(Err(err)) => apply_notify_error(operation.id, operation.notify_attempts, err),
-        Err(err) => {
-            mark_icp_refill_recovery_required(token, &operation, "cmc_notify_top_up", &err)?;
-            Err(err)
-        }
+        Err(err) => Err(preserve_icp_refill_recovery_required(
+            token,
+            &operation,
+            "cmc_notify_top_up",
+            err,
+        )),
     }
 }
 

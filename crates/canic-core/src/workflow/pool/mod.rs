@@ -74,11 +74,6 @@ impl PoolWorkflow {
         pid
     }
 
-    #[must_use]
-    pub fn pop_oldest_pending_reset() -> Option<Principal> {
-        PoolOps::pop_oldest_pending_reset_pid()
-    }
-
     fn require_pool_admin() -> Result<(), InternalError> {
         require_pool_admin(EnvOps::is_root()).map_err(Into::into)
     }

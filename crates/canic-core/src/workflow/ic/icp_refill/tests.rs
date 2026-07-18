@@ -925,13 +925,16 @@ fn refill_replay_recovery_required_preserves_effect_receipt() {
     let operation = operation_from_record(&record);
     mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
 
-    mark_icp_refill_recovery_required(
+    let error = preserve_icp_refill_recovery_required(
         &token,
         &operation,
         "ledger_transfer",
-        &InternalError::infra(InternalErrorOrigin::Infra, "call failed"),
-    )
-    .expect("mark recovery required");
+        InternalError::infra(InternalErrorOrigin::Infra, "call failed"),
+    );
+    assert_eq!(
+        error.log_fields(),
+        (crate::InternalErrorClass::Infra, InternalErrorOrigin::Infra)
+    );
 
     let receipt = ReplayReceiptOps::get(token.key())
         .expect("receipt")
