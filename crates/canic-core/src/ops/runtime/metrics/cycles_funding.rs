@@ -61,6 +61,7 @@ pub enum CyclesFundingDeniedReason {
     KillSwitchDisabled,
     MaxPerChildExceeded,
     NotDirectChild,
+    OperationInProgress,
 }
 
 impl CyclesFundingDeniedReason {
@@ -74,6 +75,7 @@ impl CyclesFundingDeniedReason {
             Self::KillSwitchDisabled => "kill_switch_disabled",
             Self::MaxPerChildExceeded => "max_per_child_exceeded",
             Self::NotDirectChild => "not_direct_child",
+            Self::OperationInProgress => "operation_in_progress",
         }
     }
 }

@@ -80,6 +80,21 @@ impl ReplayReceiptOps {
         ReplayReceiptStore::pending_len_for_command_kind(command_kind.as_str(), now_ns)
     }
 
+    #[must_use]
+    pub fn has_pending_for_actor_command_excluding_operation(
+        actor: ReplayActor,
+        command_kind: &CommandKind,
+        excluded_operation_id: OperationId,
+        now_ns: u64,
+    ) -> bool {
+        ReplayReceiptStore::has_pending_for_actor_command_excluding_operation(
+            actor,
+            command_kind.as_str(),
+            excluded_operation_id.into_bytes(),
+            now_ns,
+        )
+    }
+
     pub fn purge_expired(now_ns: u64, limit: usize) -> usize {
         let expired = ReplayReceiptStore::collect_expired(now_ns, limit);
         for key in &expired {

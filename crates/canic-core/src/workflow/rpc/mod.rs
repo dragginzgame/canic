@@ -56,6 +56,9 @@ pub enum RpcWorkflowError {
     #[error("funding request is in cooldown: retry_after_secs={retry_after_secs}")]
     FundingCooldownActive { retry_after_secs: u64 },
 
+    #[error("cycles funding operation already in progress for child {child}")]
+    FundingOperationInProgress { child: Principal },
+
     #[error("missing replay metadata for capability '{0}'")]
     MissingReplayMetadata(&'static str),
 
@@ -106,6 +109,9 @@ impl From<RpcWorkflowError> for InternalError {
                 ErrorCode::ResourceExhausted,
                 err.to_string(),
             )),
+            RpcWorkflowError::FundingOperationInProgress { .. } => {
+                Self::public(PublicError::conflict(err.to_string()))
+            }
             other => Self::workflow(InternalErrorOrigin::Workflow, other.to_string()),
         }
     }
