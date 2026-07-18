@@ -453,7 +453,7 @@ fn cycle_query_target(options: &CyclesOptions, entry: &RegistryEntry) -> CycleQu
 }
 
 fn cycles_icp(options: &CyclesOptions, root: Option<&Path>) -> IcpCli {
-    let icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    let icp = IcpCli::new(&options.icp, Some(options.network.clone()));
     if let Some(root) = root {
         return icp.with_cwd(root);
     }

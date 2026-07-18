@@ -78,7 +78,7 @@ fn icp_call_on_network_with_mode(
     query: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut command = icp::default_command_in(icp_root);
-    command.env("ICP_ENVIRONMENT", network).arg("canister");
+    command.arg("canister");
     command.args(["call", canister, method]);
 
     if let Some(output) = output {
@@ -89,7 +89,7 @@ fn icp_call_on_network_with_mode(
     if query {
         command.arg("--query");
     }
-    icp::add_target_args(&mut command, Some(network), None, local_replica);
+    icp::add_target_args(&mut command, Some(network), local_replica);
 
     icp::ensure_command_compatible(&command)?;
     let result = command_output(&mut command, stdin)?;

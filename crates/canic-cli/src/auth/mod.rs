@@ -774,7 +774,7 @@ fn validate_auth_method_mode(
 }
 
 fn icp_cli(options: &CommonOptions) -> IcpCli {
-    IcpCli::new(&options.icp, None, Some(options.network.clone()))
+    IcpCli::new(&options.icp, Some(options.network.clone()))
 }
 
 fn live_query_output(

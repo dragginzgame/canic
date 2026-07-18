@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.24` is potentially breaking: deployment-truth callers now select one
+  explicit artifact network, named ICP operations use one target selector, and
+  build plus backup evidence use the canonical network vocabulary.
+
 - `0.93.23` is potentially breaking: release-set path projection is now pure
   and canonical, leaving directory creation and I/O failure ownership to the
   durable writer instead of hidden resolver side effects or fallback branches.

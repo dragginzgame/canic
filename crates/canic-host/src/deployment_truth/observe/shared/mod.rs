@@ -7,7 +7,7 @@ pub(super) fn read_live_canister_status(
     network: &str,
     canister_id: &str,
 ) -> Result<IcpCanisterStatusReport, crate::icp::IcpCommandError> {
-    IcpCli::new("icp", Some(network.to_string()), None)
+    IcpCli::new("icp", Some(network.to_string()))
         .with_cwd(icp_root)
         .canister_status_report(canister_id)
 }

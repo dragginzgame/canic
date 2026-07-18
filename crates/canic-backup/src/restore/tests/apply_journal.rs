@@ -538,7 +538,7 @@ fn apply_journal_command_preview_honors_command_config() {
             "--input".to_string(),
             expected_artifact_path,
             "--json".to_string(),
-            "-n".to_string(),
+            "-e".to_string(),
             "local".to_string(),
         ]
     );

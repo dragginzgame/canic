@@ -1,5 +1,5 @@
 use super::commands::{
-    add_create_root_target, add_icp_environment_target, icp_canister_command_in_network,
+    add_create_root_target, add_icp_network_target, icp_canister_command,
     parse_created_canister_id, run_command_stdout,
 };
 use super::root_cycles::add_local_root_create_cycles_arg;
@@ -35,10 +35,10 @@ pub(super) fn ensure_root_canister_id(
         Err(err) => return Err(err.into()),
     }
 
-    let mut create = icp_canister_command_in_network(icp_root);
+    let mut create = icp_canister_command(icp_root);
     add_create_root_target(&mut create, root_canister, local_replica);
     add_local_root_create_cycles_arg(&mut create, config_path, network)?;
-    add_icp_environment_target(&mut create, network, local_replica);
+    add_icp_network_target(&mut create, network, local_replica);
     let output = run_command_stdout(&mut create)?;
     if let Some(canister_id) = parse_created_canister_id(&output) {
         return Ok(canister_id);
@@ -46,7 +46,7 @@ pub(super) fn ensure_root_canister_id(
 
     resolve_root_canister_id(icp_root, network, root_canister, local_replica).map_err(|_| {
         format!(
-            "created root canister target '{root_canister}', but ICP CLI still has no canister ID for environment '{network}' under ICP root {}\nExpected project-local state under {}/.icp/{network}. If another foreground replica is reachable, stop it and restart with `canic replica start --background` from this Canic project.",
+            "created root canister target '{root_canister}', but ICP CLI still has no canister ID for network '{network}' under ICP root {}\nExpected project-local state under {}/.icp/{network}. If another foreground replica is reachable, stop it and restart with `canic replica start --background` from this Canic project.",
             icp_root.display(),
             icp_root.display(),
         )
@@ -65,9 +65,9 @@ fn resolve_root_canister_id(
         return Ok(root_canister.to_string());
     }
 
-    let mut command = icp_canister_command_in_network(icp_root);
+    let mut command = icp_canister_command(icp_root);
     command.args(["status", root_canister, "--json"]);
-    add_icp_environment_target(&mut command, network, local_replica);
+    add_icp_network_target(&mut command, network, local_replica);
     let output = run_command_stdout(&mut command)?;
     parse_created_canister_id(&output).ok_or(RootCanisterIdError::InvalidOutput { output })
 }

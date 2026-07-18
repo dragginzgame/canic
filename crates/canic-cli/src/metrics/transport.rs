@@ -224,7 +224,7 @@ fn query_metrics(
         metrics_kind_candid_variant(options.kind),
         options.limit
     );
-    let mut icp = IcpCli::new(&options.icp, None, Some(options.network.clone()));
+    let mut icp = IcpCli::new(&options.icp, Some(options.network.clone()));
     let root = resolve_metrics_icp_root();
     let candid_path = registry_entry_candid_path(root.as_deref(), &options.network, entry);
     if let Some(root) = root {

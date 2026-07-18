@@ -65,22 +65,16 @@ pub(super) fn run_command_stdout(command: &mut Command) -> Result<String, IcpCom
     icp::run_output(command)
 }
 
-pub(super) fn icp_command_in_network(icp_root: &Path, network: &str) -> Command {
-    let mut command = icp::default_command_in(icp_root);
-    command.env("ICP_ENVIRONMENT", network);
-    command
-}
-
-pub(super) fn icp_canister_command_in_network(icp_root: &Path) -> Command {
+pub(super) fn icp_canister_command(icp_root: &Path) -> Command {
     let mut command = icp::default_command_in(icp_root);
     command.arg("canister");
     command
 }
 
-pub(super) fn add_icp_environment_target(
+pub(super) fn add_icp_network_target(
     command: &mut Command,
     network: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) {
-    icp::add_target_args(command, Some(network), None, local_replica);
+    icp::add_target_args(command, Some(network), local_replica);
 }

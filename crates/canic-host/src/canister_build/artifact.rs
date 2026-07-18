@@ -8,7 +8,9 @@ use crate::{
         embed_candid_metadata, maybe_shrink_wasm_artifact, write_gzip_artifact, write_wasm_artifact,
     },
     bootstrap_store::build_bootstrap_wasm_store_artifact,
-    cargo_command, remove_optional_file,
+    cargo_command,
+    release_set::artifact_root_path,
+    remove_optional_file,
     role_contract::{
         PackageValidationMode, RolePackageEvidence, RolePackageValidation, finding_detail,
         resolve_declared_role_package_contract_from_config,
@@ -23,8 +25,7 @@ use super::{
     candid::{extract_candid, remove_stale_icp_candid_sidecars},
     model::{
         ArtifactTransformKind, ArtifactTransformOutput, CanisterArtifactBuildOutput,
-        CanisterArtifactBuildSpec, LOCAL_ARTIFACT_ROOT_RELATIVE, ROOT_ROLE, WASM_STORE_ROLE,
-        WASM_TARGET,
+        CanisterArtifactBuildSpec, ROOT_ROLE, WASM_STORE_ROLE, WASM_TARGET,
     },
     wasm_store::build_hidden_wasm_store_artifact,
 };
@@ -157,10 +158,7 @@ pub fn resolve_canister_artifact_build_spec(
     };
     require_declared_role_contract(config, &evidence)?;
 
-    let artifact_root = context
-        .icp_root
-        .join(LOCAL_ARTIFACT_ROOT_RELATIVE)
-        .join(canister_name);
+    let artifact_root = artifact_root_path(&context.icp_root, "local").join(canister_name);
     Ok(CanisterArtifactBuildSpec {
         role: canister_name.to_string(),
         package_name: evidence.role_package_name,

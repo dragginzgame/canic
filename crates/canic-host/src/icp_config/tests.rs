@@ -27,21 +27,21 @@ fn ignores_nested_networks_keys_when_reading_local_gateway_port() {
 }
 
 #[test]
-fn resolves_implicit_build_environments_without_project_config() {
-    let root = temp_dir("canic-icp-build-environment-implicit");
+fn resolves_implicit_build_networks_without_project_config() {
+    let root = temp_dir("canic-icp-build-network-implicit");
 
     assert_eq!(
-        resolve_icp_build_environment_from_root(&root, "local").expect("resolve local"),
-        IcpBuildEnvironment::Local
+        resolve_icp_build_network_from_root(&root, "local").expect("resolve local"),
+        IcpBuildNetwork::Local
     );
     assert_eq!(
-        resolve_icp_build_environment_from_root(&root, "ic").expect("resolve ic"),
-        IcpBuildEnvironment::Ic
+        resolve_icp_build_network_from_root(&root, "ic").expect("resolve ic"),
+        IcpBuildNetwork::Ic
     );
 }
 
 #[test]
-fn resolves_named_environment_from_declared_network() {
+fn resolves_named_target_network_from_declared_backing_network() {
     let source = r"
 networks:
   - name: local
@@ -55,12 +55,12 @@ environments:
 ";
 
     assert_eq!(
-        resolve_icp_build_environment_from_yaml(source, "demo").expect("resolve demo"),
-        IcpBuildEnvironment::Local
+        resolve_icp_build_network_from_yaml(source, "demo").expect("resolve demo"),
+        IcpBuildNetwork::Local
     );
     assert_eq!(
-        resolve_icp_build_environment_from_yaml(source, "staging").expect("resolve staging"),
-        IcpBuildEnvironment::Ic
+        resolve_icp_build_network_from_yaml(source, "staging").expect("resolve staging"),
+        IcpBuildNetwork::Ic
     );
 }
 
@@ -82,33 +82,32 @@ environments:
 ";
 
     assert_eq!(
-        resolve_icp_build_environment_from_yaml(source, "docker").expect("resolve managed"),
-        IcpBuildEnvironment::Local
+        resolve_icp_build_network_from_yaml(source, "docker").expect("resolve managed"),
+        IcpBuildNetwork::Local
     );
     assert_eq!(
-        resolve_icp_build_environment_from_yaml(source, "test").expect("resolve connected"),
-        IcpBuildEnvironment::Local
+        resolve_icp_build_network_from_yaml(source, "test").expect("resolve connected"),
+        IcpBuildNetwork::Local
     );
 }
 
 #[test]
-fn build_environment_resolution_rejects_incomplete_config() {
-    let missing_environment =
-        resolve_icp_build_environment_from_yaml("environments: []\n", "staging")
-            .expect_err("missing environment should fail");
-    let missing_network = resolve_icp_build_environment_from_yaml(
+fn build_network_resolution_rejects_incomplete_config() {
+    let missing_target = resolve_icp_build_network_from_yaml("environments: []\n", "staging")
+        .expect_err("missing target network should fail");
+    let missing_backing_network = resolve_icp_build_network_from_yaml(
         "environments:\n  - name: staging\n    network: private\n",
         "staging",
     )
-    .expect_err("missing network should fail");
-    let unsupported_mode = resolve_icp_build_environment_from_yaml(
+    .expect_err("missing backing network should fail");
+    let unsupported_mode = resolve_icp_build_network_from_yaml(
         "networks:\n  - name: private\n    mode: mystery\nenvironments:\n  - name: staging\n    network: private\n",
         "staging",
     )
     .expect_err("unsupported network mode should fail");
 
-    assert!(missing_environment.contains("is not declared"));
-    assert!(missing_network.contains("references undeclared network 'private'"));
+    assert!(missing_target.contains("is not declared"));
+    assert!(missing_backing_network.contains("references undeclared backing network 'private'"));
     assert!(unsupported_mode.contains("unsupported mode 'mystery'"));
 }
 

@@ -43,8 +43,8 @@ Restoring the old stable-memory image also restores the incompatible ledger.
 Before mutation, run:
 
 ```bash
-canic --network <environment> deploy check <deployment>
-canic --network <environment> medic deployment <deployment>
+canic --network <network> deploy check <deployment>
+canic --network <network> medic deployment <deployment>
 ```
 
 For an existing verified deployment, `subnet_registry_role_missing` is a hard
@@ -55,7 +55,7 @@ instead of claiming corruption.
 For delegated-auth issuers, also run:
 
 ```bash
-canic --network <environment> auth renewal status <deployment> \
+canic --network <network> auth renewal status <deployment> \
   --issuer <principal>
 ```
 

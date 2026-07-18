@@ -33,7 +33,6 @@ pub struct IcpRawOutput {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IcpCli {
     pub(super) executable: String,
-    pub(super) environment: Option<String>,
     pub(super) network: Option<String>,
     pub(super) cwd: Option<PathBuf>,
     pub(super) local_replica: Option<LocalReplicaTarget>,

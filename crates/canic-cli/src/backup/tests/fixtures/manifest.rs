@@ -30,7 +30,7 @@ pub(in crate::backup::tests) fn valid_manifest_with(
             version: "0.30.3".to_string(),
         },
         source: SourceMetadata {
-            environment: "local".to_string(),
+            network: "local".to_string(),
             root_canister: ROOT.to_string(),
         },
         consistency: ConsistencySection {

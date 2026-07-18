@@ -86,7 +86,7 @@ fn root_ready(
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    let icp = IcpCli::new("icp", Some(network.to_string()), None)
+    let icp = IcpCli::new("icp", Some(network.to_string()))
         .with_cwd(icp_root)
         .with_local_replica(local_replica.cloned());
     query_canister_ready(&icp, root_canister, network, Some(icp_root), None).map_err(Into::into)

@@ -1,6 +1,52 @@
 use super::*;
 
 #[test]
+fn normal_named_network_install_checks_fresh_local_build_artifacts() {
+    let root = temp_dir("canic-install-truth-named-environment-artifacts");
+    let config_path = root.join("fleets/demo/canic.toml");
+    write_demo_root_only_config(&config_path);
+    write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
+    let mut options = local_demo_install_options(&root);
+    options.network = "staging".to_string();
+
+    let check = current_install_deployment_truth_check_at(
+        &options,
+        &root,
+        &root,
+        &config_path,
+        "demo",
+        "2026-07-18T00:00:00Z".to_string(),
+    )
+    .expect("deployment truth check");
+
+    assert_eq!(check.plan.deployment_identity.network, "staging");
+    assert!(check.plan.role_artifacts.iter().all(|artifact| {
+        artifact
+            .wasm_gz_path
+            .as_deref()
+            .is_some_and(|path| path.contains(".icp/local/canisters"))
+    }));
+    assert_eq!(check.inventory.observed_artifacts.len(), 2);
+    assert!(
+        check
+            .report
+            .hard_failures
+            .iter()
+            .all(|finding| finding.code != "artifact_missing")
+    );
+    assert!(
+        check
+            .inventory
+            .unresolved_observations
+            .iter()
+            .all(|gap| gap.key != "local_artifacts.root")
+    );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
 fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
     let root = temp_dir("canic-install-truth-artifact-digest-gate");
     let config_path = root.join("fleets/demo/canic.toml");

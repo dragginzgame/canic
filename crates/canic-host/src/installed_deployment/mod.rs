@@ -191,7 +191,7 @@ fn query_registry(
     request: &InstalledDeploymentRequest,
     root: &str,
 ) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
-    let icp = IcpCli::new(&request.icp, None, Some(request.network.clone()));
+    let icp = IcpCli::new(&request.icp, Some(request.network.clone()));
     let query = query_subnet_registry(&icp, root, &request.network, None, None)
         .map_err(|err| installed_deployment_registry_error(request, root, err))?;
     Ok((installed_deployment_source(query.source), query.entries))
@@ -202,7 +202,7 @@ fn query_registry_from_root(
     root: &str,
     icp_root: &Path,
 ) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
-    let icp = IcpCli::new(&request.icp, None, Some(request.network.clone())).with_cwd(icp_root);
+    let icp = IcpCli::new(&request.icp, Some(request.network.clone())).with_cwd(icp_root);
     let candid_path = existing_local_canister_candid_path(icp_root, &request.network, "root");
     let query = query_subnet_registry(
         &icp,

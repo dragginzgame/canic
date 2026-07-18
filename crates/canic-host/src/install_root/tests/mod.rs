@@ -1,8 +1,7 @@
-use super::build_environment::resolve_install_build_context;
+use super::build_network::resolve_install_build_context;
 use super::build_snapshot::InstallBuildTarget;
 use super::commands::{
-    add_create_root_target, add_icp_environment_target, icp_canister_command_in_network,
-    root_init_args,
+    add_create_root_target, add_icp_network_target, icp_canister_command, root_init_args,
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
@@ -93,7 +92,7 @@ fn public_install_error_preserves_phase_and_typed_source() {
 }
 
 #[test]
-fn named_ic_environment_is_explicit_for_cargo_builds() {
+fn named_ic_network_is_explicit_for_cargo_builds() {
     let root = temp_dir("canic-install-build-environment");
     fs::create_dir_all(&root).expect("create root");
     fs::write(
@@ -114,7 +113,7 @@ fn named_ic_environment_is_explicit_for_cargo_builds() {
     let mut command = std::process::Command::new("cargo");
     context.apply_to_command(&mut command);
 
-    assert_eq!(context.environment, "staging");
+    assert_eq!(context.network, "staging");
     assert_eq!(context.build_network, "ic");
     assert!(command.get_envs().any(|(key, value)| {
         key == "ICP_ENVIRONMENT" && value.is_some_and(|value| value == "ic")

@@ -33,7 +33,7 @@ impl BackupIcpRunnerExecutor {
     pub(super) fn new(options: &BackupCreateOptions, icp_root: PathBuf) -> Self {
         Self {
             options: options.clone(),
-            icp: IcpCli::new(&options.icp, None, Some(options.network.clone())).with_cwd(&icp_root),
+            icp: IcpCli::new(&options.icp, Some(options.network.clone())).with_cwd(&icp_root),
             icp_root,
         }
     }

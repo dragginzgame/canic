@@ -51,12 +51,8 @@ fn run_options(options: &ConvertOptions) -> Result<(), CyclesCommandError> {
         &installed.state.root_canister_id,
         &installed.registry.entries,
     )?;
-    let icp = IcpCli::new(
-        &options.target.icp,
-        None,
-        Some(options.target.network.clone()),
-    )
-    .with_cwd(&root);
+    let icp =
+        IcpCli::new(&options.target.icp, Some(options.target.network.clone())).with_cwd(&root);
 
     if options.fabricate {
         return run_fabricate(options, &icp, &target);

@@ -3,14 +3,14 @@ use thiserror::Error as ThisError;
 
 use super::super::ROOT_RELEASE_SET_MANIFEST_FILE;
 
-/// Failure to locate the exact artifact root for a selected ICP environment.
+/// Failure to locate the exact artifact root for a selected artifact network.
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum ArtifactRootError {
     #[error("missing built ICP artifacts under {artifact_root}")]
     Missing { artifact_root: PathBuf },
 }
 
-/// Resolve the built artifact directory for the selected ICP environment.
+/// Resolve the built artifact directory for the selected artifact network.
 pub fn resolve_artifact_root(icp_root: &Path, network: &str) -> Result<PathBuf, ArtifactRootError> {
     let artifact_root = artifact_root_path(icp_root, network);
     if artifact_root.is_dir() {
@@ -20,7 +20,7 @@ pub fn resolve_artifact_root(icp_root: &Path, network: &str) -> Result<PathBuf, 
     Err(ArtifactRootError::Missing { artifact_root })
 }
 
-/// Return the canonical artifact directory for one ICP environment.
+/// Return the canonical artifact directory for one artifact network.
 pub fn artifact_root_path(icp_root: &Path, network: &str) -> PathBuf {
     icp_root.join(".icp").join(network).join("canisters")
 }

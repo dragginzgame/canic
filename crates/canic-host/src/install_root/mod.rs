@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 
 mod activation;
 mod artifact_promotion;
-mod build_environment;
+mod build_network;
 mod build_snapshot;
 mod build_targets;
 mod capabilities;
@@ -43,7 +43,7 @@ mod truth_check;
 
 use activation::run_root_activation_phases;
 use artifact_promotion::write_artifact_promotion_execution_receipt_for_install;
-use build_environment::resolve_install_build_context;
+use build_network::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
     ConfigDiscoveryError, current_canic_project_root, discover_canic_config_choices,
@@ -227,7 +227,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     let total_started_at = Instant::now();
     let mut timings = CurrentInstallTimingSummary::default();
     let network = options.network.as_str();
-    let execution_context = current_install_execution_context(&workspace_root, &icp_root, network);
+    let execution_context =
+        current_install_execution_context(&workspace_root, &icp_root, options.artifact_network());
 
     println!("Installing deployment {deployment_name}");
     println!("Fleet template {fleet_name}");

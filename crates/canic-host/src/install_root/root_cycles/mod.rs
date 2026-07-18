@@ -1,4 +1,4 @@
-use super::commands::{add_icp_environment_target, icp_canister_command_in_network, run_command};
+use super::commands::{add_icp_network_target, icp_canister_command, run_command};
 use crate::cycle_balance::query_cycle_balance;
 use crate::format::cycles_tc;
 use crate::icp::{IcpCli, LocalReplicaTarget};
@@ -36,12 +36,12 @@ pub(super) fn ensure_local_root_min_cycles(
     }
 
     let amount = LOCAL_ROOT_MIN_READY_CYCLES.saturating_sub(current);
-    let mut command = icp_canister_command_in_network(icp_root);
+    let mut command = icp_canister_command(icp_root);
     command
         .args(["top-up", "--amount"])
         .arg(amount.to_string())
         .arg(root_canister);
-    add_icp_environment_target(&mut command, network, local_replica);
+    add_icp_network_target(&mut command, network, local_replica);
     run_command(&mut command)?;
     println!(
         "Local root cycles ({phase}): topped up {} ({} -> {} target)",
@@ -58,7 +58,7 @@ fn query_root_cycle_balance(
     root_canister: &str,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<u128, Box<dyn std::error::Error>> {
-    let icp = IcpCli::new("icp", Some(network.to_string()), None)
+    let icp = IcpCli::new("icp", Some(network.to_string()))
         .with_cwd(icp_root)
         .with_local_replica(local_replica.cloned());
     query_cycle_balance(&icp, root_canister, network, Some(icp_root), None).map_err(Into::into)

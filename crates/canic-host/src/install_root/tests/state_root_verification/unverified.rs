@@ -79,6 +79,7 @@ kind = "root"
         &crate::deployment_truth::LocalDeploymentPlanRequest {
             deployment_name: "demo-local".to_string(),
             network: "local".to_string(),
+            artifact_network: "local".to_string(),
             workspace_root,
             icp_root,
             config_path: None,

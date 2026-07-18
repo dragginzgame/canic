@@ -48,7 +48,7 @@ fn snapshot_manifest_includes_selection_and_artifacts() {
         created_at: "unknown".to_string(),
         tool_name: "canic-cli".to_string(),
         tool_version: "0.31.0".to_string(),
-        environment: "local".to_string(),
+        network: "local".to_string(),
         root_canister: ROOT.to_string(),
         selected_canister: ROOT.to_string(),
         include_children: true,
@@ -386,6 +386,6 @@ fn single_snapshot_config(out: PathBuf) -> SnapshotDownloadConfig {
         created_at: "unknown".to_string(),
         tool_name: "canic-test".to_string(),
         tool_version: "0.31.0".to_string(),
-        environment: "local".to_string(),
+        network: "local".to_string(),
     }
 }

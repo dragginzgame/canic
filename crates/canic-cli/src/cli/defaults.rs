@@ -1,7 +1,7 @@
 //! Module: canic_cli::cli::defaults
 //!
 //! Responsibility: provide shared CLI default values.
-//! Does not own: global option parsing, command dispatch, or environment selection policy.
+//! Does not own: global option parsing, command dispatch, or network selection policy.
 //! Boundary: returns stable defaults used when callers omit command options.
 
 const DEFAULT_ICP: &str = "icp";

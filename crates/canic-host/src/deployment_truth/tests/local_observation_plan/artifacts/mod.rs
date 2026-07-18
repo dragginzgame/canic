@@ -7,6 +7,7 @@ fn local_inventory_reports_missing_config_as_observation_gap() {
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "demo".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root: temp.path().join("workspace"),
         icp_root: temp.path().join("icp"),
         config_path: None,
@@ -44,6 +45,7 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
 
     let manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -114,13 +116,20 @@ fn local_artifact_manifest_requires_selected_network_artifact_root() {
 
     let manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: "ic".to_string(),
+        artifact_network: "ic".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
     });
 
     assert_eq!(manifest.artifact_root, None);
-    assert!(manifest.role_artifacts.is_empty());
+    assert_eq!(manifest.role_artifacts.len(), 3);
+    assert!(manifest.role_artifacts.iter().all(|artifact| {
+        artifact
+            .wasm_gz_path
+            .as_deref()
+            .is_some_and(|path| path.contains(".icp/ic/canisters"))
+    }));
     assert!(
         manifest
             .unresolved_artifacts
@@ -137,6 +146,72 @@ fn local_artifact_manifest_requires_selected_network_artifact_root() {
 }
 
 #[test]
+fn local_deployment_check_rejects_missing_exact_artifact_root() {
+    let temp = TempWorkspace::new("canic-host-local-check-missing-artifact-root");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+
+    let check = check_local_deployment(&LocalDeploymentCheckRequest {
+        deployment_name: "demo".to_string(),
+        network: "ic".to_string(),
+        artifact_network: "ic".to_string(),
+        workspace_root,
+        icp_root,
+        config_path: None,
+        observed_at: "2026-07-18T00:00:00Z".to_string(),
+        runtime_variant: "ic".to_string(),
+        build_profile: "release".to_string(),
+    })
+    .expect("check local deployment");
+
+    assert_eq!(check.plan.role_artifacts.len(), 3);
+    assert!(check.inventory.observed_artifacts.is_empty());
+    assert!(check.report.hard_failures.iter().any(|finding| {
+        finding.code == "artifact_missing" && finding.subject.as_deref() == Some("root")
+    }));
+}
+
+#[test]
+fn local_deployment_check_separates_target_network_from_artifact_network() {
+    let temp = TempWorkspace::new("canic-host-local-check-explicit-artifact-environment");
+    let workspace_root = temp.path().join("workspace");
+    let icp_root = temp.path().join("icp");
+    let config_dir = workspace_root.join("fleets");
+    fs::create_dir_all(&config_dir).expect("create config dir");
+    fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_artifact(&icp_root, "root", b"root-artifact");
+    write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
+    write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
+    write_release_set_manifest(&icp_root);
+
+    let check = check_local_deployment(&LocalDeploymentCheckRequest {
+        deployment_name: "demo".to_string(),
+        network: "staging".to_string(),
+        artifact_network: "local".to_string(),
+        workspace_root,
+        icp_root,
+        config_path: None,
+        observed_at: "2026-07-18T00:00:00Z".to_string(),
+        runtime_variant: "staging".to_string(),
+        build_profile: "release".to_string(),
+    })
+    .expect("check local deployment");
+
+    assert_eq!(check.plan.deployment_identity.network, "staging");
+    assert_eq!(check.plan.role_artifacts.len(), 3);
+    assert_eq!(check.inventory.observed_artifacts.len(), 3);
+    assert!(check.report.hard_failures.iter().all(|finding| {
+        !matches!(
+            finding.code.as_str(),
+            "artifact_missing" | "artifact_file_digest_mismatch"
+        )
+    }));
+}
+
+#[test]
 fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
     let temp = TempWorkspace::new("canic-host-local-artifact-manifest-missing");
     let workspace_root = temp.path().join("workspace");
@@ -148,6 +223,7 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
 
     let manifest = collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,

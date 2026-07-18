@@ -53,7 +53,7 @@ fn stopped_canister_status_command(
     args.push(operation.target_canister.clone());
     args.push("--json".to_string());
     if let Some(network) = &config.command.network {
-        args.push("-n".to_string());
+        args.push("-e".to_string());
         args.push(network.clone());
     }
 

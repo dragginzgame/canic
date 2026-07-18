@@ -110,8 +110,8 @@ fn build_provenance_envelope_wraps_stable_payload() {
     assert_eq!(envelope.target.role.as_deref(), Some("app"));
     assert_eq!(envelope.target.network.as_deref(), Some("staging"));
     assert!(envelope.inputs.iter().any(|input| {
-        input.kind == "build_environment"
-            && input.note.as_deref() == Some("environment=staging;build_network=ic")
+        input.kind == "build_network"
+            && input.note.as_deref() == Some("network=staging;build_network=ic")
     }));
     assert_eq!(envelope.payload_schema, build_provenance_schema());
     assert_eq!(payload.cargo.package_metadata_fleet, "demo");

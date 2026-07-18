@@ -23,3 +23,14 @@ pub struct InstallRootOptions {
     pub deployment_plan_override: Option<DeploymentPlanV1>,
     pub artifact_promotion_plan_override: Option<ArtifactPromotionPlanV1>,
 }
+
+impl InstallRootOptions {
+    /// Return the exact ICP artifact network owned by this install mode.
+    pub(super) fn artifact_network(&self) -> &str {
+        if self.deployment_plan_override.is_some() {
+            &self.network
+        } else {
+            "local"
+        }
+    }
+}

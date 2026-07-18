@@ -10,16 +10,11 @@ use super::{
 };
 
 impl IcpCli {
-    /// Build an ICP CLI command context from an executable path and optional target.
+    /// Build an ICP CLI command context from an executable path and optional Canic network.
     #[must_use]
-    pub fn new(
-        executable: impl Into<String>,
-        environment: Option<String>,
-        network: Option<String>,
-    ) -> Self {
+    pub fn new(executable: impl Into<String>, network: Option<String>) -> Self {
         Self {
             executable: executable.into(),
-            environment,
             network,
             cwd: None,
             local_replica: None,
@@ -40,13 +35,7 @@ impl IcpCli {
         self
     }
 
-    /// Return the optional ICP environment name carried by this command context.
-    #[must_use]
-    pub fn environment(&self) -> Option<&str> {
-        self.environment.as_deref()
-    }
-
-    /// Return the optional direct network name carried by this command context.
+    /// Return the optional Canic network carried by this command context.
     #[must_use]
     pub fn network(&self) -> Option<&str> {
         self.network.as_deref()
@@ -72,7 +61,7 @@ impl IcpCli {
         command
     }
 
-    /// Build an `icp canister ...` command with optional environment args applied.
+    /// Build an `icp canister ...` command with optional network selection applied.
     #[must_use]
     pub fn canister_command(&self) -> Command {
         let mut command = self.command();
@@ -81,18 +70,11 @@ impl IcpCli {
     }
 
     pub(super) fn add_target_args(&self, command: &mut Command) {
-        add_target_args(
-            command,
-            self.environment(),
-            self.network(),
-            self.local_replica.as_ref(),
-        );
+        add_target_args(command, self.network(), self.local_replica.as_ref());
     }
 
     pub(super) fn add_local_network_target(&self, command: &mut Command) {
-        if let Some(environment) = self.environment() {
-            command.args(["-e", environment]);
-        } else if let Some(network) = self.network() {
+        if let Some(network) = self.network() {
             command.arg(network);
         } else {
             command.arg(LOCAL_NETWORK);
@@ -103,24 +85,23 @@ impl IcpCli {
 /// Build a base `icp` command with the default executable.
 #[must_use]
 pub fn default_command() -> Command {
-    IcpCli::new("icp", None, None).command()
+    IcpCli::new("icp", None).command()
 }
 
 /// Build a base `icp` command rooted at one workspace directory.
 #[must_use]
 pub fn default_command_in(cwd: &Path) -> Command {
-    IcpCli::new("icp", None, None).command_in(cwd)
+    IcpCli::new("icp", None).command_in(cwd)
 }
 
-/// Add optional ICP CLI target arguments, preferring named environments.
+/// Add the selected Canic network through ICP CLI's named-environment selector.
 pub fn add_target_args(
     command: &mut Command,
-    environment: Option<&str>,
     network: Option<&str>,
     local_replica: Option<&LocalReplicaTarget>,
 ) {
-    if let Some(environment) = environment {
-        if environment == LOCAL_NETWORK
+    if let Some(network) = network {
+        if network == LOCAL_NETWORK
             && let Some(local_replica) = local_replica
         {
             command.env_remove("ICP_ENVIRONMENT");
@@ -131,9 +112,7 @@ pub fn add_target_args(
                 .arg(&local_replica.root_key);
             return;
         }
-        command.args(["-e", environment]);
-    } else if let Some(network) = network {
-        command.args(["-n", network]);
+        command.args(["-e", network]);
     }
 }
 
@@ -155,10 +134,10 @@ pub fn add_candid_arg(command: &mut Command, candid_path: Option<&Path>) {
 
 /// Return Canic's local ICP CLI Candid sidecar path for one role.
 #[must_use]
-pub fn local_canister_candid_path(icp_root: &Path, environment: &str, role: &str) -> PathBuf {
+pub fn local_canister_candid_path(icp_root: &Path, network: &str, role: &str) -> PathBuf {
     icp_root
         .join(".icp")
-        .join(environment)
+        .join(network)
         .join("canisters")
         .join(role)
         .join(format!("{role}.did"))
@@ -168,10 +147,10 @@ pub fn local_canister_candid_path(icp_root: &Path, environment: &str, role: &str
 #[must_use]
 pub fn existing_local_canister_candid_path(
     icp_root: &Path,
-    environment: &str,
+    network: &str,
     role: &str,
 ) -> Option<PathBuf> {
-    let path = local_canister_candid_path(icp_root, environment, role);
+    let path = local_canister_candid_path(icp_root, network, role);
     path.is_file().then_some(path)
 }
 

@@ -14,7 +14,7 @@ use super::{
 pub struct WorkspaceBuildContext {
     pub role: String,
     pub profile: CanisterBuildProfile,
-    pub environment: String,
+    pub network: String,
     pub build_network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
@@ -30,7 +30,7 @@ impl WorkspaceBuildContext {
             "Canic build:".to_string(),
             format!("role: {}", self.role),
             format!("profile: {}", self.profile.target_dir_name()),
-            format!("environment: {}", self.environment),
+            format!("network: {}", self.network),
             format!("build network: {}", self.build_network),
             format!("workspace: {}", self.workspace_root.display()),
         ];

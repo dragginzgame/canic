@@ -223,7 +223,7 @@ fn run_deployment_checks(
 
 fn check_icp_cli(options: &MedicOptions) -> MedicCheck {
     let network = options.network.clone();
-    match IcpCli::new(&options.icp, None, network).compatible_version() {
+    match IcpCli::new(&options.icp, network).compatible_version() {
         Ok(version) => MedicCheck::pass(
             MedicCategory::Environment,
             "icp_cli_ok",

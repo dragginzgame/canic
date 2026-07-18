@@ -15,6 +15,7 @@ fn local_check_builds_plan_inventory_diff_and_report() {
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
         deployment_name: "demo".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -62,6 +63,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "demo".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -125,6 +127,7 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "prod".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -173,6 +176,7 @@ fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "prod".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,
@@ -207,6 +211,7 @@ fn local_inventory_retains_install_state_decode_source() {
     let error = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "demo".to_string(),
         network: "local".to_string(),
+        artifact_network: "local".to_string(),
         workspace_root,
         icp_root,
         config_path: None,

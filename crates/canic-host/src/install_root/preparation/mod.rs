@@ -1,4 +1,4 @@
-use super::build_environment::ensure_icp_environment_ready;
+use super::build_network::ensure_icp_network_ready;
 use super::build_snapshot::ValidatedInstallSnapshot;
 use super::current_execution::{
     ensure_current_install_executor_capabilities, run_install_deployment_truth_safety_gate,
@@ -36,7 +36,7 @@ pub(super) fn prepare_install_deployment_truth(
 ) -> Result<PreparedInstallTruth, Box<dyn std::error::Error>> {
     let mut timings = InstallTimingSummary::default();
     ensure_current_install_executor_capabilities(execution_context)?;
-    ensure_icp_environment_ready(icp_root, &options.network)?;
+    ensure_icp_network_ready(icp_root, &options.network)?;
     let (root_canister_id, create_phase, create_duration) =
         resolve_root_canister_with_phase(options, icp_root, config_path, build_context)?;
     timings.create_canisters = create_duration;

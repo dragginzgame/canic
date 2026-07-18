@@ -193,7 +193,7 @@ fn test_build_context() -> WorkspaceBuildContext {
     WorkspaceBuildContext {
         role: "root".to_string(),
         profile: CanisterBuildProfile::Fast,
-        environment: "local".to_string(),
+        network: "local".to_string(),
         build_network: "local".to_string(),
         workspace_root: PathBuf::from("/workspace"),
         icp_root: PathBuf::from("/workspace/.icp"),

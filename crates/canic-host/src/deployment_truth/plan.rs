@@ -17,6 +17,7 @@ use std::path::PathBuf;
 pub struct LocalDeploymentPlanRequest {
     pub deployment_name: String,
     pub network: String,
+    pub artifact_network: String,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
     pub config_path: Option<PathBuf>,
@@ -145,6 +146,7 @@ fn local_artifact_manifest(
 ) -> RoleArtifactManifestV1 {
     collect_local_role_artifact_manifest(&LocalArtifactManifestRequest {
         network: request.network.clone(),
+        artifact_network: request.artifact_network.clone(),
         workspace_root: request.workspace_root.clone(),
         icp_root: request.icp_root.clone(),
         config_path: Some(config),
@@ -373,8 +375,11 @@ fn deployment_manifest_digest_assumption(
     assumptions: &mut Vec<DeploymentAssumptionV1>,
 ) -> Option<String> {
     let mut gaps = Vec::new();
-    let digest =
-        super::observe::release_set_manifest_digest(&request.icp_root, &request.network, &mut gaps);
+    let digest = super::observe::release_set_manifest_digest(
+        &request.icp_root,
+        &request.artifact_network,
+        &mut gaps,
+    );
     assumptions.extend(
         gaps.into_iter()
             .map(|gap| assumption(gap.key, gap.description)),
