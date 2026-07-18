@@ -28,6 +28,13 @@ audit_json="$tmp_dir/audit.json"
 
 case "$#" in
 0)
+    # The gate deliberately resolves dependency ownership offline below. Make
+    # the complete locked graph available first so a fresh runner and a warm
+    # Cargo cache produce the same result.
+    (
+        cd "$ROOT"
+        cargo fetch --locked
+    )
     audit_args=(--json)
     if [ "${CANIC_CARGO_AUDIT_NO_FETCH:-0}" = "1" ]; then
         audit_args=(--no-fetch --json)

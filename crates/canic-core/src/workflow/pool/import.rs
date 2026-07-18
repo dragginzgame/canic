@@ -376,7 +376,6 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use crate::cdk::types::Cycles;
-    use crate::storage::stable::intent::{IntentState, IntentStore};
 
     use super::*;
     use futures::executor::block_on;
@@ -409,7 +408,7 @@ mod tests {
     #[test]
     fn pending_pool_import_intent_is_recovered_by_canonical_resource() {
         let pid = p(50);
-        IntentStore::reset_for_tests();
+        IntentStoreOps::reset_for_tests();
         PoolOps::remove(&pid);
         let resource_key = pool_import_intent_key(pid).expect("pool import resource");
         let intent_id = IntentStoreOps::allocate_intent_id().expect("intent id");
@@ -420,12 +419,9 @@ mod tests {
         PoolWorkflow::commit_pending_pool_import_intent_at(pid, 101)
             .expect("scheduler recovers exact pending import");
 
-        assert_eq!(
-            IntentStoreOps::load(intent_id)
-                .expect("load intent")
-                .expect("intent exists")
-                .state,
-            IntentState::Committed
+        assert!(
+            IntentStoreOps::is_committed_for_tests(intent_id)
+                .expect("committed intent state remains readable")
         );
         assert_eq!(
             IntentStoreOps::unique_pending_intent_id(&resource_key).expect("pending lookup"),

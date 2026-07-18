@@ -1000,19 +1000,13 @@ fn request_cycles_releases_cost_reservation_when_effect_marking_fails() {
         IntentStoreOps::expirable_pending_total().expect("pending intents"),
         0
     );
-    assert_eq!(
-        IntentStoreOps::load(settlement.quota_intent_id)
-            .expect("load quota intent")
-            .expect("quota intent")
-            .state,
-        crate::storage::stable::intent::IntentState::Committed
+    assert!(
+        IntentStoreOps::is_committed_for_tests(settlement.quota_intent_id)
+            .expect("quota intent state remains readable")
     );
-    assert_eq!(
-        IntentStoreOps::load(settlement.reservation_intent_id)
-            .expect("load cycle reservation intent")
-            .expect("cycle reservation intent")
-            .state,
-        crate::storage::stable::intent::IntentState::Aborted
+    assert!(
+        IntentStoreOps::is_aborted_for_tests(settlement.reservation_intent_id)
+            .expect("cycle reservation intent state remains readable")
     );
 
     ReplayReceiptOps::reset_for_tests();

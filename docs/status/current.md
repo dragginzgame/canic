@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.19`.
-- The latest published release is `v0.93.19` at
-  `c9e1a115f705b261be1b65456869b541e401c6d4`.
-- The `v0.93.19` source tree is
-  `b5c654b88273c6256a612ebafe6f81d133ad27f1`; its product-tree hash is
-  `d0ca6c02b05d9f0bfe97618cb7d90c979a9e2d2d14538cc6d00e9fd7b212e113`.
+- The workspace package version is `0.93.20`.
+- The latest published release is `v0.93.20` at
+  `454d191f9fd8742a4a54ed3c94e34ff57a690a56`.
+- The `v0.93.20` source tree is
+  `ffa0c280bfb3bbfd58cfec86b492d042941166c0`; its product-tree hash is
+  `ca239b58611753f3d08d613696c5ad703bb3f51204b68b1a88de853883749140`.
   Its Cargo.lock SHA-256 is
-  `d6a17e14a6df9476db40b46f8978a186c6688039781e57f6d5e270baa3da0625`.
+  `d4484263577a5ddba0698572b600abc5476b9a5d7a1d9571093b7c55ec19acab`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -113,12 +113,16 @@ Historical detail is archived at:
   cursor sweep so blocked oldest rows neither spin nor starve later work. It
   also makes sharding assignment and release accounting reject dangling
   references, counter underflow, and counter overflow before stable mutation.
-- Current `0.93.20` development serializes child cycles funding through the
+- Released `v0.93.20` serializes child cycles funding through the
   existing durable replay authority. A competing pending `RequestCycles`
   operation now fails with a typed conflict before it can race whole-ledger
   rollback, cumulative budget, or cooldown accounting. Failure to persist the
   pre-transfer replay marker also settles the cost guard without losing the
   typed replay cause or retaining an unused cycle reservation.
+- Current `0.93.21` development routes workflow test fixtures through ops,
+  prepares the complete locked dependency graph before offline role-package
+  and dependency-risk inspection, and activates the dependency-risk rejection
+  fixtures in CI, making layering and fresh-cache validation deterministic.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

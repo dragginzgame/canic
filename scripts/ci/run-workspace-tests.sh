@@ -103,6 +103,12 @@ run_pic_test() {
 
 trap cleanup_heavy_build_targets EXIT
 
+# Role-package contract tests inspect the Wasm graph with locked offline Cargo
+# metadata. Populate the complete locked graph once so results do not depend on
+# whether the restored Cargo cache contains every target and host/build package.
+echo "==> prefetching locked dependency graph for offline metadata checks"
+cargo fetch --locked
+
 # Compile and run all unit/lib/bin tests together first.
 run_test "workspace lib/bin tests" --workspace --lib --bins
 run_test "canic icp-refill doc tests" -p canic --features icp-refill --doc

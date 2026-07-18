@@ -475,10 +475,6 @@ mod tests {
     use crate::{
         model::placement::allocation::PlacementAllocationIdentity,
         ops::storage::intent::IntentStoreOps,
-        storage::stable::{
-            env::Env,
-            intent::{IntentStore, ReceiptBackedIntentStore},
-        },
     };
 
     fn p(id: u8) -> Principal {
@@ -486,11 +482,8 @@ mod tests {
     }
 
     fn reset_intents() {
-        IntentStore::reset_for_tests();
-        ReceiptBackedIntentStore::reset_for_tests();
-        let mut env = Env::export();
-        env.record.root_pid = Some(p(99));
-        Env::import(env);
+        IntentStoreOps::reset_for_tests();
+        EnvOps::set_root_pid_for_tests(p(99));
     }
 
     fn request(slot: u32, limit: u64) -> PlacementAllocationRequest {
