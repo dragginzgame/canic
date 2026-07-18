@@ -415,6 +415,26 @@ fn delegated_token_verifier_gate_accepts_current_canister_verifier() {
         .expect("explicit verifier canister should pass the execution gate");
 }
 
+#[test]
+fn delegated_token_context_fails_closed_without_local_subnet() {
+    let _guard = crate::test::seams::lock();
+    install_verifier_test_config(true, false, false);
+    let original_env = Env::export();
+    let mut incomplete_env = original_env.clone();
+    incomplete_env.record.subnet_pid = None;
+    Env::import(incomplete_env);
+
+    let result = delegated_token_local_context();
+    Env::import(original_env);
+
+    let Err(err) = result else {
+        panic!("missing verifier subnet must reject");
+    };
+    assert_eq!(err.class(), crate::InternalErrorClass::Ops);
+    assert_eq!(err.origin(), crate::InternalErrorOrigin::Ops);
+    assert!(err.public_error().is_none());
+}
+
 fn install_verifier_test_config(
     delegated_token_verifier: bool,
     delegated_token_issuer: bool,

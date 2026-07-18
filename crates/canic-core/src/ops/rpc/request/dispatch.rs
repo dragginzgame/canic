@@ -5,6 +5,8 @@
 //! Boundary: delegates transport to `RpcOps` after attaching request metadata.
 
 use super::RequestOpsError;
+#[cfg(feature = "sharding")]
+use crate::model::replay::OperationId;
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::rpc::{
@@ -45,6 +47,39 @@ impl RequestOps {
     where
         A: CandidType + Send + Sync,
     {
+        Self::create_canister_with_metadata(canister_role, parent, extra, new_request_metadata())
+            .await
+    }
+
+    /// Dispatch a create-canister request under a caller-owned durable operation identity.
+    #[cfg(feature = "sharding")]
+    pub(crate) async fn create_canister_for_operation<A>(
+        canister_role: &CanisterRole,
+        parent: CreateCanisterParent,
+        extra: Option<A>,
+        operation_id: OperationId,
+    ) -> Result<CreateCanisterResponse, InternalError>
+    where
+        A: CandidType + Send + Sync,
+    {
+        Self::create_canister_with_metadata(
+            canister_role,
+            parent,
+            extra,
+            operation_request_metadata(operation_id),
+        )
+        .await
+    }
+
+    async fn create_canister_with_metadata<A>(
+        canister_role: &CanisterRole,
+        parent: CreateCanisterParent,
+        extra: Option<A>,
+        metadata: RootRequestMetadata,
+    ) -> Result<CreateCanisterResponse, InternalError>
+    where
+        A: CandidType + Send + Sync,
+    {
         let extra_arg = extra.map(encode_one).transpose().map_err(|err| {
             InternalError::invariant(
                 InternalErrorOrigin::Ops,
@@ -59,7 +94,7 @@ impl RequestOps {
                 canister_role: canister_role.clone(),
                 parent,
                 extra_arg,
-                metadata: Some(new_request_metadata()),
+                metadata: Some(metadata),
             },
         )
         .await
@@ -236,6 +271,14 @@ fn new_request_metadata() -> RootRequestMetadata {
     }
 }
 
+#[cfg(feature = "sharding")]
+const fn operation_request_metadata(operation_id: OperationId) -> RootRequestMetadata {
+    RootRequestMetadata {
+        request_id: operation_id.into_bytes(),
+        ttl_ns: DEFAULT_ROOT_REQUEST_TTL_NS,
+    }
+}
+
 fn generate_request_id() -> [u8; 32] {
     let nonce = ROOT_REQUEST_NONCE.fetch_add(1, Ordering::Relaxed);
     let now = IcOps::now_secs();
@@ -328,5 +371,16 @@ mod tests {
         };
         assert_eq!(cycles_request.cycles, 1_000_000);
         assert_eq!(cycles_request.metadata, Some(cycles_metadata));
+    }
+
+    #[cfg(feature = "sharding")]
+    #[test]
+    fn operation_metadata_preserves_caller_owned_request_id() {
+        let operation_id = OperationId::from_bytes([11; 32]);
+
+        let metadata = operation_request_metadata(operation_id);
+
+        assert_eq!(metadata.request_id, operation_id.into_bytes());
+        assert_eq!(metadata.ttl_ns, DEFAULT_ROOT_REQUEST_TTL_NS);
     }
 }

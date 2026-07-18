@@ -285,10 +285,8 @@ impl TopologyCascadeWorkflow {
                     MetricOutcome::Failed,
                     MetricReason::SendFailed,
                 );
-                Err(InternalError::workflow(
-                    InternalErrorOrigin::Workflow,
-                    format!("topology cascade rejected by child {pid}: {err}"),
-                ))
+                Err(err
+                    .with_diagnostic_context(format!("topology cascade rejected by child {pid}")))
             }
         }
     }
