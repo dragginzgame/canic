@@ -24,7 +24,7 @@ use crate::{
             guard::secs_to_ns,
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
-                ReplayReceiptToken, abort_reserved_receipt, commit_staged_receipt_response,
+                ReplayReceiptToken, commit_staged_receipt_response,
                 mark_costed_external_effect_in_flight, mark_recovery_required,
                 replay_cost_guard_settlement, reserve_or_replay_receipt, stage_receipt_response,
             },
@@ -36,7 +36,11 @@ use crate::{
         storage::pool::PoolOps,
     },
     replay_policy::CostClass,
-    workflow::{cost_guard::map_cost_guard_reserve_error, pool::PoolWorkflow},
+    workflow::{
+        cost_guard::map_cost_guard_reserve_error,
+        pool::PoolWorkflow,
+        replay::{abort_reserved_receipt_after_failure, mark_recovery_required_after_failure},
+    },
 };
 
 /// Default cycles allocated to freshly created pool canisters.
@@ -84,7 +88,11 @@ impl PoolWorkflow {
         let controllers = match Self::pool_controllers() {
             Ok(controllers) => controllers,
             Err(err) => {
-                abort_reserved_receipt(&token).map_err(map_pool_create_empty_replay_store_error)?;
+                let err = abort_reserved_receipt_after_failure(
+                    &token,
+                    err,
+                    "pool create-empty replay reservation cleanup failed",
+                );
                 MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
@@ -92,7 +100,11 @@ impl PoolWorkflow {
         let cost_permit = match reserve_pool_create_empty_cost_guard(&command_kind, caller) {
             Ok(permit) => permit,
             Err(err) => {
-                abort_reserved_receipt(&token).map_err(map_pool_create_empty_replay_store_error)?;
+                let err = abort_reserved_receipt_after_failure(
+                    &token,
+                    err,
+                    "pool create-empty replay reservation cleanup failed",
+                );
                 MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                 return Err(err);
             }
@@ -114,12 +126,13 @@ impl PoolWorkflow {
                 Err(err) => {
                     let err =
                         CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-                    mark_recovery_required(
+                    let err = mark_recovery_required_after_failure(
                         &token,
                         RecoveryReason::ExternalEffectStatusUnknown,
                         secs_to_ns(IcOps::now_secs()),
-                    )
-                    .map_err(map_pool_create_empty_replay_store_error)?;
+                        err,
+                        "pool create-empty replay recovery marker failed",
+                    );
                     MetricEvent::failed(MetricOperation::CreateEmpty, &err);
                     return Err(err);
                 }

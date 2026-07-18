@@ -32,7 +32,10 @@ use crate::{
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,
-    workflow::{cost_guard::map_cost_guard_reserve_error, rpc::RpcWorkflowError},
+    workflow::{
+        cost_guard::map_cost_guard_reserve_error, replay::mark_recovery_required_after_failure,
+        rpc::RpcWorkflowError,
+    },
 };
 
 const ROOT_REQUEST_CYCLES_COMMAND_KIND: &str = "root.request_cycles.v1";
@@ -124,15 +127,14 @@ async fn response_replay_first_with_planner(
     let grant = match authorize_plan(&ctx, &req) {
         Ok(grant) => grant,
         Err(err) => {
-            replay::abort_replay(pending)?;
-            return Err(err);
+            return Err(replay::abort_replay_after_failure(pending, err));
         }
     };
 
     let response = match execute_authorized_request_cycles(&ctx, &pending, grant).await {
         Ok(response) => response,
         Err(err) => {
-            replay::abort_replay(pending)?;
+            let err = replay::abort_replay_after_failure(pending, err);
             RootCapabilityMetrics::record_execution(
                 RootCapabilityMetricKey::RequestCycles,
                 RootCapabilityMetricOutcome::Error,
@@ -352,7 +354,8 @@ pub(super) async fn execute_authorized_request_cycles(
     {
         CyclesFundingLedgerOps::restore_child_snapshot(ctx.caller, ledger_before_grant);
         let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-        mark_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, &err)?;
+        let err =
+            preserve_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, err);
         CyclesFundingMetrics::record_denied(
             ctx.caller,
             grant.approved_cycles,
@@ -510,19 +513,20 @@ pub(super) fn mark_request_cycles_external_effect(
     Ok(())
 }
 
-fn mark_request_cycles_recovery_required(
+fn preserve_request_cycles_recovery_required(
     pending: &ReplayPending,
     ctx: &RootContext,
     approved_cycles: u128,
-    err: &InternalError,
-) -> Result<(), InternalError> {
+    err: InternalError,
+) -> InternalError {
     let (error_class, error_origin) = err.log_fields();
-    replay_ops::mark_root_replay_recovery_required(
-        pending,
+    let err = mark_recovery_required_after_failure(
+        &pending.receipt_token,
         RecoveryReason::ExternalEffectStatusUnknown,
         replay_ops::guard::secs_to_ns(IcOps::now_secs()),
-    )
-    .map_err(replay::map_replay_store_error)?;
+        err,
+        "request cycles replay recovery marker failed",
+    );
     log!(
         Topic::Rpc,
         Error,
@@ -533,5 +537,5 @@ fn mark_request_cycles_recovery_required(
         error_class,
         error_origin
     );
-    Ok(())
+    err
 }

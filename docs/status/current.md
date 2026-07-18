@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.12`.
-- The latest published release is `v0.93.12` at
-  `628b1cdd3a59297372777d69015353423b99ab9f`.
-- The `v0.93.12` source tree is
-  `4f483626321dd2fd60aa61366eefce96462cccf5`; its product-tree hash is
-  `aaea1ae67172ad577fdb4bcde08907c16e012068f0ef988a0cf04e698e2d979c`.
+- The workspace package version is `0.93.13`.
+- The latest published release is `v0.93.13` at
+  `4c62084f59648833cbf5a278478c941239771f63`.
+- The `v0.93.13` source tree is
+  `efe09bf22abecaaabbdd18abff9b952a6c3bb00b`; its product-tree hash is
+  `dd7a895494cc4d300e5f386e0332e06e1255560cbd3ce7fd6583bfc6e9f1232e`.
   Its Cargo.lock SHA-256 is
-  `6f081efb9bcee7d1a644b24f46ee69867842fedae12c1704cb00c4133e87b1f4`.
+  `b347582d1a36056071e16a9eec52c8263708b85f7e07426a110f37778ca3e49b`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -76,10 +76,15 @@ Historical detail is archived at:
 - Released `v0.93.12` makes replay receipts the durable recovery authority for
   costed refill, pool-create, root-provision, and root-upgrade completion, and
   preserves both typed root-install failure causes.
-- Current development completes that invariant for `RequestCycles` and every
+- Released `v0.93.13` completes that invariant for `RequestCycles` and every
   staged replay response, removes the duplicate direct response-commit and
   cycles-specific replay paths, and makes the reviewed production cost-flow
   inventory executable.
+- Current development prevents replay cleanup or recovery-marker failures from
+  replacing the primary typed failure across root RPC, cycles funding, pool
+  creation, ICP refill, and authentication preparation. It also keeps pending
+  pool-reset records authoritative through asynchronous recovery so recycled
+  canister metadata and duplicate-work exclusion survive the transition.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

@@ -415,6 +415,20 @@ pub(super) fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> 
     Ok(())
 }
 
+/// Abort a pre-effect root reservation without replacing the primary failure.
+#[must_use]
+pub(super) fn abort_replay_after_failure(
+    pending: ReplayPending,
+    mut error: InternalError,
+) -> InternalError {
+    if let Err(cleanup_error) = abort_replay(pending) {
+        error = error.with_diagnostic_context(format!(
+            "root replay reservation cleanup failed: {cleanup_error}"
+        ));
+    }
+    error
+}
+
 /// Record a root external effect together with the cost intents needed for recovery.
 pub(super) fn mark_costed_external_effect_in_flight(
     pending: &ReplayPending,

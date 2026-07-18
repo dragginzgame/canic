@@ -30,9 +30,12 @@ use crate::{
         storage::icp_refill::IcpRefillStoreOps,
     },
     view::icp_refill::IcpRefillOperation,
-    workflow::ic::icp_refill::{
-        ICP_REFILL_REPLAY_COMMAND_KIND,
-        cost_guard::{complete_icp_refill_cost_guard, recover_icp_refill_cost_guard},
+    workflow::{
+        ic::icp_refill::{
+            ICP_REFILL_REPLAY_COMMAND_KIND,
+            cost_guard::{complete_icp_refill_cost_guard, recover_icp_refill_cost_guard},
+        },
+        replay::mark_recovery_required_after_failure,
     },
 };
 
@@ -314,19 +317,20 @@ pub(super) fn mark_icp_refill_notify_effect(
     Ok(())
 }
 
-pub(super) fn mark_icp_refill_recovery_required(
+pub(super) fn preserve_icp_refill_recovery_required(
     token: &ReplayReceiptToken,
     operation: &IcpRefillOperation,
     effect: &'static str,
-    err: &InternalError,
-) -> Result<(), InternalError> {
+    err: InternalError,
+) -> InternalError {
     let (error_class, error_origin) = err.log_fields();
-    mark_recovery_required(
+    let err = mark_recovery_required_after_failure(
         token,
         RecoveryReason::ExternalEffectStatusUnknown,
         IcOps::now_nanos(),
-    )
-    .map_err(map_icp_refill_replay_store_error)?;
+        err,
+        "ICP refill replay recovery marker failed",
+    );
     crate::log!(
         crate::log::Topic::Cycles,
         Error,
@@ -341,7 +345,7 @@ pub(super) fn mark_icp_refill_recovery_required(
         error_class,
         error_origin
     );
-    Ok(())
+    err
 }
 
 pub(super) fn log_icp_refill_fresh_reservation(request: &IcpRefillRequest) {

@@ -10,7 +10,6 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        ic::IcOps,
         runtime::{
             metrics::{
                 pool::{
@@ -147,11 +146,7 @@ impl PoolSchedulerWorkflow {
     }
 
     async fn run_batch(limit: usize) -> Result<(), InternalError> {
-        for _ in 0..limit {
-            let Some(pid) = PoolWorkflow::pop_oldest_pending_reset() else {
-                break;
-            };
-
+        for pid in PoolOps::oldest_pending_reset_pids(limit) {
             match check_can_enter_pool(pid).await {
                 Ok(()) => {}
 
@@ -162,9 +157,7 @@ impl PoolSchedulerWorkflow {
                 }
 
                 Err(PoolPolicyError::NonImportableOnLocal { .. }) => {
-                    // Not admissible yet → requeue
-                    let created_at = IcOps::now_secs();
-                    PoolOps::mark_pending_reset(pid, created_at);
+                    // The authoritative pending record remains queued.
                     MetricEvent::record(
                         MetricOperation::Reset,
                         MetricOutcome::Requeued,
@@ -174,8 +167,6 @@ impl PoolSchedulerWorkflow {
                 }
 
                 Err(err) => {
-                    let created_at = IcOps::now_secs();
-                    PoolOps::mark_pending_reset(pid, created_at);
                     MetricEvent::record(
                         MetricOperation::Reset,
                         MetricOutcome::Requeued,

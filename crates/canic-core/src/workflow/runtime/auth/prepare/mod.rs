@@ -29,14 +29,14 @@ use crate::{
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptStoreError, ReplayReceiptToken,
-                abort_reserved_receipt, commit_staged_receipt_response, mark_recovery_required,
-                reserve_or_replay_receipt, stage_receipt_response,
+                commit_staged_receipt_response, mark_recovery_required, reserve_or_replay_receipt,
+                stage_receipt_response,
             },
         },
         runtime::env::EnvOps,
     },
     protocol,
-    workflow::runtime::auth::RuntimeAuthWorkflow,
+    workflow::{replay::abort_reserved_receipt_after_failure, runtime::auth::RuntimeAuthWorkflow},
 };
 use admission::{validate_role_attestation_request, validate_token_prepare_public_request};
 use replay::{
@@ -97,8 +97,11 @@ impl RuntimeAuthWorkflow {
         {
             Ok(prepared) => prepared,
             Err(err) => {
-                abort_reserved_receipt(&token).map_err(map_token_prepare_replay_store_error)?;
-                return Err(err);
+                return Err(abort_reserved_receipt_after_failure(
+                    &token,
+                    err,
+                    "delegated token replay reservation cleanup failed",
+                ));
             }
         };
         crate::perf!("delegated_token_prepare_proof");
@@ -168,8 +171,11 @@ impl RuntimeAuthWorkflow {
         }) {
             Ok(prepared) => prepared,
             Err(err) => {
-                abort_reserved_receipt(&token).map_err(map_role_attestation_replay_store_error)?;
-                return Err(err);
+                return Err(abort_reserved_receipt_after_failure(
+                    &token,
+                    err,
+                    "role attestation replay reservation cleanup failed",
+                ));
             }
         };
 

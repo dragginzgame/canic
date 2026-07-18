@@ -23,7 +23,7 @@ use crate::{
         config::ConfigOps,
         cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
         ic::IcOps,
-        replay::guard::ReplayPending,
+        replay::guard::{ReplayPending, secs_to_ns},
         storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,
@@ -33,6 +33,7 @@ use crate::{
         },
         cost_guard::map_cost_guard_reserve_error,
         pool::PoolWorkflow,
+        replay::mark_recovery_required_after_failure,
         rpc::RpcWorkflowError,
     },
 };
@@ -110,15 +111,17 @@ async fn execute_provision(
         Ok(result) => result,
         Err(err) => {
             let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-            mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err)?;
-            return Err(err);
+            return Err(preserve_root_provision_recovery_required(
+                pending, ctx, req, parent_pid, err,
+            ));
         }
     };
     let Some(new_canister_pid) = lifecycle_result.new_canister_pid else {
         let err: InternalError = RpcWorkflowError::MissingNewCanisterPid.into();
         let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
-        mark_root_provision_recovery_required(pending, ctx, req, parent_pid, &err)?;
-        return Err(err);
+        return Err(preserve_root_provision_recovery_required(
+            pending, ctx, req, parent_pid, err,
+        ));
     };
 
     let response = Response::CreateCanister(CreateCanisterResponse { new_canister_pid });
@@ -247,15 +250,21 @@ pub(super) fn mark_root_provision_external_effect(
     Ok(())
 }
 
-fn mark_root_provision_recovery_required(
+fn preserve_root_provision_recovery_required(
     pending: &ReplayPending,
     ctx: &RootContext,
     req: &CreateCanisterRequest,
     parent_pid: Principal,
-    err: &InternalError,
-) -> Result<(), InternalError> {
+    err: InternalError,
+) -> InternalError {
     let (error_class, error_origin) = err.log_fields();
-    replay::mark_recovery_required(pending, RecoveryReason::ExternalEffectStatusUnknown)?;
+    let err = mark_recovery_required_after_failure(
+        &pending.receipt_token,
+        RecoveryReason::ExternalEffectStatusUnknown,
+        secs_to_ns(IcOps::now_secs()),
+        err,
+        "root provision replay recovery marker failed",
+    );
     log!(
         Topic::Rpc,
         Error,
@@ -267,7 +276,7 @@ fn mark_root_provision_recovery_required(
         error_class,
         error_origin
     );
-    Ok(())
+    err
 }
 
 async fn execute_upgrade(

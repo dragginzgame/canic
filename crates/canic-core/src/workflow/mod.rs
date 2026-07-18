@@ -19,6 +19,7 @@ pub mod memory;
 pub mod metrics;
 pub mod placement;
 pub mod pool;
+pub mod replay;
 pub mod rpc;
 pub mod runtime;
 pub mod state;

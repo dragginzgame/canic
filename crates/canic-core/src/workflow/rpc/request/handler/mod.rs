@@ -122,7 +122,7 @@ impl RootResponseWorkflow {
         {
             Ok(response) => response,
             Err(err) => {
-                Self::abort_replay(prepared.pending)?;
+                let err = Self::abort_replay_after_failure(prepared.pending, err);
                 RootCapabilityMetrics::record_execution(
                     descriptor.key,
                     RootCapabilityMetricOutcome::Error,
@@ -173,8 +173,7 @@ impl RootResponseWorkflow {
                 let authorized_cycles = match Self::authorize_with_hint(ctx, capability) {
                     Ok(authorized_cycles) => authorized_cycles,
                     Err(err) => {
-                        Self::abort_replay(pending)?;
-                        return Err(err);
+                        return Err(Self::abort_replay_after_failure(pending, err));
                     }
                 };
                 Ok(RootPreflight::Fresh(PreparedExecution {
@@ -226,8 +225,8 @@ impl RootResponseWorkflow {
         replay::commit_replay(pending)
     }
 
-    fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> {
-        replay::abort_replay(pending)
+    fn abort_replay_after_failure(pending: ReplayPending, error: InternalError) -> InternalError {
+        replay::abort_replay_after_failure(pending, error)
     }
 
     fn mark_replay_recovery_required(

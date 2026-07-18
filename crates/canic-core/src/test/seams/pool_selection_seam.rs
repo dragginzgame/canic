@@ -57,3 +57,50 @@ fn pool_selection_uses_workflow_ordering() {
     assert!(!PoolOps::contains(&pid_b));
     assert!(PoolOps::contains(&pid_c));
 }
+
+#[test]
+fn pending_reset_selection_is_ordered_bounded_and_non_destructive() {
+    let _guard = lock();
+
+    for entry in PoolOps::data().entries {
+        PoolOps::remove(&entry.pid);
+    }
+
+    let pid_a = p(23);
+    let pid_b = p(24);
+    let pid_c = p(25);
+
+    PoolStore::register(
+        pid_a,
+        Cycles::default(),
+        PoolStatus::PendingReset,
+        None,
+        None,
+        None,
+        5,
+    );
+    PoolStore::register(
+        pid_b,
+        Cycles::default(),
+        PoolStatus::PendingReset,
+        None,
+        None,
+        None,
+        5,
+    );
+    PoolStore::register(
+        pid_c,
+        Cycles::default(),
+        PoolStatus::PendingReset,
+        None,
+        None,
+        None,
+        9,
+    );
+
+    assert_eq!(PoolOps::oldest_pending_reset_pids(2), vec![pid_a, pid_b]);
+    assert!(PoolOps::oldest_pending_reset_pids(0).is_empty());
+    assert!(PoolOps::contains(&pid_a));
+    assert!(PoolOps::contains(&pid_b));
+    assert!(PoolOps::contains(&pid_c));
+}

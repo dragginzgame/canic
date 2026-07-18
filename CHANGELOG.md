@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.14` is potentially breaking: replay cleanup now preserves primary
+  typed failures, and pool recovery retains pending authority and metadata
+  throughout asynchronous resets.
+
 - `0.93.13` is potentially breaking: it completes staged-response recovery,
   gives `RequestCycles` accounting-only retry, and hard-cuts duplicate replay
   and response-commit paths.

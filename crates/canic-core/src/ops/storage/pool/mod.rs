@@ -177,9 +177,37 @@ impl PoolOps {
         Self::pop_oldest_by_status(PoolStatus::Ready)
     }
 
+    /// Return the oldest pending reset identifiers without removing their records.
+    ///
+    /// Pending records remain authoritative while the scheduler performs async
+    /// admission and reset work, so duplicate workflows still observe the work
+    /// in progress and later state transitions retain stored metadata.
     #[must_use]
-    pub fn pop_oldest_pending_reset_pid() -> Option<Principal> {
-        Self::pop_oldest_by_status(PoolStatus::PendingReset)
+    pub fn oldest_pending_reset_pids(limit: usize) -> Vec<Principal> {
+        if limit == 0 {
+            return Vec::new();
+        }
+
+        let mut pending = PoolStore::export()
+            .entries
+            .into_iter()
+            .filter(|entry| matches!(entry.record.state.status, PoolStatus::PendingReset))
+            .map(|entry| (entry.pid, entry.record.header.created_at))
+            .collect::<Vec<_>>();
+
+        pending.sort_by(
+            |(left_pid, left_created_at), (right_pid, right_created_at)| {
+                left_created_at
+                    .cmp(right_created_at)
+                    .then_with(|| left_pid.as_slice().cmp(right_pid.as_slice()))
+            },
+        );
+
+        pending
+            .into_iter()
+            .take(limit)
+            .map(|(pid, _)| pid)
+            .collect()
     }
 
     // -------------------------------------------------------------------------

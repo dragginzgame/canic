@@ -525,7 +525,7 @@ fn preflight_aborts_reserved_replay_on_policy_denial() {
             panic!("policy-denied replay should not return cached response")
         }
     };
-    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
+    replay::abort_replay(pending).expect("abort replay");
 }
 
 #[test]
@@ -814,7 +814,7 @@ fn request_cycles_marks_deposit_external_effect() {
         })
     );
 
-    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
+    replay::abort_replay(pending).expect("abort replay");
     CostGuardOps::abort(&permit).expect("abort cost permit");
     CostGuardOps::reset_for_tests();
 }
@@ -996,7 +996,7 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
         secs_to_ns(1_002),
     )
     .expect("mark recovery required");
-    RootResponseWorkflow::abort_replay(pending).expect("abort replay");
+    replay::abort_replay(pending).expect("abort replay");
 
     let receipt = ReplayReceiptOps::get(key)
         .expect("recovery receipt must remain")
@@ -1012,6 +1012,43 @@ fn abort_replay_preserves_recovery_required_external_effect_receipt() {
 
     RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect_err("recovery-required duplicate must not run fresh");
+}
+
+#[test]
+fn abort_replay_cleanup_failure_preserves_primary_error_projection() {
+    ReplayReceiptOps::reset_for_tests();
+
+    let ctx = RootContext {
+        caller: p(5),
+        self_pid: p(42),
+        is_root_env: true,
+        subnet_id: p(6),
+        now: 1_000,
+    };
+    let capability = RootCapability::RequestCycles(CyclesRequest {
+        cycles: 77,
+        metadata: Some(meta(18, secs_to_ns(60))),
+    });
+    let pending = match RootResponseWorkflow::check_replay(&ctx, &capability)
+        .expect("first replay should reserve")
+    {
+        replay::ReplayPreflight::Fresh(pending) => pending,
+        replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
+    };
+    let key = pending.receipt_token.key();
+    let mut record = ReplayReceiptOps::get(key).expect("reserved receipt");
+    record.schema_version = u32::MAX;
+    ReplayReceiptOps::upsert(key, record);
+
+    let error = replay::abort_replay_after_failure(
+        pending,
+        InternalError::public(crate::dto::error::Error::conflict("primary failure")),
+    );
+
+    assert_eq!(
+        error.public_error().map(|error| error.code),
+        Some(ErrorCode::Conflict)
+    );
 }
 
 #[test]
