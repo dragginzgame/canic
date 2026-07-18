@@ -306,7 +306,7 @@ impl ReplayReceiptStore {
                 if !record_survives_replay_expiry(&record)
                     && record
                         .expires_at_ns
-                        .is_some_and(|expires_at_ns| expires_at_ns < now_ns)
+                        .is_some_and(|expires_at_ns| expires_at_ns <= now_ns)
                 {
                     expired.push(*entry.key());
                     if expired.len() >= limit {
@@ -537,6 +537,26 @@ mod tests {
         assert!(ReplayReceiptStore::collect_expired(300, 10).is_empty());
         assert!(ReplayReceiptStore::get(recovery_key).is_some());
         assert!(ReplayReceiptStore::get(effect_key).is_some());
+
+        ReplayReceiptStore::reset_for_tests();
+    }
+
+    #[test]
+    fn reserved_receipt_is_collectible_at_its_expiry_boundary() {
+        ReplayReceiptStore::reset_for_tests();
+        let key = ReplayReceiptSlotKey([48; 32]);
+        let record = receipt_record_fixture();
+        let actor = record.actor;
+        let command_kind = record.command_kind.clone();
+        ReplayReceiptStore::upsert(key, record);
+
+        assert_eq!(ReplayReceiptStore::active_len_for_actor(actor, 200), 0);
+        assert_eq!(ReplayReceiptStore::pending_len_for_actor(actor, 200), 0);
+        assert_eq!(
+            ReplayReceiptStore::pending_len_for_command_kind(&command_kind, 200),
+            0
+        );
+        assert_eq!(ReplayReceiptStore::collect_expired(200, 10), vec![key]);
 
         ReplayReceiptStore::reset_for_tests();
     }

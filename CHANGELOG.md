@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.22` binds replay mutations and cleanup to the exact reserved receipt
+  identity, preventing expired async continuations from altering a reused
+  operation slot.
+
 - `0.93.21` makes offline validation deterministic on fresh Cargo caches,
   activates dependency-risk rejection proofs, and routes workflow test setup
   through the canonical ops layering boundary.

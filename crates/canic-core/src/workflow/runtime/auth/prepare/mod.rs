@@ -30,7 +30,7 @@ use crate::{
             receipt::{
                 ReplayReceiptDecision, ReplayReceiptStoreError, ReplayReceiptToken,
                 commit_staged_receipt_response, mark_recovery_required, reserve_or_replay_receipt,
-                stage_receipt_response,
+                stage_receipt_response, validate_receipt_token,
             },
         },
         runtime::env::EnvOps,
@@ -92,6 +92,7 @@ impl RuntimeAuthWorkflow {
             prepare_input,
             metadata.request_id,
             caller,
+            &token,
         )
         .await
         {
@@ -282,6 +283,7 @@ async fn prepare_delegated_token_with_lazy_repair(
     input: PrepareDelegatedTokenIssuerProofInput,
     operation_id: [u8; 32],
     prepared_by: Principal,
+    token: &ReplayReceiptToken,
 ) -> Result<crate::ops::auth::PreparedDelegatedTokenIssuerProof, InternalError> {
     prepare_delegated_token_with_lazy_repair_using(
         input,
@@ -289,16 +291,18 @@ async fn prepare_delegated_token_with_lazy_repair(
         prepared_by,
         AuthOps::prepare_delegated_token_issuer_proof,
         repair_active_delegation_proof_from_root,
+        || validate_receipt_token(token).map_err(map_token_prepare_replay_store_error),
     )
     .await
 }
 
-async fn prepare_delegated_token_with_lazy_repair_using<T, P, R, Fut>(
+async fn prepare_delegated_token_with_lazy_repair_using<T, P, R, V, Fut>(
     input: PrepareDelegatedTokenIssuerProofInput,
     operation_id: [u8; 32],
     prepared_by: Principal,
     mut prepare: P,
     repair: R,
+    validate_replay_owner: V,
 ) -> Result<T, InternalError>
 where
     P: FnMut(
@@ -307,12 +311,14 @@ where
         Principal,
     ) -> Result<T, InternalError>,
     R: FnOnce() -> Fut,
+    V: FnOnce() -> Result<(), InternalError>,
     Fut: Future<Output = Result<(), InternalError>>,
 {
     match prepare(input.clone(), operation_id, prepared_by) {
         Ok(prepared) => Ok(prepared),
         Err(err) if delegated_token_prepare_error_allows_lazy_repair(&err) => {
             repair().await?;
+            validate_replay_owner()?;
             prepare(input, operation_id, prepared_by)
         }
         Err(err) => Err(err),
@@ -436,12 +442,51 @@ mod tests {
                 repair_calls.set(repair_calls.get() + 1);
                 Ok(())
             },
+            || Ok(()),
         ))
         .expect("lazy repair should retry and return prepared material");
 
         assert_eq!(prepared, 42);
         assert_eq!(prepare_calls.get(), 2);
         assert_eq!(repair_calls.get(), 1);
+    }
+
+    #[test]
+    fn delegated_token_lazy_repair_revalidates_replay_owner_before_retry() {
+        let prepare_calls = Cell::new(0);
+        let repair_calls = Cell::new(0);
+        let validation_calls = Cell::new(0);
+
+        let err = block_on(prepare_delegated_token_with_lazy_repair_using(
+            token_prepare_input(),
+            [11; 32],
+            p(8),
+            |_, _, _| -> Result<u8, InternalError> {
+                prepare_calls.set(prepare_calls.get() + 1);
+                Err(InternalError::auth_material_stale(
+                    "active delegation proof is stale",
+                ))
+            },
+            || async {
+                repair_calls.set(repair_calls.get() + 1);
+                Ok(())
+            },
+            || {
+                validation_calls.set(validation_calls.get() + 1);
+                Err(InternalError::public(Error::conflict(
+                    "replay ownership changed",
+                )))
+            },
+        ))
+        .expect_err("stale replay ownership must prevent the second prepare");
+
+        assert_eq!(
+            err.public_error().expect("public error").code,
+            ErrorCode::Conflict
+        );
+        assert_eq!(prepare_calls.get(), 1);
+        assert_eq!(repair_calls.get(), 1);
+        assert_eq!(validation_calls.get(), 1);
     }
 
     #[test]
@@ -462,6 +507,7 @@ mod tests {
                 repair_calls.set(repair_calls.get() + 1);
                 Ok(())
             },
+            || Ok(()),
         ))
         .expect("fresh local active proof should prepare without root repair");
 
@@ -492,6 +538,7 @@ mod tests {
                     "chain-key root delegation proof is not available yet; retry",
                 ))
             },
+            || Ok(()),
         ))
         .expect_err("pending root repair must not issue a token");
 
@@ -523,6 +570,7 @@ mod tests {
                 repair_calls.set(repair_calls.get() + 1);
                 Ok(())
             },
+            || Ok(()),
         ))
         .expect_err("non-repairable error should pass through");
 

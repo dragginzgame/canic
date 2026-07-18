@@ -476,6 +476,10 @@ pub(super) fn map_icp_refill_replay_store_error(err: ReplayReceiptStoreError) ->
             InternalErrorOrigin::Workflow,
             format!("failed to decode ICP refill replay receipt: {message}"),
         ),
+        ReplayReceiptStoreError::ReceiptTokenMismatch => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "ICP refill replay receipt token is stale",
+        ),
         ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             "ICP refill replay receipt is missing staged response data",

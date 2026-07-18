@@ -450,6 +450,10 @@ fn map_pool_create_empty_replay_store_error(err: ReplayReceiptStoreError) -> Int
             InternalErrorOrigin::Workflow,
             format!("failed to decode pool create-empty replay receipt: {message}"),
         ),
+        ReplayReceiptStoreError::ReceiptTokenMismatch => InternalError::workflow(
+            InternalErrorOrigin::Workflow,
+            "pool create-empty replay receipt token is stale",
+        ),
         ReplayReceiptStoreError::StagedResponseMissing => InternalError::workflow(
             InternalErrorOrigin::Workflow,
             "pool create-empty replay receipt is missing staged response data",

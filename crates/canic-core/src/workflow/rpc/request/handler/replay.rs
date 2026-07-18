@@ -338,6 +338,11 @@ pub(super) fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalEr
         ReplayReceiptStoreError::ReceiptDecodeFailed(message) => {
             map_replay_decode_error(ReplayDecodeError::DecodeFailed(message))
         }
+        ReplayReceiptStoreError::ReceiptTokenMismatch => {
+            map_replay_decode_error(ReplayDecodeError::DecodeFailed(
+                "replay receipt token no longer matches persisted receipt identity".to_string(),
+            ))
+        }
         ReplayReceiptStoreError::StagedResponseMissing => {
             map_replay_decode_error(ReplayDecodeError::DecodeFailed(
                 "replay receipt is missing staged response data".to_string(),
