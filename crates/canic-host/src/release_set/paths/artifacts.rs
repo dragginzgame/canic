@@ -1,7 +1,4 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use thiserror::Error as ThisError;
 
 use super::super::ROOT_RELEASE_SET_MANIFEST_FILE;
@@ -15,7 +12,7 @@ pub enum ArtifactRootError {
 
 /// Resolve the built artifact directory for the selected ICP environment.
 pub fn resolve_artifact_root(icp_root: &Path, network: &str) -> Result<PathBuf, ArtifactRootError> {
-    let artifact_root = icp_root.join(".icp").join(network).join("canisters");
+    let artifact_root = artifact_root_path(icp_root, network);
     if artifact_root.is_dir() {
         return Ok(artifact_root);
     }
@@ -23,17 +20,15 @@ pub fn resolve_artifact_root(icp_root: &Path, network: &str) -> Result<PathBuf, 
     Err(ArtifactRootError::Missing { artifact_root })
 }
 
-// Return the canonical manifest path for the staged root release set.
-pub fn root_release_set_manifest_path(
-    artifact_root: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let manifest_path = artifact_root
+/// Return the canonical artifact directory for one ICP environment.
+pub fn artifact_root_path(icp_root: &Path, network: &str) -> PathBuf {
+    icp_root.join(".icp").join(network).join("canisters")
+}
+
+/// Return the canonical manifest path for the staged root release set.
+#[must_use]
+pub fn root_release_set_manifest_path(artifact_root: &Path) -> PathBuf {
+    artifact_root
         .join("root")
-        .join(ROOT_RELEASE_SET_MANIFEST_FILE);
-
-    if let Some(parent) = manifest_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    Ok(manifest_path)
+        .join(ROOT_RELEASE_SET_MANIFEST_FILE)
 }

@@ -21,6 +21,22 @@ fn selected_network_artifact_root_never_falls_back_to_local() {
 }
 
 #[test]
+fn artifact_and_manifest_path_projection_does_not_create_directories() {
+    let temp = TempWorkspace::new();
+    let artifact_root = artifact_root_path(temp.path(), "ic");
+    let manifest_path = root_release_set_manifest_path(&artifact_root);
+
+    assert_eq!(artifact_root, temp.path().join(".icp/ic/canisters"));
+    assert_eq!(
+        manifest_path,
+        temp.path()
+            .join(".icp/ic/canisters/root/root.release-set.json")
+    );
+    assert!(!artifact_root.exists());
+    assert!(!manifest_path.parent().expect("manifest parent").exists());
+}
+
+#[test]
 fn read_release_artifact_accepts_gzip_wasm() {
     let temp = TempWorkspace::new();
     let path = temp.path().join("artifact.wasm.gz");

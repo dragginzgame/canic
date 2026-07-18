@@ -153,7 +153,7 @@ fn emit_root_release_set_manifest_from_plan(
     plan: &DeploymentPlanV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let artifact_root = resolve_artifact_root(icp_root, network)?;
-    let manifest_path = root_release_set_manifest_path(&artifact_root)?;
+    let manifest_path = root_release_set_manifest_path(&artifact_root);
     let entries = plan_release_role_artifacts(plan)
         .map(|artifact| release_set_entry_from_plan_artifact(icp_root, &artifact_root, artifact))
         .collect::<Result<Vec<_>, _>>()?;

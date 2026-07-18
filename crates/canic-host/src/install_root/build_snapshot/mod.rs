@@ -9,7 +9,7 @@ use crate::{
         CanisterArtifactBuildSpec, WorkspaceBuildContext, resolve_canister_artifact_build_spec,
     },
     release_set::{
-        RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
+        RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget, artifact_root_path,
         configured_release_roles_from_config, load_root_package_version,
         root_release_set_manifest_path, workspace_manifest_path,
     },
@@ -75,8 +75,8 @@ pub(super) fn resolve_install_snapshot(
         &root_target.spec.package_manifest_path,
         &workspace_manifest_path(&context.workspace_root),
     )?;
-    let artifact_root = context.icp_root.join(".icp/local/canisters");
-    let manifest_path = root_release_set_manifest_path(&artifact_root)?;
+    let artifact_root = artifact_root_path(&context.icp_root, "local");
+    let manifest_path = root_release_set_manifest_path(&artifact_root);
     let manifest_targets = targets
         .iter()
         .map(|target| RootReleaseSetBuildTarget {

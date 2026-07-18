@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.21`.
-- The latest published release is `v0.93.21` at
-  `e2140c4d70023970337d45e59ec14727433b96c5`.
-- The `v0.93.21` source tree is
-  `411c98ec1be82720e7b45edf5735f6b1a0a8fff6`; its product-tree hash is
-  `e67810284cf769efa6d52ee2d7beb762f92c247f6f613fd1a73beb4a8bc479c3`.
+- The workspace package version is `0.93.22`.
+- The latest published release is `v0.93.22` at
+  `0f2b7f192fd4e60503a8ef9c7c175d7509663eb1`.
+- The `v0.93.22` source tree is
+  `7fee6161c24e2c473f5c7a38f45e40e3ddde93eb`; its product-tree hash is
+  `4eee9658af2cbe7a577d51fe67c6643caabe8d37858e0889db8dce05caf7cff6`.
   Its Cargo.lock SHA-256 is
-  `5b20864240978817e71bea9367bc40be4961357c909d5b017488acb749c337f9`.
+  `229ca275da295cb92d406631e504150fd86bd3d88b1649a41f76a293f15d00ce`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -123,12 +123,16 @@ Historical detail is archived at:
   prepares the complete locked dependency graph before offline role-package
   and dependency-risk inspection, and activates the dependency-risk rejection
   fixtures in CI, making layering and fresh-cache validation deterministic.
-- Current `0.93.22` development binds every token-backed replay transition to
+- Released `v0.93.22` binds every token-backed replay transition to
   the complete immutable receipt identity, so an expired asynchronous
   continuation cannot mutate or abort a newer request that reused its stable
   slot. ICP-refill context lookup and delegated-token lazy repair revalidate
   that ownership before post-await local mutation. Ordinary receipt collection
   now matches admission at the exact expiry boundary.
+- Current `0.93.23` development makes release-set artifact and root-manifest
+  path projection pure and canonical. Deployment registration no longer
+  follows duplicate error-swallowing branches or creates artifact directories;
+  the durable writer remains the sole filesystem-mutation authority.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -665,24 +669,17 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-Released 0.93.0 removes the stale issuer-renewal attempt authority and projects
-the canonical chain-key batch instead. Released 0.93.1 removes orphaned host
-ICP CLI wrappers and the superseded text snapshot-ID path. Released 0.93.2
-closes the audited Wasm-store lifecycle race and restore-receipt defaulting
-findings. Released 0.93.3 removes the remaining ICP-refill history scans,
-retains renewal-timer failure diagnostics, and fixes publication-test layering
-residue. Released 0.93.4 through 0.93.10 then hard-cut permissive response and
-transport fallbacks and made project/workspace discovery fail closed. Current
-development completes the next three audited slices: cost-guard rollback and
-ICP-refill/pool-create settlement failures remain authoritative and prevent
-replay success; the retired Wasm-store internal-proof classifier, duplicate
-endpoint model, public re-export, and stale tests are removed; and fleet/list
-plus backup-manifest dispatch preserve concrete child errors rather than
-strings.
+The `0.93.0` through `0.93.22` audit slices are released. They hard-cut stale
+runtime, host, transport, discovery, replay, placement, intent, recovery, and
+validation authority while preserving the intentionally read-only endpoint
+metadata/Candid behavior. The current `.23` slice removes the remaining
+side-effecting release-set path projection and duplicate registration
+fallbacks. Continue the hard-cut audit from the resulting clean selected-
+environment artifact boundary; do not reopen released compatibility paths or
+merge domain-specific recovery owners merely because their orchestration has
+similar structure.
 
-The endpoint command's live-metadata-to-local-Candid fallback remains an
-intentional read-only behavior and was not promoted above those concrete
-findings. Focused cost-guard, replay, protocol-manifest, and CLI typed-error
-tests pass, as do targeted checks and warnings-as-errors Clippy for the four
-affected packages. Broad deployment, package, publish, and release validation
-remains maintainer-owned.
+Focused release-set and deployment-registration tests, targeted strict host
+Clippy, formatting, changelog governance, and diff hygiene pass for `.23`.
+Broad deployment, package, publish, and release validation remains
+maintainer-owned.

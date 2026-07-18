@@ -16,7 +16,7 @@ use crate::deployment_truth::{
     deployment_root_verification_report_from_check, validate_deployment_root_verification_report,
 };
 use crate::release_set::{
-    icp_root, resolve_artifact_root, root_release_set_manifest_path, workspace_root,
+    artifact_root_path, icp_root, root_release_set_manifest_path, workspace_root,
 };
 use canic_core::cdk::types::Principal;
 use std::path::{Path, PathBuf};
@@ -193,8 +193,5 @@ pub fn verify_registered_deployment_root(
 }
 
 fn registered_deployment_release_set_manifest_path(icp_root: &Path, network: &str) -> PathBuf {
-    let artifact_root = resolve_artifact_root(icp_root, network)
-        .unwrap_or_else(|_| icp_root.join(".icp").join(network).join("canisters"));
-    root_release_set_manifest_path(&artifact_root)
-        .unwrap_or_else(|_| artifact_root.join("root").join("root.release-set.json"))
+    root_release_set_manifest_path(&artifact_root_path(icp_root, network))
 }
