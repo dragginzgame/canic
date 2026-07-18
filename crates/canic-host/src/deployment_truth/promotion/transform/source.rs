@@ -7,8 +7,8 @@ use super::super::{
     error::PromotionArtifactSourceError,
 };
 use crate::deployment_truth::{
-    ArtifactSourceV1, PromotionArtifactLevelV1, RoleArtifactSourceKindV1, RoleArtifactSourceV1,
-    RoleArtifactV1, RolePromotionInputV1,
+    ArtifactDigestSourceV1, ArtifactSourceV1, PromotionArtifactLevelV1, RoleArtifactSourceKindV1,
+    RoleArtifactSourceV1, RoleArtifactV1, RolePromotionInputV1,
 };
 
 pub fn validate_role_artifact_source(
@@ -62,8 +62,44 @@ pub(super) fn apply_promotion_input_to_role_artifact(
             role_artifact
                 .canonical_embedded_config_sha256
                 .clone_from(&input.source.expected_canonical_embedded_config_sha256);
+            normalize_executable_artifact_source(role_artifact, &input.source);
         }
         PromotionArtifactLevelV1::SourceBuild => {}
+    }
+}
+
+fn normalize_executable_artifact_source(
+    role_artifact: &mut RoleArtifactV1,
+    source: &RoleArtifactSourceV1,
+) {
+    role_artifact.wasm_gz_size_bytes = None;
+    match source.kind {
+        RoleArtifactSourceKindV1::LocalWasm => {
+            role_artifact.wasm_gz_path = None;
+            role_artifact.wasm_gz_sha256 = None;
+            role_artifact.wasm_gz_sha256_source = None;
+            role_artifact.observed_wasm_gz_file_sha256 = None;
+            role_artifact.observed_wasm_gz_file_sha256_source = None;
+        }
+        RoleArtifactSourceKindV1::LocalWasmGz => {
+            role_artifact.wasm_path = None;
+            role_artifact.wasm_gz_sha256_source = Some(ArtifactDigestSourceV1::ObservedFileDigest);
+            role_artifact
+                .observed_wasm_gz_file_sha256
+                .clone_from(&source.expected_wasm_gz_sha256);
+            role_artifact.observed_wasm_gz_file_sha256_source =
+                Some(ArtifactDigestSourceV1::ObservedFileDigest);
+        }
+        RoleArtifactSourceKindV1::CanonicalWasmStoreDefault
+        | RoleArtifactSourceKindV1::PreviousReceiptArtifact
+        | RoleArtifactSourceKindV1::PublishedPackage
+        | RoleArtifactSourceKindV1::WorkspacePackage => {
+            role_artifact.wasm_gz_sha256_source = None;
+            role_artifact
+                .observed_wasm_gz_file_sha256
+                .clone_from(&source.expected_wasm_gz_sha256);
+            role_artifact.observed_wasm_gz_file_sha256_source = None;
+        }
     }
 }
 
