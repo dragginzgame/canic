@@ -12,7 +12,7 @@ use crate::{
     model::intent::{
         BeginLocalIntentInput, BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
         ReceiptBackedIntent, SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult,
-        TerminalEvidenceDecision,
+        TerminalEvidenceDecision, is_canic_owned_intent_resource_key,
     },
     ops::{
         ic::IcOps,
@@ -43,6 +43,7 @@ pub struct LocalIntentWorkflow;
 
 impl LocalIntentWorkflow {
     pub fn begin(input: BeginLocalIntentInput) -> Result<IntentId, InternalError> {
+        ensure_consumer_resource_key(&input.resource_key)?;
         let now = IcOps::now_secs();
         if let Some(limit) = input.reservation_limit {
             let current = IntentStoreOps::totals(&input.resource_key).reserved_qty;
@@ -116,6 +117,7 @@ impl LocalIntentWorkflow {
     }
 
     pub fn commit(intent_id: IntentId) -> Result<(), InternalError> {
+        ensure_consumer_local_intent(intent_id)?;
         IntentStoreOps::commit_at(intent_id, IcOps::now_secs()).inspect_err(|_| {
             record_intent(
                 IntentMetricSurface::Local,
@@ -134,6 +136,7 @@ impl LocalIntentWorkflow {
     }
 
     pub fn rollback(intent_id: IntentId) -> Result<(), InternalError> {
+        ensure_consumer_local_intent(intent_id)?;
         IntentStoreOps::abort(intent_id).inspect_err(|_| {
             record_intent(
                 IntentMetricSurface::Local,
@@ -159,6 +162,20 @@ impl ReceiptBackedIntentWorkflow {
     pub fn begin_or_load(
         input: &BeginReceiptBackedIntentInput,
     ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+        ensure_consumer_resource_key(&input.resource_key)?;
+        Self::begin_or_load_authorized(input)
+    }
+
+    pub(crate) fn begin_canic_owned_or_load(
+        input: &BeginReceiptBackedIntentInput,
+    ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+        ensure_canic_owned_resource_key(&input.resource_key)?;
+        Self::begin_or_load_authorized(input)
+    }
+
+    fn begin_or_load_authorized(
+        input: &BeginReceiptBackedIntentInput,
+    ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
         let result =
             ReceiptBackedIntentOps::begin_or_load(input, IcOps::now_nanos()).inspect_err(|_| {
                 record_intent(
@@ -182,10 +199,32 @@ impl ReceiptBackedIntentWorkflow {
     pub fn load(
         operation_id: crate::model::replay::OperationId,
     ) -> Result<Option<ReceiptBackedIntent>, InternalError> {
-        ReceiptBackedIntentOps::load(operation_id)
+        let intent = ReceiptBackedIntentOps::load(operation_id)?;
+        if let Some(intent) = &intent {
+            ensure_consumer_resource_key(&intent.resource_key)?;
+        }
+        Ok(intent)
     }
 
     pub fn settle_if_pending(
+        input: &SettleReceiptBackedIntentInput,
+    ) -> Result<SettleReceiptBackedIntentResult, InternalError> {
+        if let Some(intent) = ReceiptBackedIntentOps::load(input.operation_id)? {
+            ensure_consumer_resource_key(&intent.resource_key)?;
+        }
+        Self::settle_if_pending_authorized(input)
+    }
+
+    pub(crate) fn settle_canic_owned_if_pending(
+        input: &SettleReceiptBackedIntentInput,
+    ) -> Result<SettleReceiptBackedIntentResult, InternalError> {
+        if let Some(intent) = ReceiptBackedIntentOps::load(input.operation_id)? {
+            ensure_canic_owned_resource_key(&intent.resource_key)?;
+        }
+        Self::settle_if_pending_authorized(input)
+    }
+
+    fn settle_if_pending_authorized(
         input: &SettleReceiptBackedIntentInput,
     ) -> Result<SettleReceiptBackedIntentResult, InternalError> {
         let operation = match input.evidence.decision {
@@ -211,6 +250,36 @@ impl ReceiptBackedIntentWorkflow {
         }
         Ok(result)
     }
+}
+
+fn ensure_consumer_resource_key(
+    resource_key: &crate::ids::IntentResourceKey,
+) -> Result<(), InternalError> {
+    if is_canic_owned_intent_resource_key(resource_key) {
+        return Err(InternalError::invalid_input(
+            "intent resource keys beginning with 'canic:' are reserved for Canic runtime authority",
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_consumer_local_intent(intent_id: IntentId) -> Result<(), InternalError> {
+    if let Some(intent) = IntentStoreOps::load(intent_id)? {
+        ensure_consumer_resource_key(&intent.resource_key)?;
+    }
+    Ok(())
+}
+
+fn ensure_canic_owned_resource_key(
+    resource_key: &crate::ids::IntentResourceKey,
+) -> Result<(), InternalError> {
+    if !is_canic_owned_intent_resource_key(resource_key) {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "Canic-owned intent must use the reserved 'canic:' resource namespace",
+        ));
+    }
+    Ok(())
 }
 
 ///
@@ -357,4 +426,137 @@ fn record_intent(
     reason: IntentMetricReason,
 ) {
     IntentMetrics::record(surface, operation, outcome, reason);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        cdk::types::Principal,
+        dto::error::ErrorCode,
+        ids::IntentResourceKey,
+        model::{
+            intent::{PayloadBinding, TerminalEvidence},
+            replay::OperationId,
+        },
+        storage::stable::intent::{IntentStore, ReceiptBackedIntentStore},
+        test::seams,
+    };
+
+    fn canic_receipt_input() -> BeginReceiptBackedIntentInput {
+        BeginReceiptBackedIntentInput {
+            operation_id: OperationId::from_bytes([1; 32]),
+            payload_binding: PayloadBinding::new([2; 32]),
+            resource_key: IntentResourceKey::new(format!("canic:placement:{}", "a".repeat(64))),
+            quantity: 1,
+            reservation_limit: 1,
+        }
+    }
+
+    fn assert_reserved_namespace_error(err: &InternalError) {
+        assert_eq!(
+            err.public_error().map(|error| error.code),
+            Some(ErrorCode::InvalidInput)
+        );
+    }
+
+    #[test]
+    fn consumer_begin_rejects_canic_owned_resource_namespace() {
+        let _guard = seams::lock();
+        IntentStore::reset_for_tests();
+
+        let local_error = LocalIntentWorkflow::begin(BeginLocalIntentInput {
+            resource_key: IntentResourceKey::new("canic:consumer"),
+            quantity: 1,
+            ttl_secs: None,
+            reservation_limit: Some(1),
+        })
+        .expect_err("consumer local intent must not enter Canic namespace");
+        assert_reserved_namespace_error(&local_error);
+
+        let receipt_error = ReceiptBackedIntentWorkflow::begin_or_load(&canic_receipt_input())
+            .expect_err("consumer receipt intent must not enter Canic namespace");
+        assert_reserved_namespace_error(&receipt_error);
+        assert_eq!(ReceiptBackedIntentStore::len(), 0);
+    }
+
+    #[test]
+    fn consumer_cannot_commit_or_rollback_canic_owned_local_intent() {
+        let _guard = seams::lock();
+        IntentStore::reset_for_tests();
+        let intent_id = IntentStoreOps::allocate_intent_id().expect("allocate internal intent");
+        IntentStoreOps::try_reserve(
+            intent_id,
+            IntentResourceKey::new("canic:test"),
+            1,
+            10,
+            None,
+            10,
+        )
+        .expect("reserve internal intent");
+
+        let commit_error = LocalIntentWorkflow::commit(intent_id)
+            .expect_err("consumer commit must reject Canic-owned intent");
+        assert_reserved_namespace_error(&commit_error);
+        let rollback_error = LocalIntentWorkflow::rollback(intent_id)
+            .expect_err("consumer rollback must reject Canic-owned intent");
+        assert_reserved_namespace_error(&rollback_error);
+        assert_eq!(
+            IntentStoreOps::load(intent_id)
+                .expect("load internal intent")
+                .expect("internal intent remains pending")
+                .state,
+            crate::storage::stable::intent::IntentState::Pending
+        );
+    }
+
+    #[test]
+    fn consumer_receipt_operations_cannot_observe_or_settle_canic_owned_intent() {
+        let _guard = seams::lock();
+        IntentStore::reset_for_tests();
+        let input = canic_receipt_input();
+
+        assert!(matches!(
+            ReceiptBackedIntentWorkflow::begin_canic_owned_or_load(&input)
+                .expect("Canic-owned begin succeeds"),
+            BeginReceiptBackedIntentResult::Created { revision: 1 }
+        ));
+
+        let load_error = ReceiptBackedIntentWorkflow::load(input.operation_id)
+            .expect_err("consumer load must reject Canic-owned intent");
+        assert_reserved_namespace_error(&load_error);
+
+        let settle = SettleReceiptBackedIntentInput {
+            operation_id: input.operation_id,
+            expected_revision: 1,
+            expected_payload_binding: input.payload_binding,
+            evidence: TerminalEvidence::new(
+                Principal::from_slice(&[3; 29]),
+                TerminalEvidenceDecision::Committed,
+                [4; 32],
+            ),
+        };
+        let settle_error = ReceiptBackedIntentWorkflow::settle_if_pending(&settle)
+            .expect_err("consumer settlement must reject Canic-owned intent");
+        assert_reserved_namespace_error(&settle_error);
+        assert!(matches!(
+            ReceiptBackedIntentWorkflow::settle_canic_owned_if_pending(&settle)
+                .expect("Canic-owned settlement succeeds"),
+            SettleReceiptBackedIntentResult::Settled { .. }
+        ));
+    }
+
+    #[test]
+    fn consumer_receipt_namespace_remains_available_outside_canic_prefix() {
+        let _guard = seams::lock();
+        IntentStore::reset_for_tests();
+        let mut input = canic_receipt_input();
+        input.resource_key = IntentResourceKey::new("app:placement");
+
+        assert!(matches!(
+            ReceiptBackedIntentWorkflow::begin_or_load(&input)
+                .expect("consumer namespace remains available"),
+            BeginReceiptBackedIntentResult::Created { revision: 1 }
+        ));
+    }
 }

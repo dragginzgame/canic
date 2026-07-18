@@ -356,6 +356,11 @@ impl IntentStoreOps {
     // Read-only views (TTL authoritative)
     // -------------------------------------------------------------------------
 
+    pub fn load(intent_id: IntentId) -> Result<Option<IntentRecord>, InternalError> {
+        ensure_schema()?;
+        Ok(IntentStore::get_record(intent_id))
+    }
+
     pub fn totals(resource_key: &IntentResourceKey) -> IntentResourceTotalsRecord {
         IntentStore::get_totals(resource_key).unwrap_or_default()
     }

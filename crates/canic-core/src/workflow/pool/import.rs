@@ -217,8 +217,8 @@ fn mark_pool_import_queued_pending_reset(pid: Principal, created_at_override: Op
 // Build the stable intent resource key for an imported pool canister.
 fn pool_import_intent_key(pid: Principal) -> Result<IntentResourceKey, InternalError> {
     let bytes = pid.as_slice();
-    let mut buf = String::with_capacity(3 + bytes.len() * 2);
-    buf.push_str("pi:");
+    let mut buf = String::with_capacity(18 + bytes.len() * 2);
+    buf.push_str("canic:pool_import:");
     buf.push_str(&hex_encode(bytes));
 
     IntentResourceKey::try_new(buf).map_err(|err| {
@@ -356,6 +356,13 @@ mod tests {
         assert!(pool_import_already_present(pid));
 
         PoolOps::remove(&pid);
+    }
+
+    #[test]
+    fn pool_import_intent_uses_the_canic_owned_namespace() {
+        let key = pool_import_intent_key(p(1)).expect("pool import key");
+
+        assert!(key.starts_with("canic:pool_import:"));
     }
 
     #[test]

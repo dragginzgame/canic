@@ -10,6 +10,12 @@ use serde::{Deserialize, Serialize};
 pub const PAYLOAD_BINDING_SCHEMA_VERSION: u32 = 1;
 pub const RECEIPT_BACKED_INTENT_SCHEMA_VERSION: u32 = 1;
 pub const TERMINAL_EVIDENCE_SCHEMA_VERSION: u32 = 1;
+pub const CANIC_INTENT_RESOURCE_PREFIX: &str = "canic:";
+
+#[must_use]
+pub fn is_canic_owned_intent_resource_key(resource_key: &IntentResourceKey) -> bool {
+    resource_key.starts_with(CANIC_INTENT_RESOURCE_PREFIX)
+}
 
 /// Opaque, versioned binding for every field that changes an external effect.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

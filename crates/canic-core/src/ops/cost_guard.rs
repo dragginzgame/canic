@@ -381,7 +381,7 @@ fn reservation_resource_key(
 fn cost_key<const N: usize>(
     segments: [&str; N],
 ) -> Result<IntentResourceKey, CostGuardReserveError> {
-    IntentResourceKey::try_new(segments.join(":"))
+    IntentResourceKey::try_new(format!("canic:{}", segments.join(":")))
         .map_err(CostGuardReserveError::ResourceKeyInvalid)
 }
 
@@ -461,6 +461,27 @@ mod tests {
         );
 
         CostGuardOps::reserve(request(70)).expect("next bucket allowed");
+    }
+
+    #[test]
+    fn reservations_use_the_canic_owned_intent_namespace() {
+        reset();
+
+        let permit = CostGuardOps::reserve(request(10)).expect("reservation");
+        assert!(
+            IntentStoreOps::load(permit.quota_intent_id)
+                .expect("load quota")
+                .expect("quota exists")
+                .resource_key
+                .starts_with("canic:cost:quota:")
+        );
+        assert!(
+            IntentStoreOps::load(permit.reservation_id)
+                .expect("load reservation")
+                .expect("reservation exists")
+                .resource_key
+                .starts_with("canic:cost:reserve:")
+        );
     }
 
     #[test]

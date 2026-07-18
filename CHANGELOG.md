@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.17` is potentially breaking: Canic-owned local and receipt-backed
+  intents now use one reserved `canic:` resource namespace, and consumer intent
+  APIs fail closed instead of observing, settling, or colliding with runtime
+  placement, cost-guard, or pool-import authority.
+
 - `0.93.16` is potentially breaking: scaling, directory, and sharding now use
   one receipt-backed child-allocation authority, and unknown directory create
   outcomes remain recoverable or fail closed instead of being released by age.
