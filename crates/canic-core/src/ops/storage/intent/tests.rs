@@ -8,7 +8,7 @@ use crate::{
         RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
         SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
     },
-    storage::stable::intent::{IntentStore, ReceiptBackedIntentStore},
+    storage::stable::intent::{IntentStore, IntentTotalsData, ReceiptBackedIntentStore},
 };
 
 const CREATED_AT: u64 = 10;
@@ -221,6 +221,47 @@ fn expired_intents_remain_reserved_until_cleanup() {
 
     assert!(IntentStoreOps::abort_intent_if_pending(intent_id).expect("cleanup abort"));
     assert_eq!(totals(&resource_key), IntentResourceTotalsRecord::default());
+}
+
+#[test]
+fn cleanup_abort_rejects_missing_totals_without_mutation() {
+    reset();
+    let resource_key = key();
+    let intent_id = IntentId(11);
+
+    reserve(intent_id, resource_key, 3, Some(5)).expect("reserve intent");
+    IntentStore::import_totals(IntentTotalsData::default());
+
+    IntentStoreOps::abort_intent_if_pending(intent_id)
+        .expect_err("missing totals must fail closed");
+
+    assert_eq!(
+        IntentStore::get_record(intent_id)
+            .expect("record remains pending")
+            .state,
+        IntentState::Pending
+    );
+    assert!(IntentStore::get_pending(intent_id).is_some());
+    assert_eq!(meta().pending_total, 1);
+    assert_eq!(meta().aborted_total, 0);
+}
+
+#[test]
+fn unique_pending_intent_lookup_rejects_ambiguous_resource_ownership() {
+    reset();
+    let resource_key = key();
+    let first = IntentId(12);
+    let second = IntentId(13);
+
+    reserve(first, resource_key.clone(), 1, None).expect("first reservation");
+    assert_eq!(
+        IntentStoreOps::unique_pending_intent_id(&resource_key).expect("unique pending intent"),
+        Some(first)
+    );
+
+    reserve(second, resource_key.clone(), 1, None).expect("second reservation");
+    IntentStoreOps::unique_pending_intent_id(&resource_key)
+        .expect_err("ambiguous recovery identity must fail closed");
 }
 
 #[test]

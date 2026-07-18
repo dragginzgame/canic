@@ -275,7 +275,7 @@ impl ScalingWorkflow {
         MetricEvent::started(MetricOperation::RegisterWorker);
         let created_at_secs = IcOps::now_secs();
         ScalingRegistryOps::upsert(pid, entry_plan, created_at_secs);
-        if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid).await {
+        if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid) {
             MetricEvent::failed(MetricOperation::RegisterWorker, &err);
             return Err(err);
         }

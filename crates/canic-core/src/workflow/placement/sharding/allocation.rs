@@ -93,7 +93,8 @@ impl ShardAllocator {
             MetricEvent::failed(MetricOperation::CreateShard, &err);
             return Err(err);
         }
-        if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid).await {
+        ShardingLifecycleOps::set_active(pid);
+        if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid) {
             MetricEvent::failed(MetricOperation::CreateShard, &err);
             return Err(err);
         }
@@ -117,12 +118,6 @@ impl ShardingWorkflow {
         policy: &ShardPoolPolicy,
         extra_arg: Option<Vec<u8>>,
     ) -> Result<Principal, InternalError> {
-        let pid = ShardAllocator::allocate(pool, slot, canister_role, policy, extra_arg).await?;
-        Self::admit_shard(pid);
-        Ok(pid)
-    }
-
-    fn admit_shard(pid: Principal) {
-        ShardingLifecycleOps::set_active(pid);
+        ShardAllocator::allocate(pool, slot, canister_role, policy, extra_arg).await
     }
 }

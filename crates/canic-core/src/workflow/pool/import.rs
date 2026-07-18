@@ -44,6 +44,7 @@ impl PoolWorkflow {
             return Err(err);
         }
         if pool_import_already_present(pid) {
+            PoolSchedulerWorkflow::schedule_if_pending();
             MetricEvent::skipped(
                 MetricOperation::ImportImmediate,
                 MetricReason::AlreadyPresent,
@@ -81,12 +82,11 @@ impl PoolWorkflow {
         match Self::reset_into_pool(pid).await {
             Ok(cycles) => {
                 let _ = SubnetRegistryOps::unregister(&pid);
-                Self::mark_ready(pid, cycles);
-
                 if let Err(err) = commit_pool_import_intent(intent_id, pid) {
                     MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                     return Err(err);
                 }
+                Self::mark_ready(pid, cycles);
 
                 MetricEvent::completed(MetricOperation::ImportImmediate, MetricReason::Ok);
                 Ok(())
@@ -98,14 +98,39 @@ impl PoolWorkflow {
                     Warn,
                     "pool import failed for {pid} class={class} origin={origin}: {err}"
                 );
+                if let Err(abort_err) = abort_pool_import_intent(intent_id, pid) {
+                    MetricEvent::failed(MetricOperation::ImportImmediate, &err);
+                    return Err(err.with_diagnostic_context(format!(
+                        "pool import intent abort failed for {pid}: {abort_err}"
+                    )));
+                }
                 Self::mark_failed(pid, &err);
-
-                abort_pool_import_intent(intent_id, pid);
 
                 MetricEvent::failed(MetricOperation::ImportImmediate, &err);
                 Err(err)
             }
         }
+    }
+
+    pub(super) fn commit_pending_pool_import_intent(pid: Principal) -> Result<(), InternalError> {
+        Self::commit_pending_pool_import_intent_at(pid, IcOps::now_secs())
+    }
+
+    fn commit_pending_pool_import_intent_at(
+        pid: Principal,
+        now_secs: u64,
+    ) -> Result<(), InternalError> {
+        let Some(intent_id) = pending_pool_import_intent_id(pid)? else {
+            return Ok(());
+        };
+        commit_pool_import_intent_at(intent_id, pid, now_secs)
+    }
+
+    pub(super) fn abort_pending_pool_import_intent(pid: Principal) -> Result<(), InternalError> {
+        let Some(intent_id) = pending_pool_import_intent_id(pid)? else {
+            return Ok(());
+        };
+        abort_pool_import_intent(intent_id, pid)
     }
 
     pub async fn pool_import_queued_canisters(
@@ -265,9 +290,22 @@ fn reserve_pool_import_intent(intent_key: IntentResourceKey) -> Result<IntentId,
     Ok(intent_id)
 }
 
+fn pending_pool_import_intent_id(pid: Principal) -> Result<Option<IntentId>, InternalError> {
+    let intent_key = pool_import_intent_key(pid)?;
+    IntentStoreOps::unique_pending_intent_id(&intent_key)
+}
+
 // Commit the import intent after the canister has been reset and registered.
 fn commit_pool_import_intent(intent_id: IntentId, pid: Principal) -> Result<(), InternalError> {
-    if let Err(err) = IntentStoreOps::commit_at(intent_id, IcOps::now_secs()) {
+    commit_pool_import_intent_at(intent_id, pid, IcOps::now_secs())
+}
+
+fn commit_pool_import_intent_at(
+    intent_id: IntentId,
+    pid: Principal,
+    now_secs: u64,
+) -> Result<(), InternalError> {
+    if let Err(err) = IntentStoreOps::commit_at(intent_id, now_secs) {
         record_pool_intent(
             IntentMetricOperation::Commit,
             IntentMetricOutcome::Failed,
@@ -290,7 +328,7 @@ fn commit_pool_import_intent(intent_id: IntentId, pid: Principal) -> Result<(), 
 }
 
 // Abort the import intent after reset fails; the reset error remains authoritative.
-fn abort_pool_import_intent(intent_id: IntentId, pid: Principal) {
+fn abort_pool_import_intent(intent_id: IntentId, pid: Principal) -> Result<(), InternalError> {
     if let Err(abort_err) = IntentStoreOps::abort(intent_id) {
         record_pool_intent(
             IntentMetricOperation::Abort,
@@ -302,12 +340,14 @@ fn abort_pool_import_intent(intent_id: IntentId, pid: Principal) {
             Warn,
             "pool import abort failed for {pid}: {abort_err}"
         );
+        Err(abort_err)
     } else {
         record_pool_intent(
             IntentMetricOperation::Abort,
             IntentMetricOutcome::Completed,
             IntentMetricReason::Ok,
         );
+        Ok(())
     }
 }
 
@@ -336,6 +376,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use crate::cdk::types::Cycles;
+    use crate::storage::stable::intent::{IntentState, IntentStore};
 
     use super::*;
     use futures::executor::block_on;
@@ -363,6 +404,35 @@ mod tests {
         let key = pool_import_intent_key(p(1)).expect("pool import key");
 
         assert!(key.starts_with("canic:pool_import:"));
+    }
+
+    #[test]
+    fn pending_pool_import_intent_is_recovered_by_canonical_resource() {
+        let pid = p(50);
+        IntentStore::reset_for_tests();
+        PoolOps::remove(&pid);
+        let resource_key = pool_import_intent_key(pid).expect("pool import resource");
+        let intent_id = IntentStoreOps::allocate_intent_id().expect("intent id");
+        IntentStoreOps::try_reserve(intent_id, resource_key.clone(), 1, 100, None, 100)
+            .expect("reserve pool import");
+        PoolOps::mark_pending_reset(pid, 100);
+
+        PoolWorkflow::commit_pending_pool_import_intent_at(pid, 101)
+            .expect("scheduler recovers exact pending import");
+
+        assert_eq!(
+            IntentStoreOps::load(intent_id)
+                .expect("load intent")
+                .expect("intent exists")
+                .state,
+            IntentState::Committed
+        );
+        assert_eq!(
+            IntentStoreOps::unique_pending_intent_id(&resource_key).expect("pending lookup"),
+            None
+        );
+
+        PoolOps::remove(&pid);
     }
 
     #[test]

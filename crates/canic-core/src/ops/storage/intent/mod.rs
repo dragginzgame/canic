@@ -93,6 +93,9 @@ pub enum IntentStoreOpsError {
     #[error("intent pending index already exists for {0}")]
     PendingIndexExists(IntentId),
 
+    #[error("multiple pending intents exist for resource {0}")]
+    MultiplePendingForResource(IntentResourceKey),
+
     #[error("intent store schema mismatch (expected {expected}, found {found})")]
     SchemaMismatch { expected: u32, found: u32 },
 
@@ -400,6 +403,32 @@ impl IntentStoreOps {
         expired
     }
 
+    /// Return the sole pending local intent for one exact resource key.
+    ///
+    /// Callers that use one resource as a durable recovery identity require
+    /// uniqueness. Competing pending records are therefore an invariant error,
+    /// not an arbitrary first-match selection.
+    pub(crate) fn unique_pending_intent_id(
+        resource_key: &IntentResourceKey,
+    ) -> Result<Option<IntentId>, InternalError> {
+        ensure_schema()?;
+        IntentStore::with_pending_entries(|pending| {
+            let mut found = None;
+            for entry in pending.iter() {
+                if entry.value().resource_key != *resource_key {
+                    continue;
+                }
+                if found.replace(*entry.key()).is_some() {
+                    return Err(IntentStoreOpsError::MultiplePendingForResource(
+                        resource_key.clone(),
+                    )
+                    .into());
+                }
+            }
+            Ok(found)
+        })
+    }
+
     /// Return the stored local TTL-index count without scanning that index.
     pub fn expirable_pending_total() -> Result<u64, InternalError> {
         Ok(ensure_schema()?.pending_total)
@@ -417,30 +446,7 @@ impl IntentStoreOps {
             return Ok(false);
         }
 
-        let mut meta = ensure_schema()?;
-        let totals = IntentStore::get_totals(&record.resource_key).unwrap_or_default();
-
-        let new_totals = IntentResourceTotalsRecord {
-            reserved_qty: totals.reserved_qty.saturating_sub(record.quantity),
-            committed_qty: totals.committed_qty,
-            pending_count: totals.pending_count.saturating_sub(1),
-        };
-
-        meta.pending_total = meta.pending_total.saturating_sub(1);
-        meta.aborted_total = meta.aborted_total.saturating_add(1);
-
-        let updated = IntentRecord {
-            state: IntentState::Aborted,
-            ..record
-        };
-
-        remove_pending_and_apply(
-            intent_id,
-            updated.resource_key.clone(),
-            new_totals,
-            meta,
-            updated,
-        );
+        Self::abort(intent_id)?;
         Ok(true)
     }
 }

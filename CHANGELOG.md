@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.18` is potentially breaking: durable placement and pool-import
+  recovery now settle through one interruption-safe authority, while intent
+  cleanup rejects corrupt accounting instead of normalizing it.
+
 - `0.93.17` is potentially breaking: Canic-owned local and receipt-backed
   intents now use one reserved `canic:` resource namespace, and consumer intent
   APIs fail closed instead of observing, settling, or colliding with runtime
