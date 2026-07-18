@@ -8,6 +8,7 @@ use super::{
     RestoreApplyJournal, RestoreApplyJournalError, RestoreApplyJournalOperation,
     RestoreApplyOperationKind, RestoreApplyRunnerCommand, validate_apply_journal_nonempty,
 };
+use crate::artifacts::ArtifactChecksum;
 
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +44,8 @@ pub struct RestoreApplyOperationReceipt {
     pub source_snapshot_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artifact_checksum: Option<ArtifactChecksum>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uploaded_snapshot_id: Option<String>,
 }
@@ -125,6 +128,7 @@ impl RestoreApplyOperationReceipt {
             failure_reason: details.failure_reason,
             source_snapshot_id: operation.snapshot_id.clone(),
             artifact_path: operation.artifact_path.clone(),
+            artifact_checksum: operation.artifact_checksum.clone(),
             uploaded_snapshot_id: details.uploaded_snapshot_id,
         }
     }
@@ -137,6 +141,7 @@ impl RestoreApplyOperationReceipt {
             && self.target_canister == load.target_canister
             && self.source_snapshot_id == load.snapshot_id
             && self.artifact_path == load.artifact_path
+            && self.artifact_checksum == load.artifact_checksum
             && self
                 .uploaded_snapshot_id
                 .as_ref()
@@ -190,6 +195,11 @@ impl RestoreApplyOperationReceipt {
                 "operation_receipts[].artifact_path",
                 self.artifact_path.as_deref().unwrap_or_default(),
             )?;
+            if !self.matches_artifact_identity(operation) {
+                return Err(RestoreApplyJournalError::OperationReceiptMismatch {
+                    sequence: self.sequence,
+                });
+            }
             if self.outcome == RestoreApplyOperationReceiptOutcome::CommandCompleted {
                 validate_apply_journal_nonempty(
                     "operation_receipts[].uploaded_snapshot_id",
@@ -205,6 +215,15 @@ impl RestoreApplyOperationReceipt {
         }
 
         Ok(())
+    }
+
+    fn matches_artifact_identity(&self, operation: &RestoreApplyJournalOperation) -> bool {
+        let snapshot_id = &operation.snapshot_id;
+        let artifact_path = &operation.artifact_path;
+        let artifact_checksum = &operation.artifact_checksum;
+        self.source_snapshot_id.as_deref() == snapshot_id.as_deref()
+            && self.artifact_path.as_deref() == artifact_path.as_deref()
+            && self.artifact_checksum.as_ref() == artifact_checksum.as_ref()
     }
 
     fn validate_present<'a, T>(

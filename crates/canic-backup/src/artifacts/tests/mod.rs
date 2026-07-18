@@ -66,3 +66,24 @@ fn checksum_verify_rejects_mismatch() {
 
     std::assert_matches!(err, ArtifactChecksumError::ChecksumMismatch { .. });
 }
+
+#[cfg(unix)]
+#[test]
+fn filesystem_checksums_reject_symlinked_files_and_entries() {
+    let root = temp_path("canic-backup-checksum-symlink");
+    fs::create_dir_all(root.join("tree")).expect("create checksum tree");
+    fs::write(root.join("source"), b"source").expect("write source");
+    std::os::unix::fs::symlink(root.join("source"), root.join("linked-file"))
+        .expect("create file symlink");
+    std::os::unix::fs::symlink(root.join("source"), root.join("tree/linked-entry"))
+        .expect("create tree symlink");
+
+    let file_error = ArtifactChecksum::from_file(&root.join("linked-file"))
+        .expect_err("symlinked file must reject");
+    let tree_error = ArtifactChecksum::from_directory(&root.join("tree"))
+        .expect_err("symlinked directory entry must reject");
+
+    std::assert_matches!(file_error, ArtifactChecksumError::Io(_));
+    std::assert_matches!(tree_error, ArtifactChecksumError::UnsupportedEntry { .. });
+    fs::remove_dir_all(root).expect("remove fixture");
+}

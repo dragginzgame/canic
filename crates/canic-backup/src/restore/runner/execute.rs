@@ -7,6 +7,7 @@
 use super::{
     RestoreApplyCommandOutputPair, RestoreApplyJournal, RestoreApplyOperationKind,
     RestoreApplyOperationReceipt,
+    artifact::stage_upload_artifact,
     constants::{
         RESTORE_RUN_COMMAND_EXIT_PREFIX, RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID,
         RESTORE_RUN_OUTPUT_RECEIPT_LIMIT, RESTORE_RUN_STOPPED_PRECONDITION_FAILED,
@@ -108,7 +109,7 @@ fn restore_run_prepare_next_operation(
         .operation
         .clone()
         .ok_or_else(|| restore_command_unavailable_error(&preview))?;
-    let command = preview
+    let mut command = preview
         .command
         .clone()
         .ok_or_else(|| restore_command_unavailable_error(&preview))?;
@@ -119,6 +120,16 @@ fn restore_run_prepare_next_operation(
         .filter(|receipt| receipt.sequence == sequence)
         .count()
         + 1;
+    let staged_artifact = stage_upload_artifact(config, journal, &operation)?;
+    if let Some(staged) = &staged_artifact {
+        command = crate::restore::RestoreApplyRunnerCommand::from_operation_with_artifact_path(
+            &operation,
+            journal,
+            &config.command,
+            Some(staged.artifact_path()),
+        )
+        .ok_or_else(|| restore_command_unavailable_error(&preview))?;
+    }
 
     enforce_apply_claim_sequence(sequence, journal)?;
     journal
@@ -130,6 +141,7 @@ fn restore_run_prepare_next_operation(
         command,
         sequence,
         attempt,
+        _staged_artifact: staged_artifact,
     })
 }
 

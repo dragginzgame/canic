@@ -1,5 +1,6 @@
 use crate::backup::BackupCommandError;
 use canic_backup::{
+    artifacts::ArtifactChecksumError,
     persistence::PersistenceError,
     restore::{
         RestoreApplyDryRunError, RestoreApplyJournalError, RestorePersistenceError,
@@ -109,6 +110,29 @@ pub enum RestoreCommandError {
         blocked_reasons: Vec<String>,
     },
 
+    #[error("restore artifact staging checksum failed for operation {sequence}")]
+    RestoreArtifactStageChecksum {
+        sequence: usize,
+        #[source]
+        source: ArtifactChecksumError,
+    },
+
+    #[error("restore artifact staging IO failed at {path}")]
+    RestoreArtifactStageIo {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("restore artifact staging operation {sequence} is missing {field}")]
+    RestoreArtifactStageMissingField {
+        sequence: usize,
+        field: &'static str,
+    },
+
+    #[error("restore artifact staging path is unsafe or occupied: {path}")]
+    RestoreArtifactStagePathConflict { path: std::path::PathBuf },
+
     #[error(
         "restore apply journal next operation changed before claim: expected={expected}, actual={actual:?}"
     )]
@@ -166,6 +190,18 @@ pub enum RestoreCommandError {
 impl From<RestoreRunnerError> for RestoreCommandError {
     fn from(error: RestoreRunnerError) -> Self {
         match error {
+            RestoreRunnerError::ArtifactStageChecksum { sequence, source } => {
+                Self::RestoreArtifactStageChecksum { sequence, source }
+            }
+            RestoreRunnerError::ArtifactStageIo { path, source } => {
+                Self::RestoreArtifactStageIo { path, source }
+            }
+            RestoreRunnerError::ArtifactStageMissingField { sequence, field } => {
+                Self::RestoreArtifactStageMissingField { sequence, field }
+            }
+            RestoreRunnerError::ArtifactStagePathConflict { path } => {
+                Self::RestoreArtifactStagePathConflict { path }
+            }
             RestoreRunnerError::CommandFailed { sequence, status } => {
                 Self::RestoreRunCommandFailed { sequence, status }
             }

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.26`.
-- The latest published release is `v0.93.26` at
-  `e12af0d72f36c43248e828f1e2c1f84131353004`.
-- The `v0.93.26` source tree is
-  `f01c1b778fbddb97a5d86e243dcf606b8995d8f1`; its product-tree hash is
-  `a8cf40a3e5d2aa0324348f7bac5e5d7177e75e60a2ba0443d2b424ab22239581`.
+- The workspace package version is `0.93.27`.
+- The latest published release is `v0.93.27` at
+  `d9847124c584495df8db5db1182e0650d13e28a9`.
+- The `v0.93.27` source tree is
+  `e025401a4a98d2be992cc21f04226951a64984f4`; its product-tree hash is
+  `50807258d264755b4127f7f981099f95b21b501e5155c1b644962696dea4ed85`.
   Its Cargo.lock SHA-256 is
-  `6d7c9b56b54427f4da0a0fdd4003886c1ac7b160e79cdbf3e6c2e1db6ced4ae7`.
+  `0784473e1758665f54e56f43e86e04448d0f3b616f9a961e8c0bd9bab32e181d`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -149,11 +149,16 @@ Historical detail is archived at:
   replay responses and caller-bound prepared-token metadata. Expired entries
   release capacity, exact committed replay remains available at saturation,
   and the duplicate issuer-proof metadata authority is removed.
-- Current `0.93.27` development gives supplied deployment plans one prepared
+- Released `v0.93.27` gives supplied deployment plans one prepared
   artifact authority. Digest-pinned raw and gzip sources normalize under the
   selected ICP environment, deployment truth, release publication, and root
   activation consume those same revalidated bytes, and root resolution waits
   until the safety and preflight gates pass.
+- Current `0.93.28` development binds executable restore snapshot operations,
+  journals, and receipts to one expected checksum. Restore execution uses no-follow
+  descriptor traversal to copy the exact verified file or directory into
+  private staging before claiming the operation, and passes only that staged
+  artifact to the upload command.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -691,7 +696,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.26` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.27` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -702,12 +707,11 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.27` development fixes the split deployment-artifact authority.
-Supplied raw-only, gzip-only, or paired sources must be digest pinned and
-normalize to one canonical pair inside the selected ICP project. Unsafe paths,
-symlinks, invalid Wasm, unequal representations, duplicate roles, and drift
-fail closed with typed causes. Deployment truth, release-set emission, and
-activation share and revalidate the prepared bytes, while root resolution or
-creation occurs only after the gates pass. Focused host and CLI validation
-covers the maintained deployment path. Broad deployment, package, publish,
-and release validation remains maintainer-owned.
+Current `.28` development fixes the split restore-artifact authority. Snapshot
+operations persist their expected checksum through dry run, journal, and
+receipt. Preparation and execution use one no-follow checksum traversal, and
+execution copies the exact verified artifact into private staging before the
+journal claim. Source replacement, symlinks, special entries, malformed
+checksums, and receipt identity drift fail closed with typed causes. Focused
+backup and CLI restore validation covers the maintained path. Broad deployment,
+package, publish, and release validation remains maintainer-owned.

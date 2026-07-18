@@ -118,6 +118,15 @@ impl RestoreApplyRunnerCommand {
         journal: &RestoreApplyJournal,
         config: &RestoreApplyCommandConfig,
     ) -> Option<Self> {
+        Self::from_operation_with_artifact_path(operation, journal, config, None)
+    }
+
+    pub(in crate::restore) fn from_operation_with_artifact_path(
+        operation: &RestoreApplyJournalOperation,
+        journal: &RestoreApplyJournal,
+        config: &RestoreApplyCommandConfig,
+        staged_artifact_path: Option<&Path>,
+    ) -> Option<Self> {
         match operation.operation {
             RestoreApplyOperationKind::StopCanister => Some(Self {
                 program: config.program.clone(),
@@ -140,7 +149,10 @@ impl RestoreApplyRunnerCommand {
                 note: "starts the target canister after snapshot restore".to_string(),
             }),
             RestoreApplyOperationKind::UploadSnapshot => {
-                let artifact_path = upload_artifact_command_path(operation, journal)?;
+                let artifact_path = staged_artifact_path.map_or_else(
+                    || upload_artifact_command_path(operation, journal),
+                    |path| Some(path.to_string_lossy().to_string()),
+                )?;
                 Some(Self {
                     program: config.program.clone(),
                     args: icp_canister_args(
@@ -156,7 +168,7 @@ impl RestoreApplyRunnerCommand {
                     ),
                     mutates: true,
                     requires_stopped_canister: false,
-                    note: "uploads the downloaded snapshot artifact to the target canister"
+                    note: "uploads a private checksum-verified snapshot artifact copy to the target canister"
                         .to_string(),
                 })
             }

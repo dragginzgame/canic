@@ -13,9 +13,12 @@ pub fn resolve_backup_artifact_path(root: &Path, artifact_path: &str) -> Option<
     if path.is_absolute() {
         return None;
     }
+    if path.as_os_str().is_empty() {
+        return None;
+    }
     let is_safe = path
         .components()
-        .all(|component| matches!(component, Component::Normal(_) | Component::CurDir));
+        .all(|component| matches!(component, Component::Normal(_)));
     if !is_safe {
         return None;
     }

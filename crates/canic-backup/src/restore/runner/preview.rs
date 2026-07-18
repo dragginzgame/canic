@@ -6,6 +6,7 @@
 
 use super::{
     RestoreApplyJournalError, RestoreApplyOperationState,
+    artifact::cleanup_pending_upload_stage,
     io::{read_apply_journal_file, write_apply_journal_file},
     status::{restore_run_next_action, restore_run_stopped_reason},
     types::{
@@ -85,6 +86,7 @@ pub fn restore_run_unclaim_pending(
         .ok_or(RestoreApplyJournalError::NoPendingOperation)?;
 
     let recovered_updated_at = state_updated_at(config.updated_at.as_ref());
+    cleanup_pending_upload_stage(config, &recovered_operation)?;
     journal.mark_next_operation_ready_at(Some(recovered_updated_at.clone()))?;
     write_apply_journal_file(&config.journal, &journal)?;
 

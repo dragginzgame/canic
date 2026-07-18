@@ -218,6 +218,29 @@ fn apply_journal_command_receipts_require_audit_fields() {
     );
 }
 
+#[test]
+fn apply_journal_upload_receipt_binds_artifact_checksum() {
+    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    journal
+        .mark_operation_completed_at(0, Some("unix:1".to_string()))
+        .expect("mark upload completed");
+    let mut receipt = completed_upload_receipt(&journal.operations[0], 1);
+    receipt
+        .artifact_checksum
+        .as_mut()
+        .expect("receipt checksum")
+        .hash = "f".repeat(64);
+
+    let error = journal
+        .record_operation_receipt(receipt)
+        .expect_err("receipt checksum drift must reject");
+
+    std::assert_matches!(
+        error,
+        RestoreApplyJournalError::OperationReceiptMismatch { sequence: 0 }
+    );
+}
+
 fn assert_receipt_missing_field(
     journal: &mut RestoreApplyJournal,
     receipt: RestoreApplyOperationReceipt,
@@ -275,6 +298,10 @@ fn apply_journal_marks_validated_operations_ready() {
         RestoreApplyOperationState::Ready
     );
     assert!(journal.operations[0].blocking_reasons.is_empty());
+    assert_eq!(
+        journal.operations[0].artifact_checksum,
+        dry_run.operations[0].artifact_checksum
+    );
 }
 
 // Ensure restore apply journals fail closed when unknown fields are present.
@@ -806,6 +833,7 @@ fn apply_journal_validation_rejects_unsupported_verification_kind() {
             role: "root".to_string(),
             snapshot_id: Some("snap-root".to_string()),
             artifact_path: Some("artifacts/root".to_string()),
+            artifact_checksum: None,
             verification_kind: Some("query".to_string()),
         }],
         operation_receipts: Vec::new(),
@@ -1047,6 +1075,34 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
             operation: RestoreApplyOperationKind::UploadSnapshot,
             field: "operations[].artifact_path",
         }
+    );
+
+    let mut upload = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    upload.operations[0].artifact_checksum = None;
+    let err = upload
+        .validate()
+        .expect_err("upload without artifact checksum should fail");
+    std::assert_matches!(
+        err,
+        RestoreApplyJournalError::OperationMissingField {
+            sequence: 0,
+            operation: RestoreApplyOperationKind::UploadSnapshot,
+            field: "operations[].artifact_checksum",
+        }
+    );
+
+    let mut upload = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    upload.operations[0]
+        .artifact_checksum
+        .as_mut()
+        .expect("upload checksum")
+        .hash = "not-a-sha256".to_string();
+    let err = upload
+        .validate()
+        .expect_err("upload with malformed checksum should fail");
+    std::assert_matches!(
+        err,
+        RestoreApplyJournalError::ArtifactChecksum { sequence: 0, .. }
     );
 
     let mut load = command_preview_journal(RestoreApplyOperationKind::LoadSnapshot, None);

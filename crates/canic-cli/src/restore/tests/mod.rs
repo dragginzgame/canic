@@ -153,6 +153,19 @@ fn ready_apply_journal() -> RestoreApplyJournal {
     journal
 }
 
+// Build one ready journal whose artifact checksums and files are executable.
+fn ready_apply_journal_with_artifacts(backup_root: &Path) -> RestoreApplyJournal {
+    let mut manifest = restore_ready_manifest();
+    write_manifest_artifacts(backup_root, &mut manifest);
+    let plan = RestorePlanner::plan(&manifest, None).expect("build plan");
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, backup_root)
+        .expect("validate restore artifacts");
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+    journal.validate().expect("journal should validate");
+    journal
+}
+
 // Build one valid manifest for restore planning tests.
 fn valid_manifest() -> DeploymentBackupManifest {
     DeploymentBackupManifest {
