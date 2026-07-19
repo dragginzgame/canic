@@ -238,9 +238,11 @@ async fn notify_operation(
 
     match IcpRefillOps::notify_top_up(cost_permit, operation.cmc_canister_id, args).await {
         Ok(Ok(cycles_sent)) => {
-            let operation =
-                IcpRefillStoreOps::mark_completed(operation.id, cycles_sent, IcOps::now_nanos())?;
-            record_direct_child_refill_grant(&operation, IcOps::now_secs());
+            let (operation, cycles_sent) =
+                apply_notify_success(operation.id, cycles_sent, IcOps::now_nanos())?;
+            if let Some(cycles_sent) = cycles_sent {
+                record_direct_child_refill_grant(&operation, cycles_sent, IcOps::now_secs());
+            }
             Ok(operation)
         }
         Ok(Err(err)) => apply_notify_error(operation.id, operation.notify_attempts, err),
@@ -251,6 +253,14 @@ async fn notify_operation(
             err,
         )),
     }
+}
+
+pub(super) fn apply_notify_success(
+    record_id: u64,
+    cycles_sent: Nat,
+    now_ns: u64,
+) -> Result<(IcpRefillOperation, Option<u128>), InternalError> {
+    IcpRefillStoreOps::complete_from_notified_cycles(record_id, cycles_sent, now_ns)
 }
 
 pub(super) fn apply_transfer_error(
@@ -369,10 +379,11 @@ pub(super) fn mark_retryable_notify_failure(
     }
 }
 
-fn record_direct_child_refill_grant(operation: &IcpRefillOperation, now_secs: u64) {
-    let Some(cycles_sent) = operation.cycles_sent.as_ref() else {
-        return;
-    };
+fn record_direct_child_refill_grant(
+    operation: &IcpRefillOperation,
+    cycles_sent: u128,
+    now_secs: u64,
+) {
     let Some((_child_role, parent_pid)) =
         CanisterChildrenOps::role_parent(operation.target_canister)
     else {
@@ -388,17 +399,14 @@ fn record_direct_child_refill_grant(operation: &IcpRefillOperation, now_secs: u6
 
 pub(super) fn direct_child_refill_grant(
     operation: &IcpRefillOperation,
-    cycles_sent: &Nat,
+    cycles_sent: u128,
     parent_pid: Option<Principal>,
 ) -> Option<(Principal, u128)> {
     if !direct_child_refill_parent_matches(parent_pid, operation.source_canister) {
         return None;
     }
 
-    Some((
-        operation.target_canister,
-        IcpRefillStoreOps::nat_to_u128_saturating(cycles_sent),
-    ))
+    Some((operation.target_canister, cycles_sent))
 }
 
 pub(super) fn direct_child_refill_role(

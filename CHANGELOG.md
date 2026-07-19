@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.31` is potentially breaking: cycle config parsing and unbounded Candid
+  cycle conversion are exact and checked, while oversized management and CMC
+  results fail closed instead of becoming zero or saturated accounting.
+
 - `0.93.30` is potentially breaking: delegated auth, host resolution, build
   tooling, and runtime introspection now share one canonical `ic`/`local`
   build-network authority and vocabulary.

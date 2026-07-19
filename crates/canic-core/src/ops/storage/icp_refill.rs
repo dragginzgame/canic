@@ -8,7 +8,7 @@ use crate::{
     InternalError,
     cdk::{
         candid::Nat,
-        types::{Principal, Subaccount},
+        types::{Cycles, Principal, Subaccount},
     },
     domain::icp_refill::{
         IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus, icp_refill_outcome_is_resumable,
@@ -139,6 +139,9 @@ pub enum IcpRefillRecordOpsError {
     #[error("ICP refill conflicts with active record {id} for the same source and target")]
     ConcurrentOperation { id: u64 },
 
+    #[error("completed ICP refill record {id} cycles_sent does not fit in u128: {value}")]
+    CyclesSentOverflow { id: u64, value: Nat },
+
     #[error(
         "ICP refill active-operation index conflicts between records {existing_id} and {conflicting_id}"
     )]
@@ -232,6 +235,7 @@ impl From<IcpRefillErrorCode> for IcpRefillRecordErrorCode {
     fn from(error_code: IcpRefillErrorCode) -> Self {
         match error_code {
             IcpRefillErrorCode::BadFee => Self::BadFee,
+            IcpRefillErrorCode::CyclesSentOverflow => Self::CyclesSentOverflow,
             IcpRefillErrorCode::Duplicate => Self::Duplicate,
             IcpRefillErrorCode::FabricationUnavailable => Self::FabricationUnavailable,
             IcpRefillErrorCode::InvalidLedgerBlockIndex => Self::InvalidLedgerBlockIndex,
@@ -253,6 +257,7 @@ impl From<IcpRefillRecordErrorCode> for IcpRefillErrorCode {
     fn from(error_code: IcpRefillRecordErrorCode) -> Self {
         match error_code {
             IcpRefillRecordErrorCode::BadFee => Self::BadFee,
+            IcpRefillRecordErrorCode::CyclesSentOverflow => Self::CyclesSentOverflow,
             IcpRefillRecordErrorCode::Duplicate => Self::Duplicate,
             IcpRefillRecordErrorCode::FabricationUnavailable => Self::FabricationUnavailable,
             IcpRefillRecordErrorCode::InvalidLedgerBlockIndex => Self::InvalidLedgerBlockIndex,
@@ -525,12 +530,22 @@ impl IcpRefillStoreOps {
         IcpRefillRecordOps::mark_notify_processing(id, now_ns).map(record_to_operation)
     }
 
-    pub fn mark_completed(
+    pub fn complete_from_notified_cycles(
         id: u64,
         cycles_sent: Nat,
         now_ns: u64,
-    ) -> Result<IcpRefillOperation, InternalError> {
-        IcpRefillRecordOps::mark_completed(id, cycles_sent, now_ns).map(record_to_operation)
+    ) -> Result<(IcpRefillOperation, Option<u128>), InternalError> {
+        match Cycles::try_from(cycles_sent) {
+            Ok(cycles_sent) => {
+                let cycles_sent = cycles_sent.to_u128();
+                IcpRefillRecordOps::mark_completed(id, cycles_sent, now_ns)
+                    .map(record_to_operation)
+                    .map(|operation| (operation, Some(cycles_sent)))
+            }
+            Err(err) => IcpRefillRecordOps::mark_cycles_sent_overflow(id, err.to_string(), now_ns)
+                .map(record_to_operation)
+                .map(|operation| (operation, None)),
+        }
     }
 
     pub fn mark_refunded(
@@ -585,11 +600,6 @@ impl IcpRefillStoreOps {
     }
 
     #[must_use]
-    pub fn nat_to_u128_saturating(value: &Nat) -> u128 {
-        IcpRefillRecordOps::nat_to_u128_saturating(value)
-    }
-
-    #[must_use]
     pub const fn to_request(operation: &IcpRefillOperation) -> IcpRefillRequest {
         IcpRefillRequest {
             operation_id: operation.operation_id,
@@ -632,16 +642,19 @@ impl IcpRefillDerivedIndex {
         record: &IcpRefillRecord,
     ) -> Result<(), IcpRefillRecordOpsError> {
         self.validate_record(record)?;
-        if let Some(previous) = previous {
-            self.remove_record(previous);
+        let previous_cycles_sent = previous.map(completed_cycles_sent).transpose()?;
+        let cycles_sent = completed_cycles_sent(record)?;
+        if let (Some(previous), Some(previous_cycles_sent)) = (previous, previous_cycles_sent) {
+            self.remove_record(previous, previous_cycles_sent);
         }
-        self.add_record_unchecked(record);
+        self.add_record_unchecked(record, cycles_sent);
         Ok(())
     }
 
     fn add_record(&mut self, record: &IcpRefillRecord) -> Result<(), IcpRefillRecordOpsError> {
         self.validate_record(record)?;
-        self.add_record_unchecked(record);
+        let cycles_sent = completed_cycles_sent(record)?;
+        self.add_record_unchecked(record, cycles_sent);
         Ok(())
     }
 
@@ -669,7 +682,7 @@ impl IcpRefillDerivedIndex {
         Ok(())
     }
 
-    fn add_record_unchecked(&mut self, record: &IcpRefillRecord) {
+    fn add_record_unchecked(&mut self, record: &IcpRefillRecord, cycles_sent: u128) {
         let active_key = IcpRefillActiveKey::from_record(record);
         self.operation_ids.insert(record.operation_id, record.id);
         if record_is_resumable(record) {
@@ -691,16 +704,14 @@ impl IcpRefillDerivedIndex {
         totals.amount_e8s = totals
             .amount_e8s
             .saturating_add(u128::from(record.amount_e8s));
-        totals.cycles_sent = totals
-            .cycles_sent
-            .saturating_add(completed_cycles_sent(record));
+        totals.cycles_sent = totals.cycles_sent.saturating_add(cycles_sent);
         if record.status == IcpRefillRecordStatus::Completed && record.cycles_sent.is_some() {
             totals.completed_cycles_records = totals.completed_cycles_records.saturating_add(1);
         }
         self.max_id = self.max_id.max(record.id);
     }
 
-    fn remove_record(&mut self, record: &IcpRefillRecord) {
+    fn remove_record(&mut self, record: &IcpRefillRecord, cycles_sent: u128) {
         if self.operation_ids.get(&record.operation_id) == Some(&record.id) {
             self.operation_ids.remove(&record.operation_id);
         }
@@ -716,9 +727,7 @@ impl IcpRefillDerivedIndex {
             totals.amount_e8s = totals
                 .amount_e8s
                 .saturating_sub(u128::from(record.amount_e8s));
-            totals.cycles_sent = totals
-                .cycles_sent
-                .saturating_sub(completed_cycles_sent(record));
+            totals.cycles_sent = totals.cycles_sent.saturating_sub(cycles_sent);
             if record.status == IcpRefillRecordStatus::Completed && record.cycles_sent.is_some() {
                 totals.completed_cycles_records = totals.completed_cycles_records.saturating_sub(1);
             }
@@ -779,15 +788,19 @@ fn record_is_resumable(record: &IcpRefillRecord) -> bool {
     )
 }
 
-fn completed_cycles_sent(record: &IcpRefillRecord) -> u128 {
+fn completed_cycles_sent(record: &IcpRefillRecord) -> Result<u128, IcpRefillRecordOpsError> {
     if record.status != IcpRefillRecordStatus::Completed {
-        return 0;
+        return Ok(0);
     }
-    record
-        .cycles_sent
-        .as_ref()
-        .map(|cycles| u128::try_from(cycles.0.clone()).unwrap_or(u128::MAX))
-        .unwrap_or_default()
+    let Some(cycles_sent) = record.cycles_sent.as_ref() else {
+        return Ok(0);
+    };
+    Cycles::try_from(cycles_sent.clone())
+        .map(|cycles| cycles.to_u128())
+        .map_err(|_| IcpRefillRecordOpsError::CyclesSentOverflow {
+            id: record.id,
+            value: cycles_sent.clone(),
+        })
 }
 
 ///
@@ -826,11 +839,6 @@ impl IcpRefillRecordOps {
 
     pub fn metric_snapshot() -> IcpRefillMetricSnapshot {
         ICP_REFILL_DERIVED_INDEX.with_borrow(IcpRefillDerivedIndex::metric_snapshot)
-    }
-
-    #[must_use]
-    pub fn nat_to_u128_saturating(value: &Nat) -> u128 {
-        u128::try_from(value.0.clone()).unwrap_or(u128::MAX)
     }
 
     pub fn find_by_operation_id(
@@ -1024,13 +1032,27 @@ impl IcpRefillRecordOps {
 
     pub fn mark_completed(
         id: u64,
-        cycles_sent: Nat,
+        cycles_sent: u128,
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            record.cycles_sent = Some(cycles_sent);
+            record.cycles_sent = Some(Nat::from(cycles_sent));
             clear_error(record);
             record.status = IcpRefillRecordStatus::Completed;
+        })
+    }
+
+    pub fn mark_cycles_sent_overflow(
+        id: u64,
+        error_message: String,
+        now_ns: u64,
+    ) -> Result<IcpRefillRecord, InternalError> {
+        update_record(id, now_ns, |record| {
+            set_failure(
+                record,
+                IcpRefillErrorCode::CyclesSentOverflow,
+                error_message,
+            );
         })
     }
 
@@ -1348,6 +1370,28 @@ mod tests {
     }
 
     #[test]
+    fn rebuild_rejects_completed_cycles_sent_overflow() {
+        let _guard = seams::lock();
+        reset_records();
+        let mut completed = record(1, [6; 32], p(30));
+        completed.status = IcpRefillRecordStatus::Completed;
+        completed.cycles_sent = Some(
+            Nat::parse(b"340282366920938463463374607431768211456")
+                .expect("u128 max plus one is valid Nat"),
+        );
+        let _ = IcpRefillRecords::insert(completed);
+
+        let err = IcpRefillRecordOps::rebuild_indexes()
+            .expect_err("oversized completed cycles must fail closed");
+
+        assert!(matches!(
+            err,
+            IcpRefillRecordOpsError::CyclesSentOverflow { id: 1, .. }
+        ));
+        reset_records();
+    }
+
+    #[test]
     fn rebuild_rejects_duplicate_active_refill_identity() {
         let _guard = seams::lock();
         reset_records();
@@ -1387,7 +1431,7 @@ mod tests {
             .expect("active lookup")
         );
 
-        IcpRefillRecordOps::mark_completed(1, Nat::from(5_000_u64), 2).expect("complete refill");
+        IcpRefillRecordOps::mark_completed(1, 5_000, 2).expect("complete refill");
 
         assert!(
             !IcpRefillRecordOps::has_active_for_key(

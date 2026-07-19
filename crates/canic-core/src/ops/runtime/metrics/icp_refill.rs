@@ -131,7 +131,8 @@ const fn error_phase(error: IcpRefillRecordErrorCode) -> &'static str {
         | IcpRefillRecordErrorCode::InvalidLedgerBlockIndex
         | IcpRefillRecordErrorCode::LedgerTransferFailed
         | IcpRefillRecordErrorCode::TransferWindowStale => "transfer",
-        IcpRefillRecordErrorCode::InvalidTransaction
+        IcpRefillRecordErrorCode::CyclesSentOverflow
+        | IcpRefillRecordErrorCode::InvalidTransaction
         | IcpRefillRecordErrorCode::NotifyFailed
         | IcpRefillRecordErrorCode::NotifyMaxAttempts
         | IcpRefillRecordErrorCode::Processing
@@ -157,6 +158,7 @@ const fn status_label(status: IcpRefillRecordStatus) -> &'static str {
 const fn error_label(error: IcpRefillRecordErrorCode) -> &'static str {
     match error {
         IcpRefillRecordErrorCode::BadFee => "bad_fee",
+        IcpRefillRecordErrorCode::CyclesSentOverflow => "cycles_sent_overflow",
         IcpRefillRecordErrorCode::Duplicate => "duplicate",
         IcpRefillRecordErrorCode::FabricationUnavailable => "fabrication_unavailable",
         IcpRefillRecordErrorCode::InvalidLedgerBlockIndex => "invalid_ledger_block_index",

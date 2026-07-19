@@ -32,6 +32,12 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum MgmtInfraError {
+    #[error("canister {canister_pid} cycle balance does not fit in u128: {value}")]
+    CanisterCyclesOverflow {
+        canister_pid: crate::cdk::types::Principal,
+        value: crate::cdk::candid::Nat,
+    },
+
     #[error("raw_rand returned {len} bytes")]
     RawRandInvalidLength { len: usize },
 
