@@ -55,6 +55,7 @@ pub struct RestoreMappingEntry {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RestorePlan {
+    pub plan_version: u16,
     pub backup_id: String,
     pub source_environment: String,
     pub source_root_canister: String,
@@ -66,7 +67,6 @@ pub struct RestorePlan {
     pub readiness_summary: RestoreReadinessSummary,
     pub operation_summary: RestoreOperationSummary,
     pub ordering_summary: RestoreOrderingSummary,
-    #[serde(default)]
     pub deployment_verification_checks: Vec<VerificationCheck>,
     pub members: Vec<RestorePlanMember>,
 }
@@ -129,7 +129,6 @@ pub struct RestoreVerificationSummary {
     pub verification_required: bool,
     pub all_members_have_checks: bool,
     pub deployment_checks: usize,
-    pub member_check_groups: usize,
     pub member_checks: usize,
     pub members_with_checks: usize,
     pub total_checks: usize,
@@ -159,9 +158,7 @@ pub struct RestoreReadinessSummary {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RestoreOperationSummary {
-    #[serde(default)]
     pub planned_canister_stops: usize,
-    #[serde(default)]
     pub planned_canister_starts: usize,
     pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,

@@ -209,9 +209,9 @@ pub struct RestoreRunResponse {
     pub requested_state_updated_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_steps_reached: Option<bool>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub executed_operations: Vec<RestoreRunExecutedOperation>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub operation_receipts: Vec<RestoreRunOperationReceipt>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_receipt_count: Option<usize>,

@@ -65,6 +65,7 @@ pub fn build_backup_plan(input: BackupPlanBuildInput<'_>) -> Result<BackupPlan, 
     let phases = build_backup_phases(&targets);
 
     let plan = BackupPlan {
+        plan_version: 1,
         plan_id: input.plan_id,
         run_id: input.run_id,
         fleet: input.fleet,

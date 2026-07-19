@@ -89,7 +89,7 @@ pub enum PersistenceError {
     ManifestJournalTopologyReceiptMismatch {
         field: String,
         manifest: String,
-        journal: Option<String>,
+        journal: String,
     },
 
     #[error(

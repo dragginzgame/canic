@@ -188,7 +188,7 @@ fn restore_apply_dry_run(
             .map_err(RestoreCommandError::from);
     }
 
-    Ok(RestoreApplyDryRun::from_plan(&plan))
+    Ok(RestoreApplyDryRun::from_plan(&plan)?)
 }
 
 fn restore_run_dry_run(

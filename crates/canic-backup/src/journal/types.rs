@@ -20,11 +20,8 @@ use serde::{Deserialize, Serialize};
 pub struct DownloadJournal {
     pub journal_version: u16,
     pub backup_id: String,
-    #[serde(default)]
-    pub discovery_topology_hash: Option<String>,
-    #[serde(default)]
-    pub pre_snapshot_topology_hash: Option<String>,
-    #[serde(default)]
+    pub discovery_topology_hash: String,
+    pub pre_snapshot_topology_hash: String,
     pub operation_metrics: DownloadOperationMetrics,
     pub artifacts: Vec<ArtifactJournalEntry>,
 }

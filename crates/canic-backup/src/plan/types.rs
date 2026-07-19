@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackupPlan {
+    pub plan_version: u16,
     pub plan_id: String,
     pub run_id: String,
     pub fleet: String,

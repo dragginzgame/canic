@@ -53,8 +53,8 @@ impl DownloadJournal {
 #[serde(deny_unknown_fields)]
 pub struct JournalResumeReport {
     pub backup_id: String,
-    pub discovery_topology_hash: Option<String>,
-    pub pre_snapshot_topology_hash: Option<String>,
+    pub discovery_topology_hash: String,
+    pub pre_snapshot_topology_hash: String,
     pub total_artifacts: usize,
     pub is_complete: bool,
     pub pending_artifacts: usize,

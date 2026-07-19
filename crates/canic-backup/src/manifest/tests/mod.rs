@@ -73,6 +73,20 @@ fn source_snapshot_unknown_field_fails_deserialize() {
     assert!(err.is_data());
 }
 
+#[test]
+fn source_snapshot_requires_explicit_checksum_field() {
+    let mut value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
+    value["deployment"]["members"][0]["source_snapshot"]
+        .as_object_mut()
+        .expect("source snapshot object")
+        .remove("checksum");
+
+    let err = serde_json::from_value::<DeploymentBackupManifest>(value)
+        .expect_err("current checksum field must be present even when null");
+
+    assert!(err.is_data());
+}
+
 // Ensure snapshot checksum provenance stays canonical when present.
 #[test]
 fn invalid_snapshot_checksum_fails_validation() {

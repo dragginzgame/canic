@@ -1,4 +1,4 @@
-use super::{RestorePlan, RestorePlanMember};
+use super::{RestorePlan, RestorePlanError, RestorePlanMember};
 use crate::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
     manifest::VerificationCheck,
@@ -36,16 +36,13 @@ pub struct RestoreApplyDryRun {
     pub ready: bool,
     pub readiness_reasons: Vec<String>,
     pub member_count: usize,
-    #[serde(default)]
     pub planned_canister_stops: usize,
-    #[serde(default)]
     pub planned_canister_starts: usize,
     pub planned_snapshot_uploads: usize,
     pub planned_snapshot_loads: usize,
     pub planned_verification_checks: usize,
     pub planned_operations: usize,
     pub rendered_operations: usize,
-    #[serde(default)]
     pub operation_counts: RestoreApplyOperationKindCounts,
     pub artifact_validation: Option<RestoreApplyArtifactValidation>,
     pub operations: Vec<RestoreApplyDryRunOperation>,
@@ -53,9 +50,9 @@ pub struct RestoreApplyDryRun {
 
 impl RestoreApplyDryRun {
     /// Build a no-mutation apply dry-run from a restore plan.
-    #[must_use]
-    pub fn from_plan(plan: &RestorePlan) -> Self {
-        Self::from_validated_plan(plan)
+    pub fn from_plan(plan: &RestorePlan) -> Result<Self, RestorePlanError> {
+        plan.validate()?;
+        Ok(Self::from_validated_plan(plan))
     }
 
     /// Build an apply dry-run and verify all referenced artifacts under a backup root.
@@ -63,7 +60,7 @@ impl RestoreApplyDryRun {
         plan: &RestorePlan,
         backup_root: &Path,
     ) -> Result<Self, RestoreApplyDryRunError> {
-        let mut dry_run = Self::from_plan(plan);
+        let mut dry_run = Self::from_plan(plan)?;
         dry_run.artifact_validation = Some(validate_restore_apply_artifacts(plan, backup_root)?);
         Ok(dry_run)
     }
@@ -521,6 +518,9 @@ pub struct RestoreApplyDryRunOperation {
 
 #[derive(Debug, ThisError)]
 pub enum RestoreApplyDryRunError {
+    #[error(transparent)]
+    InvalidPlan(#[from] RestorePlanError),
+
     #[error("restore artifact path for {source_canister} escapes backup root: {artifact_path}")]
     ArtifactPathEscapesBackup {
         source_canister: String,

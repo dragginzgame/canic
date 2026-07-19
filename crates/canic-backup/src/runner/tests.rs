@@ -1,6 +1,7 @@
 use super::*;
 use crate::{
     execution::BackupExecutionOperationState,
+    journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics},
     manifest::{BackupUnitKind, IdentityMode},
     persistence::BackupLayout,
     plan::{
@@ -22,6 +23,91 @@ const ROOT: &str = "aaaaa-aa";
 const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
 const WORKER: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+#[test]
+fn runner_rejects_stale_download_journal_topology_before_snapshot_creation() {
+    let root = prepared_layout("canic-backup-runner-stale-download-topology");
+    let layout = BackupLayout::new(root.clone());
+    let stale_hash = "f".repeat(64);
+    layout
+        .write_journal(&download_journal("run-test", &stale_hash, "stale-snapshot"))
+        .expect("write stale download journal");
+
+    let mut executor = FakeExecutor::default();
+    let err = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
+        .expect_err("stale topology receipt must reject");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    std::assert_matches!(
+        err,
+        BackupRunnerError::DownloadJournalTopologyMismatch {
+            field: "discovery_topology_hash",
+            expected,
+            actual,
+        } if expected == HASH && actual == stale_hash
+    );
+    assert!(
+        executor
+            .commands
+            .iter()
+            .all(|command| !command.starts_with("snapshot:"))
+    );
+}
+
+#[test]
+fn runner_rejects_download_journal_for_another_backup_before_snapshot_creation() {
+    let root = prepared_layout("canic-backup-runner-other-download-backup");
+    let layout = BackupLayout::new(root.clone());
+    layout
+        .write_journal(&download_journal("other-backup", HASH, "other-snapshot"))
+        .expect("write foreign download journal");
+
+    let mut executor = FakeExecutor::default();
+    let err = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
+        .expect_err("foreign download journal must reject");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    std::assert_matches!(
+        err,
+        BackupRunnerError::DownloadJournalBackupIdMismatch { expected, actual }
+            if expected == "run-test" && actual == "other-backup"
+    );
+    assert!(
+        executor
+            .commands
+            .iter()
+            .all(|command| !command.starts_with("snapshot:"))
+    );
+}
+
+#[test]
+fn runner_recovers_created_snapshot_from_bound_download_journal() {
+    let root = prepared_layout("canic-backup-runner-created-snapshot-recovery");
+    let layout = BackupLayout::new(root.clone());
+    layout
+        .write_journal(&download_journal("run-test", HASH, "existing-snapshot"))
+        .expect("write interrupted download journal");
+
+    let mut executor = FakeExecutor::default();
+    let response =
+        backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
+            .expect("resume from recorded snapshot");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(response.complete);
+    assert!(
+        executor
+            .commands
+            .iter()
+            .all(|command| !command.starts_with("snapshot:"))
+    );
+    assert!(
+        executor
+            .commands
+            .iter()
+            .any(|command| command == &format!("download:{APP}:existing-snapshot"))
+    );
+}
 
 // Ensure the backup runner executes a persisted plan into a verified backup layout.
 #[test]
@@ -545,6 +631,26 @@ fn prepared_layout(name: &str) -> PathBuf {
         .write_execution_journal(&journal)
         .expect("write execution journal");
     root
+}
+
+fn download_journal(backup_id: &str, topology_hash: &str, snapshot_id: &str) -> DownloadJournal {
+    DownloadJournal {
+        journal_version: 1,
+        backup_id: backup_id.to_string(),
+        discovery_topology_hash: topology_hash.to_string(),
+        pre_snapshot_topology_hash: HASH.to_string(),
+        operation_metrics: DownloadOperationMetrics::default(),
+        artifacts: vec![ArtifactJournalEntry {
+            canister_id: APP.to_string(),
+            snapshot_id: snapshot_id.to_string(),
+            state: ArtifactState::Created,
+            temp_path: None,
+            artifact_path: APP.to_string(),
+            checksum_algorithm: "sha256".to_string(),
+            checksum: None,
+            updated_at: "unix:1".to_string(),
+        }],
+    }
 }
 
 fn execution_journal_lock_path(layout: &BackupLayout) -> PathBuf {

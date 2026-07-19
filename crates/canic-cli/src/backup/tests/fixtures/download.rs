@@ -12,8 +12,8 @@ pub(in crate::backup::tests) fn journal_with_checksum(checksum: String) -> Downl
     DownloadJournal {
         journal_version: 1,
         backup_id: "backup-test".to_string(),
-        discovery_topology_hash: Some(HASH.to_string()),
-        pre_snapshot_topology_hash: Some(HASH.to_string()),
+        discovery_topology_hash: HASH.to_string(),
+        pre_snapshot_topology_hash: HASH.to_string(),
         operation_metrics: canic_backup::journal::DownloadOperationMetrics::default(),
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),
@@ -33,8 +33,8 @@ pub(in crate::backup::tests) fn created_journal() -> DownloadJournal {
     DownloadJournal {
         journal_version: 1,
         backup_id: "backup-test".to_string(),
-        discovery_topology_hash: Some(HASH.to_string()),
-        pre_snapshot_topology_hash: Some(HASH.to_string()),
+        discovery_topology_hash: HASH.to_string(),
+        pre_snapshot_topology_hash: HASH.to_string(),
         operation_metrics: canic_backup::journal::DownloadOperationMetrics::default(),
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),

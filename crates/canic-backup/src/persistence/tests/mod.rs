@@ -363,7 +363,7 @@ fn integrity_rejects_manifest_journal_topology_receipt_mismatch() {
     let checksum = write_artifact(&root, b"root artifact");
     let mut journal = journal_with_checksum(checksum.hash);
     journal.discovery_topology_hash =
-        Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string();
 
     layout
         .write_manifest(&valid_manifest())
@@ -580,8 +580,8 @@ fn journal_with_checksum(checksum: String) -> DownloadJournal {
     DownloadJournal {
         journal_version: 1,
         backup_id: "fbk_test_001".to_string(),
-        discovery_topology_hash: Some(HASH.to_string()),
-        pre_snapshot_topology_hash: Some(HASH.to_string()),
+        discovery_topology_hash: HASH.to_string(),
+        pre_snapshot_topology_hash: HASH.to_string(),
         operation_metrics: crate::journal::DownloadOperationMetrics::default(),
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),

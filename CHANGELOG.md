@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.33` is potentially breaking: backup and restore documents now require
+  their exact current v1 shape and validated plan projections; stale journal
+  authority is rejected rather than defaulted, overwritten, or executed.
+
 - `0.93.32` is potentially breaking: bounded strings now enforce their byte
   limit through every construction and decode path, while malformed stable
   intent and replay identities fail closed instead of aliasing valid keys.

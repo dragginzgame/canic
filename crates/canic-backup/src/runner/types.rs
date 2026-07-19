@@ -104,6 +104,20 @@ pub enum BackupRunnerError {
     #[error("backup execution journal is locked: {lock_path}")]
     JournalLocked { lock_path: String },
 
+    #[error(
+        "download journal backup id does not match the backup plan: expected={expected}, actual={actual}"
+    )]
+    DownloadJournalBackupIdMismatch { expected: String, actual: String },
+
+    #[error(
+        "download journal topology receipt {field} does not match the backup plan: expected={expected}, actual={actual}"
+    )]
+    DownloadJournalTopologyMismatch {
+        field: &'static str,
+        expected: String,
+        actual: String,
+    },
+
     #[error("backup operation {sequence} has no target canister")]
     MissingOperationTarget { sequence: usize },
 

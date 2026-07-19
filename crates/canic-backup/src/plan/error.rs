@@ -17,6 +17,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum BackupPlanError {
+    #[error("unsupported backup plan version {0}")]
+    UnsupportedVersion(u16),
+
     #[error("field {0} must not be empty")]
     EmptyField(&'static str),
 

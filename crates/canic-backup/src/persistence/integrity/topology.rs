@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 struct TopologyReceiptMismatch {
     field: String,
     manifest: String,
-    journal: Option<String>,
+    journal: String,
 }
 
 pub(super) fn verify_manifest_journal_binding(
@@ -59,13 +59,13 @@ fn topology_receipt_mismatches(
         &mut mismatches,
         "discovery_topology_hash",
         &manifest.deployment.discovery_topology_hash,
-        journal.discovery_topology_hash.as_deref(),
+        &journal.discovery_topology_hash,
     );
     record_topology_receipt_mismatch(
         &mut mismatches,
         "pre_snapshot_topology_hash",
         &manifest.deployment.pre_snapshot_topology_hash,
-        journal.pre_snapshot_topology_hash.as_deref(),
+        &journal.pre_snapshot_topology_hash,
     );
     mismatches
 }
@@ -74,15 +74,15 @@ fn record_topology_receipt_mismatch(
     mismatches: &mut Vec<TopologyReceiptMismatch>,
     field: &str,
     manifest: &str,
-    journal: Option<&str>,
+    journal: &str,
 ) {
-    if journal == Some(manifest) {
+    if journal == manifest {
         return;
     }
 
     mismatches.push(TopologyReceiptMismatch {
         field: field.to_string(),
         manifest: manifest.to_string(),
-        journal: journal.map(ToString::to_string),
+        journal: journal.to_string(),
     });
 }

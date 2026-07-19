@@ -24,6 +24,7 @@ const AS_OF: &str = "unix:150";
 
 fn subtree_plan() -> BackupPlan {
     BackupPlan {
+        plan_version: 1,
         plan_id: "plan-001".to_string(),
         run_id: "run-001".to_string(),
         fleet: "demo".to_string(),
@@ -251,6 +252,24 @@ fn backup_plan_unknown_field_fails_deserialize() {
     let err = serde_json::from_value::<BackupPlan>(value).expect_err("unknown field rejects");
 
     assert!(err.is_data());
+}
+
+#[test]
+fn backup_plan_requires_and_validates_plan_version() {
+    let mut value = serde_json::to_value(subtree_plan()).expect("serialize plan");
+    value
+        .as_object_mut()
+        .expect("plan object")
+        .remove("plan_version");
+    let err = serde_json::from_value::<BackupPlan>(value).expect_err("plan version is required");
+    assert!(err.is_data());
+
+    let mut plan = subtree_plan();
+    plan.plan_version = 2;
+    let err = plan
+        .validate()
+        .expect_err("unsupported plan version rejects");
+    std::assert_matches!(err, BackupPlanError::UnsupportedVersion(2));
 }
 
 fn phase(

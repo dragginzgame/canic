@@ -6,7 +6,7 @@ fn apply_dry_run_renders_ordered_member_operations() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
 
     assert_eq!(dry_run.dry_run_version, 1);
     assert_eq!(dry_run.backup_id.as_str(), "fbk_test_001");
@@ -72,6 +72,40 @@ fn apply_dry_run_renders_ordered_member_operations() {
     );
 }
 
+#[test]
+fn apply_dry_run_rejects_invalid_plan() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let mut plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    plan.plan_version = 2;
+
+    let err = RestoreApplyDryRun::from_plan(&plan).expect_err("invalid plan rejects");
+
+    std::assert_matches!(err, RestorePlanError::UnsupportedVersion(2));
+}
+
+#[test]
+fn apply_dry_run_requires_current_lifecycle_and_count_fields() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+
+    for path in [
+        &["planned_canister_stops"][..],
+        &["planned_canister_starts"][..],
+        &["operation_counts"][..],
+        &["operation_counts", "canister_stops"][..],
+        &["operation_counts", "canister_starts"][..],
+    ] {
+        let mut value = serde_json::to_value(&dry_run).expect("serialize dry-run");
+        remove_json_field(&mut value, path);
+
+        let err = serde_json::from_value::<RestoreApplyDryRun>(value)
+            .expect_err("current apply dry-run field must be present");
+
+        assert!(err.is_data());
+    }
+}
+
 // Ensure apply dry-runs append deployment verification after member operations.
 #[test]
 fn apply_dry_run_renders_deployment_verification_operations() {
@@ -85,7 +119,7 @@ fn apply_dry_run_renders_deployment_verification_operations() {
         });
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
 
     assert_eq!(plan.operation_summary.planned_verification_checks, 3);
     assert_eq!(dry_run.rendered_operations, 11);
@@ -111,7 +145,7 @@ fn apply_dry_run_renders_deployment_verification_operations() {
 fn apply_dry_run_sequences_operations_in_topology_order() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
 
     assert_eq!(dry_run.rendered_operations, 10);
     assert_eq!(dry_run.operations[0].sequence, 0);

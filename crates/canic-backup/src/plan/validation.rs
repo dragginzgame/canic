@@ -8,9 +8,14 @@ use super::{BackupOperation, BackupOperationKind, BackupPlan, BackupPlanError, B
 use candid::Principal;
 use std::{collections::BTreeSet, str::FromStr};
 
+const SUPPORTED_BACKUP_PLAN_VERSION: u16 = 1;
+
 impl BackupPlan {
     /// Validate the backup plan as a dry-run/planning artifact.
     pub fn validate(&self) -> Result<(), BackupPlanError> {
+        if self.plan_version != SUPPORTED_BACKUP_PLAN_VERSION {
+            return Err(BackupPlanError::UnsupportedVersion(self.plan_version));
+        }
         validate_nonempty("plan_id", &self.plan_id)?;
         validate_nonempty("run_id", &self.run_id)?;
         validate_nonempty("fleet", &self.fleet)?;

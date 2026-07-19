@@ -32,8 +32,8 @@ pub fn download_snapshots(
     let mut journal = DownloadJournal {
         journal_version: 1,
         backup_id: config.backup_id.clone(),
-        discovery_topology_hash: Some(discovery_topology_hash.hash.clone()),
-        pre_snapshot_topology_hash: Some(pre_snapshot_topology_hash.hash.clone()),
+        discovery_topology_hash: discovery_topology_hash.hash.clone(),
+        pre_snapshot_topology_hash: pre_snapshot_topology_hash.hash.clone(),
         operation_metrics: DownloadOperationMetrics {
             target_count: targets.len(),
             ..DownloadOperationMetrics::default()

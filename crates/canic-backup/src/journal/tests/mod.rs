@@ -7,8 +7,8 @@ fn valid_journal() -> DownloadJournal {
     DownloadJournal {
         journal_version: 1,
         backup_id: "fbk_test_001".to_string(),
-        discovery_topology_hash: Some(HASH.to_string()),
-        pre_snapshot_topology_hash: Some(HASH.to_string()),
+        discovery_topology_hash: HASH.to_string(),
+        pre_snapshot_topology_hash: HASH.to_string(),
         operation_metrics: DownloadOperationMetrics::default(),
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),
@@ -38,6 +38,23 @@ fn download_journal_unknown_field_fails_deserialize() {
     let err = serde_json::from_value::<DownloadJournal>(value).expect_err("unknown field rejects");
 
     assert!(err.is_data());
+}
+
+#[test]
+fn download_journal_requires_current_topology_and_metrics_fields() {
+    for field in [
+        "discovery_topology_hash",
+        "pre_snapshot_topology_hash",
+        "operation_metrics",
+    ] {
+        let mut value = serde_json::to_value(valid_journal()).expect("serialize journal");
+        value.as_object_mut().expect("journal object").remove(field);
+
+        let err = serde_json::from_value::<DownloadJournal>(value)
+            .expect_err("current journal field must be present");
+
+        assert!(err.is_data());
+    }
 }
 
 #[test]
@@ -74,8 +91,8 @@ fn resume_report_counts_states_and_actions() {
     let report = journal.resume_report();
 
     assert_eq!(report.total_artifacts, 3);
-    assert_eq!(report.discovery_topology_hash.as_deref(), Some(HASH));
-    assert_eq!(report.pre_snapshot_topology_hash.as_deref(), Some(HASH));
+    assert_eq!(report.discovery_topology_hash, HASH);
+    assert_eq!(report.pre_snapshot_topology_hash, HASH);
     assert!(!report.is_complete);
     assert_eq!(report.pending_artifacts, 2);
     assert_eq!(report.counts.created, 1);

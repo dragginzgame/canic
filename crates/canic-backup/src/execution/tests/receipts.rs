@@ -6,6 +6,27 @@
 
 use super::*;
 
+#[test]
+fn operation_receipt_requires_current_snapshot_metadata_fields() {
+    let journal = accepted_journal();
+    let operation = journal.operations[4].clone();
+    let receipt = BackupExecutionOperationReceipt::completed(
+        &journal,
+        &operation,
+        Some("unix:31".to_string()),
+    );
+
+    for field in ["snapshot_taken_at_timestamp", "snapshot_total_size_bytes"] {
+        let mut value = serde_json::to_value(&receipt).expect("serialize receipt");
+        value.as_object_mut().expect("receipt object").remove(field);
+
+        let err = serde_json::from_value::<BackupExecutionOperationReceipt>(value)
+            .expect_err("current snapshot metadata field must be present");
+
+        assert!(err.is_data());
+    }
+}
+
 // Ensure snapshot creation receipts must carry the created snapshot id.
 #[test]
 fn snapshot_completion_requires_snapshot_id() {

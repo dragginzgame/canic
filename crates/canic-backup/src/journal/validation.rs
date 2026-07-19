@@ -23,13 +23,10 @@ impl DownloadJournal {
     pub fn validate(&self) -> Result<(), JournalValidationError> {
         validate_journal_version(self.journal_version)?;
         validate_nonempty("backup_id", &self.backup_id)?;
-        validate_optional_hash(
-            "discovery_topology_hash",
-            self.discovery_topology_hash.as_deref(),
-        )?;
-        validate_optional_hash(
+        validate_hash("discovery_topology_hash", &self.discovery_topology_hash)?;
+        validate_hash(
             "pre_snapshot_topology_hash",
-            self.pre_snapshot_topology_hash.as_deref(),
+            &self.pre_snapshot_topology_hash,
         )?;
 
         if self.artifacts.is_empty() {
@@ -191,16 +188,6 @@ fn validate_required_hash(
         Some(value) => validate_hash(field, value),
         None => Err(JournalValidationError::EmptyField(field)),
     }
-}
-
-fn validate_optional_hash(
-    field: &'static str,
-    value: Option<&str>,
-) -> Result<(), JournalValidationError> {
-    if let Some(value) = value {
-        validate_hash(field, value)?;
-    }
-    Ok(())
 }
 
 fn validate_hash(field: &'static str, value: &str) -> Result<(), JournalValidationError> {

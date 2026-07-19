@@ -5,7 +5,7 @@
 //! Boundary: derives read-only projections embedded in restore plans.
 
 use crate::{
-    manifest::{DeploymentBackupManifest, IdentityMode},
+    manifest::{IdentityMode, VerificationCheck},
     restore::{
         RestoreIdentitySummary, RestoreOperationSummary, RestorePlanMember,
         RestoreReadinessSummary, RestoreSnapshotSummary, RestoreVerificationSummary,
@@ -91,11 +91,10 @@ pub(super) fn restore_readiness_summary(
 }
 
 pub(super) fn restore_verification_summary(
-    manifest: &DeploymentBackupManifest,
+    deployment_verification_checks: &[VerificationCheck],
     members: &[RestorePlanMember],
 ) -> RestoreVerificationSummary {
-    let deployment_checks = manifest.verification.deployment_checks.len();
-    let member_check_groups = manifest.verification.member_checks.len();
+    let deployment_checks = deployment_verification_checks.len();
     let member_checks = members
         .iter()
         .map(|member| member.verification_checks.len())
@@ -109,7 +108,6 @@ pub(super) fn restore_verification_summary(
         verification_required: true,
         all_members_have_checks: members_with_checks == members.len(),
         deployment_checks,
-        member_check_groups,
         member_checks,
         members_with_checks,
         total_checks: deployment_checks + member_checks,

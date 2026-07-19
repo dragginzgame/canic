@@ -10,6 +10,7 @@ mod members;
 mod ordering;
 mod summary;
 mod types;
+mod validation;
 
 pub use error::RestorePlanError;
 pub use types::*;
@@ -48,14 +49,16 @@ impl RestorePlanner {
         let members = resolve_members(manifest, mapping)?;
         let identity_summary = restore_identity_summary(&members, mapping.is_some());
         let snapshot_summary = restore_snapshot_summary(&members);
-        let verification_summary = restore_verification_summary(manifest, &members);
+        let verification_summary =
+            restore_verification_summary(&manifest.verification.deployment_checks, &members);
         let readiness_summary = restore_readiness_summary(&snapshot_summary, &verification_summary);
         let members = order_members(members)?;
         let ordering_summary = restore_ordering_summary(&members);
         let operation_summary =
             restore_operation_summary(manifest.deployment.members.len(), &verification_summary);
 
-        Ok(RestorePlan {
+        let plan = RestorePlan {
+            plan_version: 1,
             backup_id: manifest.backup_id.clone(),
             source_environment: manifest.source.environment.clone(),
             source_root_canister: manifest.source.root_canister.clone(),
@@ -69,6 +72,8 @@ impl RestorePlanner {
             ordering_summary,
             deployment_verification_checks: manifest.verification.deployment_checks.clone(),
             members,
-        })
+        };
+        plan.validate()?;
+        Ok(plan)
     }
 }
