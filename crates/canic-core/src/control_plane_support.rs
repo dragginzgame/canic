@@ -95,7 +95,7 @@ pub mod ops {
 
 pub mod view {
     pub mod topology {
-        pub use crate::view::topology::IndexEntryView;
+        pub use crate::view::topology::{IndexEntryView, RegisteredCanisterView};
     }
 }
 

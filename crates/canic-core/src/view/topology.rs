@@ -17,3 +17,15 @@ pub struct IndexEntryView {
     pub role: CanisterRole,
     pub pid: Principal,
 }
+
+///
+/// RegisteredCanisterView
+///
+/// Internal read-only identity and creation metadata for one registered canister.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RegisteredCanisterView {
+    pub pid: Principal,
+    pub created_at: u64,
+}
