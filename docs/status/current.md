@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Purpose
 
@@ -155,10 +155,13 @@ Historical detail is archived at:
   activation consume those same revalidated bytes, and root resolution waits
   until the safety and preflight gates pass.
 - Current `0.93.28` development binds executable restore snapshot operations,
-  journals, and receipts to one expected checksum. Restore execution uses no-follow
-  descriptor traversal to copy the exact verified file or directory into
-  private staging before claiming the operation, and passes only that staged
-  artifact to the upload command.
+  journals, and receipts to one expected checksum. Restore execution uses
+  no-follow descriptor traversal to copy the exact verified file or directory
+  into private staging before claiming the operation, and passes only that
+  staged artifact to the upload command. The same open patch removes the
+  redundant 0.50-bound adoption availability field; recommendation support is
+  now the sole current decision and projection, and recommendation decoding
+  rejects unknown JSON fields.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -713,5 +716,10 @@ receipt. Preparation and execution use one no-follow checksum traversal, and
 execution copies the exact verified artifact into private staging before the
 journal claim. Source replacement, symlinks, special entries, malformed
 checksums, and receipt identity drift fail closed with typed causes. Focused
-backup and CLI restore validation covers the maintained path. Broad deployment,
-package, publish, and release validation remains maintainer-owned.
+backup and CLI restore validation covers the maintained path. The same patch
+hard-cuts the duplicate fleet-adoption availability enum, JSON field, text
+annotation, and stale active 0.49/0.50 wording; `suggested_action_support`
+remains the sole recommendation authority, and recommendation records reject
+unknown JSON fields. Focused host adoption and CLI fleet tests cover that
+current projection. Broad deployment, package, publish, and release validation
+remains maintainer-owned.

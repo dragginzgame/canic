@@ -14,7 +14,8 @@ Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
 - `0.93.28` is potentially breaking: restore journals and receipts now bind
   each executable snapshot operation to its expected checksum, and execution
-  consumes only a private no-follow copy of the verified artifact.
+  consumes only a private no-follow copy of the verified artifact. Fleet
+  adoption also hard-cuts its redundant 0.50-specific availability surface.
 
 - `0.93.27` is potentially breaking: supplied deployment plans now normalize
   one digest-pinned Wasm artifact set before the safety gate, and truth,

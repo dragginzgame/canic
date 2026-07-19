@@ -721,6 +721,7 @@ fn renders_adoption_report_text_for_declared_only_roles() {
         "suggested_action_preview: canic fleet role attach demo store --subnet <subnet>"
     ));
     assert!(text.contains("status: not executed by adoption report"));
+    assert!(text.contains("support: unsupported-by-adoption"));
     assert!(!text.contains("suggested_action:"));
     assert!(text.contains("Blocked adoption actions (not executed by report):"));
     assert!(text.contains("topology attachment"));
@@ -755,6 +756,16 @@ fn writes_adoption_report_json_output_file() {
     assert_eq!(value["fleet"], "demo");
     assert_eq!(value["profile"], "Minimal");
     assert_eq!(value["summary"]["mutating_actions_performed"], 0);
+    assert!(
+        value["recommendations"]
+            .as_array()
+            .is_some_and(|recommendations| !recommendations.is_empty()
+                && recommendations.iter().all(|recommendation| {
+                    recommendation["suggested_action_support"]
+                        .as_str()
+                        .is_some()
+                }))
+    );
     assert!(value.get("envelope_schema").is_none());
 }
 

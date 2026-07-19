@@ -164,10 +164,6 @@ fn adoption_report_authority_gates_observed_only_declaration_recommendations() {
         );
         if expected_authority == AdoptionAuthorityStateV1::CanicAuthorized {
             assert_eq!(
-                recommendation.suggested_action_availability,
-                AdoptionSuggestedActionAvailabilityV1::BlockedIn0500
-            );
-            assert_eq!(
                 recommendation.suggested_action_support,
                 AdoptionSuggestedActionSupportV1::UnsupportedByAdoption
             );

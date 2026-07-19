@@ -18,8 +18,8 @@ fn adoption_report_preserves_declared_only_as_non_deployable() {
     assert_eq!(report.summary.declared_only_roles, 1);
     assert_eq!(report.summary.mutating_actions_performed, 0);
     assert!(store.recommendations.iter().all(|recommendation| {
-        recommendation.suggested_action_availability
-            == AdoptionSuggestedActionAvailabilityV1::BlockedIn0500
+        recommendation.suggested_action_support
+            == AdoptionSuggestedActionSupportV1::UnsupportedByAdoption
     }));
     assert!(report.blocked_actions.contains(&"install".to_string()));
 }

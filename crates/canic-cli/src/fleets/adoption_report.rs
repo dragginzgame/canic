@@ -10,9 +10,8 @@ use canic_host::{
         AdoptionDeclarationStateV1, AdoptionMatchConfidenceV1, AdoptionObservationStateV1,
         AdoptionOperatorActionRequirementV1, AdoptionPackageMetadataV1, AdoptionPackageStateV1,
         AdoptionProfileV1, AdoptionRecommendationSeverityV1, AdoptionReportRequest,
-        AdoptionReportV1, AdoptionSuggestedActionAvailabilityV1, AdoptionSuggestedActionEffectV1,
-        AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
-        adoption_report_from_config_source,
+        AdoptionReportV1, AdoptionSuggestedActionEffectV1, AdoptionSuggestedActionSupportV1,
+        AdoptionTopologyStateV1, adoption_report_from_config_source,
     },
     build_provenance::build_provenance_schema,
     deployment_truth::{DeploymentInventoryV1, RoleArtifactManifestV1, RoleArtifactV1},
@@ -676,12 +675,11 @@ fn adoption_recommendation_lines(report: &AdoptionReportV1) -> Vec<String> {
 
     for recommendation in &report.recommendations {
         lines.push(format!(
-            "  - {} [{}; {}; {}; {}; {}]",
+            "  - {} [{}; {}; {}; {}]",
             recommendation.description,
             adoption_recommendation_severity_label(recommendation.severity),
             adoption_action_effect_label(recommendation.suggested_action_effect),
             adoption_action_support_label(recommendation.suggested_action_support),
-            adoption_action_availability_label(recommendation.suggested_action_availability),
             adoption_operator_requirement_label(recommendation.operator_action_requirement)
         ));
         if let Some(action) = &recommendation.suggested_action {
@@ -690,10 +688,6 @@ fn adoption_recommendation_lines(report: &AdoptionReportV1) -> Vec<String> {
             lines.push(format!(
                 "    support: {}",
                 adoption_action_support_label(recommendation.suggested_action_support)
-            ));
-            lines.push(format!(
-                "    availability: {}",
-                adoption_action_availability_label(recommendation.suggested_action_availability)
             ));
         }
     }
@@ -839,15 +833,6 @@ const fn adoption_action_support_label(support: AdoptionSuggestedActionSupportV1
     match support {
         AdoptionSuggestedActionSupportV1::SupportedByAdoption => "supported-by-adoption",
         AdoptionSuggestedActionSupportV1::UnsupportedByAdoption => "unsupported-by-adoption",
-    }
-}
-
-const fn adoption_action_availability_label(
-    availability: AdoptionSuggestedActionAvailabilityV1,
-) -> &'static str {
-    match availability {
-        AdoptionSuggestedActionAvailabilityV1::AllowedIn0500 => "allowed-in-0.50.0",
-        AdoptionSuggestedActionAvailabilityV1::BlockedIn0500 => "blocked-in-0.50.0",
     }
 }
 

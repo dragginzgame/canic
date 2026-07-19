@@ -146,6 +146,7 @@ pub struct AdoptionObservedCanisterFindingV1 {
 /// AdoptionRecommendationV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct AdoptionRecommendationV1 {
     pub kind: String,
     pub severity: AdoptionRecommendationSeverityV1,
@@ -153,7 +154,6 @@ pub struct AdoptionRecommendationV1 {
     pub suggested_action: Option<String>,
     pub suggested_action_effect: AdoptionSuggestedActionEffectV1,
     pub suggested_action_support: AdoptionSuggestedActionSupportV1,
-    pub suggested_action_availability: AdoptionSuggestedActionAvailabilityV1,
     pub operator_action_requirement: AdoptionOperatorActionRequirementV1,
 }
 
@@ -282,15 +282,6 @@ pub enum AdoptionSuggestedActionEffectV1 {
 pub enum AdoptionSuggestedActionSupportV1 {
     SupportedByAdoption,
     UnsupportedByAdoption,
-}
-
-///
-/// AdoptionSuggestedActionAvailabilityV1
-///
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AdoptionSuggestedActionAvailabilityV1 {
-    AllowedIn0500,
-    BlockedIn0500,
 }
 
 ///
