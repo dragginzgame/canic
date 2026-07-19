@@ -138,7 +138,7 @@ fn write_fake_icp_upload_without_id(root: &Path) -> PathBuf {
 fn ready_apply_journal() -> RestoreApplyJournal {
     let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     journal.ready = true;
     journal.blocked_reasons = Vec::new();
@@ -160,7 +160,7 @@ fn ready_apply_journal_with_artifacts(backup_root: &Path) -> RestoreApplyJournal
     let plan = RestorePlanner::plan(&manifest, None).expect("build plan");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, backup_root)
         .expect("validate restore artifacts");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     journal.validate().expect("journal should validate");
     journal

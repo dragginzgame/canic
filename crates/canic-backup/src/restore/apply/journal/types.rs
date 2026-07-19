@@ -7,7 +7,7 @@
 use crate::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
     manifest::VERIFICATION_KIND_STATUS,
-    restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation},
+    restore::{RestoreApplyDryRun, RestoreApplyDryRunOperation, RestoreApplyDryRunValidationError},
 };
 
 use std::collections::BTreeSet;
@@ -249,6 +249,9 @@ pub enum RestoreApplyJournalError {
         #[source]
         source: ArtifactChecksumError,
     },
+
+    #[error(transparent)]
+    InvalidDryRun(#[from] RestoreApplyDryRunValidationError),
 
     #[error("unsupported restore apply journal version {0}")]
     UnsupportedVersion(u16),

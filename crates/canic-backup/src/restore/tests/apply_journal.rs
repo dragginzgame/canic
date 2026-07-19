@@ -282,7 +282,7 @@ fn apply_journal_marks_validated_operations_ready() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(journal.journal_version, 1);
@@ -310,7 +310,7 @@ fn apply_journal_unknown_field_fails_deserialize() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     let mut value = serde_json::to_value(journal).expect("serialize journal");
     value["unexpected_field"] = serde_json::Value::Bool(true);
 
@@ -321,11 +321,29 @@ fn apply_journal_unknown_field_fails_deserialize() {
 }
 
 #[test]
+fn apply_journal_rejects_invalid_dry_run_with_typed_cause() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let mut dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+    dry_run.dry_run_version = 2;
+
+    let err = RestoreApplyJournal::from_dry_run(&dry_run)
+        .expect_err("invalid dry-run must not create journal");
+
+    std::assert_matches!(
+        err,
+        RestoreApplyJournalError::InvalidDryRun(
+            RestoreApplyDryRunValidationError::UnsupportedVersion(2)
+        )
+    );
+}
+
+#[test]
 fn apply_journal_requires_current_receipt_and_lifecycle_count_fields() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     for path in [
         &["operation_receipts"][..],
@@ -349,7 +367,7 @@ fn apply_journal_blocks_without_artifact_validation() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     assert!(!journal.ready);
     assert_eq!(journal.ready_operations, 0);
@@ -390,7 +408,7 @@ fn apply_journal_report_exposes_progress_and_next_transition() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     let report = journal.report();
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -453,7 +471,7 @@ fn apply_journal_command_preview_reports_full_ready_row() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark operation completed");
@@ -480,7 +498,7 @@ fn apply_journal_command_preview_reports_blocked_state() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     let preview = journal.next_command_preview();
 
     assert!(!preview.ready);
@@ -517,7 +535,7 @@ fn apply_journal_command_preview_reports_upload_command() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     let preview = journal.next_command_preview();
     let expected_artifact_path = root.join("artifacts/root").to_string_lossy().to_string();
 
@@ -567,7 +585,7 @@ fn apply_journal_command_preview_honors_command_config() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig {
         program: "/tmp/icp".to_string(),
         environment: Some("local".to_string()),
@@ -617,7 +635,7 @@ fn apply_journal_command_preview_reports_load_command() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark root upload completed");
@@ -718,7 +736,7 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark root upload completed");
@@ -880,7 +898,7 @@ fn apply_journal_validation_rejects_count_mismatch() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     journal.blocked_operations = 0;
 
     let err = journal.validate().expect_err("count mismatch should fail");
@@ -929,7 +947,7 @@ fn apply_journal_validation_rejects_duplicate_sequences() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     journal.operations[1].sequence = journal.operations[0].sequence;
 
     let err = journal
@@ -946,7 +964,7 @@ fn apply_journal_validation_rejects_failed_without_reason() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     journal.operations[0].state = RestoreApplyOperationState::Failed;
     journal.operations[0].blocking_reasons = Vec::new();
     journal.blocked_operations -= 1;
@@ -1195,7 +1213,7 @@ fn apply_journal_mark_pending_rejects_out_of_order_operation() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     let err = journal
         .mark_operation_pending_at(1, None)
@@ -1237,7 +1255,7 @@ fn apply_journal_mark_completed_advances_next_ready_operation() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     journal
         .mark_operation_completed_at(0, None)
@@ -1289,7 +1307,7 @@ fn apply_journal_mark_completed_rejects_out_of_order_operation() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     let err = journal
         .mark_operation_completed_at(1, None)
@@ -1331,7 +1349,7 @@ fn apply_journal_mark_failed_records_reason() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     journal
         .mark_operation_failed_at(0, "icp-load-failed".to_string(), None)
@@ -1374,7 +1392,7 @@ fn apply_journal_retry_failed_operation_marks_ready() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
     journal
         .mark_operation_failed_at(0, "icp-upload-failed".to_string(), None)
         .expect("mark failed operation");
@@ -1399,7 +1417,7 @@ fn apply_journal_rejects_blocked_operation_completion() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
-    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
+    let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
 
     let err = journal
         .mark_operation_completed_at(0, None)

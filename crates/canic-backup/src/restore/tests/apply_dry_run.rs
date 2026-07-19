@@ -7,6 +7,7 @@ fn apply_dry_run_renders_ordered_member_operations() {
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+    dry_run.validate().expect("dry-run should validate");
 
     assert_eq!(dry_run.dry_run_version, 1);
     assert_eq!(dry_run.backup_id.as_str(), "fbk_test_001");
@@ -70,6 +71,52 @@ fn apply_dry_run_renders_ordered_member_operations() {
         operations[9].operation,
         RestoreApplyOperationKind::VerifyMember
     );
+}
+
+#[test]
+fn apply_dry_run_rejects_unsupported_version_and_count_projection() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let mut dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+    dry_run.dry_run_version = 2;
+
+    let err = dry_run
+        .validate()
+        .expect_err("unsupported dry-run version rejects");
+    std::assert_matches!(
+        err,
+        RestoreApplyDryRunValidationError::UnsupportedVersion(2)
+    );
+
+    dry_run.dry_run_version = 1;
+    dry_run.planned_operations += 1;
+    let err = dry_run
+        .validate()
+        .expect_err("contradictory operation count rejects");
+    std::assert_matches!(
+        err,
+        RestoreApplyDryRunValidationError::ProjectionMismatch("planned_operations")
+    );
+}
+
+#[test]
+fn apply_dry_run_rejects_readiness_and_sequence_projection() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let mut dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+    dry_run.ready = false;
+
+    let err = dry_run
+        .validate()
+        .expect_err("contradictory readiness rejects");
+    std::assert_matches!(err, RestoreApplyDryRunValidationError::ReadinessMismatch);
+
+    dry_run.ready = true;
+    dry_run.operations[1].sequence = 0;
+    let err = dry_run
+        .validate()
+        .expect_err("duplicate operation sequence rejects");
+    std::assert_matches!(err, RestoreApplyDryRunValidationError::DuplicateSequence(0));
 }
 
 #[test]
@@ -176,11 +223,13 @@ fn apply_dry_run_validates_artifacts_under_backup_root() {
     );
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
+    let mut dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
+    dry_run.validate().expect("dry-run should validate");
 
     let validation = dry_run
         .artifact_validation
+        .as_ref()
         .expect("artifact validation should be present");
     assert_eq!(validation.checked_members, 2);
     assert!(validation.artifacts_present);
@@ -189,8 +238,99 @@ fn apply_dry_run_validates_artifacts_under_backup_root() {
     assert_eq!(validation.checks[0].source_canister, ROOT);
     assert!(validation.checks[0].checksum_verified);
 
+    dry_run
+        .artifact_validation
+        .as_mut()
+        .expect("artifact validation should be present")
+        .checked_members += 1;
+    let err = dry_run
+        .validate()
+        .expect_err("contradictory artifact projection rejects");
+    std::assert_matches!(
+        err,
+        RestoreApplyDryRunValidationError::ProjectionMismatch(
+            "artifact_validation.checked_members"
+        )
+    );
+
+    let validation = dry_run
+        .artifact_validation
+        .as_mut()
+        .expect("artifact validation should be present");
+    validation.checked_members -= 1;
+    validation.checks[0].target_canister = CHILD.to_string();
+    let err = dry_run
+        .validate()
+        .expect_err("artifact identity contradiction rejects");
+    std::assert_matches!(
+        err,
+        RestoreApplyDryRunValidationError::ProjectionMismatch("artifact_validation.checks[]")
+    );
+
+    let validation = dry_run
+        .artifact_validation
+        .as_mut()
+        .expect("artifact validation should be present");
+    validation.checks[0].target_canister = ROOT.to_string();
+    validation.checks[0].checksum_expected = Some("invalid".to_string());
+    let err = dry_run
+        .validate()
+        .expect_err("invalid artifact checksum rejects");
+    std::assert_matches!(
+        err,
+        RestoreApplyDryRunValidationError::ArtifactChecksum {
+            field: "artifact_validation.checks[].checksum_expected",
+            source: ArtifactChecksumError::InvalidHash(_),
+        }
+    );
+
     fs::remove_dir_all(root).expect("remove temp root");
 }
+
+#[test]
+fn apply_dry_run_preserves_exact_missing_checksum_as_blocked() {
+    let root = temp_dir("canic-restore-apply-artifact-missing-checksum");
+    fs::create_dir_all(&root).expect("create temp root");
+    let mut manifest = valid_manifest(IdentityMode::Relocatable);
+    set_member_artifact(
+        &mut manifest,
+        CHILD,
+        &root,
+        "artifacts/child",
+        b"child-snapshot",
+    );
+    set_member_artifact(
+        &mut manifest,
+        ROOT,
+        &root,
+        "artifacts/root",
+        b"root-snapshot",
+    );
+    manifest.deployment.members[0].source_snapshot.checksum = None;
+
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
+        .expect("dry-run should inspect artifacts");
+    dry_run.validate().expect("blocked dry-run should validate");
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build blocked journal");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    assert!(!dry_run.ready);
+    assert!(
+        !dry_run
+            .artifact_validation
+            .as_ref()
+            .expect("artifact validation")
+            .checksums_verified
+    );
+    assert!(!journal.ready);
+    assert!(
+        journal
+            .blocked_reasons
+            .contains(&"missing-snapshot-checksum".to_string())
+    );
+}
+
 // Ensure apply dry-runs fail closed when a referenced artifact is missing.
 #[test]
 fn apply_dry_run_rejects_missing_artifacts() {
