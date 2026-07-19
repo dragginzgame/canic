@@ -459,8 +459,8 @@ fn encode_root_proof_mode(out: &mut Vec<u8>, _mode: RootProofMode) {
     out.push(2);
 }
 
-fn encode_build_network(out: &mut Vec<u8>, network: BuildNetwork) {
-    let tag = match network {
+fn encode_build_network(out: &mut Vec<u8>, build_network: BuildNetwork) {
+    let tag = match build_network {
         BuildNetwork::Ic => 1,
         BuildNetwork::Local => 2,
     };

@@ -401,7 +401,7 @@ the downstream verifier sees the forwarding canister as caller.
 enabled = true
 root_canister_id = "..."
 ic_root_public_key_raw_hex = "..."
-network = "mainnet"
+build_network = "ic"
 max_ttl_secs = 3600
 root_proof_mode = "chain_key_batch"
 
@@ -420,17 +420,17 @@ max_revocation_latency_ns = 60000000000
 ```
 
 `root_canister_id` may fall back to initialized Canic root env. The raw IC root
-key is paired with `network` for issuer canister-signature verification:
-mainnet requires the configured known mainnet raw key, while local/PocketIC/test
-verification requires a non-mainnet raw root key from
+key is paired with `build_network` for issuer canister-signature verification:
+`ic` requires the configured known mainnet raw key, while `local` verification
+requires a non-mainnet raw root key from
 `ic_root_public_key_raw_hex` and rejects the mainnet key.
 
 Delegated-token auth requires `root_proof_mode = "chain_key_batch"`.
 `chain_key_root_proof` is the root delegation proof trust anchor. Its
 `public_key_hex` must be a secp256k1 SEC1 public key for the configured root
 canister id, `key_id`, and `derivation_path_hex`; `derivation_path_hash_hex`
-must match the canonical hash of `derivation_path_hex`. Mainnet rejects
-`test_key_1`; local/test use of `test_key_1` requires `allow_test_key = true`.
+must match the canonical hash of `derivation_path_hex`. The `ic` build network
+rejects `test_key_1`; local use requires `allow_test_key = true`.
 
 If delegated-token verification is enabled, startup must have chain-key root
 proof verification support, issuer canister-signature verification support, an

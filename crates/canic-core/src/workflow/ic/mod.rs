@@ -2,13 +2,13 @@
 //!
 //! Responsibility: coordinate IC-facing workflow helpers and registry lookups.
 //! Does not own: IC call execution, endpoint authorization, or stable storage.
-//! Boundary: exposes workflow facades over IC ops and network metadata.
+//! Boundary: exposes workflow facades over IC ops and build-network metadata.
 
+pub mod build_network;
 pub mod call;
 pub mod icp_refill;
 pub mod ledger;
 pub mod mgmt;
-pub mod network;
 pub mod provision;
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
 ///
 /// IcWorkflow
 ///
-/// Workflow facade for IC registry and network metadata operations.
+/// Workflow facade for IC registry and build-network metadata operations.
 ///
 
 pub struct IcWorkflow;

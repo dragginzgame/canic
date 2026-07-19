@@ -127,7 +127,7 @@ pub enum IcpRefillInfraError {
     #[error("ledger block index {value} does not fit in u64")]
     LedgerBlockIndexOverflow { value: Nat },
 
-    #[error("network=ic rejects ICP ledger / CMC overrides without unsafe override flag")]
+    #[error("build_network=ic rejects ICP ledger / CMC overrides without unsafe override flag")]
     MainnetSystemCanisterOverrideRejected,
 
     #[error("target principal is too long for CMC top-up subaccount: len={len}")]
@@ -300,10 +300,10 @@ impl IcpRefillInfra {
 
     /// Resolve refill canister IDs while enforcing mainnet override rules.
     pub fn resolve_canisters(
-        network: BuildNetwork,
+        build_network: BuildNetwork,
         overrides: IcpRefillCanisterOverrides,
     ) -> Result<IcpRefillCanisters, InfraError> {
-        if network == BuildNetwork::Ic
+        if build_network == BuildNetwork::Ic
             && !overrides.allow_ic_overrides
             && (overrides.ledger_canister_id.is_some() || overrides.cmc_canister_id.is_some())
         {

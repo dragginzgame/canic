@@ -17,6 +17,8 @@ Canic uses one name for each distinct target concept:
   option. It may be the implicit `local` or `ic` environment, or a named entry
   such as `staging` declared under `environments` in `icp.yaml`.
 - `build_network` is the `local` or `ic` compile-time class baked into Wasm.
+- Guarded runtime status projects that same class as typed `build_network`; it
+  does not expose a selected environment or a second runtime network label.
 - `artifact_environment` is the exact `.icp/<name>/canisters` namespace read
   or written by an artifact operation; it can differ from the deployment
   environment when a named deployment installs artifacts built under `local`.

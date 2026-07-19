@@ -24,42 +24,6 @@ pub const MAINNET_IC_ROOT_PUBLIC_KEY_RAW: [u8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH] = 
 #[cfg(any(target_arch = "wasm32", test))]
 const IC_ROOT_PK_DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 
-///
-/// DelegatedAuthNetwork
-///
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DelegatedAuthNetwork {
-    Mainnet,
-    Local,
-    PocketIc,
-    Testnet,
-}
-
-impl DelegatedAuthNetwork {
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "mainnet" => Some(Self::Mainnet),
-            "local" => Some(Self::Local),
-            "pocketic" => Some(Self::PocketIc),
-            "testnet" => Some(Self::Testnet),
-            _ => None,
-        }
-    }
-
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Mainnet => "mainnet",
-            Self::Local => "local",
-            Self::PocketIc => "pocketic",
-            Self::Testnet => "testnet",
-        }
-    }
-
-    pub const fn is_mainnet(self) -> bool {
-        matches!(self, Self::Mainnet)
-    }
-}
-
 pub fn is_mainnet_ic_root_public_key_raw(root_key: &[u8]) -> bool {
     root_key == MAINNET_IC_ROOT_PUBLIC_KEY_RAW
 }

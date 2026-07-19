@@ -6,8 +6,7 @@
 use crate::{
     InternalError, InternalErrorClass, InternalErrorOrigin,
     config::schema::DelegatedTokenConfig,
-    domain::{auth::DelegatedAuthNetwork, runtime::FailureSeverity},
-    ids::BuildNetwork,
+    domain::runtime::FailureSeverity,
     log,
     log::Topic,
     ops::{
@@ -104,7 +103,7 @@ impl RootDelegationRenewalWorkflow {
             return Ok(false);
         }
         require_chain_key_root_proof_mode(&config)?;
-        let build_network = build_network_from_delegated_auth_config(&config)?;
+        let build_network = config.build_network;
         let min_accepted_proof_epoch = chain_key_min_accepted_proof_epoch(&config)?;
         let max_cert_ttl_ns = delegated_token_max_ttl_ns()?;
         let now_ns = IcOps::now_nanos();
@@ -205,21 +204,6 @@ fn require_chain_key_root_proof_mode(config: &DelegatedTokenConfig) -> Result<()
         InternalErrorOrigin::Workflow,
         "delegated-auth renewal requires root_proof_mode=\"chain_key_batch\"",
     ))
-}
-
-fn build_network_from_delegated_auth_config(
-    config: &DelegatedTokenConfig,
-) -> Result<BuildNetwork, InternalError> {
-    let network = DelegatedAuthNetwork::parse(config.network.trim()).ok_or_else(|| {
-        InternalError::invalid_input(
-            "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet",
-        )
-    })?;
-    if network.is_mainnet() {
-        Ok(BuildNetwork::Ic)
-    } else {
-        Ok(BuildNetwork::Local)
-    }
 }
 
 fn chain_key_min_accepted_proof_epoch(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {

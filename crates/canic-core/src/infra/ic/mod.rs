@@ -4,13 +4,13 @@
 //! Does not own: ops conversion, workflow policy, or endpoint DTO shaping.
 //! Boundary: ops calls this namespace for low-level IC platform interactions.
 
+pub mod build_network;
 pub mod call;
 pub mod http;
 pub mod icp_refill;
 pub mod known;
 pub mod ledger;
 pub mod mgmt;
-pub mod network;
 pub mod nns;
 
 use crate::cdk::{

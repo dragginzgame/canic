@@ -6,7 +6,7 @@
 
 use super::{
     error::{delegated_auth_reason_from_verify_error, map_verify_delegated_token_error},
-    verifier_config::{chain_key_policy_from_config, validate_network_root_key_pair},
+    verifier_config::{chain_key_policy_from_config, validate_build_network_root_key_pair},
     *,
 };
 
@@ -141,7 +141,10 @@ pub(super) fn verify_with_embedded_proofs<'a>(
     ctx: &'a DelegatedTokenLocalContext,
     verifier_cfg: &'a AuthProofVerifierConfig,
 ) -> Result<VerifiedDelegatedToken, InternalError> {
-    validate_network_root_key_pair(verifier_cfg.network, &verifier_cfg.ic_root_public_key_raw)?;
+    validate_build_network_root_key_pair(
+        verifier_cfg.build_network,
+        &verifier_cfg.ic_root_public_key_raw,
+    )?;
     verify_delegated_token(
         delegated_token_verify_input(input, ctx),
         |cert, root_proof| {

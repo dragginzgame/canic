@@ -47,8 +47,8 @@ pub mod ops {
             pub use crate::ops::ic::mgmt::MgmtOps;
         }
 
-        pub mod network {
-            pub use crate::ops::ic::network::NetworkOps;
+        pub mod build_network {
+            pub use crate::ops::ic::build_network::BuildNetworkOps;
         }
     }
 

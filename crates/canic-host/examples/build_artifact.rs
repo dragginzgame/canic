@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         role: canister_name.clone(),
         profile,
         environment,
-        build_network: build_network.as_str().to_string(),
+        build_network,
         config_path,
         workspace_root,
         icp_root,

@@ -152,6 +152,7 @@ mod tests {
     use crate::{
         config::Config,
         dto::auth::{IcCanisterSignatureProofV1, RoleAttestationRootProof},
+        ids::BuildNetwork,
         test::config::ConfigTestBuilder,
     };
 
@@ -160,9 +161,9 @@ mod tests {
     }
 
     #[test]
-    fn role_attestation_verifier_uses_same_mainnet_root_key_requirement() {
+    fn role_attestation_verifier_uses_same_ic_root_key_requirement() {
         let mut cfg = ConfigTestBuilder::new().build();
-        cfg.auth.delegated_tokens.network = "mainnet".to_string();
+        cfg.auth.delegated_tokens.build_network = BuildNetwork::Ic;
         cfg.auth.delegated_tokens.root_canister_id = Some(p(1).to_string());
         cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = None;
         Config::reset_for_tests();
@@ -187,13 +188,13 @@ mod tests {
         };
 
         AuthOps::verify_role_attestation_cached(&attestation, p(2), p(3), None, 15, 0)
-            .expect_err("missing mainnet root key must fail before proof acceptance");
+            .expect_err("missing IC root key must fail before proof acceptance");
     }
 
     #[test]
     fn role_attestation_verifier_requires_explicit_local_root_key() {
         let mut cfg = ConfigTestBuilder::new().build();
-        cfg.auth.delegated_tokens.network = "local".to_string();
+        cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
         cfg.auth.delegated_tokens.root_canister_id = Some(p(1).to_string());
         cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = None;
         Config::reset_for_tests();

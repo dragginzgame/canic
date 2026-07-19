@@ -171,7 +171,7 @@ fn atomic_create_rejects_distinct_operation_while_failure_is_retryable() {
 
 #[test]
 fn missing_build_network_fails_closed() {
-    let error = require_build_network(None).expect_err("network must be explicit");
+    let error = require_build_network(None).expect_err("build network must be explicit");
 
     assert_eq!(error.class(), InternalErrorClass::Invariant);
     assert_eq!(error.origin(), InternalErrorOrigin::Workflow);

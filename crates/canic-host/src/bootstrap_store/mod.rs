@@ -102,7 +102,7 @@ pub fn build_bootstrap_wasm_store_artifact(
     fs::copy(&built_wasm_path, &wasm_path)?;
     let mut transforms = vec![maybe_shrink_wasm_artifact(WASM_STORE_ROLE, &wasm_path)?];
     fs::write(profile_path, context.profile.target_dir_name())?;
-    if should_export_candid_artifacts(&context.build_network) {
+    if should_export_candid_artifacts(context.build_network) {
         ensure_wasm_store_did(context, &source, &did_path)?;
         transforms.push(embed_candid_metadata(
             WASM_STORE_ROLE,

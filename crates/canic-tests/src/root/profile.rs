@@ -1,3 +1,4 @@
+use canic::ids::BuildNetwork;
 use canic_testing_internal::pic::{CanicWasmBuildProfile, RootBaselineMetadata, RootBaselineSpec};
 use ic_testkit::{artifacts::workspace_root_for, pic::CachedPicBaseline};
 use std::{
@@ -184,7 +185,7 @@ fn baseline_spec_for_roles_owned_env(
         release_roles,
         icp_build_lock_path: icp_build_lock_path(&workspace_root),
         workspace_root,
-        build_network: "local",
+        build_network: BuildNetwork::Local,
         build_profile,
         build_config_path,
         build_extra_env,

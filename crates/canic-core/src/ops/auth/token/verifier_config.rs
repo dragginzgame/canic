@@ -28,18 +28,6 @@ pub(super) fn configured_root_canister_id(
     })
 }
 
-pub(super) fn configured_delegated_auth_network(
-    cfg: &DelegatedTokenConfig,
-) -> Result<DelegatedAuthNetwork, InternalError> {
-    DelegatedAuthNetwork::parse(cfg.network.trim()).ok_or_else(|| {
-        AuthValidationError::Auth(
-            "auth.delegated_tokens.network must be one of mainnet, local, pocketic, testnet"
-                .to_string(),
-        )
-        .into()
-    })
-}
-
 pub(super) fn configured_root_proof_mode(
     cfg: &DelegatedTokenConfig,
 ) -> Result<RootProofMode, InternalError> {
@@ -55,7 +43,7 @@ pub(super) fn configured_root_proof_mode(
 pub(super) fn configured_chain_key_root_verifier(
     cfg: &DelegatedTokenConfig,
     root_canister_id: Principal,
-    network: DelegatedAuthNetwork,
+    build_network: BuildNetwork,
 ) -> Result<Option<AuthChainKeyRootVerifierConfig>, InternalError> {
     let chain_key = &cfg.chain_key_root_proof;
     let key_id = required_chain_key_field(chain_key.key_id.as_deref(), "key_id")?;
@@ -108,16 +96,16 @@ pub(super) fn configured_chain_key_root_verifier(
         )
         .into());
     }
-    if network.is_mainnet() && key_id == "test_key_1" {
+    if build_network == BuildNetwork::Ic && key_id == "test_key_1" {
         return Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.chain_key_root_proof.key_id must not be test_key_1 on network=\"mainnet\""
+            "auth.delegated_tokens.chain_key_root_proof.key_id must not be test_key_1 on build_network=\"ic\""
                 .to_string(),
         )
         .into());
     }
-    if !network.is_mainnet() && key_id == "test_key_1" && !chain_key.allow_test_key {
+    if build_network == BuildNetwork::Local && key_id == "test_key_1" && !chain_key.allow_test_key {
         return Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.chain_key_root_proof.allow_test_key must be true to use test_key_1 outside mainnet"
+            "auth.delegated_tokens.chain_key_root_proof.allow_test_key must be true to use test_key_1 on build_network=\"local\""
                 .to_string(),
         )
         .into());
@@ -140,7 +128,7 @@ pub(super) fn configured_chain_key_root_verifier(
             max_revocation_latency_ns,
             valid_from_ns,
             accept_until_ns,
-            build_network: build_network_for_delegated_auth(network),
+            build_network,
         },
         allow_test_chain_key: chain_key.allow_test_key,
     }))
@@ -194,14 +182,6 @@ fn required_fixed_32_chain_key_hex(
     })
 }
 
-const fn build_network_for_delegated_auth(network: DelegatedAuthNetwork) -> BuildNetwork {
-    if network.is_mainnet() {
-        BuildNetwork::Ic
-    } else {
-        BuildNetwork::Local
-    }
-}
-
 pub(super) fn chain_key_policy_from_config(
     config: &AuthChainKeyRootVerifierConfig,
 ) -> ChainKeyRootVerifierPolicy {
@@ -225,7 +205,7 @@ pub(super) fn chain_key_policy_from_config(
 
 pub(super) fn configured_ic_root_public_key_raw(
     cfg: &DelegatedTokenConfig,
-    network: DelegatedAuthNetwork,
+    build_network: BuildNetwork,
 ) -> Result<Vec<u8>, InternalError> {
     let ic_root_public_key_raw = match cfg.ic_root_public_key_raw_hex.as_deref() {
         Some(root_key_hex) => {
@@ -245,8 +225,7 @@ pub(super) fn configured_ic_root_public_key_raw(
         }
         None => {
             return Err(AuthValidationError::Auth(format!(
-                "auth.delegated_tokens.ic_root_public_key_raw_hex is required when delegated-token verification is enabled for network=\"{}\"",
-                network.label()
+                "auth.delegated_tokens.ic_root_public_key_raw_hex is required when delegated-token verification is enabled for build_network=\"{build_network}\""
             ))
             .into());
         }
@@ -259,30 +238,30 @@ pub(super) fn configured_ic_root_public_key_raw(
         .into());
     }
 
-    validate_network_root_key_pair(network, &ic_root_public_key_raw)?;
+    validate_build_network_root_key_pair(build_network, &ic_root_public_key_raw)?;
     Ok(ic_root_public_key_raw)
 }
 
-pub(super) fn validate_network_root_key_pair(
-    network: DelegatedAuthNetwork,
+pub(super) fn validate_build_network_root_key_pair(
+    build_network: BuildNetwork,
     ic_root_public_key_raw: &[u8],
 ) -> Result<(), InternalError> {
     let is_mainnet_key = is_mainnet_ic_root_public_key_raw(ic_root_public_key_raw);
-    if network.is_mainnet() {
+    if build_network == BuildNetwork::Ic {
         if is_mainnet_key {
             return Ok(());
         }
         return Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.network=\"mainnet\" requires the known mainnet raw IC root public key".to_string(),
+            "auth.delegated_tokens.build_network=\"ic\" requires the known mainnet raw IC root public key".to_string(),
         )
         .into());
     }
 
     if is_mainnet_key {
-        return Err(AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.network=\"{}\" must not use the mainnet IC root public key",
-            network.label()
-        ))
+        return Err(AuthValidationError::Auth(
+            "auth.delegated_tokens.build_network=\"local\" must not use the mainnet IC root public key"
+                .to_string(),
+        )
         .into());
     }
 

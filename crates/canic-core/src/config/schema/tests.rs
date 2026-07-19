@@ -186,13 +186,18 @@ fn complete_config_validation_rejects_unadmitted_role_declarations() {
 }
 
 #[test]
-fn test_fleet_configs_validate_with_chain_key_batch_policy() {
+fn checked_in_delegated_auth_configs_validate_with_chain_key_batch_policy() {
     let root = workspace_root();
     for rel_path in [
         "fleets/test/canic.toml",
         "fleets/test/test-configs/root-capability.toml",
         "fleets/test/test-configs/root-scaling.toml",
         "fleets/test/test-configs/root-sharding.toml",
+        "canisters/test/delegation_issuer_stub/canic.toml",
+        "canisters/test/delegation_root_stub/canic.toml",
+        "canisters/test/project_hub_stub/canic.toml",
+        "canisters/test/project_instance_stub/canic.toml",
+        "canisters/test/runtime_probe/canic.toml",
     ] {
         let path = root.join(rel_path);
         let source =
@@ -203,6 +208,11 @@ fn test_fleet_configs_validate_with_chain_key_batch_policy() {
         assert_eq!(
             cfg.auth.delegated_tokens.root_proof_mode, "chain_key_batch",
             "{rel_path} should use the current hard-cut root proof mode",
+        );
+        assert_eq!(
+            cfg.auth.delegated_tokens.build_network,
+            BuildNetwork::Local,
+            "{rel_path} should use the local build-network trust policy",
         );
         assert_eq!(
             cfg.auth
@@ -502,12 +512,15 @@ fn delegated_tokens_ic_root_public_key_hex_must_be_raw_length() {
 }
 
 #[test]
-fn delegated_tokens_network_must_be_known() {
-    let mut cfg = ConfigModel::test_default();
-    cfg.auth.delegated_tokens.network = "mars".to_string();
-
-    cfg.validate()
-        .expect_err("expected invalid network to fail");
+fn delegated_tokens_build_network_must_be_known() {
+    crate::bootstrap::parse_config_model(
+        r#"
+[auth.delegated_tokens]
+enabled = false
+build_network = "mars"
+"#,
+    )
+    .expect_err("expected invalid build network to fail");
 }
 
 #[test]
@@ -523,7 +536,7 @@ fn delegated_tokens_root_proof_mode_must_be_chain_key_batch() {
 fn delegated_tokens_chain_key_batch_requires_key_policy() {
     let mut cfg = ConfigModel::test_default();
     cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
-    cfg.auth.delegated_tokens.network = "local".to_string();
+    cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
     cfg.auth.delegated_tokens.chain_key_root_proof = ChainKeyRootProofConfig::default();
 
     cfg.validate()
@@ -579,10 +592,10 @@ fn delegated_tokens_chain_key_public_key_must_be_sec1_secp256k1() {
 }
 
 #[test]
-fn delegated_tokens_chain_key_mainnet_rejects_test_key() {
+fn delegated_tokens_chain_key_ic_rejects_test_key() {
     let mut cfg = ConfigModel::test_default();
     cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
-    cfg.auth.delegated_tokens.network = "mainnet".to_string();
+    cfg.auth.delegated_tokens.build_network = BuildNetwork::Ic;
     cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("test_key_1".to_string());
     cfg.auth
         .delegated_tokens
@@ -623,24 +636,23 @@ fn delegated_tokens_chain_key_mainnet_rejects_test_key() {
         .chain_key_root_proof
         .max_revocation_latency_ns = Some(1);
 
-    cfg.validate()
-        .expect_err("expected mainnet test key to fail");
+    cfg.validate().expect_err("expected IC test key to fail");
 }
 
 #[test]
-fn delegated_tokens_mainnet_requires_known_mainnet_root_key_when_key_is_configured() {
+fn delegated_tokens_ic_requires_known_mainnet_root_key_when_key_is_configured() {
     let mut cfg = ConfigModel::test_default();
-    cfg.auth.delegated_tokens.network = "mainnet".to_string();
+    cfg.auth.delegated_tokens.build_network = BuildNetwork::Ic;
     cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some("07".repeat(96));
 
     cfg.validate()
-        .expect_err("expected wrong mainnet root key to fail");
+        .expect_err("expected wrong IC root key to fail");
 }
 
 #[test]
 fn delegated_tokens_local_rejects_configured_mainnet_root_key() {
     let mut cfg = ConfigModel::test_default();
-    cfg.auth.delegated_tokens.network = "local".to_string();
+    cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
     cfg.auth.delegated_tokens.ic_root_public_key_raw_hex =
         Some(hex(MAINNET_IC_ROOT_PUBLIC_KEY_RAW));
 

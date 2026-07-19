@@ -11,7 +11,7 @@ use crate::{
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     dto::env::EnvBootstrapArgs,
     ids::CanisterRole,
-    ops::{ic::network::NetworkOps, runtime::env::EnvOps},
+    ops::{ic::build_network::BuildNetworkOps, runtime::env::EnvOps},
 };
 
 ///
@@ -25,11 +25,10 @@ impl EnvWorkflow {
         env_args: EnvBootstrapArgs,
         role: CanisterRole,
     ) -> Result<(), InternalError> {
-        NetworkOps::build_network().ok_or_else(|| {
+        BuildNetworkOps::build_network().ok_or_else(|| {
             InternalError::invariant(
                 InternalErrorOrigin::Workflow,
-                "runtime network unavailable; set ICP_ENVIRONMENT=local|ic at build time"
-                    .to_string(),
+                "build network unavailable; set ICP_ENVIRONMENT=local|ic at build time".to_string(),
             )
         })?;
 

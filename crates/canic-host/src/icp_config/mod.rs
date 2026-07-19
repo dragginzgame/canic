@@ -9,6 +9,7 @@ use crate::{
     },
     workspace_discovery::discover_icp_root_from,
 };
+use canic_core::ids::BuildNetwork;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -18,28 +19,6 @@ use thiserror::Error as ThisError;
 
 const ICP_CONFIG_FILE: &str = "icp.yaml";
 pub const DEFAULT_LOCAL_GATEWAY_PORT: u16 = 8000;
-
-///
-/// IcpBuildNetwork
-///
-/// Build-time network class baked into Canic Wasm artifacts.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum IcpBuildNetwork {
-    Ic,
-    Local,
-}
-
-impl IcpBuildNetwork {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Ic => "ic",
-            Self::Local => "local",
-        }
-    }
-}
 
 ///
 /// IcpConfigError
@@ -136,7 +115,7 @@ pub fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpCo
 pub fn resolve_icp_build_network_from_root(
     root: &Path,
     environment: &str,
-) -> Result<IcpBuildNetwork, IcpConfigError> {
+) -> Result<BuildNetwork, IcpConfigError> {
     let environment = environment.trim();
     if environment.is_empty() {
         return Err(IcpConfigError::Config(
@@ -144,8 +123,8 @@ pub fn resolve_icp_build_network_from_root(
         ));
     }
     match environment {
-        "local" => return Ok(IcpBuildNetwork::Local),
-        "ic" => return Ok(IcpBuildNetwork::Ic),
+        "local" => return Ok(BuildNetwork::Local),
+        "ic" => return Ok(BuildNetwork::Ic),
         _ => {}
     }
 
@@ -319,7 +298,7 @@ fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
 fn resolve_icp_build_network_from_yaml(
     source: &str,
     environment: &str,
-) -> Result<IcpBuildNetwork, String> {
+) -> Result<BuildNetwork, String> {
     let lines = source.lines().collect::<Vec<_>>();
     let (_, environment_start, environment_end) =
         named_item_block(&lines, "environments:", environment)?.ok_or_else(|| {
@@ -333,8 +312,8 @@ fn resolve_icp_build_network_from_yaml(
         )?;
 
     match configured_network.as_str() {
-        "ic" => Ok(IcpBuildNetwork::Ic),
-        "local" => Ok(IcpBuildNetwork::Local),
+        "ic" => Ok(BuildNetwork::Ic),
+        "local" => Ok(BuildNetwork::Local),
         _ => {
             let (_, network_start, network_end) =
                 named_item_block(&lines, "networks:", &configured_network)?.ok_or_else(|| {
@@ -347,7 +326,7 @@ fn resolve_icp_build_network_from_yaml(
             match mode.as_str() {
                 // ICP CLI reserves the implicit `ic` network for mainnet.
                 // Declared managed and connected networks are non-mainnet build classes.
-                "connected" | "managed" => Ok(IcpBuildNetwork::Local),
+                "connected" | "managed" => Ok(BuildNetwork::Local),
                 _ => Err(format!(
                     "ICP backing network '{configured_network}' has unsupported mode '{mode}'"
                 )),

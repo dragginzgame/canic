@@ -22,22 +22,26 @@ fn root_pid() -> Principal {
     Principal::from_slice(&[1; 29])
 }
 
-fn cfg(network: &str, root_key: Option<Vec<u8>>) -> DelegatedTokenConfig {
+fn cfg(build_network: BuildNetwork, root_key: Option<Vec<u8>>) -> DelegatedTokenConfig {
     let mut cfg = DelegatedTokenConfig {
         enabled: true,
         root_canister_id: Some(root_pid().to_string()),
         ic_root_public_key_raw_hex: root_key.map(hex),
         root_proof_mode: "chain_key_batch".to_string(),
         chain_key_root_proof: ChainKeyRootProofConfig::default(),
-        network: network.to_string(),
+        build_network,
         max_ttl_secs: None,
     };
     install_chain_key_policy(&mut cfg, "key_1");
     cfg
 }
 
-fn chain_key_cfg(network: &str, root_key: Vec<u8>, key_id: &str) -> DelegatedTokenConfig {
-    let mut cfg = cfg(network, Some(root_key));
+fn chain_key_cfg(
+    build_network: BuildNetwork,
+    root_key: Vec<u8>,
+    key_id: &str,
+) -> DelegatedTokenConfig {
+    let mut cfg = cfg(build_network, Some(root_key));
     install_chain_key_policy(&mut cfg, key_id);
     cfg
 }
@@ -231,12 +235,12 @@ fn chain_key_root_proof_failures_keep_boundary_specific_codes() {
 }
 
 #[test]
-fn auth_proof_verifier_config_accepts_mainnet_with_known_mainnet_root_key() {
-    let cfg = cfg("mainnet", Some(mainnet_key()));
+fn auth_proof_verifier_config_accepts_ic_with_known_mainnet_root_key() {
+    let cfg = cfg(BuildNetwork::Ic, Some(mainnet_key()));
 
-    let verifier = AuthOps::auth_proof_verifier_config_from(&cfg).expect("mainnet key should pass");
+    let verifier = AuthOps::auth_proof_verifier_config_from(&cfg).expect("IC key should pass");
 
-    assert_eq!(verifier.network, DelegatedAuthNetwork::Mainnet);
+    assert_eq!(verifier.build_network, BuildNetwork::Ic);
     assert_eq!(verifier.root_canister_id, root_pid());
     assert_eq!(verifier.ic_root_public_key_raw, mainnet_key());
     assert_eq!(verifier.root_proof_mode, RootProofMode::ChainKeyBatch);
@@ -245,7 +249,7 @@ fn auth_proof_verifier_config_accepts_mainnet_with_known_mainnet_root_key() {
 
 #[test]
 fn auth_proof_verifier_config_rejects_non_chain_key_root_proof_mode() {
-    let mut cfg = cfg("mainnet", Some(mainnet_key()));
+    let mut cfg = cfg(BuildNetwork::Ic, Some(mainnet_key()));
     cfg.root_proof_mode = "canister_signature".to_string();
 
     AuthOps::auth_proof_verifier_config_from(&cfg)
@@ -253,22 +257,22 @@ fn auth_proof_verifier_config_rejects_non_chain_key_root_proof_mode() {
 }
 
 #[test]
-fn auth_proof_verifier_config_rejects_mainnet_without_root_key() {
-    let cfg = cfg("mainnet", None);
+fn auth_proof_verifier_config_rejects_ic_without_root_key() {
+    let cfg = cfg(BuildNetwork::Ic, None);
 
-    AuthOps::auth_proof_verifier_config_from(&cfg).expect_err("mainnet requires explicit root key");
+    AuthOps::auth_proof_verifier_config_from(&cfg).expect_err("IC requires explicit root key");
 }
 
 #[test]
-fn auth_proof_verifier_config_rejects_mainnet_with_local_root_key() {
-    let cfg = cfg("mainnet", Some(local_key()));
+fn auth_proof_verifier_config_rejects_ic_with_local_root_key() {
+    let cfg = cfg(BuildNetwork::Ic, Some(local_key()));
 
-    AuthOps::auth_proof_verifier_config_from(&cfg).expect_err("mainnet must reject local root key");
+    AuthOps::auth_proof_verifier_config_from(&cfg).expect_err("IC must reject local root key");
 }
 
 #[test]
 fn auth_proof_verifier_config_local_requires_explicit_root_key() {
-    let cfg = cfg("local", None);
+    let cfg = cfg(BuildNetwork::Local, None);
 
     AuthOps::auth_proof_verifier_config_from(&cfg)
         .expect_err("local verifier requires explicit root key");
@@ -276,70 +280,25 @@ fn auth_proof_verifier_config_local_requires_explicit_root_key() {
 
 #[test]
 fn auth_proof_verifier_config_local_accepts_explicit_local_root_key() {
-    let cfg = cfg("local", Some(local_key()));
+    let cfg = cfg(BuildNetwork::Local, Some(local_key()));
 
     let verifier = AuthOps::auth_proof_verifier_config_from(&cfg).expect("local key should pass");
 
-    assert_eq!(verifier.network, DelegatedAuthNetwork::Local);
-    assert_eq!(verifier.ic_root_public_key_raw, local_key());
-}
-
-#[test]
-fn auth_proof_verifier_config_pocketic_requires_explicit_root_key() {
-    let cfg = cfg("pocketic", None);
-
-    AuthOps::auth_proof_verifier_config_from(&cfg)
-        .expect_err("pocketic verifier requires explicit root key");
-}
-
-#[test]
-fn auth_proof_verifier_config_pocketic_rejects_explicit_mainnet_root_key() {
-    let cfg = cfg("pocketic", Some(mainnet_key()));
-
-    AuthOps::auth_proof_verifier_config_from(&cfg)
-        .expect_err("pocketic must not accept mainnet root key");
-}
-
-#[test]
-fn auth_proof_verifier_config_pocketic_accepts_explicit_pocketic_root_key() {
-    let cfg = cfg("pocketic", Some(local_key()));
-
-    let verifier =
-        AuthOps::auth_proof_verifier_config_from(&cfg).expect("pocketic key should pass");
-
-    assert_eq!(verifier.network, DelegatedAuthNetwork::PocketIc);
+    assert_eq!(verifier.build_network, BuildNetwork::Local);
     assert_eq!(verifier.ic_root_public_key_raw, local_key());
 }
 
 #[test]
 fn auth_proof_verifier_config_local_rejects_explicit_mainnet_root_key() {
-    let cfg = cfg("local", Some(mainnet_key()));
+    let cfg = cfg(BuildNetwork::Local, Some(mainnet_key()));
 
     AuthOps::auth_proof_verifier_config_from(&cfg)
         .expect_err("local must reject explicit mainnet root key");
 }
 
 #[test]
-fn auth_proof_verifier_config_testnet_requires_explicit_root_key() {
-    let cfg = cfg("testnet", None);
-
-    AuthOps::auth_proof_verifier_config_from(&cfg)
-        .expect_err("testnet verifier requires explicit root key");
-}
-
-#[test]
-fn auth_proof_verifier_config_testnet_accepts_explicit_test_root_key() {
-    let cfg = cfg("testnet", Some(local_key()));
-
-    let verifier = AuthOps::auth_proof_verifier_config_from(&cfg).expect("testnet key should pass");
-
-    assert_eq!(verifier.network, DelegatedAuthNetwork::Testnet);
-    assert_eq!(verifier.ic_root_public_key_raw, local_key());
-}
-
-#[test]
 fn auth_proof_verifier_config_chain_key_local_accepts_test_key_when_allowed() {
-    let mut cfg = chain_key_cfg("local", local_key(), "test_key_1");
+    let mut cfg = chain_key_cfg(BuildNetwork::Local, local_key(), "test_key_1");
     cfg.chain_key_root_proof.allow_test_key = true;
 
     let verifier =
@@ -368,7 +327,7 @@ fn auth_proof_verifier_config_chain_key_local_accepts_test_key_when_allowed() {
 
 #[test]
 fn auth_proof_verifier_config_chain_key_rejects_invalid_public_key() {
-    let mut cfg = chain_key_cfg("local", local_key(), "test_key_1");
+    let mut cfg = chain_key_cfg(BuildNetwork::Local, local_key(), "test_key_1");
     cfg.chain_key_root_proof.allow_test_key = true;
     cfg.chain_key_root_proof.public_key_hex = Some("00".repeat(33));
 
@@ -377,15 +336,15 @@ fn auth_proof_verifier_config_chain_key_rejects_invalid_public_key() {
 }
 
 #[test]
-fn auth_proof_verifier_config_chain_key_rejects_mainnet_test_key() {
-    let cfg = chain_key_cfg("mainnet", mainnet_key(), "test_key_1");
+fn auth_proof_verifier_config_chain_key_rejects_ic_test_key() {
+    let cfg = chain_key_cfg(BuildNetwork::Ic, mainnet_key(), "test_key_1");
 
-    AuthOps::auth_proof_verifier_config_from(&cfg).expect_err("mainnet must reject test_key_1");
+    AuthOps::auth_proof_verifier_config_from(&cfg).expect_err("IC must reject test_key_1");
 }
 
 #[test]
 fn auth_proof_verifier_config_chain_key_rejects_unapproved_local_test_key() {
-    let cfg = chain_key_cfg("local", local_key(), "test_key_1");
+    let cfg = chain_key_cfg(BuildNetwork::Local, local_key(), "test_key_1");
 
     AuthOps::auth_proof_verifier_config_from(&cfg)
         .expect_err("local test key requires explicit opt-in");
@@ -450,7 +409,7 @@ fn install_verifier_test_config(
     let mut cfg = ConfigTestBuilder::new()
         .with_prime_canister("project_instance", canister_cfg)
         .build();
-    cfg.auth.delegated_tokens.network = "local".to_string();
+    cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
     cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
     cfg.auth.delegated_tokens.root_canister_id = Some(root_pid().to_string());
     cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some(hex(local_key()));

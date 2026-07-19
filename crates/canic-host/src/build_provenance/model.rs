@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use canic_core::ids::BuildNetwork;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -185,7 +186,7 @@ pub struct BuildProvenanceRequest {
     pub fleet: String,
     pub role: String,
     pub environment: String,
-    pub build_network: String,
+    pub build_network: BuildNetwork,
     pub profile: CanisterBuildProfile,
     pub workspace_root: PathBuf,
     pub config_path: PathBuf,

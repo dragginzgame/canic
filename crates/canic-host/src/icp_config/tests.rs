@@ -32,11 +32,11 @@ fn resolves_implicit_build_networks_without_project_config() {
 
     assert_eq!(
         resolve_icp_build_network_from_root(&root, "local").expect("resolve local"),
-        IcpBuildNetwork::Local
+        BuildNetwork::Local
     );
     assert_eq!(
         resolve_icp_build_network_from_root(&root, "ic").expect("resolve ic"),
-        IcpBuildNetwork::Ic
+        BuildNetwork::Ic
     );
 }
 
@@ -56,11 +56,11 @@ environments:
 
     assert_eq!(
         resolve_icp_build_network_from_yaml(source, "demo").expect("resolve demo"),
-        IcpBuildNetwork::Local
+        BuildNetwork::Local
     );
     assert_eq!(
         resolve_icp_build_network_from_yaml(source, "staging").expect("resolve staging"),
-        IcpBuildNetwork::Ic
+        BuildNetwork::Ic
     );
 }
 
@@ -83,11 +83,11 @@ environments:
 
     assert_eq!(
         resolve_icp_build_network_from_yaml(source, "docker").expect("resolve managed"),
-        IcpBuildNetwork::Local
+        BuildNetwork::Local
     );
     assert_eq!(
         resolve_icp_build_network_from_yaml(source, "test").expect("resolve connected"),
-        IcpBuildNetwork::Local
+        BuildNetwork::Local
     );
 }
 

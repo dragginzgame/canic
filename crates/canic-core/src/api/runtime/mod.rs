@@ -18,7 +18,7 @@ use crate::{
         },
     },
     ops::{
-        ic::IcOps,
+        ic::{IcOps, build_network::BuildNetworkOps},
         runtime::{
             env::EnvOps,
             memory::MemoryRegistryOps,
@@ -219,7 +219,7 @@ impl RuntimeIntrospectionApi {
             canister_id,
             role,
             root,
-            network: None,
+            build_network: BuildNetworkOps::build_network(),
             build: RuntimeBuildInfo {
                 package_name: package_name.to_string(),
                 package_version: package_version.to_string(),
@@ -430,7 +430,7 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
         ("canister_id", RuntimeFieldVisibility::OperatorOnly),
         ("role", RuntimeFieldVisibility::OperatorOnly),
         ("root", RuntimeFieldVisibility::OperatorOnly),
-        ("network", RuntimeFieldVisibility::OperatorOnly),
+        ("build_network", RuntimeFieldVisibility::OperatorOnly),
         ("build", RuntimeFieldVisibility::OperatorOnly),
         ("features", RuntimeFieldVisibility::OperatorOnly),
         ("topology", RuntimeFieldVisibility::ControllerOnly),
@@ -484,6 +484,7 @@ mod tests {
         assert_eq!(status.schema_version, RUNTIME_INTROSPECTION_SCHEMA_VERSION);
         assert_eq!(status.observed_at_ns, 100);
         assert_eq!(status.canister_id, Principal::anonymous());
+        assert_eq!(status.build_network, BuildNetworkOps::build_network());
         assert_eq!(status.build.package_name, "test-canister");
         assert_eq!(status.build.package_version, "1.2.3");
         assert_eq!(status.build.canic_version, "0.81.0");
@@ -514,7 +515,7 @@ mod tests {
             ("canister_id", RuntimeFieldVisibility::OperatorOnly),
             ("role", RuntimeFieldVisibility::OperatorOnly),
             ("root", RuntimeFieldVisibility::OperatorOnly),
-            ("network", RuntimeFieldVisibility::OperatorOnly),
+            ("build_network", RuntimeFieldVisibility::OperatorOnly),
             ("build", RuntimeFieldVisibility::OperatorOnly),
             ("features", RuntimeFieldVisibility::OperatorOnly),
             ("topology", RuntimeFieldVisibility::ControllerOnly),

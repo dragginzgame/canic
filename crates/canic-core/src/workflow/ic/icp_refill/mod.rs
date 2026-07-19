@@ -31,7 +31,7 @@ use crate::{
         runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
     },
-    workflow::ic::network::NetworkWorkflow,
+    workflow::ic::build_network::BuildNetworkWorkflow,
 };
 use thiserror::Error as ThisError;
 
@@ -322,11 +322,13 @@ fn active_for_request(request: &IcpRefillRequest) -> Result<bool, InternalError>
 }
 
 fn build_network() -> Result<BuildNetwork, InternalError> {
-    require_build_network(NetworkWorkflow::build_network())
+    require_build_network(BuildNetworkWorkflow::build_network())
 }
 
-fn require_build_network(network: Option<BuildNetwork>) -> Result<BuildNetwork, InternalError> {
-    network.ok_or_else(|| {
+fn require_build_network(
+    build_network: Option<BuildNetwork>,
+) -> Result<BuildNetwork, InternalError> {
+    build_network.ok_or_else(|| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
             "ICP refill build network unavailable; set ICP_ENVIRONMENT=local|ic at build time",
