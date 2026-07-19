@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.33`.
-- The latest published release is `v0.93.33` at
-  `4c281aabb893aff5d3a7941cbebce2bebf234535`.
-- The `v0.93.33` source tree is
-  `770a91e26c04504f43a6caff369710e91589db52`; its product-tree hash is
-  `ec8ce8194ac59da29220a0278c25f68b36f926c86ed50e43103f02f466c47a78`.
+- The workspace package version is `0.93.34`.
+- The latest published release is `v0.93.34` at
+  `54221cb35caacc0a2e07c88b2f9a6d35f24e5195`.
+- The `v0.93.34` source tree is
+  `4dd3e2276f9c64295bc5206891c0427f38e56a10`; its product-tree hash is
+  `367ceb544636382f4b4fa637505d56b3463d88e21441b82b71271add466375aa`.
   Its Cargo.lock SHA-256 is
-  `a190d1a77528a42e61f9ff566bf4fc62f6f235844469116c1dea9dc21beb846e`.
+  `65eb4ac780dc50500499b6c35242e79255e0f5ace20ba8108fbf6a5f6a175f7c`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -195,11 +195,17 @@ Historical detail is archived at:
   `plan_version: 1`; restore plan projections are recomputed and validated
   before persistence or apply preparation. Ordinary config and private helper
   types no longer carry misleading `V1` suffixes.
-- Current `0.93.34` development validates restore apply dry-runs before they
+- Released `v0.93.34` validates restore apply dry-runs before they
   can create durable journals. Version, readiness, operation, sequence, and
   artifact projections must match their concrete rows. Checksum algorithm and
   hash validation use the canonical artifact authority, and contradictions
   preserve a typed cause rather than being converted into executable state.
+- Current `.35` development makes every nullable field in maintained backup
+  and restore documents explicit and required, while stable restore runner
+  JSON retains one key set across modes. It also removes two behavior-neutral
+  PascalCase `rename_all` declarations; remaining declarations belong only to
+  Serde JSON, configuration, report, evidence, or external CBOR enums, while
+  Candid continues to require explicit item-level names.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -737,7 +743,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.33` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.34` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -748,9 +754,9 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.34` development makes restore apply dry-run admission exact. Durable
-journal construction rejects unsupported versions or contradictory readiness,
-operation, sequence, and artifact projections with a typed cause. Exact ready
-and blocked dry-runs retain their current behavior. Focused backup restore and
-CLI restore tests plus strict targeted Clippy pass. Broad deployment, package,
+Current `.35` development removes the implicit missing-key-to-`None` path from
+maintained backup manifests, plans, preflight evidence, journals, dry-runs, and
+receipts. Explicit `null` remains valid, and stable restore runner JSON now
+retains nullable and empty keys across every mode. Focused backup and CLI
+restore tests plus strict targeted Clippy pass. Broad deployment, package,
 publish, and release validation remains maintainer-owned.

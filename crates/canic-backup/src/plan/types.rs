@@ -24,6 +24,7 @@ pub struct BackupPlan {
     pub fleet: String,
     pub environment: String,
     pub root_canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub selected_subtree_root: Option<String>,
     pub selected_scope_kind: BackupScopeKind,
     pub include_descendants: bool,
@@ -63,12 +64,15 @@ pub enum BackupScopeKind {
 #[serde(deny_unknown_fields)]
 pub struct BackupTarget {
     pub canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub role: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_canister_id: Option<String>,
     pub depth: u32,
     pub control_authority: ControlAuthority,
     pub snapshot_read_authority: SnapshotReadAuthority,
     pub identity_mode: IdentityMode,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub expected_module_hash: Option<String>,
 }
 
@@ -241,6 +245,7 @@ pub struct BackupOperation {
     pub operation_id: String,
     pub order: u32,
     pub kind: BackupOperationKind,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub target_canister_id: Option<String>,
 }
 
@@ -303,6 +308,7 @@ pub struct ControlAuthorityReceipt {
     pub proof_source: AuthorityProofSource,
     pub validated_at: String,
     pub expires_at: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub message: Option<String>,
 }
 
@@ -323,6 +329,7 @@ pub struct SnapshotReadAuthorityReceipt {
     pub proof_source: AuthorityProofSource,
     pub validated_at: String,
     pub expires_at: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub message: Option<String>,
 }
 
@@ -369,7 +376,9 @@ pub struct ControlAuthorityPreflightRequest {
 #[serde(deny_unknown_fields)]
 pub struct ControlAuthorityPreflightTarget {
     pub canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub role: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_canister_id: Option<String>,
     pub declared_authority: ControlAuthority,
 }
@@ -414,7 +423,9 @@ pub struct SnapshotReadAuthorityPreflightRequest {
 #[serde(deny_unknown_fields)]
 pub struct SnapshotReadAuthorityPreflightTarget {
     pub canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub role: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_canister_id: Option<String>,
     pub declared_authority: SnapshotReadAuthority,
 }
@@ -445,6 +456,7 @@ pub struct TopologyPreflightRequest {
     pub fleet: String,
     pub environment: String,
     pub root_canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub selected_subtree_root: Option<String>,
     pub selected_scope_kind: BackupScopeKind,
     pub topology_hash_before_quiesce: String,
@@ -462,6 +474,7 @@ pub struct TopologyPreflightRequest {
 #[serde(deny_unknown_fields)]
 pub struct TopologyPreflightTarget {
     pub canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_canister_id: Option<String>,
     pub depth: u32,
 }
@@ -493,6 +506,7 @@ pub struct TopologyPreflightReceipt {
     pub targets: Vec<TopologyPreflightTarget>,
     pub validated_at: String,
     pub expires_at: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub message: Option<String>,
 }
 
@@ -511,6 +525,7 @@ pub struct QuiescencePreflightRequest {
     pub fleet: String,
     pub environment: String,
     pub root_canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub selected_subtree_root: Option<String>,
     pub quiescence_policy: QuiescencePolicy,
     pub targets: Vec<QuiescencePreflightTarget>,
@@ -527,7 +542,9 @@ pub struct QuiescencePreflightRequest {
 #[serde(deny_unknown_fields)]
 pub struct QuiescencePreflightTarget {
     pub canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub role: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_canister_id: Option<String>,
 }
 
@@ -558,5 +575,6 @@ pub struct QuiescencePreflightReceipt {
     pub targets: Vec<QuiescencePreflightTarget>,
     pub validated_at: String,
     pub expires_at: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub message: Option<String>,
 }

@@ -60,9 +60,11 @@ pub struct ArtifactJournalEntry {
     pub canister_id: String,
     pub snapshot_id: String,
     pub state: ArtifactState,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub temp_path: Option<String>,
     pub artifact_path: String,
     pub checksum_algorithm: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub checksum: Option<String>,
     pub updated_at: String,
 }
@@ -106,7 +108,6 @@ impl ArtifactJournalEntry {
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "PascalCase")]
 pub enum ArtifactState {
     Created,
     Downloaded,
@@ -140,7 +141,6 @@ impl ArtifactState {
 ///
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "PascalCase")]
 pub enum ResumeAction {
     Download,
     VerifyChecksum,

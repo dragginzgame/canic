@@ -48,6 +48,32 @@ fn execution_journal_unknown_field_fails_deserialize() {
     assert!(err.is_data());
 }
 
+#[test]
+fn execution_journal_requires_exact_current_optional_fields() {
+    let journal = journal();
+    let mut value = serde_json::to_value(&journal).expect("serialize execution journal");
+    value
+        .as_object_mut()
+        .expect("execution journal object")
+        .remove("preflight_id");
+    let err = serde_json::from_value::<BackupExecutionJournal>(value)
+        .expect_err("current preflight_id field must be present");
+    assert!(err.is_data());
+
+    for field in ["target_canister_id", "state_updated_at"] {
+        let mut value =
+            serde_json::to_value(&journal.operations[0]).expect("serialize journal operation");
+        value
+            .as_object_mut()
+            .expect("journal operation object")
+            .remove(field);
+
+        let err = serde_json::from_value::<BackupExecutionJournalOperation>(value)
+            .expect_err("current execution operation field must be present");
+        assert!(err.is_data());
+    }
+}
+
 fn complete_operation(journal: &mut BackupExecutionJournal, sequence: usize) {
     journal
         .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))

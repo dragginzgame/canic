@@ -7,7 +7,7 @@
 use super::*;
 
 #[test]
-fn operation_receipt_requires_current_snapshot_metadata_fields() {
+fn operation_receipt_requires_exact_current_optional_fields() {
     let journal = accepted_journal();
     let operation = journal.operations[4].clone();
     let receipt = BackupExecutionOperationReceipt::completed(
@@ -16,7 +16,17 @@ fn operation_receipt_requires_current_snapshot_metadata_fields() {
         Some("unix:31".to_string()),
     );
 
-    for field in ["snapshot_taken_at_timestamp", "snapshot_total_size_bytes"] {
+    for field in [
+        "preflight_id",
+        "target_canister_id",
+        "updated_at",
+        "snapshot_id",
+        "snapshot_taken_at_timestamp",
+        "snapshot_total_size_bytes",
+        "artifact_path",
+        "checksum",
+        "failure_reason",
+    ] {
         let mut value = serde_json::to_value(&receipt).expect("serialize receipt");
         value.as_object_mut().expect("receipt object").remove(field);
 

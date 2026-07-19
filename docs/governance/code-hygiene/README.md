@@ -341,6 +341,18 @@ Examples:
 
 Do not invent parallel names for existing concepts.
 
+### Serde and Candid enum names
+
+- Serde-only JSON, configuration, report, and evidence enums may use
+  `serde(rename_all)` when every variant follows one canonical convention.
+- Types deriving `CandidType` must use an explicit `serde(rename)` on each
+  renamed field or variant. The Candid derive supports those item-level names
+  but does not support container-level `rename_all` or `rename_all_fields`.
+- Do not retain a `rename_all` declaration when its transformation is identical
+  to Rust's default serialized variant names.
+- The `candid_serde_boundary_guard` test enforces the Candid boundary across
+  Canic-owned source crates.
+
 ## 11. Data Shape Rules
 
 DTOs are passive boundary data only. Command/request/mutation DTOs must not
@@ -351,6 +363,17 @@ read-only projections and live under `view/`. `export()` and `import()` are
 reserved for canonical `*Data` snapshots.
 
 Cross-layer data should use named structs/enums, not boundary type aliases.
+
+For current durable or versioned Serde documents, every declared field is part
+of the exact document shape. Nullable fields must serialize as an explicit
+`null` and use `serialization::required_option` when deserialized so omission
+does not silently become `None`. User-authored configuration may allow omitted
+optional fields only when that omission is an intentional documented input
+contract.
+
+Stable operator JSON responses should keep one predictable key set across
+modes. Do not use `skip_serializing_if` for mode-dependent nullable or empty
+fields unless omission itself is a documented discriminator.
 
 ## 12. Test Placement and Scope
 

@@ -272,6 +272,40 @@ fn backup_plan_requires_and_validates_plan_version() {
     std::assert_matches!(err, BackupPlanError::UnsupportedVersion(2));
 }
 
+#[test]
+fn backup_plan_requires_exact_current_optional_fields() {
+    let plan = subtree_plan();
+    let mut value = serde_json::to_value(&plan).expect("serialize backup plan");
+    value
+        .as_object_mut()
+        .expect("backup plan object")
+        .remove("selected_subtree_root");
+    let err = serde_json::from_value::<BackupPlan>(value)
+        .expect_err("current selected_subtree_root field must be present");
+    assert!(err.is_data());
+
+    for field in ["role", "parent_canister_id", "expected_module_hash"] {
+        let mut value = serde_json::to_value(&plan.targets[0]).expect("serialize backup target");
+        value
+            .as_object_mut()
+            .expect("backup target object")
+            .remove(field);
+
+        let err = serde_json::from_value::<BackupTarget>(value)
+            .expect_err("current backup target field must be present");
+        assert!(err.is_data());
+    }
+
+    let mut value = serde_json::to_value(&plan.phases[0]).expect("serialize backup operation");
+    value
+        .as_object_mut()
+        .expect("backup operation object")
+        .remove("target_canister_id");
+    let err = serde_json::from_value::<BackupOperation>(value)
+        .expect_err("current target_canister_id field must be present");
+    assert!(err.is_data());
+}
+
 fn phase(
     operation_id: &str,
     order: u32,

@@ -54,7 +54,7 @@ pub struct RestoreApplyJournal {
     pub backup_id: String,
     pub ready: bool,
     pub blocked_reasons: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub backup_root: Option<String>,
     pub operation_count: usize,
     pub operation_counts: RestoreApplyOperationKindCounts,

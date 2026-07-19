@@ -205,20 +205,13 @@ pub struct RestoreRunResponse {
     pub unclaim_pending: bool,
     pub stopped_reason: &'static str,
     pub next_action: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub requested_state_updated_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_steps_reached: Option<bool>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub executed_operations: Vec<RestoreRunExecutedOperation>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub operation_receipts: Vec<RestoreRunOperationReceipt>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_receipt_count: Option<usize>,
     pub operation_receipt_summary: RestoreRunReceiptSummary,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub executed_operation_count: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub recovered_operation: Option<RestoreApplyJournalOperation>,
     pub ready: bool,
     pub complete: bool,
@@ -235,11 +228,8 @@ pub struct RestoreRunResponse {
     pub failed_operations: usize,
     pub blocked_reasons: Vec<String>,
     pub next_transition: Option<RestoreApplyReportOperation>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_available: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub command_available: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<RestoreApplyRunnerCommand>,
 }
 
@@ -350,11 +340,8 @@ pub struct RestoreRunOperationReceipt {
     pub operation: RestoreApplyOperationKind,
     pub target_canister: String,
     pub state: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<RestoreApplyRunnerCommand>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
 }
 

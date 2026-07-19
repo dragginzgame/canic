@@ -22,6 +22,7 @@ pub struct BackupExecutionJournal {
     pub journal_version: u16,
     pub plan_id: String,
     pub run_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub preflight_id: Option<String>,
     pub preflight_accepted: bool,
     pub restart_required: bool,
@@ -42,8 +43,10 @@ pub struct BackupExecutionJournalOperation {
     pub sequence: usize,
     pub operation_id: String,
     pub kind: BackupOperationKind,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub target_canister_id: Option<String>,
     pub state: BackupExecutionOperationState,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub state_updated_at: Option<String>,
     pub blocking_reasons: Vec<String>,
 }
@@ -78,20 +81,27 @@ pub enum BackupExecutionOperationState {
 pub struct BackupExecutionOperationReceipt {
     pub plan_id: String,
     pub run_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub preflight_id: Option<String>,
     pub sequence: usize,
     pub operation_id: String,
     pub kind: BackupOperationKind,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub target_canister_id: Option<String>,
     pub outcome: BackupExecutionOperationReceiptOutcome,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub updated_at: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_id: Option<String>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_taken_at_timestamp: Option<u64>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_total_size_bytes: Option<u64>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_path: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub checksum: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub failure_reason: Option<String>,
 }
 

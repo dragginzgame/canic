@@ -126,8 +126,11 @@ pub struct DeploymentSection {
 pub struct DeploymentMember {
     pub role: String,
     pub canister_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_canister_id: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub subnet_canister_id: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub controller_hint: Option<String>,
     pub identity_mode: IdentityMode,
     pub verification_checks: Vec<VerificationCheck>,
@@ -159,7 +162,9 @@ pub enum IdentityMode {
 #[serde(deny_unknown_fields)]
 pub struct SourceSnapshot {
     pub snapshot_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub module_hash: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub code_version: Option<String>,
     pub artifact_path: String,
     pub checksum_algorithm: String,
