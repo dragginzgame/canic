@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.35`.
-- The latest published release is `v0.93.35` at
-  `74f173359eb95306a5c43c534397ee19809bdae5`.
-- The `v0.93.35` source tree is
-  `bfd57cccd5dde77b156713414fd9cadf0aea1a39`; its product-tree hash is
-  `6046490b111cae902eeda46a2bb7b29a1aafb513835d310fcfd77f6ea422e808`.
+- The workspace package version is `0.93.36`.
+- The latest published release is `v0.93.36` at
+  `f9c28c48bdc72055d873e8291d201aac1c871f5e`.
+- The `v0.93.36` source tree is
+  `590abeec5d23d5163dc72663ca63359453bfb057`; its product-tree hash is
+  `46445b89c955e741211206a15402ef8b8557b28f9e5a6b1ae594e19d950ea5cf`.
   Its Cargo.lock SHA-256 is
-  `2cd2c9d7da3087b807b70550a0c73e4bbd821731938ee5b297b64c75fb7e3795`.
+  `0835d36e4f5acbe7ae80b7985f32dc419fa11ebf0c126b9e0ff21ba636a7de80`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -206,19 +206,37 @@ Historical detail is archived at:
   PascalCase `rename_all` declarations; remaining declarations belong only to
   Serde JSON, configuration, report, evidence, or external CBOR enums, while
   Candid continues to require explicit item-level names.
-- Current `.36` development makes the canonical backup phase builder the sole
+- Released `v0.93.36` makes the canonical backup phase builder the sole
   persisted operation authority. Backup plans reject incomplete or altered
   operation projections, malformed topology hashes, target cycles, internal
   depth contradictions, and selected subtree graphs that are disconnected or
   rooted beneath another selected target. Root-omitted deployment targets must
   likewise remain connected to their declared root.
-- The accepted line design is
+- The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
-- Current release notes are in the
-  [0.93 changelog](../changelog/0.93.md); the completed 0.92 line remains in the
+- The active line design is
+  [0.94 backup and restore operational readiness](../design/0.94-backup-restore-operational-readiness/0.94-design.md).
+- Current development notes are in the
+  [0.94 changelog](../changelog/0.94.md); released 0.93 notes remain in the
+  [0.93 changelog](../changelog/0.93.md), and the completed 0.92 line remains in the
   [0.92 changelog](../changelog/0.92.md).
 
 ## Current Decision
+
+0.93 is closed at `v0.93.36`. Its structural hard-cut purpose is complete, and
+no known blocking structural residue is carried forward. The line deliberately
+does not claim process-death recovery or realistic multi-canister
+backup/restore readiness. Those bounded operational proofs move to the active
+0.94 design rather than extending 0.93 as another open-ended audit.
+Known non-blocking structural residue deferred from 0.93: none.
+
+0.94 focuses only on backup and restore operational readiness. Its accepted
+finish line is an early disposable-environment capability probe, a frozen
+crash-point matrix, deterministic process-restart evidence, corruption/replay
+rejection, and one realistic multi-canister state restore. Product changes
+require a journey-backed finding. General cleanup, dependency work, unrelated
+CI work, compatibility layers, speculative abstraction, and unproven public-
+surface changes remain out of scope.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -749,7 +767,8 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.34` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.36` audit slices are released and the line is
+closed. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -760,9 +779,12 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.35` development removes the implicit missing-key-to-`None` path from
-maintained backup manifests, plans, preflight evidence, journals, dry-runs, and
-receipts. Explicit `null` remains valid, and stable restore runner JSON now
-retains nullable and empty keys across every mode. Focused backup and CLI
-restore tests plus strict targeted Clippy pass. Broad deployment, package,
-publish, and release validation remains maintainer-owned.
+The accepted 0.94 design has confirmed its exact operation and durable-
+transition inventory and completed the early disposable-platform gate.
+Snapshot create, upload, stopped-target restore observation, and exact repeated
+restore are available through a managed local ICP deployment. The gate also
+confirmed two P1 findings: the `Drop`-owned sidecar lock could remain stale
+after process death, and external command children can outlive the runner
+without restart-visible identity. The first is fixed in the current worktree
+with a no-follow, close-on-exec kernel lock; the second remains the bounded
+next action before the complete in-flight-command harness is frozen.
