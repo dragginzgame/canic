@@ -89,17 +89,20 @@ impl Storable for IntentId {
         self.0.to_be_bytes().to_vec()
     }
 
+    /// Decode the exact fixed-width stable intent identity.
+    ///
+    /// # Panics
+    ///
+    /// Panics when stable memory contains an intent ID that is not exactly eight bytes.
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let b = bytes.as_ref();
+        let bytes = <[u8; 8]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
+            panic!(
+                "stable IntentId is {} bytes; expected 8",
+                bytes.as_ref().len()
+            )
+        });
 
-        if b.len() != 8 {
-            return Self::default();
-        }
-
-        let mut arr = [0u8; 8];
-        arr.copy_from_slice(b);
-
-        Self(u64::from_be_bytes(arr))
+        Self(u64::from_be_bytes(bytes))
     }
 }
 
@@ -117,11 +120,18 @@ impl Storable for OperationId {
         self.as_bytes().to_vec()
     }
 
+    /// Decode the exact fixed-width stable operation identity.
+    ///
+    /// # Panics
+    ///
+    /// Panics when stable memory contains an operation ID that is not exactly 32 bytes.
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let mut operation_id = [0_u8; 32];
-        if bytes.len() == operation_id.len() {
-            operation_id.copy_from_slice(bytes.as_ref());
-        }
+        let operation_id = <[u8; 32]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
+            panic!(
+                "stable OperationId is {} bytes; expected 32",
+                bytes.as_ref().len()
+            )
+        });
         Self::from_bytes(operation_id)
     }
 }
@@ -645,6 +655,18 @@ mod tests {
             RECEIPT_BACKED_INTENT_SCHEMA_VERSION, TerminalEvidence, TerminalEvidenceDecision,
         },
     };
+
+    #[test]
+    #[should_panic(expected = "stable IntentId is 7 bytes; expected 8")]
+    fn malformed_stable_intent_id_fails_closed() {
+        let _ = <IntentId as Storable>::from_bytes(Cow::Owned(vec![0; 7]));
+    }
+
+    #[test]
+    #[should_panic(expected = "stable OperationId is 31 bytes; expected 32")]
+    fn malformed_stable_operation_id_fails_closed() {
+        let _ = <OperationId as Storable>::from_bytes(Cow::Owned(vec![0; 31]));
+    }
 
     #[test]
     fn intent_allocations_round_trip_through_canonical_data_snapshots() {

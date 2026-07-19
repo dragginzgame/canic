@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.32` is potentially breaking: bounded strings now enforce their byte
+  limit through every construction and decode path, while malformed stable
+  intent and replay identities fail closed instead of aliasing valid keys.
+
 - `0.93.31` is potentially breaking: cycle config parsing and unbounded Candid
   cycle conversion are exact and checked, while oversized management and CMC
   results fail closed instead of becoming zero or saturated accounting.

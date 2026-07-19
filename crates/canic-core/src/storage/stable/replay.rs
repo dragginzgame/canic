@@ -52,15 +52,20 @@ impl Storable for ReplayReceiptSlotKey {
         self.0.to_vec()
     }
 
+    /// Decode the exact fixed-width stable replay slot identity.
+    ///
+    /// # Panics
+    ///
+    /// Panics when stable memory contains a replay slot that is not exactly 32 bytes.
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        let bytes = bytes.as_ref();
-        let mut out = [0u8; 32];
+        let key = <[u8; 32]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
+            panic!(
+                "stable ReplayReceiptSlotKey is {} bytes; expected 32",
+                bytes.as_ref().len()
+            )
+        });
 
-        if bytes.len() == 32 {
-            out.copy_from_slice(bytes);
-        }
-
-        Self(out)
+        Self(key)
     }
 }
 
@@ -462,6 +467,12 @@ mod tests {
         ReplayReceiptRecord::from_bytes(Cow::Owned(encoded))
             .into_receipt()
             .expect("stable replay receipt decodes")
+    }
+
+    #[test]
+    #[should_panic(expected = "stable ReplayReceiptSlotKey is 31 bytes; expected 32")]
+    fn malformed_stable_replay_slot_key_fails_closed() {
+        let _ = ReplayReceiptSlotKey::from_bytes(Cow::Owned(vec![0; 31]));
     }
 
     #[test]

@@ -33,8 +33,8 @@ impl DirectoryKey {
 
     pub(crate) fn try_new(pool: &str, key_value: &str) -> Result<Self, String> {
         Ok(Self {
-            pool: pool.try_into()?,
-            key_value: key_value.try_into()?,
+            pool: BoundedString64::try_from(pool).map_err(|err| err.to_string())?,
+            key_value: BoundedString128::try_from(key_value).map_err(|err| err.to_string())?,
         })
     }
 }
