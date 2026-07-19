@@ -69,8 +69,8 @@ pub struct RestoreApplyJournal {
 
 impl RestoreApplyJournal {
     /// Build the initial no-mutation restore apply journal from a dry-run.
-    #[must_use]
-    pub fn from_dry_run(dry_run: &RestoreApplyDryRun) -> Self {
+    pub fn from_dry_run(dry_run: &RestoreApplyDryRun) -> Result<Self, RestoreApplyJournalError> {
+        dry_run.validate()?;
         let blocked_reasons = restore_apply_blocked_reasons(dry_run);
         let initial_state = if blocked_reasons.is_empty() {
             RestoreApplyOperationState::Ready
@@ -98,7 +98,7 @@ impl RestoreApplyJournal {
             .count();
         let operation_counts = RestoreApplyOperationKindCounts::from_operations(&operations);
 
-        Self {
+        let journal = Self {
             journal_version: 1,
             backup_id: dry_run.backup_id.clone(),
             ready: blocked_reasons.is_empty(),
@@ -116,7 +116,9 @@ impl RestoreApplyJournal {
             failed_operations: 0,
             operations,
             operation_receipts: Vec::new(),
-        }
+        };
+        journal.validate()?;
+        Ok(journal)
     }
 
     /// Validate the structural consistency of a restore apply journal.

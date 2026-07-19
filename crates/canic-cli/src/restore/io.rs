@@ -259,7 +259,8 @@ pub(super) fn write_apply_journal_file(
     path: &Path,
     dry_run: &RestoreApplyDryRun,
 ) -> Result<(), RestoreCommandError> {
-    write_restore_apply_journal(path, &RestoreApplyJournal::from_dry_run(dry_run))?;
+    let journal = RestoreApplyJournal::from_dry_run(dry_run)?;
+    write_restore_apply_journal(path, &journal)?;
     Ok(())
 }
 
@@ -298,7 +299,8 @@ pub(super) fn write_apply_journal_if_requested(
         return Ok(());
     };
 
-    write_restore_apply_journal(path, &RestoreApplyJournal::from_dry_run(dry_run))?;
+    let journal = RestoreApplyJournal::from_dry_run(dry_run)?;
+    write_restore_apply_journal(path, &journal)?;
     Ok(())
 }
 

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.32`.
-- The latest published release is `v0.93.32` at
-  `decb0b6fe4cf47eb76aa9d9e5e45f29f255228f9`.
-- The `v0.93.32` source tree is
-  `b5dcc9c756b0f03a3b6482567ec2be53db91413b`; its product-tree hash is
-  `2fe3b4937f383e6b5ca5795b0876662a9827f746c8d0ecddca5a66b51fa123ac`.
+- The workspace package version is `0.93.33`.
+- The latest published release is `v0.93.33` at
+  `4c281aabb893aff5d3a7941cbebce2bebf234535`.
+- The `v0.93.33` source tree is
+  `770a91e26c04504f43a6caff369710e91589db52`; its product-tree hash is
+  `ec8ce8194ac59da29220a0278c25f68b36f926c86ed50e43103f02f466c47a78`.
   Its Cargo.lock SHA-256 is
-  `0c67d25ff902a472c3cb9e9d4a31b4218e4be672e4f7b63dac4b9946b9ac8a3d`.
+  `a190d1a77528a42e61f9ff566bf4fc62f6f235844469116c1dea9dc21beb846e`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -184,7 +184,7 @@ Historical detail is archived at:
   access, lossy UTF-8 replacement, and overlong truncation are removed.
   Malformed stable intent, operation, and replay-slot identities fail closed
   rather than aliasing all-zero keys.
-- Current `0.93.33` development hard-cuts missing-field defaults from current
+- Released `v0.93.33` hard-cuts missing-field defaults from current
   backup and restore v1 documents. Download-journal topology receipts are
   mandatory and stale receipts fail before snapshot creation rather than being
   overwritten during resume. Exact backup- and topology-bound journal rows
@@ -195,6 +195,11 @@ Historical detail is archived at:
   `plan_version: 1`; restore plan projections are recomputed and validated
   before persistence or apply preparation. Ordinary config and private helper
   types no longer carry misleading `V1` suffixes.
+- Current `0.93.34` development validates restore apply dry-runs before they
+  can create durable journals. Version, readiness, operation, sequence, and
+  artifact projections must match their concrete rows. Checksum algorithm and
+  hash validation use the canonical artifact authority, and contradictions
+  preserve a typed cause rather than being converted into executable state.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -732,7 +737,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.31` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.33` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -743,11 +748,9 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.33` development makes backup and restore recovery documents exact.
-Persisted plans declare version 1, restore plan summaries are checked against
-their concrete members before execution, and stale download-journal identity
-or topology evidence rejects before an external snapshot call. Missing current
-fields no longer become empty or zero values, while exact interrupted snapshot
-receipts resume without repeating the external effect. Focused backup/restore,
-CLI, config-schema, and evidence-envelope validation passes. Broad deployment,
-package, publish, and release validation remains maintainer-owned.
+Current `.34` development makes restore apply dry-run admission exact. Durable
+journal construction rejects unsupported versions or contradictory readiness,
+operation, sequence, and artifact projections with a typed cause. Exact ready
+and blocked dry-runs retain their current behavior. Focused backup restore and
+CLI restore tests plus strict targeted Clippy pass. Broad deployment, package,
+publish, and release validation remains maintainer-owned.

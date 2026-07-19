@@ -14,9 +14,9 @@ use apply::RestoreApplyJournalReport;
 pub use apply::{
     RestoreApplyArtifactCheck, RestoreApplyArtifactValidation, RestoreApplyCommandConfig,
     RestoreApplyCommandOutput, RestoreApplyCommandPreview, RestoreApplyDryRun,
-    RestoreApplyDryRunError, RestoreApplyDryRunOperation, RestoreApplyJournal,
-    RestoreApplyJournalError, RestoreApplyJournalOperation, RestoreApplyOperationKind,
-    RestoreApplyOperationKindCounts, RestoreApplyOperationReceipt,
+    RestoreApplyDryRunError, RestoreApplyDryRunOperation, RestoreApplyDryRunValidationError,
+    RestoreApplyJournal, RestoreApplyJournalError, RestoreApplyJournalOperation,
+    RestoreApplyOperationKind, RestoreApplyOperationKindCounts, RestoreApplyOperationReceipt,
     RestoreApplyOperationReceiptOutcome, RestoreApplyOperationState, RestoreApplyPendingSummary,
     RestoreApplyProgressSummary, RestoreApplyReportOperation, RestoreApplyReportOutcome,
     RestoreApplyRunnerCommand,

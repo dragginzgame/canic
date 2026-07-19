@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.34` is potentially breaking: restore apply dry-runs now validate their
+  exact version, readiness, operation, and artifact projections before they
+  can create a durable journal.
+
 - `0.93.33` is potentially breaking: backup and restore documents now require
   their exact current v1 shape and validated plan projections; stale journal
   authority is rejected rather than defaulted, overwritten, or executed.

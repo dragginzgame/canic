@@ -12,6 +12,7 @@ use std::{
 use thiserror::Error as ThisError;
 
 mod journal;
+mod validation;
 
 pub(in crate::restore) use journal::RestoreApplyCommandOutputPair;
 pub(in crate::restore) use journal::RestoreApplyJournalReport;
@@ -23,6 +24,7 @@ pub use journal::{
     RestoreApplyProgressSummary, RestoreApplyReportOperation, RestoreApplyReportOutcome,
     RestoreApplyRunnerCommand,
 };
+pub use validation::RestoreApplyDryRunValidationError;
 
 ///
 /// RestoreApplyDryRun

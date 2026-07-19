@@ -1,5 +1,5 @@
 use super::*;
-use crate::artifacts::ArtifactChecksum;
+use crate::artifacts::{ArtifactChecksum, ArtifactChecksumError};
 use crate::manifest::{
     BackupUnit, BackupUnitKind, ConsistencySection, DeploymentBackupManifest, DeploymentMember,
     DeploymentSection, IdentityMode, MemberVerificationChecks, SourceMetadata, SourceSnapshot,

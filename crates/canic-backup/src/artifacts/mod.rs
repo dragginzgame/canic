@@ -143,14 +143,27 @@ impl ArtifactChecksum {
 
     /// Validate checksum metadata without comparing artifact bytes.
     pub fn validate(&self) -> Result<(), ArtifactChecksumError> {
-        if self.algorithm != SHA256_ALGORITHM {
+        Self::validate_algorithm(&self.algorithm)?;
+        Self::validate_hash(&self.hash)
+    }
+
+    /// Validate one artifact-checksum algorithm identifier.
+    pub(crate) fn validate_algorithm(algorithm: &str) -> Result<(), ArtifactChecksumError> {
+        if algorithm != SHA256_ALGORITHM {
             return Err(ArtifactChecksumError::UnsupportedAlgorithm(
-                self.algorithm.clone(),
+                algorithm.to_string(),
             ));
         }
-        if self.hash.len() != 64 || !self.hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-            return Err(ArtifactChecksumError::InvalidHash(self.hash.clone()));
+
+        Ok(())
+    }
+
+    /// Validate one artifact-checksum hash representation.
+    pub(crate) fn validate_hash(hash: &str) -> Result<(), ArtifactChecksumError> {
+        if hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ArtifactChecksumError::InvalidHash(hash.to_string()));
         }
+
         Ok(())
     }
 
