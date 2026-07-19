@@ -844,6 +844,7 @@ mod tests {
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], "runtime_observed");
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
+        assert_eq!(value["runtime_status"]["status"]["build_network"], "local");
         assert_eq!(
             value["runtime_status"]["status"]["features"][0]["name"],
             "sharding"
@@ -932,7 +933,7 @@ mod tests {
             canister_id: Principal::anonymous(),
             role: Some("root".to_string()),
             root: None,
-            network: Some("local".to_string()),
+            build_network: Some(canic_core::ids::BuildNetwork::Local),
             build: RuntimeBuildInfo {
                 package_name: "root".to_string(),
                 package_version: "0.81.0".to_string(),

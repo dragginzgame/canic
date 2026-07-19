@@ -22,7 +22,7 @@ use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
     ops::{
         config::ConfigOps,
-        ic::{IcOps, network::NetworkOps},
+        ic::{IcOps, build_network::BuildNetworkOps},
         runtime::{
             bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
             env::EnvOps,
@@ -54,17 +54,17 @@ use std::collections::BTreeMap;
 
 struct RootBootstrapContext {
     subnet_cfg: SubnetConfig,
-    network: Option<BuildNetwork>,
+    build_network: Option<BuildNetwork>,
 }
 
 impl RootBootstrapContext {
     fn load() -> Result<Self, InternalError> {
         let subnet_cfg = ConfigOps::current_subnet()?;
-        let network = NetworkOps::build_network();
+        let build_network = BuildNetworkOps::build_network();
 
         Ok(Self {
             subnet_cfg,
-            network,
+            build_network,
         })
     }
 }
@@ -361,14 +361,14 @@ pub async fn bootstrap_post_upgrade_root_canister() {
 /// IC builds resolve the authoritative subnet from the NNS registry. Local and
 /// test builds use the explicit subnet identity seeded by lifecycle init.
 pub async fn root_set_subnet_id() -> Result<(), InternalError> {
-    let network = NetworkOps::build_network().ok_or_else(|| {
+    let build_network = BuildNetworkOps::build_network().ok_or_else(|| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
-            "runtime network unavailable; set ICP_ENVIRONMENT=local|ic at build time",
+            "build network unavailable; set ICP_ENVIRONMENT=local|ic at build time",
         )
     })?;
 
-    if network != BuildNetwork::Ic {
+    if build_network != BuildNetwork::Ic {
         let subnet_pid = EnvOps::subnet_pid()?;
         AppRegistryOps::upsert(subnet_pid, IcOps::canister_self());
         log!(
@@ -463,7 +463,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         .initial
         .map_or_else(|| "unset".to_string(), |v| v.to_string());
 
-    let import_list = match data.network {
+    let import_list = match data.build_network {
         Some(BuildNetwork::Local) => data.subnet_cfg.pool.import.local.clone(),
         Some(BuildNetwork::Ic) => data.subnet_cfg.pool.import.ic.clone(),
         None => {
@@ -489,7 +489,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
         Topic::CanisterPool,
         Info,
         "pool import cfg: net={} min={} init={} limit={} wait={}",
-        data.network.map_or("unknown", BuildNetwork::as_str),
+        data.build_network.map_or("unknown", BuildNetwork::as_str),
         data.subnet_cfg.pool.minimum_size,
         initial_cfg,
         initial_limit,
@@ -519,7 +519,7 @@ async fn ensure_pool_imported(data: &RootBootstrapContext, wait_for_queued_impor
             Topic::CanisterPool,
             Warn,
             "pool import skipped: empty list for net={}",
-            data.network.map_or("unknown", BuildNetwork::as_str)
+            data.build_network.map_or("unknown", BuildNetwork::as_str)
         );
         log_pool_stats("after-empty-import-skip", data.subnet_cfg.pool.minimum_size);
         return;

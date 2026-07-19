@@ -18,9 +18,9 @@ pub use subnet::*;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    ids::{CanisterRole, SubnetRole},
+    ids::{BuildNetwork, CanisterRole, SubnetRole},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 
@@ -241,7 +241,7 @@ impl ConfigModel {
             name: Some("test".to_string()),
         });
         cfg.auth.delegated_tokens.enabled = true;
-        cfg.auth.delegated_tokens.network = "local".to_string();
+        cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
         cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
         cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("key_1".to_string());
         cfg.auth
@@ -420,8 +420,12 @@ pub struct DelegatedTokenConfig {
     #[serde(default)]
     pub chain_key_root_proof: ChainKeyRootProofConfig,
 
-    #[serde(default = "default_delegated_tokens_network")]
-    pub network: String,
+    #[serde(
+        default = "default_delegated_tokens_build_network",
+        deserialize_with = "deserialize_build_network",
+        serialize_with = "serialize_build_network"
+    )]
+    pub build_network: BuildNetwork,
 
     #[serde(default)]
     pub max_ttl_secs: Option<u64>,
@@ -481,8 +485,32 @@ fn default_delegated_tokens_root_proof_mode() -> String {
     "chain_key_batch".to_string()
 }
 
-fn default_delegated_tokens_network() -> String {
-    "mainnet".to_string()
+const fn default_delegated_tokens_build_network() -> BuildNetwork {
+    BuildNetwork::Ic
+}
+
+fn deserialize_build_network<'de, D>(deserializer: D) -> Result<BuildNetwork, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    BuildNetwork::parse(&value).ok_or_else(|| {
+        D::Error::custom("auth.delegated_tokens.build_network must be one of ic, local")
+    })
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde serialize_with requires a shared reference"
+)]
+fn serialize_build_network<S>(
+    build_network: &BuildNetwork,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(build_network.as_str())
 }
 
 impl Default for DelegatedTokenConfig {
@@ -493,7 +521,7 @@ impl Default for DelegatedTokenConfig {
             ic_root_public_key_raw_hex: None,
             root_proof_mode: default_delegated_tokens_root_proof_mode(),
             chain_key_root_proof: ChainKeyRootProofConfig::default(),
-            network: default_delegated_tokens_network(),
+            build_network: default_delegated_tokens_build_network(),
             max_ttl_secs: None,
         }
     }

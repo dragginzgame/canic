@@ -16,6 +16,7 @@ use crate::{
     },
     output, version_text,
 };
+use canic_core::ids::BuildNetwork;
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
     CanisterBuildProfile, WorkspaceBuildContext, build_workspace_canister_artifact,
@@ -23,9 +24,7 @@ use canic_host::canister_build::{
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
-    icp_config::{
-        IcpBuildNetwork, resolve_current_canic_icp_root, resolve_icp_build_network_from_root,
-    },
+    icp_config::{resolve_current_canic_icp_root, resolve_icp_build_network_from_root},
     install_root::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
         select_discovered_fleet_config_path,
@@ -247,7 +246,7 @@ fn write_build_provenance_if_requested(
         fleet: options.fleet.clone(),
         role: options.role.clone(),
         environment: options.environment.clone(),
-        build_network: context.build_network.clone(),
+        build_network: context.build_network,
         profile: context.profile,
         workspace_root: context.workspace_root.clone(),
         config_path: context.config_path.clone(),
@@ -379,7 +378,7 @@ fn resolve_build_context(
         role: options.role.clone(),
         profile,
         environment: options.environment.clone(),
-        build_network: build_network.as_str().to_string(),
+        build_network,
         workspace_root,
         icp_root,
         config_path,
@@ -391,7 +390,7 @@ fn resolve_build_context(
 fn resolve_build_network(
     environment: &str,
     icp_root: &Path,
-) -> Result<IcpBuildNetwork, BuildCommandError> {
+) -> Result<BuildNetwork, BuildCommandError> {
     resolve_icp_build_network_from_root(icp_root, environment)
         .map_err(|err| BuildCommandError::Build(Box::new(err)))
 }
@@ -450,7 +449,7 @@ mod tests {
             resolve_build_network(&options.environment, &root).expect("resolve build network");
 
         fs::remove_dir_all(root).expect("remove temp root");
-        assert_eq!(build_network, IcpBuildNetwork::Ic);
+        assert_eq!(build_network, BuildNetwork::Ic);
     }
 
     #[test]

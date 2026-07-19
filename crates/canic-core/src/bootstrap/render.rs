@@ -15,7 +15,7 @@ use crate::{
         RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{BuildNetwork, CanisterRole, SubnetRole},
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -256,7 +256,14 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
         });
     let root_proof_mode = render_owned_string(&config.root_proof_mode);
     let chain_key_root_proof = render_chain_key_root_proof_config(&config.chain_key_root_proof);
-    let network = render_owned_string(&config.network);
+    let build_network = match config.build_network {
+        BuildNetwork::Ic => {
+            quote!(::canic::__internal::core::bootstrap::compiled::BuildNetwork::Ic)
+        }
+        BuildNetwork::Local => {
+            quote!(::canic::__internal::core::bootstrap::compiled::BuildNetwork::Local)
+        }
+    };
     let max_ttl_secs = render_option(config.max_ttl_secs.as_ref(), |value| {
         render_u64_literal(*value)
     });
@@ -268,7 +275,7 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
             ic_root_public_key_raw_hex: #ic_root_public_key_raw_hex,
             root_proof_mode: #root_proof_mode,
             chain_key_root_proof: #chain_key_root_proof,
-            network: #network,
+            build_network: #build_network,
             max_ttl_secs: #max_ttl_secs,
         }
     }

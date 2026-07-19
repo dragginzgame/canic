@@ -12,7 +12,7 @@ use crate::{
     log::Topic,
     ops::{
         config::ConfigOps,
-        ic::{IcOps, network::NetworkOps},
+        ic::{IcOps, build_network::BuildNetworkOps},
         runtime::{env::EnvOps, memory::MemoryRegistryOps},
         storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
     },
@@ -71,13 +71,13 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
         parent_pid: Some(prime_root_pid),
     };
 
-    let network = NetworkOps::build_network().ok_or_else(|| {
+    let build_network = BuildNetworkOps::build_network().ok_or_else(|| {
         InternalError::invariant(
             InternalErrorOrigin::Workflow,
-            "runtime network unavailable; set ICP_ENVIRONMENT=local|ic at build time".to_string(),
+            "build network unavailable; set ICP_ENVIRONMENT=local|ic at build time".to_string(),
         )
     })?;
-    crate::log!(Topic::Init, Info, "build network: {network}");
+    crate::log!(Topic::Init, Info, "build network: {build_network}");
     let validated = match validate_or_default(input) {
         Ok(validated) => validated,
         Err(EnvPolicyError::MissingEnvFields(missing)) => {

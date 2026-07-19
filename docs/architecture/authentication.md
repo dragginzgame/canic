@@ -443,10 +443,9 @@ Verifier steps:
 1. Decode the first ingress argument as `DelegatedToken`.
 2. Resolve verifier trust config:
    - `auth.delegated_tokens.root_canister_id`, or initialized root env
-   - parsed `auth.delegated_tokens.network`
-   - `network = "mainnet"` requires the configured known mainnet raw IC root key
-   - `network = "local"`, `"pocketic"`, or `"testnet"` requires a configured
-     non-mainnet raw IC root key
+   - parsed `auth.delegated_tokens.build_network`
+   - `build_network = "ic"` requires the configured known mainnet raw IC root key
+   - `build_network = "local"` requires a configured non-mainnet raw IC root key
    - `auth.delegated_tokens.root_proof_mode = "chain_key_batch"`
    - complete `auth.delegated_tokens.chain_key_root_proof` policy
    - issuer canister-signature proof embedded in the token
@@ -610,7 +609,7 @@ Delegated tokens:
 enabled = true
 root_canister_id = "..."
 ic_root_public_key_raw_hex = "..."
-network = "mainnet"
+build_network = "ic"
 max_ttl_secs = 3600
 root_proof_mode = "chain_key_batch"
 
@@ -653,9 +652,9 @@ Security boundaries:
 
 - `auth.delegated_tokens.root_canister_id` or `EnvOps::root_pid()` is the
   delegated-token root identity trust boundary.
-- `auth.delegated_tokens.network` and the effective raw IC root key are paired:
-  mainnet requires the known mainnet raw key, while local/PocketIC/test
-  verification requires a non-mainnet root key configured as
+- `auth.delegated_tokens.build_network` and the effective raw IC root key are
+  paired: `ic` requires the known mainnet raw key, while `local` verification
+  requires a non-mainnet root key configured as
   `ic_root_public_key_raw_hex`.
 - `auth.delegated_tokens.root_proof_mode` must be `chain_key_batch`.
 - `auth.delegated_tokens.chain_key_root_proof` is the delegated-token root

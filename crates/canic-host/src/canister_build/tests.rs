@@ -1,5 +1,6 @@
 use super::{WorkspaceBuildContext, parse_parent_process_id, remove_stale_icp_candid_sidecars};
 use crate::test_support::temp_dir;
+use canic_core::ids::BuildNetwork;
 use std::fs;
 
 #[test]
@@ -41,7 +42,7 @@ fn build_context_distinguishes_environment_from_build_network() {
         role: "app".to_string(),
         profile: super::CanisterBuildProfile::Fast,
         environment: "staging".to_string(),
-        build_network: "ic".to_string(),
+        build_network: BuildNetwork::Ic,
         workspace_root: "/workspace".into(),
         icp_root: "/workspace".into(),
         config_path: "/workspace/fleets/demo/canic.toml".into(),
@@ -61,7 +62,7 @@ fn build_context_applies_exact_child_build_network() {
         role: "app".to_string(),
         profile: super::CanisterBuildProfile::Fast,
         environment: "staging".to_string(),
-        build_network: "ic".to_string(),
+        build_network: BuildNetwork::Ic,
         workspace_root: "/workspace".into(),
         icp_root: "/project".into(),
         config_path: "/workspace/fleets/demo/canic.toml".into(),

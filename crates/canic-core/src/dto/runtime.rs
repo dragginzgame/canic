@@ -1,4 +1,5 @@
 use crate::dto::prelude::*;
+use crate::ids::BuildNetwork;
 
 pub use crate::domain::runtime::{
     FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus, RuntimeDiagnosticSeverity,
@@ -45,7 +46,7 @@ pub struct CanicRuntimeStatus {
     pub canister_id: Principal,
     pub role: Option<String>,
     pub root: Option<Principal>,
-    pub network: Option<String>,
+    pub build_network: Option<BuildNetwork>,
     pub build: RuntimeBuildInfo,
     pub features: Vec<RuntimeFeatureStatus>,
     pub topology: Option<RuntimeTopologyStatus>,

@@ -1,4 +1,5 @@
 use super::*;
+use canic_core::ids::BuildNetwork;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -90,7 +91,7 @@ fn build_provenance_envelope_wraps_stable_payload() {
         fleet: "demo".to_string(),
         role: "app".to_string(),
         environment: "staging".to_string(),
-        build_network: "ic".to_string(),
+        build_network: BuildNetwork::Ic,
         profile: CanisterBuildProfile::Fast,
         workspace_root: root.clone(),
         config_path: root.join("fleets/demo/canic.toml"),
@@ -158,7 +159,7 @@ fn sample_request(root: &Path, output: CanisterArtifactBuildOutput) -> BuildProv
         fleet: "demo".to_string(),
         role: "app".to_string(),
         environment: "local".to_string(),
-        build_network: "local".to_string(),
+        build_network: BuildNetwork::Local,
         profile: CanisterBuildProfile::Fast,
         workspace_root: root.to_path_buf(),
         config_path: root.join("fleets/demo/canic.toml"),

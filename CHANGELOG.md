@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.30` is potentially breaking: delegated auth, host resolution, build
+  tooling, and runtime introspection now share one canonical `ic`/`local`
+  build-network authority and vocabulary.
+
 - `0.93.29` is potentially breaking: Wasm-store fleet discovery now consumes
   one registry-owned metadata projection, preserves persisted creation time,
   and fails closed when successful creation lacks its required registration;

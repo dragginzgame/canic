@@ -45,8 +45,8 @@ pub(crate) fn cargo_command() -> Command {
     command
 }
 
-pub(crate) fn should_export_candid_artifacts(build_network: &str) -> bool {
-    build_network == "local"
+pub(crate) fn should_export_candid_artifacts(build_network: canic_core::ids::BuildNetwork) -> bool {
+    build_network == canic_core::ids::BuildNetwork::Local
 }
 
 pub(crate) fn remove_optional_file(path: &std::path::Path) -> std::io::Result<()> {

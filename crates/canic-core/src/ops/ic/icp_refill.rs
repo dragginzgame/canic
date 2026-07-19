@@ -89,10 +89,10 @@ impl IcpRefillOps {
     }
 
     pub fn resolve_canisters(
-        network: BuildNetwork,
+        build_network: BuildNetwork,
         overrides: IcpRefillCanisterOverrides,
     ) -> Result<IcpRefillCanisters, InternalError> {
-        map_infra(IcpRefillInfra::resolve_canisters(network, overrides))
+        map_infra(IcpRefillInfra::resolve_canisters(build_network, overrides))
     }
 
     pub async fn icrc1_fee(ledger_id: Principal) -> Result<Nat, InternalError> {

@@ -6,7 +6,6 @@
 
 use crate::{
     cdk::types::Principal,
-    domain::auth::DelegatedAuthNetwork,
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegationAudience, RoleAttestation, RootKeyPolicyV1,
         RootProofMode,
@@ -124,7 +123,7 @@ pub struct PreparedDelegatedTokenIssuerProof {
 
 #[derive(Debug)]
 pub struct AuthProofVerifierConfig {
-    pub network: DelegatedAuthNetwork,
+    pub build_network: BuildNetwork,
     pub root_canister_id: Principal,
     pub ic_root_public_key_raw: Vec<u8>,
     pub root_proof_mode: RootProofMode,

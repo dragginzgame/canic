@@ -76,17 +76,17 @@ AuthProofVerifierConfig
 auth_proof_verifier_config
 root_canister_id
 ic_root_public_key_raw
-DelegatedAuthNetwork
+BuildNetwork
 MAINNET_IC_ROOT_PUBLIC_KEY_RAW
-validate_network_root_key_pair
+validate_build_network_root_key_pair
 ```
 
 Confirm:
 
 - the verifier uses explicit configured root canister id and raw IC root public
   key material
-- mainnet requires the known mainnet IC root public key
-- local, PocketIC, and testnet require explicit non-mainnet root keys
+- `ic` requires the known mainnet IC root public key
+- `local` requires an explicit non-mainnet root key
 - no protected verification path implicitly falls back to `cdk::api::root_key()`
 - runtime root-key injection remains a bootstrap/config step, not a verifier
   shortcut
@@ -192,7 +192,7 @@ Confirm rejection for:
 - invalid root proof
 - invalid issuer proof
 - root canister id mismatch
-- missing or wrong root key for the configured network
+- missing or wrong root key for the configured build network
 - cert hash drift
 - issuer pid mismatch
 - issuer proof binding hash drift
@@ -238,7 +238,7 @@ List concrete files/modules/structs that carry trust-chain validation risk.
 Detection commands (run and record output references):
 
 ```bash
-rg -n 'AuthProofVerifierConfig|auth_proof_verifier_config|validate_network_root_key_pair|ic_root_public_key_raw|root_canister_id' crates/canic-core/src -g '*.rs'
+rg -n 'AuthProofVerifierConfig|auth_proof_verifier_config|validate_build_network_root_key_pair|ic_root_public_key_raw|root_canister_id' crates/canic-core/src -g '*.rs'
 rg -n 'verify_chain_key_batch_root_proof|ChainKeyRootVerifierPolicy|RootProof::IcChainKeyBatchSignatureV1|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates/canic-core/src -g '*.rs'
 rg -n 'RoleAttestationRootProof|verify_root_canister_signature_proof|root_canister_sig_seed|root_canister_sig_domain|RootPayloadKind::RoleAttestation' crates/canic-core/src -g '*.rs'
 rg -n 'verify_issuer_canister_signature_proof|issuer_canister_sig_seed|issuer_canister_sig_seed_hash|IssuerPayloadKind|IssuerProof::IcCanisterSignatureV1' crates/canic-core/src -g '*.rs'
@@ -311,7 +311,7 @@ failures.
 Detection scans (run and record output references):
 
 ```bash
-rg -l 'AuthProofVerifierConfig|auth_proof_verifier_config|ic_root_public_key_raw|validate_network_root_key_pair' crates canisters fleets -g '*.rs' | wc -l
+rg -l 'AuthProofVerifierConfig|auth_proof_verifier_config|ic_root_public_key_raw|validate_build_network_root_key_pair' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'verify_chain_key_batch_root_proof|RootProof::IcChainKeyBatchSignatureV1|ChainKeyRootVerifierPolicy|ChainKeyBatchHeaderV1|ChainKeyDelegationCertV1' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'RoleAttestationRootProof|verify_root_canister_signature_proof|RootPayloadKind::RoleAttestation|root_canister_sig_' crates canisters fleets -g '*.rs' | wc -l
 rg -l 'verify_issuer_canister_signature_proof|IssuerPayloadKind|IssuerProof::IcCanisterSignatureV1|issuer_canister_sig_' crates canisters fleets -g '*.rs' | wc -l

@@ -39,9 +39,7 @@ use crate::{
     InternalError,
     cdk::{types::Principal, utils::hash::decode_hex},
     config::schema::DelegatedTokenConfig,
-    domain::auth::{
-        DelegatedAuthNetwork, IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw,
-    },
+    domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw},
     dto::auth::{
         ActiveDelegationProofStatus, ChainKeyAlgorithm, ChainKeyKeyId, DelegatedToken,
         DelegationCert, RootKeyPolicyV1, RootProof, RootProofMode,
@@ -70,8 +68,8 @@ use verification::{
     verify_with_embedded_proofs,
 };
 use verifier_config::{
-    configured_chain_key_root_verifier, configured_delegated_auth_network,
-    configured_ic_root_public_key_raw, configured_root_canister_id, configured_root_proof_mode,
+    configured_chain_key_root_verifier, configured_ic_root_public_key_raw,
+    configured_root_canister_id, configured_root_proof_mode,
 };
 
 impl AuthOps {
@@ -209,14 +207,15 @@ impl AuthOps {
     fn auth_proof_verifier_config_from(
         cfg: &DelegatedTokenConfig,
     ) -> Result<AuthProofVerifierConfig, InternalError> {
-        let network = configured_delegated_auth_network(cfg)?;
+        let build_network = cfg.build_network;
         let root_canister_id = configured_root_canister_id(cfg)?;
         let root_proof_mode = configured_root_proof_mode(cfg)?;
-        let chain_key_root = configured_chain_key_root_verifier(cfg, root_canister_id, network)?;
+        let chain_key_root =
+            configured_chain_key_root_verifier(cfg, root_canister_id, build_network)?;
         Ok(AuthProofVerifierConfig {
-            network,
+            build_network,
             root_canister_id,
-            ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg, network)?,
+            ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg, build_network)?,
             root_proof_mode,
             chain_key_root,
         })

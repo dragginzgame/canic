@@ -1,4 +1,5 @@
 use super::*;
+use canic_core::ids::BuildNetwork;
 
 #[test]
 fn current_install_staging_evidence_records_release_set_transport_facts() {
@@ -194,7 +195,7 @@ fn test_build_context() -> WorkspaceBuildContext {
         role: "root".to_string(),
         profile: CanisterBuildProfile::Fast,
         environment: "local".to_string(),
-        build_network: "local".to_string(),
+        build_network: BuildNetwork::Local,
         workspace_root: PathBuf::from("/workspace"),
         icp_root: PathBuf::from("/workspace/.icp"),
         config_path: PathBuf::from("/workspace/fleets/demo/canic.toml"),

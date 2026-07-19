@@ -1144,6 +1144,7 @@ fn runtime_introspection_dto_candid_shapes_are_named() {
             && status_env.contains("schema_version : nat32")
             && status_env.contains("observed_at_ns : nat64")
             && status_env.contains("canister_id : principal")
+            && status_env.contains("build_network : opt BuildNetwork")
             && status_env.contains("readiness : CanicReadinessStatus")
             && status_env.contains("auth : opt RuntimeAuthStatusSummary")
             && status_env.contains("blob_storage : opt RuntimeBlobStorageStatusSummary")

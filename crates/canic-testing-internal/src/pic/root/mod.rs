@@ -1,6 +1,9 @@
 //! Root-specific cached baseline and topology helpers for internal test suites.
 
-use canic::{cdk::types::Principal, ids::CanisterRole};
+use canic::{
+    cdk::types::Principal,
+    ids::{BuildNetwork, CanisterRole},
+};
 use ic_testkit::pic::Pic;
 use std::{collections::HashMap, io::Write, path::PathBuf, time::Instant};
 
@@ -29,7 +32,7 @@ pub struct RootBaselineSpec<'a> {
     pub artifact_watch_paths: &'a [&'a str],
     pub release_roles: &'a [&'a str],
     pub icp_build_lock_path: PathBuf,
-    pub build_network: &'a str,
+    pub build_network: BuildNetwork,
     pub build_profile: CanicWasmBuildProfile,
     pub build_config_path: PathBuf,
     pub build_extra_env: Vec<(String, String)>,

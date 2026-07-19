@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.28`.
-- The latest published release is `v0.93.28` at
-  `9798edcc6445e69282c4408f6a6b3255189e3904`.
-- The `v0.93.28` source tree is
-  `7ace314905039287bc0971649163a587ed816ee8`; its product-tree hash is
-  `7d2c2c73e868327a99261e031d0ca0a3560e407d52a277aaee9dba7fb7189d71`.
+- The workspace package version is `0.93.29`.
+- The latest published release is `v0.93.29` at
+  `e4ed43d4062ce069c5a69ecd2c2acbb9e281f013`.
+- The `v0.93.29` source tree is
+  `43a1ec65b006c7209a018bfb0783096e8656508d`; its product-tree hash is
+  `33c0dcdbcc80ee9e15fc3452a38e7e4850e6354e4e7f74f82a93d6f9a8f9e0f3`.
   Its Cargo.lock SHA-256 is
-  `db94704e1a9821b84ded83fe32c13fec02b2f651fe9c91937caf96c92f0821bd`.
+  `41879e69f38a749fe85327754676d91b926347bd00af1fdff1ae44c0ad697280`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -159,13 +159,20 @@ Historical detail is archived at:
   private no-follow copy of the verified artifact. It also removes the
   redundant 0.50-bound adoption availability field; recommendation support is
   the sole current decision and projection.
-- Current `0.93.29` development gives Wasm-store inventory one deterministic
+- Released `v0.93.29` gives Wasm-store inventory one deterministic
   registry projection carrying canister identity and persisted creation time.
   Missing roles are empty inventories, while post-create registration absence
   fails closed instead of inventing metadata. The raw stable-record accessor
   and dead role-not-found error flow are removed from the control-plane bridge.
   Root index validation now shares the index builder's direct-child scope, so
   nested canisters cannot create false duplicate service-role failures.
+- Current `0.93.30` development hard-cuts the duplicate delegated-auth network
+  model and duplicate host build-network enum. Config, bootstrap, verification,
+  renewal, provisioning, environment resolution, build tooling, and runtime
+  introspection now use the canonical `BuildNetwork` authority. The strict
+  config and runtime-status field is `build_network`; the old auth key,
+  mainnet/PocketIC/testnet auth labels, and empty runtime `network` projection
+  have no aliases or fallback parsing.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -703,7 +710,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.28` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.29` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -714,12 +721,12 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.29` development removes a split Wasm-store registry lookup. One
-read-only ops projection now carries the selected canister id and authoritative
-creation time into control-plane inventory. Missing roles remain valid empty
-inventories; a created store missing its required registration rejects before
-runtime fleet mutation. Root index validation also uses the same direct-child
-scope as index construction, excluding nested reuse of an indexed service role.
-Focused core registry tests, all-feature control-plane tests, and strict
-targeted Clippy pass. Broad deployment, package, publish, and release validation
-remains maintainer-owned.
+Current `.30` development removes the duplicate delegated-auth network model,
+host build-network enum, and empty runtime `network` projection. The strict
+config and runtime-status field is `build_network`, its only labels are `ic`
+and `local`, and one `BuildNetwork` type flows from host resolution through
+build context, auth proof policy, and operator projection. The removed names
+have no aliases, translation layer, or fallback parsing. Focused config,
+verifier, bootstrap, host resolution, runtime-status, Candid, and CLI tests pass
+together with strict targeted Clippy. Broad deployment, package, publish, and
+release validation remains maintainer-owned.

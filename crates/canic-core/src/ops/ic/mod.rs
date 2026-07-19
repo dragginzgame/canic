@@ -4,12 +4,12 @@
 //! Does not own: business policy, workflow orchestration, or lifecycle decisions.
 //! Boundary: ops layer between workflows and raw infra/CDK IC primitives.
 
+pub mod build_network;
 pub mod call;
 pub mod http;
 pub mod icp_refill;
 pub mod ledger;
 pub mod mgmt;
-pub mod network;
 pub mod nns;
 
 use crate::{

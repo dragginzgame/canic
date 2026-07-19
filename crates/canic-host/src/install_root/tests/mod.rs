@@ -68,6 +68,7 @@ use crate::deployment_truth::{
 use crate::icp::LocalReplicaTarget;
 use crate::release_set::{ReleaseSetEntry, RootReleaseSetBuildSnapshot, RootReleaseSetManifest};
 use crate::test_support::temp_dir;
+use canic_core::ids::BuildNetwork;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -117,7 +118,7 @@ fn named_ic_environment_is_explicit_for_cargo_builds() {
     context.apply_to_command(&mut command);
 
     assert_eq!(context.environment, "staging");
-    assert_eq!(context.build_network, "ic");
+    assert_eq!(context.build_network, BuildNetwork::Ic);
     assert!(command.get_envs().any(|(key, value)| {
         key == "ICP_ENVIRONMENT" && value.is_some_and(|value| value == "ic")
     }));

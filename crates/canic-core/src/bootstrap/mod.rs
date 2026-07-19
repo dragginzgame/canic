@@ -10,8 +10,10 @@ mod render;
 use crate::config::{Config, schema::ConfigModel};
 #[cfg(any(target_arch = "wasm32", test))]
 use crate::domain::auth::{
-    DelegatedAuthNetwork, ic_root_public_key_raw_from_der_or_raw, is_mainnet_ic_root_public_key_raw,
+    ic_root_public_key_raw_from_der_or_raw, is_mainnet_ic_root_public_key_raw,
 };
+#[cfg(any(target_arch = "wasm32", test))]
+use crate::ids::BuildNetwork;
 #[cfg(any(target_arch = "wasm32", test))]
 use std::fmt::Write as _;
 use std::sync::Arc;
@@ -34,7 +36,7 @@ pub mod compiled {
             Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
             validate_canister_role_name,
         },
-        ids::{CanisterRole, SubnetRole},
+        ids::{BuildNetwork, CanisterRole, SubnetRole},
     };
 }
 
@@ -128,14 +130,12 @@ fn inject_runtime_ic_root_public_key_from(
         return Ok(());
     }
 
-    let network = DelegatedAuthNetwork::parse(config.auth.delegated_tokens.network.trim())
-        .expect("validated delegated auth network");
+    let build_network = config.auth.delegated_tokens.build_network;
     let raw_root_key =
         ic_root_public_key_raw_from_der_or_raw(root_key).map_err(ConfigError::RuntimeRootKey)?;
     if is_mainnet_ic_root_public_key_raw(&raw_root_key) {
         return Err(ConfigError::RuntimeRootKey(format!(
-            "auth.delegated_tokens.network=\"{}\" must not use the mainnet IC root public key",
-            network.label()
+            "auth.delegated_tokens.build_network=\"{build_network}\" must not use the mainnet IC root public key"
         )));
     }
 
@@ -155,8 +155,7 @@ fn should_inject_runtime_ic_root_public_key(config: &ConfigModel) -> bool {
         return false;
     }
 
-    DelegatedAuthNetwork::parse(config.auth.delegated_tokens.network.trim())
-        .is_some_and(|network| !network.is_mainnet())
+    config.auth.delegated_tokens.build_network == BuildNetwork::Local
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -180,7 +179,7 @@ mod tests {
     #[test]
     fn runtime_root_key_injection_sets_local_missing_key() {
         let mut config = ConfigModel::test_default();
-        config.auth.delegated_tokens.network = "local".to_string();
+        config.auth.delegated_tokens.build_network = BuildNetwork::Local;
 
         inject_runtime_ic_root_public_key_from(&mut config, &[9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH])
             .expect("local runtime root key should inject");
@@ -199,7 +198,7 @@ mod tests {
     #[test]
     fn runtime_root_key_injection_preserves_explicit_key() {
         let mut config = ConfigModel::test_default();
-        config.auth.delegated_tokens.network = "local".to_string();
+        config.auth.delegated_tokens.build_network = BuildNetwork::Local;
         config.auth.delegated_tokens.ic_root_public_key_raw_hex =
             Some(hex_bytes(&[8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]));
 
@@ -218,12 +217,12 @@ mod tests {
     }
 
     #[test]
-    fn runtime_root_key_injection_leaves_mainnet_missing_key_unresolved() {
+    fn runtime_root_key_injection_leaves_ic_missing_key_unresolved() {
         let mut config = ConfigModel::test_default();
-        config.auth.delegated_tokens.network = "mainnet".to_string();
+        config.auth.delegated_tokens.build_network = BuildNetwork::Ic;
 
         inject_runtime_ic_root_public_key_from(&mut config, &[9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH])
-            .expect("mainnet runtime root key must not be injected");
+            .expect("IC runtime root key must not be injected");
 
         assert!(
             config
@@ -237,7 +236,7 @@ mod tests {
     #[test]
     fn runtime_root_key_injection_rejects_mainnet_key_for_local() {
         let mut config = ConfigModel::test_default();
-        config.auth.delegated_tokens.network = "local".to_string();
+        config.auth.delegated_tokens.build_network = BuildNetwork::Local;
 
         inject_runtime_ic_root_public_key_from(&mut config, &MAINNET_IC_ROOT_PUBLIC_KEY_RAW)
             .expect_err("local runtime root key must not accept mainnet key");

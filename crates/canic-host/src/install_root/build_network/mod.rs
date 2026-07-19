@@ -21,7 +21,7 @@ pub(super) fn resolve_install_build_context(
         role: role.to_string(),
         profile,
         environment: environment.to_string(),
-        build_network: build_network.as_str().to_string(),
+        build_network,
         workspace_root: workspace_root.to_path_buf(),
         icp_root: icp_root.to_path_buf(),
         config_path: config_path.to_path_buf(),

@@ -47,8 +47,8 @@ pub mod ic {
         pub use crate::__internal::core::api::ic::http::HttpApi;
     }
 
-    pub mod network {
-        pub use crate::__internal::core::api::ic::network::NetworkApi;
+    pub mod build_network {
+        pub use crate::__internal::core::api::ic::build_network::BuildNetworkApi;
     }
 }
 

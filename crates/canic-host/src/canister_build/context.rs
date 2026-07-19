@@ -1,5 +1,7 @@
 use std::{fs, path::PathBuf, process::Command};
 
+use canic_core::ids::BuildNetwork;
+
 use crate::icp::LocalReplicaTarget;
 
 use super::{
@@ -15,7 +17,7 @@ pub struct WorkspaceBuildContext {
     pub role: String,
     pub profile: CanisterBuildProfile,
     pub environment: String,
-    pub build_network: String,
+    pub build_network: BuildNetwork,
     pub workspace_root: PathBuf,
     pub icp_root: PathBuf,
     pub config_path: PathBuf,
@@ -61,7 +63,7 @@ impl WorkspaceBuildContext {
     /// Apply the exact Canic build authority to one child command.
     pub fn apply_to_command(&self, command: &mut Command) {
         command
-            .env("ICP_ENVIRONMENT", &self.build_network)
+            .env("ICP_ENVIRONMENT", self.build_network.as_str())
             .env(
                 canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV,
                 &self.icp_root,

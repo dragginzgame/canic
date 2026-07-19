@@ -94,7 +94,7 @@ Root/issuer delegated token authentication
 - `root_canister_id: string` – optional root canister trust anchor. If omitted, runtime verification uses the initialized Canic root env.
 - `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider for issuer canister-signature proof verification.
 - `root_proof_mode: "chain_key_batch"` – required active delegated root proof mode. Other values are rejected.
-- `network: "mainnet" | "local" | "pocketic" | "testnet"` – operator label for the configured verifier trust anchor (default `"mainnet"`).
+- `build_network: "ic" | "local"` – network class bound into delegated-auth proofs and verifier policy (default `"ic"`).
 - `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
 
 When delegated-token verification is enabled on a non-root endpoint canister,
@@ -121,7 +121,7 @@ These fields are required when delegated tokens are enabled:
 - `valid_from_ns: u64` – first accepted proof-policy time in nanoseconds.
 - `accept_until_ns: u64` – last accepted proof-policy time in nanoseconds; must be greater than `valid_from_ns`.
 - `max_revocation_latency_ns: u64` – maximum accepted policy revocation lag; must be greater than zero.
-- `allow_test_key: bool` – allow `test_key_1` outside mainnet (default `false`). Mainnet always rejects `test_key_1`.
+- `allow_test_key: bool` – allow `test_key_1` for `build_network = "local"` (default `false`). The `ic` build network always rejects `test_key_1`.
 
 ### `[auth.role_attestation]`
 
@@ -268,7 +268,7 @@ app_index = ["user_hub", "scale_hub"]
 enabled = false
 # root_canister_id = "..."
 # ic_root_public_key_raw_hex = "..."
-network = "local"
+build_network = "local"
 # root_proof_mode = "chain_key_batch"
 #
 # [auth.delegated_tokens.chain_key_root_proof]

@@ -14,7 +14,7 @@ package = "."
 
 [auth.delegated_tokens]
 enabled = true
-network = "local"
+build_network = "local"
 
 [auth.delegated_tokens.chain_key_root_proof]
 key_id = "key_1"

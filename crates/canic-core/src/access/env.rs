@@ -7,7 +7,7 @@
 use crate::{
     access::AccessError,
     ids::BuildNetwork,
-    ops::{ic::network::NetworkOps, runtime::env::EnvOps},
+    ops::{ic::build_network::BuildNetworkOps, runtime::env::EnvOps},
 };
 
 // -----------------------------------------------------------------------------
@@ -60,9 +60,9 @@ pub fn build_network_local() -> Result<(), AccessError> {
 
 /// check_build_network
 ///
-/// Permit access only when the build-time network matches the expected network.
+/// Permit access only when the build network matches the expected build network.
 pub fn check_build_network(expected: BuildNetwork) -> Result<(), AccessError> {
-    let actual = NetworkOps::build_network();
+    let actual = BuildNetworkOps::build_network();
 
     match actual {
         Some(actual) if actual == expected => Ok(()),
