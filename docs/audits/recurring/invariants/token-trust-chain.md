@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-AUTH-TRUST-001`
-- Method version: `2`
+- Method version: `1`
 - Disposition: `revise`
 - Owner: configured root, issuer proof, canister signature, and token trust
   chain

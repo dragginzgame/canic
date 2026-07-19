@@ -12,7 +12,7 @@ use crate::{
     execution::{
         BackupExecutionJournal, BackupExecutionJournalOperation, BackupExecutionOperationReceipt,
     },
-    persistence::BackupLayout,
+    persistence::{BackupLayout, CommandLifetimeHandle},
     plan::{BackupOperationKind, BackupPlan},
     runner::{
         BackupRunnerCommandError, BackupRunnerConfig, BackupRunnerError, BackupRunnerExecutor,
@@ -32,16 +32,36 @@ pub(super) fn execute_operation_receipt(
     plan: &BackupPlan,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
+    command_lifetime: Option<CommandLifetimeHandle>,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     match operation.kind {
-        BackupOperationKind::Stop => execute_stop(executor, journal, operation),
-        BackupOperationKind::CreateSnapshot => {
-            execute_create_snapshot(executor, layout, plan, journal, operation)
-        }
-        BackupOperationKind::Start => execute_start(executor, journal, operation),
-        BackupOperationKind::DownloadSnapshot => {
-            execute_download_snapshot(executor, layout, journal, operation)
-        }
+        BackupOperationKind::Stop => execute_stop(
+            executor,
+            journal,
+            operation,
+            required_command_lifetime(operation, command_lifetime)?,
+        ),
+        BackupOperationKind::CreateSnapshot => execute_create_snapshot(
+            executor,
+            layout,
+            plan,
+            journal,
+            operation,
+            required_command_lifetime(operation, command_lifetime)?,
+        ),
+        BackupOperationKind::Start => execute_start(
+            executor,
+            journal,
+            operation,
+            required_command_lifetime(operation, command_lifetime)?,
+        ),
+        BackupOperationKind::DownloadSnapshot => execute_download_snapshot(
+            executor,
+            layout,
+            journal,
+            operation,
+            required_command_lifetime(operation, command_lifetime)?,
+        ),
         BackupOperationKind::VerifyArtifact => execute_verify_artifact(layout, journal, operation),
         BackupOperationKind::FinalizeManifest => {
             execute_finalize_manifest(config, layout, plan, journal, operation)
@@ -63,10 +83,11 @@ fn execute_stop(
     executor: &mut impl BackupRunnerExecutor,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
+    command_lifetime: CommandLifetimeHandle,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     executor
-        .stop_canister(&target)
+        .stop_canister(&target, command_lifetime)
         .map_err(|error| command_failed(operation.sequence, error))?;
     Ok(BackupExecutionOperationReceipt::completed(
         journal,
@@ -79,16 +100,27 @@ fn execute_start(
     executor: &mut impl BackupRunnerExecutor,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
+    command_lifetime: CommandLifetimeHandle,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     executor
-        .start_canister(&target)
+        .start_canister(&target, command_lifetime)
         .map_err(|error| command_failed(operation.sequence, error))?;
     Ok(BackupExecutionOperationReceipt::completed(
         journal,
         operation,
         Some(current_timestamp_marker()),
     ))
+}
+
+fn required_command_lifetime(
+    operation: &BackupExecutionJournalOperation,
+    command_lifetime: Option<CommandLifetimeHandle>,
+) -> Result<CommandLifetimeHandle, BackupRunnerError> {
+    command_lifetime.ok_or_else(|| BackupRunnerError::MissingCommandLifetime {
+        sequence: operation.sequence,
+        operation_id: operation.operation_id.clone(),
+    })
 }
 
 fn operation_target(

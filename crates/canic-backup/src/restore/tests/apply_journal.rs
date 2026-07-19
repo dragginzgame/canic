@@ -1106,57 +1106,6 @@ fn apply_journal_mark_next_operation_pending_claims_first_operation() {
     );
 }
 
-// Ensure a pending claim can be released back to ready for retry.
-#[test]
-fn apply_journal_mark_next_operation_ready_unclaims_pending_operation() {
-    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
-
-    journal
-        .mark_next_operation_pending_at(Some("2026-05-04T12:00:00Z".to_string()))
-        .expect("mark operation pending");
-    journal
-        .mark_next_operation_ready_at(Some("2026-05-04T12:01:00Z".to_string()))
-        .expect("mark operation ready");
-    let report = journal.report();
-    let preview = journal.next_command_preview();
-
-    assert_eq!(journal.pending_operations, 0);
-    assert_eq!(journal.ready_operations, 1);
-    assert_eq!(
-        journal.operations[0].state,
-        RestoreApplyOperationState::Ready
-    );
-    assert_eq!(
-        journal.operations[0].state_updated_at.as_deref(),
-        Some("2026-05-04T12:01:00Z")
-    );
-    assert_eq!(
-        report
-            .next_transition
-            .as_ref()
-            .map(|operation| operation.sequence),
-        Some(0)
-    );
-    assert_eq!(
-        report
-            .next_transition
-            .as_ref()
-            .map(|operation| &operation.state),
-        Some(&RestoreApplyOperationState::Ready)
-    );
-    assert_eq!(
-        report
-            .next_transition
-            .as_ref()
-            .and_then(|operation| operation.state_updated_at.as_deref()),
-        Some("2026-05-04T12:01:00Z")
-    );
-    assert_eq!(
-        preview.operation.expect("next operation").state,
-        RestoreApplyOperationState::Ready
-    );
-}
-
 // Ensure empty state update markers are rejected during journal validation.
 #[test]
 fn apply_journal_validation_rejects_empty_state_updated_at() {
@@ -1246,20 +1195,6 @@ fn apply_journal_validation_rejects_missing_operation_fields() {
             field: "operations[].verification_kind",
         }
     );
-}
-
-// Ensure unclaim fails when the next transitionable operation is not pending.
-#[test]
-fn apply_journal_mark_next_operation_ready_rejects_without_pending_operation() {
-    let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
-
-    let err = journal
-        .mark_next_operation_ready_at(None)
-        .expect_err("ready operation should not unclaim");
-
-    std::assert_matches!(err, RestoreApplyJournalError::NoPendingOperation);
-    assert_eq!(journal.ready_operations, 1);
-    assert_eq!(journal.pending_operations, 0);
 }
 
 // Ensure pending claims cannot skip earlier ready operations.

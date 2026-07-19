@@ -6,6 +6,7 @@
 
 use crate::{
     artifacts::{ArtifactChecksum, ArtifactChecksumError},
+    persistence::CommandLifetimeLock,
     restore::{
         RestoreApplyCommandConfig, RestoreApplyJournalOperation, RestoreApplyOperationKind,
         RestoreApplyOperationKindCounts, RestoreApplyOperationState, write_restore_apply_journal,
@@ -125,12 +126,9 @@ fn execute_upload_stages_complete_snapshot_directory() {
     fs::remove_dir_all(fixture.root).expect("remove fixture");
 }
 
-#[cfg(unix)]
 #[test]
-fn unclaim_pending_upload_removes_interrupted_private_stage() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let fixture = upload_fixture("canic-restore-interrupted-stage");
+fn execute_preserves_pending_operation_while_command_is_in_flight() {
+    let fixture = upload_fixture("canic-restore-command-in-flight");
     let mut journal: RestoreApplyJournal =
         serde_json::from_slice(&fs::read(&fixture.config.journal).expect("read ready journal"))
             .expect("decode ready journal");
@@ -138,21 +136,111 @@ fn unclaim_pending_upload_removes_interrupted_private_stage() {
     journal.ready_operations = 0;
     journal.pending_operations = 1;
     write_restore_apply_journal(&fixture.config.journal, &journal).expect("write pending journal");
+    let command_lock =
+        CommandLifetimeLock::acquire(&fixture.config.journal, 0).expect("hold prior command lock");
+    let mut executor = InspectingExecutor {
+        original_source: fixture.root.join("artifacts/root"),
+        observed_input: None,
+        calls: 0,
+    };
 
-    let stage_root = fixture.root.join(".restore-apply.json.canic-restore-stage");
-    let operation_root = stage_root.join("operation-0");
-    fs::create_dir_all(&operation_root).expect("create interrupted stage");
-    fs::set_permissions(&stage_root, fs::Permissions::from_mode(0o700))
-        .expect("restrict stage root");
-    fs::write(operation_root.join("stale"), b"stale").expect("write interrupted stage bytes");
+    let error = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect_err("in-flight command must stop resume");
+    let persisted: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&fixture.config.journal).expect("read pending journal"))
+            .expect("decode pending journal");
 
-    let response =
-        restore_run_unclaim_pending(&fixture.config).expect("unclaim interrupted upload");
+    std::assert_matches!(
+        error,
+        RestoreRunnerError::CommandInFlight {
+            sequence: 0,
+            operation: RestoreApplyOperationKind::UploadSnapshot,
+            ..
+        }
+    );
+    assert_eq!(executor.calls, 0);
+    assert_eq!(
+        persisted.operations[0].state,
+        RestoreApplyOperationState::Pending
+    );
+    assert!(persisted.operation_receipts.is_empty());
 
-    assert!(!stage_root.exists());
-    assert_eq!(response.ready_operations, 1);
-    assert_eq!(response.pending_operations, 0);
+    command_lock.finish().expect("release prior command lock");
+    let error = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect_err("quiescent unknown outcome must stop resume");
+    let persisted: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&fixture.config.journal).expect("read pending journal"))
+            .expect("decode pending journal");
+
+    std::assert_matches!(
+        error,
+        RestoreRunnerError::CommandOutcomeUnknown {
+            sequence: 0,
+            operation: RestoreApplyOperationKind::UploadSnapshot,
+            ..
+        }
+    );
+    assert_eq!(executor.calls, 0);
+    assert_eq!(
+        persisted.operations[0].state,
+        RestoreApplyOperationState::Pending
+    );
+    assert!(persisted.operation_receipts.is_empty());
     fs::remove_dir_all(fixture.root).expect("remove fixture");
+}
+
+#[test]
+fn execute_repeats_pending_verification_without_a_mutating_command_lock() {
+    let root = temp_dir("canic-restore-pending-verification");
+    fs::create_dir_all(&root).expect("create temp root");
+    let operation = RestoreApplyJournalOperation {
+        sequence: 0,
+        operation: RestoreApplyOperationKind::VerifyMember,
+        state: RestoreApplyOperationState::Pending,
+        state_updated_at: Some("2026-07-18T12:00:00Z".to_string()),
+        blocking_reasons: Vec::new(),
+        member_order: 0,
+        source_canister: "aaaaa-aa".to_string(),
+        target_canister: "rno2w-sqaaa-aaaaa-aaacq-cai".to_string(),
+        role: "root".to_string(),
+        snapshot_id: None,
+        artifact_path: None,
+        artifact_checksum: None,
+        verification_kind: Some("status".to_string()),
+    };
+    let journal = RestoreApplyJournal {
+        journal_version: 1,
+        backup_id: "backup-pending-verification".to_string(),
+        ready: true,
+        blocked_reasons: Vec::new(),
+        backup_root: Some(root.to_string_lossy().to_string()),
+        operation_count: 1,
+        operation_counts: RestoreApplyOperationKindCounts::from_operations(std::slice::from_ref(
+            &operation,
+        )),
+        pending_operations: 1,
+        ready_operations: 0,
+        blocked_operations: 0,
+        completed_operations: 0,
+        failed_operations: 0,
+        operations: vec![operation],
+        operation_receipts: Vec::new(),
+    };
+    let config = RestoreRunnerConfig {
+        journal: root.join("restore-apply.json"),
+        command: RestoreApplyCommandConfig::default(),
+        max_steps: None,
+        updated_at: Some("2026-07-18T12:01:00Z".to_string()),
+    };
+    write_restore_apply_journal(&config.journal, &journal).expect("write pending journal");
+    let mut executor = SuccessfulExecutor { calls: 0 };
+
+    let response = restore_run_execute_with_executor(&config, &mut executor)
+        .expect("repeat read-only verification");
+
+    assert!(response.complete);
+    assert_eq!(executor.calls, 1);
+    fs::remove_dir_all(root).expect("remove fixture");
 }
 
 struct UploadFixture {
@@ -235,6 +323,7 @@ impl RestoreRunnerCommandExecutor for DirectoryInspectingExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
+        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         let input = command
             .args
@@ -273,10 +362,31 @@ struct InspectingExecutor {
     calls: usize,
 }
 
+struct SuccessfulExecutor {
+    calls: usize,
+}
+
+impl RestoreRunnerCommandExecutor for SuccessfulExecutor {
+    fn execute(
+        &mut self,
+        _command: &RestoreApplyRunnerCommand,
+        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+    ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
+        self.calls += 1;
+        Ok(RestoreRunnerCommandOutput {
+            success: true,
+            status: "0".to_string(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        })
+    }
+}
+
 impl RestoreRunnerCommandExecutor for InspectingExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
+        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
         self.calls += 1;
         let input = command

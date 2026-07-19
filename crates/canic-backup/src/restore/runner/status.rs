@@ -52,7 +52,7 @@ pub(super) const fn restore_run_next_action(report: &RestoreApplyJournalReport) 
         return RESTORE_RUN_ACTION_RETRY_FAILED;
     }
     if report.pending_operations > 0 {
-        return RESTORE_RUN_ACTION_UNCLAIM_PENDING;
+        return RESTORE_RUN_ACTION_RERUN;
     }
     if !report.ready || report.blocked_operations > 0 {
         return RESTORE_RUN_ACTION_FIX_BLOCKED;
@@ -64,17 +64,6 @@ pub(super) fn enforce_restore_run_executable(
     journal: &RestoreApplyJournal,
     report: &RestoreApplyJournalReport,
 ) -> Result<(), RestoreRunnerError> {
-    if report.pending_operations > 0 {
-        return Err(RestoreRunnerError::Pending {
-            backup_id: report.backup_id.clone(),
-            pending_operations: report.pending_operations,
-            next_transition_sequence: report
-                .next_transition
-                .as_ref()
-                .map(|operation| operation.sequence),
-        });
-    }
-
     if report.failed_operations > 0 {
         return Err(RestoreRunnerError::Failed {
             backup_id: report.backup_id.clone(),

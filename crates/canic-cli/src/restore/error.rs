@@ -59,19 +59,38 @@ pub enum RestoreCommandError {
     #[error("restore apply journal lock path is unsafe: {lock_path} ({kind})")]
     RestoreApplyJournalLockUnsafeEntry { lock_path: String, kind: String },
 
+    #[error(
+        "restore operation {sequence} {operation:?} has an external command still running: {lock_path}"
+    )]
+    RestoreCommandInFlight {
+        sequence: usize,
+        operation: canic_backup::restore::RestoreApplyOperationKind,
+        lock_path: String,
+    },
+
+    #[error(
+        "restore operation {sequence} {operation:?} has a quiescent command with an unknown external outcome: {lock_path}"
+    )]
+    RestoreCommandOutcomeUnknown {
+        sequence: usize,
+        operation: canic_backup::restore::RestoreApplyOperationKind,
+        lock_path: String,
+    },
+
+    #[error(
+        "restore operation {sequence} {operation:?} command lock path is unsafe: {lock_path} ({kind})"
+    )]
+    RestoreCommandLockUnsafeEntry {
+        sequence: usize,
+        operation: canic_backup::restore::RestoreApplyOperationKind,
+        lock_path: String,
+        kind: String,
+    },
+
     #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
     RestoreNotReady {
         backup_id: String,
         reasons: Vec<String>,
-    },
-
-    #[error(
-        "restore apply journal for backup {backup_id} has pending operations: pending={pending_operations}, next={next_transition_sequence:?}"
-    )]
-    RestoreApplyPending {
-        backup_id: String,
-        pending_operations: usize,
-        next_transition_sequence: Option<usize>,
     },
 
     #[error(
@@ -214,14 +233,34 @@ impl From<RestoreRunnerError> for RestoreCommandError {
             RestoreRunnerError::JournalLockUnsafeEntry { lock_path, kind } => {
                 Self::RestoreApplyJournalLockUnsafeEntry { lock_path, kind }
             }
-            RestoreRunnerError::Pending {
-                backup_id,
-                pending_operations,
-                next_transition_sequence,
-            } => Self::RestoreApplyPending {
-                backup_id,
-                pending_operations,
-                next_transition_sequence,
+            RestoreRunnerError::CommandInFlight {
+                sequence,
+                operation,
+                lock_path,
+            } => Self::RestoreCommandInFlight {
+                sequence,
+                operation,
+                lock_path,
+            },
+            RestoreRunnerError::CommandOutcomeUnknown {
+                sequence,
+                operation,
+                lock_path,
+            } => Self::RestoreCommandOutcomeUnknown {
+                sequence,
+                operation,
+                lock_path,
+            },
+            RestoreRunnerError::CommandLockUnsafeEntry {
+                sequence,
+                operation,
+                lock_path,
+                kind,
+            } => Self::RestoreCommandLockUnsafeEntry {
+                sequence,
+                operation,
+                lock_path,
+                kind,
             },
             RestoreRunnerError::Failed {
                 backup_id,

@@ -3,7 +3,7 @@ use crate::{
     execution::BackupExecutionOperationState,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics},
     manifest::{BackupUnitKind, IdentityMode},
-    persistence::{BackupLayout, JournalLock},
+    persistence::{BackupLayout, CommandLifetimeLock, JournalLock},
     plan::{
         AuthorityEvidence, AuthorityProofSource, BackupExecutionPreflightReceipts,
         BackupOperationKind, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
@@ -412,6 +412,91 @@ fn runner_rejects_locked_execution_journal_before_running_commands() {
     assert!(executor.commands.is_empty());
 }
 
+// Ensure restart cannot observe or replay a pending effect while its prior command tree lives.
+#[test]
+fn runner_preserves_pending_operation_while_command_is_in_flight() {
+    let root = prepared_layout("canic-backup-runner-command-in-flight");
+    let layout = BackupLayout::new(root.clone());
+    let mut preflight_executor = FakeExecutor::default();
+    backup_run_execute_with_executor(
+        &runner_config(root.clone(), Some(0)),
+        &mut preflight_executor,
+    )
+    .expect("accept preflight without mutation");
+
+    let mut journal = layout
+        .read_execution_journal()
+        .expect("read accepted journal");
+    let operation = journal
+        .next_ready_operation()
+        .cloned()
+        .expect("next mutation");
+    journal
+        .mark_operation_pending_at(operation.sequence, Some("unix:11".to_string()))
+        .expect("mark interrupted operation pending");
+    layout
+        .write_execution_journal(&journal)
+        .expect("write pending journal");
+    let command_lock =
+        CommandLifetimeLock::acquire(&layout.execution_journal_path(), operation.sequence)
+            .expect("hold prior command lock");
+
+    let mut executor = FakeExecutor::default();
+    let error = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
+        .expect_err("in-flight command must stop resume");
+    let persisted = layout
+        .read_execution_journal()
+        .expect("read preserved pending journal");
+
+    std::assert_matches!(
+        error,
+        BackupRunnerError::CommandInFlight {
+            sequence,
+            operation_id,
+            ..
+        } if sequence == operation.sequence && operation_id == operation.operation_id
+    );
+    assert!(executor.commands.is_empty());
+    assert_eq!(
+        persisted.operations[operation.sequence].state,
+        BackupExecutionOperationState::Pending
+    );
+    assert!(
+        persisted
+            .operation_receipts
+            .iter()
+            .all(|receipt| receipt.sequence != operation.sequence)
+    );
+
+    command_lock.finish().expect("release prior command lock");
+    let error = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
+        .expect_err("quiescent unknown outcome must stop resume");
+    let persisted = layout
+        .read_execution_journal()
+        .expect("read preserved pending journal");
+
+    std::assert_matches!(
+        error,
+        BackupRunnerError::CommandOutcomeUnknown {
+            sequence,
+            operation_id,
+            ..
+        } if sequence == operation.sequence && operation_id == operation.operation_id
+    );
+    assert!(executor.commands.is_empty());
+    assert_eq!(
+        persisted.operations[operation.sequence].state,
+        BackupExecutionOperationState::Pending
+    );
+    assert!(
+        persisted
+            .operation_receipts
+            .iter()
+            .all(|receipt| receipt.sequence != operation.sequence)
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure failed preflight evidence does not accept the preflight or unblock mutation.
 #[test]
 fn runner_preflight_failure_leaves_mutation_blocked() {
@@ -577,12 +662,20 @@ impl BackupRunnerExecutor for FakeExecutor {
         })
     }
 
-    fn stop_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError> {
+    fn stop_canister(
+        &mut self,
+        canister_id: &str,
+        _command_lifetime: crate::persistence::CommandLifetimeHandle,
+    ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("stop:{canister_id}"));
         Ok(())
     }
 
-    fn start_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError> {
+    fn start_canister(
+        &mut self,
+        canister_id: &str,
+        _command_lifetime: crate::persistence::CommandLifetimeHandle,
+    ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("start:{canister_id}"));
         Ok(())
     }
@@ -590,6 +683,7 @@ impl BackupRunnerExecutor for FakeExecutor {
     fn create_snapshot(
         &mut self,
         canister_id: &str,
+        _command_lifetime: crate::persistence::CommandLifetimeHandle,
     ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
         self.commands.push(format!("snapshot:{canister_id}"));
         if self.fail_on == Some(FakeFailure::CreateSnapshot) {
@@ -610,6 +704,7 @@ impl BackupRunnerExecutor for FakeExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
+        _command_lifetime: crate::persistence::CommandLifetimeHandle,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands
             .push(format!("download:{canister_id}:{snapshot_id}"));

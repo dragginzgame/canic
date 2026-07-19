@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{
-    command::{command_display, ensure_command_compatible},
+    command::{command_display, configure_inherited_fd, ensure_command_compatible},
     error::IcpCommandError,
     model::IcpRawOutput,
     version::compatible_version_output,
@@ -144,12 +144,19 @@ pub fn run_success(command: &mut Command) -> Result<bool, IcpCommandError> {
 }
 
 /// Execute a rendered ICP CLI command and return raw process output.
-pub fn run_raw_output(program: &str, args: &[String]) -> Result<IcpRawOutput, std::io::Error> {
+pub fn run_raw_output(
+    program: &str,
+    args: &[String],
+    inherited_fd: Option<i32>,
+) -> Result<IcpRawOutput, std::io::Error> {
     if is_icp_program(program) {
         compatible_version_output(program, None)
             .map_err(|err| io::Error::other(err.to_string()))?;
     }
-    let output = Command::new(program).args(args).output()?;
+    let mut command = Command::new(program);
+    command.args(args);
+    configure_inherited_fd(&mut command, inherited_fd);
+    let output = command.output()?;
     Ok(IcpRawOutput {
         success: output.status.success(),
         status: exit_status_label(output.status),

@@ -67,7 +67,7 @@ retained-method owner below.
 | `capability-scope-enforcement.md` | `revise` | `CANIC-AUTH-CAPABILITY-001/v1` | Capability and local-role scopes are enforced before execution. |
 | `expiry-replay-single-use.md` | `revise` | `CANIC-AUTH-REPLAY-001/v2` | Expiry, replay identity, and single-use/domain-receipt boundaries. |
 | `subject-caller-binding.md` | `revise` | `CANIC-AUTH-SUBJECT-001/v1` | Verified subject is bound to the transport caller. |
-| `token-trust-chain.md` | `revise` | `CANIC-AUTH-TRUST-001/v2` | Root, issuer, proof, and token trust chain. |
+| `token-trust-chain.md` | `revise` | `CANIC-AUTH-TRUST-001/v1` | Root, issuer, proof, and token trust chain. |
 
 All seven are `invariant` profile methods owned by the authentication boundary.
 Run the affected method after a local property change and the full set before

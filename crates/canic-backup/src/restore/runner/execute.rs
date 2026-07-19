@@ -26,7 +26,10 @@ use super::{
         RestoreRunnerOutcome, RestoreStoppedPreconditionFailure,
     },
 };
-use crate::{persistence::JournalLock, timestamp::state_updated_at};
+use crate::{
+    persistence::{CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
+    timestamp::state_updated_at,
+};
 
 /// Execute ready restore apply journal operations through an injected command executor.
 pub fn restore_run_execute_with_executor(
@@ -114,6 +117,10 @@ fn restore_run_prepare_next_operation(
         .clone()
         .ok_or_else(|| restore_command_unavailable_error(&preview))?;
     let sequence = operation.sequence;
+    let mut command_lock = restore_command_lock(config, &operation)?;
+    if operation.state == crate::restore::RestoreApplyOperationState::Pending {
+        reject_unknown_restore_command_outcome(&operation, command_lock.take())?;
+    }
     let attempt = journal
         .operation_receipts
         .iter()
@@ -141,6 +148,7 @@ fn restore_run_prepare_next_operation(
         command,
         sequence,
         attempt,
+        command_lock,
         _staged_artifact: staged_artifact,
     })
 }
@@ -149,21 +157,37 @@ fn restore_run_execute_prepared_operation(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
     journal: &mut RestoreApplyJournal,
-    prepared: RestoreRunPreparedOperation,
+    mut prepared: RestoreRunPreparedOperation,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
-    if prepared.command.requires_stopped_canister
-        && let Some(outcome) = enforce_stopped_canister_precondition(
+    let command_lifetime = prepared
+        .command_lock
+        .as_ref()
+        .map(CommandLifetimeLock::handle);
+    if prepared.command.requires_stopped_canister {
+        let precondition = enforce_stopped_canister_precondition(
             config,
             executor,
             &prepared.operation,
             prepared.attempt,
             config.updated_at.as_ref(),
-        )?
-    {
-        return restore_run_commit_precondition_failure(config, journal, prepared, outcome);
+            command_lifetime,
+        );
+        match precondition {
+            Ok(Some(outcome)) => {
+                finish_restore_command_lock(&mut prepared)?;
+                return restore_run_commit_precondition_failure(config, journal, prepared, outcome);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                finish_restore_command_lock(&mut prepared)?;
+                return Err(error);
+            }
+        }
     }
 
-    let output = executor.execute(&prepared.command)?;
+    let output = executor.execute(&prepared.command, command_lifetime);
+    finish_restore_command_lock(&mut prepared)?;
+    let output = output?;
     let status_label = output.status;
     let output_pair = RestoreApplyCommandOutputPair::from_bytes(
         &output.stdout,
@@ -197,6 +221,76 @@ fn restore_run_execute_prepared_operation(
     }
 
     restore_run_commit_command_failure(config, journal, prepared, status_label, output_pair)
+}
+
+fn restore_command_lock(
+    config: &RestoreRunnerConfig,
+    operation: &crate::restore::RestoreApplyJournalOperation,
+) -> Result<Option<CommandLifetimeLock>, RestoreRunnerError> {
+    if !matches!(
+        operation.operation,
+        RestoreApplyOperationKind::UploadSnapshot
+            | RestoreApplyOperationKind::StopCanister
+            | RestoreApplyOperationKind::LoadSnapshot
+            | RestoreApplyOperationKind::StartCanister
+    ) {
+        return Ok(None);
+    }
+
+    CommandLifetimeLock::acquire(&config.journal, operation.sequence)
+        .map(Some)
+        .map_err(|error| restore_command_lock_error(operation, error))
+}
+
+fn finish_restore_command_lock(
+    prepared: &mut RestoreRunPreparedOperation,
+) -> Result<(), RestoreRunnerError> {
+    let Some(command_lock) = prepared.command_lock.take() else {
+        return Ok(());
+    };
+    command_lock
+        .finish()
+        .map_err(|error| restore_command_lock_error(&prepared.operation, error))
+}
+
+fn reject_unknown_restore_command_outcome(
+    operation: &crate::restore::RestoreApplyJournalOperation,
+    command_lock: Option<CommandLifetimeLock>,
+) -> Result<(), RestoreRunnerError> {
+    let Some(command_lock) = command_lock else {
+        return Ok(());
+    };
+    let lock_path = command_lock.path().to_string_lossy().to_string();
+    command_lock
+        .finish()
+        .map_err(|error| restore_command_lock_error(operation, error))?;
+    Err(RestoreRunnerError::CommandOutcomeUnknown {
+        sequence: operation.sequence,
+        operation: operation.operation.clone(),
+        lock_path,
+    })
+}
+
+fn restore_command_lock_error(
+    operation: &crate::restore::RestoreApplyJournalOperation,
+    error: CommandLifetimeLockError,
+) -> RestoreRunnerError {
+    match error {
+        CommandLifetimeLockError::InFlight { lock_path } => RestoreRunnerError::CommandInFlight {
+            sequence: operation.sequence,
+            operation: operation.operation.clone(),
+            lock_path,
+        },
+        CommandLifetimeLockError::UnsafeEntry { lock_path, kind } => {
+            RestoreRunnerError::CommandLockUnsafeEntry {
+                sequence: operation.sequence,
+                operation: operation.operation.clone(),
+                lock_path,
+                kind,
+            }
+        }
+        CommandLifetimeLockError::Io(error) => RestoreRunnerError::Io(error),
+    }
 }
 
 fn restore_run_commit_missing_uploaded_snapshot_id(

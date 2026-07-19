@@ -257,35 +257,6 @@ impl RestoreApplyJournal {
         )
     }
 
-    /// Mark the current pending operation ready again with an update marker.
-    pub(in crate::restore) fn mark_next_operation_ready_at(
-        &mut self,
-        updated_at: Option<String>,
-    ) -> Result<(), RestoreApplyJournalError> {
-        let operation = self
-            .next_transition_operation()
-            .ok_or(RestoreApplyJournalError::NoTransitionableOperation)?;
-        if operation.state != RestoreApplyOperationState::Pending {
-            return Err(RestoreApplyJournalError::NoPendingOperation);
-        }
-
-        self.mark_operation_ready_at(operation.sequence, updated_at)
-    }
-
-    /// Mark one restore apply operation ready again with an update marker.
-    pub(in crate::restore) fn mark_operation_ready_at(
-        &mut self,
-        sequence: usize,
-        updated_at: Option<String>,
-    ) -> Result<(), RestoreApplyJournalError> {
-        self.transition_operation(
-            sequence,
-            RestoreApplyOperationState::Ready,
-            Vec::new(),
-            updated_at,
-        )
-    }
-
     /// Retry one failed restore apply operation by moving it back to ready.
     pub fn retry_failed_operation_at(
         &mut self,

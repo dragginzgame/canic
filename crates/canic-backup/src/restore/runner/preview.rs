@@ -6,7 +6,6 @@
 
 use super::{
     RestoreApplyJournalError, RestoreApplyOperationState,
-    artifact::cleanup_pending_upload_stage,
     io::{read_apply_journal_file, write_apply_journal_file},
     status::{restore_run_next_action, restore_run_stopped_reason},
     types::{
@@ -66,39 +65,6 @@ pub fn restore_run_retry_failed(
     );
     response.set_requested_state_updated_at(config.updated_at.as_ref());
     response.set_operation_receipts(vec![RestoreRunOperationReceipt::recovered_failed(
-        recovered_operation.clone(),
-        Some(recovered_updated_at),
-    )]);
-    response.recovered_operation = Some(recovered_operation);
-    Ok(response)
-}
-
-/// Recover an interrupted restore runner by unclaiming the pending operation.
-pub fn restore_run_unclaim_pending(
-    config: &RestoreRunnerConfig,
-) -> Result<RestoreRunResponse, RestoreRunnerError> {
-    let _lock = JournalLock::acquire(&config.journal)?;
-    let mut journal = read_apply_journal_file(&config.journal)?;
-    let recovered_operation = journal
-        .next_transition_operation()
-        .filter(|operation| operation.state == RestoreApplyOperationState::Pending)
-        .cloned()
-        .ok_or(RestoreApplyJournalError::NoPendingOperation)?;
-
-    let recovered_updated_at = state_updated_at(config.updated_at.as_ref());
-    cleanup_pending_upload_stage(config, &recovered_operation)?;
-    journal.mark_next_operation_ready_at(Some(recovered_updated_at.clone()))?;
-    write_apply_journal_file(&config.journal, &journal)?;
-
-    let report = journal.report();
-    let next_action = restore_run_next_action(&report);
-    let mut response = RestoreRunResponse::from_report(
-        journal.backup_id,
-        report,
-        RestoreRunResponseMode::unclaim_pending(next_action),
-    );
-    response.set_requested_state_updated_at(config.updated_at.as_ref());
-    response.set_operation_receipts(vec![RestoreRunOperationReceipt::recovered_pending(
         recovered_operation.clone(),
         Some(recovered_updated_at),
     )]);

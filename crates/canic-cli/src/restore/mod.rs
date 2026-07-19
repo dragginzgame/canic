@@ -98,11 +98,6 @@ where
                     response: restore_run_retry_failed(&options)?,
                     error: None,
                 }
-            } else if options.unclaim_pending {
-                canic_backup::restore::RestoreRunnerOutcome {
-                    response: restore_run_unclaim_pending(&options)?,
-                    error: None,
-                }
             } else {
                 canic_backup::restore::RestoreRunnerOutcome {
                     response: restore_run_dry_run(&options)?,
@@ -198,13 +193,6 @@ fn restore_run_dry_run(
         .map_err(RestoreCommandError::from)
 }
 
-fn restore_run_unclaim_pending(
-    options: &RestoreRunOptions,
-) -> Result<RestoreRunResponse, RestoreCommandError> {
-    canic_backup::restore::restore_run_unclaim_pending(&restore_runner_config(options)?)
-        .map_err(RestoreCommandError::from)
-}
-
 fn restore_run_retry_failed(
     options: &RestoreRunOptions,
 ) -> Result<RestoreRunResponse, RestoreCommandError> {
@@ -241,8 +229,13 @@ impl RestoreRunnerCommandExecutor for HostRestoreCommandExecutor {
     fn execute(
         &mut self,
         command: &canic_backup::restore::RestoreApplyRunnerCommand,
+        command_lifetime: Option<canic_backup::persistence::CommandLifetimeHandle>,
     ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
-        let output = icp::run_raw_output(&command.program, &command.args)?;
+        let output = icp::run_raw_output(
+            &command.program,
+            &command.args,
+            command_lifetime.map(canic_backup::persistence::CommandLifetimeHandle::raw_fd),
+        )?;
         Ok(RestoreRunnerCommandOutput {
             success: output.success,
             status: output.status,
