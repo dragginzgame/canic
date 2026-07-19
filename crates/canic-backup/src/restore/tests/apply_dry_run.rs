@@ -242,7 +242,8 @@ fn apply_dry_run_rejects_symlinked_backup_root() {
 fn apply_dry_run_rejects_special_artifact_files() {
     use std::os::unix::net::UnixListener;
 
-    let root = temp_dir("canic-restore-apply-special-artifact");
+    // Keep the fixture path short enough for Unix-domain socket path limits.
+    let root = temp_dir("cba-special");
     fs::create_dir_all(root.join("artifacts")).expect("create artifact root");
     let socket = root.join("artifacts/root");
     let listener = UnixListener::bind(&socket).expect("create artifact socket");
@@ -268,5 +269,6 @@ fn apply_dry_run_rejects_special_artifact_files() {
 
     std::assert_matches!(error, RestoreApplyDryRunError::ArtifactUnsafeType { .. });
     drop(listener);
+    fs::remove_file(socket).expect("remove artifact socket");
     fs::remove_dir_all(root).expect("remove fixture");
 }
