@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.29`.
-- The latest published release is `v0.93.29` at
-  `e4ed43d4062ce069c5a69ecd2c2acbb9e281f013`.
-- The `v0.93.29` source tree is
-  `43a1ec65b006c7209a018bfb0783096e8656508d`; its product-tree hash is
-  `33c0dcdbcc80ee9e15fc3452a38e7e4850e6354e4e7f74f82a93d6f9a8f9e0f3`.
+- The workspace package version is `0.93.30`.
+- The latest published release is `v0.93.30` at
+  `922d30460d90bc5e0b0f4d7c2f8a622aed71d42f`.
+- The `v0.93.30` source tree is
+  `93133c7995330a83b86772566f24940bc45237a0`; its product-tree hash is
+  `4408b7a9b3769e0701b9159ff39e0e75135f703bd564f28d368a531e2a8737e7`.
   Its Cargo.lock SHA-256 is
-  `41879e69f38a749fe85327754676d91b926347bd00af1fdff1ae44c0ad697280`.
+  `5859f4f35fc44de594eb76e52f31f8ed3b8bfe929641f9d25da0d2cf3206ab5c`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -166,13 +166,19 @@ Historical detail is archived at:
   and dead role-not-found error flow are removed from the control-plane bridge.
   Root index validation now shares the index builder's direct-child scope, so
   nested canisters cannot create false duplicate service-role failures.
-- Current `0.93.30` development hard-cuts the duplicate delegated-auth network
+- Released `v0.93.30` hard-cuts the duplicate delegated-auth network
   model and duplicate host build-network enum. Config, bootstrap, verification,
   renewal, provisioning, environment resolution, build tooling, and runtime
   introspection now use the canonical `BuildNetwork` authority. The strict
   config and runtime-status field is `build_network`; the old auth key,
   mainnet/PocketIC/testnet auth labels, and empty runtime `network` projection
   have no aliases or fallback parsing.
+- Current `0.93.31` development makes human-readable cycle parsing and Candid
+  `Nat` narrowing exact and checked. Oversized management balances preserve a
+  typed cause; oversized CMC notification totals terminate without entering
+  child-funding accounting; corrupt oversized refill totals cannot rebuild the
+  derived index. Lossy conversions and unchecked convenience arithmetic are
+  hard-cut without aliases.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -710,7 +716,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.29` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.30` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -721,12 +727,13 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.30` development removes the duplicate delegated-auth network model,
-host build-network enum, and empty runtime `network` projection. The strict
-config and runtime-status field is `build_network`, its only labels are `ic`
-and `local`, and one `BuildNetwork` type flows from host resolution through
-build context, auth proof policy, and operator projection. The removed names
-have no aliases, translation layer, or fallback parsing. Focused config,
-verifier, bootstrap, host resolution, runtime-status, Candid, and CLI tests pass
-together with strict targeted Clippy. Broad deployment, package, publish, and
-release validation remains maintainer-owned.
+Current `.31` development replaces floating-point cycle parsing and lossy
+unbounded `Nat` narrowing with one exact checked boundary. Invalid cycle
+configuration fails with typed parse causes; oversized management balances
+preserve their principal and value; oversized CMC `cycles_sent` becomes a
+typed terminal refill outcome and cannot enter the child-funding ledger or
+derived metrics. Removed infallible, saturating, and unchecked convenience
+surfaces have no aliases or fallback behavior. Focused cycle and ICP-refill
+tests, strict all-feature core Clippy, and downstream facade/control-plane
+checks pass. Broad deployment, package, publish, and release validation remains
+maintainer-owned.

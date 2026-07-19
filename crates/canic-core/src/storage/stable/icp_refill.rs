@@ -67,6 +67,7 @@ pub enum IcpRefillRecordStatus {
 #[remain::sorted]
 pub enum IcpRefillRecordErrorCode {
     BadFee,
+    CyclesSentOverflow,
     Duplicate,
     FabricationUnavailable,
     InvalidLedgerBlockIndex,

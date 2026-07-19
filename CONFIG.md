@@ -192,6 +192,10 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up (set both fields if enabling top-ups).
 - `topup.amount = "5T"` – cycles to request when topping up (set both fields if enabling top-ups).
   Omit `topup` entirely to disable auto top-ups.
+
+Cycle amount fields use exact decimal `K`, `M`, `B`, `T`, or `Q` shorthand.
+They must resolve to a whole number of cycles within `u128`; Canic does not
+round, truncate, or saturate them.
 - `randomness.enabled = true` – enable PRNG seeding (set `false` to disable).
 - `randomness.reseed_interval_secs = 3600` – reseed interval in seconds (default `3600`, must be > 0 when enabled).
 - `randomness.source = "ic"` – seeding source (`ic` or `time`, default `ic`).

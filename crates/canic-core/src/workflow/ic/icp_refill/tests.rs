@@ -145,8 +145,7 @@ fn atomic_create_rejects_distinct_active_operation_for_same_refill_key() {
 #[test]
 fn atomic_create_allows_next_operation_after_terminal_outcome() {
     let first = IcpRefillRecordOps::create_or_get(create_input(203)).expect("create first refill");
-    IcpRefillRecordOps::mark_completed(first.id, Nat::from(1_u64), 2_000)
-        .expect("complete first refill");
+    IcpRefillRecordOps::mark_completed(first.id, 1, 2_000).expect("complete first refill");
 
     let second = IcpRefillRecordOps::create_or_get(create_input(204))
         .expect("create refill after terminal outcome");
@@ -961,7 +960,7 @@ fn direct_child_refill_grant_records_matching_parent() {
     assert_eq!(
         direct_child_refill_grant(
             &operation_from_record(&record),
-            &Nat::from(123_u64),
+            123,
             Some(record.source_canister)
         ),
         Some((record.target_canister, 123))
@@ -973,33 +972,48 @@ fn direct_child_refill_grant_ignores_non_child_targets() {
     let record = sample_record(IcpRefillStatus::Completed);
 
     assert_eq!(
-        direct_child_refill_grant(&operation_from_record(&record), &Nat::from(123_u64), None),
+        direct_child_refill_grant(&operation_from_record(&record), 123, None),
         None
     );
     assert_eq!(
-        direct_child_refill_grant(
-            &operation_from_record(&record),
-            &Nat::from(123_u64),
-            Some(p(9))
-        ),
+        direct_child_refill_grant(&operation_from_record(&record), 123, Some(p(9))),
         None
     );
 }
 
 #[test]
-fn direct_child_refill_grant_saturates_large_cycle_totals() {
-    let record = sample_record(IcpRefillStatus::Completed);
+fn notify_cycle_total_at_u128_boundary_is_persisted_exactly() {
+    let mut record = stored_record(10_011, 111, IcpRefillStatus::Transferred);
+    record.ledger_block_index = Some(46);
+    IcpRefillRecordOps::insert(record.clone()).expect("insert transferred refill record");
+
+    let (operation, grant) = apply_notify_success(record.id, Nat::from(u128::MAX), 2_000)
+        .expect("u128 boundary is a valid notified cycle total");
+
+    assert_eq!(grant, Some(u128::MAX));
+    assert_eq!(operation.status, IcpRefillStatus::Completed);
+    assert_eq!(operation.error_code, None);
+    assert_eq!(operation.cycles_sent, Some(Nat::from(u128::MAX)));
+}
+
+#[test]
+fn oversized_notify_cycle_total_is_terminal_and_not_accounted() {
+    let mut record = stored_record(10_010, 110, IcpRefillStatus::Transferred);
+    record.ledger_block_index = Some(45);
+    IcpRefillRecordOps::insert(record.clone()).expect("insert transferred refill record");
     let too_large =
         Nat::from_str("340282366920938463463374607431768211456").expect("u128 max plus one");
 
+    let (operation, grant) = apply_notify_success(record.id, too_large, 2_000)
+        .expect("overflow is persisted as terminal outcome");
+
+    assert_eq!(grant, None);
+    assert_eq!(operation.status, IcpRefillStatus::Failed);
     assert_eq!(
-        direct_child_refill_grant(
-            &operation_from_record(&record),
-            &too_large,
-            Some(record.source_canister)
-        ),
-        Some((record.target_canister, u128::MAX))
+        operation.error_code,
+        Some(IcpRefillErrorCode::CyclesSentOverflow)
     );
+    assert_eq!(operation.cycles_sent, None);
 }
 
 #[test]
