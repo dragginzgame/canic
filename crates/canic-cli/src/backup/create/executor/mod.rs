@@ -10,6 +10,7 @@ mod registry;
 
 use super::super::options::BackupCreateOptions;
 use canic_backup::{
+    persistence::CommandLifetimeHandle,
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
     runner::{BackupRunnerCommandError, BackupRunnerExecutor, BackupRunnerSnapshotReceipt},
 };
@@ -37,6 +38,12 @@ impl BackupIcpRunnerExecutor {
             icp_root,
         }
     }
+
+    fn command_icp(&self, command_lifetime: CommandLifetimeHandle) -> IcpCli {
+        self.icp
+            .clone()
+            .with_inherited_fd(Some(command_lifetime.raw_fd()))
+    }
 }
 
 impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
@@ -58,14 +65,22 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         )
     }
 
-    fn stop_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError> {
-        self.icp
+    fn stop_canister(
+        &mut self,
+        canister_id: &str,
+        command_lifetime: CommandLifetimeHandle,
+    ) -> Result<(), BackupRunnerCommandError> {
+        self.command_icp(command_lifetime)
             .stop_canister(canister_id)
             .map_err(runner_icp_error)
     }
 
-    fn start_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError> {
-        self.icp
+    fn start_canister(
+        &mut self,
+        canister_id: &str,
+        command_lifetime: CommandLifetimeHandle,
+    ) -> Result<(), BackupRunnerCommandError> {
+        self.command_icp(command_lifetime)
             .start_canister(canister_id)
             .map_err(runner_icp_error)
     }
@@ -73,8 +88,9 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
     fn create_snapshot(
         &mut self,
         canister_id: &str,
+        command_lifetime: CommandLifetimeHandle,
     ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
-        self.icp
+        self.command_icp(command_lifetime)
             .snapshot_create_receipt(canister_id)
             .map(|receipt| BackupRunnerSnapshotReceipt {
                 snapshot_id: receipt.snapshot_id,
@@ -89,8 +105,9 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
+        command_lifetime: CommandLifetimeHandle,
     ) -> Result<(), BackupRunnerCommandError> {
-        self.icp
+        self.command_icp(command_lifetime)
             .snapshot_download(canister_id, snapshot_id, artifact_path)
             .map_err(runner_icp_error)
     }

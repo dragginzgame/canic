@@ -6,7 +6,7 @@ pub use types::*;
 
 use crate::{
     execution::{BackupExecutionJournal, BackupExecutionOperationState},
-    persistence::{BackupLayout, JournalLock},
+    persistence::{BackupLayout, CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
     plan::BackupPlan,
     timestamp::{state_updated_at, timestamp_marker, timestamp_seconds},
 };
@@ -93,15 +93,33 @@ fn execute_ready_operations(
             });
         }
 
-        if operation.state != BackupExecutionOperationState::Pending {
-            journal.mark_operation_pending_at(
-                operation.sequence,
-                Some(state_updated_at(config.updated_at.as_ref())),
-            )?;
-            layout.write_execution_journal(journal)?;
+        let mut command_lock = backup_command_lock(layout, &operation)?;
+        if operation.state == BackupExecutionOperationState::Pending {
+            reject_unknown_backup_command_outcome(&operation, command_lock.take())?;
         }
 
-        match execute_operation_receipt(config, executor, layout, plan, journal, &operation) {
+        journal.mark_operation_pending_at(
+            operation.sequence,
+            Some(state_updated_at(config.updated_at.as_ref())),
+        )?;
+        layout.write_execution_journal(journal)?;
+
+        let operation_result = execute_operation_receipt(
+            config,
+            executor,
+            layout,
+            plan,
+            journal,
+            &operation,
+            command_lock.as_ref().map(CommandLifetimeLock::handle),
+        );
+        if let Some(command_lock) = command_lock {
+            command_lock
+                .finish()
+                .map_err(|error| backup_command_lock_error(&operation, error))?;
+        }
+
+        match operation_result {
             Ok(receipt) => {
                 journal.record_operation_receipt(receipt)?;
                 layout.write_execution_journal(journal)?;
@@ -120,6 +138,65 @@ fn execute_ready_operations(
                 return Err(error);
             }
         }
+    }
+}
+
+fn reject_unknown_backup_command_outcome(
+    operation: &crate::execution::BackupExecutionJournalOperation,
+    command_lock: Option<CommandLifetimeLock>,
+) -> Result<(), BackupRunnerError> {
+    let Some(command_lock) = command_lock else {
+        return Ok(());
+    };
+    let lock_path = command_lock.path().to_string_lossy().to_string();
+    command_lock
+        .finish()
+        .map_err(|error| backup_command_lock_error(operation, error))?;
+    Err(BackupRunnerError::CommandOutcomeUnknown {
+        sequence: operation.sequence,
+        operation_id: operation.operation_id.clone(),
+        lock_path,
+    })
+}
+
+fn backup_command_lock(
+    layout: &BackupLayout,
+    operation: &crate::execution::BackupExecutionJournalOperation,
+) -> Result<Option<CommandLifetimeLock>, BackupRunnerError> {
+    if !matches!(
+        operation.kind,
+        crate::plan::BackupOperationKind::Stop
+            | crate::plan::BackupOperationKind::CreateSnapshot
+            | crate::plan::BackupOperationKind::Start
+            | crate::plan::BackupOperationKind::DownloadSnapshot
+    ) {
+        return Ok(None);
+    }
+
+    CommandLifetimeLock::acquire(&layout.execution_journal_path(), operation.sequence)
+        .map(Some)
+        .map_err(|error| backup_command_lock_error(operation, error))
+}
+
+fn backup_command_lock_error(
+    operation: &crate::execution::BackupExecutionJournalOperation,
+    error: CommandLifetimeLockError,
+) -> BackupRunnerError {
+    match error {
+        CommandLifetimeLockError::InFlight { lock_path } => BackupRunnerError::CommandInFlight {
+            sequence: operation.sequence,
+            operation_id: operation.operation_id.clone(),
+            lock_path,
+        },
+        CommandLifetimeLockError::UnsafeEntry { lock_path, kind } => {
+            BackupRunnerError::CommandLockUnsafeEntry {
+                sequence: operation.sequence,
+                operation_id: operation.operation_id.clone(),
+                lock_path,
+                kind,
+            }
+        }
+        CommandLifetimeLockError::Io(error) => BackupRunnerError::Io(error),
     }
 }
 

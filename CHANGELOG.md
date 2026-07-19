@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.1` is potentially breaking: mutating backup and restore commands now
+  retain a restart-visible lifetime lock through their complete descendant
+  tree, while restore hard-cuts the unsafe pending-reset command and version-1
+  runner JSON.
+
 - `0.94.0` makes kernel ownership the sole backup/restore journal-lock
   authority, preserving live exclusion while restoring liveness immediately
   after abrupt process death.

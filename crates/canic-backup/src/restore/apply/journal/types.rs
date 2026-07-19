@@ -314,9 +314,6 @@ pub enum RestoreApplyJournalError {
     #[error("restore apply journal has no operation that can be advanced")]
     NoTransitionableOperation,
 
-    #[error("restore apply journal has no pending operation to release")]
-    NoPendingOperation,
-
     #[error("restore apply journal has no failed operation to recover")]
     NoFailedOperation,
 

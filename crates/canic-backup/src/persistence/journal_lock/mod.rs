@@ -3,13 +3,9 @@
 //! Responsibility: serialize mutation of a persisted journal with a sidecar lock.
 //! Does not own: journal validation, workflow policy, or domain error projection.
 
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, io, path::Path, path::PathBuf};
 
-#[cfg(unix)]
-use rustix::fs::{CWD, FileType, FlockOperation, Mode, OFlags, flock, fstat, openat};
+use super::file_lock::{self, FileLockError};
 
 #[derive(Debug)]
 pub enum JournalLockError {
@@ -56,67 +52,23 @@ impl JournalLock {
 #[cfg(unix)]
 impl Drop for JournalLock {
     fn drop(&mut self) {
-        let _ = flock(&self.file, FlockOperation::Unlock);
+        file_lock::unlock(&self.file);
     }
 }
 
 #[cfg(unix)]
 fn acquire_supported(path: PathBuf) -> Result<JournalLock, JournalLockError> {
-    reject_existing_unsafe_entry(&path)?;
-
-    let fd = openat(
-        CWD,
-        &path,
-        OFlags::RDWR | OFlags::CREATE | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::RUSR | Mode::WUSR,
-    )
-    .map_err(errno_to_io)?;
-    let metadata = fstat(&fd).map_err(errno_to_io)?;
-    let kind = FileType::from_raw_mode(metadata.st_mode);
-    if !kind.is_file() {
-        return Err(unsafe_entry(&path, format!("{kind:?}")));
-    }
-
-    let file = fs::File::from(fd);
-    match flock(&file, FlockOperation::NonBlockingLockExclusive) {
-        Ok(()) => Ok(JournalLock { file }),
-        Err(error) if error == rustix::io::Errno::WOULDBLOCK => Err(JournalLockError::Locked {
+    match file_lock::acquire(&path) {
+        Ok(file) => Ok(JournalLock { file }),
+        Err(FileLockError::Locked) => Err(JournalLockError::Locked {
             lock_path: path.to_string_lossy().to_string(),
         }),
-        Err(error) => Err(errno_to_io(error).into()),
+        Err(FileLockError::UnsafeEntry { kind }) => Err(JournalLockError::UnsafeEntry {
+            lock_path: path.to_string_lossy().to_string(),
+            kind,
+        }),
+        Err(FileLockError::Io(error)) => Err(JournalLockError::Io(error)),
     }
-}
-
-#[cfg(unix)]
-fn reject_existing_unsafe_entry(path: &Path) -> Result<(), JournalLockError> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_file() => Ok(()),
-        Ok(metadata) => Err(unsafe_entry(
-            path,
-            if metadata.file_type().is_symlink() {
-                "Symlink".to_string()
-            } else if metadata.file_type().is_dir() {
-                "Directory".to_string()
-            } else {
-                "Special".to_string()
-            },
-        )),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
-    }
-}
-
-#[cfg(unix)]
-fn unsafe_entry(path: &Path, kind: String) -> JournalLockError {
-    JournalLockError::UnsafeEntry {
-        lock_path: path.to_string_lossy().to_string(),
-        kind,
-    }
-}
-
-#[cfg(unix)]
-fn errno_to_io(error: rustix::io::Errno) -> io::Error {
-    io::Error::from_raw_os_error(error.raw_os_error())
 }
 
 fn journal_lock_path(path: &Path) -> PathBuf {

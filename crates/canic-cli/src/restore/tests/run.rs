@@ -161,7 +161,7 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
             .expect("decode dry-run");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert_eq!(dry_run["run_version"], 1);
+    assert_eq!(dry_run["run_version"], 2);
     assert_eq!(dry_run["backup_id"], "backup-test");
     assert_eq!(dry_run["run_mode"], "dry-run");
     assert_eq!(dry_run["dry_run"], true);
@@ -194,7 +194,6 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
     assert_eq!(dry_run["operation_receipt_summary"]["total_receipts"], 0);
     assert_eq!(dry_run["operation_receipt_summary"]["command_completed"], 0);
     assert_eq!(dry_run["operation_receipt_summary"]["command_failed"], 0);
-    assert_eq!(dry_run["operation_receipt_summary"]["pending_recovered"], 0);
     assert_exact_restore_run_optional_fields(&dry_run);
     assert!(dry_run.get("batch_summary").is_none());
     assert_eq!(dry_run["stopped_reason"], "preview");
@@ -218,115 +217,6 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
         ])
     );
     assert_eq!(dry_run["command"]["mutates"], true);
-}
-
-// Ensure restore run can recover one interrupted pending operation.
-#[test]
-fn run_restore_run_unclaim_pending_marks_operation_ready() {
-    let root = temp_dir("canic-cli-restore-run-unclaim-pending");
-    fs::create_dir_all(&root).expect("create temp root");
-    let journal_path = root.join("restore-apply-journal.json");
-    let out_path = root.join("restore-run.json");
-    let mut journal = ready_apply_journal();
-    journal
-        .mark_next_operation_pending_at(Some("2026-05-05T12:01:00Z".to_string()))
-        .expect("mark pending operation");
-
-    fs::write(
-        &journal_path,
-        serde_json::to_vec(&journal).expect("serialize journal"),
-    )
-    .expect("write journal");
-
-    run([
-        OsString::from("run"),
-        OsString::from("--journal"),
-        OsString::from(journal_path.as_os_str()),
-        OsString::from("--unclaim-pending"),
-        OsString::from("--out"),
-        OsString::from(out_path.as_os_str()),
-    ])
-    .expect("unclaim pending operation");
-
-    let run_summary: serde_json::Value =
-        serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
-            .expect("decode run summary");
-    let updated: RestoreApplyJournal =
-        serde_json::from_slice(&fs::read(&journal_path).expect("read updated journal"))
-            .expect("decode updated journal");
-
-    fs::remove_dir_all(root).expect("remove temp root");
-    assert_eq!(run_summary["run_mode"], "unclaim-pending");
-    assert_eq!(run_summary["unclaim_pending"], true);
-    assert_eq!(run_summary["stopped_reason"], "recovered-pending");
-    assert_eq!(run_summary["next_action"], "rerun");
-    assert_eq!(
-        run_summary["requested_state_updated_at"],
-        serde_json::Value::Null
-    );
-    assert_eq!(run_summary["recovered_operation"]["sequence"], 0);
-    assert_eq!(run_summary["recovered_operation"]["state"], "pending");
-    assert_eq!(run_summary["operation_receipt_count"], 1);
-    assert_eq!(
-        run_summary["operation_receipt_summary"]["total_receipts"],
-        1
-    );
-    assert!(run_summary.get("batch_summary").is_none());
-    assert_eq!(
-        run_summary["operation_receipt_summary"]["command_completed"],
-        0
-    );
-    assert_eq!(
-        run_summary["operation_receipt_summary"]["command_failed"],
-        0
-    );
-    assert_eq!(
-        run_summary["operation_receipt_summary"]["pending_recovered"],
-        1
-    );
-    let receipt = run_summary["operation_receipts"][0]
-        .as_object()
-        .expect("restore run receipt object");
-    for field in ["updated_at", "command", "status"] {
-        assert!(
-            receipt.contains_key(field),
-            "restore run receipt omitted current field {field}"
-        );
-    }
-    assert_eq!(
-        run_summary["operation_receipts"][0]["command"],
-        serde_json::Value::Null
-    );
-    assert_eq!(
-        run_summary["operation_receipts"][0]["status"],
-        serde_json::Value::Null
-    );
-    assert_eq!(
-        run_summary["operation_receipts"][0]["event"],
-        "pending-recovered"
-    );
-    assert_eq!(run_summary["operation_receipts"][0]["sequence"], 0);
-    assert_eq!(run_summary["operation_receipts"][0]["state"], "ready");
-    assert!(
-        run_summary["operation_receipts"][0]["updated_at"]
-            .as_str()
-            .is_some_and(|updated_at| updated_at.starts_with("unix:"))
-    );
-    assert_eq!(run_summary["pending_operations"], 0);
-    assert_eq!(run_summary["ready_operations"], 10);
-    assert_eq!(run_summary["attention_required"], false);
-    assert_eq!(updated.pending_operations, 0);
-    assert_eq!(updated.ready_operations, 10);
-    assert_eq!(
-        updated.operations[0].state,
-        RestoreApplyOperationState::Ready
-    );
-    assert!(
-        updated.operations[0]
-            .state_updated_at
-            .as_deref()
-            .is_some_and(|updated_at| updated_at.starts_with("unix:"))
-    );
 }
 
 // Ensure restore run execute claims and completes one generated command.
@@ -391,10 +281,6 @@ fn run_restore_run_execute_marks_completed_operation() {
     );
     assert_eq!(
         run_summary["operation_receipt_summary"]["command_failed"],
-        0
-    );
-    assert_eq!(
-        run_summary["operation_receipt_summary"]["pending_recovered"],
         0
     );
     assert_eq!(run_summary["executed_operations"][0]["sequence"], 0);
@@ -534,6 +420,7 @@ fn run_restore_run_execute_rejects_upload_without_snapshot_id() {
     let updated: RestoreApplyJournal =
         serde_json::from_slice(&fs::read(&journal_path).expect("read updated journal"))
             .expect("decode updated journal");
+    assert!(out_path.is_file(), "restore summary missing after {err:?}");
     let run_summary: serde_json::Value =
         serde_json::from_slice(&fs::read(&out_path).expect("read run summary"))
             .expect("decode run summary");
@@ -763,10 +650,6 @@ fn run_restore_run_execute_marks_failed_operation() {
         run_summary["operation_receipt_summary"]["failed_recovered"],
         0
     );
-    assert_eq!(
-        run_summary["operation_receipt_summary"]["pending_recovered"],
-        0
-    );
     assert_eq!(run_summary["executed_operations"][0]["state"], "failed");
     assert_eq!(run_summary["executed_operations"][0]["status"], "1");
     assert_eq!(
@@ -882,7 +765,7 @@ fn run_restore_run_require_no_attention_writes_summary_then_fails() {
     assert_eq!(run_summary["attention_required"], true);
     assert_eq!(run_summary["outcome"], "pending");
     assert_eq!(run_summary["stopped_reason"], "pending");
-    assert_eq!(run_summary["next_action"], "unclaim-pending");
+    assert_eq!(run_summary["next_action"], "rerun");
     assert_eq!(run_summary["pending_summary"]["pending_sequence"], 0);
     assert_eq!(
         run_summary["pending_summary"]["pending_updated_at"],

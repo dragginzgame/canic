@@ -10,7 +10,9 @@ use crate::{
         BackupExecutionJournal, BackupExecutionJournalOperation, BackupExecutionOperationReceipt,
     },
     journal::{ArtifactJournalEntry, ArtifactState},
-    persistence::{BackupLayout, PersistenceError, commit_artifact_directory},
+    persistence::{
+        BackupLayout, CommandLifetimeHandle, PersistenceError, commit_artifact_directory,
+    },
     plan::BackupPlan,
     runner::{
         BackupRunnerConfig, BackupRunnerError, BackupRunnerExecutor,
@@ -36,6 +38,7 @@ pub(super) fn execute_create_snapshot(
     plan: &BackupPlan,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
+    command_lifetime: CommandLifetimeHandle,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     let mut download_journal = read_or_new_download_journal(layout, plan, journal)?;
@@ -53,7 +56,7 @@ pub(super) fn execute_create_snapshot(
         return Ok(receipt);
     }
     let snapshot = executor
-        .create_snapshot(&target)
+        .create_snapshot(&target, command_lifetime)
         .map_err(|error| command_failed(operation.sequence, error))?;
     let mut receipt = BackupExecutionOperationReceipt::completed(
         journal,
@@ -86,6 +89,7 @@ pub(super) fn execute_download_snapshot(
     layout: &BackupLayout,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
+    command_lifetime: CommandLifetimeHandle,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     let snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
@@ -95,7 +99,7 @@ pub(super) fn execute_download_snapshot(
     }
     fs::create_dir_all(&temp_path)?;
     executor
-        .download_snapshot(&target, &snapshot_id, &temp_path)
+        .download_snapshot(&target, &snapshot_id, &temp_path, command_lifetime)
         .map_err(|error| command_failed(operation.sequence, error))?;
 
     let mut download_journal = layout.read_journal()?;

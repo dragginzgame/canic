@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.36`.
-- The latest published release is `v0.93.36` at
-  `f9c28c48bdc72055d873e8291d201aac1c871f5e`.
-- The `v0.93.36` source tree is
-  `590abeec5d23d5163dc72663ca63359453bfb057`; its product-tree hash is
-  `46445b89c955e741211206a15402ef8b8557b28f9e5a6b1ae594e19d950ea5cf`.
+- The workspace package version is `0.94.0`.
+- The latest published release is `v0.94.0` at
+  `c23027aa73685d1fc23ea70f83afaaedf5e0761a`.
+- The `v0.94.0` source tree is
+  `9321d016af410e04fae6daad3d1ba30d36cf33e5`; its product-tree hash is
+  `b658018432e8abdff201f5f7f2309a3376049bbfadc3ee8bdcd2d81379ee2168`.
   Its Cargo.lock SHA-256 is
-  `0835d36e4f5acbe7ae80b7985f32dc419fa11ebf0c126b9e0ff21ba636a7de80`.
+  `e9554b651175fe343392f927243901f1895952e95c1486dc717530a5b04386d1`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -212,6 +212,10 @@ Historical detail is archived at:
   depth contradictions, and selected subtree graphs that are disconnected or
   rooted beneath another selected target. Root-omitted deployment targets must
   likewise remain connected to their declared root.
+- Released `v0.94.0` replaces path-existence and `Drop`-owned backup/restore
+  journal locking with one no-follow, close-on-exec kernel authority. Live
+  owners remain exclusive, abrupt process death releases ownership, and stale
+  regular sidecars no longer block recovery.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -782,9 +786,11 @@ JSON keys, aliases, or direct named-network paths.
 The accepted 0.94 design has confirmed its exact operation and durable-
 transition inventory and completed the early disposable-platform gate.
 Snapshot create, upload, stopped-target restore observation, and exact repeated
-restore are available through a managed local ICP deployment. The gate also
-confirmed two P1 findings: the `Drop`-owned sidecar lock could remain stale
-after process death, and external command children can outlive the runner
-without restart-visible identity. The first is fixed in the current worktree
-with a no-follow, close-on-exec kernel lock; the second remains the bounded
-next action before the complete in-flight-command harness is frozen.
+restore are available through a managed local ICP deployment. The journal-
+lock finding is released in `v0.94.0`. The current worktree fixes the command-
+lifetime finding with one intended-child inherited lock per mutating operation
+and hard-cuts the unsafe restore pending-to-ready reset. Live commands,
+quiescent unknown outcomes, and repeatable read-only verification now have
+distinct typed behavior; restore runner JSON advances to version 2 without a
+version-1 compatibility path. The next bounded action is freezing the
+executable crash-point manifest and beginning the backup/verification cases.

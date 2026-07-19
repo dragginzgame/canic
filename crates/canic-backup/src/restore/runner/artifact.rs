@@ -126,28 +126,6 @@ fn validate_backup_root(path: &Path) -> Result<PathBuf, RestoreRunnerError> {
     Ok(canonical)
 }
 
-pub(super) fn cleanup_pending_upload_stage(
-    config: &RestoreRunnerConfig,
-    operation: &RestoreApplyJournalOperation,
-) -> Result<(), RestoreRunnerError> {
-    if operation.operation != RestoreApplyOperationKind::UploadSnapshot {
-        return Ok(());
-    }
-    let root = stage_root(&config.journal)?;
-    match fs::symlink_metadata(&root) {
-        Ok(metadata) => ensure_private_directory_metadata(&root, &metadata)?,
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(source) => return Err(stage_io(root, source)),
-    }
-    remove_stale_operation_root(&root.join(format!("operation-{}", operation.sequence)))?;
-    match fs::remove_dir(&root) {
-        Ok(()) => Ok(()),
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(source) if source.kind() == std::io::ErrorKind::DirectoryNotEmpty => Ok(()),
-        Err(source) => Err(stage_io(root, source)),
-    }
-}
-
 fn required_path<'a>(
     sequence: usize,
     field: &'static str,

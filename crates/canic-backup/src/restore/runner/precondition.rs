@@ -12,6 +12,7 @@ use super::{
         RestoreStoppedPreconditionFailure,
     },
 };
+use crate::persistence::CommandLifetimeHandle;
 use crate::timestamp::state_updated_at;
 
 pub(super) fn enforce_stopped_canister_precondition(
@@ -20,9 +21,10 @@ pub(super) fn enforce_stopped_canister_precondition(
     operation: &RestoreApplyJournalOperation,
     attempt: usize,
     updated_at: Option<&String>,
+    command_lifetime: Option<CommandLifetimeHandle>,
 ) -> Result<Option<RestoreStoppedPreconditionFailure>, RestoreRunnerError> {
     let command = stopped_canister_status_command(config, operation);
-    let output = executor.execute(&command)?;
+    let output = executor.execute(&command, command_lifetime)?;
     let status_label = output.status;
     let output_pair = RestoreApplyCommandOutputPair::from_bytes(
         &output.stdout,

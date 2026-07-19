@@ -4,7 +4,10 @@
 //! Does not own: journal persistence, command execution, or restore plan construction.
 //! Boundary: public response contract for restore runner preview and execution APIs.
 
-use crate::{artifacts::ArtifactChecksumError, persistence::JournalLockError};
+use crate::{
+    artifacts::ArtifactChecksumError,
+    persistence::{CommandLifetimeHandle, CommandLifetimeLock, JournalLockError},
+};
 
 use std::{io, path::PathBuf};
 
@@ -46,6 +49,7 @@ pub trait RestoreRunnerCommandExecutor {
     fn execute(
         &mut self,
         command: &RestoreApplyRunnerCommand,
+        command_lifetime: Option<CommandLifetimeHandle>,
     ) -> Result<RestoreRunnerCommandOutput, io::Error>;
 }
 
@@ -106,12 +110,31 @@ pub enum RestoreRunnerError {
     JournalLockUnsafeEntry { lock_path: String, kind: String },
 
     #[error(
-        "restore apply journal for backup {backup_id} has pending operations: pending={pending_operations}, next={next_transition_sequence:?}"
+        "restore operation {sequence} {operation:?} has an external command still running: {lock_path}"
     )]
-    Pending {
-        backup_id: String,
-        pending_operations: usize,
-        next_transition_sequence: Option<usize>,
+    CommandInFlight {
+        sequence: usize,
+        operation: RestoreApplyOperationKind,
+        lock_path: String,
+    },
+
+    #[error(
+        "restore operation {sequence} {operation:?} has a quiescent command with an unknown external outcome: {lock_path}"
+    )]
+    CommandOutcomeUnknown {
+        sequence: usize,
+        operation: RestoreApplyOperationKind,
+        lock_path: String,
+    },
+
+    #[error(
+        "restore operation {sequence} {operation:?} command lock path is unsafe: {lock_path} ({kind})"
+    )]
+    CommandLockUnsafeEntry {
+        sequence: usize,
+        operation: RestoreApplyOperationKind,
+        lock_path: String,
+        kind: String,
     },
 
     #[error(
@@ -208,7 +231,6 @@ pub struct RestoreRunResponse {
     pub dry_run: bool,
     pub execute: bool,
     pub retry_failed: bool,
-    pub unclaim_pending: bool,
     pub stopped_reason: &'static str,
     pub next_action: &'static str,
     pub requested_state_updated_at: Option<String>,
@@ -252,7 +274,6 @@ impl RestoreRunResponse {
             dry_run: mode.dry_run,
             execute: mode.execute,
             retry_failed: mode.retry_failed,
-            unclaim_pending: mode.unclaim_pending,
             stopped_reason: mode.stopped_reason,
             next_action: mode.next_action,
             requested_state_updated_at: None,
@@ -308,7 +329,6 @@ pub struct RestoreRunReceiptSummary {
     pub command_completed: usize,
     pub command_failed: usize,
     pub failed_recovered: usize,
-    pub pending_recovered: usize,
 }
 
 impl RestoreRunReceiptSummary {
@@ -323,7 +343,6 @@ impl RestoreRunReceiptSummary {
                 RESTORE_RUN_RECEIPT_COMPLETED => summary.command_completed += 1,
                 RESTORE_RUN_RECEIPT_FAILED => summary.command_failed += 1,
                 RESTORE_RUN_RECEIPT_RECOVERED_FAILED => summary.failed_recovered += 1,
-                RESTORE_RUN_RECEIPT_RECOVERED_PENDING => summary.pending_recovered += 1,
                 _ => {}
             }
         }
@@ -381,20 +400,6 @@ impl RestoreRunOperationReceipt {
             updated_at,
             Some(command),
             Some(status),
-        )
-    }
-
-    pub(super) fn recovered_pending(
-        operation: RestoreApplyJournalOperation,
-        updated_at: Option<String>,
-    ) -> Self {
-        Self::from_operation(
-            RESTORE_RUN_RECEIPT_RECOVERED_PENDING,
-            operation,
-            RESTORE_RUN_RECEIPT_STATE_READY,
-            updated_at,
-            None,
-            None,
         )
     }
 
@@ -526,31 +531,21 @@ pub(super) struct RestoreStoppedPreconditionFailure {
 /// Owned by restore runner response construction.
 ///
 
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "Internal response mode maps directly to stable JSON mode flags"
-)]
 pub(super) struct RestoreRunResponseMode {
     run_mode: &'static str,
     dry_run: bool,
     execute: bool,
     retry_failed: bool,
-    unclaim_pending: bool,
     stopped_reason: &'static str,
     next_action: &'static str,
 }
 
 impl RestoreRunResponseMode {
-    #[expect(
-        clippy::fn_params_excessive_bools,
-        reason = "Internal constructor keeps stable JSON mode flags explicit"
-    )]
     const fn new(
         run_mode: &'static str,
         dry_run: bool,
         execute: bool,
         retry_failed: bool,
-        unclaim_pending: bool,
         stopped_reason: &'static str,
         next_action: &'static str,
     ) -> Self {
@@ -559,7 +554,6 @@ impl RestoreRunResponseMode {
             dry_run,
             execute,
             retry_failed,
-            unclaim_pending,
             stopped_reason,
             next_action,
         }
@@ -569,7 +563,6 @@ impl RestoreRunResponseMode {
         Self::new(
             RESTORE_RUN_MODE_DRY_RUN,
             true,
-            false,
             false,
             false,
             stopped_reason,
@@ -584,7 +577,6 @@ impl RestoreRunResponseMode {
             false,
             true,
             false,
-            false,
             stopped_reason,
             next_action,
         )
@@ -597,21 +589,7 @@ impl RestoreRunResponseMode {
             false,
             false,
             true,
-            false,
             RESTORE_RUN_STOPPED_RECOVERED_FAILED,
-            next_action,
-        )
-    }
-
-    // Build the pending-operation recovery response mode.
-    pub(super) const fn unclaim_pending(next_action: &'static str) -> Self {
-        Self::new(
-            RESTORE_RUN_MODE_UNCLAIM_PENDING,
-            false,
-            false,
-            false,
-            true,
-            RESTORE_RUN_STOPPED_RECOVERED_PENDING,
             next_action,
         )
     }
@@ -626,6 +604,7 @@ pub(super) struct RestoreRunPreparedOperation {
     pub(super) command: RestoreApplyRunnerCommand,
     pub(super) sequence: usize,
     pub(super) attempt: usize,
+    pub(super) command_lock: Option<CommandLifetimeLock>,
     pub(super) _staged_artifact: Option<StagedRestoreArtifact>,
 }
 

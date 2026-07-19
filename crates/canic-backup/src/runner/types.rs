@@ -1,5 +1,6 @@
 use crate::{
     execution::{BackupExecutionJournalOperation, BackupExecutionResumeSummary},
+    persistence::CommandLifetimeHandle,
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
 };
 use serde::Serialize;
@@ -36,15 +37,24 @@ pub trait BackupRunnerExecutor {
     ) -> Result<BackupExecutionPreflightReceipts, BackupRunnerCommandError>;
 
     /// Stop one selected canister.
-    fn stop_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError>;
+    fn stop_canister(
+        &mut self,
+        canister_id: &str,
+        command_lifetime: CommandLifetimeHandle,
+    ) -> Result<(), BackupRunnerCommandError>;
 
     /// Start one selected canister.
-    fn start_canister(&mut self, canister_id: &str) -> Result<(), BackupRunnerCommandError>;
+    fn start_canister(
+        &mut self,
+        canister_id: &str,
+        command_lifetime: CommandLifetimeHandle,
+    ) -> Result<(), BackupRunnerCommandError>;
 
     /// Create one selected canister snapshot and return the typed snapshot receipt.
     fn create_snapshot(
         &mut self,
         canister_id: &str,
+        command_lifetime: CommandLifetimeHandle,
     ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError>;
 
     /// Download one selected snapshot into a temporary artifact directory.
@@ -53,6 +63,7 @@ pub trait BackupRunnerExecutor {
         canister_id: &str,
         snapshot_id: &str,
         artifact_path: &Path,
+        command_lifetime: CommandLifetimeHandle,
     ) -> Result<(), BackupRunnerCommandError>;
 }
 
@@ -106,6 +117,40 @@ pub enum BackupRunnerError {
 
     #[error("backup execution journal lock path is unsafe: {lock_path} ({kind})")]
     JournalLockUnsafeEntry { lock_path: String, kind: String },
+
+    #[error(
+        "backup operation {sequence} {operation_id} has an external command still running: {lock_path}"
+    )]
+    CommandInFlight {
+        sequence: usize,
+        operation_id: String,
+        lock_path: String,
+    },
+
+    #[error(
+        "backup operation {sequence} {operation_id} has a quiescent command with an unknown external outcome: {lock_path}"
+    )]
+    CommandOutcomeUnknown {
+        sequence: usize,
+        operation_id: String,
+        lock_path: String,
+    },
+
+    #[error(
+        "backup operation {sequence} {operation_id} command lock path is unsafe: {lock_path} ({kind})"
+    )]
+    CommandLockUnsafeEntry {
+        sequence: usize,
+        operation_id: String,
+        lock_path: String,
+        kind: String,
+    },
+
+    #[error("backup operation {sequence} {operation_id} is missing its command lifetime handle")]
+    MissingCommandLifetime {
+        sequence: usize,
+        operation_id: String,
+    },
 
     #[error(
         "download journal backup id does not match the backup plan: expected={expected}, actual={actual}"

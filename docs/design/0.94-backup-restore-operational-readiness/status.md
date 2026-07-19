@@ -4,17 +4,18 @@ Last updated: 2026-07-19
 
 ## Current State
 
-The maintainer has approved closing 0.93 at `v0.93.36` and started 0.94 as a
-focused backup/restore operational-readiness line. The exact operation and
-durable-transition inventory is confirmed, and the early disposable-platform
-capability gate is complete with two findings.
+The maintainer released the first 0.94 batch as `v0.94.0`. The exact operation
+and durable-transition inventory is confirmed, and the early disposable-
+platform capability gate is complete with two findings.
 
-`CANIC-094-LOCK-001` is fixed in the current worktree by replacing
-path-existence and `Drop` cleanup with one kernel-owned, no-follow,
-close-on-exec lock descriptor. `CANIC-094-PROC-001` remains open: the current
-host command boundary permits a child to survive runner death without a
-restart-visible execution identity. No persisted schema, command syntax,
-package version, Candid surface, or compatibility path has changed.
+`CANIC-094-LOCK-001` is released in `v0.94.0`. `CANIC-094-PROC-001` is fixed in
+the current worktree by binding each mutating command tree to one inherited
+kernel lock while keeping unrelated descriptors close-on-exec.
+`CANIC-094-RESTORE-001` is also fixed in the current worktree: restore can no
+longer reset an unknown pending mutation to ready or synthesize a recovery
+receipt. Restore runner JSON is hard-cut to version 2 and the obsolete CLI,
+API, mode flag, and receipt-summary field are removed without aliases.
+Persisted journals, Candid, and package versions are unchanged.
 
 Known non-blocking structural residue deferred from 0.93: none. The baseline
 risks below are bounded operational proof gaps intentionally assigned to 0.94,
@@ -112,8 +113,9 @@ still requires a reproducible required-journey finding.
 
 | Finding | Severity | Status | Owner | Evidence |
 | --- | --- | --- | --- | --- |
-| `CANIC-094-LOCK-001` | P1 | fixed in worktree | backup persistence lock | `C07`; live exclusion, close-on-exec, unsafe entry, and `SIGKILL` tests |
-| `CANIC-094-PROC-001` | P1 | open | host external command execution | `B18`, `R14`; child-lifetime probe |
+| `CANIC-094-LOCK-001` | P1 | fixed in `v0.94.0` | backup persistence lock | `C07`; live exclusion, close-on-exec, unsafe entry, and `SIGKILL` tests |
+| `CANIC-094-PROC-001` | P1 | fixed in worktree | host external command execution | [command-quiescence report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md); `B18`, `R14` |
+| `CANIC-094-RESTORE-001` | P1 | fixed in worktree | restore pending recovery | [pending-recovery report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md) |
 
 ## Validation State
 
@@ -125,7 +127,14 @@ still requires a reproducible required-journey finding.
 - Restore CLI live-lock regression: passed.
 - A completed-backup layout remains integrity-valid with the stable sidecar:
   passed.
-- Strict all-target Clippy for `canic-backup` and `canic-cli`: passed.
+- Command-lifetime owner-death and descendant proof: passed.
+- Intended-child-only host descriptor inheritance proof: passed.
+- Backup and restore active-command rejection plus quiescent unknown-outcome
+  rejection: passed.
+- Pending read-only restore verification replay: passed.
+- Restore CLI option and run suites after the pending-reset hard cut: passed.
+- Strict targeted Clippy for `canic-backup`, `canic-host`, and `canic-cli`:
+  passed.
 - Changelog governance: passed.
 - Design/status Markdown and link review: passed.
 - Whitespace/diff hygiene: passed.
@@ -134,8 +143,7 @@ still requires a reproducible required-journey finding.
 
 ## Next Action
 
-Resolve `CANIC-094-PROC-001` at the existing host executor boundary without a
-daemon or general supervisor. Freeze its deterministic direct-child and
-descendant quiescence proof, then freeze the executable crash-point manifest
-and begin the backup/verification baseline cases. The open lock finding is not
-a reason to widen the slice or change persisted documents.
+Freeze the executable crash-point manifest against the now-proven command-
+quiescence boundary, then begin the backup and verification baseline cases.
+Effect-specific reconciliation remains journey-driven: the command lock does
+not authorize blind replay of a quiescent unknown mutation.

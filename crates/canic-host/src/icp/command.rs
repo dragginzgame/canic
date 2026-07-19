@@ -1,7 +1,15 @@
 use std::{
+    io,
+    os::fd::BorrowedFd,
     path::{Path, PathBuf},
     process::Command,
 };
+
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
+#[cfg(unix)]
+use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
 
 use crate::release_set::artifact_root_path;
 
@@ -20,6 +28,7 @@ impl IcpCli {
             environment,
             cwd: None,
             local_replica: None,
+            inherited_fd: None,
         }
     }
 
@@ -37,6 +46,13 @@ impl IcpCli {
         self
     }
 
+    /// Keep one caller-owned descriptor open in commands spawned by this context.
+    #[must_use]
+    pub const fn with_inherited_fd(mut self, inherited_fd: Option<i32>) -> Self {
+        self.inherited_fd = inherited_fd;
+        self
+    }
+
     /// Return the optional ICP environment carried by this command context.
     #[must_use]
     pub fn environment(&self) -> Option<&str> {
@@ -51,6 +67,7 @@ impl IcpCli {
             command.current_dir(cwd);
             add_project_root_override_arg(&mut command, cwd);
         }
+        configure_inherited_fd(&mut command, self.inherited_fd);
         command
     }
 
@@ -60,6 +77,7 @@ impl IcpCli {
         let mut command = Command::new(&self.executable);
         command.current_dir(cwd);
         add_project_root_override_arg(&mut command, cwd);
+        configure_inherited_fd(&mut command, self.inherited_fd);
         command
     }
 
@@ -73,6 +91,89 @@ impl IcpCli {
 
     pub(super) fn add_target_args(&self, command: &mut Command) {
         add_target_args(command, self.environment(), self.local_replica.as_ref());
+    }
+}
+
+pub(super) fn configure_inherited_fd(command: &mut Command, inherited_fd: Option<i32>) {
+    let Some(inherited_fd) = inherited_fd else {
+        return;
+    };
+
+    #[cfg(unix)]
+    // SAFETY: the closure performs only fcntl operations on the caller-owned
+    // descriptor between fork and exec. The caller keeps that descriptor open
+    // until the synchronous command completes.
+    unsafe {
+        command.pre_exec(move || {
+            // SAFETY: the runner guarantees the raw descriptor remains valid
+            // for the duration of this child setup callback.
+            let fd = BorrowedFd::borrow_raw(inherited_fd);
+            let mut flags = fcntl_getfd(fd).map_err(errno_to_io)?;
+            flags.remove(FdFlags::CLOEXEC);
+            fcntl_setfd(fd, flags).map_err(errno_to_io)
+        });
+    }
+
+    #[cfg(not(unix))]
+    let _ = (command, inherited_fd);
+}
+
+#[cfg(unix)]
+fn errno_to_io(error: rustix::io::Errno) -> io::Error {
+    io::Error::from_raw_os_error(error.raw_os_error())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use crate::test_support::temp_dir;
+    use rustix::fs::{FlockOperation, flock};
+    use std::{fs, time::Duration};
+
+    #[test]
+    fn configured_descriptor_lives_through_command_descendants_only() {
+        let root = temp_dir("canic-icp-command-inherited-fd");
+        fs::create_dir_all(&root).expect("create temp root");
+        let lock_path = root.join("command.lock");
+        let owner = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .expect("open owner lock");
+        flock(&owner, FlockOperation::NonBlockingLockExclusive).expect("lock owner file");
+
+        let mut command = Command::new("sh");
+        command.args(["-c", "sleep 0.2 & wait"]);
+        configure_inherited_fd(&mut command, Some(std::os::fd::AsRawFd::as_raw_fd(&owner)));
+        let mut child = command.spawn().expect("spawn inherited command tree");
+        drop(owner);
+
+        let contender = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&lock_path)
+            .expect("open contender lock");
+        assert_eq!(
+            flock(&contender, FlockOperation::NonBlockingLockExclusive),
+            Err(rustix::io::Errno::WOULDBLOCK)
+        );
+
+        child.wait().expect("wait for command tree");
+        for _ in 0..50 {
+            match flock(&contender, FlockOperation::NonBlockingLockExclusive) {
+                Ok(()) => {
+                    fs::remove_dir_all(root).expect("remove temp root");
+                    return;
+                }
+                Err(rustix::io::Errno::WOULDBLOCK) => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                Err(error) => panic!("unexpected contender lock error: {error}"),
+            }
+        }
+        panic!("inherited descriptor survived the command tree");
     }
 }
 

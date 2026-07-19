@@ -326,13 +326,15 @@ operations. `--max-steps 1` is the safest operational mode while validating a
 new restore path. Snapshot load operations first run `icp canister status` and
 fail before loading unless the target is visibly stopped.
 
-If a previous runner stopped after claiming work, release the pending operation
-back to ready:
+If a previous runner stopped after claiming work, rerun execution to classify
+the interruption. Canic will refuse to overlap a live command tree and will
+leave a quiescent mutating operation pending when its external outcome is not
+yet proven:
 
 ```bash
 canic restore run \
   1 \
-  --unclaim-pending \
+  --execute \
   --out restore-run-recovery.json
 ```
 
