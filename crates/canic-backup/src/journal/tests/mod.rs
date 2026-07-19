@@ -58,6 +58,21 @@ fn download_journal_requires_current_topology_and_metrics_fields() {
 }
 
 #[test]
+fn download_journal_requires_exact_current_optional_fields() {
+    for field in ["temp_path", "checksum"] {
+        let mut value = serde_json::to_value(valid_journal()).expect("serialize journal");
+        value["artifacts"][0]
+            .as_object_mut()
+            .expect("artifact journal object")
+            .remove(field);
+
+        let err = serde_json::from_value::<DownloadJournal>(value)
+            .expect_err("current artifact journal field must be present");
+        assert!(err.is_data());
+    }
+}
+
+#[test]
 fn resume_action_matches_artifact_state() {
     let mut entry = valid_journal().artifacts.remove(0);
 
@@ -72,6 +87,18 @@ fn resume_action_matches_artifact_state() {
 
     entry.state = ArtifactState::Durable;
     assert_eq!(entry.resume_action(), ResumeAction::Skip);
+}
+
+#[test]
+fn journal_state_names_match_their_rust_variants_without_serde_rules() {
+    assert_eq!(
+        serde_json::to_value(ArtifactState::ChecksumVerified).expect("serialize artifact state"),
+        serde_json::json!("ChecksumVerified")
+    );
+    assert_eq!(
+        serde_json::to_value(ResumeAction::VerifyChecksum).expect("serialize resume action"),
+        serde_json::json!("VerifyChecksum")
+    );
 }
 
 #[test]

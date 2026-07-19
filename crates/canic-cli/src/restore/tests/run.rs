@@ -12,6 +12,36 @@ fn command_program_file_name(command: &serde_json::Value) -> Option<&str> {
         .and_then(std::ffi::OsStr::to_str)
 }
 
+fn assert_exact_restore_run_optional_fields(response: &serde_json::Value) {
+    let object = response.as_object().expect("restore run response object");
+    for field in [
+        "requested_state_updated_at",
+        "max_steps_reached",
+        "executed_operations",
+        "operation_receipts",
+        "operation_receipt_count",
+        "executed_operation_count",
+        "recovered_operation",
+        "operation_available",
+        "command_available",
+        "command",
+    ] {
+        assert!(
+            object.contains_key(field),
+            "restore run response omitted current field {field}"
+        );
+    }
+
+    assert_eq!(response["max_steps_reached"], serde_json::Value::Null);
+    assert_eq!(response["executed_operations"], json!([]));
+    assert_eq!(response["operation_receipts"], json!([]));
+    assert_eq!(
+        response["executed_operation_count"],
+        serde_json::Value::Null
+    );
+    assert_eq!(response["recovered_operation"], serde_json::Value::Null);
+}
+
 // Ensure row-reference restore journals must point back at the selected backup.
 #[test]
 fn prepared_journal_backup_root_accepts_selected_backup_dir() {
@@ -165,6 +195,7 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
     assert_eq!(dry_run["operation_receipt_summary"]["command_completed"], 0);
     assert_eq!(dry_run["operation_receipt_summary"]["command_failed"], 0);
     assert_eq!(dry_run["operation_receipt_summary"]["pending_recovered"], 0);
+    assert_exact_restore_run_optional_fields(&dry_run);
     assert!(dry_run.get("batch_summary").is_none());
     assert_eq!(dry_run["stopped_reason"], "preview");
     assert_eq!(dry_run["next_action"], "rerun");
@@ -252,6 +283,23 @@ fn run_restore_run_unclaim_pending_marks_operation_ready() {
     assert_eq!(
         run_summary["operation_receipt_summary"]["pending_recovered"],
         1
+    );
+    let receipt = run_summary["operation_receipts"][0]
+        .as_object()
+        .expect("restore run receipt object");
+    for field in ["updated_at", "command", "status"] {
+        assert!(
+            receipt.contains_key(field),
+            "restore run receipt omitted current field {field}"
+        );
+    }
+    assert_eq!(
+        run_summary["operation_receipts"][0]["command"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        run_summary["operation_receipts"][0]["status"],
+        serde_json::Value::Null
     );
     assert_eq!(
         run_summary["operation_receipts"][0]["event"],

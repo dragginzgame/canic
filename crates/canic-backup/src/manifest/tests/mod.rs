@@ -74,17 +74,34 @@ fn source_snapshot_unknown_field_fails_deserialize() {
 }
 
 #[test]
-fn source_snapshot_requires_explicit_checksum_field() {
-    let mut value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
-    value["deployment"]["members"][0]["source_snapshot"]
-        .as_object_mut()
-        .expect("source snapshot object")
-        .remove("checksum");
+fn manifest_requires_exact_current_optional_fields() {
+    for field in [
+        "parent_canister_id",
+        "subnet_canister_id",
+        "controller_hint",
+    ] {
+        let mut value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
+        value["deployment"]["members"][0]
+            .as_object_mut()
+            .expect("deployment member object")
+            .remove(field);
 
-    let err = serde_json::from_value::<DeploymentBackupManifest>(value)
-        .expect_err("current checksum field must be present even when null");
+        let err = serde_json::from_value::<DeploymentBackupManifest>(value)
+            .expect_err("current deployment member field must be present");
+        assert!(err.is_data());
+    }
 
-    assert!(err.is_data());
+    for field in ["module_hash", "code_version", "checksum"] {
+        let mut value = serde_json::to_value(valid_manifest()).expect("serialize manifest");
+        value["deployment"]["members"][0]["source_snapshot"]
+            .as_object_mut()
+            .expect("source snapshot object")
+            .remove(field);
+
+        let err = serde_json::from_value::<DeploymentBackupManifest>(value)
+            .expect_err("current source snapshot field must be present");
+        assert!(err.is_data());
+    }
 }
 
 // Ensure snapshot checksum provenance stays canonical when present.

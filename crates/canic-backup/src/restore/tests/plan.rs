@@ -136,6 +136,29 @@ fn restore_plan_requires_current_verification_and_lifecycle_fields() {
     }
 }
 
+#[test]
+fn restore_plan_requires_exact_current_optional_fields() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+    for field in [
+        "parent_source_canister",
+        "parent_target_canister",
+        "ordering_dependency",
+    ] {
+        let mut value =
+            serde_json::to_value(&plan.members[0]).expect("serialize restore plan member");
+        value
+            .as_object_mut()
+            .expect("restore plan member object")
+            .remove(field);
+
+        let err = serde_json::from_value::<RestorePlanMember>(value)
+            .expect_err("current restore plan member field must be present");
+        assert!(err.is_data());
+    }
+}
+
 // Ensure fixed identities cannot be remapped.
 #[test]
 fn fixed_identity_member_cannot_be_remapped() {

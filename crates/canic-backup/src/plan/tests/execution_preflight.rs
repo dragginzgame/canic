@@ -39,6 +39,30 @@ fn applies_execution_preflight_receipt_bundle() {
         .expect("bundle makes plan executable");
 }
 
+// Ensure nullable receipt messages are explicit parts of the current evidence envelope.
+#[test]
+fn preflight_receipts_require_exact_current_optional_fields() {
+    let receipts = execution_preflight_receipts(&subtree_plan());
+
+    let mut values = [
+        serde_json::to_value(&receipts.topology).expect("serialize topology receipt"),
+        serde_json::to_value(&receipts.quiescence).expect("serialize quiescence receipt"),
+        serde_json::to_value(&receipts.control_authority[0]).expect("serialize control receipt"),
+        serde_json::to_value(&receipts.snapshot_read_authority[0]).expect("serialize read receipt"),
+    ];
+    for value in &mut values {
+        value
+            .as_object_mut()
+            .expect("preflight receipt object")
+            .remove("message");
+    }
+
+    assert!(serde_json::from_value::<TopologyPreflightReceipt>(values[0].clone()).is_err());
+    assert!(serde_json::from_value::<QuiescencePreflightReceipt>(values[1].clone()).is_err());
+    assert!(serde_json::from_value::<ControlAuthorityReceipt>(values[2].clone()).is_err());
+    assert!(serde_json::from_value::<SnapshotReadAuthorityReceipt>(values[3].clone()).is_err());
+}
+
 // Ensure stale preflight bundles cannot authorize later mutation.
 #[test]
 fn rejects_expired_execution_preflight_bundle() {

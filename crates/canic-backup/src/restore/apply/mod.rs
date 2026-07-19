@@ -46,6 +46,7 @@ pub struct RestoreApplyDryRun {
     pub planned_operations: usize,
     pub rendered_operations: usize,
     pub operation_counts: RestoreApplyOperationKindCounts,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_validation: Option<RestoreApplyArtifactValidation>,
     pub operations: Vec<RestoreApplyDryRunOperation>,
 }
@@ -328,7 +329,9 @@ pub struct RestoreApplyArtifactCheck {
     pub resolved_path: String,
     pub exists: bool,
     pub checksum_algorithm: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub checksum_expected: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub checksum_actual: Option<String>,
     pub checksum_verified: bool,
 }
@@ -508,9 +511,13 @@ pub struct RestoreApplyDryRunOperation {
     pub source_canister: String,
     pub target_canister: String,
     pub role: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_id: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_path: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_checksum: Option<ArtifactChecksum>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub verification_kind: Option<String>,
 }
 

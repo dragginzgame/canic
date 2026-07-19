@@ -28,16 +28,20 @@ pub struct RestoreApplyJournalOperation {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,
     pub state: RestoreApplyOperationState,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub state_updated_at: Option<String>,
     pub blocking_reasons: Vec<String>,
     pub member_order: usize,
     pub source_canister: String,
     pub target_canister: String,
     pub role: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_id: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_path: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_checksum: Option<ArtifactChecksum>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub verification_kind: Option<String>,
 }
 

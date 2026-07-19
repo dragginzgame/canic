@@ -112,13 +112,30 @@ fn apply_journal_rejects_zero_operation_receipt_attempt() {
     assert!(journal.operation_receipts.is_empty());
 }
 
-// Ensure durable receipt identity and outcome fields are required at decode time.
+// Ensure every current durable receipt field is required at decode time.
 #[test]
-fn apply_journal_receipt_decode_requires_outcome_and_attempt() {
+fn apply_journal_receipt_decode_requires_exact_current_fields() {
     let journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
     let receipt = completed_upload_receipt(&journal.operations[0], 1);
 
-    for field in ["outcome", "attempt"] {
+    for field in [
+        "sequence",
+        "operation",
+        "outcome",
+        "source_canister",
+        "target_canister",
+        "attempt",
+        "updated_at",
+        "command",
+        "status",
+        "stdout",
+        "stderr",
+        "failure_reason",
+        "source_snapshot_id",
+        "artifact_path",
+        "artifact_checksum",
+        "uploaded_snapshot_id",
+    ] {
         let mut value = serde_json::to_value(&receipt).expect("serialize receipt");
         value.as_object_mut().expect("receipt object").remove(field);
 
@@ -126,6 +143,18 @@ fn apply_journal_receipt_decode_requires_outcome_and_attempt() {
             .expect_err("required receipt field should reject");
         assert!(err.is_data());
     }
+}
+
+// Ensure nullable current receipt fields serialize explicitly and still accept null.
+#[test]
+fn apply_journal_receipt_serializes_explicit_null_fields() {
+    let journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    let receipt = completed_upload_receipt(&journal.operations[0], 1);
+    let value = serde_json::to_value(&receipt).expect("serialize receipt");
+
+    assert_eq!(value["failure_reason"], serde_json::Value::Null);
+    serde_json::from_value::<RestoreApplyOperationReceipt>(value)
+        .expect("explicit null receipt field should decode");
 }
 
 // Ensure command receipts preserve the durable command/output audit envelope.
@@ -358,6 +387,50 @@ fn apply_journal_requires_current_receipt_and_lifecycle_count_fields() {
 
         assert!(err.is_data());
     }
+}
+
+// Ensure nullable journal and operation fields cannot disappear from the current document shape.
+#[test]
+fn apply_journal_requires_exact_current_optional_fields() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+
+    let mut value = serde_json::to_value(&journal).expect("serialize journal");
+    value
+        .as_object_mut()
+        .expect("journal object")
+        .remove("backup_root");
+    let err = serde_json::from_value::<RestoreApplyJournal>(value)
+        .expect_err("current backup_root field must be present");
+    assert!(err.is_data());
+
+    for field in [
+        "state_updated_at",
+        "snapshot_id",
+        "artifact_path",
+        "artifact_checksum",
+        "verification_kind",
+    ] {
+        let mut value =
+            serde_json::to_value(&journal.operations[0]).expect("serialize journal operation");
+        value
+            .as_object_mut()
+            .expect("journal operation object")
+            .remove(field);
+
+        let err = serde_json::from_value::<RestoreApplyJournalOperation>(value)
+            .expect_err("current journal operation field must be present");
+        assert!(err.is_data());
+    }
+
+    let value = serde_json::to_value(&journal).expect("serialize journal");
+    assert_eq!(value["backup_root"], serde_json::Value::Null);
+    assert_eq!(
+        value["operations"][0]["state_updated_at"],
+        serde_json::Value::Null
+    );
 }
 
 // Ensure apply journals block when artifact validation was not supplied.

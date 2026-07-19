@@ -28,25 +28,25 @@ pub struct RestoreApplyOperationReceipt {
     pub source_canister: String,
     pub target_canister: String,
     pub attempt: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub updated_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub command: Option<RestoreApplyRunnerCommand>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub stdout: Option<RestoreApplyCommandOutput>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub stderr: Option<RestoreApplyCommandOutput>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub failure_reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub source_snapshot_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_path: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_checksum: Option<ArtifactChecksum>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub uploaded_snapshot_id: Option<String>,
 }
 

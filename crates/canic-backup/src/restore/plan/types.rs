@@ -194,8 +194,11 @@ pub struct RestorePlanMember {
     pub source_canister: String,
     pub target_canister: String,
     pub role: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_source_canister: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub parent_target_canister: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub ordering_dependency: Option<RestoreOrderingDependency>,
     pub member_order: usize,
     pub identity_mode: IdentityMode,

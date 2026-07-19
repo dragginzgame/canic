@@ -153,6 +153,83 @@ fn apply_dry_run_requires_current_lifecycle_and_count_fields() {
     }
 }
 
+#[test]
+fn apply_dry_run_requires_exact_current_optional_fields() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+
+    let mut value = serde_json::to_value(&dry_run).expect("serialize dry-run");
+    value
+        .as_object_mut()
+        .expect("dry-run object")
+        .remove("artifact_validation");
+    let err = serde_json::from_value::<RestoreApplyDryRun>(value)
+        .expect_err("current artifact_validation field must be present");
+    assert!(err.is_data());
+
+    for field in [
+        "snapshot_id",
+        "artifact_path",
+        "artifact_checksum",
+        "verification_kind",
+    ] {
+        let mut value =
+            serde_json::to_value(&dry_run.operations[0]).expect("serialize dry-run operation");
+        value
+            .as_object_mut()
+            .expect("dry-run operation object")
+            .remove(field);
+
+        let err = serde_json::from_value::<RestoreApplyDryRunOperation>(value)
+            .expect_err("current dry-run operation field must be present");
+        assert!(err.is_data());
+    }
+}
+
+#[test]
+fn apply_dry_run_artifact_checks_require_exact_current_optional_fields() {
+    let root = temp_dir("canic-restore-apply-exact-artifact-check");
+    fs::create_dir_all(&root).expect("create temp root");
+    let mut manifest = valid_manifest(IdentityMode::Relocatable);
+    set_member_artifact(
+        &mut manifest,
+        CHILD,
+        &root,
+        "artifacts/child",
+        b"child-snapshot",
+    );
+    set_member_artifact(
+        &mut manifest,
+        ROOT,
+        &root,
+        "artifacts/root",
+        b"root-snapshot",
+    );
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
+        .expect("dry-run should validate artifacts");
+    let check = &dry_run
+        .artifact_validation
+        .as_ref()
+        .expect("artifact validation")
+        .checks[0];
+
+    for field in ["checksum_expected", "checksum_actual"] {
+        let mut value = serde_json::to_value(check).expect("serialize artifact check");
+        value
+            .as_object_mut()
+            .expect("artifact check object")
+            .remove(field);
+
+        let err = serde_json::from_value::<RestoreApplyArtifactCheck>(value)
+            .expect_err("current artifact check field must be present");
+        assert!(err.is_data());
+    }
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure apply dry-runs append deployment verification after member operations.
 #[test]
 fn apply_dry_run_renders_deployment_verification_operations() {
