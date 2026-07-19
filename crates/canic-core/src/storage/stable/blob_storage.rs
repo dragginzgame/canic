@@ -110,7 +110,7 @@ impl BlobRootHashKey {
 
     #[cfg(all(test, feature = "blob-storage"))]
     pub fn into_hash(self) -> Result<BlobRootHash, crate::model::blob_storage::BlobRootHashError> {
-        BlobRootHash::try_from(self.value.0)
+        BlobRootHash::try_from(self.value.into_string())
     }
 }
 

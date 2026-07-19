@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.30`.
-- The latest published release is `v0.93.30` at
-  `922d30460d90bc5e0b0f4d7c2f8a622aed71d42f`.
-- The `v0.93.30` source tree is
-  `93133c7995330a83b86772566f24940bc45237a0`; its product-tree hash is
-  `4408b7a9b3769e0701b9159ff39e0e75135f703bd564f28d368a531e2a8737e7`.
+- The workspace package version is `0.93.31`.
+- The latest published release is `v0.93.31` at
+  `b22eefa9be6e11d2199af173c1790d0a1144e786`.
+- The `v0.93.31` source tree is
+  `e51e162e29239af16e96203511b2b1384eeb8382`; its product-tree hash is
+  `fdb15630d9e60ef6b9cdc0f5fbb38d6001665d4929367c96d46c9b94fb93aaa3`.
   Its Cargo.lock SHA-256 is
-  `5859f4f35fc44de594eb76e52f31f8ed3b8bfe929641f9d25da0d2cf3206ab5c`.
+  `a4873b66db3627c69067dfc5213c9b5dbf3c385897ec4c31aab97a256c1360eb`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -173,12 +173,17 @@ Historical detail is archived at:
   config and runtime-status field is `build_network`; the old auth key,
   mainnet/PocketIC/testnet auth labels, and empty runtime `network` projection
   have no aliases or fallback parsing.
-- Current `0.93.31` development makes human-readable cycle parsing and Candid
+- Released `v0.93.31` makes human-readable cycle parsing and Candid
   `Nat` narrowing exact and checked. Oversized management balances preserve a
   typed cause; oversized CMC notification totals terminate without entering
   child-funding accounting; corrupt oversized refill totals cannot rebuild the
   derived index. Lossy conversions and unchecked convenience arithmetic are
   hard-cut without aliases.
+- Current `0.93.32` development makes bounded strings invariant-preserving
+  across construction, Serde/Candid input, and stable decoding. Mutable inner
+  access, lossy UTF-8 replacement, and overlong truncation are removed.
+  Malformed stable intent, operation, and replay-slot identities fail closed
+  rather than aliasing all-zero keys.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -716,7 +721,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.30` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.31` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -727,13 +732,11 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.31` development replaces floating-point cycle parsing and lossy
-unbounded `Nat` narrowing with one exact checked boundary. Invalid cycle
-configuration fails with typed parse causes; oversized management balances
-preserve their principal and value; oversized CMC `cycles_sent` becomes a
-typed terminal refill outcome and cannot enter the child-funding ledger or
-derived metrics. Removed infallible, saturating, and unchecked convenience
-surfaces have no aliases or fallback behavior. Focused cycle and ICP-refill
-tests, strict all-feature core Clippy, and downstream facade/control-plane
-checks pass. Broad deployment, package, publish, and release validation remains
-maintainer-owned.
+Current `.32` development makes `BoundedString` enforce its declared byte limit
+through every construction and decoding path. The inner value is immutable,
+length failures are typed, and stable decode rejects invalid UTF-8 or excess
+bytes instead of changing key identity. Fixed-width intent, operation, and
+replay-slot stable keys likewise reject malformed lengths instead of becoming
+zero. Focused bounded-value, intent, replay, blob, directory, sharding, and
+cost-guard tests pass. Broad deployment, package, publish, and release
+validation remains maintainer-owned.

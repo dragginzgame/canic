@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    cdk::types::Principal,
+    cdk::types::{BoundedStringError, Principal},
     ids::{IntentId, IntentResourceKey},
     model::replay::{CommandKind, ReplayCostGuardSettlement},
     ops::storage::intent::IntentStoreOps,
@@ -120,7 +120,7 @@ pub enum CostGuardReserveError {
     },
 
     #[error("cost guard resource key is invalid: {0}")]
-    ResourceKeyInvalid(String),
+    ResourceKeyInvalid(BoundedStringError),
 
     #[error("cost guard reservation failed: {reservation}; quota rollback failed: {rollback}")]
     ReservationRollback {

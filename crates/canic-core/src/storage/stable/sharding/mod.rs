@@ -63,8 +63,9 @@ impl ShardKey {
     #[cfg(feature = "sharding")]
     pub(crate) fn try_new(pool: &str, partition_key: &str) -> Result<Self, String> {
         Ok(Self {
-            pool: pool.try_into()?,
-            partition_key: partition_key.try_into()?,
+            pool: BoundedString64::try_from(pool).map_err(|err| err.to_string())?,
+            partition_key: BoundedString128::try_from(partition_key)
+                .map_err(|err| err.to_string())?,
         })
     }
 }
