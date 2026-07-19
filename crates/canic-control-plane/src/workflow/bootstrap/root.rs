@@ -820,7 +820,7 @@ pub fn root_validate_state() -> ValidationReport {
         });
     }
 
-    let registry_roles = SubnetRegistryOps::role_index();
+    let registry_roles = SubnetRegistryOps::direct_root_role_index();
 
     let (app_unique, app_consistent) =
         check_index("app_index", &app_entries, &registry_roles, &mut issues);

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.27`.
-- The latest published release is `v0.93.27` at
-  `d9847124c584495df8db5db1182e0650d13e28a9`.
-- The `v0.93.27` source tree is
-  `e025401a4a98d2be992cc21f04226951a64984f4`; its product-tree hash is
-  `50807258d264755b4127f7f981099f95b21b501e5155c1b644962696dea4ed85`.
+- The workspace package version is `0.93.28`.
+- The latest published release is `v0.93.28` at
+  `9798edcc6445e69282c4408f6a6b3255189e3904`.
+- The `v0.93.28` source tree is
+  `7ace314905039287bc0971649163a587ed816ee8`; its product-tree hash is
+  `7d2c2c73e868327a99261e031d0ca0a3560e407d52a277aaee9dba7fb7189d71`.
   Its Cargo.lock SHA-256 is
-  `0784473e1758665f54e56f43e86e04448d0f3b616f9a961e8c0bd9bab32e181d`.
+  `db94704e1a9821b84ded83fe32c13fec02b2f651fe9c91937caf96c92f0821bd`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -154,14 +154,18 @@ Historical detail is archived at:
   selected ICP environment, deployment truth, release publication, and root
   activation consume those same revalidated bytes, and root resolution waits
   until the safety and preflight gates pass.
-- Current `0.93.28` development binds executable restore snapshot operations,
-  journals, and receipts to one expected checksum. Restore execution uses
-  no-follow descriptor traversal to copy the exact verified file or directory
-  into private staging before claiming the operation, and passes only that
-  staged artifact to the upload command. The same open patch removes the
+- Released `v0.93.28` binds executable restore snapshot operations, journals,
+  and receipts to one expected checksum. Restore execution consumes only a
+  private no-follow copy of the verified artifact. It also removes the
   redundant 0.50-bound adoption availability field; recommendation support is
-  now the sole current decision and projection, and recommendation decoding
-  rejects unknown JSON fields.
+  the sole current decision and projection.
+- Current `0.93.29` development gives Wasm-store inventory one deterministic
+  registry projection carrying canister identity and persisted creation time.
+  Missing roles are empty inventories, while post-create registration absence
+  fails closed instead of inventing metadata. The raw stable-record accessor
+  and dead role-not-found error flow are removed from the control-plane bridge.
+  Root index validation now shares the index builder's direct-child scope, so
+  nested canisters cannot create false duplicate service-role failures.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -699,7 +703,7 @@ fail-closed inventory. All 28 P1 findings are fixed; no deferred or blocked
 finding remains, and one accepted P2 external limitation keeps the 0.92
 verdict at `pass_with_limitations`.
 
-The `0.93.0` through `0.93.27` audit slices are released. They hard-cut stale
+The `0.93.0` through `0.93.28` audit slices are released. They hard-cut stale
 runtime, host, transport, discovery, replay, placement, intent, recovery, and
 validation authority while preserving the intentionally read-only endpoint
 metadata/Candid behavior. Released `.25` corrects `.24`'s selected target
@@ -710,16 +714,12 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.28` development fixes the split restore-artifact authority. Snapshot
-operations persist their expected checksum through dry run, journal, and
-receipt. Preparation and execution use one no-follow checksum traversal, and
-execution copies the exact verified artifact into private staging before the
-journal claim. Source replacement, symlinks, special entries, malformed
-checksums, and receipt identity drift fail closed with typed causes. Focused
-backup and CLI restore validation covers the maintained path. The same patch
-hard-cuts the duplicate fleet-adoption availability enum, JSON field, text
-annotation, and stale active 0.49/0.50 wording; `suggested_action_support`
-remains the sole recommendation authority, and recommendation records reject
-unknown JSON fields. Focused host adoption and CLI fleet tests cover that
-current projection. Broad deployment, package, publish, and release validation
+Current `.29` development removes a split Wasm-store registry lookup. One
+read-only ops projection now carries the selected canister id and authoritative
+creation time into control-plane inventory. Missing roles remain valid empty
+inventories; a created store missing its required registration rejects before
+runtime fleet mutation. Root index validation also uses the same direct-child
+scope as index construction, excluding nested reuse of an indexed service role.
+Focused core registry tests, all-feature control-plane tests, and strict
+targeted Clippy pass. Broad deployment, package, publish, and release validation
 remains maintainer-owned.

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.29` is potentially breaking: Wasm-store fleet discovery now consumes
+  one registry-owned metadata projection, preserves persisted creation time,
+  and fails closed when successful creation lacks its required registration;
+  root validation now applies the same direct-child scope as index building.
+
 - `0.93.28` is potentially breaking: restore journals and receipts now bind
   each executable snapshot operation to its expected checksum, and execution
   consumes only a private no-follow copy of the verified artifact. Fleet

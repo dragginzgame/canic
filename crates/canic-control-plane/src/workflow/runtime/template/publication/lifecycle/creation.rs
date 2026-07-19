@@ -3,7 +3,11 @@ use super::super::{
     WASM_STORE_ROLE, WasmStorePublicationWorkflow,
     fleet::{PublicationPlacement, PublicationPlacementAction, PublicationStoreFleet},
 };
-use crate::{config, ops::storage::state::subnet::SubnetStateOps, workflow::deployment};
+use crate::{
+    config,
+    ops::storage::state::subnet::SubnetStateOps,
+    workflow::{deployment, runtime::template::publication::error::PublicationWorkflowError},
+};
 use canic_core::control_plane_support::{
     error::{InternalError, InternalErrorOrigin},
     ops::{cost_guard::CostGuardPermit, ic::IcOps, storage::registry::subnet::SubnetRegistryOps},
@@ -29,9 +33,16 @@ impl WasmStorePublicationWorkflow {
             )
         })?;
         let binding = Self::binding_for_store_pid(pid);
-        let created_at =
-            SubnetRegistryOps::get(pid).map_or_else(IcOps::now_secs, |record| record.created_at);
-        SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at)?;
+        let registration = SubnetRegistryOps::registration(pid).ok_or_else(|| {
+            PublicationWorkflowError::InvalidState(format!(
+                "new wasm store {pid} is missing from the subnet registry"
+            ))
+        })?;
+        SubnetStateOps::upsert_wasm_store(
+            binding.clone(),
+            registration.pid,
+            registration.created_at,
+        )?;
 
         log!(Topic::Wasm, Ok, "ws created {} ({})", binding, pid);
 

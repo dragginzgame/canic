@@ -15,10 +15,13 @@ impl WasmStorePublicationWorkflow {
     pub fn sync_registered_wasm_store_inventory() -> Result<Vec<WasmStoreBinding>, InternalError> {
         let mut bindings = Vec::new();
 
-        for pid in SubnetRegistryOps::pids_for_role(&WASM_STORE_ROLE).unwrap_or_default() {
-            let binding = Self::binding_for_store_pid(pid);
-            let created_at = SubnetRegistryOps::get(pid).map_or(0, |record| record.created_at);
-            SubnetStateOps::upsert_wasm_store(binding.clone(), pid, created_at)?;
+        for registration in SubnetRegistryOps::registrations_for_role(&WASM_STORE_ROLE) {
+            let binding = Self::binding_for_store_pid(registration.pid);
+            SubnetStateOps::upsert_wasm_store(
+                binding.clone(),
+                registration.pid,
+                registration.created_at,
+            )?;
             bindings.push(binding);
         }
 

@@ -12,6 +12,7 @@ use crate::{
         canister::{CanisterEntryRecord, CanisterRecord},
         stable::registry::subnet::{SubnetRegistry, SubnetRegistryData},
     },
+    view::topology::RegisteredCanisterView,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use thiserror::Error as ThisError;
@@ -29,9 +30,6 @@ pub enum SubnetRegistryOpsError {
 
     #[error("canister {0} not found in subnet registry")]
     CanisterNotFound(Principal),
-
-    #[error("role '{0}' not found in subnet registry")]
-    RoleNotFound(CanisterRole),
 
     #[error("parent chain contains a cycle at {0}")]
     ParentChainCycle(Principal),
@@ -166,8 +164,17 @@ impl SubnetRegistryOps {
     // ---------------------------------------------------------------------
 
     #[must_use]
-    pub fn get(pid: Principal) -> Option<CanisterRecord> {
+    pub(crate) fn get(pid: Principal) -> Option<CanisterRecord> {
         SubnetRegistry::get(pid)
+    }
+
+    /// Return the read-only registration metadata for one canister.
+    #[must_use]
+    pub fn registration(pid: Principal) -> Option<RegisteredCanisterView> {
+        Self::get(pid).map(|record| RegisteredCanisterView {
+            pid,
+            created_at: record.created_at,
+        })
     }
 
     #[must_use]
@@ -246,24 +253,49 @@ impl SubnetRegistryOps {
         SubnetRegistryResponse(entries)
     }
 
+    /// Group direct root children by role for root-owned index validation.
     #[must_use]
-    pub fn role_index() -> BTreeMap<CanisterRole, Vec<Principal>> {
-        let mut roles = BTreeMap::<CanisterRole, Vec<Principal>>::new();
-
-        SubnetRegistry::for_each(|pid, entry| {
-            roles.entry(entry.role).or_default().push(pid);
+    pub fn direct_root_role_index() -> BTreeMap<CanisterRole, Vec<Principal>> {
+        let mut root_pid = None;
+        SubnetRegistry::for_each(|pid, record| {
+            if root_pid.is_none()
+                && record.role == CanisterRole::ROOT
+                && record.parent_pid.is_none()
+            {
+                root_pid = Some(pid);
+            }
         });
 
+        let Some(root_pid) = root_pid else {
+            return BTreeMap::new();
+        };
+
+        let mut roles = BTreeMap::<CanisterRole, Vec<Principal>>::new();
+        SubnetRegistry::for_each(|pid, record| {
+            if record.parent_pid == Some(root_pid) {
+                roles.entry(record.role).or_default().push(pid);
+            }
+        });
+        for pids in roles.values_mut() {
+            pids.sort();
+        }
         roles
     }
 
-    /// Resolve all registered canister ids for one role in deterministic order.
-    pub fn pids_for_role(role: &CanisterRole) -> Result<Vec<Principal>, InternalError> {
-        let mut pids = Self::role_index()
-            .remove(role)
-            .ok_or_else(|| SubnetRegistryOpsError::RoleNotFound(role.clone()))?;
-        pids.sort();
-        Ok(pids)
+    /// Resolve registration metadata for one role in deterministic canister-id order.
+    #[must_use]
+    pub fn registrations_for_role(role: &CanisterRole) -> Vec<RegisteredCanisterView> {
+        let mut registrations = Vec::new();
+        SubnetRegistry::for_each(|pid, record| {
+            if &record.role == role {
+                registrations.push(RegisteredCanisterView {
+                    pid,
+                    created_at: record.created_at,
+                });
+            }
+        });
+        registrations.sort_by_key(|registration| registration.pid);
+        registrations
     }
 }
 
@@ -280,6 +312,8 @@ mod tests {
     }
 
     fn seed_registry() {
+        let _ = SubnetRegistry::remove(&p(89));
+        let _ = SubnetRegistry::remove(&p(90));
         let _ = SubnetRegistry::remove(&p(93));
         let _ = SubnetRegistry::remove(&p(92));
         let _ = SubnetRegistry::remove(&p(91));
@@ -298,6 +332,13 @@ mod tests {
             p(91),
             vec![3],
             3,
+        );
+        SubnetRegistry::register(
+            p(90),
+            &CanisterRole::new("alpha_registry_test"),
+            p(91),
+            vec![4],
+            4,
         );
     }
 
@@ -321,5 +362,65 @@ mod tests {
         assert_eq!(alpha.role, CanisterRole::new("alpha_registry_test"));
         assert_eq!(alpha.record.parent_pid, Some(p(91)));
         assert_eq!(beta.record.module_hash, Some(vec![3]));
+    }
+
+    #[test]
+    fn registrations_for_role_returns_empty_for_absent_role() {
+        seed_registry();
+
+        assert!(
+            SubnetRegistryOps::registrations_for_role(&CanisterRole::new("missing_registry_test"))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn registrations_for_role_preserves_creation_metadata() {
+        seed_registry();
+
+        assert_eq!(
+            SubnetRegistryOps::registration(p(92)),
+            Some(RegisteredCanisterView {
+                pid: p(92),
+                created_at: 2,
+            })
+        );
+        assert_eq!(
+            SubnetRegistryOps::registrations_for_role(&CanisterRole::new("alpha_registry_test")),
+            vec![
+                RegisteredCanisterView {
+                    pid: p(90),
+                    created_at: 4,
+                },
+                RegisteredCanisterView {
+                    pid: p(92),
+                    created_at: 2,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn direct_root_role_index_excludes_nested_matching_roles() {
+        seed_registry();
+        SubnetRegistry::register(
+            p(89),
+            &CanisterRole::new("alpha_registry_test"),
+            p(93),
+            vec![5],
+            5,
+        );
+
+        let roles = SubnetRegistryOps::direct_root_role_index();
+
+        assert_eq!(
+            roles.get(&CanisterRole::new("alpha_registry_test")),
+            Some(&vec![p(90), p(92)])
+        );
+        assert_eq!(
+            roles.get(&CanisterRole::new("beta_registry_test")),
+            Some(&vec![p(93)])
+        );
+        assert!(!roles.values().flatten().any(|pid| pid == &p(89)));
     }
 }
