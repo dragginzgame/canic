@@ -6,7 +6,7 @@
 
 use crate::plan::{BackupOperation, BackupOperationKind, BackupTarget};
 
-pub(super) fn build_backup_phases(targets: &[BackupTarget]) -> Vec<BackupOperation> {
+pub(in crate::plan) fn build_backup_phases(targets: &[BackupTarget]) -> Vec<BackupOperation> {
     let mut phases = vec![
         operation(
             "validate-topology",

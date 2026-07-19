@@ -4,9 +4,12 @@
 //! Does not own: plan construction, preflight receipt mapping, or journaling.
 //! Boundary: enforces plan invariants before dry-run or live execution.
 
-use super::{BackupOperation, BackupOperationKind, BackupPlan, BackupPlanError, BackupScopeKind};
+use super::{BackupPlan, BackupPlanError, BackupScopeKind, BackupTarget, build_backup_phases};
 use candid::Principal;
-use std::{collections::BTreeSet, str::FromStr};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    str::FromStr,
+};
 
 const SUPPORTED_BACKUP_PLAN_VERSION: u16 = 1;
 
@@ -25,14 +28,15 @@ impl BackupPlan {
             "selected_subtree_root",
             self.selected_subtree_root.as_deref(),
         )?;
-        validate_nonempty(
+        validate_required_hash(
             "topology_hash_before_quiesce",
             &self.topology_hash_before_quiesce,
         )?;
         validate_root_scope(self)?;
         validate_targets(self)?;
         validate_selected_scope(self)?;
-        validate_phase_order(&self.phases)
+        validate_target_topology(self)?;
+        validate_phase_projection(self)
     }
 
     /// Validate the backup plan before any live mutation can run.
@@ -104,7 +108,7 @@ fn validate_targets(plan: &BackupPlan) -> Result<(), BackupPlanError> {
         }
     }
 
-    validate_operation_targets(&plan.phases, &target_ids)
+    Ok(())
 }
 
 fn validate_selected_scope(plan: &BackupPlan) -> Result<(), BackupPlanError> {
@@ -134,95 +138,131 @@ fn validate_selected_scope(plan: &BackupPlan) -> Result<(), BackupPlanError> {
     }
 }
 
-fn validate_operation_targets(
-    phases: &[BackupOperation],
-    target_ids: &BTreeSet<String>,
-) -> Result<(), BackupPlanError> {
-    if phases.is_empty() {
-        return Err(BackupPlanError::EmptyPhases);
-    }
+fn validate_target_topology(plan: &BackupPlan) -> Result<(), BackupPlanError> {
+    let targets = plan
+        .targets
+        .iter()
+        .map(|target| (target.canister_id.as_str(), target))
+        .collect::<BTreeMap<_, _>>();
 
-    let mut operation_ids = BTreeSet::new();
-    for (index, phase) in phases.iter().enumerate() {
-        validate_nonempty("phases[].operation_id", &phase.operation_id)?;
-        let expected = u32::try_from(index).unwrap_or(u32::MAX);
-        if phase.order != expected {
-            return Err(BackupPlanError::OperationOrderMismatch {
-                operation_id: phase.operation_id.clone(),
-                order: phase.order,
-                expected,
-            });
-        }
-        if !operation_ids.insert(phase.operation_id.clone()) {
-            return Err(BackupPlanError::DuplicateOperationId(
-                phase.operation_id.clone(),
-            ));
-        }
-        if let Some(target) = &phase.target_canister_id {
-            validate_principal("phases[].target_canister_id", target)?;
-            if !target_ids.contains(target) {
-                return Err(BackupPlanError::UnknownOperationTarget {
-                    operation_id: phase.operation_id.clone(),
-                    target_canister_id: target.clone(),
+    for target in &plan.targets {
+        validate_target_parent_chain(target.canister_id.as_str(), &targets)?;
+        if let Some(parent_canister_id) = target.parent_canister_id.as_deref()
+            && let Some(parent) = targets.get(parent_canister_id)
+        {
+            let expected = u64::from(parent.depth) + 1;
+            if u64::from(target.depth) != expected {
+                return Err(BackupPlanError::TargetDepthMismatch {
+                    canister_id: target.canister_id.clone(),
+                    parent_canister_id: parent_canister_id.to_string(),
+                    expected,
+                    actual: target.depth,
                 });
             }
         }
     }
 
-    Ok(())
-}
+    if plan.selected_scope_kind == BackupScopeKind::NonRootDeployment {
+        for target in &plan.targets {
+            validate_target_connects_to_root(target, &plan.root_canister_id, &targets)?;
+        }
+        return Ok(());
+    }
+    let selected_root = plan
+        .selected_subtree_root
+        .as_deref()
+        .ok_or(BackupPlanError::EmptyField("selected_subtree_root"))?;
+    let selected = targets
+        .get(selected_root)
+        .ok_or_else(|| BackupPlanError::SelectedRootNotInTargets(selected_root.to_string()))?;
+    if let Some(parent_canister_id) = selected.parent_canister_id.as_deref()
+        && targets.contains_key(parent_canister_id)
+    {
+        return Err(BackupPlanError::SelectedRootHasInternalParent {
+            selected_root: selected_root.to_string(),
+            parent_canister_id: parent_canister_id.to_string(),
+        });
+    }
 
-fn validate_phase_order(phases: &[BackupOperation]) -> Result<(), BackupPlanError> {
-    let topology = preflight_position(phases, BackupOperationKind::ValidateTopology, "topology")?;
-    let control = preflight_position(
-        phases,
-        BackupOperationKind::ValidateControlAuthority,
-        "control_authority",
-    )?;
-    let read = preflight_position(
-        phases,
-        BackupOperationKind::ValidateSnapshotReadAuthority,
-        "snapshot_read_authority",
-    )?;
-    let quiescence = preflight_position(
-        phases,
-        BackupOperationKind::ValidateQuiescencePolicy,
-        "quiescence_policy",
-    )?;
-    let preflight_cutoff = [topology, control, read, quiescence]
-        .into_iter()
-        .max()
-        .expect("non-empty preflight positions");
-
-    for (index, phase) in phases.iter().enumerate() {
-        if index < preflight_cutoff && phase.kind.is_mutating() {
-            return Err(BackupPlanError::MutationBeforePreflight {
-                operation_id: phase.operation_id.clone(),
-            });
+    for target in &plan.targets {
+        if target.canister_id != selected_root {
+            validate_target_connects_to_root(target, selected_root, &targets)?;
         }
     }
-
     Ok(())
 }
 
-fn preflight_position(
-    phases: &[BackupOperation],
-    kind: BackupOperationKind,
-    label: &'static str,
-) -> Result<usize, BackupPlanError> {
-    phases
-        .iter()
-        .position(|phase| phase.kind == kind)
-        .ok_or(BackupPlanError::MissingPreflight(label))
+fn validate_target_parent_chain(
+    canister_id: &str,
+    targets: &BTreeMap<&str, &BackupTarget>,
+) -> Result<(), BackupPlanError> {
+    let mut current = canister_id;
+    let mut seen = BTreeSet::new();
+    loop {
+        if !seen.insert(current) {
+            return Err(BackupPlanError::TargetParentCycle {
+                canister_id: canister_id.to_string(),
+            });
+        }
+        let Some(parent) = targets
+            .get(current)
+            .and_then(|target| target.parent_canister_id.as_deref())
+            .and_then(|parent| targets.get(parent))
+        else {
+            return Ok(());
+        };
+        current = parent.canister_id.as_str();
+    }
 }
 
-impl BackupOperationKind {
-    const fn is_mutating(&self) -> bool {
-        matches!(
-            self,
-            Self::Stop | Self::CreateSnapshot | Self::Start | Self::DownloadSnapshot
-        )
+fn validate_target_connects_to_root(
+    target: &BackupTarget,
+    expected_root: &str,
+    targets: &BTreeMap<&str, &BackupTarget>,
+) -> Result<(), BackupPlanError> {
+    let mut current = target;
+    while let Some(parent_canister_id) = current.parent_canister_id.as_deref() {
+        if parent_canister_id == expected_root {
+            return Ok(());
+        }
+        let Some(parent) = targets.get(parent_canister_id) else {
+            break;
+        };
+        current = parent;
     }
+
+    Err(BackupPlanError::TargetDisconnected {
+        canister_id: target.canister_id.clone(),
+        expected_root: expected_root.to_string(),
+    })
+}
+
+fn validate_phase_projection(plan: &BackupPlan) -> Result<(), BackupPlanError> {
+    let expected = build_backup_phases(&plan.targets);
+    if plan.phases.len() != expected.len() {
+        return Err(BackupPlanError::OperationCountMismatch {
+            expected: expected.len(),
+            actual: plan.phases.len(),
+        });
+    }
+
+    for (index, (actual, expected)) in plan.phases.iter().zip(expected).enumerate() {
+        let field = if actual.order != expected.order {
+            Some("order")
+        } else if actual.operation_id != expected.operation_id {
+            Some("operation_id")
+        } else if actual.kind != expected.kind {
+            Some("kind")
+        } else if actual.target_canister_id != expected.target_canister_id {
+            Some("target_canister_id")
+        } else {
+            None
+        };
+        if let Some(field) = field {
+            return Err(BackupPlanError::OperationProjectionMismatch { index, field });
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn validate_nonempty(field: &'static str, value: &str) -> Result<(), BackupPlanError> {
