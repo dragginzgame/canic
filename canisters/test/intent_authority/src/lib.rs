@@ -254,11 +254,11 @@ fn init_memory() {
 }
 
 fn intent_key() -> Result<IntentResourceKey, String> {
-    IntentResourceKey::try_new("capacity")
+    IntentResourceKey::try_new("capacity").map_err(|err| err.to_string())
 }
 
 fn receipt_key(seed: u8) -> Result<IntentResourceKey, String> {
-    IntentResourceKey::try_new(format!("receipt_capacity:{seed}"))
+    IntentResourceKey::try_new(format!("receipt_capacity:{seed}")).map_err(|err| err.to_string())
 }
 
 const fn operation_id(seed: u8) -> OperationId {
