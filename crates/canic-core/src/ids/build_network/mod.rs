@@ -16,9 +16,10 @@ use std::fmt::{self, Display};
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
 pub enum BuildNetwork {
+    #[serde(rename = "ic")]
     Ic,
+    #[serde(rename = "local")]
     Local,
 }
 
