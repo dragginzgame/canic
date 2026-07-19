@@ -35,21 +35,14 @@ pub enum BackupPlanError {
     #[error("backup plan has no targets")]
     EmptyTargets,
 
-    #[error("backup plan has no phases")]
-    EmptyPhases,
-
     #[error("duplicate backup target {0}")]
     DuplicateTarget(String),
 
-    #[error("duplicate backup operation id {0}")]
-    DuplicateOperationId(String),
+    #[error("backup plan has {actual} operations, expected {expected}")]
+    OperationCountMismatch { expected: usize, actual: usize },
 
-    #[error("operation {operation_id} has order {order}, expected {expected}")]
-    OperationOrderMismatch {
-        operation_id: String,
-        order: u32,
-        expected: u32,
-    },
+    #[error("backup plan operation {index} field {field} does not match its canonical projection")]
+    OperationProjectionMismatch { index: usize, field: &'static str },
 
     #[error("normal backup scope must not include root")]
     RootIncludedWithoutMaintenance,
@@ -62,6 +55,31 @@ pub enum BackupPlanError {
 
     #[error("non-root-deployment scope must not declare a selected subtree root")]
     NonRootDeploymentHasSelectedRoot,
+
+    #[error("backup target {canister_id} has a parent cycle")]
+    TargetParentCycle { canister_id: String },
+
+    #[error(
+        "backup target {canister_id} has depth {actual}, expected {expected} below parent {parent_canister_id}"
+    )]
+    TargetDepthMismatch {
+        canister_id: String,
+        parent_canister_id: String,
+        expected: u64,
+        actual: u32,
+    },
+
+    #[error("backup target {canister_id} is disconnected from expected root {expected_root}")]
+    TargetDisconnected {
+        canister_id: String,
+        expected_root: String,
+    },
+
+    #[error("selected backup root {selected_root} has selected parent {parent_canister_id}")]
+    SelectedRootHasInternalParent {
+        selected_root: String,
+        parent_canister_id: String,
+    },
 
     #[error("target {0} has no proven control authority")]
     UnprovenControlAuthority(String),
@@ -130,12 +148,6 @@ pub enum BackupPlanError {
     #[error("quiescence preflight targets do not match selected plan targets")]
     QuiescencePreflightTargetsMismatch,
 
-    #[error("operation {operation_id} targets unknown canister {target_canister_id}")]
-    UnknownOperationTarget {
-        operation_id: String,
-        target_canister_id: String,
-    },
-
     #[error("backup selector {0} did not match a live topology node")]
     UnknownSelector(String),
 
@@ -144,12 +156,6 @@ pub enum BackupPlanError {
         selector: String,
         matches: Vec<String>,
     },
-
-    #[error("required preflight operation {0} is missing")]
-    MissingPreflight(&'static str),
-
-    #[error("mutating operation {operation_id} appears before required preflights")]
-    MutationBeforePreflight { operation_id: String },
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),

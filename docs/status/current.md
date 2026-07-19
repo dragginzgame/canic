@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.34`.
-- The latest published release is `v0.93.34` at
-  `54221cb35caacc0a2e07c88b2f9a6d35f24e5195`.
-- The `v0.93.34` source tree is
-  `4dd3e2276f9c64295bc5206891c0427f38e56a10`; its product-tree hash is
-  `367ceb544636382f4b4fa637505d56b3463d88e21441b82b71271add466375aa`.
+- The workspace package version is `0.93.35`.
+- The latest published release is `v0.93.35` at
+  `74f173359eb95306a5c43c534397ee19809bdae5`.
+- The `v0.93.35` source tree is
+  `bfd57cccd5dde77b156713414fd9cadf0aea1a39`; its product-tree hash is
+  `6046490b111cae902eeda46a2bb7b29a1aafb513835d310fcfd77f6ea422e808`.
   Its Cargo.lock SHA-256 is
-  `65eb4ac780dc50500499b6c35242e79255e0f5ace20ba8108fbf6a5f6a175f7c`.
+  `2cd2c9d7da3087b807b70550a0c73e4bbd821731938ee5b297b64c75fb7e3795`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -200,12 +200,18 @@ Historical detail is archived at:
   artifact projections must match their concrete rows. Checksum algorithm and
   hash validation use the canonical artifact authority, and contradictions
   preserve a typed cause rather than being converted into executable state.
-- Current `.35` development makes every nullable field in maintained backup
+- Released `v0.93.35` makes every nullable field in maintained backup
   and restore documents explicit and required, while stable restore runner
   JSON retains one key set across modes. It also removes two behavior-neutral
   PascalCase `rename_all` declarations; remaining declarations belong only to
   Serde JSON, configuration, report, evidence, or external CBOR enums, while
   Candid continues to require explicit item-level names.
+- Current `.36` development makes the canonical backup phase builder the sole
+  persisted operation authority. Backup plans reject incomplete or altered
+  operation projections, malformed topology hashes, target cycles, internal
+  depth contradictions, and selected subtree graphs that are disconnected or
+  rooted beneath another selected target. Root-omitted deployment targets must
+  likewise remain connected to their declared root.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the

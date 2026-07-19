@@ -15,8 +15,9 @@ use crate::plan::{
     QuiescencePolicy, SnapshotReadAuthority,
 };
 use crate::{manifest::IdentityMode, registry::RegistryEntry};
-use phases::build_backup_phases;
 use targets::{backup_target, selected_subtree_root, snapshot_targets, target_depths};
+
+pub(in crate::plan) use phases::build_backup_phases;
 
 ///
 /// BackupPlanBuildInput

@@ -23,6 +23,18 @@ const EXPIRES_AT: &str = "unix:200";
 const AS_OF: &str = "unix:150";
 
 fn subtree_plan() -> BackupPlan {
+    let targets = vec![BackupTarget {
+        canister_id: APP.to_string(),
+        role: Some("app".to_string()),
+        parent_canister_id: Some(ROOT.to_string()),
+        depth: 1,
+        control_authority: proven_root_control(),
+        snapshot_read_authority: proven_root_read(),
+        identity_mode: IdentityMode::Relocatable,
+        expected_module_hash: None,
+    }];
+    let phases = build_backup_phases(&targets);
+
     BackupPlan {
         plan_version: 1,
         plan_id: "plan-001".to_string(),
@@ -39,63 +51,8 @@ fn subtree_plan() -> BackupPlan {
         quiescence_policy: QuiescencePolicy::RootCoordinated,
         topology_hash_before_quiesce:
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-        targets: vec![BackupTarget {
-            canister_id: APP.to_string(),
-            role: Some("app".to_string()),
-            parent_canister_id: Some(ROOT.to_string()),
-            depth: 1,
-            control_authority: proven_root_control(),
-            snapshot_read_authority: proven_root_read(),
-            identity_mode: IdentityMode::Relocatable,
-            expected_module_hash: None,
-        }],
-        phases: vec![
-            phase(
-                "validate-topology",
-                0,
-                BackupOperationKind::ValidateTopology,
-                None,
-            ),
-            phase(
-                "validate-control",
-                1,
-                BackupOperationKind::ValidateControlAuthority,
-                None,
-            ),
-            phase(
-                "validate-read",
-                2,
-                BackupOperationKind::ValidateSnapshotReadAuthority,
-                None,
-            ),
-            phase(
-                "validate-quiescence",
-                3,
-                BackupOperationKind::ValidateQuiescencePolicy,
-                None,
-            ),
-            phase("stop-app", 4, BackupOperationKind::Stop, Some(APP)),
-            phase(
-                "snapshot-app",
-                5,
-                BackupOperationKind::CreateSnapshot,
-                Some(APP),
-            ),
-            phase("start-app", 6, BackupOperationKind::Start, Some(APP)),
-            phase(
-                "download-app",
-                7,
-                BackupOperationKind::DownloadSnapshot,
-                Some(APP),
-            ),
-            phase(
-                "verify-app",
-                8,
-                BackupOperationKind::VerifyArtifact,
-                Some(APP),
-            ),
-            phase("finalize", 9, BackupOperationKind::FinalizeManifest, None),
-        ],
+        targets,
+        phases,
     }
 }
 
@@ -237,12 +194,6 @@ fn assert_operation_order(plan: &BackupPlan, expected: &[(&str, Option<&str>)]) 
     assert_eq!(actual, expected);
 }
 
-fn reset_phase_order(phases: &mut [BackupOperation]) {
-    for (index, phase) in phases.iter_mut().enumerate() {
-        phase.order = u32::try_from(index).expect("test phase index fits u32");
-    }
-}
-
 // Ensure backup plans fail closed when unknown fields are present.
 #[test]
 fn backup_plan_unknown_field_fails_deserialize() {
@@ -304,18 +255,4 @@ fn backup_plan_requires_exact_current_optional_fields() {
     let err = serde_json::from_value::<BackupOperation>(value)
         .expect_err("current target_canister_id field must be present");
     assert!(err.is_data());
-}
-
-fn phase(
-    operation_id: &str,
-    order: u32,
-    kind: BackupOperationKind,
-    target_canister_id: Option<&str>,
-) -> BackupOperation {
-    BackupOperation {
-        operation_id: operation_id.to_string(),
-        order,
-        kind,
-        target_canister_id: target_canister_id.map(str::to_string),
-    }
 }

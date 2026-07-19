@@ -114,22 +114,22 @@ fn rejects_unproven_snapshot_read_authority() {
     );
 }
 
-// Ensure mutations cannot be planned before authority and quiescence checks.
+// Ensure persisted plans contain the complete canonical operation projection.
 #[test]
-fn rejects_mutation_before_preflights() {
+fn rejects_incomplete_operation_projection() {
     let mut plan = subtree_plan();
-    let stop = plan.phases.remove(4);
-    plan.phases.insert(0, stop);
-    reset_phase_order(&mut plan.phases);
+    plan.phases.pop();
 
     let err = plan
         .validate()
-        .expect_err("mutation before preflight should reject");
+        .expect_err("incomplete operation projection should reject");
 
     std::assert_matches!(
         err,
-        BackupPlanError::MutationBeforePreflight { operation_id }
-            if operation_id == "stop-app"
+        BackupPlanError::OperationCountMismatch {
+            expected: 10,
+            actual: 9
+        }
     );
 }
 
@@ -146,7 +146,7 @@ fn rejects_root_omitted_deployment_scope_with_selected_root() {
     std::assert_matches!(err, BackupPlanError::NonRootDeploymentHasSelectedRoot);
 }
 
-// Ensure journals can rely on stable contiguous operation ordering.
+// Ensure journals can rely on the canonical operation ordering.
 #[test]
 fn rejects_operation_order_mismatch() {
     let mut plan = subtree_plan();
@@ -158,7 +158,199 @@ fn rejects_operation_order_mismatch() {
 
     std::assert_matches!(
         err,
-        BackupPlanError::OperationOrderMismatch { operation_id, order, expected }
-            if operation_id == "validate-control" && order == 42 && expected == 1
+        BackupPlanError::OperationProjectionMismatch {
+            index: 1,
+            field: "order"
+        }
     );
+}
+
+// Ensure operation identities cannot diverge from the canonical projection.
+#[test]
+fn rejects_operation_id_mismatch() {
+    let mut plan = subtree_plan();
+    plan.phases[4].operation_id = "stop-other".to_string();
+
+    let err = plan
+        .validate()
+        .expect_err("operation id mismatch should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::OperationProjectionMismatch {
+            index: 4,
+            field: "operation_id"
+        }
+    );
+}
+
+// Ensure operation kinds cannot diverge from the canonical projection.
+#[test]
+fn rejects_operation_kind_mismatch() {
+    let mut plan = subtree_plan();
+    plan.phases[4].kind = BackupOperationKind::CreateSnapshot;
+
+    let err = plan
+        .validate()
+        .expect_err("operation kind mismatch should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::OperationProjectionMismatch {
+            index: 4,
+            field: "kind"
+        }
+    );
+}
+
+// Ensure operation targets cannot diverge from the canonical projection.
+#[test]
+fn rejects_operation_target_mismatch() {
+    let mut plan = subtree_plan();
+    plan.phases[4].target_canister_id = Some(WORKER.to_string());
+
+    let err = plan
+        .validate()
+        .expect_err("operation target mismatch should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::OperationProjectionMismatch {
+            index: 4,
+            field: "target_canister_id"
+        }
+    );
+}
+
+// Ensure the persisted discovery hash has the current exact shape.
+#[test]
+fn rejects_invalid_topology_hash() {
+    let mut plan = subtree_plan();
+    plan.topology_hash_before_quiesce = "not-a-hash".to_string();
+
+    let err = plan
+        .validate()
+        .expect_err("invalid topology hash should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::InvalidTopologyHash {
+            field: "topology_hash_before_quiesce",
+            value
+        } if value == "not-a-hash"
+    );
+}
+
+// Ensure selected target parent links cannot form a cycle.
+#[test]
+fn rejects_target_parent_cycle() {
+    let mut plan = subtree_plan();
+    plan.targets[0].parent_canister_id = Some(APP.to_string());
+
+    let err = plan
+        .validate()
+        .expect_err("target parent cycle should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::TargetParentCycle { canister_id } if canister_id == APP
+    );
+}
+
+// Ensure target depth agrees with every selected parent edge.
+#[test]
+fn rejects_target_depth_mismatch() {
+    let mut plan = subtree_plan();
+    plan.targets.push(worker_target(APP, 3));
+    plan.phases = build_backup_phases(&plan.targets);
+
+    let err = plan
+        .validate()
+        .expect_err("target depth mismatch should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::TargetDepthMismatch {
+            canister_id,
+            parent_canister_id,
+            expected: 2,
+            actual: 3
+        } if canister_id == WORKER && parent_canister_id == APP
+    );
+}
+
+// Ensure a selected subtree root is the root of its persisted target graph.
+#[test]
+fn rejects_selected_root_with_internal_parent() {
+    let mut plan = subtree_plan();
+    plan.targets[0].parent_canister_id = Some(WORKER.to_string());
+    plan.targets[0].depth = 2;
+    plan.targets.push(worker_target(ROOT, 1));
+    plan.phases = build_backup_phases(&plan.targets);
+
+    let err = plan
+        .validate()
+        .expect_err("selected root with internal parent should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::SelectedRootHasInternalParent {
+            selected_root,
+            parent_canister_id
+        } if selected_root == APP && parent_canister_id == WORKER
+    );
+}
+
+// Ensure every selected subtree member connects to its selected root.
+#[test]
+fn rejects_target_disconnected_from_selected_root() {
+    let mut plan = subtree_plan();
+    plan.targets.push(worker_target(ROOT, 1));
+    plan.phases = build_backup_phases(&plan.targets);
+
+    let err = plan
+        .validate()
+        .expect_err("disconnected target should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::TargetDisconnected {
+            canister_id,
+            expected_root
+        } if canister_id == WORKER && expected_root == APP
+    );
+}
+
+// Ensure a root-omitted deployment still belongs to its declared root graph.
+#[test]
+fn rejects_non_root_deployment_target_disconnected_from_root() {
+    let mut plan = subtree_plan();
+    plan.selected_scope_kind = BackupScopeKind::NonRootDeployment;
+    plan.selected_subtree_root = None;
+    plan.targets[0].parent_canister_id = Some(WORKER.to_string());
+
+    let err = plan
+        .validate()
+        .expect_err("root-disconnected deployment target should reject");
+
+    std::assert_matches!(
+        err,
+        BackupPlanError::TargetDisconnected {
+            canister_id,
+            expected_root
+        } if canister_id == APP && expected_root == ROOT
+    );
+}
+
+fn worker_target(parent_canister_id: &str, depth: u32) -> BackupTarget {
+    BackupTarget {
+        canister_id: WORKER.to_string(),
+        role: Some("worker".to_string()),
+        parent_canister_id: Some(parent_canister_id.to_string()),
+        depth,
+        control_authority: proven_root_control(),
+        snapshot_read_authority: proven_root_read(),
+        identity_mode: IdentityMode::Relocatable,
+        expected_module_hash: None,
+    }
 }

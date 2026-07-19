@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)
 
+- `0.93.36` is potentially breaking: persisted backup plans must match their
+  canonical target topology and exact generated operation sequence before they
+  can be stored, resumed, or executed.
+
 - `0.93.35` is potentially breaking: current backup and restore documents now
   require every nullable field explicitly, while restore runner JSON keeps one
   deterministic key set across all modes.
