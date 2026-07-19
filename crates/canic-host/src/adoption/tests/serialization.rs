@@ -51,3 +51,19 @@ fn adoption_report_round_trips_through_json() {
         AdoptionArtifactStateV1::CanicBuilt
     );
 }
+
+#[test]
+fn adoption_recommendation_rejects_unknown_json_fields() {
+    let value = serde_json::json!({
+        "kind": "review_authority_before_declaration",
+        "severity": "Warning",
+        "description": "review authority",
+        "suggested_action": null,
+        "suggested_action_effect": "ReadOnly",
+        "suggested_action_support": "SupportedByAdoption",
+        "operator_action_requirement": "Required",
+        "unexpected": true,
+    });
+
+    assert!(serde_json::from_value::<AdoptionRecommendationV1>(value).is_err());
+}

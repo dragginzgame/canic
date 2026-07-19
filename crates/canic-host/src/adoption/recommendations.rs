@@ -1,7 +1,6 @@
 use super::model::{
     AdoptionAuthorityStateV1, AdoptionOperatorActionRequirementV1, AdoptionProfileV1,
-    AdoptionRecommendationSeverityV1, AdoptionRecommendationV1,
-    AdoptionSuggestedActionAvailabilityV1, AdoptionSuggestedActionEffectV1,
+    AdoptionRecommendationSeverityV1, AdoptionRecommendationV1, AdoptionSuggestedActionEffectV1,
     AdoptionSuggestedActionSupportV1,
 };
 
@@ -50,7 +49,6 @@ fn declare_role_recommendation(fleet: &str, role: &str) -> AdoptionRecommendatio
         )),
         suggested_action_effect: AdoptionSuggestedActionEffectV1::MutatesState,
         suggested_action_support: AdoptionSuggestedActionSupportV1::UnsupportedByAdoption,
-        suggested_action_availability: AdoptionSuggestedActionAvailabilityV1::BlockedIn0500,
         operator_action_requirement: AdoptionOperatorActionRequirementV1::Required,
     }
 }
@@ -70,7 +68,6 @@ fn review_authority_before_declaration_recommendation(
         suggested_action: None,
         suggested_action_effect: AdoptionSuggestedActionEffectV1::ReadOnly,
         suggested_action_support: AdoptionSuggestedActionSupportV1::SupportedByAdoption,
-        suggested_action_availability: AdoptionSuggestedActionAvailabilityV1::AllowedIn0500,
         operator_action_requirement: AdoptionOperatorActionRequirementV1::Required,
     }
 }
@@ -94,7 +91,6 @@ pub(super) fn attach_later_recommendation(fleet: &str, role: &str) -> AdoptionRe
         )),
         suggested_action_effect: AdoptionSuggestedActionEffectV1::MutatesState,
         suggested_action_support: AdoptionSuggestedActionSupportV1::UnsupportedByAdoption,
-        suggested_action_availability: AdoptionSuggestedActionAvailabilityV1::BlockedIn0500,
         operator_action_requirement: AdoptionOperatorActionRequirementV1::Required,
     }
 }

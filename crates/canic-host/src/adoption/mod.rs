@@ -14,8 +14,8 @@ pub use model::{
     AdoptionOperatorActionRequirementV1, AdoptionPackageMetadataV1, AdoptionPackageStateV1,
     AdoptionProfileV1, AdoptionRecommendationSeverityV1, AdoptionRecommendationV1,
     AdoptionReportError, AdoptionReportInputsV1, AdoptionReportRequest, AdoptionReportSummaryV1,
-    AdoptionReportV1, AdoptionRoleFindingV1, AdoptionSuggestedActionAvailabilityV1,
-    AdoptionSuggestedActionEffectV1, AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
+    AdoptionReportV1, AdoptionRoleFindingV1, AdoptionSuggestedActionEffectV1,
+    AdoptionSuggestedActionSupportV1, AdoptionTopologyStateV1,
 };
 pub use report::adoption_report_from_config_source;
 

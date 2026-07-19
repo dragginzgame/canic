@@ -63,9 +63,7 @@ fn brownfield_fixture_reports_observed_roles_without_claiming_them() {
             .iter()
             .filter(|recommendation| recommendation.kind == "declare_role")
             .all(|recommendation| recommendation.suggested_action_support
-                == AdoptionSuggestedActionSupportV1::UnsupportedByAdoption
-                && recommendation.suggested_action_availability
-                    == AdoptionSuggestedActionAvailabilityV1::BlockedIn0500)
+                == AdoptionSuggestedActionSupportV1::UnsupportedByAdoption)
     );
 }
 

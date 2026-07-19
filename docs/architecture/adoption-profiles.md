@@ -45,7 +45,7 @@ edit manifests.
 
 ## Lifecycle Vocabulary
 
-Adoption reporting uses the 0.49 role lifecycle directly:
+Adoption reporting uses the maintained role lifecycle directly:
 
 - `declared-only`: a role exists under `[roles.<role>]` with an explicit
   `package = "<path>"`, but is not attached to topology;
@@ -78,7 +78,7 @@ An explicit output path writes only that report artifact:
 canic fleet adoption report demo --profile partial --output adoption-report.txt
 ```
 
-JSON output is available for inspection, but the 0.50 JSON shape is
+JSON output is available for inspection, but the adoption-report schema is
 experimental:
 
 ```bash
@@ -144,12 +144,16 @@ Text output renders suggested commands as previews:
 
 ```text
 Recommendations (report-only; not executed):
-  - declare observed role candidate [warning; mutates-state; unsupported-by-adoption; blocked-in-0.50.0; requires-explicit-operator-action]
+  - declare observed role candidate [warning; mutates-state; unsupported-by-adoption; requires-explicit-operator-action]
     suggested_action_preview: canic fleet role declare demo store --package canisters/store
     status: not executed by adoption report
     support: unsupported-by-adoption
-    availability: blocked-in-0.50.0
 ```
+
+`suggested_action_support` is the sole authority for whether the passive
+adoption surface supports a recommendation. The report does not project a
+release-specific availability field. Recommendation objects reject unknown
+JSON fields rather than silently accepting stale or misspelled decisions.
 
 Blocked actions are also report-only:
 
