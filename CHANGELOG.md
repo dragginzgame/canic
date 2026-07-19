@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.94.x] - 2026-07-19 - Backup And Restore Operational Readiness
+
+Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
+
+- `0.94.0` makes kernel ownership the sole backup/restore journal-lock
+  authority, preserving live exclusion while restoring liveness immediately
+  after abrupt process death.
+
 ## [0.93.x] - 2026-07-16 - Pre-1.0 Surface Hard Cuts
 
 Detailed patch breakdown: [docs/changelog/0.93.md](docs/changelog/0.93.md)

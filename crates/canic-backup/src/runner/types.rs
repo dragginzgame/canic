@@ -104,6 +104,9 @@ pub enum BackupRunnerError {
     #[error("backup execution journal is locked: {lock_path}")]
     JournalLocked { lock_path: String },
 
+    #[error("backup execution journal lock path is unsafe: {lock_path} ({kind})")]
+    JournalLockUnsafeEntry { lock_path: String, kind: String },
+
     #[error(
         "download journal backup id does not match the backup plan: expected={expected}, actual={actual}"
     )]
@@ -190,6 +193,9 @@ impl From<JournalLockError> for BackupRunnerError {
     fn from(error: JournalLockError) -> Self {
         match error {
             JournalLockError::Locked { lock_path } => Self::JournalLocked { lock_path },
+            JournalLockError::UnsafeEntry { lock_path, kind } => {
+                Self::JournalLockUnsafeEntry { lock_path, kind }
+            }
             JournalLockError::Io(error) => Self::Io(error),
         }
     }

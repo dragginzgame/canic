@@ -102,6 +102,9 @@ pub enum RestoreRunnerError {
     #[error("restore apply journal is locked: {lock_path}")]
     JournalLocked { lock_path: String },
 
+    #[error("restore apply journal lock path is unsafe: {lock_path} ({kind})")]
+    JournalLockUnsafeEntry { lock_path: String, kind: String },
+
     #[error(
         "restore apply journal for backup {backup_id} has pending operations: pending={pending_operations}, next={next_transition_sequence:?}"
     )]
@@ -178,6 +181,9 @@ impl From<JournalLockError> for RestoreRunnerError {
     fn from(error: JournalLockError) -> Self {
         match error {
             JournalLockError::Locked { lock_path } => Self::JournalLocked { lock_path },
+            JournalLockError::UnsafeEntry { lock_path, kind } => {
+                Self::JournalLockUnsafeEntry { lock_path, kind }
+            }
             JournalLockError::Io(error) => Self::Io(error),
         }
     }

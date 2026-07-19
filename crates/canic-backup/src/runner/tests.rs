@@ -3,7 +3,7 @@ use crate::{
     execution::BackupExecutionOperationState,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics},
     manifest::{BackupUnitKind, IdentityMode},
-    persistence::BackupLayout,
+    persistence::{BackupLayout, JournalLock},
     plan::{
         AuthorityEvidence, AuthorityProofSource, BackupExecutionPreflightReceipts,
         BackupOperationKind, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
@@ -398,7 +398,7 @@ fn runner_records_failed_operation_and_retries_from_that_operation() {
 fn runner_rejects_locked_execution_journal_before_running_commands() {
     let root = prepared_layout("canic-backup-runner-lock");
     let layout = BackupLayout::new(root.clone());
-    fs::write(execution_journal_lock_path(&layout), b"pid=1\n").expect("write lock");
+    let _lock = JournalLock::acquire(&layout.execution_journal_path()).expect("acquire lock");
 
     let mut executor = FakeExecutor::default();
     let err = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
@@ -651,12 +651,6 @@ fn download_journal(backup_id: &str, topology_hash: &str, snapshot_id: &str) -> 
             updated_at: "unix:1".to_string(),
         }],
     }
-}
-
-fn execution_journal_lock_path(layout: &BackupLayout) -> PathBuf {
-    let mut lock_path = layout.execution_journal_path().as_os_str().to_os_string();
-    lock_path.push(".lock");
-    PathBuf::from(lock_path)
 }
 
 fn runner_config(out: PathBuf, max_steps: Option<usize>) -> BackupRunnerConfig {

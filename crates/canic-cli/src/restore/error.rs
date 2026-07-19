@@ -56,6 +56,9 @@ pub enum RestoreCommandError {
     #[error("restore apply journal is locked: {lock_path}")]
     RestoreApplyJournalLocked { lock_path: String },
 
+    #[error("restore apply journal lock path is unsafe: {lock_path} ({kind})")]
+    RestoreApplyJournalLockUnsafeEntry { lock_path: String, kind: String },
+
     #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
     RestoreNotReady {
         backup_id: String,
@@ -207,6 +210,9 @@ impl From<RestoreRunnerError> for RestoreCommandError {
             }
             RestoreRunnerError::JournalLocked { lock_path } => {
                 Self::RestoreApplyJournalLocked { lock_path }
+            }
+            RestoreRunnerError::JournalLockUnsafeEntry { lock_path, kind } => {
+                Self::RestoreApplyJournalLockUnsafeEntry { lock_path, kind }
             }
             RestoreRunnerError::Pending {
                 backup_id,

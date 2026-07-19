@@ -576,7 +576,18 @@ fn run_restore_run_execute_rejects_locked_journal() {
     let journal = ready_apply_journal();
     fixture.write_journal(&journal);
     let lock_path = journal_lock_path(&fixture.journal_path);
-    fs::write(&lock_path, "pid=other\n").expect("write existing lock");
+    let lock_file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .expect("open lock path");
+    rustix::fs::flock(
+        &lock_file,
+        rustix::fs::FlockOperation::NonBlockingLockExclusive,
+    )
+    .expect("acquire competing lock");
 
     let err = fixture
         .run_restore_run(&[
