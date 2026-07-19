@@ -245,8 +245,15 @@ fn apply_dry_run_rejects_special_artifact_files() {
     let root = temp_dir("canic-restore-apply-special-artifact");
     fs::create_dir_all(root.join("artifacts")).expect("create artifact root");
     let socket = root.join("artifacts/root");
-    let _listener = UnixListener::bind(&socket).expect("create artifact socket");
+    let listener = UnixListener::bind(&socket).expect("create artifact socket");
     let mut manifest = valid_manifest(IdentityMode::Relocatable);
+    set_member_artifact(
+        &mut manifest,
+        CHILD,
+        &root,
+        "artifacts/child",
+        b"child-snapshot",
+    );
     let member = manifest
         .deployment
         .members
@@ -260,5 +267,6 @@ fn apply_dry_run_rejects_special_artifact_files() {
         .expect_err("special artifact must reject");
 
     std::assert_matches!(error, RestoreApplyDryRunError::ArtifactUnsafeType { .. });
+    drop(listener);
     fs::remove_dir_all(root).expect("remove fixture");
 }
