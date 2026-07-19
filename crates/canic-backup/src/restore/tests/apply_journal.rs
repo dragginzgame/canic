@@ -309,7 +309,7 @@ fn apply_journal_marks_validated_operations_ready() {
 fn apply_journal_unknown_field_fails_deserialize() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
     let mut value = serde_json::to_value(journal).expect("serialize journal");
     value["unexpected_field"] = serde_json::Value::Bool(true);
@@ -320,13 +320,35 @@ fn apply_journal_unknown_field_fails_deserialize() {
     assert!(err.is_data());
 }
 
+#[test]
+fn apply_journal_requires_current_receipt_and_lifecycle_count_fields() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
+    let journal = RestoreApplyJournal::from_dry_run(&dry_run);
+
+    for path in [
+        &["operation_receipts"][..],
+        &["operation_counts", "canister_stops"][..],
+        &["operation_counts", "canister_starts"][..],
+    ] {
+        let mut value = serde_json::to_value(&journal).expect("serialize journal");
+        remove_json_field(&mut value, path);
+
+        let err = serde_json::from_value::<RestoreApplyJournal>(value)
+            .expect_err("current apply-journal field must be present");
+
+        assert!(err.is_data());
+    }
+}
+
 // Ensure apply journals block when artifact validation was not supplied.
 #[test]
 fn apply_journal_blocks_without_artifact_validation() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     assert!(!journal.ready);
@@ -457,7 +479,7 @@ fn apply_journal_command_preview_reports_blocked_state() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run);
     let preview = journal.next_command_preview();
 
@@ -857,7 +879,7 @@ fn apply_journal_validation_rejects_count_mismatch() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal.blocked_operations = 0;
 
@@ -906,7 +928,7 @@ fn apply_journal_validation_rejects_duplicate_sequences() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal.operations[1].sequence = journal.operations[0].sequence;
 
@@ -923,7 +945,7 @@ fn apply_journal_validation_rejects_failed_without_reason() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
     journal.operations[0].state = RestoreApplyOperationState::Failed;
     journal.operations[0].blocking_reasons = Vec::new();
@@ -1376,7 +1398,7 @@ fn apply_journal_rejects_blocked_operation_completion() {
     let manifest = valid_manifest(IdentityMode::Relocatable);
 
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     let err = journal

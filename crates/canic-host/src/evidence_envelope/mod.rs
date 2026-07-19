@@ -372,39 +372,39 @@ pub fn command_path_for_root(path: &Path, root: &Path) -> String {
 }
 
 ///
-/// InputPathSummaryV1
+/// InputPathSummary
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct InputPathSummaryV1 {
+struct InputPathSummary {
     path: Option<String>,
     display: InputPathDisplayV1,
 }
 
-fn input_path_summary(path: &Path, root: &Path) -> InputPathSummaryV1 {
+fn input_path_summary(path: &Path, root: &Path) -> InputPathSummary {
     let canonical_path = fs::canonicalize(path).ok();
     let canonical_root = fs::canonicalize(root).ok();
 
     if let (Some(canonical_path), Some(canonical_root)) = (canonical_path, canonical_root) {
         if let Ok(relative) = canonical_path.strip_prefix(canonical_root) {
-            return InputPathSummaryV1 {
+            return InputPathSummary {
                 path: Some(path_to_display(relative)),
                 display: InputPathDisplayV1::Relative,
             };
         }
-        return InputPathSummaryV1 {
+        return InputPathSummary {
             path: None,
             display: InputPathDisplayV1::AbsoluteRedacted,
         };
     }
 
     if path.is_absolute() {
-        return InputPathSummaryV1 {
+        return InputPathSummary {
             path: None,
             display: InputPathDisplayV1::AbsoluteRedacted,
         };
     }
 
-    InputPathSummaryV1 {
+    InputPathSummary {
         path: Some(path_to_display(path)),
         display: InputPathDisplayV1::Relative,
     }

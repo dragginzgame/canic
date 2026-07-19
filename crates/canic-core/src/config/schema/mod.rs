@@ -151,9 +151,9 @@ impl ConfigModel {
 
     /// Return a fleet-scoped role reference for a local role.
     #[must_use]
-    pub fn fleet_role_ref(&self, role: &CanisterRole) -> Option<FleetRoleRefV1> {
+    pub fn fleet_role_ref(&self, role: &CanisterRole) -> Option<FleetRoleRef> {
         self.fleet_name()
-            .map(|fleet| FleetRoleRefV1::new(fleet, role.clone()))
+            .map(|fleet| FleetRoleRef::new(fleet, role.clone()))
     }
 
     /// Return whether a local canister role is explicitly declared.
@@ -195,14 +195,14 @@ impl ConfigModel {
 
     /// Return the fleet-scoped roles attached to topology.
     #[must_use]
-    pub fn attached_fleet_roles(&self) -> BTreeSet<FleetRoleRefV1> {
+    pub fn attached_fleet_roles(&self) -> BTreeSet<FleetRoleRef> {
         let Some(fleet) = self.fleet_name() else {
             return BTreeSet::new();
         };
 
         self.attached_roles()
             .into_iter()
-            .map(|role| FleetRoleRefV1::new(fleet, role))
+            .map(|role| FleetRoleRef::new(fleet, role))
             .collect()
     }
 

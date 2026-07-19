@@ -4,7 +4,7 @@
 //! Does not own: restore planning, journal transitions, or generic CLI output.
 //! Boundary: exposes typed plan/journal writes backed by backup-owned durable IO.
 
-use super::{RestoreApplyJournal, RestoreApplyJournalError, RestorePlan};
+use super::{RestoreApplyJournal, RestoreApplyJournalError, RestorePlan, RestorePlanError};
 use crate::persistence::{PersistenceError, write_json_durable};
 
 use std::path::Path;
@@ -21,6 +21,9 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum RestorePersistenceError {
     #[error(transparent)]
+    InvalidPlan(#[from] RestorePlanError),
+
+    #[error(transparent)]
     InvalidJournal(#[from] RestoreApplyJournalError),
 
     #[error(transparent)]
@@ -29,6 +32,7 @@ pub enum RestorePersistenceError {
 
 /// Durably replace one serialized restore plan.
 pub fn write_restore_plan(path: &Path, plan: &RestorePlan) -> Result<(), RestorePersistenceError> {
+    plan.validate()?;
     write_json_durable(path, plan)?;
     Ok(())
 }

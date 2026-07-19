@@ -137,7 +137,7 @@ fn write_fake_icp_upload_without_id(root: &Path) -> PathBuf {
 // Build one manually ready apply journal for runner-focused CLI tests.
 fn ready_apply_journal() -> RestoreApplyJournal {
     let plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run);
 
     journal.ready = true;
@@ -275,10 +275,8 @@ fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &Deployme
         .write_journal(&DownloadJournal {
             journal_version: 1,
             backup_id: manifest.backup_id.clone(),
-            discovery_topology_hash: Some(manifest.deployment.discovery_topology_hash.clone()),
-            pre_snapshot_topology_hash: Some(
-                manifest.deployment.pre_snapshot_topology_hash.clone(),
-            ),
+            discovery_topology_hash: manifest.deployment.discovery_topology_hash.clone(),
+            pre_snapshot_topology_hash: manifest.deployment.pre_snapshot_topology_hash.clone(),
             operation_metrics: canic_backup::journal::DownloadOperationMetrics::default(),
             artifacts,
         })

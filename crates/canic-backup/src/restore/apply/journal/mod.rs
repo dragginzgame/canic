@@ -54,7 +54,7 @@ pub struct RestoreApplyJournal {
     pub backup_id: String,
     pub ready: bool,
     pub blocked_reasons: Vec<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub backup_root: Option<String>,
     pub operation_count: usize,
     pub operation_counts: RestoreApplyOperationKindCounts,
@@ -64,7 +64,6 @@ pub struct RestoreApplyJournal {
     pub completed_operations: usize,
     pub failed_operations: usize,
     pub operations: Vec<RestoreApplyJournalOperation>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operation_receipts: Vec<RestoreApplyOperationReceipt>,
 }
 

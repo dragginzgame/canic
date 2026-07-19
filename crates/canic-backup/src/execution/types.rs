@@ -86,9 +86,9 @@ pub struct BackupExecutionOperationReceipt {
     pub outcome: BackupExecutionOperationReceiptOutcome,
     pub updated_at: Option<String>,
     pub snapshot_id: Option<String>,
-    #[serde(default)]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_taken_at_timestamp: Option<u64>,
-    #[serde(default)]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub snapshot_total_size_bytes: Option<u64>,
     pub artifact_path: Option<String>,
     pub checksum: Option<String>,

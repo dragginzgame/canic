@@ -38,6 +38,20 @@ pub(super) fn execute_create_snapshot(
     operation: &BackupExecutionJournalOperation,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
+    let mut download_journal = read_or_new_download_journal(layout, plan, journal)?;
+    if let Some(existing) = download_journal
+        .artifacts
+        .iter()
+        .find(|artifact| artifact.canister_id == target)
+    {
+        let mut receipt = BackupExecutionOperationReceipt::completed(
+            journal,
+            operation,
+            Some(current_timestamp_marker()),
+        );
+        receipt.snapshot_id = Some(existing.snapshot_id.clone());
+        return Ok(receipt);
+    }
     let snapshot = executor
         .create_snapshot(&target)
         .map_err(|error| command_failed(operation.sequence, error))?;
@@ -50,7 +64,6 @@ pub(super) fn execute_create_snapshot(
     receipt.snapshot_taken_at_timestamp = snapshot.taken_at_timestamp;
     receipt.snapshot_total_size_bytes = snapshot.total_size_bytes;
 
-    let mut download_journal = read_or_new_download_journal(layout, plan, journal)?;
     upsert_artifact_entry(
         &mut download_journal,
         ArtifactJournalEntry {

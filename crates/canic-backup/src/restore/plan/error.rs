@@ -17,6 +17,27 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum RestorePlanError {
+    #[error("unsupported restore plan version {0}")]
+    UnsupportedVersion(u16),
+
+    #[error("field {0} must not be empty")]
+    EmptyField(&'static str),
+
+    #[error("field {field} must be a valid principal: {value}")]
+    InvalidPrincipal { field: &'static str, value: String },
+
+    #[error("field {field} must be a 64-character hex sha256 value: {value}")]
+    InvalidHash { field: &'static str, value: String },
+
+    #[error("restore plan member_count is {actual}, expected {expected}")]
+    MemberCountMismatch { expected: usize, actual: usize },
+
+    #[error("restore plan projection {0} does not match its concrete members")]
+    ProjectionMismatch(&'static str),
+
+    #[error("restore plan contains duplicate source canister {0}")]
+    DuplicatePlanSource(String),
+
     #[error("mapping contains duplicate source canister {0}")]
     DuplicateMappingSource(String),
 
@@ -34,9 +55,6 @@ pub enum RestorePlanError {
 
     #[error(transparent)]
     InvalidManifest(#[from] ManifestValidationError),
-
-    #[error("field {field} must be a valid principal: {value}")]
-    InvalidPrincipal { field: &'static str, value: String },
 
     #[error("mapping is missing source canister {0}")]
     MissingMappingSource(String),

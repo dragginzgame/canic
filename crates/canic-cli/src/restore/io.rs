@@ -233,7 +233,9 @@ pub(super) fn read_mapping(path: &Path) -> Result<RestoreMapping, RestoreCommand
 
 // Read and decode a restore plan from disk.
 pub(super) fn read_plan(path: &Path) -> Result<RestorePlan, RestoreCommandError> {
-    output::read_json_file::<RestorePlan, RestoreCommandError>(path)
+    let plan = output::read_json_file::<RestorePlan, RestoreCommandError>(path)?;
+    plan.validate()?;
+    Ok(plan)
 }
 
 fn read_apply_journal(path: &Path) -> Result<RestoreApplyJournal, RestoreCommandError> {

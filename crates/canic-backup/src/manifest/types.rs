@@ -163,7 +163,7 @@ pub struct SourceSnapshot {
     pub code_version: Option<String>,
     pub artifact_path: String,
     pub checksum_algorithm: String,
-    #[serde(default)]
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub checksum: Option<String>,
 }
 

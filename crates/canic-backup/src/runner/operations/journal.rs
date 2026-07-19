@@ -18,20 +18,50 @@ pub(super) fn read_or_new_download_journal(
     journal: &BackupExecutionJournal,
 ) -> Result<DownloadJournal, BackupRunnerError> {
     if layout.journal_path().is_file() {
-        let mut journal = layout.read_journal()?;
-        journal.discovery_topology_hash = Some(plan.topology_hash_before_quiesce.clone());
-        journal.pre_snapshot_topology_hash = Some(plan.topology_hash_before_quiesce.clone());
+        let journal = layout.read_journal()?;
+        if journal.backup_id != plan.run_id {
+            return Err(BackupRunnerError::DownloadJournalBackupIdMismatch {
+                expected: plan.run_id.clone(),
+                actual: journal.backup_id,
+            });
+        }
+        require_plan_topology_receipt(
+            "discovery_topology_hash",
+            &plan.topology_hash_before_quiesce,
+            &journal.discovery_topology_hash,
+        )?;
+        require_plan_topology_receipt(
+            "pre_snapshot_topology_hash",
+            &plan.topology_hash_before_quiesce,
+            &journal.pre_snapshot_topology_hash,
+        )?;
         return Ok(journal);
     }
 
     Ok(DownloadJournal {
         journal_version: 1,
         backup_id: journal.run_id.clone(),
-        discovery_topology_hash: Some(plan.topology_hash_before_quiesce.clone()),
-        pre_snapshot_topology_hash: Some(plan.topology_hash_before_quiesce.clone()),
+        discovery_topology_hash: plan.topology_hash_before_quiesce.clone(),
+        pre_snapshot_topology_hash: plan.topology_hash_before_quiesce.clone(),
         operation_metrics: DownloadOperationMetrics::default(),
         artifacts: Vec::new(),
     })
+}
+
+fn require_plan_topology_receipt(
+    field: &'static str,
+    expected: &str,
+    actual: &str,
+) -> Result<(), BackupRunnerError> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(BackupRunnerError::DownloadJournalTopologyMismatch {
+            field,
+            expected: expected.to_string(),
+            actual: actual.to_string(),
+        })
+    }
 }
 
 pub(super) fn upsert_artifact_entry(journal: &mut DownloadJournal, entry: ArtifactJournalEntry) {

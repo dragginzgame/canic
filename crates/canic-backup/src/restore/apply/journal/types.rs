@@ -28,7 +28,7 @@ pub struct RestoreApplyJournalOperation {
     pub sequence: usize,
     pub operation: RestoreApplyOperationKind,
     pub state: RestoreApplyOperationState,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub state_updated_at: Option<String>,
     pub blocking_reasons: Vec<String>,
     pub member_order: usize,

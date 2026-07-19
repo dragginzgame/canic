@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
-use canic_backup::restore::{RestoreApplyDryRun, RestorePlanner};
+use canic_backup::restore::{RestoreApplyDryRun, RestorePlanError, RestorePlanner};
 use std::{ffi::OsString, fs};
 
 // Ensure restore apply dry-run writes ordered operations from a plan.
@@ -63,6 +63,35 @@ fn run_restore_apply_dry_run_writes_operations() {
     assert_eq!(dry_run_json["operations"][2]["operation"], "stop-canister");
     assert_eq!(dry_run_json["operations"][8]["operation"], "verify-member");
     assert_eq!(dry_run_json["operations"][8]["verification_kind"], "status");
+}
+
+#[test]
+fn run_restore_apply_rejects_contradictory_plan_projection() {
+    let root = temp_dir("canic-cli-restore-apply-invalid-plan");
+    fs::create_dir_all(&root).expect("create temp root");
+    let plan_path = root.join("restore-plan.json");
+    let mut plan = RestorePlanner::plan(&restore_ready_manifest(), None).expect("build plan");
+    plan.readiness_summary.ready = false;
+
+    fs::write(
+        &plan_path,
+        serde_json::to_vec(&plan).expect("serialize plan"),
+    )
+    .expect("write plan");
+
+    let err = run([
+        OsString::from("apply"),
+        OsString::from("--plan"),
+        OsString::from(plan_path.as_os_str()),
+        OsString::from("--dry-run"),
+    ])
+    .expect_err("contradictory plan rejects");
+
+    fs::remove_dir_all(root).expect("remove temp root");
+    std::assert_matches!(
+        err,
+        RestoreCommandError::RestorePlan(RestorePlanError::ProjectionMismatch("readiness_summary"))
+    );
 }
 
 // Ensure restore apply dry-run can validate artifacts under a backup directory.

@@ -9,6 +9,7 @@ fn in_place_plan_orders_parent_before_child() {
     let ordered = plan.ordered_members();
     let value = serde_json::to_value(&plan).expect("serialize restore plan");
 
+    assert_eq!(plan.plan_version, 1);
     assert_eq!(plan.backup_id, "fbk_test_001");
     assert_eq!(plan.source_environment, "local");
     assert_eq!(value["source_environment"], "local");
@@ -25,7 +26,6 @@ fn in_place_plan_orders_parent_before_child() {
     assert!(plan.readiness_summary.ready);
     assert!(plan.readiness_summary.reasons.is_empty());
     assert_eq!(plan.verification_summary.deployment_checks, 0);
-    assert_eq!(plan.verification_summary.member_check_groups, 0);
     assert_eq!(plan.verification_summary.member_checks, 2);
     assert_eq!(plan.verification_summary.members_with_checks, 2);
     assert_eq!(plan.verification_summary.total_checks, 2);
@@ -57,6 +57,83 @@ fn restore_plan_unknown_field_fails_deserialize() {
     let err = serde_json::from_value::<RestorePlan>(value).expect_err("unknown field rejects");
 
     assert!(err.is_data());
+}
+
+#[test]
+fn restore_plan_requires_and_validates_plan_version() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let mut value = serde_json::to_value(&plan).expect("serialize restore plan");
+    value
+        .as_object_mut()
+        .expect("plan object")
+        .remove("plan_version");
+    let err = serde_json::from_value::<RestorePlan>(value).expect_err("plan version is required");
+    assert!(err.is_data());
+
+    let mut unsupported = plan;
+    unsupported.plan_version = 2;
+    let err = unsupported
+        .validate()
+        .expect_err("unsupported restore plan version rejects");
+    std::assert_matches!(err, RestorePlanError::UnsupportedVersion(2));
+}
+
+#[test]
+fn restore_plan_rejects_contradictory_derived_projection() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let mut plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    plan.readiness_summary.ready = false;
+
+    let err = plan
+        .validate()
+        .expect_err("contradictory readiness projection rejects");
+
+    std::assert_matches!(
+        err,
+        RestorePlanError::ProjectionMismatch("readiness_summary")
+    );
+}
+
+#[test]
+fn restore_plan_rejects_contradictory_parent_projection() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let mut plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+    let child = plan
+        .members
+        .iter_mut()
+        .find(|member| member.source_canister == CHILD)
+        .expect("child member should exist");
+    child.parent_target_canister = Some(TARGET.to_string());
+
+    let err = plan
+        .validate()
+        .expect_err("contradictory parent target rejects");
+
+    std::assert_matches!(
+        err,
+        RestorePlanError::ProjectionMismatch("members[].parent_target_canister")
+    );
+}
+
+#[test]
+fn restore_plan_requires_current_verification_and_lifecycle_fields() {
+    let manifest = valid_manifest(IdentityMode::Relocatable);
+    let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
+
+    for path in [
+        &["deployment_verification_checks"][..],
+        &["operation_summary", "planned_canister_stops"][..],
+        &["operation_summary", "planned_canister_starts"][..],
+    ] {
+        let mut value = serde_json::to_value(&plan).expect("serialize restore plan");
+        remove_json_field(&mut value, path);
+
+        let err = serde_json::from_value::<RestorePlan>(value)
+            .expect_err("current restore-plan field must be present");
+
+        assert!(err.is_data());
+    }
 }
 
 // Ensure fixed identities cannot be remapped.
@@ -220,7 +297,6 @@ fn plan_includes_verification_summary() {
     assert_eq!(plan.deployment_verification_checks.len(), 1);
     assert_eq!(plan.deployment_verification_checks[0].kind, "status");
     assert_eq!(plan.verification_summary.deployment_checks, 1);
-    assert_eq!(plan.verification_summary.member_check_groups, 1);
     assert_eq!(plan.verification_summary.member_checks, 3);
     assert_eq!(plan.verification_summary.members_with_checks, 2);
     assert_eq!(plan.verification_summary.total_checks, 4);
@@ -265,7 +341,6 @@ fn plan_expands_role_verification_checks_per_matching_member() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
 
     assert_eq!(plan.verification_summary.deployment_checks, 0);
-    assert_eq!(plan.verification_summary.member_check_groups, 1);
     assert_eq!(plan.verification_summary.member_checks, 5);
     assert_eq!(plan.verification_summary.members_with_checks, 3);
     assert_eq!(plan.verification_summary.total_checks, 5);
@@ -304,7 +379,7 @@ fn plan_applies_member_verification_role_filters() {
         .into_iter()
         .find(|member| member.role == "app")
         .expect("app member should be planned");
-    let dry_run = RestoreApplyDryRun::from_plan(&plan);
+    let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let app_verification_kinds = dry_run
         .operations
         .iter()

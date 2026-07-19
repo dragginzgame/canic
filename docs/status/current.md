@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.93.31`.
-- The latest published release is `v0.93.31` at
-  `b22eefa9be6e11d2199af173c1790d0a1144e786`.
-- The `v0.93.31` source tree is
-  `e51e162e29239af16e96203511b2b1384eeb8382`; its product-tree hash is
-  `fdb15630d9e60ef6b9cdc0f5fbb38d6001665d4929367c96d46c9b94fb93aaa3`.
+- The workspace package version is `0.93.32`.
+- The latest published release is `v0.93.32` at
+  `decb0b6fe4cf47eb76aa9d9e5e45f29f255228f9`.
+- The `v0.93.32` source tree is
+  `b5dcc9c756b0f03a3b6482567ec2be53db91413b`; its product-tree hash is
+  `2fe3b4937f383e6b5ca5795b0876662a9827f746c8d0ecddca5a66b51fa123ac`.
   Its Cargo.lock SHA-256 is
-  `a4873b66db3627c69067dfc5213c9b5dbf3c385897ec4c31aab97a256c1360eb`.
+  `0c67d25ff902a472c3cb9e9d4a31b4218e4be672e4f7b63dac4b9946b9ac8a3d`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -179,11 +179,22 @@ Historical detail is archived at:
   child-funding accounting; corrupt oversized refill totals cannot rebuild the
   derived index. Lossy conversions and unchecked convenience arithmetic are
   hard-cut without aliases.
-- Current `0.93.32` development makes bounded strings invariant-preserving
+- Released `v0.93.32` makes bounded strings invariant-preserving
   across construction, Serde/Candid input, and stable decoding. Mutable inner
   access, lossy UTF-8 replacement, and overlong truncation are removed.
   Malformed stable intent, operation, and replay-slot identities fail closed
   rather than aliasing all-zero keys.
+- Current `0.93.33` development hard-cuts missing-field defaults from current
+  backup and restore v1 documents. Download-journal topology receipts are
+  mandatory and stale receipts fail before snapshot creation rather than being
+  overwritten during resume. Exact backup- and topology-bound journal rows
+  recover interrupted snapshot creation without repeating the external call.
+  Current manifest provenance, execution metadata, restore verification,
+  lifecycle counts, operation counts, and receipt collections must be
+  explicitly present. Persisted backup and restore plans now require
+  `plan_version: 1`; restore plan projections are recomputed and validated
+  before persistence or apply preparation. Ordinary config and private helper
+  types no longer carry misleading `V1` suffixes.
 - The accepted line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - Current release notes are in the
@@ -732,11 +743,11 @@ and `runtime_variant` distinct as defined in the active build-artifact
 vocabulary. Do not reopen removed selected-target `network` fields, CLI flags,
 JSON keys, aliases, or direct named-network paths.
 
-Current `.32` development makes `BoundedString` enforce its declared byte limit
-through every construction and decoding path. The inner value is immutable,
-length failures are typed, and stable decode rejects invalid UTF-8 or excess
-bytes instead of changing key identity. Fixed-width intent, operation, and
-replay-slot stable keys likewise reject malformed lengths instead of becoming
-zero. Focused bounded-value, intent, replay, blob, directory, sharding, and
-cost-guard tests pass. Broad deployment, package, publish, and release
-validation remains maintainer-owned.
+Current `.33` development makes backup and restore recovery documents exact.
+Persisted plans declare version 1, restore plan summaries are checked against
+their concrete members before execution, and stale download-journal identity
+or topology evidence rejects before an external snapshot call. Missing current
+fields no longer become empty or zero values, while exact interrupted snapshot
+receipts resume without repeating the external effect. Focused backup/restore,
+CLI, config-schema, and evidence-envelope validation passes. Broad deployment,
+package, publish, and release validation remains maintainer-owned.

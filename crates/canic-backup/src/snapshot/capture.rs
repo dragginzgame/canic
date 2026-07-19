@@ -222,8 +222,8 @@ mod tests {
         let mut journal = DownloadJournal {
             journal_version: 1,
             backup_id: "backup-1".to_string(),
-            discovery_topology_hash: None,
-            pre_snapshot_topology_hash: None,
+            discovery_topology_hash: "0".repeat(64),
+            pre_snapshot_topology_hash: "0".repeat(64),
             operation_metrics: DownloadOperationMetrics {
                 artifact_finalize_started: 1,
                 ..DownloadOperationMetrics::default()

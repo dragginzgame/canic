@@ -14,6 +14,15 @@ const CHILD_TWO: &str = "r7inp-6aaaa-aaaaa-aaabq-cai";
 const TARGET: &str = "rno2w-sqaaa-aaaaa-aaacq-cai";
 const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+fn remove_json_field(value: &mut serde_json::Value, path: &[&str]) {
+    let (field, parents) = path.split_last().expect("field path");
+    let mut object = value;
+    for parent in parents {
+        object = object.get_mut(parent).expect("parent field");
+    }
+    object.as_object_mut().expect("JSON object").remove(*field);
+}
+
 // Build a one-operation ready journal for command preview tests.
 fn command_preview_journal(
     operation: RestoreApplyOperationKind,

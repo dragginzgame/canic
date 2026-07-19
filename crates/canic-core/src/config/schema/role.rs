@@ -55,19 +55,19 @@ pub const fn validate_canister_role_name(role: &str) -> Result<(), CanisterRoleN
 }
 
 ///
-/// FleetRoleRefV1
+/// FleetRoleRef
 ///
 /// Fleet-scoped role reference derived from config role declarations.
 /// Owned by config schema and used by validation diagnostics and topology views.
 ///
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct FleetRoleRefV1 {
+pub struct FleetRoleRef {
     pub fleet: String,
     pub role: CanisterRole,
 }
 
-impl FleetRoleRefV1 {
+impl FleetRoleRef {
     #[must_use]
     pub fn new(fleet: impl Into<String>, role: CanisterRole) -> Self {
         Self {
@@ -77,7 +77,7 @@ impl FleetRoleRefV1 {
     }
 }
 
-impl fmt::Display for FleetRoleRefV1 {
+impl fmt::Display for FleetRoleRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}", self.fleet, self.role)
     }
