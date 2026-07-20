@@ -1158,14 +1158,22 @@ fn runtime_introspection_dto_candid_shapes_are_named() {
             && status_env.contains("type CanicReadinessStatus = record")
             && status_env.contains("type RecentFailure = record")
             && status_env.contains("redacted : bool")
-            && status_env.contains("type RuntimeFieldVisibility = variant"),
+            && status_env.contains("type RuntimeFieldVisibility = variant")
+            && status_env.contains("type CanicTimerStatus = record")
+            && status_env.contains("scheduling_mode : TimerSchedulingMode")
+            && status_env.contains("registration : TimerRegistrationStatus")
+            && status_env.contains("condition : TimerProcessCondition")
+            && status_env.contains("last_outcome : opt TimerExecutionOutcome")
+            && status_env.contains("type TimerExecutionOutcome = variant")
+            && status_env.contains("type TimerProcessCondition = variant")
+            && status_env.contains("type TimerRegistrationStatus = variant")
+            && status_env.contains("type TimerSchedulingMode = variant"),
         "runtime introspection DTO Candid changed:\n{status_env}"
     );
     for label in [
         "controller_only",
+        "disabled",
         "feature_gated",
-        "not_evaluated",
-        "not_registered",
         "operator_only",
         "public_safe",
     ] {
