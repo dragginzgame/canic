@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.11`.
-- The latest published release is `v0.94.11` at
-  `cce7354c1c3e6c04cb3efbb7f5819e1f2becd4f7`.
-- The `v0.94.11` source tree is
-  `1f0a037a8d8a70de16b0be0e368faf34bd9fff69`; its product-tree hash is
-  `18b3023c31402be5fa533756e1fbf5f98ade4554be0caf45be9df13c80b43bcb`.
+- The workspace package version is `0.94.12`.
+- The latest published release is `v0.94.12` at
+  `a067216ca18e6512033cc0214579d45c927b71fb`.
+- The `v0.94.12` source tree is
+  `8c062f7d11efed07ca08a13ea86ab8c1fb3b3352`; its product-tree hash is
+  `782e4f06aec6fe7798cd94b778a220537aaf243e311dd774093577a7cafa423b`.
   Its Cargo.lock SHA-256 is
-  `2f3a7d051525a6d00240f2648aa04b2190ac4469bfba3207fe493c26b5a99851`.
+  `48fc3ce75fcf16b58506f9667019e5f996fab8f315afdd84441f89bc1609d67f`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -258,7 +258,7 @@ Historical detail is archived at:
   Restart reconciles pre-write interruption and skips post-write completion
   without duplicate mutation or receipt. A lost final response replays the
   same completed backup with no command, receipt, or layout change.
-- The open `0.94.12` draft hard-cuts the competing snapshot-download flow and
+- Released `v0.94.12` hard-cuts the competing snapshot-download flow and
   unsafe failed-layout pruning, preserves progressed restore authority during
   preparation, restores availability after backup failures, and reconciles
   interrupted restore effects from exact status or inventory evidence. A real
@@ -269,6 +269,11 @@ Historical detail is archived at:
   `>=1.1.0,<2.0.0`. Both durable sides of initial restore-plan and apply-
   journal publication now survive acknowledged process death, bringing the
   frozen matrix to 60 passing cases with 46 pending.
+- The open `0.94.13` draft completes private restore staging, all pending-
+  claim and terminal publication sides, and final-response loss. Upload
+  staging skipped by process death is removed before terminal publication or
+  during reconciliation. The frozen matrix is 86 passing cases with 20
+  pending.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -875,7 +880,7 @@ conflicting manifests, and premature manifests fail closed.
 Released `v0.94.11` completes all 12 `B16` terminal execution receipt/state
 publication cases and `B17` final-successful-response loss.
 
-The open 0.94.12 draft retains the complete `B18` command-tree proof and fixes
+Released `v0.94.12` retains the complete `B18` command-tree proof and fixes
 the defects exposed by closeout tracing and the first realistic recovery run.
 `canic backup create` is now the sole capture authority; prepare and prune
 cannot erase recovery evidence; backup failures restore availability; and
@@ -898,10 +903,16 @@ real snapshot upload and before its receipt; restart adopted exactly one new
 inventory identity without another upload and completed the journal. The
 temporary network is stopped.
 
-The current hard cut removes the old snapshot CLI/library path and failed
+The 0.94.12 hard cut removes the old snapshot CLI/library path and failed
 prune selector, changes the exact version-1 restore-document field set, and
 requires ICP CLI `>=1.1.0,<2.0.0`. No version 2, alias, legacy parser, or
 compatibility fallback exists; Candid and Cargo package versions are
-unchanged. Sixty of 106 frozen cases pass; the remaining 46 restore and
-rejection cases are still the bounded closeout work, so 0.94 is not yet
-declared closed.
+unchanged.
+
+The open 0.94.13 draft completes `R03`, all 12 `R04` pending-claim cases, all
+12 `R12` terminal state/receipt cases, and `R13` final-response loss. It also
+removes private upload staging before terminal persistence and during
+committed-effect reconciliation, so process death cannot retain a completed
+staged snapshot after the journal advances. Eighty-six of 106 frozen cases
+pass; the remaining 20 restore-effect, command-tree, and rejection cases are
+still the bounded closeout work, so 0.94 is not yet declared closed.

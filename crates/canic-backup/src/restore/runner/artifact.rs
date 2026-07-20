@@ -43,6 +43,55 @@ pub(super) fn stage_upload_artifact(
     journal: &RestoreApplyJournal,
     operation: &RestoreApplyJournalOperation,
 ) -> Result<Option<StagedRestoreArtifact>, RestoreRunnerError> {
+    stage_upload_artifact_at_barrier(config, journal, operation, || {})
+}
+
+pub(super) fn cleanup_upload_staging(
+    config: &RestoreRunnerConfig,
+    operation: &RestoreApplyJournalOperation,
+) -> Result<(), RestoreRunnerError> {
+    if operation.operation != RestoreApplyOperationKind::UploadSnapshot {
+        return Ok(());
+    }
+
+    let stage_root = stage_root(&config.journal)?;
+    let metadata = match fs::symlink_metadata(&stage_root) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => return Err(stage_io(stage_root, source)),
+    };
+    ensure_private_directory_metadata(&stage_root, &metadata)?;
+    remove_stale_operation_root(&stage_root.join(format!("operation-{}", operation.sequence)))?;
+    match fs::remove_dir(&stage_root) {
+        Ok(()) => Ok(()),
+        Err(source)
+            if matches!(
+                source.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+            ) =>
+        {
+            Ok(())
+        }
+        Err(source) => Err(stage_io(stage_root, source)),
+    }
+}
+
+#[cfg(test)]
+pub(super) fn stage_upload_artifact_at_test_barrier(
+    config: &RestoreRunnerConfig,
+    journal: &RestoreApplyJournal,
+    operation: &RestoreApplyJournalOperation,
+    barrier: impl FnMut(),
+) -> Result<Option<StagedRestoreArtifact>, RestoreRunnerError> {
+    stage_upload_artifact_at_barrier(config, journal, operation, barrier)
+}
+
+fn stage_upload_artifact_at_barrier(
+    config: &RestoreRunnerConfig,
+    journal: &RestoreApplyJournal,
+    operation: &RestoreApplyJournalOperation,
+    mut staging_created: impl FnMut(),
+) -> Result<Option<StagedRestoreArtifact>, RestoreRunnerError> {
     if operation.operation != RestoreApplyOperationKind::UploadSnapshot {
         return Ok(None);
     }
@@ -82,6 +131,7 @@ pub(super) fn stage_upload_artifact(
     let operation_root = stage_root.join(format!("operation-{}", operation.sequence));
     remove_stale_operation_root(&operation_root)?;
     create_private_directory(&operation_root)?;
+    staging_created();
     let staged = StagedRestoreArtifact {
         artifact_path: operation_root.join("artifact"),
         operation_root,
@@ -105,6 +155,11 @@ pub(super) fn stage_upload_artifact(
         })?;
 
     Ok(Some(staged))
+}
+
+#[cfg(test)]
+pub(super) fn restore_upload_stage_root(journal: &Path) -> Result<PathBuf, RestoreRunnerError> {
+    stage_root(journal)
 }
 
 fn validate_backup_root(path: &Path) -> Result<PathBuf, RestoreRunnerError> {

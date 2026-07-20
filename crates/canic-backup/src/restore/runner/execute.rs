@@ -7,7 +7,7 @@
 use super::{
     RestoreApplyCommandOutputPair, RestoreApplyJournal, RestoreApplyOperationKind,
     RestoreApplyOperationReceipt, RestoreApplyRunnerCommand,
-    artifact::stage_upload_artifact,
+    artifact::{cleanup_upload_staging, stage_upload_artifact},
     constants::{
         RESTORE_RUN_COMMAND_EXIT_PREFIX, RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID,
         RESTORE_RUN_OUTPUT_RECEIPT_LIMIT, RESTORE_RUN_STOPPED_PRECONDITION_FAILED,
@@ -34,7 +34,7 @@ use crate::{
     persistence::{CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
     timestamp::state_updated_at,
 };
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::Path};
 
 /// Execute ready restore apply journal operations through an injected command executor.
 pub fn restore_run_execute_with_executor(
@@ -52,6 +52,32 @@ pub fn restore_run_execute_with_executor(
 pub fn restore_run_execute_result_with_executor(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
+) -> Result<RestoreRunnerOutcome, RestoreRunnerError> {
+    restore_run_execute_result_with_terminal_writer(config, executor, &mut |path, journal| {
+        write_apply_journal_file(path, journal)
+    })
+}
+
+#[cfg(all(test, unix))]
+pub fn restore_run_execute_with_terminal_barriers(
+    config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
+    mut barriers: impl FnMut(crate::persistence::DurableWriteBarrier),
+) -> Result<RestoreRunResponse, RestoreRunnerError> {
+    let run =
+        restore_run_execute_result_with_terminal_writer(config, executor, &mut |path, journal| {
+            super::io::write_apply_journal_file_at_barriers(path, journal, &mut barriers)
+        })?;
+    if let Some(error) = run.error {
+        return Err(error);
+    }
+    Ok(run.response)
+}
+
+fn restore_run_execute_result_with_terminal_writer(
+    config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunnerOutcome, RestoreRunnerError> {
     let _lock = JournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
@@ -75,7 +101,13 @@ pub fn restore_run_execute_result_with_executor(
         enforce_restore_run_executable(&journal, &report)?;
         let prepared = restore_run_prepare_next_operation(config, executor, &mut journal)?;
         let sequence = prepared.sequence;
-        match restore_run_execute_prepared_operation(config, executor, &mut journal, prepared)? {
+        match restore_run_execute_prepared_operation(
+            config,
+            executor,
+            &mut journal,
+            prepared,
+            terminal_writer,
+        )? {
             RestoreRunStepOutcome::Completed {
                 executed_operation,
                 operation_receipt,
@@ -204,18 +236,10 @@ fn restore_run_execute_prepared_operation(
     executor: &mut impl RestoreRunnerCommandExecutor,
     journal: &mut RestoreApplyJournal,
     mut prepared: RestoreRunPreparedOperation,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
-    if let Some(reconciled) = prepared.reconciled_success.take() {
-        prepared.command = reconciled.command;
-        finish_restore_command_lock(&mut prepared)?;
-        return restore_run_commit_command_success(
-            config,
-            journal,
-            prepared,
-            reconciled.status,
-            reconciled.output,
-            reconciled.uploaded_snapshot_id,
-        );
+    if prepared.reconciled_success.is_some() {
+        return restore_run_commit_reconciled_success(config, journal, prepared, terminal_writer);
     }
     let command_lifetime = prepared
         .command_lock
@@ -233,7 +257,13 @@ fn restore_run_execute_prepared_operation(
         match precondition {
             Ok(Some(outcome)) => {
                 finish_restore_command_lock(&mut prepared)?;
-                return restore_run_commit_precondition_failure(config, journal, prepared, outcome);
+                return restore_run_commit_precondition_failure(
+                    config,
+                    journal,
+                    prepared,
+                    outcome,
+                    terminal_writer,
+                );
             }
             Ok(None) => {}
             Err(error) => {
@@ -246,6 +276,7 @@ fn restore_run_execute_prepared_operation(
     let output = executor.execute(&prepared.command, command_lifetime);
     finish_restore_command_lock(&mut prepared)?;
     let output = output?;
+    cleanup_upload_staging(config, &prepared.operation)?;
     let status_label = output.status;
     let output_pair = RestoreApplyCommandOutputPair::from_bytes(
         &output.stdout,
@@ -265,6 +296,7 @@ fn restore_run_execute_prepared_operation(
                 prepared,
                 RESTORE_RUN_VERIFICATION_EVIDENCE_MISMATCH.to_string(),
                 output_pair,
+                terminal_writer,
             );
         }
         let is_upload_snapshot =
@@ -278,6 +310,7 @@ fn restore_run_execute_prepared_operation(
                 journal,
                 prepared,
                 output_pair,
+                terminal_writer,
             );
         }
 
@@ -288,10 +321,42 @@ fn restore_run_execute_prepared_operation(
             status_label,
             output_pair,
             uploaded_snapshot_id,
+            terminal_writer,
         );
     }
 
-    restore_run_commit_command_failure(config, journal, prepared, status_label, output_pair)
+    restore_run_commit_command_failure(
+        config,
+        journal,
+        prepared,
+        status_label,
+        output_pair,
+        terminal_writer,
+    )
+}
+
+fn restore_run_commit_reconciled_success(
+    config: &RestoreRunnerConfig,
+    journal: &mut RestoreApplyJournal,
+    mut prepared: RestoreRunPreparedOperation,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
+) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
+    let reconciled = prepared
+        .reconciled_success
+        .take()
+        .expect("reconciled restore operation");
+    prepared.command = reconciled.command;
+    cleanup_upload_staging(config, &prepared.operation)?;
+    finish_restore_command_lock(&mut prepared)?;
+    restore_run_commit_command_success(
+        config,
+        journal,
+        prepared,
+        reconciled.status,
+        reconciled.output,
+        reconciled.uploaded_snapshot_id,
+        terminal_writer,
+    )
 }
 
 fn verification_output_matches(
@@ -613,6 +678,7 @@ fn restore_run_commit_missing_uploaded_snapshot_id(
     journal: &mut RestoreApplyJournal,
     prepared: RestoreRunPreparedOperation,
     output_pair: RestoreApplyCommandOutputPair,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
     let failed_updated_at = state_updated_at(config.updated_at.as_ref());
     let status = RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID.to_string();
@@ -630,7 +696,7 @@ fn restore_run_commit_missing_uploaded_snapshot_id(
         prepared.attempt,
         status.clone(),
     ))?;
-    write_apply_journal_file(&config.journal, journal)?;
+    terminal_writer(&config.journal, journal)?;
 
     Ok(RestoreRunStepOutcome::Failed {
         executed_operation: RestoreRunExecutedOperation::failed(
@@ -653,6 +719,7 @@ fn restore_run_commit_precondition_failure(
     journal: &mut RestoreApplyJournal,
     prepared: RestoreRunPreparedOperation,
     outcome: RestoreStoppedPreconditionFailure,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
     let failed_updated_at = state_updated_at(config.updated_at.as_ref());
     journal.mark_operation_failed_at(
@@ -669,7 +736,7 @@ fn restore_run_commit_precondition_failure(
         prepared.attempt,
         outcome.failure_reason,
     ))?;
-    write_apply_journal_file(&config.journal, journal)?;
+    terminal_writer(&config.journal, journal)?;
 
     Ok(RestoreRunStepOutcome::Failed {
         executed_operation: RestoreRunExecutedOperation::failed(
@@ -694,6 +761,7 @@ fn restore_run_commit_command_success(
     status_label: String,
     output_pair: RestoreApplyCommandOutputPair,
     uploaded_snapshot_id: Option<String>,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
     let completed_updated_at = state_updated_at(config.updated_at.as_ref());
     journal.mark_operation_completed_at(prepared.sequence, Some(completed_updated_at.clone()))?;
@@ -706,7 +774,7 @@ fn restore_run_commit_command_success(
         prepared.attempt,
         uploaded_snapshot_id,
     ))?;
-    write_apply_journal_file(&config.journal, journal)?;
+    terminal_writer(&config.journal, journal)?;
 
     Ok(RestoreRunStepOutcome::Completed {
         executed_operation: RestoreRunExecutedOperation::completed(
@@ -729,6 +797,7 @@ fn restore_run_commit_command_failure(
     prepared: RestoreRunPreparedOperation,
     status_label: String,
     output_pair: RestoreApplyCommandOutputPair,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
     let failed_updated_at = state_updated_at(config.updated_at.as_ref());
     let failure_reason = format!("{RESTORE_RUN_COMMAND_EXIT_PREFIX}-{status_label}");
@@ -746,7 +815,7 @@ fn restore_run_commit_command_failure(
         prepared.attempt,
         failure_reason,
     ))?;
-    write_apply_journal_file(&config.journal, journal)?;
+    terminal_writer(&config.journal, journal)?;
 
     Ok(RestoreRunStepOutcome::Failed {
         executed_operation: RestoreRunExecutedOperation::failed(

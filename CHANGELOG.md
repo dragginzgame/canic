@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.13` proves private restore staging, every pending claim, every atomic
+  terminal state/receipt pair, and final-response replay across process death,
+  while ensuring interrupted upload staging cannot survive reconciliation.
+
 - `0.94.12` hard-cuts duplicate and destructive backup/restore paths, adds
   evidence-backed failure containment and restore reconciliation, and proves
   real two-canister `A -> B -> A` recovery plus effect/receipt crash handling
