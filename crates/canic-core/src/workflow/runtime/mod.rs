@@ -13,7 +13,10 @@ mod nonroot;
 mod root;
 pub mod timer;
 
-use crate::ops::storage::{icp_refill::IcpRefillStoreOps, intent::IntentStoreOps};
+use crate::ops::storage::{
+    icp_refill::IcpRefillStoreOps,
+    intent::{IntentStoreOps, ReceiptBackedIntentOps},
+};
 use crate::{
     InternalError, InternalErrorOrigin,
     log::Topic,
@@ -88,6 +91,9 @@ pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
         .map_err(|err| err.with_diagnostic_context("rebuild ICP-refill derived indexes"))?;
     IntentStoreOps::rebuild_expiry_index()
         .map_err(|err| err.with_diagnostic_context("rebuild intent expiry derived index"))?;
+    ReceiptBackedIntentOps::rebuild_placement_acknowledgement_index().map_err(|err| {
+        err.with_diagnostic_context("rebuild placement acknowledgement derived index")
+    })?;
 
     Ok(())
 }

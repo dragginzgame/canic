@@ -6,8 +6,9 @@
 
 use crate::model::{intent::ReceiptBackedIntent, replay::OperationId};
 
-/// Bounded stable-map scan page used by internal durable cleanup owners.
-pub struct ReceiptBackedIntentPage {
+/// Bounded placement-only acknowledgement page used by its durable cleanup owner.
+#[derive(Debug)]
+pub struct PlacementAcknowledgementPage {
     pub intents: Vec<ReceiptBackedIntent>,
     pub next_cursor: Option<OperationId>,
 }

@@ -2,13 +2,21 @@ use super::*;
 use crate::{
     InternalErrorClass, InternalErrorOrigin,
     cdk::types::Principal,
-    model::intent::{
-        BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, PayloadBinding,
-        ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
-        RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
-        SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
+    ids::CanisterRole,
+    model::{
+        intent::{
+            BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, PayloadBinding,
+            ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
+            RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
+            SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
+        },
+        placement::allocation::PlacementAllocationIdentity,
     },
-    storage::stable::intent::{IntentStore, IntentTotalsData, ReceiptBackedIntentStore},
+    storage::stable::intent::{
+        IntentStore, IntentTotalsData, PlacementAcknowledgementEntryRecord,
+        PlacementAcknowledgementIndexData, PlacementAcknowledgementIndexEntryRecord,
+        ReceiptBackedIntentStore,
+    },
 };
 
 const CREATED_AT: u64 = 10;
@@ -62,6 +70,23 @@ fn receipt_input(byte: u8) -> BeginReceiptBackedIntentInput {
         payload_binding: PayloadBinding::new([byte.wrapping_add(1); 32]),
         resource_key: key(),
         quantity: 5,
+        reservation_limit: 20,
+    }
+}
+
+fn placement_receipt_input(sequence: u64) -> BeginReceiptBackedIntentInput {
+    let identity = PlacementAllocationIdentity::scaling(
+        Principal::from_slice(&[7; 29]),
+        "workers",
+        sequence,
+        &CanisterRole::new("worker"),
+        None,
+    );
+    BeginReceiptBackedIntentInput {
+        operation_id: identity.operation_id,
+        payload_binding: identity.payload_binding,
+        resource_key: identity.resource_key,
+        quantity: 1,
         reservation_limit: 20,
     }
 }
@@ -594,29 +619,6 @@ fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
         .expect("settle intent");
     }
 
-    let listed = ReceiptBackedIntentOps::list_page(None, 10).expect("list intent page");
-    assert_eq!(listed.intents.len(), 2);
-    assert_eq!(listed.next_cursor, None);
-    assert!(listed.intents.iter().any(|intent| {
-        intent.operation_id == target.operation_id
-            && intent.resource_key == target.resource_key
-            && !matches!(intent.state, ReceiptBackedIntentState::Pending)
-    }));
-    let first_page = ReceiptBackedIntentOps::list_page(None, 1).expect("first bounded page");
-    let first_cursor = first_page
-        .next_cursor
-        .expect("another record must require a continuation cursor");
-    assert_eq!(first_page.intents.len(), 1);
-    assert_eq!(first_page.intents[0].operation_id, first_cursor);
-    let second_page =
-        ReceiptBackedIntentOps::list_page(Some(first_cursor), 1).expect("second bounded page");
-    assert_eq!(second_page.intents.len(), 1);
-    assert_ne!(
-        second_page.intents[0].operation_id,
-        first_page.intents[0].operation_id
-    );
-    assert_eq!(second_page.next_cursor, None);
-
     let totals_before = totals(&target.resource_key);
     assert_eq!(
         ReceiptBackedIntentOps::remove_terminal(&RemoveTerminalReceiptBackedIntentInput {
@@ -646,6 +648,115 @@ fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
         ReceiptBackedIntentOps::load(other.operation_id)
             .expect("load unrelated intent")
             .is_some()
+    );
+}
+
+#[test]
+fn placement_acknowledgement_index_is_exact_bounded_and_rebuilt_from_terminal_authority() {
+    reset();
+    let first = placement_receipt_input(1);
+    let second = placement_receipt_input(2);
+    let generic = receipt_input(23);
+
+    for input in [&first, &second, &generic] {
+        ReceiptBackedIntentOps::begin_or_load(input, 100).expect("create intent");
+        ReceiptBackedIntentOps::settle_if_pending(
+            &SettleReceiptBackedIntentInput {
+                operation_id: input.operation_id,
+                expected_revision: 1,
+                expected_payload_binding: input.payload_binding,
+                evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 24),
+            },
+            200,
+        )
+        .expect("settle intent");
+    }
+
+    assert!(
+        ReceiptBackedIntentOps::has_placement_acknowledgements()
+            .expect("placement acknowledgement presence")
+    );
+    let first_page = ReceiptBackedIntentOps::list_placement_acknowledgement_page(None, 1)
+        .expect("first bounded page");
+    let cursor = first_page.next_cursor.expect("second placement row exists");
+    assert_eq!(first_page.intents.len(), 1);
+    assert_eq!(first_page.intents[0].operation_id, cursor);
+    let second_page = ReceiptBackedIntentOps::list_placement_acknowledgement_page(Some(cursor), 1)
+        .expect("second bounded page");
+    assert_eq!(second_page.intents.len(), 1);
+    assert_eq!(second_page.next_cursor, None);
+    assert_ne!(
+        first_page.intents[0].operation_id,
+        second_page.intents[0].operation_id
+    );
+    assert!(
+        [first.operation_id, second.operation_id].contains(&first_page.intents[0].operation_id)
+    );
+    assert!(
+        [first.operation_id, second.operation_id].contains(&second_page.intents[0].operation_id)
+    );
+
+    ReceiptBackedIntentStore::import_placement_acknowledgement_index(
+        PlacementAcknowledgementIndexData {
+            entries: vec![PlacementAcknowledgementIndexEntryRecord {
+                operation_id: operation_id(99),
+                record: PlacementAcknowledgementEntryRecord {
+                    operation_id: operation_id(99),
+                },
+            }],
+        },
+    );
+    ReceiptBackedIntentOps::rebuild_placement_acknowledgement_index()
+        .expect("rebuild from canonical records");
+    let rebuilt = ReceiptBackedIntentOps::list_placement_acknowledgement_page(None, 10)
+        .expect("rebuilt placement page");
+    assert_eq!(rebuilt.intents.len(), 2);
+    assert_eq!(
+        ReceiptBackedIntentStore::export_placement_acknowledgement_index()
+            .entries
+            .len(),
+        2
+    );
+    assert!(
+        rebuilt
+            .intents
+            .iter()
+            .all(|intent| intent.operation_id != generic.operation_id)
+    );
+}
+
+#[test]
+fn placement_acknowledgement_index_corruption_fails_closed() {
+    reset();
+    let input = placement_receipt_input(3);
+    ReceiptBackedIntentOps::begin_or_load(&input, 100).expect("create placement intent");
+    ReceiptBackedIntentOps::settle_if_pending(
+        &SettleReceiptBackedIntentInput {
+            operation_id: input.operation_id,
+            expected_revision: 1,
+            expected_payload_binding: input.payload_binding,
+            evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 25),
+        },
+        200,
+    )
+    .expect("settle placement intent");
+
+    ReceiptBackedIntentStore::import_placement_acknowledgement_index(
+        PlacementAcknowledgementIndexData {
+            entries: vec![PlacementAcknowledgementIndexEntryRecord {
+                operation_id: input.operation_id,
+                record: PlacementAcknowledgementEntryRecord {
+                    operation_id: operation_id(98),
+                },
+            }],
+        },
+    );
+
+    let error = ReceiptBackedIntentOps::list_placement_acknowledgement_page(None, 1)
+        .expect_err("mismatched derived identity must reject");
+    assert_eq!(
+        error.log_fields(),
+        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
     );
 }
 

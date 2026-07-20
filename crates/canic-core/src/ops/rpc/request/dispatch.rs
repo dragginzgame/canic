@@ -72,9 +72,9 @@ impl RequestOps {
 
     /// Acknowledge a placement-child response after the caller durably owns its result.
     pub(crate) async fn acknowledge_placement_receipt(
+        root_pid: Principal,
         operation_id: OperationId,
     ) -> Result<AcknowledgePlacementReceiptResponse, InternalError> {
-        let root_pid = EnvOps::root_pid()?;
         RpcOps::execute_response_rpc(
             root_pid,
             AcknowledgePlacementReceiptRpc {

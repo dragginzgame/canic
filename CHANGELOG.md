@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
 
+- `0.95.4` replaces shared receipt-store scans and fixed one-minute placement
+  retries with one lifecycle-rebuilt terminal index, pending-only scheduling,
+  and bounded root-transport recovery that remains idle when empty.
+
 - `0.95.3` removes permanent root-pool polling in favor of one pending-only
   reset owner with bounded local recovery, and stops intent cleanup on
   invariant failure instead of polling corrupt state.
