@@ -11,9 +11,8 @@ use crate::{
     ops::runtime::{
         bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps},
         env::EnvOps,
-        timer::TimerOps,
     },
-    workflow,
+    workflow::{self, runtime::timer::TimerWorkflow},
 };
 use std::time::Duration;
 
@@ -92,7 +91,7 @@ pub fn schedule_post_upgrade_nonroot_bootstrap() {
     );
     BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_UPGRADE_SCHEDULED);
 
-    TimerOps::set(
+    TimerWorkflow::set_application_once(
         Duration::ZERO,
         "canic:bootstrap:post_upgrade_nonroot_canister",
         async {

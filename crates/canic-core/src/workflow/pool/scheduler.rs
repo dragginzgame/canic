@@ -10,15 +10,12 @@ use crate::{
     log,
     log::Topic,
     ops::{
-        runtime::{
-            metrics::{
-                pool::{
-                    PoolMetricOperation as MetricOperation, PoolMetricOutcome as MetricOutcome,
-                    PoolMetricReason as MetricReason,
-                },
-                recording::PoolMetricEvent as MetricEvent,
+        runtime::metrics::{
+            pool::{
+                PoolMetricOperation as MetricOperation, PoolMetricOutcome as MetricOutcome,
+                PoolMetricReason as MetricReason,
             },
-            timer::TimerId,
+            recording::PoolMetricEvent as MetricEvent,
         },
         storage::pool::PoolOps,
     },
@@ -26,33 +23,19 @@ use crate::{
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_POOL_CHECK_INTERVAL},
         pool::{PoolWorkflow, admissibility::check_can_enter_pool, metric_reason_for_policy},
-        runtime::timer::TimerWorkflow,
+        runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
     },
 };
-use std::{
-    cell::{Cell, RefCell},
-    time::Duration,
-};
+use std::{cell::Cell, time::Duration};
 
 /// Default batch size for resetting pending pool entries.
 pub const POOL_RESET_BATCH_SIZE: usize = 10;
-
-// -----------------------------------------------------------------------------
-// Timer State
-// -----------------------------------------------------------------------------
-
-thread_local! {
-    static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-}
 
 // -----------------------------------------------------------------------------
 // Internal Scheduler State
 // -----------------------------------------------------------------------------
 
 thread_local! {
-    static RESET_IN_PROGRESS: RefCell<bool> = const { RefCell::new(false) };
-    static RESET_RESCHEDULE: RefCell<bool> = const { RefCell::new(false) };
-    static RESET_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
     static RESET_CURSOR: Cell<Option<PoolPendingResetCursor>> = const { Cell::new(None) };
 }
 
@@ -67,15 +50,10 @@ impl PoolSchedulerWorkflow {
     ///
     /// Safe to call multiple times.
     pub fn start() {
-        let _ = TimerWorkflow::set_guarded_interval(
-            &TIMER,
+        TimerWorkflow::ensure_recurring(
+            TimerKey::PoolMaintenance,
             WORKFLOW_INIT_DELAY,
-            "pool:init",
-            || async {
-                Self::schedule_if_pending();
-            },
             WORKFLOW_POOL_CHECK_INTERVAL,
-            "pool:interval",
             || async {
                 Self::schedule_if_pending();
             },
@@ -100,60 +78,38 @@ impl PoolSchedulerWorkflow {
             MetricOutcome::Scheduled,
             MetricReason::Ok,
         );
-        let _ = TimerWorkflow::set_guarded(&RESET_TIMER, Duration::ZERO, "pool:pending", async {
-            RESET_TIMER.with_borrow_mut(|slot| *slot = None);
-            let _ = Self::run_worker(POOL_RESET_BATCH_SIZE).await;
-        });
-    }
-
-    fn maybe_reschedule(has_more: bool) {
-        let reschedule = RESET_RESCHEDULE.with_borrow_mut(|flag| {
-            let v = *flag;
-            *flag = false;
-            v
-        });
-
-        if should_reschedule(reschedule, has_more) {
-            Self::schedule();
-        }
-    }
-
-    async fn run_worker(limit: usize) -> Result<(), InternalError> {
-        if limit == 0 {
-            MetricEvent::skipped(MetricOperation::Scheduler, MetricReason::Empty);
-            return Ok(());
-        }
-
-        let should_run = RESET_IN_PROGRESS.with_borrow_mut(|flag| {
-            if *flag {
-                RESET_RESCHEDULE.with_borrow_mut(|r| *r = true);
-                false
-            } else {
-                *flag = true;
-                true
+        TimerWorkflow::schedule(TimerKey::PoolReset, Duration::ZERO, || async {
+            match Self::run_worker(POOL_RESET_BATCH_SIZE).await {
+                Ok(has_more) => TimerRunResult::success(
+                    1,
+                    if has_more {
+                        TimerDirective::ContinueImmediately
+                    } else {
+                        TimerDirective::Stop
+                    },
+                ),
+                Err(_) => TimerRunResult::retryable_failure(TimerDirective::Stop),
             }
         });
+    }
 
-        if !should_run {
-            MetricEvent::skipped(MetricOperation::Scheduler, MetricReason::InProgress);
-            return Ok(());
+    async fn run_worker(limit: usize) -> Result<bool, InternalError> {
+        if limit == 0 {
+            MetricEvent::skipped(MetricOperation::Scheduler, MetricReason::Empty);
+            return Ok(false);
         }
 
         MetricEvent::started(MetricOperation::Scheduler);
         let result = Self::run_batch(limit).await;
-
-        RESET_IN_PROGRESS.with_borrow_mut(|flag| *flag = false);
-
         let next_cursor = result.as_ref().ok().copied().flatten();
         RESET_CURSOR.set(next_cursor);
-        Self::maybe_reschedule(next_cursor.is_some());
 
         match &result {
             Ok(_) => MetricEvent::completed(MetricOperation::Scheduler, MetricReason::Ok),
             Err(err) => MetricEvent::failed(MetricOperation::Scheduler, err),
         }
 
-        result.map(|_| ())
+        result.map(|next_cursor| next_cursor.is_some())
     }
 
     async fn run_batch(limit: usize) -> Result<Option<PoolPendingResetCursor>, InternalError> {
@@ -224,23 +180,5 @@ impl PoolSchedulerWorkflow {
 
     fn has_pending_reset() -> bool {
         PoolOps::has_pending_reset()
-    }
-}
-
-#[must_use]
-const fn should_reschedule(requested: bool, has_more: bool) -> bool {
-    requested || has_more
-}
-
-#[cfg(test)]
-mod tests {
-    use super::should_reschedule;
-
-    #[test]
-    fn reset_worker_only_reschedules_for_more_sweep_work_or_a_new_request() {
-        assert!(!should_reschedule(false, false));
-        assert!(should_reschedule(false, true));
-        assert!(should_reschedule(true, false));
-        assert!(should_reschedule(true, true));
     }
 }

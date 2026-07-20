@@ -1,7 +1,13 @@
 #![expect(clippy::unused_async)]
 
 use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
-use std::time::Duration;
+use std::{cell::Cell, time::Duration};
+
+thread_local! {
+    static TIMER_ONCE_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
+    static TIMER_INTERVAL_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
+    static TIMER_CANCELLED_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
+}
 
 canic::start!();
 
@@ -13,6 +19,8 @@ async fn canic_install(_: Option<Vec<u8>>) {
     // Schedule perf-instrumented timers to ensure timer macros are covered.
     timer!(Duration::from_secs(5), timer_once);
     timer_interval!(Duration::from_secs(10), timer_interval);
+    let cancelled = timer!(Duration::from_secs(5), timer_cancelled);
+    assert!(canic::api::timer::cancel(cancelled));
 }
 
 /// Run no-op upgrade handling for the runtime probe.
@@ -33,12 +41,25 @@ async fn test_verify_delegated_token(token: DelegatedToken) -> Result<(), Error>
     Ok(())
 }
 
+#[canic_query(public)]
+fn timer_probe_counts() -> Result<(u64, u64, u64), Error> {
+    Ok((
+        TIMER_ONCE_EXECUTIONS.get(),
+        TIMER_INTERVAL_EXECUTIONS.get(),
+        TIMER_CANCELLED_EXECUTIONS.get(),
+    ))
+}
+
 async fn timer_once() {
-    let _ = 1 + 1;
+    TIMER_ONCE_EXECUTIONS.set(TIMER_ONCE_EXECUTIONS.get().saturating_add(1));
 }
 
 async fn timer_interval() {
-    let _ = 1 + 1;
+    TIMER_INTERVAL_EXECUTIONS.set(TIMER_INTERVAL_EXECUTIONS.get().saturating_add(1));
+}
+
+async fn timer_cancelled() {
+    TIMER_CANCELLED_EXECUTIONS.set(TIMER_CANCELLED_EXECUTIONS.get().saturating_add(1));
 }
 
 canic::finish!();

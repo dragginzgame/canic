@@ -9,7 +9,6 @@ pub use ic_cdk::{
     api, call, eprintln, export_candid, futures, init, inspect_message, post_upgrade, println,
     query, trap, update,
 };
-pub use ic_cdk_timers as timers;
 
 pub mod serialize;
 pub mod spec;

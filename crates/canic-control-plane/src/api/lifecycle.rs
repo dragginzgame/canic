@@ -45,7 +45,7 @@ impl LifecycleApi {
             LifecycleMetricOutcome::Scheduled,
         );
 
-        canic_core::api::timer::TimerApi::set_lifecycle_timer(
+        canic_core::api::timer::TimerApi::defer_lifecycle(
             Duration::ZERO,
             "canic:bootstrap:init_root_canister",
             async {
@@ -83,7 +83,7 @@ impl LifecycleApi {
             LifecycleMetricOutcome::Scheduled,
         );
 
-        canic_core::api::timer::TimerApi::set_lifecycle_timer(
+        canic_core::api::timer::TimerApi::defer_lifecycle(
             Duration::ZERO,
             "canic:bootstrap:post_upgrade_root_canister",
             async {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
 
+- `0.95.1` gives built-in and application timers one generation-safe,
+  non-overlapping scheduler, adds consuming cancellation and truthful live
+  status, and hard-cuts guarded, fixed-rate, and raw-CDK timer bypasses.
+
 - `0.95.0` closes 0.94 at its exact released anchor and freezes the exhaustive
   timer, lifecycle-deferral, public-surface, and bounded-host-wait inventory
   with seven finding-backed implementation dispositions.

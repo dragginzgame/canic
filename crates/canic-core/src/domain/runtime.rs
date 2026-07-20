@@ -241,35 +241,119 @@ impl RuntimeStatus {
 }
 
 ///
-/// TimerStatus
+/// TimerRegistrationStatus
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum TimerStatus {
-    #[serde(rename = "healthy")]
-    Healthy,
-    #[serde(rename = "delayed")]
-    Delayed,
-    #[serde(rename = "failing")]
-    Failing,
-    #[serde(rename = "disabled")]
-    Disabled,
-    #[serde(rename = "not_registered")]
-    NotRegistered,
-    #[serde(rename = "unknown")]
-    Unknown,
+pub enum TimerRegistrationStatus {
+    #[serde(rename = "unregistered")]
+    Unregistered,
+    #[serde(rename = "scheduled")]
+    Scheduled,
+    #[serde(rename = "running")]
+    Running,
 }
 
-impl TimerStatus {
+impl TimerRegistrationStatus {
     #[must_use]
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Healthy => "healthy",
-            Self::Delayed => "delayed",
-            Self::Failing => "failing",
+            Self::Unregistered => "unregistered",
+            Self::Scheduled => "scheduled",
+            Self::Running => "running",
+        }
+    }
+}
+
+///
+/// TimerProcessCondition
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum TimerProcessCondition {
+    #[serde(rename = "disabled")]
+    Disabled,
+    #[serde(rename = "idle")]
+    Idle,
+    #[serde(rename = "active")]
+    Active,
+    #[serde(rename = "retrying")]
+    Retrying,
+    #[serde(rename = "failed")]
+    Failed,
+    #[serde(rename = "missing_registration")]
+    MissingRegistration,
+}
+
+impl TimerProcessCondition {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
             Self::Disabled => "disabled",
-            Self::NotRegistered => "not_registered",
-            Self::Unknown => "unknown",
+            Self::Idle => "idle",
+            Self::Active => "active",
+            Self::Retrying => "retrying",
+            Self::Failed => "failed",
+            Self::MissingRegistration => "missing_registration",
+        }
+    }
+}
+
+///
+/// TimerSchedulingMode
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum TimerSchedulingMode {
+    #[serde(rename = "once")]
+    Once,
+    #[serde(rename = "after_completion")]
+    AfterCompletion,
+    #[serde(rename = "deadline")]
+    Deadline,
+    #[serde(rename = "retry")]
+    Retry,
+    #[serde(rename = "continuation")]
+    Continuation,
+}
+
+impl TimerSchedulingMode {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Once => "once",
+            Self::AfterCompletion => "after_completion",
+            Self::Deadline => "deadline",
+            Self::Retry => "retry",
+            Self::Continuation => "continuation",
+        }
+    }
+}
+
+///
+/// TimerExecutionOutcome
+///
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum TimerExecutionOutcome {
+    #[serde(rename = "success")]
+    Success,
+    #[serde(rename = "no_work")]
+    NoWork,
+    #[serde(rename = "retryable_failure")]
+    RetryableFailure,
+    #[serde(rename = "invariant_failure")]
+    InvariantFailure,
+}
+
+impl TimerExecutionOutcome {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::NoWork => "no_work",
+            Self::RetryableFailure => "retryable_failure",
+            Self::InvariantFailure => "invariant_failure",
         }
     }
 }
@@ -347,11 +431,41 @@ mod tests {
         assert_eq!(RuntimeStatus::Failing.label(), "failing");
         assert_eq!(RuntimeStatus::Unknown.label(), "unknown");
 
-        assert_eq!(TimerStatus::Healthy.label(), "healthy");
-        assert_eq!(TimerStatus::Delayed.label(), "delayed");
-        assert_eq!(TimerStatus::Failing.label(), "failing");
-        assert_eq!(TimerStatus::Disabled.label(), "disabled");
-        assert_eq!(TimerStatus::NotRegistered.label(), "not_registered");
-        assert_eq!(TimerStatus::Unknown.label(), "unknown");
+        assert_eq!(
+            TimerRegistrationStatus::Unregistered.label(),
+            "unregistered"
+        );
+        assert_eq!(TimerRegistrationStatus::Scheduled.label(), "scheduled");
+        assert_eq!(TimerRegistrationStatus::Running.label(), "running");
+
+        assert_eq!(TimerProcessCondition::Disabled.label(), "disabled");
+        assert_eq!(TimerProcessCondition::Idle.label(), "idle");
+        assert_eq!(TimerProcessCondition::Active.label(), "active");
+        assert_eq!(TimerProcessCondition::Retrying.label(), "retrying");
+        assert_eq!(TimerProcessCondition::Failed.label(), "failed");
+        assert_eq!(
+            TimerProcessCondition::MissingRegistration.label(),
+            "missing_registration"
+        );
+
+        assert_eq!(TimerSchedulingMode::Once.label(), "once");
+        assert_eq!(
+            TimerSchedulingMode::AfterCompletion.label(),
+            "after_completion"
+        );
+        assert_eq!(TimerSchedulingMode::Deadline.label(), "deadline");
+        assert_eq!(TimerSchedulingMode::Retry.label(), "retry");
+        assert_eq!(TimerSchedulingMode::Continuation.label(), "continuation");
+
+        assert_eq!(TimerExecutionOutcome::Success.label(), "success");
+        assert_eq!(TimerExecutionOutcome::NoWork.label(), "no_work");
+        assert_eq!(
+            TimerExecutionOutcome::RetryableFailure.label(),
+            "retryable_failure"
+        );
+        assert_eq!(
+            TimerExecutionOutcome::InvariantFailure.label(),
+            "invariant_failure"
+        );
     }
 }

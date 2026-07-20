@@ -3,7 +3,8 @@ use crate::ids::BuildNetwork;
 
 pub use crate::domain::runtime::{
     FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus, RuntimeDiagnosticSeverity,
-    RuntimeFieldVisibility, RuntimeStateDomainStatus, RuntimeStatus, TimerStatus,
+    RuntimeFieldVisibility, RuntimeStateDomainStatus, RuntimeStatus, TimerExecutionOutcome,
+    TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
 };
 
 pub const RUNTIME_INTROSPECTION_SCHEMA_VERSION: u32 = 1;
@@ -134,15 +135,23 @@ pub struct RuntimeTopologyStatus {
 pub struct CanicTimerStatus {
     pub name: String,
     pub subsystem: String,
-    pub status: TimerStatus,
+    pub scheduling_mode: TimerSchedulingMode,
+    pub registration: TimerRegistrationStatus,
+    pub condition: TimerProcessCondition,
     pub enabled: bool,
-    pub registered: bool,
+    pub generation: u64,
+    pub next_due_at_ns: Option<u64>,
+    pub last_outcome: Option<TimerExecutionOutcome>,
+    pub last_work_count: u64,
     pub last_success_at_ns: Option<u64>,
     pub last_failure_at_ns: Option<u64>,
-    pub next_due_at_ns: Option<u64>,
-    pub consecutive_failures: u64,
-    pub last_error_code: Option<String>,
-    pub last_error_summary: Option<String>,
+    pub consecutive_expected_failures: u64,
+    pub schedules_since_runtime_start: u64,
+    pub executions_since_runtime_start: u64,
+    pub successes_since_runtime_start: u64,
+    pub expected_failures_since_runtime_start: u64,
+    pub invariant_failures_since_runtime_start: u64,
+    pub stale_callbacks_since_runtime_start: u64,
 }
 
 //
@@ -225,7 +234,10 @@ mod tests {
         assert_enum_candid_contract(HealthStatus::Unknown);
         assert_enum_candid_contract(ReadinessStatus::NotEvaluated);
         assert_enum_candid_contract(RuntimeStatus::Failing);
-        assert_enum_candid_contract(TimerStatus::NotRegistered);
+        assert_enum_candid_contract(TimerRegistrationStatus::Unregistered);
+        assert_enum_candid_contract(TimerProcessCondition::MissingRegistration);
+        assert_enum_candid_contract(TimerSchedulingMode::AfterCompletion);
+        assert_enum_candid_contract(TimerExecutionOutcome::InvariantFailure);
         assert_enum_candid_contract(FailureSeverity::Critical);
         assert_enum_candid_contract(RuntimeCheckStatus::NotEvaluated);
         assert_enum_candid_contract(RuntimeDiagnosticSeverity::Unsupported);
@@ -253,15 +265,22 @@ mod tests {
         assert_enum_serde_contract(RuntimeStatus::Failing, RuntimeStatus::Failing.label());
         assert_enum_serde_contract(RuntimeStatus::Unknown, RuntimeStatus::Unknown.label());
 
-        assert_enum_serde_contract(TimerStatus::Healthy, TimerStatus::Healthy.label());
-        assert_enum_serde_contract(TimerStatus::Delayed, TimerStatus::Delayed.label());
-        assert_enum_serde_contract(TimerStatus::Failing, TimerStatus::Failing.label());
-        assert_enum_serde_contract(TimerStatus::Disabled, TimerStatus::Disabled.label());
         assert_enum_serde_contract(
-            TimerStatus::NotRegistered,
-            TimerStatus::NotRegistered.label(),
+            TimerRegistrationStatus::Unregistered,
+            TimerRegistrationStatus::Unregistered.label(),
         );
-        assert_enum_serde_contract(TimerStatus::Unknown, TimerStatus::Unknown.label());
+        assert_enum_serde_contract(
+            TimerProcessCondition::MissingRegistration,
+            TimerProcessCondition::MissingRegistration.label(),
+        );
+        assert_enum_serde_contract(
+            TimerSchedulingMode::AfterCompletion,
+            TimerSchedulingMode::AfterCompletion.label(),
+        );
+        assert_enum_serde_contract(
+            TimerExecutionOutcome::InvariantFailure,
+            TimerExecutionOutcome::InvariantFailure.label(),
+        );
 
         assert_enum_serde_contract(FailureSeverity::Info, FailureSeverity::Info.label());
         assert_enum_serde_contract(FailureSeverity::Warning, FailureSeverity::Warning.label());

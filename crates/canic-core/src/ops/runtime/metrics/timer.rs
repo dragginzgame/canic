@@ -14,7 +14,7 @@ thread_local! {
     ///
     /// Keyed by `(mode, delay_ms, label)` and holding the number of times
     /// the timer has fired.
-    static TIMER_METRICS: RefCell<HashMap<TimerMetricKey, u64>> =
+    static TIMER_METRICS: RefCell<HashMap<TimerMetricKey, TimerMetricValue>> =
         RefCell::new(HashMap::new());
 }
 
@@ -26,7 +26,7 @@ thread_local! {
 
 #[derive(Clone)]
 pub struct TimerMetricsSnapshot {
-    pub entries: Vec<(TimerMetricKey, u64)>,
+    pub entries: Vec<(TimerMetricKey, TimerMetricValue)>,
 }
 
 ///
@@ -38,8 +38,14 @@ pub struct TimerMetricsSnapshot {
 #[derive(Clone, Eq, Hash, PartialEq)]
 pub struct TimerMetricKey {
     pub mode: TimerMode,
-    pub delay_ms: u64,
     pub label: String,
+}
+
+/// Bounded values retained for one logical timer label.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TimerMetricValue {
+    pub executions: u64,
+    pub latest_delay_ms: u64,
 }
 
 ///
@@ -52,11 +58,11 @@ pub struct TimerMetricKey {
 /// `TimerMetrics` answers two related questions:
 ///
 /// 1) **Which timers have been scheduled?**
-///    - Use [`ensure`] at scheduling time to guarantee the timer appears in
-///      snapshots, even if it has not fired yet (important for interval timers).
+///    - Use [`ensure`](Self::ensure) at scheduling time to guarantee the timer
+///      appears in snapshots before its first execution.
 ///
 /// 2) **How many times has a given timer fired?**
-///    - Use [`increment`] when a timer fires (one-shot completion or interval tick).
+///    - Use [`increment`](Self::increment) when a timer fires.
 ///
 /// Interval timers are counted once per tick. Scheduling counts are tracked
 /// separately (e.g. via `SystemMetricKind::TimerScheduled`), and instruction
@@ -64,7 +70,8 @@ pub struct TimerMetricKey {
 ///
 /// ## Cardinality and labels
 ///
-/// Labels are used as metric keys. They should be:
+/// Mode and label are the complete metric key; delays remain values so exact
+/// deadline scheduling cannot create a new row per duration. Labels should be:
 /// - stable
 /// - low-cardinality
 /// - free of principals, IDs, or other high-variance data
@@ -89,18 +96,21 @@ impl TimerMetrics {
     /// Intended to be called at **schedule time** so that timers are visible
     /// in snapshots before their first execution.
     ///
-    /// Idempotent: repeated calls with the same key do not change the count.
+    /// Repeated calls preserve the execution count and update the latest delay.
     pub fn ensure(mode: TimerMode, delay: Duration, label: &str) {
         let delay_ms = Self::delay_ms(delay);
-
         TIMER_METRICS.with_borrow_mut(|counts| {
             let key = TimerMetricKey {
                 mode,
-                delay_ms,
                 label: label.to_string(),
             };
-
-            counts.entry(key).or_insert(0);
+            counts
+                .entry(key)
+                .and_modify(|value| value.latest_delay_ms = delay_ms)
+                .or_insert(TimerMetricValue {
+                    executions: 0,
+                    latest_delay_ms: delay_ms,
+                });
         });
     }
 
@@ -112,16 +122,17 @@ impl TimerMetrics {
     /// Uses saturating arithmetic to avoid overflow.
     pub fn increment(mode: TimerMode, delay: Duration, label: &str) {
         let delay_ms = Self::delay_ms(delay);
-
         TIMER_METRICS.with_borrow_mut(|counts| {
             let key = TimerMetricKey {
                 mode,
-                delay_ms,
                 label: label.to_string(),
             };
-
-            let entry = counts.entry(key).or_insert(0);
-            *entry = entry.saturating_add(1);
+            let entry = counts.entry(key).or_insert(TimerMetricValue {
+                executions: 0,
+                latest_delay_ms: delay_ms,
+            });
+            entry.executions = entry.executions.saturating_add(1);
+            entry.latest_delay_ms = delay_ms;
         });
     }
 
@@ -161,7 +172,7 @@ impl TimerMetrics {
 mod tests {
     use super::*;
 
-    fn snapshot_map() -> HashMap<TimerMetricKey, u64> {
+    fn snapshot_map() -> HashMap<TimerMetricKey, TimerMetricValue> {
         TimerMetrics::snapshot().entries.into_iter().collect()
     }
 
@@ -181,18 +192,28 @@ mod tests {
 
         let key_once = TimerMetricKey {
             mode: TimerMode::Once,
-            delay_ms: 1_000,
             label: "once:a".to_string(),
         };
 
         let key_interval = TimerMetricKey {
             mode: TimerMode::Interval,
-            delay_ms: 500,
             label: "interval:b".to_string(),
         };
 
-        assert_eq!(map.get(&key_once), Some(&2));
-        assert_eq!(map.get(&key_interval), Some(&1));
+        assert_eq!(
+            map.get(&key_once),
+            Some(&TimerMetricValue {
+                executions: 2,
+                latest_delay_ms: 1_000
+            })
+        );
+        assert_eq!(
+            map.get(&key_interval),
+            Some(&TimerMetricValue {
+                executions: 1,
+                latest_delay_ms: 500
+            })
+        );
         assert_eq!(map.len(), 2);
     }
 
@@ -206,11 +227,16 @@ mod tests {
 
         let key = TimerMetricKey {
             mode: TimerMode::Interval,
-            delay_ms: 2_000,
             label: "heartbeat".to_string(),
         };
 
-        assert_eq!(map.get(&key), Some(&0));
+        assert_eq!(
+            map.get(&key),
+            Some(&TimerMetricValue {
+                executions: 0,
+                latest_delay_ms: 2_000
+            })
+        );
         assert_eq!(map.len(), 1);
     }
 
@@ -225,11 +251,34 @@ mod tests {
 
         let key = TimerMetricKey {
             mode: TimerMode::Once,
-            delay_ms: 1_000,
             label: "once:x".to_string(),
         };
 
-        assert_eq!(map.get(&key), Some(&0));
+        assert_eq!(
+            map.get(&key),
+            Some(&TimerMetricValue {
+                executions: 0,
+                latest_delay_ms: 1_000
+            })
+        );
         assert_eq!(map.len(), 1);
+    }
+
+    #[test]
+    fn rescheduling_a_deadline_updates_value_without_adding_cardinality() {
+        TimerMetrics::reset();
+
+        TimerMetrics::ensure(TimerMode::Once, Duration::from_secs(2), "deadline");
+        TimerMetrics::ensure(TimerMode::Once, Duration::from_secs(1), "deadline");
+
+        let map = snapshot_map();
+        assert_eq!(map.len(), 1);
+        assert_eq!(
+            map.values().next(),
+            Some(&TimerMetricValue {
+                executions: 0,
+                latest_delay_ms: 1_000
+            })
+        );
     }
 }

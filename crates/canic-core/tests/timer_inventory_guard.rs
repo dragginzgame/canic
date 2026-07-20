@@ -79,23 +79,22 @@ fn direct_ic_timer_access_has_one_production_owner() {
 
     assert_eq!(
         raw_crate_users,
-        BTreeMap::from([("crates/canic-core/src/cdk/mod.rs".to_string(), 1)])
+        BTreeMap::from([("crates/canic-core/src/ops/runtime/timer.rs".to_string(), 1)])
     );
-    assert_eq!(
-        reexport_users,
-        BTreeMap::from([("crates/canic-core/src/ops/runtime/timer.rs".to_string(), 2)])
-    );
+    assert!(reexport_users.is_empty());
 }
 
 fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
     BTreeMap::from([
         ("crates/canic/src/macros/start.rs".to_string(), 7),
-        ("crates/canic/src/macros/timer.rs".to_string(), 4),
+        ("crates/canic/src/api/mod.rs".to_string(), 1),
+        ("crates/canic/src/macros/timer.rs".to_string(), 2),
         (
             "crates/canic-control-plane/src/api/lifecycle.rs".to_string(),
             2,
         ),
-        ("crates/canic-core/src/api/timer.rs".to_string(), 6),
+        ("crates/canic-core/src/api/runtime/mod.rs".to_string(), 1),
+        ("crates/canic-core/src/api/timer.rs".to_string(), 3),
         (
             "crates/canic-core/src/lifecycle/init/nonroot.rs".to_string(),
             1,
@@ -104,7 +103,7 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
             "crates/canic-core/src/lifecycle/upgrade/nonroot.rs".to_string(),
             1,
         ),
-        ("crates/canic-core/src/ops/runtime/timer.rs".to_string(), 3),
+        ("crates/canic-core/src/ops/runtime/timer.rs".to_string(), 2),
         (
             "crates/canic-core/src/workflow/placement/allocation.rs".to_string(),
             1,
@@ -123,15 +122,15 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
         ),
         (
             "crates/canic-core/src/workflow/runtime/intent.rs".to_string(),
-            2,
+            1,
         ),
         (
             "crates/canic-core/src/workflow/runtime/log.rs".to_string(),
             1,
         ),
         (
-            "crates/canic-core/src/workflow/runtime/timer.rs".to_string(),
-            6,
+            "crates/canic-core/src/workflow/runtime/timer/mod.rs".to_string(),
+            3,
         ),
     ])
 }

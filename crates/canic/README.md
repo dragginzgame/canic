@@ -78,5 +78,23 @@ Use `canic::build!("../canic.toml")` from `build.rs` and `canic::start!()` from
 `canic.toml`. `role = "root"` selects the root lifecycle and root endpoint
 bundle; ordinary roles select the non-root lifecycle and endpoint bundle.
 
+## Application Timers
+
+`timer!` schedules one asynchronous invocation. `timer_interval!` schedules
+the next invocation only after the current future completes, so interval work
+cannot overlap itself. Both return an opaque, single-owner handle:
+
+```rust
+use canic::prelude::*;
+use std::time::Duration;
+
+let handle = timer_interval!(Duration::from_secs(30), refresh_cache);
+assert!(canic::api::timer::cancel(handle));
+```
+
+Cancellation consumes the handle. A pending invocation is cleared; a running
+invocation is allowed to finish but cannot rearm. Guarded timer macros and raw
+CDK timer access are not part of the maintained facade.
+
 This crate lives in the Canic workspace. See the workspace guide at
 `../../README.md` for full setup, topology, and example canisters.

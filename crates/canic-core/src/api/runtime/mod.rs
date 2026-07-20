@@ -5,7 +5,6 @@ use crate::{
     domain::runtime::{
         FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus,
         RuntimeDiagnosticSeverity, RuntimeFieldVisibility, RuntimeStateDomainStatus, RuntimeStatus,
-        TimerStatus,
     },
     dto::{
         error::Error,
@@ -22,12 +21,12 @@ use crate::{
         runtime::{
             env::EnvOps,
             memory::MemoryRegistryOps,
-            metrics::timer::TimerMetrics,
             ready::ReadyOps,
             recent_failure::{RecentFailureInput, RecentFailureOps},
         },
     },
     state_contract::{STATE_MANIFEST_SCHEMA_VERSION, canic_state_descriptors},
+    workflow::runtime::timer::{TimerRuntimeSnapshot, TimerWorkflow},
 };
 
 const MAX_TIMER_SUBSYSTEM_BYTES: usize = 64;
@@ -306,27 +305,36 @@ fn runtime_blob_storage_status() -> Option<RuntimeBlobStorageStatusSummary> {
 }
 
 fn timer_statuses() -> Vec<CanicTimerStatus> {
-    let mut timers = TimerMetrics::snapshot()
-        .entries
+    timer_statuses_from(TimerWorkflow::statuses())
+}
+
+fn timer_statuses_from(snapshots: Vec<TimerRuntimeSnapshot>) -> Vec<CanicTimerStatus> {
+    let mut timers = snapshots
         .into_iter()
-        .map(|(key, ticks)| {
-            let (subsystem, name) = split_timer_label(&key.label);
+        .map(|snapshot| {
+            let (subsystem, name) = split_timer_label(&snapshot.label);
             CanicTimerStatus {
                 name,
                 subsystem,
-                status: if ticks > 0 {
-                    TimerStatus::Healthy
-                } else {
-                    TimerStatus::Unknown
-                },
-                enabled: true,
-                registered: true,
-                last_success_at_ns: None,
-                last_failure_at_ns: None,
-                next_due_at_ns: None,
-                consecutive_failures: 0,
-                last_error_code: None,
-                last_error_summary: None,
+                scheduling_mode: snapshot.scheduling_mode,
+                registration: snapshot.registration,
+                condition: snapshot.condition,
+                enabled: snapshot.enabled,
+                generation: snapshot.generation,
+                next_due_at_ns: snapshot.next_due_at_ns,
+                last_outcome: snapshot.last_outcome,
+                last_work_count: snapshot.last_work_count,
+                last_success_at_ns: snapshot.last_success_at_ns,
+                last_failure_at_ns: snapshot.last_failure_at_ns,
+                consecutive_expected_failures: snapshot.consecutive_expected_failures,
+                schedules_since_runtime_start: snapshot.schedules_since_runtime_start,
+                executions_since_runtime_start: snapshot.executions_since_runtime_start,
+                successes_since_runtime_start: snapshot.successes_since_runtime_start,
+                expected_failures_since_runtime_start: snapshot
+                    .expected_failures_since_runtime_start,
+                invariant_failures_since_runtime_start: snapshot
+                    .invariant_failures_since_runtime_start,
+                stale_callbacks_since_runtime_start: snapshot.stale_callbacks_since_runtime_start,
             }
         })
         .collect::<Vec<_>>();
@@ -379,20 +387,23 @@ fn state_summary_for_memory_ids(
 }
 
 fn split_timer_label(label: &str) -> (String, String) {
-    label.split_once(':').map_or_else(
-        || {
-            (
-                "runtime".to_string(),
-                bounded_runtime_text(label, MAX_TIMER_NAME_BYTES),
-            )
-        },
-        |(subsystem, name)| {
-            (
-                bounded_runtime_text(subsystem, MAX_TIMER_SUBSYSTEM_BYTES),
-                bounded_runtime_text(name, MAX_TIMER_NAME_BYTES),
-            )
-        },
-    )
+    label
+        .split_once("::")
+        .or_else(|| label.split_once(':'))
+        .map_or_else(
+            || {
+                (
+                    "runtime".to_string(),
+                    bounded_runtime_text(label, MAX_TIMER_NAME_BYTES),
+                )
+            },
+            |(subsystem, name)| {
+                (
+                    bounded_runtime_text(subsystem, MAX_TIMER_SUBSYSTEM_BYTES),
+                    bounded_runtime_text(name, MAX_TIMER_NAME_BYTES),
+                )
+            },
+        )
 }
 
 fn bounded_runtime_text(value: &str, max_bytes: usize) -> String {
@@ -454,10 +465,11 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::runtime::{
+        TimerExecutionOutcome, TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
+    };
     use crate::ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps};
     use crate::ops::runtime::recent_failure::RecentFailureOps;
-    use crate::{domain::runtime::TimerMode, ops::runtime::metrics::timer::TimerMetrics};
-    use std::time::Duration;
 
     #[test]
     fn health_is_minimal_and_schema_versioned() {
@@ -627,67 +639,54 @@ mod tests {
     }
 
     #[test]
-    fn runtime_status_projects_registered_timer_metrics() {
-        TimerMetrics::reset();
-        TimerMetrics::record_timer_scheduled(
-            TimerMode::Interval,
-            Duration::from_mins(1),
-            "cycles:interval",
-        );
-        TimerMetrics::record_timer_scheduled(
-            TimerMode::Once,
-            Duration::from_secs(1),
-            "auth_renewal:init",
-        );
-        TimerMetrics::record_timer_tick(
-            TimerMode::Once,
-            Duration::from_secs(1),
-            "auth_renewal:init",
-        );
+    fn runtime_status_projects_live_registration_and_process_condition() {
+        let statuses = timer_statuses_from(vec![timer_snapshot("cycles:tracking")]);
 
-        let status = RuntimeIntrospectionApi::runtime_status_for(
-            Principal::anonymous(),
-            100,
-            "test-canister",
-            "1.2.3",
-            "0.81.0",
-            7,
+        assert_eq!(statuses.len(), 1);
+        assert_eq!(statuses[0].subsystem, "cycles");
+        assert_eq!(statuses[0].name, "tracking");
+        assert_eq!(statuses[0].registration, TimerRegistrationStatus::Scheduled);
+        assert_eq!(statuses[0].condition, TimerProcessCondition::Active);
+        assert_eq!(
+            statuses[0].last_outcome,
+            Some(TimerExecutionOutcome::Success)
         );
-
-        assert_eq!(status.timers.len(), 2);
-        assert_eq!(status.timers[0].subsystem, "auth_renewal");
-        assert_eq!(status.timers[0].name, "init");
-        assert_eq!(status.timers[0].status, TimerStatus::Healthy);
-        assert_eq!(status.timers[1].subsystem, "cycles");
-        assert_eq!(status.timers[1].name, "interval");
-        assert_eq!(status.timers[1].status, TimerStatus::Unknown);
-
-        TimerMetrics::reset();
+        assert_eq!(statuses[0].schedules_since_runtime_start, 3);
     }
 
     #[test]
     fn runtime_status_bounds_timer_labels() {
-        TimerMetrics::reset();
-
         let label = format!("{}\n:{}\n", "subsystem".repeat(12), "timer_name".repeat(16));
-        TimerMetrics::record_timer_scheduled(TimerMode::Once, Duration::from_secs(1), &label);
+        let status = timer_statuses_from(vec![timer_snapshot(&label)]);
 
-        let status = RuntimeIntrospectionApi::runtime_status_for(
-            Principal::anonymous(),
-            100,
-            "test-canister",
-            "1.2.3",
-            "0.81.0",
-            7,
-        );
+        assert_eq!(status.len(), 1);
+        assert!(status[0].subsystem.len() <= MAX_TIMER_SUBSYSTEM_BYTES);
+        assert!(status[0].name.len() <= MAX_TIMER_NAME_BYTES);
+        assert!(!status[0].subsystem.contains('\n'));
+        assert!(!status[0].name.contains('\n'));
+    }
 
-        assert_eq!(status.timers.len(), 1);
-        assert!(status.timers[0].subsystem.len() <= MAX_TIMER_SUBSYSTEM_BYTES);
-        assert!(status.timers[0].name.len() <= MAX_TIMER_NAME_BYTES);
-        assert!(!status.timers[0].subsystem.contains('\n'));
-        assert!(!status.timers[0].name.contains('\n'));
-
-        TimerMetrics::reset();
+    fn timer_snapshot(label: &str) -> TimerRuntimeSnapshot {
+        TimerRuntimeSnapshot {
+            label: label.to_string(),
+            scheduling_mode: TimerSchedulingMode::AfterCompletion,
+            registration: TimerRegistrationStatus::Scheduled,
+            condition: TimerProcessCondition::Active,
+            enabled: true,
+            generation: 4,
+            next_due_at_ns: Some(500),
+            last_outcome: Some(TimerExecutionOutcome::Success),
+            last_work_count: 2,
+            last_success_at_ns: Some(400),
+            last_failure_at_ns: None,
+            consecutive_expected_failures: 0,
+            schedules_since_runtime_start: 3,
+            executions_since_runtime_start: 2,
+            successes_since_runtime_start: 2,
+            expected_failures_since_runtime_start: 0,
+            invariant_failures_since_runtime_start: 0,
+            stale_callbacks_since_runtime_start: 0,
+        }
     }
 
     #[test]
