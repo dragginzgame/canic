@@ -147,6 +147,13 @@ fn prove_pending_claim_barrier(
                 receipt_count,
                 expected_command.expect("snapshot command"),
             );
+        } else if expected_kind == BackupOperationKind::Start {
+            prove_pending_start_observes_then_executes(
+                &root,
+                &expected_operation,
+                receipt_count,
+                expected_command.expect("start command"),
+            );
         } else if expected_command.is_some() {
             prove_unknown_external_operation_halts(&root, &expected_operation, &observed);
         } else {
@@ -210,6 +217,38 @@ fn prove_pending_stop_observes_then_executes(
     assert_eq!(
         executor.commands,
         vec![format!("status:{target}"), stop_command]
+    );
+    assert_operation_completed_once(&journal, expected_operation, receipt_count);
+}
+
+fn prove_pending_start_observes_then_executes(
+    root: &Path,
+    expected_operation: &BackupExecutionJournalOperation,
+    receipt_count: usize,
+    start_command: String,
+) {
+    let target = expected_operation
+        .target_canister_id
+        .as_deref()
+        .expect("start operation target");
+    let mut executor = FakeBackupRunnerExecutor::default();
+    executor.canister_statuses.insert(
+        target.to_string(),
+        crate::runner::BackupRunnerCanisterStatus::Stopped,
+    );
+    let response = backup_run_execute_with_executor(
+        &runner_config(root.to_path_buf(), Some(1)),
+        &mut executor,
+    )
+    .expect("observe stopped target and execute pending start");
+    let journal = BackupLayout::new(root.to_path_buf())
+        .read_execution_journal()
+        .expect("read reconciled start journal");
+
+    assert_eq!(response.executed_operation_count, 1);
+    assert_eq!(
+        executor.commands,
+        vec![format!("status:{target}"), start_command]
     );
     assert_operation_completed_once(&journal, expected_operation, receipt_count);
 }

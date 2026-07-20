@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.5` reconciles interrupted start operations through the canonical
+  lifecycle-status authority, preventing duplicate starts after process or
+  command-output failure.
+
 - `0.94.4` is potentially breaking: interrupted snapshot creation now
   reconciles one exact inventory identity without duplicate creation, while
   old execution and artifact journal shapes are hard-rejected.
