@@ -63,6 +63,18 @@ fn application_timers_cancel_and_recur_only_after_completion() {
             .iter()
             .all(|timer| { timer.name != "timer_once" && timer.name != "timer_cancelled" })
     );
+    let log_retention = status
+        .timers
+        .iter()
+        .find(|timer| timer.subsystem == "log_retention" && timer.name == "run")
+        .expect("log retention runtime status");
+    assert_eq!(
+        log_retention.registration,
+        TimerRegistrationStatus::Unregistered
+    );
+    assert_eq!(log_retention.condition, TimerProcessCondition::Idle);
+    assert_eq!(log_retention.next_due_at_ns, None);
+    assert_eq!(log_retention.executions_since_runtime_start, 0);
 }
 
 #[test]

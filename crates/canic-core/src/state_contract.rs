@@ -22,7 +22,7 @@ use crate::role_contract::allocation::memory::{
     },
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
-        LOG_DATA_ID, LOG_INDEX_ID,
+        LOG_ENTRIES_ID,
     },
     placement::{
         DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENT_ID,
@@ -530,6 +530,7 @@ fn runtime_observability_domains() -> Vec<StateDomainManifest> {
         CycleTopupEventRecord, CycleTopupEventsData, CyclesFundingLedgerData,
         CyclesFundingLedgerRecord,
     };
+    use crate::storage::stable::log::{LogEntriesData, LogEntryRecord};
 
     vec![
         state_domain(
@@ -539,6 +540,14 @@ fn runtime_observability_domains() -> Vec<StateDomainManifest> {
             CycleTopupEventsData::STATE_CONTRACT_NAME,
             80,
             "cycle_topup_events_decode_status_values",
+        ),
+        state_domain(
+            "runtime_log",
+            LOG_ENTRIES_ID,
+            LogEntryRecord::STATE_CONTRACT_NAME,
+            LogEntriesData::STATE_CONTRACT_NAME,
+            85,
+            "runtime_log_restores_exact_sequence_and_retention_order",
         ),
         state_domain(
             "cycles_funding_ledger",
@@ -633,23 +642,11 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
 }
 
 fn runtime_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
-    vec![
-        reserved_memory(
-            "cycle_tracker",
-            CYCLE_TRACKER_ID,
-            "cycle tracker stores raw cycle balances and needs an explicit record/snapshot declaration",
-        ),
-        reserved_memory(
-            "log_index",
-            LOG_INDEX_ID,
-            "stable log index memory is one half of the logical log domain and needs multi-memory domain modeling",
-        ),
-        reserved_memory(
-            "log_data",
-            LOG_DATA_ID,
-            "stable log data memory is one half of the logical log domain and needs multi-memory domain modeling",
-        ),
-    ]
+    vec![reserved_memory(
+        "cycle_tracker",
+        CYCLE_TRACKER_ID,
+        "cycle tracker stores raw cycle balances and needs an explicit record/snapshot declaration",
+    )]
 }
 
 fn state_domain(
@@ -753,6 +750,7 @@ mod tests {
             AUTH_STATE_ID,
             REPLAY_RECEIPTS_ID,
             CYCLE_TOPUP_EVENTS_ID,
+            LOG_ENTRIES_ID,
             ICP_REFILL_RECORDS_ID,
             CYCLES_FUNDING_LEDGER_ID,
             INTENT_META_ID,
@@ -939,13 +937,14 @@ mod tests {
     }
 
     #[test]
-    fn financial_history_descriptors_reference_canonical_data_types() {
+    fn observability_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             cycles::{
                 CycleTopupEventRecord, CycleTopupEventsData, CyclesFundingLedgerData,
                 CyclesFundingLedgerRecord,
             },
             icp_refill::{IcpRefillRecord, IcpRefillRecordsData},
+            log::{LogEntriesData, LogEntryRecord},
         };
 
         let descriptors = canic_state_descriptors();
@@ -956,6 +955,12 @@ mod tests {
                 "cycle_topup_events",
                 CycleTopupEventRecord::STATE_CONTRACT_NAME,
                 CycleTopupEventsData::STATE_CONTRACT_NAME,
+            ),
+            (
+                StateAllocationKey::CoreRuntimeObservability,
+                "runtime_log",
+                LogEntryRecord::STATE_CONTRACT_NAME,
+                LogEntriesData::STATE_CONTRACT_NAME,
             ),
             (
                 StateAllocationKey::CoreRuntimeObservability,
@@ -973,12 +978,12 @@ mod tests {
             let descriptor = descriptors
                 .iter()
                 .find(|descriptor| descriptor.allocation == allocation)
-                .expect("financial history descriptor");
+                .expect("observability descriptor");
             let declaration = descriptor
                 .state
                 .iter()
                 .find(|declaration| declaration.domain == domain)
-                .expect("financial history state declaration");
+                .expect("observability state declaration");
 
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
@@ -1199,11 +1204,6 @@ mod tests {
             .map(|reservation| reservation.memory_id)
             .collect::<Vec<_>>();
 
-        for expected in [CYCLE_TRACKER_ID, LOG_INDEX_ID, LOG_DATA_ID] {
-            assert!(
-                ids.contains(&expected),
-                "state manifest should reserve memory id {expected}"
-            );
-        }
+        assert_eq!(ids, vec![CYCLE_TRACKER_ID]);
     }
 }

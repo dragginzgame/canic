@@ -1,35 +1,35 @@
+/// Return the strict age cutoff used by runtime-log retention.
 ///
-/// LogRetentionParams
-///
-
-#[derive(Clone, Debug)]
-pub struct LogRetentionParams {
-    pub cutoff: Option<u64>,
-    pub max_entries: usize,
-    pub max_entry_bytes: u32,
-}
-
-///
-/// LogRetentionPolicyInput
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct LogRetentionPolicyInput {
-    pub max_entries: u64,
-    pub max_entry_bytes: u32,
-    pub max_age_secs: Option<u64>,
-}
-
+/// Entries created before the cutoff are expired. An entry remains available
+/// through the full configured age second.
 #[must_use]
-pub fn retention_params(input: LogRetentionPolicyInput, now: u64) -> LogRetentionParams {
-    let max_entries = usize::try_from(input.max_entries).unwrap_or(usize::MAX);
-    let cutoff = input
-        .max_age_secs
-        .map(|max_age| now.saturating_sub(max_age));
+pub const fn age_cutoff(now_secs: u64, max_age_secs: u64) -> u64 {
+    now_secs.saturating_sub(max_age_secs)
+}
 
-    LogRetentionParams {
-        cutoff,
-        max_entries,
-        max_entry_bytes: input.max_entry_bytes,
+/// Return the first whole second at which an entry is older than the limit.
+#[must_use]
+pub const fn age_expiry_at(created_at: u64, max_age_secs: u64) -> Option<u64> {
+    match created_at.checked_add(max_age_secs) {
+        Some(last_retained_at) => last_retained_at.checked_add(1),
+        None => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn age_expiry_preserves_the_existing_strict_cutoff_boundary() {
+        assert_eq!(age_expiry_at(10, 5), Some(16));
+        assert_eq!(age_cutoff(15, 5), 10);
+        assert_eq!(age_cutoff(16, 5), 11);
+    }
+
+    #[test]
+    fn unreachable_age_expiry_is_not_wrapped() {
+        assert_eq!(age_expiry_at(u64::MAX, 0), None);
+        assert_eq!(age_expiry_at(1, u64::MAX), None);
     }
 }
