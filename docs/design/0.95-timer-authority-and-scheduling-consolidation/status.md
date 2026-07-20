@@ -17,11 +17,14 @@ Request sequence and generation arbitration, schedule-during-run merging,
 after-completion recurrence, consuming cancellation, live status, and the
 public hard cuts are implemented and validated.
 
-The open `0.95.2` draft begins Slice C with the finite local-intent owner.
+Released `v0.95.2` begins Slice C with the finite local-intent owner.
 One lifecycle-rebuilt stable index contains only finite expiry deadlines;
 bounded callbacks follow its exact earliest deadline, while TTL-free intents
-leave the process unregistered and idle. Pool, placement acknowledgement, and
-log owner migrations remain separate subsequent Slice C batches.
+leave the process unregistered and idle. The open `0.95.3` batch removes the
+pool maintenance interval, makes `pool:pending` the sole event/retry owner, and
+corrects intent invariant failure to stop rather than self-retry. Placement
+acknowledgement remains separate; log retention is blocked on the count-
+authority correction admitted below.
 
 The accepted design now includes a maintainer-approved duration amendment.
 Cadences are no longer retained merely because the audit recorded them.
@@ -84,13 +87,32 @@ The canonical report is
 - Local-intent and cost-guard workflow authorities maintain that index across
   reserve and terminal transitions; direct production cost-guard mutation is
   structurally limited to the workflow owner.
-- One callback processes at most 32 due intents, continues through a new timer
-  message when more are due, retries storage failure after one minute, and
-  stops when the index is empty.
+- Released `v0.95.2` processes at most 32 due intents, continues through a new
+  timer message when more are due, retries storage failure after one minute,
+  and stops when the index is empty. The open `0.95.3` correction removes that
+  invariant self-retry and stops failed while preserving durable evidence.
 - PocketIC proves exact scheduling, upgrade reconstruction, finite capacity
   release, TTL-free retention, and truthful active/idle runtime status.
 - Intent record and receipt schemas, public Candid, configuration, dependencies,
   and Cargo package versions are unchanged.
+
+## Slice C Pool Evidence
+
+- The open `0.95.3` batch hard-cuts the `pool:maintenance` key and its permanent
+  30-minute cadence. Root lifecycle reconstructs only `pool:pending` from
+  durable pending-reset rows.
+- Empty roots retain `pool:pending` as `unregistered + idle` with zero
+  executions. A focused maintained-root PocketIC topology journey proves the
+  runtime projection and absence of the removed maintenance row.
+- Known producer work and bounded ten-row continuation schedule immediately.
+  Only local-build importability failure retries, through the frozen
+  1/2/4/8/16/30-minute progression; production IC builds cannot enter that
+  probe failure.
+- Unexpected policy variants and intent cleanup storage/deadline contradictions
+  stop as invariant failures. Durable pool and intent evidence remains for
+  lifecycle or operator recovery.
+- No stable schema, memory allocation, configuration, dependency, or Cargo
+  package version changes are present.
 
 ## Finding Index
 
@@ -99,10 +121,11 @@ The canonical report is
 | `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-003` false live timer status | P2 | fixed in released 0.95.1 | common timer workflow/runtime projection |
-| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent owner fixed in open 0.95.2; log/pool remain | log, pool, intent workflows |
-| `CANIC-095-TIMER-005` unrelated full scans | P2 | intent owner fixed in open 0.95.2; placement remains | intent and placement ops/workflows |
+| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in open 0.95.3; log remains | log, pool, intent workflows |
+| `CANIC-095-TIMER-005` unrelated full scans | P2 | intent fixed in released 0.95.2; placement remains | intent and placement ops/workflows |
 | `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in released 0.95.1 | timer workflow and lifecycle facade |
 | `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | accepted for Slice D | cycle/top-up workflow |
+| `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | accepted for later isolated Slice C batch | log storage/ops/workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
 reproducible timer-owner evidence.
@@ -123,8 +146,7 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Align the open `0.95.2` intent failure directive with the duration amendment:
-local storage/invariant failure must stop failed rather than retry every minute.
-Then finish targeted validation and release the bounded intent batch. Select
-the next independent Slice C owner without combining pool, placement
-acknowledgement, and log migrations into one unreviewable change.
+Release the validated open `0.95.3` pool batch with its intent invariant-stop
+correction. Then take placement acknowledgement as the next independent owner.
+Keep log retention separate until bounded count and age mutation have one
+canonical authority.

@@ -22,15 +22,10 @@ use crate::{
         },
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
-    workflow::{
-        config::WORKFLOW_INTENT_CLEANUP_RETRY_INTERVAL,
-        runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
-    },
+    workflow::runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
 };
-use std::time::Duration;
 
 const CLEANUP_BATCH_SIZE: usize = 32;
-const CLEANUP_RETRY_INTERVAL: Duration = WORKFLOW_INTENT_CLEANUP_RETRY_INTERVAL;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 /// Direct workflow for locally decidable, expirable reservations.
@@ -292,7 +287,10 @@ impl IntentCleanupWorkflow {
     }
 
     fn run_due_batch() -> TimerRunResult {
-        let now = IcOps::now_secs();
+        Self::run_due_batch_at(IcOps::now_secs())
+    }
+
+    fn run_due_batch_at(now: u64) -> TimerRunResult {
         let result = Self::cleanup_due_batch(now);
         let aborted = match result {
             Ok(aborted) => aborted,
@@ -303,11 +301,7 @@ impl IntentCleanupWorkflow {
                     IntentMetricReason::StorageFailed,
                 );
                 log!(Topic::Memory, Warn, "intent cleanup batch failed: {err}");
-                return TimerRunResult {
-                    outcome: crate::domain::runtime::TimerExecutionOutcome::RetryableFailure,
-                    work_count: 0,
-                    directive: TimerDirective::RetryAfter(CLEANUP_RETRY_INTERVAL),
-                };
+                return TimerRunResult::invariant_failure();
             }
         };
 
@@ -320,9 +314,9 @@ impl IntentCleanupWorkflow {
                     "intent cleanup deadline reconciliation failed: {err}"
                 );
                 return TimerRunResult {
-                    outcome: crate::domain::runtime::TimerExecutionOutcome::RetryableFailure,
+                    outcome: crate::domain::runtime::TimerExecutionOutcome::InvariantFailure,
                     work_count: u64::try_from(aborted).unwrap_or(u64::MAX),
-                    directive: TimerDirective::RetryAfter(CLEANUP_RETRY_INTERVAL),
+                    directive: TimerDirective::Stop,
                 };
             }
         };
@@ -648,5 +642,12 @@ mod tests {
                 .expect("due intent remains indexed"),
             vec![intent_id]
         );
+
+        let result = IntentCleanupWorkflow::run_due_batch_at(11);
+        assert_eq!(
+            result.outcome,
+            crate::domain::runtime::TimerExecutionOutcome::InvariantFailure
+        );
+        assert_eq!(result.directive, TimerDirective::Stop);
     }
 }

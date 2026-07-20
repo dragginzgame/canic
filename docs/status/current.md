@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.1`.
-- The latest published release is `v0.95.1` at
-  `f562369b1c27622b4c2febfcee9d6cb02ff287a7`.
-- The `v0.95.1` source tree is
-  `f0a5f44d1deb0659e46fb81651fdb67f87cdde13`; its Cargo.lock SHA-256 is
-  `b05af1b8020a16f43fea1e9b9272c784dd7af0d69ff03e574689d04f45185a7a`.
+- The workspace package version is `0.95.2`.
+- The latest published release is `v0.95.2` at
+  `1c233944a6539c7b4662897b866ae5b6b83b5b15`.
+- The `v0.95.2` source tree is
+  `01a35c26d90912ec4f63b442ff3ab7d7f68d5277`; its Cargo.lock SHA-256 is
+  `836580cc9272ab702861aaa6427dfebf779fe6cea85c549b473f94db688f89f5`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -283,15 +283,21 @@ Historical detail is archived at:
   consuming application cancellation, and projects live registration and
   process condition independently. Owner-specific idle-poll and full-scan
   removal remains in Slice C.
-- The open `0.95.2` draft replaces hourly local-intent polling with one
+- Released `v0.95.2` replaces hourly local-intent polling with one
   lifecycle-rebuilt stable finite-expiry index, exact earliest-deadline
   scheduling, bounded 32-row continuation, and truthful idle state for
   TTL-free work. Other Slice C owners remain separate.
 - The accepted 0.95 duration amendment rejects inherited round-number
   cadences. Every delay must be semantic zero, an authoritative deadline,
   bounded retry policy, explicit safety observation, or application-supplied.
-  Before `.2` releases, local intent invariant/storage failure must stop failed
-  rather than repeat a one-minute retry.
+  The open `.3` correction makes local intent invariant/storage failure stop
+  failed rather than repeat the one-minute retry released in `.2`.
+- The open `0.95.3` batch removes the permanent root-pool maintenance interval.
+  One `pool:pending` owner reconstructs from durable work, remains idle when
+  empty, and retries only local-build importability failure through the
+  accepted bounded backoff. Direct inspection also corrected the log audit:
+  entry-count retention is still sweep-owned, so log migration remains an
+  isolated later batch rather than being folded into pool work.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -318,10 +324,11 @@ multi-canister state restore is complete.
 `v0.95.0` completes Slice A and released `v0.95.1` completes the Slice B common
 authority: one direct platform owner, fixed built-in keys, opaque application
 identities, request/generation arbitration, after-completion recurrence,
-consuming cancellation, truthful live status, and one lifecycle facade. The
-open `.2` draft completes the first Slice C owner: finite local-intent expiry.
-It does not combine the remaining pool, placement-acknowledgement, or log
-owners.
+consuming cancellation, truthful live status, and one lifecycle facade.
+Released `.2` completes the first Slice C owner: finite local-intent expiry.
+The open `.3` batch removes idle pool polling and corrects intent invariant
+failure without combining placement acknowledgement or the newly blocked log
+storage-authority work.
 Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
 backup/restore changes, and compatibility layers remain excluded.
 
@@ -844,12 +851,10 @@ First primary results:
 
 ## Next Action
 
-Align local-intent storage/invariant failure with the accepted duration policy:
-stop failed without autonomous retry. Then finish the targeted gates for the
-open `0.95.2` finite-intent expiry owner and release it as the first bounded
-Slice C batch. Select one remaining Slice C owner—pool events/retries,
-placement acknowledgement, or measured log retention—without combining their
-storage and trigger authorities.
+Release the validated open `0.95.3` event-driven pool batch with the intent
+invariant-stop correction. Then take placement acknowledgement as the next
+independent Slice C owner. Keep log retention separate until its sweep-owned
+count cap and age deletion have one bounded mutation authority.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

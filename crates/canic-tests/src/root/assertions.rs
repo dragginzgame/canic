@@ -298,6 +298,24 @@ fn assert_root_runtime_introspection_reports(pic: &Pic, root_id: Principal) {
         &["auth-chain-key-root-sign", "auth-root-canister-sig-create"],
     );
     assert_runtime_timers(&runtime_status, true);
+    let pool_reset = runtime_status
+        .timers
+        .iter()
+        .find(|timer| timer.subsystem == "pool" && timer.name == "pending")
+        .expect("root runtime status should expose the idle pool reset owner");
+    assert_eq!(
+        pool_reset.registration,
+        TimerRegistrationStatus::Unregistered
+    );
+    assert_eq!(pool_reset.condition, TimerProcessCondition::Idle);
+    assert_eq!(pool_reset.executions_since_runtime_start, 0);
+    assert!(
+        runtime_status
+            .timers
+            .iter()
+            .all(|timer| timer.subsystem != "pool" || timer.name != "maintenance"),
+        "the removed pool maintenance interval must not survive in runtime status"
+    );
     assert_runtime_state_metadata(&runtime_status, true);
     assert!(
         runtime_status
