@@ -92,6 +92,9 @@ pub enum PersistenceError {
         journal: String,
     },
 
+    #[error("backup manifest conflicts with the existing canonical manifest: {path}")]
+    ManifestConflict { path: String },
+
     #[error(
         "manifest artifact path for {canister_id} snapshot {snapshot_id} does not match journal artifact path"
     )]

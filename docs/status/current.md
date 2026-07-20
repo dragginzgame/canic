@@ -841,12 +841,16 @@ Released `v0.94.8` completes `B11` with deterministic process-death proof. A
 checksum lost with child memory is recomputed from unchanged staged bytes,
 while missing or unsafe input never becomes verified progress.
 
-The open 0.94.9 draft completes both `B12` and both `B13` write sides. Restart
-adopts an exact durable checksum row only after rehashing the same staging;
-first publication and canonical recovery also verify their exact tree against
-that recorded hash. Changed bytes and conflicting destinations reject without
-advancing artifact authority. Thirty-four of 106 protocol cases now pass.
-Durable shapes, CLI/JSON/Candid surfaces, Cargo versions, and genuine version
-`1` fields remain unchanged; the public Rust runner error enum adds one exact
-state-conflict cause. The next bounded action is both `B14` sides of the
-`ChecksumVerified -> Durable` artifact-journal transition.
+Released `v0.94.9` completes both `B12` and both `B13` write sides. Durable
+checksum rows, initial publication, and canonical recovery now share exact
+checksum-bound artifact authority.
+
+The open 0.94.10 draft completes both `B14` and both `B15` write sides. Restart
+verifies every durable artifact in place, then publishes or adopts only the
+exact manifest derived from current authority. Missing or changed bytes,
+conflicting manifests, and premature manifests fail closed. Thirty-eight of
+106 protocol cases now pass. `write_manifest` is hard-cut to immutable
+`publish_manifest`, and the persistence/runner error enums gain exact conflict
+causes; durable shapes, CLI/JSON/Candid surfaces, Cargo versions, and genuine
+version `1` fields remain unchanged. The next bounded action is all 12 `B16`
+terminal execution receipt/state publication cases.

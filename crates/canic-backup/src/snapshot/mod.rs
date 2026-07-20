@@ -80,7 +80,7 @@ pub fn download_snapshots(
             discovery_topology_hash,
             pre_snapshot_topology_hash,
         })?;
-        layout.write_manifest(&manifest)?;
+        layout.publish_manifest(&manifest)?;
     }
 
     Ok(SnapshotDownloadResult {

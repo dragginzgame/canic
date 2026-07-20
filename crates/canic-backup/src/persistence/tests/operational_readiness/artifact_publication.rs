@@ -204,7 +204,7 @@ fn prove_artifact_publication_side(barrier_name: &str) {
     fs::remove_dir_all(handshake_root).expect("remove artifact publication handshake root");
 }
 
-fn prepared_pending_finalize(
+pub(super) fn prepared_pending_finalize(
     name: &str,
 ) -> (
     PathBuf,

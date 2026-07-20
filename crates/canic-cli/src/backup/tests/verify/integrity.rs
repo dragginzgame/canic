@@ -18,7 +18,7 @@ fn verify_backup_reads_layout_and_artifacts() {
     let checksum = write_artifact(&root, b"root artifact");
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
         .write_journal(&journal_with_checksum(checksum.hash.clone()))

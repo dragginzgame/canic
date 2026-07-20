@@ -26,7 +26,7 @@ fn backup_prune_removes_failed_layouts() {
         .write_execution_journal(&journal)
         .expect("write failed journal");
     BackupLayout::new(complete.clone())
-        .write_manifest(&valid_manifest_with("backup-complete", "unix:1778457600"))
+        .publish_manifest(&valid_manifest_with("backup-complete", "unix:1778457600"))
         .expect("write complete manifest");
 
     let dry_run = backup_prune(&BackupPruneOptions {
@@ -66,13 +66,13 @@ fn backup_prune_keep_removes_older_entries() {
     let middle = root.join("deployment-demo-20260511-010000");
     let oldest = root.join("deployment-demo-20260511-000000");
     BackupLayout::new(newest.clone())
-        .write_manifest(&valid_manifest_with("backup-newest", "unix:1778464800"))
+        .publish_manifest(&valid_manifest_with("backup-newest", "unix:1778464800"))
         .expect("write newest manifest");
     BackupLayout::new(middle.clone())
-        .write_manifest(&valid_manifest_with("backup-middle", "unix:1778461200"))
+        .publish_manifest(&valid_manifest_with("backup-middle", "unix:1778461200"))
         .expect("write middle manifest");
     BackupLayout::new(oldest.clone())
-        .write_manifest(&valid_manifest_with("backup-oldest", "unix:1778457600"))
+        .publish_manifest(&valid_manifest_with("backup-oldest", "unix:1778457600"))
         .expect("write oldest manifest");
 
     let report = backup_prune(&BackupPruneOptions {

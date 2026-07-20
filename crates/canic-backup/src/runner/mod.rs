@@ -21,6 +21,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 const PREFLIGHT_TTL_SECONDS: u64 = 300;
 
+#[cfg(test)]
+pub(crate) fn build_manifest_for_test(
+    config: &BackupRunnerConfig,
+    plan: &BackupPlan,
+    journal: &crate::journal::DownloadJournal,
+) -> Result<crate::manifest::DeploymentBackupManifest, BackupRunnerError> {
+    manifest::build_manifest(config, plan, journal)
+}
+
 /// Execute a persisted backup plan through an injected host executor.
 pub fn backup_run_execute_with_executor(
     config: &BackupRunnerConfig,
@@ -37,9 +46,36 @@ pub fn backup_run_execute_with_executor(
         journal
     };
     layout.verify_execution_integrity()?;
+    reject_premature_manifest(&layout, &journal)?;
 
     accept_preflight_if_needed(config, executor, &layout, &mut plan, &mut journal)?;
     execute_ready_operations(config, executor, &layout, &plan, &mut journal)
+}
+
+fn reject_premature_manifest(
+    layout: &BackupLayout,
+    journal: &BackupExecutionJournal,
+) -> Result<(), BackupRunnerError> {
+    if !layout.manifest_path().exists() {
+        return Ok(());
+    }
+    let finalize = journal
+        .operations
+        .iter()
+        .find(|operation| operation.kind == BackupOperationKind::FinalizeManifest)
+        .ok_or(BackupRunnerError::NoReadyOperation)?;
+    if matches!(
+        finalize.state,
+        BackupExecutionOperationState::Pending
+            | BackupExecutionOperationState::Failed
+            | BackupExecutionOperationState::Completed
+    ) {
+        return Ok(());
+    }
+    Err(BackupRunnerError::PrematureManifest {
+        sequence: finalize.sequence,
+        state: finalize.state.clone(),
+    })
 }
 
 fn accept_preflight_if_needed(

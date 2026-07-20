@@ -20,10 +20,10 @@ fn backup_list_reads_backup_directories() {
     let ignored = root.join("not-a-backup");
 
     BackupLayout::new(first)
-        .write_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
+        .publish_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
         .expect("write first manifest");
     BackupLayout::new(second)
-        .write_manifest(&valid_manifest_with("backup-new", "2026-05-07T13:00:00Z"))
+        .publish_manifest(&valid_manifest_with("backup-new", "2026-05-07T13:00:00Z"))
         .expect("write second manifest");
     let mut plan = valid_backup_plan();
     plan.plan_id = "plan-demo-20260511-001234".to_string();

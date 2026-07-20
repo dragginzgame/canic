@@ -11,7 +11,7 @@ use crate::{
     persistence::{
         BackupExecutionIntegrityReport, BackupIntegrityReport, PersistenceError,
         integrity::{verify_execution_integrity, verify_layout_integrity},
-        json::{read_json, write_json_durable},
+        json::{create_json_durable, read_json, write_json_durable},
     },
     plan::BackupPlan,
 };
@@ -72,13 +72,25 @@ impl BackupLayout {
         self.root.join(EXECUTION_JOURNAL_FILE_NAME)
     }
 
-    /// Write a validated manifest with durable replace semantics.
-    pub fn write_manifest(
+    /// Publish a validated manifest or adopt the exact existing manifest.
+    pub fn publish_manifest(
         &self,
         manifest: &DeploymentBackupManifest,
     ) -> Result<(), PersistenceError> {
         manifest.validate()?;
-        write_json_durable(&self.manifest_path(), manifest)
+        let path = self.manifest_path();
+        if path.exists() {
+            return self.require_exact_manifest(manifest);
+        }
+        match create_json_durable(&path, manifest) {
+            Ok(()) => Ok(()),
+            Err(PersistenceError::Io(error))
+                if error.kind() == std::io::ErrorKind::AlreadyExists =>
+            {
+                self.require_exact_manifest(manifest)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Read and validate a manifest from this backup layout.
@@ -86,6 +98,49 @@ impl BackupLayout {
         let manifest = read_json(&self.manifest_path())?;
         DeploymentBackupManifest::validate(&manifest)?;
         Ok(manifest)
+    }
+
+    fn require_exact_manifest(
+        &self,
+        expected: &DeploymentBackupManifest,
+    ) -> Result<(), PersistenceError> {
+        let path = self.manifest_path();
+        let metadata = std::fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(PersistenceError::ManifestConflict {
+                path: path.display().to_string(),
+            });
+        }
+        let actual = self.read_manifest()?;
+        if serde_json::to_vec(&actual)? == serde_json::to_vec(expected)? {
+            std::fs::File::open(&path)?.sync_all()?;
+            if let Some(parent) = path.parent() {
+                std::fs::File::open(parent)?.sync_all()?;
+            }
+            Ok(())
+        } else {
+            Err(PersistenceError::ManifestConflict {
+                path: path.display().to_string(),
+            })
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn publish_manifest_at_barriers(
+        &self,
+        manifest: &DeploymentBackupManifest,
+        before_publication: impl FnMut(),
+        after_directory_sync: impl FnMut(),
+    ) -> Result<(), PersistenceError> {
+        use crate::persistence::json::create_json_durable_at_barriers;
+
+        manifest.validate()?;
+        create_json_durable_at_barriers(
+            &self.manifest_path(),
+            manifest,
+            before_publication,
+            after_directory_sync,
+        )
     }
 
     /// Write a validated backup plan with durable replace semantics.

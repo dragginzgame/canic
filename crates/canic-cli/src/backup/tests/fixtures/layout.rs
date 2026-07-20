@@ -19,7 +19,7 @@ pub(in crate::backup::tests) fn write_manifest_plan_without_execution_journal(ro
         .write_backup_plan(&valid_backup_plan())
         .expect("write backup plan");
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
 }
 
@@ -30,7 +30,7 @@ pub(in crate::backup::tests) fn write_manifest_plan_journal(
 ) {
     let layout = BackupLayout::new(root.to_path_buf());
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
         .write_backup_plan(&valid_backup_plan())
@@ -56,7 +56,7 @@ pub(in crate::backup::tests) fn backup_status_for_execution_journal(
         .expect("write execution journal");
     if write_manifest {
         layout
-            .write_manifest(&valid_manifest())
+            .publish_manifest(&valid_manifest())
             .expect("write manifest");
     }
     let options = BackupStatusOptions {
