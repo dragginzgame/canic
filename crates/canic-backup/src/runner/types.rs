@@ -1,5 +1,8 @@
 use crate::{
-    execution::{BackupExecutionJournalOperation, BackupExecutionResumeSummary},
+    execution::{
+        BackupExecutionJournalOperation, BackupExecutionOperationState,
+        BackupExecutionResumeSummary,
+    },
     journal::ArtifactState,
     persistence::CommandLifetimeHandle,
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
@@ -325,6 +328,14 @@ pub enum BackupRunnerError {
         sequence: usize,
         target_canister_id: String,
         state: ArtifactState,
+    },
+
+    #[error(
+        "backup manifest exists before finalization operation {sequence} reached a recoverable state: {state:?}"
+    )]
+    PrematureManifest {
+        sequence: usize,
+        state: BackupExecutionOperationState,
     },
 
     #[error(

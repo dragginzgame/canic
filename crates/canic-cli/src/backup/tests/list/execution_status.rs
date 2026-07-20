@@ -36,7 +36,7 @@ fn backup_list_reports_execution_backed_manifest_status() {
     write_manifest_plan_journal(&invalid, invalid_journal);
     let missing_layout = BackupLayout::new(missing_journal.clone());
     missing_layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write missing-journal manifest");
     missing_layout
         .write_backup_plan(&valid_backup_plan())

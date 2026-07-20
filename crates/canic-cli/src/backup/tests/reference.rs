@@ -18,10 +18,10 @@ fn backup_reference_resolves_rows_and_backup_ids() {
     let second = root.join("deployment-demo-20260507-130000");
 
     BackupLayout::new(first.clone())
-        .write_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
+        .publish_manifest(&valid_manifest_with("backup-old", "2026-05-07T12:00:00Z"))
         .expect("write first manifest");
     BackupLayout::new(second.clone())
-        .write_manifest(&valid_manifest_with("backup-new", "2026-05-07T13:00:00Z"))
+        .publish_manifest(&valid_manifest_with("backup-new", "2026-05-07T13:00:00Z"))
         .expect("write second manifest");
 
     let by_row = resolve_backup_reference_in(&root, "1").expect("resolve row");
@@ -42,10 +42,10 @@ fn backup_reference_rejects_ambiguous_backup_ids() {
     let second = root.join("deployment-demo-20260507-130000");
 
     BackupLayout::new(first)
-        .write_manifest(&valid_manifest_with("backup-same", "2026-05-07T12:00:00Z"))
+        .publish_manifest(&valid_manifest_with("backup-same", "2026-05-07T12:00:00Z"))
         .expect("write first manifest");
     BackupLayout::new(second)
-        .write_manifest(&valid_manifest_with("backup-same", "2026-05-07T13:00:00Z"))
+        .publish_manifest(&valid_manifest_with("backup-same", "2026-05-07T13:00:00Z"))
         .expect("write second manifest");
 
     let err = resolve_backup_reference_in(&root, "backup-same").expect_err("ambiguous rejects");

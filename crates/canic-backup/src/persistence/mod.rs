@@ -22,6 +22,7 @@ pub(crate) use artifact_commit::{ArtifactCommitBarrier, commit_artifact_director
 pub use command_lifetime_lock::CommandLifetimeHandle;
 pub(crate) use command_lifetime_lock::{CommandLifetimeLock, CommandLifetimeLockError};
 pub use error::PersistenceError;
+pub(crate) use integrity::verify_durable_artifact;
 pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,

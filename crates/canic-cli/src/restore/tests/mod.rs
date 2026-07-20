@@ -243,7 +243,7 @@ fn deployment_member(
 
 // Write a canonical backup layout whose journal checksums match the artifacts.
 fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &DeploymentBackupManifest) {
-    layout.write_manifest(manifest).expect("write manifest");
+    layout.publish_manifest(manifest).expect("write manifest");
 
     let artifacts = manifest
         .deployment

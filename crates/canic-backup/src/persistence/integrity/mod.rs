@@ -10,6 +10,7 @@ mod path;
 mod reports;
 mod topology;
 
+pub use artifacts::verify_durable_artifact;
 pub(super) use artifacts::verify_layout_integrity;
 pub(super) use execution::verify_execution_integrity;
 pub use path::resolve_backup_artifact_path;

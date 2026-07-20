@@ -61,7 +61,7 @@ fn verify_backup_rejects_incomplete_execution_layout_with_manifest() {
     let checksum = write_artifact(&root, b"root artifact");
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
         .write_journal(&journal_with_checksum(checksum.hash))
@@ -97,7 +97,7 @@ fn verify_backup_rejects_execution_plan_journal_mismatch() {
     journal.operations[0].operation_id = "different-operation".to_string();
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
         .write_journal(&journal_with_checksum(checksum.hash))

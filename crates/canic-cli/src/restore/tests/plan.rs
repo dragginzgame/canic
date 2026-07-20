@@ -10,7 +10,7 @@ fn plan_restore_reads_manifest_from_backup_dir() {
     let root = temp_dir("canic-cli-restore-plan-layout");
     let layout = BackupLayout::new(root.clone());
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
 
     let options = RestorePlanOptions {
@@ -88,7 +88,7 @@ fn plan_restore_rejects_unverified_backup_layout() {
     let root = temp_dir("canic-cli-restore-plan-unverified");
     let layout = BackupLayout::new(root.clone());
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
 
     let options = RestorePlanOptions {
@@ -229,7 +229,7 @@ fn run_restore_prepare_writes_default_layout_artifacts() {
     let layout = BackupLayout::new(root.clone());
     let mut manifest = restore_ready_manifest();
     write_manifest_artifacts(&root, &mut manifest);
-    layout.write_manifest(&manifest).expect("write manifest");
+    layout.publish_manifest(&manifest).expect("write manifest");
     let out_path = root.join("restore-prepare.json");
 
     run([

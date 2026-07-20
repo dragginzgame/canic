@@ -77,20 +77,16 @@ fn verify_member_artifact(
         });
     };
 
-    if entry.state != ArtifactState::Durable {
-        return Err(PersistenceError::NonDurableArtifact {
-            canister_id: entry.canister_id.clone(),
-            snapshot_id: entry.snapshot_id.clone(),
-        });
-    }
-
-    let expected_hash = entry.checksum.as_deref().ok_or_else(|| {
-        PersistenceError::MissingJournalArtifactChecksum {
-            canister_id: entry.canister_id.clone(),
-            snapshot_id: entry.snapshot_id.clone(),
-        }
-    })?;
+    let expected_hash = durable_artifact_checksum(entry)?;
     validate_member_artifact_metadata(member, entry, expected_hash)?;
+    verify_durable_artifact(layout, entry)
+}
+
+pub fn verify_durable_artifact(
+    layout: &BackupLayout,
+    entry: &ArtifactJournalEntry,
+) -> Result<ArtifactIntegrityReport, PersistenceError> {
+    let expected_hash = durable_artifact_checksum(entry)?;
     let artifact_path = resolve_backup_artifact_path(layout.root(), &entry.artifact_path)
         .ok_or_else(|| PersistenceError::ArtifactPathEscapesBackup {
             artifact_path: entry.artifact_path.clone(),
@@ -112,6 +108,22 @@ fn verify_member_artifact(
         artifact_path: artifact_path.display().to_string(),
         checksum: expected_hash.to_string(),
     })
+}
+
+fn durable_artifact_checksum(entry: &ArtifactJournalEntry) -> Result<&str, PersistenceError> {
+    if entry.state != ArtifactState::Durable {
+        return Err(PersistenceError::NonDurableArtifact {
+            canister_id: entry.canister_id.clone(),
+            snapshot_id: entry.snapshot_id.clone(),
+        });
+    }
+    entry
+        .checksum
+        .as_deref()
+        .ok_or_else(|| PersistenceError::MissingJournalArtifactChecksum {
+            canister_id: entry.canister_id.clone(),
+            snapshot_id: entry.snapshot_id.clone(),
+        })
 }
 
 fn validate_member_artifact_metadata(

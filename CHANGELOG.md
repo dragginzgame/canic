@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.10` reconciles durable artifacts and final-manifest publication,
+  verifying canonical bytes in place and adopting only the exact immutable
+  manifest while rejecting missing, conflicting, or premature evidence.
+
 - `0.94.9` makes checksum-verified staging authoritative across restart and
   publishes only bytes matching its recorded hash, safely adopting exact
   canonical directories while rejecting conflicting evidence.

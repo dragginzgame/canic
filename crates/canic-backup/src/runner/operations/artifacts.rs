@@ -12,6 +12,7 @@ use crate::{
     journal::{ArtifactJournalEntry, ArtifactState},
     persistence::{
         BackupLayout, CommandLifetimeHandle, PersistenceError, commit_artifact_directory,
+        verify_durable_artifact,
     },
     plan::BackupPlan,
     runner::{
@@ -393,6 +394,7 @@ pub(super) fn execute_finalize_manifest(
     let mut download_journal = layout.read_journal()?;
     for index in 0..download_journal.artifacts.len() {
         if download_journal.artifacts[index].state == ArtifactState::Durable {
+            verify_durable_artifact(layout, &download_journal.artifacts[index])?;
             continue;
         }
         let canister_id = download_journal.artifacts[index].canister_id.clone();
@@ -434,7 +436,7 @@ pub(super) fn execute_finalize_manifest(
     }
 
     let manifest = build_manifest(config, plan, &download_journal)?;
-    layout.write_manifest(&manifest)?;
+    layout.publish_manifest(&manifest)?;
     Ok(BackupExecutionOperationReceipt::completed(
         journal,
         operation,

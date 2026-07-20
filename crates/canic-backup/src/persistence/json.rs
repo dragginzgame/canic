@@ -1,8 +1,8 @@
 //! Module: persistence::json
 //!
-//! Responsibility: read and durably replace JSON persistence documents.
+//! Responsibility: read and durably create or replace JSON persistence documents.
 //! Does not own: document validation, layout paths, or integrity checks.
-//! Boundary: provides filesystem JSON helpers for backup layout persistence.
+//! Boundary: provides explicit create-only and replace filesystem primitives.
 
 use crate::persistence::PersistenceError;
 
@@ -26,6 +26,14 @@ where
     replace_bytes(path, &bytes).map_err(PersistenceError::from)
 }
 
+pub(super) fn create_json_durable<T>(path: &Path, value: &T) -> Result<(), PersistenceError>
+where
+    T: Serialize,
+{
+    let bytes = serde_json::to_vec_pretty(value)?;
+    create_bytes_at_barriers(path, &bytes, || {}, || {}).map_err(PersistenceError::from)
+}
+
 pub(super) fn read_json<T>(path: &Path) -> Result<T, PersistenceError>
 where
     T: DeserializeOwned,
@@ -36,6 +44,40 @@ where
 
 fn replace_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
     replace_bytes_at_barriers(path, bytes, |_| {})
+}
+
+fn create_bytes_at_barriers(
+    path: &Path,
+    bytes: &[u8],
+    mut before_publication: impl FnMut(),
+    mut after_directory_sync: impl FnMut(),
+) -> io::Result<()> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent)?;
+
+    let (temp_path, mut temp_file) = create_sibling_temp(path, parent)?;
+    if let Err(error) = temp_file
+        .write_all(bytes)
+        .and_then(|()| temp_file.sync_all())
+    {
+        drop(temp_file);
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+    drop(temp_file);
+    before_publication();
+
+    if let Err(error) = fs::hard_link(&temp_path, path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+    fs::remove_file(&temp_path)?;
+    File::open(parent)?.sync_all()?;
+    after_directory_sync();
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -88,6 +130,21 @@ where
 {
     let bytes = serde_json::to_vec_pretty(value)?;
     replace_bytes_at_barriers(path, &bytes, barrier).map_err(PersistenceError::from)
+}
+
+#[cfg(test)]
+pub(super) fn create_json_durable_at_barriers<T>(
+    path: &Path,
+    value: &T,
+    before_publication: impl FnMut(),
+    after_directory_sync: impl FnMut(),
+) -> Result<(), PersistenceError>
+where
+    T: Serialize,
+{
+    let bytes = serde_json::to_vec_pretty(value)?;
+    create_bytes_at_barriers(path, &bytes, before_publication, after_directory_sync)
+        .map_err(PersistenceError::from)
 }
 
 fn create_sibling_temp(path: &Path, parent: &Path) -> io::Result<(PathBuf, File)> {

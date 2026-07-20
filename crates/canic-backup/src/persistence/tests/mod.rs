@@ -33,7 +33,7 @@ fn manifest_round_trips_through_layout() {
     let manifest = valid_manifest();
 
     layout
-        .write_manifest(&manifest)
+        .publish_manifest(&manifest)
         .expect("write manifest atomically");
     let read = layout.read_manifest().expect("read manifest");
 
@@ -307,7 +307,7 @@ fn invalid_manifest_is_not_written() {
     manifest.deployment.discovery_topology_hash = "bad".to_string();
 
     let err = layout
-        .write_manifest(&manifest)
+        .publish_manifest(&manifest)
         .expect_err("invalid manifest should fail");
 
     let manifest_path = layout.manifest_path();
@@ -324,7 +324,7 @@ fn integrity_verifies_durable_artifacts() {
     let journal = journal_with_checksum(checksum.hash.clone());
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout.write_journal(&journal).expect("write journal");
 
@@ -347,7 +347,7 @@ fn integrity_rejects_backup_id_mismatch() {
     journal.backup_id = "other-backup".to_string();
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout.write_journal(&journal).expect("write journal");
 
@@ -369,7 +369,7 @@ fn integrity_rejects_manifest_journal_topology_receipt_mismatch() {
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string();
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout.write_journal(&journal).expect("write journal");
 
@@ -393,7 +393,7 @@ fn integrity_rejects_non_durable_artifacts() {
     journal.artifacts[0].checksum = None;
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout.write_journal(&journal).expect("write journal");
 
@@ -416,7 +416,7 @@ fn integrity_rejects_unexpected_journal_artifacts() {
     journal.artifacts.push(extra);
 
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout.write_journal(&journal).expect("write journal");
 
@@ -437,7 +437,7 @@ fn integrity_rejects_manifest_journal_checksum_mismatch() {
     manifest.deployment.members[0].source_snapshot.checksum =
         Some("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
 
-    layout.write_manifest(&manifest).expect("write manifest");
+    layout.publish_manifest(&manifest).expect("write manifest");
     layout
         .write_journal(&journal_with_checksum(checksum.hash))
         .expect("write journal");
@@ -462,7 +462,7 @@ fn integrity_rejects_manifest_journal_artifact_path_mismatch() {
     manifest.deployment.members[0].source_snapshot.artifact_path =
         "artifacts/different-root".to_string();
 
-    layout.write_manifest(&manifest).expect("write manifest");
+    layout.publish_manifest(&manifest).expect("write manifest");
     layout
         .write_journal(&journal_with_checksum(checksum.hash))
         .expect("write journal");

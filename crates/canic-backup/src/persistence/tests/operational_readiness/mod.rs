@@ -14,7 +14,11 @@ mod checksum_transition;
 mod download_effect;
 #[cfg(unix)]
 mod download_transition;
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+mod durable_transition;
 mod lifecycle_effect;
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+mod manifest_publication;
 mod pending_claim;
 #[cfg(unix)]
 mod snapshot_create;
@@ -276,7 +280,7 @@ fn prove_verification_barrier(barrier_name: &str) {
     let layout = BackupLayout::new(root.clone());
     let checksum = write_artifact(&root, b"root artifact");
     layout
-        .write_manifest(&valid_manifest())
+        .publish_manifest(&valid_manifest())
         .expect("write manifest");
     layout
         .write_journal(&journal_with_checksum(checksum.hash))
