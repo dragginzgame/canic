@@ -287,6 +287,11 @@ Historical detail is archived at:
   lifecycle-rebuilt stable finite-expiry index, exact earliest-deadline
   scheduling, bounded 32-row continuation, and truthful idle state for
   TTL-free work. Other Slice C owners remain separate.
+- The accepted 0.95 duration amendment rejects inherited round-number
+  cadences. Every delay must be semantic zero, an authoritative deadline,
+  bounded retry policy, explicit safety observation, or application-supplied.
+  Before `.2` releases, local intent invariant/storage failure must stop failed
+  rather than repeat a one-minute retry.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -839,10 +844,12 @@ First primary results:
 
 ## Next Action
 
-Finish the targeted gates for the open `0.95.2` finite-intent expiry owner and
-release it as the first bounded Slice C batch. Then select one remaining Slice
-C owner—pool events/retries, placement acknowledgement, or measured log
-retention—without combining their storage and trigger authorities.
+Align local-intent storage/invariant failure with the accepted duration policy:
+stop failed without autonomous retry. Then finish the targeted gates for the
+open `0.95.2` finite-intent expiry owner and release it as the first bounded
+Slice C batch. Select one remaining Slice C owner—pool events/retries,
+placement acknowledgement, or measured log retention—without combining their
+storage and trigger authorities.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with
