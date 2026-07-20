@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.7`.
-- The latest published release is `v0.94.7` at
-  `6a8cc9f6eb45e2cd603d87cb638b8fd0618b9081`.
-- The `v0.94.7` source tree is
-  `e8d325bfc4e6eb9633cfd14211eee3726a24b00f`; its product-tree hash is
-  `40d11ab44879a1419567b48fb7c983984c20a54fb14e5d0e44c3e12dd1dcc0d3`.
+- The workspace package version is `0.94.10`.
+- The latest published release is `v0.94.10` at
+  `108a944a1cc53dd444e1b424fba092a680e48826`.
+- The `v0.94.10` source tree is
+  `100f096f5e3bf92e470958791720d6a9fea54d1e`; its product-tree hash is
+  `92a6e71b6c4b5160520fd2e5e0864d927acabb266eb2381dea03ab007f4c7505`.
   Its Cargo.lock SHA-256 is
-  `66ee80229930ec7af7ac2a957dd459146f4d18db6ed40faf5865dac4917bec6b`.
+  `eba2948533d9f06e8e2bbde89a593d181d9beb7ab9dc8c00f38a11e38df75635`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -243,10 +243,21 @@ Historical detail is archived at:
   one redownload; a durable exact row rebuilds the normal receipt and proceeds
   to checksum without another command. Missing or mismatched staging rejects
   before execution-journal mutation.
-- The open `0.94.8` draft proves a checksum completed only in memory is safely
+- Released `v0.94.8` proves a checksum completed only in memory is safely
   recomputed after process death from unchanged staged bytes. Missing or
   unsafe input fails closed without claiming checksum-verified state. The
   existing production runner and secure traversal required no change.
+- Released `v0.94.9` reconciles checksum-verified staging and canonical
+  artifact publication through one checksum-bound authority. Exact durable
+  evidence is adopted while missing, changed, or conflicting evidence rejects.
+- Released `v0.94.10` reconciles durable artifact state and final manifest
+  publication. Canonical bytes are reverified in place, and only the exact
+  immutable manifest is published or adopted.
+- The open `0.94.11` draft proves terminal state and its receipt publish in one
+  durable execution-journal document for every post-preflight operation.
+  Restart reconciles pre-write interruption and skips post-write completion
+  without duplicate mutation or receipt. A lost final response replays the
+  same completed backup with no command, receipt, or layout change.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -845,12 +856,17 @@ Released `v0.94.9` completes both `B12` and both `B13` write sides. Durable
 checksum rows, initial publication, and canonical recovery now share exact
 checksum-bound artifact authority.
 
-The open 0.94.10 draft completes both `B14` and both `B15` write sides. Restart
+Released `v0.94.10` completes both `B14` and both `B15` write sides. Restart
 verifies every durable artifact in place, then publishes or adopts only the
 exact manifest derived from current authority. Missing or changed bytes,
-conflicting manifests, and premature manifests fail closed. Thirty-eight of
-106 protocol cases now pass. `write_manifest` is hard-cut to immutable
-`publish_manifest`, and the persistence/runner error enums gain exact conflict
-causes; durable shapes, CLI/JSON/Candid surfaces, Cargo versions, and genuine
-version `1` fields remain unchanged. The next bounded action is all 12 `B16`
-terminal execution receipt/state publication cases.
+conflicting manifests, and premature manifests fail closed.
+
+The open 0.94.11 draft completes all 12 `B16` terminal execution receipt/state
+publication cases and `B17` final-successful-response loss. Every operation
+either reconciles its pre-write `Pending` state through canonical evidence or
+resumes from an atomic `Completed` plus receipt pair. Losing the final response
+after complete persistence replays the same terminal identity with zero
+commands or state changes. Fifty-one of 106 protocol cases now pass; no
+mutating command or receipt is duplicated. Durable shapes, CLI/JSON/Candid
+surfaces, Cargo versions, and genuine version `1` fields remain unchanged. The
+next bounded action is all four `B18` command-in-flight cases.
