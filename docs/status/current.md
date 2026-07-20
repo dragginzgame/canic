@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.0`.
-- The latest published release is `v0.95.0` at
-  `a3598fe001aec4f339f4c2d162af21e080bafc7c`.
-- The `v0.95.0` source tree is
-  `00ddd60f1ed7f1f73a41e2b274ec1e8d1ce1930d`; its Cargo.lock SHA-256 is
-  `3d2792df60a2f84cf7a02a1780ad44a43cacf4b83d50f29d375562af01fbdd8e`.
+- The workspace package version is `0.95.1`.
+- The latest published release is `v0.95.1` at
+  `f562369b1c27622b4c2febfcee9d6cb02ff287a7`.
+- The `v0.95.1` source tree is
+  `f0a5f44d1deb0659e46fb81651fdb67f87cdde13`; its Cargo.lock SHA-256 is
+  `b05af1b8020a16f43fea1e9b9272c784dd7af0d69ff03e574689d04f45185a7a`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -278,11 +278,15 @@ Historical detail is archived at:
   seven findings, freezes every owner disposition and the public hard-cut
   surface, and adds an executable source inventory guard. Production timer
   behavior is unchanged in this audit-only batch.
-- The open `0.95.1` draft gives every current canister timer one common
+- Released `v0.95.1` gives every current canister timer one common
   generation-safe workflow, removes guarded/fixed-rate/raw-CDK bypasses, adds
   consuming application cancellation, and projects live registration and
   process condition independently. Owner-specific idle-poll and full-scan
   removal remains in Slice C.
+- The open `0.95.2` draft replaces hourly local-intent polling with one
+  lifecycle-rebuilt stable finite-expiry index, exact earliest-deadline
+  scheduling, bounded 32-row continuation, and truthful idle state for
+  TTL-free work. Other Slice C owners remain separate.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -306,11 +310,13 @@ all seven required journeys pass, every finding is fixed, and the realistic
 multi-canister state restore is complete.
 
 0.95 focuses only on timer authority and scheduling consolidation. Released
-`v0.95.0` completes Slice A. The open `.1` draft completes the Slice B common
+`v0.95.0` completes Slice A and released `v0.95.1` completes the Slice B common
 authority: one direct platform owner, fixed built-in keys, opaque application
 identities, request/generation arbitration, after-completion recurrence,
-consuming cancellation, truthful live status, and one lifecycle facade. Slice
-C may now migrate idle polling and full scans to event/deadline-owned work.
+consuming cancellation, truthful live status, and one lifecycle facade. The
+open `.2` draft completes the first Slice C owner: finite local-intent expiry.
+It does not combine the remaining pool, placement-acknowledgement, or log
+owners.
 Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
 backup/restore changes, and compatibility layers remain excluded.
 
@@ -832,6 +838,11 @@ First primary results:
   manifest tests, 15 provenance/policy tests, and 195 backup/restore tests.
 
 ## Next Action
+
+Finish the targeted gates for the open `0.95.2` finite-intent expiry owner and
+release it as the first bounded Slice C batch. Then select one remaining Slice
+C owner—pool events/retries, placement acknowledgement, or measured log
+retention—without combining their storage and trigger authorities.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

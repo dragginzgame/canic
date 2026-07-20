@@ -23,7 +23,7 @@ use crate::{
     model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
     ops::{
         config::ConfigOps,
-        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+        cost_guard::{CostGuardPermit, CostGuardRequest},
         ic::IcOps,
         replay::{
             acknowledge_root_placement_receipt,
@@ -37,7 +37,7 @@ use crate::{
         canister_lifecycle::{
             CanisterLifecycleEvent, CanisterLifecycleWorkflow, CanisterUpgradeCostContext,
         },
-        cost_guard::map_cost_guard_reserve_error,
+        cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         pool::PoolWorkflow,
         replay::mark_recovery_required_after_failure,
         rpc::RpcWorkflowError,
@@ -141,7 +141,7 @@ async fn execute_provision(
         &cost_permit,
         command_kind,
     ) {
-        return Err(CostGuardOps::recover_after_failure(
+        return Err(CostGuardWorkflow::recover_after_failure(
             &cost_permit,
             IcOps::now_secs(),
             err,
@@ -158,7 +158,8 @@ async fn execute_provision(
     let lifecycle_result = match CanisterLifecycleWorkflow::apply(event).await {
         Ok(result) => result,
         Err(err) => {
-            let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
+            let err =
+                CostGuardWorkflow::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
             return Err(preserve_root_provision_recovery_required(
                 pending,
                 ctx,
@@ -171,7 +172,7 @@ async fn execute_provision(
     };
     let Some(new_canister_pid) = lifecycle_result.new_canister_pid else {
         let err: InternalError = RpcWorkflowError::MissingNewCanisterPid.into();
-        let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
+        let err = CostGuardWorkflow::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
         return Err(preserve_root_provision_recovery_required(
             pending,
             ctx,
@@ -185,7 +186,7 @@ async fn execute_provision(
     let response = Response::CreateCanister(CreateCanisterResponse { new_canister_pid });
     if let Err(err) = replay::stage_response(pending, &response) {
         let mut err = err;
-        let reason = match CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+        let reason = match CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
             Ok(()) => RecoveryReason::ResponseCommitFailed,
             Err(settlement_err) => {
                 err = err.with_diagnostic_context(format!(
@@ -201,7 +202,7 @@ async fn execute_provision(
         }
         return Err(err);
     }
-    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+    if let Err(err) = CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
         if let Err(recovery_err) =
             replay::mark_recovery_required(pending, RecoveryReason::CostSettlementFailed)
         {
@@ -251,7 +252,7 @@ fn reserve_root_provision_cost_guard(
     reservation_cycles: u128,
     command_kind: &'static str,
 ) -> Result<CostGuardPermit, InternalError> {
-    CostGuardOps::reserve(root_provision_cost_guard_request(
+    CostGuardWorkflow::reserve(root_provision_cost_guard_request(
         ctx,
         reservation_cycles,
         IcOps::canister_cycle_balance().to_u128(),

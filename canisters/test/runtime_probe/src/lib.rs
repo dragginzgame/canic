@@ -1,6 +1,12 @@
 #![expect(clippy::unused_async)]
 
-use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use canic::{
+    Error,
+    api::intent::{BeginLocalIntentInput, IntentResourceKey, LocalIntentApi},
+    dto::auth::DelegatedToken,
+    ids::cap,
+    prelude::*,
+};
 use std::{cell::Cell, time::Duration};
 
 thread_local! {
@@ -29,6 +35,20 @@ async fn canic_upgrade() {}
 #[canic_update(public)]
 async fn test() -> Result<(), Error> {
     Ok(())
+}
+
+/// Reserve one test resource so PocketIC can exercise expiry scheduling and recovery.
+#[canic_update(public)]
+async fn begin_timer_probe_intent(resource_seed: u8, ttl_secs: Option<u64>) -> Result<u64, Error> {
+    let resource_key = IntentResourceKey::try_new(format!("timer_probe:{resource_seed}"))
+        .map_err(|err| Error::invalid(err.to_string()))?;
+    LocalIntentApi::begin(BeginLocalIntentInput {
+        resource_key,
+        quantity: 1,
+        ttl_secs,
+        reservation_limit: Some(1),
+    })
+    .map(|intent_id| intent_id.0)
 }
 
 #[canic_update(requires(auth::authenticated(cap::VERIFY)))]

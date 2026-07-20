@@ -15,8 +15,8 @@ use crate::{
         replay::OperationId,
     },
     role_contract::allocation::memory::intent::{
-        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-        RECEIPT_BACKED_INTENT_RECORDS_ID,
+        INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID,
+        INTENT_TOTALS_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     storage::prelude::*,
 };
@@ -49,6 +49,14 @@ eager_static! {
         ty = ReceiptBackedIntentRecord,
         id = RECEIPT_BACKED_INTENT_RECORDS_ID
     )));
+}
+
+eager_static! {
+    static INTENT_EXPIRY_INDEX: RefCell<
+        StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, VirtualMemory<DefaultMemoryImpl>>
+    > = RefCell::new(
+        StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_expiry_index.v1", ty = IntentExpiryEntryRecord, id = INTENT_EXPIRY_INDEX_ID)),
+    );
 }
 
 eager_static! {
@@ -136,6 +144,71 @@ impl Storable for OperationId {
     }
 }
 
+/// Ordered stable key for one finite local-intent cleanup deadline.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct IntentExpiryKeyRecord {
+    pub due_at_secs: u64,
+    pub intent_id: IntentId,
+}
+
+impl Storable for IntentExpiryKeyRecord {
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 16,
+        is_fixed_size: true,
+    };
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.into_bytes())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(16);
+        bytes.extend_from_slice(&self.due_at_secs.to_be_bytes());
+        bytes.extend_from_slice(&self.intent_id.0.to_be_bytes());
+        bytes
+    }
+
+    /// Decode the exact fixed-width stable intent-expiry key.
+    ///
+    /// # Panics
+    ///
+    /// Panics when stable memory contains a key that is not exactly sixteen bytes.
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let bytes = <[u8; 16]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
+            panic!(
+                "stable IntentExpiryKeyRecord is {} bytes; expected 16",
+                bytes.as_ref().len()
+            )
+        });
+        let (due_at_secs, intent_id) = bytes.split_at(8);
+        Self {
+            due_at_secs: u64::from_be_bytes(
+                due_at_secs.try_into().expect("expiry key deadline width"),
+            ),
+            intent_id: IntentId(u64::from_be_bytes(
+                intent_id.try_into().expect("expiry key intent width"),
+            )),
+        }
+    }
+}
+
+/// Stable value for one finite local-intent cleanup deadline.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IntentExpiryEntryRecord {
+    pub intent_id: IntentId,
+}
+
+impl IntentExpiryEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentExpiryEntryRecord";
+    pub const STORABLE_MAX_SIZE: u32 = 32;
+}
+
+impl_storable_bounded!(
+    IntentExpiryEntryRecord,
+    IntentExpiryEntryRecord::STORABLE_MAX_SIZE,
+    false
+);
+
 ///
 /// IntentState
 ///
@@ -158,7 +231,7 @@ pub struct IntentRecord {
     pub quantity: u64,
     pub state: IntentState,
     pub created_at: u64,
-    // TTL is enforced logically at read time; cleanup is asynchronous.
+    // TTL is enforced logically at read time; the derived index schedules cleanup.
     pub ttl_secs: Option<u64>,
 }
 
@@ -387,6 +460,23 @@ impl IntentPendingData {
     pub const STATE_CONTRACT_NAME: &'static str = "IntentPendingData";
 }
 
+/// One logical finite-expiry snapshot row preserving its stable ordered key.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct IntentExpiryIndexEntryRecord {
+    pub key: IntentExpiryKeyRecord,
+    pub record: IntentExpiryEntryRecord,
+}
+
+/// Canonical finite-expiry index allocation snapshot.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct IntentExpiryIndexData {
+    pub entries: Vec<IntentExpiryIndexEntryRecord>,
+}
+
+impl IntentExpiryIndexData {
+    pub const STATE_CONTRACT_NAME: &'static str = "IntentExpiryIndexData";
+}
+
 /// One logical receipt-backed intent snapshot row.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReceiptBackedIntentEntryRecord {
@@ -479,6 +569,42 @@ impl IntentStore {
         ) -> R,
     ) -> R {
         INTENT_PENDING.with_borrow(|map| f(map))
+    }
+
+    // -------------------------------------------------------------
+    // Finite-expiry derived index
+    // -------------------------------------------------------------
+
+    #[must_use]
+    pub(crate) fn get_expiry(key: IntentExpiryKeyRecord) -> Option<IntentExpiryEntryRecord> {
+        INTENT_EXPIRY_INDEX.with_borrow(|map| map.get(&key))
+    }
+
+    pub(crate) fn insert_expiry(
+        key: IntentExpiryKeyRecord,
+        record: IntentExpiryEntryRecord,
+    ) -> Option<IntentExpiryEntryRecord> {
+        INTENT_EXPIRY_INDEX.with_borrow_mut(|map| map.insert(key, record))
+    }
+
+    pub(crate) fn remove_expiry(key: IntentExpiryKeyRecord) -> Option<IntentExpiryEntryRecord> {
+        INTENT_EXPIRY_INDEX.with_borrow_mut(|map| map.remove(&key))
+    }
+
+    pub(crate) fn clear_expiry_index() {
+        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+    }
+
+    pub(crate) fn with_expiry_entries<R>(
+        f: impl FnOnce(
+            &StableBtreeMap<
+                IntentExpiryKeyRecord,
+                IntentExpiryEntryRecord,
+                VirtualMemory<DefaultMemoryImpl>,
+            >,
+        ) -> R,
+    ) -> R {
+        INTENT_EXPIRY_INDEX.with_borrow(|map| f(map))
     }
 }
 
@@ -606,10 +732,34 @@ impl IntentStore {
         });
     }
 
+    #[must_use]
+    pub(crate) fn export_expiry_index() -> IntentExpiryIndexData {
+        IntentExpiryIndexData {
+            entries: INTENT_EXPIRY_INDEX.with_borrow(|map| {
+                map.iter()
+                    .map(|entry| IntentExpiryIndexEntryRecord {
+                        key: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_expiry_index(data: IntentExpiryIndexData) {
+        INTENT_EXPIRY_INDEX.with_borrow_mut(|map| {
+            map.clear_new();
+            for entry in data.entries {
+                map.insert(entry.key, entry.record);
+            }
+        });
+    }
+
     pub(crate) fn reset_for_tests() {
         INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_TOTALS.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_PENDING.with_borrow_mut(StableBtreeMap::clear_new);
+        INTENT_EXPIRY_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
         INTENT_META.with_borrow_mut(|cell| cell.set(IntentStoreMetaRecord::default()));
         ReceiptBackedIntentStore::reset_for_tests();
     }
@@ -669,6 +819,40 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "stable IntentExpiryKeyRecord is 15 bytes; expected 16")]
+    fn malformed_stable_intent_expiry_key_fails_closed() {
+        let _ = <IntentExpiryKeyRecord as Storable>::from_bytes(Cow::Owned(vec![0; 15]));
+    }
+
+    #[test]
+    fn stable_intent_expiry_key_preserves_deadline_then_identity_order() {
+        let keys = [
+            IntentExpiryKeyRecord {
+                due_at_secs: 11,
+                intent_id: IntentId(1),
+            },
+            IntentExpiryKeyRecord {
+                due_at_secs: 10,
+                intent_id: IntentId(2),
+            },
+            IntentExpiryKeyRecord {
+                due_at_secs: 10,
+                intent_id: IntentId(1),
+            },
+        ];
+        let mut encoded = keys.map(Storable::into_bytes);
+        encoded.sort();
+        assert_eq!(
+            encoded,
+            [
+                keys[2].into_bytes(),
+                keys[1].into_bytes(),
+                keys[0].into_bytes()
+            ]
+        );
+    }
+
+    #[test]
     fn intent_allocations_round_trip_through_canonical_data_snapshots() {
         IntentStore::reset_for_tests();
         let intent_id = IntentId(7);
@@ -704,22 +888,30 @@ mod tests {
         IntentStore::insert_record(record);
         IntentStore::set_totals(resource_key, totals);
         IntentStore::insert_pending(intent_id, pending);
+        let expiry_key = IntentExpiryKeyRecord {
+            due_at_secs: 31,
+            intent_id,
+        };
+        IntentStore::insert_expiry(expiry_key, IntentExpiryEntryRecord { intent_id });
 
         let meta_data = IntentStore::export_meta();
         let records_data = IntentStore::export_records();
         let totals_data = IntentStore::export_totals();
         let pending_data = IntentStore::export_pending();
+        let expiry_data = IntentStore::export_expiry_index();
 
         IntentStore::reset_for_tests();
         IntentStore::import_meta(meta_data);
         IntentStore::import_records(records_data.clone());
         IntentStore::import_totals(totals_data.clone());
         IntentStore::import_pending(pending_data.clone());
+        IntentStore::import_expiry_index(expiry_data.clone());
 
         assert_eq!(IntentStore::export_meta(), meta_data);
         assert_eq!(IntentStore::export_records(), records_data);
         assert_eq!(IntentStore::export_totals(), totals_data);
         assert_eq!(IntentStore::export_pending(), pending_data);
+        assert_eq!(IntentStore::export_expiry_index(), expiry_data);
         IntentStore::reset_for_tests();
     }
 

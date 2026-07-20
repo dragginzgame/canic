@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
 
+- `0.95.2` replaces hourly local-intent cleanup scans with one lifecycle-rebuilt
+  finite-expiry index, exact earliest-deadline scheduling, and bounded due-work
+  continuation while leaving TTL-free intents idle.
+
 - `0.95.1` gives built-in and application timers one generation-safe,
   non-overlapping scheduler, adds consuming cancellation and truthful live
   status, and hard-cuts guarded, fixed-rate, and raw-CDK timer bypasses.

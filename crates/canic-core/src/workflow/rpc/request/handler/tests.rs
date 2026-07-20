@@ -980,10 +980,7 @@ fn request_cycles_releases_cost_reservation_when_effect_marking_fails() {
     ))
     .expect("cost permit");
     let settlement = permit.replay_settlement();
-    assert_eq!(
-        IntentStoreOps::expirable_pending_total().expect("pending intents"),
-        2
-    );
+    assert_eq!(IntentStoreOps::pending_total().expect("pending intents"), 2);
 
     ReplayReceiptOps::remove(pending.receipt_token.key()).expect("remove replay receipt");
     let err = nonroot_cycles::mark_request_cycles_external_effect(&pending, &ctx, 77, &permit)
@@ -996,10 +993,7 @@ fn request_cycles_releases_cost_reservation_when_effect_marking_fails() {
             crate::InternalErrorOrigin::Workflow,
         )
     );
-    assert_eq!(
-        IntentStoreOps::expirable_pending_total().expect("pending intents"),
-        0
-    );
+    assert_eq!(IntentStoreOps::pending_total().expect("pending intents"), 0);
     assert!(
         IntentStoreOps::is_committed_for_tests(settlement.quota_intent_id)
             .expect("quota intent state remains readable")

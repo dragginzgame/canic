@@ -18,7 +18,7 @@ use crate::{
     },
     ops::{
         config::ConfigOps,
-        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+        cost_guard::{CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
         replay::{self as replay_ops, guard::ReplayPending},
         runtime::{
@@ -38,7 +38,8 @@ use crate::{
     },
     replay_policy::CostClass,
     workflow::{
-        cost_guard::map_cost_guard_reserve_error, replay::mark_recovery_required_after_failure,
+        cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
+        replay::mark_recovery_required_after_failure,
         rpc::RpcWorkflowError,
     },
 };
@@ -390,7 +391,7 @@ pub(super) async fn execute_authorized_request_cycles(
         MgmtOps::deposit_cycles_with_permit(&cost_permit, ctx.caller, grant.approved_cycles).await
     {
         CyclesFundingLedgerOps::restore_child_snapshot(ctx.caller, ledger_before_grant);
-        let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
+        let err = CostGuardWorkflow::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
         let err =
             preserve_request_cycles_recovery_required(pending, ctx, grant.approved_cycles, err);
         CyclesFundingMetrics::record_denied(
@@ -411,7 +412,7 @@ pub(super) async fn execute_authorized_request_cycles(
         &crate::dto::rpc::Response::Cycles(response.clone()),
     ) {
         let mut err = err;
-        let reason = match CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+        let reason = match CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
             Ok(()) => RecoveryReason::ResponseCommitFailed,
             Err(settlement_err) => {
                 err = err.with_diagnostic_context(format!(
@@ -428,7 +429,7 @@ pub(super) async fn execute_authorized_request_cycles(
         return Err(err);
     }
 
-    if let Err(err) = CostGuardOps::complete(&cost_permit, IcOps::now_secs()) {
+    if let Err(err) = CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs()) {
         if let Err(recovery_err) =
             replay::mark_recovery_required(pending, RecoveryReason::CostSettlementFailed)
         {
@@ -490,7 +491,7 @@ fn reserve_request_cycles_cost_guard(
     ctx: &RootContext,
     approved_cycles: u128,
 ) -> Result<CostGuardPermit, InternalError> {
-    CostGuardOps::reserve(request_cycles_cost_guard_request(
+    CostGuardWorkflow::reserve(request_cycles_cost_guard_request(
         ctx,
         approved_cycles,
         IcOps::canister_cycle_balance().to_u128(),
@@ -540,7 +541,7 @@ pub(super) fn mark_request_cycles_external_effect(
     )
     .map_err(replay::map_replay_store_error)
     {
-        return Err(CostGuardOps::recover_after_failure(
+        return Err(CostGuardWorkflow::recover_after_failure(
             cost_permit,
             IcOps::now_secs(),
             err,

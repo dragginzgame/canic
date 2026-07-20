@@ -20,8 +20,8 @@ pub const WORKFLOW_CYCLE_TRACK_INTERVAL: Duration = Duration::from_hours(1);
 /// Shared cadence for log retention (10 minutes).
 pub const WORKFLOW_LOG_RETENTION_INTERVAL: Duration = Duration::from_mins(10);
 
-/// Shared cadence for intent cleanup (1 hour).
-pub const WORKFLOW_INTENT_CLEANUP_INTERVAL: Duration = Duration::from_hours(1);
+/// Retry delay for a failed bounded intent-cleanup batch (1 minute).
+pub const WORKFLOW_INTENT_CLEANUP_RETRY_INTERVAL: Duration = Duration::from_mins(1);
 
 /// Pool check cadence (30 minutes).
 pub const WORKFLOW_POOL_CHECK_INTERVAL: Duration = Duration::from_mins(30);

@@ -50,6 +50,7 @@ pub mod memory {
         pub const INTENT_TOTALS_ID: u8 = 41;
         pub const INTENT_PENDING_ID: u8 = 42;
         pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 43;
+        pub const INTENT_EXPIRY_INDEX_ID: u8 = 44;
     }
 
     pub mod pool {
@@ -89,8 +90,8 @@ use memory::{
     },
     env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
     intent::{
-        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-        RECEIPT_BACKED_INTENT_RECORDS_ID,
+        INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID,
+        INTENT_TOTALS_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
@@ -138,6 +139,7 @@ const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[
     MemoryId::new(INTENT_TOTALS_ID),
     MemoryId::new(INTENT_PENDING_ID),
     MemoryId::new(RECEIPT_BACKED_INTENT_RECORDS_ID),
+    MemoryId::new(INTENT_EXPIRY_INDEX_ID),
 ];
 const CANISTER_POOL_IDS: &[MemoryId] = &[MemoryId::new(CANISTER_POOL_ID)];
 const SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SCALING_REGISTRY_ID)];

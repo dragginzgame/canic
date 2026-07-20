@@ -21,7 +21,7 @@ use crate::{
     log::Topic,
     model::replay::{CommandKind, ExternalEffectDescriptor, RecoveryReason},
     ops::{
-        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+        cost_guard::{CostGuardPermit, CostGuardRequest},
         ic::{
             IcOps,
             mgmt::{CanisterInstallMode, MgmtOps},
@@ -39,7 +39,8 @@ use crate::{
     replay_policy::CostClass,
     workflow::{
         canister_lifecycle::propagation::PropagationWorkflow,
-        cost_guard::map_cost_guard_reserve_error, ic::provision::ProvisionWorkflow,
+        cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
+        ic::provision::ProvisionWorkflow,
         runtime::install::ModuleInstallWorkflow,
     },
 };
@@ -326,7 +327,7 @@ async fn execute_costed_upgrade(
         cost_permit,
         crate::ops::replay::guard::secs_to_ns(IcOps::now_secs()),
     ) {
-        return Err(CostGuardOps::recover_after_failure(
+        return Err(CostGuardWorkflow::recover_after_failure(
             cost_permit,
             IcOps::now_secs(),
             map_upgrade_replay_store_error(replay_err),
@@ -342,7 +343,7 @@ async fn execute_costed_upgrade(
     )
     .await
     {
-        let err = CostGuardOps::recover_after_failure(cost_permit, IcOps::now_secs(), err);
+        let err = CostGuardWorkflow::recover_after_failure(cost_permit, IcOps::now_secs(), err);
         return match replay_ops::mark_root_replay_recovery_required(
             replay_pending,
             RecoveryReason::ExternalEffectStatusUnknown,
@@ -359,7 +360,7 @@ async fn execute_costed_upgrade(
 
     SubnetRegistryOps::update_module_hash(pid, target_hash.to_vec());
     if let Err(mut err) = assert_upgrade_module_hash(pid, target_hash, role) {
-        if let Err(settlement_err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+        if let Err(settlement_err) = CostGuardWorkflow::complete(cost_permit, IcOps::now_secs()) {
             err = err.with_diagnostic_context(format!(
                 "root upgrade cost settlement also failed: {settlement_err}"
             ));
@@ -377,7 +378,7 @@ async fn execute_costed_upgrade(
         }
         return Err(err);
     }
-    if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+    if let Err(err) = CostGuardWorkflow::complete(cost_permit, IcOps::now_secs()) {
         return match replay_ops::mark_root_replay_recovery_required(
             replay_pending,
             RecoveryReason::CostSettlementFailed,
@@ -413,7 +414,7 @@ fn reserve_canister_upgrade_cost_guard(
     cost_context: CanisterUpgradeCostContext,
     current_cycle_balance: u128,
 ) -> Result<CostGuardPermit, InternalError> {
-    CostGuardOps::reserve(canister_upgrade_cost_guard_request(
+    CostGuardWorkflow::reserve(canister_upgrade_cost_guard_request(
         cost_context,
         current_cycle_balance,
     ))

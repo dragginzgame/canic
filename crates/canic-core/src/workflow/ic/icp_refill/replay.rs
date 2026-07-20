@@ -31,6 +31,7 @@ use crate::{
     },
     view::icp_refill::IcpRefillOperation,
     workflow::{
+        cost_guard::CostGuardWorkflow,
         ic::icp_refill::{
             ICP_REFILL_REPLAY_COMMAND_KIND,
             cost_guard::{complete_icp_refill_cost_guard, recover_icp_refill_cost_guard},
@@ -237,10 +238,7 @@ fn recover_icp_refill_response(
     if cost_settled {
         let settlement =
             replay_cost_guard_settlement(token).map_err(map_icp_refill_replay_store_error)?;
-        crate::ops::cost_guard::CostGuardOps::complete_replay_settlement(
-            &settlement,
-            IcOps::now_secs(),
-        )?;
+        CostGuardWorkflow::complete_replay_settlement(&settlement, IcOps::now_secs())?;
     }
     let receipt = match commit_staged_receipt_response(token, IcOps::now_nanos()) {
         Ok(receipt) => receipt,

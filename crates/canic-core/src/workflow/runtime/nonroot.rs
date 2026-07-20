@@ -96,9 +96,9 @@ pub fn init_nonroot_canister(
 
     // --- Phase 3: Service startup ---
     if with_role_attestation_refresh {
-        RuntimeWorkflow::start_all_with_role_attestation_refresh();
+        RuntimeWorkflow::start_all_with_role_attestation_refresh()?;
     } else {
-        RuntimeWorkflow::start_all();
+        RuntimeWorkflow::start_all()?;
     }
 
     Ok(())
@@ -135,9 +135,9 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
 
     // --- Phase 3: Service startup ---
     if with_role_attestation_refresh {
-        RuntimeWorkflow::start_all_with_role_attestation_refresh();
+        RuntimeWorkflow::start_all_with_role_attestation_refresh()?;
     } else {
-        RuntimeWorkflow::start_all();
+        RuntimeWorkflow::start_all()?;
     }
 
     Ok(())

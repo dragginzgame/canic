@@ -27,12 +27,9 @@ use crate::{
         },
         storage::{intent::IntentStoreOps, pool::PoolOps, registry::subnet::SubnetRegistryOps},
     },
-    workflow::{
-        pool::{
-            PoolWorkflow, admissibility, metric_reason_for_policy, query::PoolQuery,
-            scheduler::PoolSchedulerWorkflow,
-        },
-        runtime::intent::IntentCleanupWorkflow,
+    workflow::pool::{
+        PoolWorkflow, admissibility, metric_reason_for_policy, query::PoolQuery,
+        scheduler::PoolSchedulerWorkflow,
     },
 };
 
@@ -269,7 +266,6 @@ fn reserve_pool_import_intent(intent_key: IntentResourceKey) -> Result<IntentId,
     };
 
     let now_secs = IcOps::now_secs();
-    IntentCleanupWorkflow::ensure_started();
     if let Err(err) =
         IntentStoreOps::try_reserve(intent_id, intent_key, 1, now_secs, None, now_secs)
     {

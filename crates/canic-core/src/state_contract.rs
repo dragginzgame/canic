@@ -17,8 +17,8 @@ use crate::role_contract::allocation::memory::{
     },
     env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
     intent::{
-        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
-        RECEIPT_BACKED_INTENT_RECORDS_ID,
+        INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID,
+        INTENT_TOTALS_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
@@ -566,9 +566,10 @@ fn icp_refill_domains() -> Vec<StateDomainManifest> {
 
 fn runtime_intent_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::intent::{
-        IntentMetaData, IntentPendingData, IntentPendingEntryRecord, IntentRecord,
-        IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord, IntentTotalsData,
-        ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
+        IntentExpiryEntryRecord, IntentExpiryIndexData, IntentMetaData, IntentPendingData,
+        IntentPendingEntryRecord, IntentRecord, IntentRecordsData, IntentResourceTotalsRecord,
+        IntentStoreMetaRecord, IntentTotalsData, ReceiptBackedIntentRecord,
+        ReceiptBackedIntentsData,
     };
 
     vec![
@@ -611,6 +612,14 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
             ReceiptBackedIntentsData::STATE_CONTRACT_NAME,
             114,
             "receipt_backed_intent_records_restore_terminal_evidence",
+        ),
+        state_domain(
+            "intent_expiry_index",
+            INTENT_EXPIRY_INDEX_ID,
+            IntentExpiryEntryRecord::STATE_CONTRACT_NAME,
+            IntentExpiryIndexData::STATE_CONTRACT_NAME,
+            115,
+            "intent_expiry_index_restores_exact_ordered_deadlines",
         ),
     ]
 }
@@ -743,6 +752,7 @@ mod tests {
             INTENT_TOTALS_ID,
             INTENT_PENDING_ID,
             RECEIPT_BACKED_INTENT_RECORDS_ID,
+            INTENT_EXPIRY_INDEX_ID,
             CANISTER_POOL_ID,
             SCALING_REGISTRY_ID,
             DIRECTORY_REGISTRY_ID,
@@ -969,9 +979,10 @@ mod tests {
     #[test]
     fn intent_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::intent::{
-            IntentMetaData, IntentPendingData, IntentPendingEntryRecord, IntentRecord,
-            IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord, IntentTotalsData,
-            ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
+            IntentExpiryEntryRecord, IntentExpiryIndexData, IntentMetaData, IntentPendingData,
+            IntentPendingEntryRecord, IntentRecord, IntentRecordsData, IntentResourceTotalsRecord,
+            IntentStoreMetaRecord, IntentTotalsData, ReceiptBackedIntentRecord,
+            ReceiptBackedIntentsData,
         };
 
         let descriptors = canic_state_descriptors();
@@ -1006,6 +1017,11 @@ mod tests {
                 ReceiptBackedIntentRecord::STATE_CONTRACT_NAME,
                 ReceiptBackedIntentsData::STATE_CONTRACT_NAME,
             ),
+            (
+                "intent_expiry_index",
+                IntentExpiryEntryRecord::STATE_CONTRACT_NAME,
+                IntentExpiryIndexData::STATE_CONTRACT_NAME,
+            ),
         ] {
             let declaration = runtime_intents
                 .state
@@ -1016,6 +1032,8 @@ mod tests {
             assert_eq!(declaration.record, record);
             assert_eq!(declaration.snapshot, snapshot);
         }
+
+        assert!(runtime_intents.reserved_memory.is_empty());
     }
 
     #[test]

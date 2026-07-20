@@ -17,7 +17,7 @@ use crate::{
         ReplayPayloadHasher, ReplayReceipt,
     },
     ops::{
-        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+        cost_guard::{CostGuardPermit, CostGuardRequest},
         ic::{IcOps, mgmt::MgmtOps},
         replay::{
             self as replay_ops, POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION,
@@ -37,7 +37,7 @@ use crate::{
     },
     replay_policy::CostClass,
     workflow::{
-        cost_guard::map_cost_guard_reserve_error,
+        cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         pool::PoolWorkflow,
         replay::{abort_reserved_receipt_after_failure, mark_recovery_required_after_failure},
     },
@@ -113,7 +113,8 @@ impl PoolWorkflow {
         if let Err(err) =
             mark_pool_create_empty_external_effect(&token, &command_kind, &cost_permit)
         {
-            let err = CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
+            let err =
+                CostGuardWorkflow::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
             MetricEvent::failed(MetricOperation::CreateEmpty, &err);
             return Err(err);
         }
@@ -124,8 +125,11 @@ impl PoolWorkflow {
             {
                 Ok(pid) => pid,
                 Err(err) => {
-                    let err =
-                        CostGuardOps::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
+                    let err = CostGuardWorkflow::recover_after_failure(
+                        &cost_permit,
+                        IcOps::now_secs(),
+                        err,
+                    );
                     let err = mark_recovery_required_after_failure(
                         &token,
                         RecoveryReason::ExternalEffectStatusUnknown,
@@ -251,7 +255,7 @@ fn reserve_pool_create_empty_cost_guard(
     command_kind: &CommandKind,
     caller: Principal,
 ) -> Result<CostGuardPermit, InternalError> {
-    CostGuardOps::reserve(CostGuardRequest {
+    CostGuardWorkflow::reserve(CostGuardRequest {
         cost_class: CostClass::ManagementDeployment,
         command_kind: command_kind.clone(),
         quota_subject: caller,
@@ -300,7 +304,7 @@ fn commit_pool_create_empty_success(
             map_pool_create_empty_replay_store_error(err),
         ));
     }
-    if let Err(err) = CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+    if let Err(err) = CostGuardWorkflow::complete(cost_permit, IcOps::now_secs()) {
         if let Err(recovery_err) = mark_recovery_required(
             token,
             RecoveryReason::CostSettlementFailed,
@@ -337,7 +341,7 @@ fn preserve_pool_create_empty_response_failure(
     cost_permit: &CostGuardPermit,
     mut err: InternalError,
 ) -> InternalError {
-    let reason = match CostGuardOps::complete(cost_permit, IcOps::now_secs()) {
+    let reason = match CostGuardWorkflow::complete(cost_permit, IcOps::now_secs()) {
         Ok(()) => RecoveryReason::ResponseCommitFailed,
         Err(settlement_err) => {
             err = err.with_diagnostic_context(format!(
@@ -364,7 +368,7 @@ fn recover_pool_create_empty_response(
     if cost_settled {
         let settlement = replay_cost_guard_settlement(token)
             .map_err(map_pool_create_empty_replay_store_error)?;
-        CostGuardOps::complete_replay_settlement(&settlement, IcOps::now_secs())?;
+        CostGuardWorkflow::complete_replay_settlement(&settlement, IcOps::now_secs())?;
     }
     let receipt = match commit_staged_receipt_response(token, secs_to_ns(IcOps::now_secs())) {
         Ok(receipt) => receipt,
@@ -487,6 +491,7 @@ fn decode_pool_create_empty_response(receipt: &ReplayReceipt) -> Result<Principa
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ops::cost_guard::CostGuardOps;
     use crate::{
         dto::error::ErrorCode,
         model::replay::{

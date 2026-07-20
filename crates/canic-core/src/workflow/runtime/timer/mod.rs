@@ -70,10 +70,6 @@ pub enum TimerDirective {
     Stop,
     ContinueImmediately,
     RetryAfter(Duration),
-    #[expect(
-        dead_code,
-        reason = "accepted exact-deadline owners migrate in Slice C and D"
-    )]
     ScheduleAt(u64),
     RecurAfter(Duration),
 }
@@ -414,11 +410,53 @@ impl TimerWorkflow {
         );
     }
 
+    /// Configure one built-in bounded process if needed and request an absolute deadline.
+    pub fn schedule_at<F, Fut>(key: TimerKey, deadline_ns: u64, task: F)
+    where
+        F: FnMut() -> Fut + 'static,
+        Fut: Future<Output = TimerRunResult> + 'static,
+    {
+        let identity = TimerIdentity::BuiltIn(key);
+        ensure_bounded_entry(identity, key, task);
+        request_at(identity, deadline_ns);
+    }
+
+    /// Configure one built-in bounded process and reconcile its sole live deadline.
+    pub fn reconcile_at<F, Fut>(key: TimerKey, deadline_ns: Option<u64>, task: F)
+    where
+        F: FnMut() -> Fut + 'static,
+        Fut: Future<Output = TimerRunResult> + 'static,
+    {
+        let identity = TimerIdentity::BuiltIn(key);
+        ensure_bounded_entry(identity, key, task);
+        match deadline_ns {
+            Some(deadline_ns) => request_reconcile_at(identity, deadline_ns),
+            None => request_idle(identity),
+        }
+    }
+
     /// Snapshot live registrations and current-runtime counters.
     #[must_use]
     pub fn statuses() -> Vec<TimerRuntimeSnapshot> {
         TIMERS.with_borrow(|timers| timers.values().map(TimerEntry::snapshot).collect())
     }
+}
+
+fn ensure_bounded_entry<F, Fut>(identity: TimerIdentity, key: TimerKey, task: F)
+where
+    F: FnMut() -> Fut + 'static,
+    Fut: Future<Output = TimerRunResult> + 'static,
+{
+    insert_entry_if_absent(
+        identity,
+        TimerEntry::new(
+            key.label().to_string(),
+            TimerMode::Once,
+            TimerSchedulingMode::Deadline,
+            true,
+            timer_factory(task),
+        ),
+    );
 }
 
 fn ensure_builtin(
@@ -486,10 +524,48 @@ fn request_at(identity: TimerIdentity, deadline_ns: u64) {
             .unwrap_or_else(|| panic!("timer identity is not configured"));
         entry.enabled = true;
         entry.condition = TimerProcessCondition::Active;
-        entry
+        let action = entry
             .control
             .schedule(deadline_ns)
-            .unwrap_or_else(|err| panic!("timer scheduling failed closed: {err}"))
+            .unwrap_or_else(|err| panic!("timer scheduling failed closed: {err}"));
+        if matches!(
+            action,
+            TimerControlAction::Arm { .. } | TimerControlAction::Replace { .. }
+        ) {
+            entry.scheduling_mode = TimerSchedulingMode::Deadline;
+        }
+        action
+    });
+    apply_action(identity, action);
+}
+
+fn request_reconcile_at(identity: TimerIdentity, deadline_ns: u64) {
+    let action = TIMERS.with_borrow_mut(|timers| {
+        let entry = timers
+            .get_mut(&identity)
+            .unwrap_or_else(|| panic!("timer identity is not configured"));
+        entry.enabled = true;
+        entry.condition = TimerProcessCondition::Active;
+        entry.scheduling_mode = TimerSchedulingMode::Deadline;
+        entry
+            .control
+            .reconcile(deadline_ns)
+            .unwrap_or_else(|err| panic!("timer deadline reconciliation failed closed: {err}"))
+    });
+    apply_action(identity, action);
+}
+
+fn request_idle(identity: TimerIdentity) {
+    let action = TIMERS.with_borrow_mut(|timers| {
+        let entry = timers
+            .get_mut(&identity)
+            .unwrap_or_else(|| panic!("timer identity is not configured"));
+        entry.enabled = true;
+        entry.condition = TimerProcessCondition::Idle;
+        entry
+            .control
+            .cancel()
+            .unwrap_or_else(|err| panic!("timer idle reconciliation failed closed: {err}"))
     });
     apply_action(identity, action);
 }
@@ -641,16 +717,23 @@ async fn fire(identity: TimerIdentity, generation: u64) {
                 entry.invariant_failures = entry.invariant_failures.saturating_add(1);
             }
         }
-        if let Some(scheduling_mode) = scheduling_mode {
-            entry.scheduling_mode = scheduling_mode;
-        }
-
         let action = entry
             .control
             .complete(generation, directive_deadline_ns)
             .unwrap_or_else(|err| panic!("timer completion failed closed: {err}"));
+        if let Some(mode) =
+            effective_scheduling_mode(action, directive_deadline_ns, scheduling_mode)
+        {
+            entry.scheduling_mode = mode;
+        }
         entry.condition = match action {
-            TimerControlAction::Disarm { cancelled: true } => TimerProcessCondition::Disabled,
+            TimerControlAction::Disarm { cancelled: true } => {
+                if entry.enabled {
+                    TimerProcessCondition::Idle
+                } else {
+                    TimerProcessCondition::Disabled
+                }
+            }
             TimerControlAction::Disarm { cancelled: false } => match result.outcome {
                 TimerExecutionOutcome::Success | TimerExecutionOutcome::NoWork => {
                     TimerProcessCondition::Idle
@@ -687,6 +770,21 @@ async fn fire(identity: TimerIdentity, generation: u64) {
     } else {
         apply_action(identity, action);
     }
+}
+
+fn effective_scheduling_mode(
+    action: TimerControlAction,
+    directive_deadline_ns: Option<u64>,
+    directive_mode: Option<TimerSchedulingMode>,
+) -> Option<TimerSchedulingMode> {
+    let TimerControlAction::Arm { deadline_ns, .. } = action else {
+        return None;
+    };
+    Some(if Some(deadline_ns) == directive_deadline_ns {
+        directive_mode.unwrap_or(TimerSchedulingMode::Deadline)
+    } else {
+        TimerSchedulingMode::Deadline
+    })
 }
 
 fn next_application_timer_id() -> u64 {

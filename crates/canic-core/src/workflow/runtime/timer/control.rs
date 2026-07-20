@@ -16,6 +16,7 @@ pub(super) enum TimerRegistration {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PendingCommand {
     Cancel { sequence: u64 },
+    Reconcile { sequence: u64, deadline_ns: u64 },
     Schedule { sequence: u64, deadline_ns: u64 },
 }
 
@@ -109,10 +110,16 @@ impl TimerControl {
             TimerRegistration::Running { .. } => {
                 self.request_sequence = sequence;
                 self.pending = Some(match self.pending {
-                    Some(PendingCommand::Schedule {
-                        deadline_ns: current_deadline,
-                        ..
-                    }) => PendingCommand::Schedule {
+                    Some(
+                        PendingCommand::Schedule {
+                            deadline_ns: current_deadline,
+                            ..
+                        }
+                        | PendingCommand::Reconcile {
+                            deadline_ns: current_deadline,
+                            ..
+                        },
+                    ) => PendingCommand::Schedule {
                         sequence,
                         deadline_ns: current_deadline.min(deadline_ns),
                     },
@@ -150,6 +157,57 @@ impl TimerControl {
         }
     }
 
+    pub(super) fn reconcile(
+        &mut self,
+        deadline_ns: u64,
+    ) -> Result<TimerControlAction, TimerControlError> {
+        let sequence = self.next_request_sequence()?;
+
+        match self.registration {
+            TimerRegistration::Unregistered => {
+                let generation = self.next_generation()?;
+                self.request_sequence = sequence;
+                self.generation = generation;
+                self.registration = TimerRegistration::Scheduled {
+                    generation,
+                    deadline_ns,
+                };
+                Ok(TimerControlAction::Arm {
+                    generation,
+                    deadline_ns,
+                })
+            }
+            TimerRegistration::Scheduled {
+                deadline_ns: current_deadline,
+                ..
+            } if deadline_ns == current_deadline => {
+                self.request_sequence = sequence;
+                Ok(TimerControlAction::None)
+            }
+            TimerRegistration::Scheduled { .. } => {
+                let generation = self.next_generation()?;
+                self.request_sequence = sequence;
+                self.generation = generation;
+                self.registration = TimerRegistration::Scheduled {
+                    generation,
+                    deadline_ns,
+                };
+                Ok(TimerControlAction::Replace {
+                    generation,
+                    deadline_ns,
+                })
+            }
+            TimerRegistration::Running { .. } => {
+                self.request_sequence = sequence;
+                self.pending = Some(PendingCommand::Reconcile {
+                    sequence,
+                    deadline_ns,
+                });
+                Ok(TimerControlAction::None)
+            }
+        }
+    }
+
     pub(super) const fn begin(&mut self, generation: u64) -> bool {
         match self.registration {
             TimerRegistration::Scheduled {
@@ -177,6 +235,7 @@ impl TimerControl {
         let pending = self.pending;
         let (deadline_ns, cancelled) = match pending {
             Some(PendingCommand::Cancel { .. }) => (None, true),
+            Some(PendingCommand::Reconcile { deadline_ns, .. }) => (Some(deadline_ns), false),
             Some(PendingCommand::Schedule { deadline_ns, .. }) => (
                 Some(
                     directive_deadline_ns
@@ -265,6 +324,36 @@ mod tests {
         );
         assert!(!control.begin(old_generation));
         assert!(control.begin(2));
+    }
+
+    #[test]
+    fn authoritative_reconciliation_can_move_a_scheduled_deadline_later() {
+        let mut control = TimerControl::default();
+        let old_generation = arm(&mut control, 100);
+        assert_eq!(
+            control.reconcile(200),
+            Ok(TimerControlAction::Replace {
+                generation: 2,
+                deadline_ns: 200
+            })
+        );
+        assert!(!control.begin(old_generation));
+        assert!(control.begin(2));
+    }
+
+    #[test]
+    fn authoritative_reconciliation_while_running_replaces_callback_deadline() {
+        let mut control = TimerControl::default();
+        let generation = arm(&mut control, 100);
+        assert!(control.begin(generation));
+        assert_eq!(control.reconcile(300), Ok(TimerControlAction::None));
+        assert_eq!(
+            control.complete(generation, Some(150)),
+            Ok(TimerControlAction::Arm {
+                generation: 2,
+                deadline_ns: 300
+            })
+        );
     }
 
     #[test]

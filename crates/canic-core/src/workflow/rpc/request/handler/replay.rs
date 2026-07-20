@@ -16,7 +16,6 @@ use crate::{
     ids::CanisterRole,
     model::replay::{CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason},
     ops::{
-        cost_guard::CostGuardOps,
         ic::IcOps,
         replay::{
             self as replay_ops, ReplayCommitError, ReplayDecodeError, ReplayFinalizeError,
@@ -32,7 +31,7 @@ use crate::{
             RootCapabilityMetricKey, RootCapabilityMetricOutcome, RootCapabilityMetrics,
         },
     },
-    workflow::rpc::RpcWorkflowError,
+    workflow::{cost_guard::CostGuardWorkflow, rpc::RpcWorkflowError},
 };
 use sha2::{Digest, Sha256};
 
@@ -208,7 +207,7 @@ pub(super) fn recover_staged_response(
     if cost_settled {
         let settlement = replay_ops::root_replay_cost_guard_settlement(pending)
             .map_err(map_replay_store_error)?;
-        CostGuardOps::complete_replay_settlement(&settlement, ctx.now)?;
+        CostGuardWorkflow::complete_replay_settlement(&settlement, ctx.now)?;
     }
     let receipt = match replay_ops::commit_staged_root_replay_response(pending, secs_to_ns(ctx.now))
     {
