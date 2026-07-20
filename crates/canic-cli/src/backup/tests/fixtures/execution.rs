@@ -25,9 +25,7 @@ pub(in crate::backup::tests) fn complete_execution_operation(
     journal: &mut BackupExecutionJournal,
     sequence: usize,
 ) {
-    journal
-        .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))
-        .expect("mark operation pending");
+    mark_execution_operation_pending(journal, sequence);
     let operation = journal
         .operations
         .iter()
@@ -62,9 +60,7 @@ pub(in crate::backup::tests) fn fail_execution_operation(
     sequence: usize,
     reason: &str,
 ) {
-    journal
-        .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))
-        .expect("mark operation pending");
+    mark_execution_operation_pending(journal, sequence);
     let operation = journal
         .operations
         .iter()
@@ -80,4 +76,22 @@ pub(in crate::backup::tests) fn fail_execution_operation(
     journal
         .record_operation_receipt(receipt)
         .expect("record failed operation");
+}
+
+fn mark_execution_operation_pending(journal: &mut BackupExecutionJournal, sequence: usize) {
+    let operation = journal
+        .operations
+        .iter()
+        .find(|operation| operation.sequence == sequence)
+        .expect("operation exists");
+    let updated_at = Some(format!("unix:{sequence}0"));
+    if operation.kind == BackupOperationKind::CreateSnapshot {
+        journal
+            .mark_snapshot_create_pending_at(sequence, updated_at, Vec::new())
+            .expect("mark snapshot operation pending");
+    } else {
+        journal
+            .mark_operation_pending_at(sequence, updated_at)
+            .expect("mark operation pending");
+    }
 }
