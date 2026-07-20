@@ -62,9 +62,19 @@ fn pending_claim_publication_selects_the_exact_restart_policy() {
         .cloned()
         .expect("next pending-claim operation");
     assert_eq!(backup_operation_label(&operation.kind), operation_label);
-    journal
-        .mark_operation_pending_at(operation.sequence, Some("unix:20".to_string()))
-        .expect("mark operation pending in crash child");
+    if operation.kind == BackupOperationKind::CreateSnapshot {
+        journal
+            .mark_snapshot_create_pending_at(
+                operation.sequence,
+                Some("unix:20".to_string()),
+                Vec::new(),
+            )
+            .expect("mark snapshot operation pending in crash child");
+    } else {
+        journal
+            .mark_operation_pending_at(operation.sequence, Some("unix:20".to_string()))
+            .expect("mark operation pending in crash child");
+    }
     let barrier = durable_write_barrier(&barrier_name);
     write_json_durable_at_barriers(&layout.execution_journal_path(), &journal, |observed| {
         if observed == barrier {
@@ -130,6 +140,13 @@ fn prove_pending_claim_barrier(
                 receipt_count,
                 expected_command.expect("stop command"),
             );
+        } else if expected_kind == BackupOperationKind::CreateSnapshot {
+            prove_pending_snapshot_without_effect_executes_once(
+                &root,
+                &expected_operation,
+                receipt_count,
+                expected_command.expect("snapshot command"),
+            );
         } else if expected_command.is_some() {
             prove_unknown_external_operation_halts(&root, &expected_operation, &observed);
         } else {
@@ -139,6 +156,34 @@ fn prove_pending_claim_barrier(
 
     fs::remove_dir_all(root).expect("remove pending claim layout");
     fs::remove_dir_all(handshake_root).expect("remove pending claim handshake root");
+}
+
+fn prove_pending_snapshot_without_effect_executes_once(
+    root: &Path,
+    expected_operation: &BackupExecutionJournalOperation,
+    receipt_count: usize,
+    snapshot_command: String,
+) {
+    let target = expected_operation
+        .target_canister_id
+        .as_deref()
+        .expect("snapshot operation target");
+    let mut executor = FakeBackupRunnerExecutor::default();
+    let response = backup_run_execute_with_executor(
+        &runner_config(root.to_path_buf(), Some(1)),
+        &mut executor,
+    )
+    .expect("empty exact inventory proves pending create effect absent");
+    let journal = BackupLayout::new(root.to_path_buf())
+        .read_execution_journal()
+        .expect("read reconciled snapshot journal");
+
+    assert_eq!(response.executed_operation_count, 1);
+    assert_eq!(
+        executor.commands,
+        vec![format!("snapshot-list:{target}"), snapshot_command]
+    );
+    assert_operation_completed_once(&journal, expected_operation, receipt_count);
 }
 
 fn prove_pending_stop_observes_then_executes(
@@ -221,10 +266,18 @@ fn prove_ready_operation_resumes(
 
     assert_eq!(response.executed_operation_count, 1);
     assert_operation_completed_once(&journal, expected_operation, receipt_count);
-    assert_eq!(
-        executor.commands,
-        expected_command.into_iter().collect::<Vec<_>>()
-    );
+    let mut expected_commands = Vec::new();
+    if expected_operation.kind == BackupOperationKind::CreateSnapshot {
+        expected_commands.push(format!(
+            "snapshot-list:{}",
+            expected_operation
+                .target_canister_id
+                .as_deref()
+                .expect("snapshot operation target")
+        ));
+    }
+    expected_commands.extend(expected_command);
+    assert_eq!(executor.commands, expected_commands);
 }
 
 fn prove_unknown_external_operation_halts(

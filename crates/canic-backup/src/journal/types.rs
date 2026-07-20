@@ -59,6 +59,10 @@ pub struct DownloadOperationMetrics {
 pub struct ArtifactJournalEntry {
     pub canister_id: String,
     pub snapshot_id: String,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub snapshot_taken_at_timestamp: Option<u64>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub snapshot_total_size_bytes: Option<u64>,
     pub state: ArtifactState,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub temp_path: Option<String>,

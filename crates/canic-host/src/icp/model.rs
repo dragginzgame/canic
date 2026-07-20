@@ -50,11 +50,11 @@ pub struct IcpCliVersion {
 }
 
 ///
-/// IcpSnapshotCreateReceipt
+/// IcpSnapshot
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct IcpSnapshotCreateReceipt {
+pub struct IcpSnapshot {
     pub snapshot_id: String,
     pub taken_at_timestamp: Option<u64>,
     pub total_size_bytes: Option<u64>,

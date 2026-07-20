@@ -91,3 +91,43 @@ fn rejects_out_of_order_mutation() {
         }
     );
 }
+
+#[test]
+fn snapshot_pending_claim_requires_exact_inventory_evidence() {
+    let mut journal = accepted_journal();
+    complete_operation(&mut journal, 4);
+    let before = journal.clone();
+
+    let error = journal
+        .mark_operation_pending_at(5, Some("unix:20".to_string()))
+        .expect_err("snapshot claim without inventory must reject");
+
+    assert!(
+        matches!(error, BackupExecutionJournalError::MissingField(field) if field == "operations[].snapshot_ids_before")
+    );
+    assert_eq!(journal, before);
+}
+
+#[test]
+fn snapshot_pending_claim_rejects_duplicate_inventory_without_mutation() {
+    let mut journal = accepted_journal();
+    complete_operation(&mut journal, 4);
+    let before = journal.clone();
+
+    let error = journal
+        .mark_snapshot_create_pending_at(
+            5,
+            Some("unix:20".to_string()),
+            vec!["snapshot-a".to_string(), "snapshot-a".to_string()],
+        )
+        .expect_err("duplicate snapshot inventory must reject");
+
+    std::assert_matches!(
+        error,
+        BackupExecutionJournalError::DuplicateSnapshotIdentity {
+            sequence: 5,
+            snapshot_id,
+        } if snapshot_id == "snapshot-a"
+    );
+    assert_eq!(journal, before);
+}

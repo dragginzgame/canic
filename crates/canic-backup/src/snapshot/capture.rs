@@ -128,6 +128,8 @@ fn capture_snapshot_artifact_body(
     let mut entry = ArtifactJournalEntry {
         canister_id: target.canister_id.clone(),
         snapshot_id: snapshot_id.clone(),
+        snapshot_taken_at_timestamp: None,
+        snapshot_total_size_bytes: None,
         state: ArtifactState::Created,
         temp_path: None,
         artifact_path: artifact_relative_path.display().to_string(),
@@ -212,6 +214,8 @@ mod tests {
         let entry = ArtifactJournalEntry {
             canister_id: "aaaaa-aa".to_string(),
             snapshot_id: "snapshot-1".to_string(),
+            snapshot_taken_at_timestamp: None,
+            snapshot_total_size_bytes: None,
             state: ArtifactState::ChecksumVerified,
             temp_path: Some("aaaaa-aa.tmp".to_string()),
             artifact_path: "aaaaa-aa".to_string(),

@@ -43,7 +43,7 @@ fn snapshot_completion_requires_snapshot_id() {
     let mut journal = accepted_journal();
     complete_operation(&mut journal, 4);
     journal
-        .mark_operation_pending_at(5, Some("unix:30".to_string()))
+        .mark_snapshot_create_pending_at(5, Some("unix:30".to_string()), Vec::new())
         .expect("mark snapshot pending");
     let operation = journal.operations[5].clone();
     let receipt = BackupExecutionOperationReceipt::completed(

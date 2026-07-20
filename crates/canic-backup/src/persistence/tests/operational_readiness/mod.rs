@@ -5,6 +5,8 @@
 //! Boundary: binds deterministic process loss to real durable layout operations.
 
 mod pending_claim;
+#[cfg(unix)]
+mod snapshot_create;
 mod stop_effect;
 
 use super::*;

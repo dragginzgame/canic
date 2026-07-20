@@ -7,11 +7,12 @@ use crate::{
     },
     runner::{
         BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerExecutor,
-        BackupRunnerSnapshotReceipt,
+        BackupRunnerSnapshot,
     },
 };
 
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -22,6 +23,7 @@ use std::{
 pub struct FakeBackupRunnerExecutor {
     pub commands: Vec<String>,
     pub fail_on: Option<FakeBackupRunnerFailure>,
+    pub snapshots: BTreeMap<String, Vec<BackupRunnerSnapshot>>,
 }
 
 /// Failure point supported by the shared backup runner test executor.
@@ -128,6 +130,14 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
         Ok(BackupRunnerCanisterStatus::Running)
     }
 
+    fn snapshot_inventory(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<Vec<BackupRunnerSnapshot>, BackupRunnerCommandError> {
+        self.commands.push(format!("snapshot-list:{canister_id}"));
+        Ok(self.snapshots.get(canister_id).cloned().unwrap_or_default())
+    }
+
     fn stop_canister(
         &mut self,
         canister_id: &str,
@@ -150,7 +160,7 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
         &mut self,
         canister_id: &str,
         _command_lifetime: CommandLifetimeHandle,
-    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
+    ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.commands.push(format!("snapshot:{canister_id}"));
         if self.fail_on == Some(FakeBackupRunnerFailure::CreateSnapshot) {
             return Err(BackupRunnerCommandError::failed(
@@ -158,11 +168,16 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
                 "simulated snapshot failure",
             ));
         }
-        Ok(BackupRunnerSnapshotReceipt {
+        let snapshot = BackupRunnerSnapshot {
             snapshot_id: "snap-app".to_string(),
             taken_at_timestamp: Some(1_778_709_681_897_818_005),
             total_size_bytes: Some(272_586_987),
-        })
+        };
+        self.snapshots
+            .entry(canister_id.to_string())
+            .or_default()
+            .push(snapshot.clone());
+        Ok(snapshot)
     }
 
     fn download_snapshot(

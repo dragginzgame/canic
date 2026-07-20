@@ -12,7 +12,7 @@ use crate::{
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
     runner::{
         BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerConfig,
-        BackupRunnerExecutor, BackupRunnerSnapshotReceipt, backup_run_execute_with_executor,
+        BackupRunnerExecutor, BackupRunnerSnapshot, backup_run_execute_with_executor,
     },
     test_support::{FakeBackupRunnerExecutor, temp_dir},
 };
@@ -277,6 +277,13 @@ impl BackupRunnerExecutor for StopEffectExecutor {
         }
     }
 
+    fn snapshot_inventory(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<Vec<BackupRunnerSnapshot>, BackupRunnerCommandError> {
+        self.delegate.snapshot_inventory(canister_id)
+    }
+
     fn stop_canister(
         &mut self,
         canister_id: &str,
@@ -302,7 +309,7 @@ impl BackupRunnerExecutor for StopEffectExecutor {
         &mut self,
         canister_id: &str,
         command_lifetime: CommandLifetimeHandle,
-    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
+    ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.delegate.create_snapshot(canister_id, command_lifetime)
     }
 

@@ -42,6 +42,12 @@ pub trait BackupRunnerExecutor {
         canister_id: &str,
     ) -> Result<BackupRunnerCanisterStatus, BackupRunnerCommandError>;
 
+    /// Observe the authoritative snapshots currently retained for one canister.
+    fn snapshot_inventory(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<Vec<BackupRunnerSnapshot>, BackupRunnerCommandError>;
+
     /// Stop one selected canister.
     fn stop_canister(
         &mut self,
@@ -61,7 +67,7 @@ pub trait BackupRunnerExecutor {
         &mut self,
         canister_id: &str,
         command_lifetime: CommandLifetimeHandle,
-    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError>;
+    ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError>;
 
     /// Download one selected snapshot into a temporary artifact directory.
     fn download_snapshot(
@@ -98,11 +104,11 @@ impl BackupRunnerCanisterStatus {
 }
 
 ///
-/// BackupRunnerSnapshotReceipt
+/// BackupRunnerSnapshot
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct BackupRunnerSnapshotReceipt {
+pub struct BackupRunnerSnapshot {
     pub snapshot_id: String,
     pub taken_at_timestamp: Option<u64>,
     pub total_size_bytes: Option<u64>,
@@ -192,6 +198,50 @@ pub enum BackupRunnerError {
         message: String,
     },
 
+    #[error(
+        "backup operation {sequence} snapshot inventory observation failed: {status}: {message}"
+    )]
+    SnapshotInventoryFailed {
+        sequence: usize,
+        status: String,
+        message: String,
+    },
+
+    #[error(
+        "backup operation {sequence} {operation_id} snapshot inventory lost baseline identities: {snapshot_ids:?}"
+    )]
+    SnapshotInventoryLostBaseline {
+        sequence: usize,
+        operation_id: String,
+        snapshot_ids: Vec<String>,
+    },
+
+    #[error(
+        "backup operation {sequence} {operation_id} snapshot identity is ambiguous: {snapshot_ids:?}"
+    )]
+    SnapshotIdentityAmbiguous {
+        sequence: usize,
+        operation_id: String,
+        snapshot_ids: Vec<String>,
+    },
+
+    #[error(
+        "backup operation {sequence} {operation_id} snapshot inventory contains a blank identity"
+    )]
+    InvalidSnapshotIdentity {
+        sequence: usize,
+        operation_id: String,
+    },
+
+    #[error(
+        "backup operation {sequence} {operation_id} snapshot inventory contains duplicate identity {snapshot_id}"
+    )]
+    DuplicateSnapshotIdentity {
+        sequence: usize,
+        operation_id: String,
+        snapshot_id: String,
+    },
+
     #[error("backup operation {sequence} {operation_id} is missing its command lifetime handle")]
     MissingCommandLifetime {
         sequence: usize,
@@ -227,6 +277,15 @@ pub enum BackupRunnerError {
     MissingArtifactEntry {
         sequence: usize,
         target_canister_id: String,
+    },
+
+    #[error(
+        "backup operation {sequence} has multiple artifact snapshots for target {target_canister_id}: {snapshot_ids:?}"
+    )]
+    AmbiguousArtifactSnapshot {
+        sequence: usize,
+        target_canister_id: String,
+        snapshot_ids: Vec<String>,
     },
 
     #[error(

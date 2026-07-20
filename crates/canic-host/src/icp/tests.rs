@@ -206,20 +206,38 @@ fn renders_canister_top_up() {
     );
 }
 
-// Ensure current ICP CLI snapshot JSON receipts parse into the typed host shape.
+// Ensure current ICP CLI snapshot JSON metadata parses into the typed host shape.
 #[test]
-fn parses_snapshot_create_receipt_json() {
-    let receipt = serde_json::from_str::<IcpSnapshotCreateReceipt>(
+fn parses_snapshot_json() {
+    let snapshot = serde_json::from_str::<IcpSnapshot>(
         r#"{
   "snapshot_id": "0000000000000000ffffffffffc000020101",
   "taken_at_timestamp": 1778709681897818005,
   "total_size_bytes": 272586987
 }"#,
     )
-    .expect("parse snapshot receipt");
+    .expect("parse snapshot metadata");
 
-    assert_eq!(receipt.snapshot_id, "0000000000000000ffffffffffc000020101");
-    assert_eq!(receipt.total_size_bytes, Some(272_586_987));
+    assert_eq!(snapshot.snapshot_id, "0000000000000000ffffffffffc000020101");
+    assert_eq!(snapshot.total_size_bytes, Some(272_586_987));
+}
+
+#[test]
+fn parses_snapshot_inventory_json() {
+    let snapshots = serde_json::from_str::<Vec<IcpSnapshot>>(
+        r#"[{
+  "snapshot_id": "0000000000000000ffffffffffc000020101",
+  "taken_at_timestamp": 1778709681897818005,
+  "total_size_bytes": 272586987
+}]"#,
+    )
+    .expect("parse snapshot inventory");
+
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(
+        snapshots[0].snapshot_id,
+        "0000000000000000ffffffffffc000020101"
+    );
 }
 
 // Ensure current ICP CLI status JSON parses into the typed host shape.

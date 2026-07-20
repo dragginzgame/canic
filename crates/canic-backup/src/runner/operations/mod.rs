@@ -24,6 +24,7 @@ use artifacts::{
     execute_create_snapshot, execute_download_snapshot, execute_finalize_manifest,
     execute_verify_artifact,
 };
+pub(super) use artifacts::{persist_created_snapshot, recorded_snapshot_receipt};
 
 pub(super) fn execute_operation_receipt(
     config: &BackupRunnerConfig,
@@ -123,7 +124,7 @@ fn required_command_lifetime(
     })
 }
 
-fn operation_target(
+pub(super) fn operation_target(
     operation: &BackupExecutionJournalOperation,
 ) -> Result<String, BackupRunnerError> {
     operation

@@ -60,7 +60,11 @@ fn execution_journal_requires_exact_current_optional_fields() {
         .expect_err("current preflight_id field must be present");
     assert!(err.is_data());
 
-    for field in ["target_canister_id", "state_updated_at"] {
+    for field in [
+        "target_canister_id",
+        "state_updated_at",
+        "snapshot_ids_before",
+    ] {
         let mut value =
             serde_json::to_value(&journal.operations[0]).expect("serialize journal operation");
         value
@@ -75,9 +79,19 @@ fn execution_journal_requires_exact_current_optional_fields() {
 }
 
 fn complete_operation(journal: &mut BackupExecutionJournal, sequence: usize) {
-    journal
-        .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))
-        .expect("mark pending");
+    if journal.operations[sequence].kind == BackupOperationKind::CreateSnapshot {
+        journal
+            .mark_snapshot_create_pending_at(
+                sequence,
+                Some(format!("unix:{sequence}0")),
+                Vec::new(),
+            )
+            .expect("mark snapshot pending");
+    } else {
+        journal
+            .mark_operation_pending_at(sequence, Some(format!("unix:{sequence}0")))
+            .expect("mark pending");
+    }
     let operation = journal.operations[sequence].clone();
     let mut receipt = BackupExecutionOperationReceipt::completed(
         journal,

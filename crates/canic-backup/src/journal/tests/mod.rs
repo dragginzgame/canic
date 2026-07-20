@@ -13,6 +13,8 @@ fn valid_journal() -> DownloadJournal {
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),
             snapshot_id: "snap-1".to_string(),
+            snapshot_taken_at_timestamp: Some(1_778_709_681_897_818_005),
+            snapshot_total_size_bytes: Some(272_586_987),
             state: ArtifactState::Durable,
             temp_path: None,
             artifact_path: "artifacts/root".to_string(),
@@ -59,7 +61,12 @@ fn download_journal_requires_current_topology_and_metrics_fields() {
 
 #[test]
 fn download_journal_requires_exact_current_optional_fields() {
-    for field in ["temp_path", "checksum"] {
+    for field in [
+        "snapshot_taken_at_timestamp",
+        "snapshot_total_size_bytes",
+        "temp_path",
+        "checksum",
+    ] {
         let mut value = serde_json::to_value(valid_journal()).expect("serialize journal");
         value["artifacts"][0]
             .as_object_mut()

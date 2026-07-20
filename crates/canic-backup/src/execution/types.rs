@@ -48,6 +48,8 @@ pub struct BackupExecutionJournalOperation {
     pub state: BackupExecutionOperationState,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub state_updated_at: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub snapshot_ids_before: Option<Vec<String>>,
     pub blocking_reasons: Vec<String>,
 }
 
@@ -192,6 +194,15 @@ pub enum BackupExecutionJournalError {
 
     #[error("operation {0} cannot have blocking reasons in its current state")]
     UnblockedOperationHasReasons(usize),
+
+    #[error("operation {0} cannot carry snapshot inventory evidence")]
+    UnexpectedSnapshotInventory(usize),
+
+    #[error("operation {sequence} snapshot inventory repeats identity {snapshot_id}")]
+    DuplicateSnapshotIdentity {
+        sequence: usize,
+        snapshot_id: String,
+    },
 
     #[error("operation {0} was not found")]
     OperationNotFound(usize),

@@ -589,6 +589,8 @@ fn journal_with_checksum(checksum: String) -> DownloadJournal {
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),
             snapshot_id: "snap-root".to_string(),
+            snapshot_taken_at_timestamp: None,
+            snapshot_total_size_bytes: None,
             state: ArtifactState::Durable,
             temp_path: None,
             artifact_path: "artifacts/root".to_string(),
