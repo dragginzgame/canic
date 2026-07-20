@@ -4,19 +4,19 @@ Last updated: 2026-07-20
 
 ## Current State
 
-The maintainer released exact start-effect reconciliation as `v0.94.5`. The
-capability, command-lifetime, pending-claim, stop, snapshot-create, and start
-findings are fixed in released code.
+The maintainer released private snapshot-download staging recovery as
+`v0.94.6`. The capability, command-lifetime, pending-claim, lifecycle,
+snapshot-create, and download-effect findings are fixed in released code.
 
-The current 0.94.6 draft completes private snapshot-download staging recovery
-(`B09`). A pending download resumes only from one exact `Created` artifact row
-bound to its target, snapshot, and canonical path. Restart replaces only
-uncommitted private staging, rejects unsafe filesystem entries, and preserves
-`Downloaded` or later evidence for the next frozen recovery boundary.
-Artifact-journal states now reject fields owned by another transition. The
-aggregate verification journey passes; the backup crash journey remains
-pending until every assigned case passes. CLI syntax, Candid, durable document
-versions, and package versions are unchanged.
+The current 0.94.7 draft completes both durable sides of the `Downloaded`
+artifact-journal transition (`B10`). A non-durable write leaves exact `Created`
+authority and justifies one redownload. A durable `Downloaded` row bound to the
+exact target, snapshot, artifact path, temporary path, and existing private
+directory reconstructs the normal execution receipt and proceeds to checksum
+without another command. Missing or mismatched evidence rejects before
+execution-journal mutation. The aggregate verification journey passes; the
+backup crash journey remains pending until every assigned case passes. CLI
+syntax, Candid, durable document shapes, and package versions are unchanged.
 
 Known non-blocking structural residue deferred from 0.93: none. The baseline
 risks below are bounded operational proof gaps intentionally assigned to 0.94,
@@ -39,7 +39,7 @@ not unfinished structural cleanup.
 | Journey | State | Evidence | Findings |
 | --- | --- | --- | --- |
 | `CANIC-094-J01` complete backup/verify/restore | pending | none | none |
-| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); [snapshot-create reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); [start reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); [download staging](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); `B01`-`B09` | `CANIC-094-BACKUP-001` through `-005` fixed |
+| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); [snapshot-create reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); [start reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); [download staging](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); [downloaded transition](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); `B01`-`B10` | `CANIC-094-BACKUP-001` through `-006` fixed |
 | `CANIC-094-J03` verification interruption | pass | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `V01`-`V03`; resumed | none |
 | `CANIC-094-J04` restore crash matrix | pending | none | none |
 | `CANIC-094-J05` completed-operation replay | pending | none | none |
@@ -123,7 +123,8 @@ still requires a reproducible required-journey finding.
 | `CANIC-094-BACKUP-002` | P1 | fixed in `v0.94.3` | backup stop recovery | [stop-reconciliation report](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); `B05` |
 | `CANIC-094-BACKUP-003` | P1 | fixed in `v0.94.4` | backup snapshot-create recovery | [snapshot-create report](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); `B06`-`B07` |
 | `CANIC-094-BACKUP-004` | P1 | fixed in `v0.94.5` | backup start recovery | [start-reconciliation report](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); `B08` |
-| `CANIC-094-BACKUP-005` | P1 | fixed in current 0.94.6 draft | backup download-staging recovery | [download-staging report](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); `B09` |
+| `CANIC-094-BACKUP-005` | P1 | fixed in `v0.94.6` | backup download-staging recovery | [download-staging report](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); `B09` |
+| `CANIC-094-BACKUP-006` | P1 | fixed in current 0.94.7 draft | downloaded-artifact transition recovery | [downloaded-transition report](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); `B10` |
 
 ## Validation State
 
@@ -173,6 +174,12 @@ still requires a reproducible required-journey finding.
   and leaves the artifact unpublished in exact `Downloaded` state. Unsafe
   staging roots reject without being followed, while `Downloaded` or later
   journal evidence is preserved for its canonical transition recovery.
+- Both `B10` downloaded-artifact transition sides: passed under `SIGKILL`.
+  Before rename, restart retains `Created`, performs one redownload, and
+  proceeds to checksum. After rename and directory sync, restart adopts exact
+  `Downloaded` evidence, reconstructs one receipt, and proceeds to checksum
+  with zero download commands. Missing or mismatched evidence rejects without
+  execution-journal mutation.
 - `V01` before-validation, `V02` during-checksum, and `V03` after-result
   process-death cases: passed; the backup layout path/type/byte inventory is
   unchanged.
@@ -181,12 +188,11 @@ still requires a reproducible required-journey finding.
 - Changelog governance: passed.
 - Design/status Markdown and link review: passed.
 - Whitespace/diff hygiene: passed.
-- Crash-point execution: 27 cases passed; 79 remain pending.
+- Crash-point execution: 29 cases passed; 77 remain pending.
 - Realistic environment journey: not started.
 
 ## Next Action
 
-Execute `B10` on both sides of the `Downloaded` artifact-journal transition.
-Restart must proceed to checksum verification from the exact expected
-temporary path and snapshot identity without redownloading or accepting
-partial, mismatched, or competing evidence.
+Execute `B11` during checksum calculation. A checksum lost only from memory
+must be safely recomputed from unchanged authoritative staged bytes, while
+missing, altered, or unsafe input rejects without claiming verification.

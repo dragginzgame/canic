@@ -150,6 +150,7 @@ pub(super) fn execute_download_snapshot(
     executor
         .download_snapshot(&target, &snapshot_id, &temp_path, command_lifetime)
         .map_err(|error| command_failed(operation.sequence, error))?;
+    require_download_temp_directory(operation.sequence, &target, &temp_path)?;
 
     let mut download_journal = layout.read_journal()?;
     let entry = artifact_entry_mut(&mut download_journal, operation.sequence, &target)?;
@@ -157,20 +158,14 @@ pub(super) fn execute_download_snapshot(
     entry.advance_to(ArtifactState::Downloaded, current_timestamp_marker())?;
     layout.write_journal(&download_journal)?;
 
-    let mut receipt = BackupExecutionOperationReceipt::completed(
-        journal,
-        operation,
-        Some(current_timestamp_marker()),
-    );
-    receipt.artifact_path = Some(artifact_relative_path(&target));
-    Ok(receipt)
+    Ok(download_receipt(journal, operation, &target))
 }
 
-pub(in crate::runner) fn ensure_pending_download_replayable(
+pub(in crate::runner) fn reconcile_pending_download(
     layout: &BackupLayout,
     journal: &BackupExecutionJournal,
     operation: &BackupExecutionJournalOperation,
-) -> Result<(), BackupRunnerError> {
+) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
     let target = operation_target(operation)?;
     let expected_snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
     let download_journal = layout.read_journal()?;
@@ -215,14 +210,37 @@ pub(in crate::runner) fn ensure_pending_download_replayable(
             expected_path,
         });
     }
-    if entry.state != ArtifactState::Created {
-        return Err(BackupRunnerError::ArtifactDownloadStateConflict {
+    match entry.state {
+        ArtifactState::Created => Ok(None),
+        ArtifactState::Downloaded => {
+            let temp_path = entry
+                .temp_path
+                .as_deref()
+                .expect("validated Downloaded artifact has a temporary path");
+            ensure_expected_temp_path(layout, operation.sequence, &target, temp_path)?;
+            require_download_temp_directory(operation.sequence, &target, Path::new(temp_path))?;
+            Ok(Some(download_receipt(journal, operation, &target)))
+        }
+        state => Err(BackupRunnerError::ArtifactDownloadStateConflict {
             sequence: operation.sequence,
             target_canister_id: target,
-            state: entry.state,
-        });
+            state,
+        }),
     }
-    Ok(())
+}
+
+fn download_receipt(
+    journal: &BackupExecutionJournal,
+    operation: &BackupExecutionJournalOperation,
+    target: &str,
+) -> BackupExecutionOperationReceipt {
+    let mut receipt = BackupExecutionOperationReceipt::completed(
+        journal,
+        operation,
+        Some(current_timestamp_marker()),
+    );
+    receipt.artifact_path = Some(artifact_relative_path(target));
+    receipt
 }
 
 fn prepare_download_temp_directory(
@@ -249,6 +267,33 @@ fn prepare_download_temp_directory(
     builder.mode(0o700);
     builder.create(&temp_path)?;
     Ok(temp_path)
+}
+
+fn require_download_temp_directory(
+    sequence: usize,
+    target: &str,
+    temp_path: &Path,
+) -> Result<(), BackupRunnerError> {
+    let metadata = match fs::symlink_metadata(temp_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(BackupRunnerError::ArtifactTempPathMissing {
+                sequence,
+                target_canister_id: target.to_string(),
+                path: temp_path.display().to_string(),
+            });
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(BackupRunnerError::ArtifactTempPathUnsafeEntry {
+            sequence,
+            target_canister_id: target.to_string(),
+            path: temp_path.display().to_string(),
+            kind: artifact_entry_kind(&metadata),
+        });
+    }
+    Ok(())
 }
 
 fn artifact_entry_kind(metadata: &fs::Metadata) -> String {

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.7` recovers both durable sides of the downloaded-artifact transition,
+  adopting exact staged evidence without redownloading and rejecting missing
+  or mismatched staging before receipt reconstruction.
+
 - `0.94.6` safely replaces interrupted private snapshot-download staging,
   preserves stronger artifact-journal evidence, and rejects contradictory or
   unsafe staging authority before mutation.

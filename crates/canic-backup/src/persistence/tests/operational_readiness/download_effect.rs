@@ -28,7 +28,7 @@ use std::{
 
 const DOWNLOAD_EFFECT_CHILD_ROOT_ENV: &str = "CANIC_TEST_DOWNLOAD_EFFECT_ROOT";
 const DOWNLOAD_EFFECT_CHILD_HANDSHAKE_ENV: &str = "CANIC_TEST_DOWNLOAD_EFFECT_HANDSHAKE";
-const COMPLETE_BYTES: &[u8] = b"complete snapshot download";
+pub(super) const COMPLETE_BYTES: &[u8] = b"complete snapshot download";
 const INTERRUPTED_BYTES: &[u8] = b"uncommitted snapshot download";
 
 #[test]
@@ -107,7 +107,7 @@ fn pending_download_rejects_unsafe_staging_entry_without_following_it() {
 }
 
 #[test]
-fn pending_download_preserves_downloaded_journal_evidence() {
+fn pending_download_adopts_downloaded_journal_evidence_without_redownload() {
     let (root, layout) = prepared_download_operation("downloaded-evidence");
     let pending = mark_download_pending(&layout);
     let download = pending
@@ -128,28 +128,73 @@ fn pending_download_preserves_downloaded_journal_evidence() {
         .expect("write downloaded artifact evidence");
 
     let mut executor = DownloadEffectExecutor::new(None, false);
-    let error =
+    let response =
         backup_run_execute_with_executor(&runner_config(root.clone(), Some(1)), &mut executor)
-            .expect_err("stronger downloaded evidence must not be replaced");
+            .expect("exact downloaded evidence rebuilds the execution receipt");
     let persisted = layout
         .read_execution_journal()
-        .expect("read preserved execution journal");
+        .expect("read reconciled execution journal");
 
-    std::assert_matches!(
-        error,
-        crate::runner::BackupRunnerError::ArtifactDownloadStateConflict {
-            sequence,
-            target_canister_id,
-            state: ArtifactState::Downloaded,
-        } if sequence == download.sequence && target_canister_id == target(&download)
+    assert_eq!(response.executed_operation_count, 1);
+    assert_eq!(
+        persisted.operations[download.sequence].state,
+        BackupExecutionOperationState::Completed
     );
-    assert_eq!(persisted.operations, pending.operations);
+    assert_eq!(
+        persisted
+            .operation_receipts
+            .iter()
+            .filter(|receipt| receipt.sequence == download.sequence)
+            .count(),
+        1
+    );
     assert!(executor.commands.is_empty());
     assert_eq!(
         fs::read(temp_path.join("snapshot.bin")).expect("read preserved staged snapshot"),
         COMPLETE_BYTES
     );
     fs::remove_dir_all(root).expect("remove downloaded evidence layout");
+}
+
+#[test]
+fn pending_downloaded_evidence_rejects_missing_staging_before_receipt() {
+    let (root, layout) = prepared_download_operation("missing-downloaded-stage");
+    let pending = mark_download_pending(&layout);
+    let download = pending
+        .next_ready_operation()
+        .cloned()
+        .expect("pending download operation");
+    let temp_path = artifact_temp_path(&layout);
+    let mut artifact_journal = layout.read_journal().expect("read artifact journal");
+    artifact_journal.artifacts[0].temp_path = Some(temp_path.display().to_string());
+    artifact_journal.artifacts[0]
+        .advance_to(ArtifactState::Downloaded, "unix:30".to_string())
+        .expect("advance artifact to downloaded");
+    layout
+        .write_journal(&artifact_journal)
+        .expect("write downloaded artifact evidence");
+
+    let mut executor = DownloadEffectExecutor::new(None, false);
+    let error =
+        backup_run_execute_with_executor(&runner_config(root.clone(), Some(1)), &mut executor)
+            .expect_err("downloaded evidence without staging must reject");
+    let persisted = layout
+        .read_execution_journal()
+        .expect("read rejected execution journal");
+
+    std::assert_matches!(
+        error,
+        crate::runner::BackupRunnerError::ArtifactTempPathMissing {
+            sequence,
+            target_canister_id,
+            path,
+        } if sequence == download.sequence
+            && target_canister_id == target(&download)
+            && path == temp_path.display().to_string()
+    );
+    assert_eq!(persisted, pending);
+    assert!(executor.commands.is_empty());
+    fs::remove_dir_all(root).expect("remove missing downloaded staging layout");
 }
 
 fn prove_interrupted_download_recovery() {
@@ -254,7 +299,7 @@ fn prove_interrupted_download_recovery() {
     fs::remove_dir_all(handshake_root).expect("remove download effect handshake root");
 }
 
-fn prepared_download_operation(name: &str) -> (PathBuf, BackupLayout) {
+pub(super) fn prepared_download_operation(name: &str) -> (PathBuf, BackupLayout) {
     let root = temp_dir(&format!("canic-backup-{name}"));
     let layout = BackupLayout::new(root.clone());
     let plan = super::valid_backup_plan();
@@ -282,7 +327,7 @@ fn prepared_download_operation(name: &str) -> (PathBuf, BackupLayout) {
     (root, layout)
 }
 
-fn mark_download_pending(layout: &BackupLayout) -> BackupExecutionJournal {
+pub(super) fn mark_download_pending(layout: &BackupLayout) -> BackupExecutionJournal {
     let mut journal = layout
         .read_execution_journal()
         .expect("read prepared execution journal");
@@ -299,7 +344,7 @@ fn mark_download_pending(layout: &BackupLayout) -> BackupExecutionJournal {
     journal
 }
 
-fn artifact_temp_path(layout: &BackupLayout) -> PathBuf {
+pub(super) fn artifact_temp_path(layout: &BackupLayout) -> PathBuf {
     let journal = layout.read_journal().expect("read artifact journal");
     layout
         .root()
@@ -415,14 +460,14 @@ impl BackupRunnerExecutor for DownloadEffectExecutor {
     }
 }
 
-fn target(operation: &crate::execution::BackupExecutionJournalOperation) -> &str {
+pub(super) fn target(operation: &crate::execution::BackupExecutionJournalOperation) -> &str {
     operation
         .target_canister_id
         .as_deref()
         .expect("download operation target")
 }
 
-fn runner_config(out: PathBuf, max_steps: Option<usize>) -> BackupRunnerConfig {
+pub(super) fn runner_config(out: PathBuf, max_steps: Option<usize>) -> BackupRunnerConfig {
     BackupRunnerConfig {
         out,
         max_steps,
