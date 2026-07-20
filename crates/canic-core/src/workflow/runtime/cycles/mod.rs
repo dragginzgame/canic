@@ -10,19 +10,18 @@ use crate::{
         config::ConfigOps,
         ic::IcOps,
         rpc::request::RequestOps,
-        runtime::{env::EnvOps, metrics::cycles_topup::CyclesTopupMetrics, timer::TimerId},
+        runtime::{env::EnvOps, metrics::cycles_topup::CyclesTopupMetrics},
         storage::cycles::{CycleTopupEventOps, CycleTrackerOps},
     },
     workflow::{
         config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
         ic::icp_refill::IcpRefillWorkflow,
-        runtime::timer::TimerWorkflow,
+        runtime::timer::{TimerKey, TimerWorkflow},
     },
 };
 use std::{cell::RefCell, thread::LocalKey, time::Duration};
 
 thread_local! {
-    static TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
     static TOPUP_IN_FLIGHT: RefCell<bool> = const { RefCell::new(false) };
     static ICP_REFILL_IN_FLIGHT: RefCell<bool> = const { RefCell::new(false) };
 }
@@ -86,16 +85,10 @@ impl CycleTrackerWorkflow {
     }
 
     fn schedule_standard_interval(mode: CycleTrackingMode) -> bool {
-        TimerWorkflow::set_guarded_interval(
-            &TIMER,
+        TimerWorkflow::ensure_recurring(
+            TimerKey::CycleTracking,
             TRACKER_INTERVAL,
-            "cycles:interval:first",
-            move || async move {
-                Self::track_internal(mode);
-                let _ = Self::purge();
-            },
             TRACKER_INTERVAL,
-            "cycles:interval",
             move || async move {
                 Self::track_internal(mode);
                 let _ = Self::purge();
@@ -104,15 +97,13 @@ impl CycleTrackerWorkflow {
     }
 
     fn schedule_topup_interval(mode: CycleTrackingMode) -> bool {
-        TimerWorkflow::set_guarded_interval(
-            &TIMER,
+        TimerWorkflow::ensure_recurring_with_initial(
+            TimerKey::CycleTracking,
             WORKFLOW_INIT_DELAY,
-            "cycles:topup:first",
             move || async move {
                 Self::evaluate_current_topup();
             },
             TRACKER_INTERVAL,
-            "cycles:interval",
             move || async move {
                 Self::track_internal(mode);
                 let _ = Self::purge();

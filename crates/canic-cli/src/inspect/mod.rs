@@ -491,12 +491,13 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
 
     for timer in &status.timers {
         lines.push(format!(
-            "timer: {}/{} status={} enabled={} registered={}",
+            "timer: {}/{} registration={} condition={} mode={} enabled={}",
             timer.subsystem,
             timer.name,
-            timer.status.label(),
-            timer.enabled,
-            timer.registered
+            timer.registration.label(),
+            timer.condition.label(),
+            timer.scheduling_mode.label(),
+            timer.enabled
         ));
     }
 
@@ -804,7 +805,7 @@ mod tests {
         assert!(rendered.contains("enabled_features: sharding"));
         assert!(
             rendered
-                .contains("timer: runtime/heartbeat status=healthy enabled=true registered=true")
+                .contains("timer: runtime/heartbeat registration=scheduled condition=active mode=after_completion enabled=true")
         );
         assert!(
             rendered.contains(
@@ -921,10 +922,10 @@ mod tests {
 
     fn sample_runtime_status(status: RuntimeStatus) -> CanicRuntimeStatus {
         use canic_core::dto::runtime::{
-            CanicReadinessStatus, CanicTimerStatus, FailureSeverity, ReadinessStatus,
-            RecentFailure, RuntimeAuthStatusSummary, RuntimeBlobStorageStatusSummary,
-            RuntimeBuildInfo, RuntimeFeatureStatus, RuntimeFieldVisibility,
-            RuntimeStateDomainStatus, RuntimeStateDomainSummary, RuntimeStateSummary, TimerStatus,
+            CanicReadinessStatus, FailureSeverity, ReadinessStatus, RecentFailure,
+            RuntimeAuthStatusSummary, RuntimeBlobStorageStatusSummary, RuntimeBuildInfo,
+            RuntimeFeatureStatus, RuntimeFieldVisibility, RuntimeStateDomainStatus,
+            RuntimeStateDomainSummary, RuntimeStateSummary,
         };
 
         CanicRuntimeStatus {
@@ -955,19 +956,7 @@ mod tests {
                 },
             ],
             topology: None,
-            timers: vec![CanicTimerStatus {
-                name: "heartbeat".to_string(),
-                subsystem: "runtime".to_string(),
-                status: TimerStatus::Healthy,
-                enabled: true,
-                registered: true,
-                last_success_at_ns: None,
-                last_failure_at_ns: None,
-                next_due_at_ns: None,
-                consecutive_failures: 0,
-                last_error_code: None,
-                last_error_summary: None,
-            }],
+            timers: vec![sample_timer_status()],
             state: Some(RuntimeStateSummary {
                 manifest_schema_version: 1,
                 domains: vec![RuntimeStateDomainSummary {
@@ -1015,6 +1004,35 @@ mod tests {
                 warnings: Vec::new(),
             },
             status,
+        }
+    }
+
+    fn sample_timer_status() -> canic_core::dto::runtime::CanicTimerStatus {
+        use canic_core::dto::runtime::{
+            CanicTimerStatus, TimerExecutionOutcome, TimerProcessCondition,
+            TimerRegistrationStatus, TimerSchedulingMode,
+        };
+
+        CanicTimerStatus {
+            name: "heartbeat".to_string(),
+            subsystem: "runtime".to_string(),
+            scheduling_mode: TimerSchedulingMode::AfterCompletion,
+            registration: TimerRegistrationStatus::Scheduled,
+            condition: TimerProcessCondition::Active,
+            enabled: true,
+            generation: 2,
+            next_due_at_ns: Some(100),
+            last_outcome: Some(TimerExecutionOutcome::Success),
+            last_work_count: 1,
+            last_success_at_ns: None,
+            last_failure_at_ns: None,
+            consecutive_expected_failures: 0,
+            schedules_since_runtime_start: 2,
+            executions_since_runtime_start: 1,
+            successes_since_runtime_start: 1,
+            expected_failures_since_runtime_start: 0,
+            invariant_failures_since_runtime_start: 0,
+            stale_callbacks_since_runtime_start: 0,
         }
     }
 

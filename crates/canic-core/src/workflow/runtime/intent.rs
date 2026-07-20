@@ -16,25 +16,18 @@ use crate::{
     },
     ops::{
         ic::IcOps,
-        runtime::{
-            metrics::intent::{
-                IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
-                IntentMetricSurface, IntentMetrics,
-            },
-            timer::TimerId,
+        runtime::metrics::intent::{
+            IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
+            IntentMetrics,
         },
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_INTENT_CLEANUP_INTERVAL},
-        runtime::timer::TimerWorkflow,
+        runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
     },
 };
-use std::{cell::RefCell, time::Duration};
-
-thread_local! {
-    static INTENT_CLEANUP_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-}
+use std::time::Duration;
 
 const CLEANUP_INTERVAL: Duration = WORKFLOW_INTENT_CLEANUP_INTERVAL;
 
@@ -291,19 +284,16 @@ pub struct IntentCleanupWorkflow;
 impl IntentCleanupWorkflow {
     /// Start periodic intent cleanup sweeps.
     pub fn ensure_started() {
-        let _ = TimerWorkflow::set_guarded_interval(
-            &INTENT_CLEANUP_TIMER,
-            WORKFLOW_INIT_DELAY,
-            "intent_cleanup:init",
-            || async {
-                let _ = Self::cleanup();
-            },
-            CLEANUP_INTERVAL,
-            "intent_cleanup:interval",
-            || async {
-                let _ = Self::cleanup();
-            },
-        );
+        TimerWorkflow::schedule(TimerKey::IntentCleanup, WORKFLOW_INIT_DELAY, || async {
+            let completed = Self::cleanup();
+            if Self::stop_when_idle() {
+                TimerRunResult::no_work(TimerDirective::Stop)
+            } else if completed {
+                TimerRunResult::success(1, TimerDirective::RecurAfter(CLEANUP_INTERVAL))
+            } else {
+                TimerRunResult::retryable_failure(TimerDirective::RetryAfter(CLEANUP_INTERVAL))
+            }
+        });
     }
 
     /// Run a cleanup sweep immediately.
@@ -373,7 +363,6 @@ impl IntentCleanupWorkflow {
                 IntentMetricOutcome::Completed,
                 IntentMetricReason::Ok,
             );
-            Self::stop_when_idle();
         } else {
             record_cleanup_intent(
                 IntentMetricOperation::Cleanup,
@@ -385,13 +374,10 @@ impl IntentCleanupWorkflow {
         errors == 0
     }
 
-    // Stop the cleanup timer once there are no pending intents left.
+    // Return whether no expirable pending intent remains.
     fn stop_when_idle() -> bool {
         match IntentStoreOps::expirable_pending_total() {
-            Ok(0) => {
-                let _ = TimerWorkflow::clear_guarded(&INTENT_CLEANUP_TIMER);
-                true
-            }
+            Ok(0) => true,
             Ok(_) => false,
             Err(err) => {
                 record_cleanup_intent(

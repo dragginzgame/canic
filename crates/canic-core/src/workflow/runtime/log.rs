@@ -8,21 +8,13 @@ use crate::{
     domain::policy::pure as policy,
     log,
     log::Topic,
-    ops::{
-        config::ConfigOps,
-        ic::IcOps,
-        runtime::{log::LogOps, timer::TimerId},
-    },
+    ops::{config::ConfigOps, ic::IcOps, runtime::log::LogOps},
     workflow::{
         config::{WORKFLOW_INIT_DELAY, WORKFLOW_LOG_RETENTION_INTERVAL},
-        runtime::timer::TimerWorkflow,
+        runtime::timer::{TimerKey, TimerWorkflow},
     },
 };
-use std::{cell::RefCell, time::Duration};
-
-thread_local! {
-    static RETENTION_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-}
+use std::time::Duration;
 
 const RETENTION_INTERVAL: Duration = WORKFLOW_LOG_RETENTION_INTERVAL;
 
@@ -35,15 +27,10 @@ pub struct LogRetentionWorkflow;
 impl LogRetentionWorkflow {
     /// Start periodic log retention sweeps.
     pub fn start() {
-        let _ = TimerWorkflow::set_guarded_interval(
-            &RETENTION_TIMER,
+        TimerWorkflow::ensure_recurring(
+            TimerKey::LogRetention,
             WORKFLOW_INIT_DELAY,
-            "log_retention:init",
-            || async {
-                let _ = Self::retain();
-            },
             RETENTION_INTERVAL,
-            "log_retention:interval",
             || async {
                 let _ = Self::retain();
             },

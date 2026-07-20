@@ -13,7 +13,8 @@ use canic::{
         runtime::{
             CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, HealthStatus,
             RUNTIME_INTROSPECTION_SCHEMA_VERSION, ReadinessStatus, RuntimeFieldVisibility,
-            RuntimeStateDomainStatus, RuntimeStatus,
+            RuntimeStateDomainStatus, RuntimeStatus, TimerProcessCondition,
+            TimerRegistrationStatus,
         },
         state::{AppStateResponse, SubnetStateResponse},
         topology::AppRegistryResponse,
@@ -536,16 +537,20 @@ fn assert_runtime_timers(status: &CanicRuntimeStatus, require_timer: bool) {
 
     for timer in &status.timers {
         assert!(
-            timer.enabled && timer.registered,
-            "runtime timer {}:{} should be enabled and registered",
+            timer.enabled || timer.condition == TimerProcessCondition::Disabled,
+            "runtime timer {}:{} disabled configuration must be explicit",
+            timer.subsystem,
+            timer.name
+        );
+        assert_eq!(
+            timer.next_due_at_ns.is_some(),
+            timer.registration == TimerRegistrationStatus::Scheduled,
+            "runtime timer {}:{} due timestamp must match live registration",
             timer.subsystem,
             timer.name
         );
         assert_runtime_text(&timer.subsystem, "timer subsystem");
         assert_runtime_text(&timer.name, "timer name");
-        if let Some(summary) = &timer.last_error_summary {
-            assert_runtime_text(summary, "timer error summary");
-        }
     }
 }
 

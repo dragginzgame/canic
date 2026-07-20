@@ -118,5 +118,12 @@ pub mod ops {
 
 /// Timers and scheduling helpers
 pub mod timer {
+    pub use crate::__internal::core::api::timer::TimerHandle;
     pub use crate::{timer, timer_interval};
+
+    /// Consume a timer handle and suppress any future invocation.
+    #[must_use]
+    pub fn cancel(handle: TimerHandle) -> bool {
+        crate::__internal::core::api::timer::TimerApi::cancel(handle)
+    }
 }

@@ -66,7 +66,7 @@ pub fn schedule_init_nonroot_bootstrap(args: Option<Vec<u8>>) {
     );
     BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT_SCHEDULED);
 
-    TimerWorkflow::set(
+    TimerWorkflow::set_application_once(
         Duration::ZERO,
         "canic:bootstrap:init_nonroot_canister",
         async move {

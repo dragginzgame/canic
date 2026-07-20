@@ -4,14 +4,19 @@ Last updated: 2026-07-20
 
 ## Current State
 
-0.95 is active. Slice A is complete against released `v0.94.14`: every
+0.95 is active. Slice A is released as `v0.95.0` against the exact
+`v0.94.14` anchor: every
 production timer, lifecycle deferral, retry scheduler, public timer form, and
 bounded host wait is inventoried and dispositioned. The public hard-cut
 surface, scheduler arbitration rules, owner trigger model, service bounds, and
 closeout gate are frozen.
 
-No production scheduling behavior changed in Slice A. Slice B is authorized
-to implement the common timer authority for the seven reproduced findings.
+The open `0.95.1` draft completes Slice B. All current canister timer owners
+route through one common workflow and one one-shot-only IC platform boundary.
+Request sequence and generation arbitration, schedule-during-run merging,
+after-completion recurrence, consuming cancellation, live status, and the
+public hard cuts are implemented and validated. Slice C is authorized after
+`.1` is released.
 
 ## Immutable Baseline
 
@@ -40,16 +45,33 @@ The canonical report is
   had no authoritative work.
 - Permanent source inventory guard: added and targeted for every 0.95 slice.
 
+## Slice B Evidence
+
+- Common control: nine deterministic arbitration and checked-overflow tests
+  pass inside the 915-test `canic-core` library run.
+- Public behavior: one PocketIC journey proves consuming cancellation,
+  exactly-once one-shot execution, after-completion recurrence without missed-
+  tick replay, and truthful live status.
+- Structural boundaries: both timer-inventory/direct-owner tests and both
+  lifecycle synchronous/deferral tests pass; the layering guards pass.
+- Boundary projection: runtime DTO Candid/Serde and passive-DTO guards pass,
+  and all 17 focused CLI inspect tests consume the new two-dimensional status.
+- Strict Clippy passes for all targets in `canic-core`, `canic`,
+  `canic-control-plane`, and `canic-cli`; it also passes for the focused
+  `canic-tests` journey and `runtime_probe` fixture.
+- No stable state, configuration schema, dependency, host wait, backup,
+  restore, receipt-reclamation, or Cargo package version changes are present.
+
 ## Finding Index
 
 | Finding | Severity | State | Owner |
 | --- | --- | --- | --- |
-| `CANIC-095-TIMER-001` async interval overlap | P1 | accepted for Slice B | common timer workflow |
-| `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | accepted for Slice B | common timer workflow |
-| `CANIC-095-TIMER-003` false live timer status | P2 | accepted for Slice B | common timer workflow/runtime projection |
+| `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in open 0.95.1 | common timer workflow |
+| `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in open 0.95.1 | common timer workflow |
+| `CANIC-095-TIMER-003` false live timer status | P2 | fixed in open 0.95.1 | common timer workflow/runtime projection |
 | `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | accepted for owner slices | log, pool, intent workflows |
 | `CANIC-095-TIMER-005` unrelated full scans | P2 | accepted for owner slices | intent and placement ops/workflows |
-| `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | accepted for Slice B | timer workflow and lifecycle facade |
+| `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in open 0.95.1 | timer workflow and lifecycle facade |
 | `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | accepted for Slice D | cycle/top-up workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
@@ -71,6 +93,7 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Implement Slice B as one coherent common-authority batch, then run targeted
-core, lifecycle, macro-surface, status, and inventory-guard validation. Do not
-begin owner-specific stable indexes until common arbitration is proven.
+Release the validated Slice B common-authority batch as `0.95.1`. Then begin
+Slice C with the derived finite-intent expiry index and exact earliest-deadline
+scheduling; do not combine it with placement acknowledgement or pool/log
+migrations until that first owner boundary is proven.

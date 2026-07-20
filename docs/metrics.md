@@ -138,6 +138,10 @@ the bounded operation label `renewal_sweep`. Outcomes are
 | `timer` | `[mode, label]` | `None` | `CountAndU64` |
 | `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
 
+For `timer`, `count` is the execution count and `value_u64` is the latest
+armed delay in milliseconds. Delay is deliberately a value rather than a key,
+so exact-deadline rescheduling does not create unbounded metric rows.
+
 Endpoint perf `call_kind` labels are `query`, `composite_query`, or `update`.
 Query and composite-query endpoint perf rows are only durable when sampled by a
 call path that commits state; ordinary query calls should use same-call

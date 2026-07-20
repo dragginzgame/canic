@@ -17,22 +17,17 @@ use crate::{
             env::EnvOps,
             metrics::delegated_auth::DelegatedAuthMetrics,
             recent_failure::{RecentFailureInput, RecentFailureOps},
-            timer::TimerId,
         },
     },
     workflow::{
         config::{WORKFLOW_AUTH_RENEWAL_INTERVAL, WORKFLOW_INIT_DELAY},
         runtime::{
             auth::{provisioning, root_delegation_batch},
-            timer::TimerWorkflow,
+            timer::{TimerKey, TimerWorkflow},
         },
     },
 };
-use std::{cell::RefCell, time::Duration};
-
-thread_local! {
-    static RENEWAL_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
-}
+use std::time::Duration;
 
 const DEFAULT_DELEGATED_TOKEN_MAX_TTL_SECS: u64 = 24 * 60 * 60;
 const RENEWAL_INTERVAL: Duration = WORKFLOW_AUTH_RENEWAL_INTERVAL;
@@ -66,15 +61,10 @@ impl RootDelegationRenewalWorkflow {
         }
         require_chain_key_root_proof_mode(&config)?;
 
-        let _ = TimerWorkflow::set_guarded_interval(
-            &RENEWAL_TIMER,
+        TimerWorkflow::ensure_recurring(
+            TimerKey::AuthRenewal,
             init_delay,
-            "auth_renewal:init",
-            || async {
-                Self::run_timer_sweep().await;
-            },
             RENEWAL_INTERVAL,
-            "auth_renewal:interval",
             || async {
                 Self::run_timer_sweep().await;
             },

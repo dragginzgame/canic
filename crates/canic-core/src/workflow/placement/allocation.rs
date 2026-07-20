@@ -23,22 +23,21 @@ use crate::{
     },
     ops::{
         rpc::request::RequestOps,
-        runtime::{env::EnvOps, timer::TimerId},
+        runtime::env::EnvOps,
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
-    workflow::runtime::{intent::ReceiptBackedIntentWorkflow, timer::TimerWorkflow},
+    workflow::runtime::{
+        intent::ReceiptBackedIntentWorkflow,
+        timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
+    },
 };
-use std::{
-    cell::{Cell, RefCell},
-    time::Duration,
-};
+use std::{cell::Cell, time::Duration};
 
 const ALLOCATION_RESULT_COMMAND: &str = "placement.allocate_child.result";
 const ROOT_RECEIPT_ACK_BATCH_SIZE: usize = 32;
 const ROOT_RECEIPT_ACK_RETRY_DELAY: Duration = Duration::from_mins(1);
 
 thread_local! {
-    static ROOT_RECEIPT_ACK_TIMER: RefCell<Option<TimerId>> = const { RefCell::new(None) };
     static ROOT_RECEIPT_ACK_CURSOR: Cell<Option<OperationId>> = const { Cell::new(None) };
     static ROOT_RECEIPT_ACK_RETRY_NEEDED: Cell<bool> = const { Cell::new(false) };
 }
@@ -263,17 +262,17 @@ fn finish_terminal_allocation(permit: &PlacementAllocationPermit) -> Result<(), 
 }
 
 fn schedule_root_receipt_acknowledgement_drain(delay: Duration) {
-    let _ = TimerWorkflow::set_guarded(
-        &ROOT_RECEIPT_ACK_TIMER,
-        delay,
-        "placement:receipt_ack",
-        async {
-            ROOT_RECEIPT_ACK_TIMER.with_borrow_mut(|slot| *slot = None);
-            if let Some(next_delay) = drain_root_receipt_acknowledgements().await {
-                schedule_root_receipt_acknowledgement_drain(next_delay);
+    TimerWorkflow::schedule(TimerKey::PlacementReceiptAcknowledgement, delay, || async {
+        match drain_root_receipt_acknowledgements().await {
+            None => TimerRunResult::no_work(TimerDirective::Stop),
+            Some(next_delay) if next_delay.is_zero() => {
+                TimerRunResult::success(1, TimerDirective::ContinueImmediately)
             }
-        },
-    );
+            Some(next_delay) => {
+                TimerRunResult::retryable_failure(TimerDirective::RetryAfter(next_delay))
+            }
+        }
+    });
 }
 
 async fn drain_root_receipt_acknowledgements() -> Option<Duration> {

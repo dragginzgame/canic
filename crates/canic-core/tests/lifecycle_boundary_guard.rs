@@ -97,8 +97,8 @@ const FORBIDDEN_BEFORE_BOOTSTRAP_FRAGMENTS: &[&str] = &[
     "async move",
     "TimerOps::set",
     "TimerWorkflow::set",
-    "TimerApi::set_lifecycle_timer",
-    "set_lifecycle_timer",
+    "TimerApi::defer_lifecycle",
+    "defer_lifecycle",
     "workflow::bootstrap",
     "schedule_",
 ];
@@ -109,6 +109,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_init_nonroot_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
+            "TimerWorkflow::set_application_once",
             "canic:bootstrap:init_nonroot_canister",
             "bootstrap_init_nonroot_canister(args).await",
         ],
@@ -118,6 +119,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_post_upgrade_nonroot_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
+            "TimerWorkflow::set_application_once",
             "canic:bootstrap:post_upgrade_nonroot_canister",
             "bootstrap_post_upgrade_nonroot_canister().await",
         ],
@@ -127,6 +129,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_init_root_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
+            "TimerApi::defer_lifecycle",
             "canic:bootstrap:init_root_canister",
             "bootstrap_init_root_canister().await",
         ],
@@ -136,6 +139,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
         function: "schedule_post_upgrade_root_bootstrap",
         required_fragments: &[
             "Duration::ZERO",
+            "TimerApi::defer_lifecycle",
             "canic:bootstrap:post_upgrade_root_canister",
             "bootstrap_post_upgrade_root_canister().await",
         ],

@@ -36,7 +36,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 "canic:user:init_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
-                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::std::time::Duration::ZERO,
                         "canic:user:init",
                         async move {
@@ -65,7 +65,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 "canic:user:post_upgrade_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::core::time::Duration::ZERO,
                         "canic:user:init",
                         async move {
@@ -141,7 +141,7 @@ macro_rules! __canic_start_local_lifecycle_core {
                 "canic:user:init_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
-                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::std::time::Duration::ZERO,
                         "canic:user:init",
                         async move {
@@ -170,7 +170,7 @@ macro_rules! __canic_start_local_lifecycle_core {
                 "canic:user:post_upgrade_block",
                 {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::core::time::Duration::ZERO,
                         "canic:user:init",
                         async move {
@@ -234,7 +234,7 @@ macro_rules! __canic_root_lifecycle_core {
                 "canic:user:init_block",
                 {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::core::time::Duration::ZERO,
                         "canic:user:init",
                         async move {
@@ -264,7 +264,7 @@ macro_rules! __canic_root_lifecycle_core {
                 "canic:user:post_upgrade_block",
                 {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::core::time::Duration::ZERO,
                         "canic:user:init",
                         async move {
@@ -287,7 +287,7 @@ macro_rules! __canic_after_optional_start_init_hook {
         $after
     }};
     ($label:expr, $after:block, $init:block) => {{
-        $crate::__internal::core::api::timer::TimerApi::set_lifecycle_timer(
+        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
             ::core::time::Duration::ZERO,
             $label,
             async move {

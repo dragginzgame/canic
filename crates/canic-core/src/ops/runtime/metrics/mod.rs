@@ -409,7 +409,7 @@ fn timer_entries() -> Vec<MetricEntry> {
     TimerMetrics::snapshot()
         .entries
         .into_iter()
-        .map(|(key, count)| MetricEntry {
+        .map(|(key, value)| MetricEntry {
             labels: vec![
                 match key.mode {
                     TimerMode::Once => "once",
@@ -420,8 +420,8 @@ fn timer_entries() -> Vec<MetricEntry> {
             ],
             principal: None,
             value: MetricValue::CountAndU64 {
-                count,
-                value_u64: key.delay_ms,
+                count: value.executions,
+                value_u64: value.latest_delay_ms,
             },
         })
         .collect()

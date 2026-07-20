@@ -14,14 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.14`.
-- The latest published release is `v0.94.14` at
-  `7d5cca4fceae1cb29644b3c1de12cf6a576e0503`.
-- The `v0.94.14` source tree is
-  `2c5155fc8ebbf7a69066f50b4cf1810b264b0071`; its product-tree hash is
-  `5599ed0e0f6e77b197e63cc4d3bd5bce0ce166ca8390c40f4a87203b89779ce2`.
-  Its Cargo.lock SHA-256 is
-  `0263c0acf3a2fdd34017ceab6ef528f0d1ab352bf3d1a08a2f1ad1de19f99823`.
+- The workspace package version is `0.95.0`.
+- The latest published release is `v0.95.0` at
+  `a3598fe001aec4f339f4c2d162af21e080bafc7c`.
+- The `v0.95.0` source tree is
+  `00ddd60f1ed7f1f73a41e2b274ec1e8d1ce1930d`; its Cargo.lock SHA-256 is
+  `3d2792df60a2f84cf7a02a1780ad44a43cacf4b83d50f29d375562af01fbdd8e`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -275,11 +273,16 @@ Historical detail is archived at:
 - Released `v0.94.14` completes the remaining stopped-precondition,
   effect/receipt, command-tree, and rejection cases. All 106 frozen protocol
   cases and all seven required journeys pass; no case remains pending.
-- The open `0.95.0` draft closes 0.94's status records, anchors the timer line
+- Released `v0.95.0` closes 0.94's status records, anchors the timer line
   to `v0.94.14`, inventories every timer and bounded host wait, reproduces
   seven findings, freezes every owner disposition and the public hard-cut
   surface, and adds an executable source inventory guard. Production timer
   behavior is unchanged in this audit-only batch.
+- The open `0.95.1` draft gives every current canister timer one common
+  generation-safe workflow, removes guarded/fixed-rate/raw-CDK bypasses, adds
+  consuming application cancellation, and projects live registration and
+  process condition independently. Owner-specific idle-poll and full-scan
+  removal remains in Slice C.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -302,13 +305,14 @@ Known non-blocking structural residue deferred from 0.93: none.
 all seven required journeys pass, every finding is fixed, and the realistic
 multi-canister state restore is complete.
 
-0.95 focuses only on timer authority and scheduling consolidation. Slice A is
-complete: direct timer access has one owner, every timer/process and bounded
-host wait is dispositioned, seven findings are reproduced, and the public
-hard-cut surface plus owner bounds are frozen. Slice B may now implement the
-common arbitration authority. Receipt reclamation remains 0.96 scope; general
-cleanup, dependency work, backup/restore changes, and compatibility layers
-remain excluded.
+0.95 focuses only on timer authority and scheduling consolidation. Released
+`v0.95.0` completes Slice A. The open `.1` draft completes the Slice B common
+authority: one direct platform owner, fixed built-in keys, opaque application
+identities, request/generation arbitration, after-completion recurrence,
+consuming cancellation, truthful live status, and one lifecycle facade. Slice
+C may now migrate idle polling and full scans to event/deadline-owned work.
+Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
+backup/restore changes, and compatibility layers remain excluded.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
