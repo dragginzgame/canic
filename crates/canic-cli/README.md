@@ -258,6 +258,9 @@ canic restore status 1 --require-complete --require-no-attention
 `restore prepare` writes `restore-plan.json` and
 `restore-apply-journal.json` inside the selected backup directory, so later
 restore commands can use the same backup row number from `canic backup list`.
+Preparing the same exact pristine documents again is idempotent. Canic never
+replaces a different plan or a journal that already contains recovery
+progress; inspect and resume that journal instead.
 For deeper no-mutation checks, use `canic restore plan`,
 `canic restore apply --dry-run`, and `canic restore run --dry-run` directly.
 
@@ -327,9 +330,11 @@ new restore path. Snapshot load operations first run `icp canister status` and
 fail before loading unless the target is visibly stopped.
 
 If a previous runner stopped after claiming work, rerun execution to classify
-the interruption. Canic will refuse to overlap a live command tree and will
-leave a quiescent mutating operation pending when its external outcome is not
-yet proven:
+the interruption. Canic refuses to overlap a live command tree. Once the old
+tree is quiescent, it reconciles lifecycle operations from target status and
+snapshot upload from an exclusive inventory delta; an exact stopped-target
+load can safely resume, and read-only verification can repeat. Ambiguous or
+mismatched evidence fails closed without inventing a receipt:
 
 ```bash
 canic restore run \
@@ -370,3 +375,6 @@ records, and pending-operation recovery.
   verification, and snapshot-restore readiness before execution.
 - Runner summaries and journals are durable audit artifacts; failures still
   write status before returning a nonzero exit code.
+- `canic backup prune --keep <count>` deletes only older completed backups.
+  Failed, incomplete, and otherwise recoverable layouts are never prune
+  candidates.

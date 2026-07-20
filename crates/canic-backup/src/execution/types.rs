@@ -223,6 +223,9 @@ pub enum BackupExecutionJournalError {
     #[error("operation {0} is not failed")]
     OperationNotFailed(usize),
 
+    #[error("operation {0} is not an eligible failure-containment start")]
+    OperationNotFailureContainmentStart(usize),
+
     #[error("operation receipt references missing operation {0}")]
     ReceiptOperationNotFound(usize),
 

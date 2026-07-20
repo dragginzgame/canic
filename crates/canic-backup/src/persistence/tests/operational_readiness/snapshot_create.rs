@@ -10,7 +10,7 @@ use crate::{
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics},
     operational_readiness::manifest::assert_case_defined,
     persistence::{BackupLayout, CommandLifetimeHandle},
-    plan::{BackupExecutionPreflightReceipts, BackupPlan},
+    plan::{BackupExecutionPreflightReceipts, BackupOperationKind, BackupPlan},
     runner::{
         BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerConfig,
         BackupRunnerExecutor, BackupRunnerSnapshot, backup_run_execute_with_executor,
@@ -134,10 +134,14 @@ fn pending_snapshot_rejects_multiple_new_inventory_identities_without_creating()
             && operation_id == operation.operation_id
             && snapshot_ids == vec!["new-snapshot-a".to_string(), "new-snapshot-b".to_string()]
     );
-    assert_eq!(persisted, pending);
+    assert_ne!(persisted, pending);
+    assert_snapshot_rejection_restored_availability(&persisted, operation.sequence);
     assert_eq!(
         executor.commands,
-        vec![format!("snapshot-list:{canister_id}")]
+        vec![
+            format!("snapshot-list:{canister_id}"),
+            format!("start:{canister_id}"),
+        ]
     );
     assert!(!layout.journal_path().exists());
     fs::remove_dir_all(root).expect("remove ambiguous inventory layout");
@@ -172,13 +176,57 @@ fn pending_snapshot_rejects_lost_baseline_identity_without_creating() {
             && operation_id == operation.operation_id
             && snapshot_ids == vec!["preexisting-snapshot".to_string()]
     );
-    assert_eq!(persisted, pending);
+    assert_ne!(persisted, pending);
+    assert_snapshot_rejection_restored_availability(&persisted, operation.sequence);
     assert_eq!(
         executor.commands,
-        vec![format!("snapshot-list:{canister_id}")]
+        vec![
+            format!("snapshot-list:{canister_id}"),
+            format!("start:{canister_id}"),
+        ]
     );
     assert!(!layout.journal_path().exists());
     fs::remove_dir_all(root).expect("remove lost baseline layout");
+}
+
+fn assert_snapshot_rejection_restored_availability(
+    journal: &BackupExecutionJournal,
+    snapshot_sequence: usize,
+) {
+    assert!(!journal.restart_required);
+    assert_eq!(
+        journal
+            .operations
+            .iter()
+            .find(|operation| operation.sequence == snapshot_sequence)
+            .expect("snapshot operation")
+            .state,
+        BackupExecutionOperationState::Pending
+    );
+    for kind in [BackupOperationKind::Stop, BackupOperationKind::Start] {
+        assert_eq!(
+            journal
+                .operations
+                .iter()
+                .find(|operation| operation.kind == kind)
+                .expect("lifecycle operation")
+                .state,
+            BackupExecutionOperationState::Ready
+        );
+    }
+    let start = journal
+        .operations
+        .iter()
+        .find(|operation| operation.kind == BackupOperationKind::Start)
+        .expect("start operation");
+    assert_eq!(
+        journal
+            .operation_receipts
+            .iter()
+            .filter(|receipt| receipt.sequence == start.sequence)
+            .count(),
+        1
+    );
 }
 
 #[test]
@@ -197,7 +245,9 @@ fn explicit_retry_after_failed_snapshot_command_reconciles_original_inventory() 
         .read_execution_journal()
         .expect("read failed execution journal");
     let operation = failed
-        .next_ready_operation()
+        .operations
+        .iter()
+        .find(|operation| operation.kind == crate::plan::BackupOperationKind::CreateSnapshot)
         .cloned()
         .expect("failed snapshot operation");
 
@@ -216,7 +266,8 @@ fn explicit_retry_after_failed_snapshot_command_reconciles_original_inventory() 
         .expect("mark failed snapshot ready for explicit retry");
     assert_eq!(
         retrying
-            .next_ready_operation()
+            .operations
+            .get(operation.sequence)
             .expect("ready snapshot operation")
             .snapshot_ids_before,
         Some(Vec::new())
@@ -227,15 +278,15 @@ fn explicit_retry_after_failed_snapshot_command_reconciles_original_inventory() 
 
     let mut recovery_executor = SnapshotEffectExecutor::new(state_path, None, true, false);
     let response = backup_run_execute_with_executor(
-        &runner_config(root.clone(), Some(1)),
+        &runner_config(root.clone(), Some(2)),
         &mut recovery_executor,
     )
-    .expect("reconcile original failed-attempt inventory");
+    .expect("re-quiesce and reconcile original failed-attempt inventory");
     let recovered = layout
         .read_execution_journal()
         .expect("read recovered execution journal");
 
-    assert_eq!(response.executed_operation_count, 1);
+    assert_eq!(response.executed_operation_count, 2);
     assert_eq!(
         recovery_executor.commands,
         vec![format!("snapshot-list:{}", target(&operation))]

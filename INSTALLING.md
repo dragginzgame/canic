@@ -25,7 +25,13 @@ make install-dev
 
 Canic shells out to the installed `icp` binary for local replica and canister
 operations. Canic releases that support the ICP CLI stable line require
-`icp-cli >=1.0.0, <2.0.0`; the maintainer toolchain currently pins `1.0.2`.
+`icp-cli >=1.1.0, <2.0.0`; the maintainer toolchain currently pins `1.1.0`.
+
+ICP CLI 1.1 requires custom connected-network definitions to declare an
+explicit `root-key`. Canic's maintained project configuration uses the managed
+local network and the built-in `ic` network, so no repository configuration
+change is required. Downstream projects with custom connected networks must add
+that key to their own ICP configuration.
 
 Check the resolved binary and version:
 
@@ -361,6 +367,10 @@ default plan and apply journal inside the backup layout, `restore status 1`
 checks progress and gates, and `restore run 1 --execute` advances the durable
 journal through upload, stop, snapshot load, start, and verification
 operations.
+Preparing the same pristine documents again is idempotent. A conflicting plan
+or a journal containing progress is preserved and rejected rather than
+overwritten. Rerun `restore run` to reconcile interrupted work after the prior
+command tree has ended.
 
 ```bash
 canic restore prepare 1 --require-verified --require-restore-ready

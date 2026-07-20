@@ -2,8 +2,13 @@
 
 use canic::api::canister::placement::ShardingApi;
 use canic::{Error, cdk::types::Principal, prelude::*};
+use std::cell::RefCell;
 
 const POOL_NAME: &str = "user_shards";
+
+thread_local! {
+    static RECOVERY_GENERATION: RefCell<String> = const { RefCell::new(String::new()) };
+}
 
 canic::start!();
 
@@ -25,6 +30,19 @@ async fn plan_create_account(pid: Principal) -> Result<String, Error> {
     let plan = ShardingApi::plan_assign_to_pool(POOL_NAME, pid.to_string())?;
 
     Ok(format!("{plan:?}"))
+}
+
+/// Set deterministic fixture state for the disposable backup/restore journey.
+#[canic_update(public)]
+async fn test_set_recovery_generation(generation: String) -> Result<(), Error> {
+    RECOVERY_GENERATION.with_borrow_mut(|current| *current = generation);
+    Ok(())
+}
+
+/// Return deterministic fixture state for the disposable backup/restore journey.
+#[canic_query(public)]
+async fn test_recovery_generation() -> Result<String, Error> {
+    Ok(RECOVERY_GENERATION.with_borrow(Clone::clone))
 }
 
 canic::finish!();

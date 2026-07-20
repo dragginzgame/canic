@@ -21,7 +21,10 @@ pub use apply::{
     RestoreApplyProgressSummary, RestoreApplyReportOperation, RestoreApplyReportOutcome,
     RestoreApplyRunnerCommand,
 };
-pub use persistence::{RestorePersistenceError, write_restore_apply_journal, write_restore_plan};
+pub use persistence::{
+    RestorePersistenceError, create_or_adopt_restore_apply_journal, create_or_adopt_restore_plan,
+    write_restore_apply_journal, write_restore_plan,
+};
 pub use plan::{
     RestoreIdentitySummary, RestoreMapping, RestoreMappingEntry, RestoreOperationSummary,
     RestoreOrderingDependency, RestoreOrderingRelationship, RestoreOrderingSummary, RestorePlan,

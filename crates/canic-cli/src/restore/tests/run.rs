@@ -161,7 +161,7 @@ fn run_restore_run_dry_run_writes_native_runner_preview() {
             .expect("decode dry-run");
 
     fs::remove_dir_all(root).expect("remove temp root");
-    assert_eq!(dry_run["run_version"], 2);
+    assert_eq!(dry_run["run_version"], 1);
     assert_eq!(dry_run["backup_id"], "backup-test");
     assert_eq!(dry_run["run_mode"], "dry-run");
     assert_eq!(dry_run["dry_run"], true);
@@ -499,6 +499,7 @@ fn run_restore_run_rejects_terminal_operation_without_receipt() {
     );
     let mut journal = ready_apply_journal();
     journal.operations[0].state = RestoreApplyOperationState::Completed;
+    journal.operations[0].snapshot_ids_before = Some(Vec::new());
     journal.ready_operations -= 1;
     journal.completed_operations = 1;
     journal
@@ -581,6 +582,7 @@ fn run_restore_run_execute_marks_failed_operation() {
     let journal_path = root.join("restore-apply-journal.json");
     let out_path = root.join("restore-run.json");
     let journal = ready_apply_journal_with_artifacts(&root);
+    let fake_icp = write_fake_icp_upload_failure(&root);
 
     fs::write(
         &journal_path,
@@ -594,7 +596,7 @@ fn run_restore_run_execute_marks_failed_operation() {
         OsString::from(journal_path.as_os_str()),
         OsString::from("--execute"),
         OsString::from(crate::cli::globals::INTERNAL_ICP_OPTION),
-        OsString::from("/bin/false"),
+        OsString::from(fake_icp.as_os_str()),
         OsString::from("--max-steps"),
         OsString::from("1"),
         OsString::from("--out"),
@@ -659,8 +661,8 @@ fn run_restore_run_execute_marks_failed_operation() {
     assert_eq!(run_summary["operation_receipts"][0]["sequence"], 0);
     assert_eq!(run_summary["operation_receipts"][0]["state"], "failed");
     assert_eq!(
-        run_summary["operation_receipts"][0]["command"]["program"],
-        "/bin/false"
+        command_program_file_name(&run_summary["operation_receipts"][0]["command"]),
+        Some("icp-upload-failed")
     );
     assert_eq!(run_summary["operation_receipts"][0]["status"], "1");
     assert!(
@@ -699,13 +701,14 @@ fn run_restore_run_execute_marks_failed_operation() {
 fn run_restore_run_retry_failed_marks_operation_ready() {
     let fixture = RestoreCliFixture::new("canic-cli-restore-run-retry-failed", "restore-run.json");
     let journal = ready_apply_journal_with_artifacts(&fixture.root);
+    let fake_icp = write_fake_icp_upload_failure(&fixture.root);
     fixture.write_journal(&journal);
 
     fixture
         .run_restore_run(&[
             "--execute",
             crate::cli::globals::INTERNAL_ICP_OPTION,
-            "/bin/false",
+            fake_icp.to_str().expect("fake icp path"),
             "--max-steps",
             "1",
         ])
@@ -751,9 +754,7 @@ fn run_restore_run_require_no_attention_writes_summary_then_fails() {
         "restore-run.json",
     );
     let mut journal = ready_apply_journal();
-    journal
-        .mark_next_operation_pending_at(Some("2026-05-05T12:01:00Z".to_string()))
-        .expect("mark pending operation");
+    mark_first_upload_pending(&mut journal, "2026-05-05T12:01:00Z");
     fixture.write_journal(&journal);
 
     let err = fixture

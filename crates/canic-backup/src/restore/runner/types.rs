@@ -119,15 +119,6 @@ pub enum RestoreRunnerError {
     },
 
     #[error(
-        "restore operation {sequence} {operation:?} has a quiescent command with an unknown external outcome: {lock_path}"
-    )]
-    CommandOutcomeUnknown {
-        sequence: usize,
-        operation: RestoreApplyOperationKind,
-        lock_path: String,
-    },
-
-    #[error(
         "restore operation {sequence} {operation:?} command lock path is unsafe: {lock_path} ({kind})"
     )]
     CommandLockUnsafeEntry {
@@ -135,6 +126,37 @@ pub enum RestoreRunnerError {
         operation: RestoreApplyOperationKind,
         lock_path: String,
         kind: String,
+    },
+
+    #[error("restore operation {sequence} canister status observation failed: status={status}")]
+    CanisterStatusObservationFailed { sequence: usize, status: String },
+
+    #[error("restore operation {sequence} returned an unknown canister status")]
+    CanisterStatusUnknown { sequence: usize },
+
+    #[error("restore operation {sequence} observed unsettled canister status")]
+    CanisterStatusUnsettled { sequence: usize },
+
+    #[error("restore operation {sequence} snapshot inventory observation failed: status={status}")]
+    SnapshotInventoryObservationFailed { sequence: usize, status: String },
+
+    #[error("restore operation {sequence} returned invalid snapshot inventory")]
+    InvalidSnapshotInventory { sequence: usize },
+
+    #[error(
+        "restore operation {sequence} snapshot inventory lost baseline identities: {snapshot_ids:?}"
+    )]
+    SnapshotInventoryLostBaseline {
+        sequence: usize,
+        snapshot_ids: Vec<String>,
+    },
+
+    #[error(
+        "restore operation {sequence} uploaded snapshot identity is ambiguous: {snapshot_ids:?}"
+    )]
+    UploadedSnapshotIdentityAmbiguous {
+        sequence: usize,
+        snapshot_ids: Vec<String>,
     },
 
     #[error(
@@ -606,6 +628,14 @@ pub(super) struct RestoreRunPreparedOperation {
     pub(super) attempt: usize,
     pub(super) command_lock: Option<CommandLifetimeLock>,
     pub(super) _staged_artifact: Option<StagedRestoreArtifact>,
+    pub(super) reconciled_success: Option<RestoreReconciledCommandSuccess>,
+}
+
+pub(super) struct RestoreReconciledCommandSuccess {
+    pub(super) command: RestoreApplyRunnerCommand,
+    pub(super) status: String,
+    pub(super) output: RestoreApplyCommandOutputPair,
+    pub(super) uploaded_snapshot_id: Option<String>,
 }
 
 ///

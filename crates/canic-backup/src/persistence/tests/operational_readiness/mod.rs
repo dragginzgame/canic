@@ -11,6 +11,8 @@ mod checksum_effect;
 #[cfg(unix)]
 mod checksum_transition;
 #[cfg(unix)]
+mod command_in_flight;
+#[cfg(unix)]
 mod download_effect;
 #[cfg(unix)]
 mod download_transition;
@@ -33,15 +35,16 @@ use crate::{
     persistence::{DurableWriteBarrier, write_json_durable_at_barriers},
     plan::{AuthorityEvidence, BackupOperationKind},
     runner::{BackupRunnerConfig, BackupRunnerExecutor, backup_run_execute_with_executor},
-    test_support::FakeBackupRunnerExecutor,
+    test_support::{
+        FakeBackupRunnerExecutor, hold_at_acknowledged_barrier, kill_child_at_acknowledged_barrier,
+        wait_for_child_path, wait_for_path,
+    },
 };
 
 #[cfg(unix)]
 use std::{
     io::{self, Read},
-    process::{Child, Command},
-    thread,
-    time::{Duration, Instant},
+    process::Command,
 };
 
 #[cfg(unix)]
@@ -467,59 +470,6 @@ fn durable_write_barrier(barrier_name: &str) -> DurableWriteBarrier {
         "before-rename" => DurableWriteBarrier::BeforeRename,
         "after-directory-sync" => DurableWriteBarrier::AfterDirectorySync,
         _ => panic!("unsupported durable-write barrier: {barrier_name}"),
-    }
-}
-
-#[cfg(unix)]
-fn kill_child_at_acknowledged_barrier(child: &mut Child, root: &Path) {
-    let ready_path = root.join("barrier-ready");
-    let acknowledge_path = root.join("barrier-acknowledged");
-    let armed_path = root.join("barrier-armed");
-    wait_for_child_path(child, &ready_path, "child barrier");
-    fs::write(&acknowledge_path, b"acknowledged\n").expect("acknowledge child barrier");
-    wait_for_child_path(child, &armed_path, "armed child barrier");
-    child.kill().expect("kill child at acknowledged barrier");
-    child.wait().expect("reap killed child");
-}
-
-#[cfg(unix)]
-fn hold_at_acknowledged_barrier(root: &Path) -> ! {
-    let ready_path = root.join("barrier-ready");
-    let acknowledge_path = root.join("barrier-acknowledged");
-    let armed_path = root.join("barrier-armed");
-    fs::write(&ready_path, b"ready\n").expect("signal child barrier");
-    wait_for_path(&acknowledge_path, "parent barrier acknowledgement");
-    fs::write(&armed_path, b"armed\n").expect("arm child crash");
-    loop {
-        thread::sleep(Duration::from_secs(1));
-    }
-}
-
-#[cfg(unix)]
-fn wait_for_child_path(child: &mut Child, path: &Path, description: &str) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !path.is_file() {
-        assert!(
-            child.try_wait().expect("inspect crash child").is_none(),
-            "crash child exited before {description}"
-        );
-        assert!(
-            Instant::now() < deadline,
-            "timed out waiting for {description}"
-        );
-        thread::sleep(Duration::from_millis(10));
-    }
-}
-
-#[cfg(unix)]
-fn wait_for_path(path: &Path, description: &str) {
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !path.is_file() {
-        assert!(
-            Instant::now() < deadline,
-            "timed out waiting for {description}"
-        );
-        thread::sleep(Duration::from_millis(10));
     }
 }
 

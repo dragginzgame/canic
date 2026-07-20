@@ -23,15 +23,20 @@ fn parses_icp_cli_versions_from_common_output() {
 }
 
 #[test]
-fn icp_cli_version_range_accepts_supported_major_only() {
+fn icp_cli_version_range_requires_1_1_or_newer_within_major_one() {
     assert!(!is_supported_icp_cli_version(IcpCliVersion {
         major: 0,
         minor: 0,
         patch: 0
     }));
-    assert!(is_supported_icp_cli_version(IcpCliVersion {
+    assert!(!is_supported_icp_cli_version(IcpCliVersion {
         major: 1,
         minor: 0,
+        patch: 0
+    }));
+    assert!(is_supported_icp_cli_version(IcpCliVersion {
+        major: 1,
+        minor: 1,
         patch: 0
     }));
     assert!(is_supported_icp_cli_version(IcpCliVersion {
@@ -74,7 +79,7 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     assert!(err.to_string().contains("found: icp development build"));
     assert!(
         err.to_string()
-            .contains("required: icp-cli >=1.0.0, <2.0.0")
+            .contains("required: icp-cli >=1.1.0, <2.0.0")
     );
     assert!(
         err.to_string()
@@ -224,15 +229,16 @@ fn parses_snapshot_json() {
 
 #[test]
 fn parses_snapshot_inventory_json() {
-    let snapshots = serde_json::from_str::<Vec<IcpSnapshot>>(
-        r#"[{
+    let inventory = serde_json::from_str::<super::snapshot::IcpSnapshotInventory>(
+        r#"{"snapshots":[{
   "snapshot_id": "0000000000000000ffffffffffc000020101",
   "taken_at_timestamp": 1778709681897818005,
   "total_size_bytes": 272586987
-}]"#,
+}]}"#,
     )
     .expect("parse snapshot inventory");
 
+    let snapshots = inventory.snapshots;
     assert_eq!(snapshots.len(), 1);
     assert_eq!(
         snapshots[0].snapshot_id,

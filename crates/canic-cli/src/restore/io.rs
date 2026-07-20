@@ -4,6 +4,7 @@ use canic_backup::{
     persistence::BackupLayout,
     restore::{
         RestoreApplyDryRun, RestoreApplyJournal, RestoreMapping, RestorePlan, RestoreRunResponse,
+        create_or_adopt_restore_apply_journal, create_or_adopt_restore_plan,
         write_restore_apply_journal, write_restore_plan,
     },
 };
@@ -255,12 +256,15 @@ pub(super) fn write_plan_file(path: &Path, plan: &RestorePlan) -> Result<(), Res
     Ok(())
 }
 
-pub(super) fn write_apply_journal_file(
-    path: &Path,
+pub(super) fn create_or_adopt_prepare_documents(
+    plan_path: &Path,
+    plan: &RestorePlan,
+    journal_path: &Path,
     dry_run: &RestoreApplyDryRun,
 ) -> Result<(), RestoreCommandError> {
     let journal = RestoreApplyJournal::from_dry_run(dry_run)?;
-    write_restore_apply_journal(path, &journal)?;
+    create_or_adopt_restore_plan(plan_path, plan)?;
+    create_or_adopt_restore_apply_journal(journal_path, &journal)?;
     Ok(())
 }
 

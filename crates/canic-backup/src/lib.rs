@@ -18,7 +18,6 @@ pub mod registry;
 pub mod restore;
 pub mod runner;
 mod serialization;
-pub mod snapshot;
 #[cfg(test)]
 mod test_support;
 pub mod timestamp;

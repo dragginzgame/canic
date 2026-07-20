@@ -121,7 +121,9 @@ fn prove_terminal_transition_side(operation: &BackupOperationKind, barrier_name:
     fs::remove_dir_all(handshake_root).expect("remove terminal transition handshake root");
 }
 
-fn prepare_target_operation(operation: &BackupOperationKind) -> (PathBuf, BackupLayout, usize) {
+pub(super) fn prepare_target_operation(
+    operation: &BackupOperationKind,
+) -> (PathBuf, BackupLayout, usize) {
     let operations = backup_post_preflight_operations();
     let preceding_steps = operations
         .iter()

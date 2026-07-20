@@ -26,7 +26,6 @@ fn backup_target_options_reject_missing_or_duplicate_selectors() {
             .expect_err("invalid keep rejects");
     std::assert_matches!(invalid_keep, BackupCommandError::Usage(_));
 
-    let missing_prune_selector =
-        BackupPruneOptions::parse([]).expect_err("missing prune selector rejects");
+    let missing_prune_selector = BackupPruneOptions::parse([]).expect_err("missing keep rejects");
     std::assert_matches!(missing_prune_selector, BackupCommandError::Usage(_));
 }

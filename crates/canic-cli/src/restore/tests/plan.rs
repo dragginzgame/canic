@@ -263,6 +263,69 @@ fn run_restore_prepare_writes_default_layout_artifacts() {
     assert_eq!(journal["operation_count"], 10);
 }
 
+// Ensure repeating preparation adopts the exact pristine recovery documents.
+#[test]
+fn run_restore_prepare_adopts_exact_pristine_documents() {
+    let root = temp_dir("canic-cli-restore-prepare-adopt");
+    let layout = BackupLayout::new(root.clone());
+    let mut manifest = restore_ready_manifest();
+    write_manifest_artifacts(&root, &mut manifest);
+    layout.publish_manifest(&manifest).expect("write manifest");
+
+    for _ in 0..2 {
+        run([
+            OsString::from("prepare"),
+            OsString::from("--backup-dir"),
+            OsString::from(root.as_os_str()),
+            OsString::from("--require-restore-ready"),
+        ])
+        .expect("prepare or adopt restore documents");
+    }
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+// Ensure preparation never replaces a progressed recovery journal.
+#[test]
+fn run_restore_prepare_rejects_progressed_journal_without_replacing_it() {
+    let root = temp_dir("canic-cli-restore-prepare-progressed");
+    let layout = BackupLayout::new(root.clone());
+    let mut manifest = restore_ready_manifest();
+    write_manifest_artifacts(&root, &mut manifest);
+    layout.publish_manifest(&manifest).expect("write manifest");
+    let args = || {
+        [
+            OsString::from("prepare"),
+            OsString::from("--backup-dir"),
+            OsString::from(root.as_os_str()),
+            OsString::from("--require-restore-ready"),
+        ]
+    };
+    run(args()).expect("prepare restore documents");
+
+    let journal_path = root.join("restore-apply-journal.json");
+    let mut journal: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&journal_path).expect("read journal"))
+            .expect("decode journal");
+    mark_first_upload_pending(&mut journal, "unix:1");
+    write_restore_apply_journal(&journal_path, &journal).expect("write progressed journal");
+    let progressed = fs::read(&journal_path).expect("read progressed bytes");
+
+    let error = run(args()).expect_err("progressed journal rejects prepare");
+    std::assert_matches!(
+        error,
+        RestoreCommandError::RestorePersistence(
+            RestorePersistenceError::ApplyJournalConflict { path }
+        ) if path == journal_path.display().to_string()
+    );
+    assert_eq!(
+        fs::read(&journal_path).expect("read preserved journal"),
+        progressed
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure prepared backup references fail with an operator action, not raw IO.
 #[test]
 fn prepared_plan_path_reports_prepare_action_when_missing() {

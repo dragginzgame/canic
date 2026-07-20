@@ -26,7 +26,7 @@ where
     replace_bytes(path, &bytes).map_err(PersistenceError::from)
 }
 
-pub(super) fn create_json_durable<T>(path: &Path, value: &T) -> Result<(), PersistenceError>
+pub fn create_json_durable<T>(path: &Path, value: &T) -> Result<(), PersistenceError>
 where
     T: Serialize,
 {
@@ -34,7 +34,7 @@ where
     create_bytes_at_barriers(path, &bytes, || {}, || {}).map_err(PersistenceError::from)
 }
 
-pub(super) fn read_json<T>(path: &Path) -> Result<T, PersistenceError>
+pub fn read_json<T>(path: &Path) -> Result<T, PersistenceError>
 where
     T: DeserializeOwned,
 {
@@ -133,7 +133,7 @@ where
 }
 
 #[cfg(test)]
-pub(super) fn create_json_durable_at_barriers<T>(
+pub fn create_json_durable_at_barriers<T>(
     path: &Path,
     value: &T,
     before_publication: impl FnMut(),

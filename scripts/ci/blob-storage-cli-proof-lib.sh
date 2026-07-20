@@ -55,7 +55,7 @@ STATE_FILE="${FAKE_ICP_STATE:?missing FAKE_ICP_STATE}"
 
 for arg in "$@"; do
     if [ "$arg" = "--version" ]; then
-        echo "icp-cli 1.0.0"
+        echo "icp-cli 1.1.0"
         exit 0
     fi
 done

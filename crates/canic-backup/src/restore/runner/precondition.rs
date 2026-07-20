@@ -23,27 +23,69 @@ pub(super) fn enforce_stopped_canister_precondition(
     updated_at: Option<&String>,
     command_lifetime: Option<CommandLifetimeHandle>,
 ) -> Result<Option<RestoreStoppedPreconditionFailure>, RestoreRunnerError> {
-    let command = stopped_canister_status_command(config, operation);
-    let output = executor.execute(&command, command_lifetime)?;
-    let status_label = output.status;
-    let output_pair = RestoreApplyCommandOutputPair::from_bytes(
-        &output.stdout,
-        &output.stderr,
-        RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
-    );
-    if output.success && status_output_reports_stopped(&output_pair) {
+    let observation = observe_canister_status(config, executor, operation, command_lifetime)?;
+    if observation.success && observation.status == Some(RestoreObservedCanisterStatus::Stopped) {
         return Ok(None);
     }
 
     Ok(Some(RestoreStoppedPreconditionFailure {
-        command,
-        status_label,
-        output: output_pair,
+        command: observation.command,
+        status_label: observation.status_label,
+        output: observation.output,
         failure_reason: format!(
             "{RESTORE_RUN_STOPPED_PRECONDITION_FAILED}-attempt-{attempt}-{}",
             state_updated_at(updated_at)
         ),
     }))
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RestoreObservedCanisterStatus {
+    Running,
+    Stopped,
+    Stopping,
+}
+
+pub(super) struct RestoreCanisterStatusEvidence {
+    pub(super) status: RestoreObservedCanisterStatus,
+    pub(super) module_hash: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct RestoreCanisterStatusResponse {
+    status: String,
+    module_hash: Option<String>,
+}
+
+pub(super) struct RestoreCanisterStatusObservation {
+    pub(super) command: RestoreApplyRunnerCommand,
+    pub(super) success: bool,
+    pub(super) status_label: String,
+    pub(super) output: RestoreApplyCommandOutputPair,
+    pub(super) status: Option<RestoreObservedCanisterStatus>,
+}
+
+pub(super) fn observe_canister_status(
+    config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
+    operation: &RestoreApplyJournalOperation,
+    command_lifetime: Option<CommandLifetimeHandle>,
+) -> Result<RestoreCanisterStatusObservation, RestoreRunnerError> {
+    let command = stopped_canister_status_command(config, operation);
+    let raw = executor.execute(&command, command_lifetime)?;
+    let output = RestoreApplyCommandOutputPair::from_bytes(
+        &raw.stdout,
+        &raw.stderr,
+        RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
+    );
+    let status = status_output(&output);
+    Ok(RestoreCanisterStatusObservation {
+        command,
+        success: raw.success,
+        status_label: raw.status,
+        output,
+        status,
+    })
 }
 
 fn stopped_canister_status_command(
@@ -68,32 +110,36 @@ fn stopped_canister_status_command(
     }
 }
 
+#[cfg(test)]
 fn status_output_reports_stopped(output: &RestoreApplyCommandOutputPair) -> bool {
-    status_json_reports_stopped(&output.stdout.text)
-        || status_json_reports_stopped(&output.stderr.text)
+    status_output(output) == Some(RestoreObservedCanisterStatus::Stopped)
 }
 
-fn status_json_reports_stopped(output: &str) -> bool {
-    serde_json::from_str::<serde_json::Value>(output)
-        .ok()
-        .and_then(|value| {
-            find_json_field(&value, "status")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-        })
-        .is_some_and(|status| status.eq_ignore_ascii_case("stopped"))
+fn status_output(output: &RestoreApplyCommandOutputPair) -> Option<RestoreObservedCanisterStatus> {
+    status_json(&output.stdout.text).or_else(|| status_json(&output.stderr.text))
 }
 
-fn find_json_field<'a>(value: &'a serde_json::Value, field: &str) -> Option<&'a serde_json::Value> {
-    match value {
-        serde_json::Value::Object(map) => map
-            .get(field)
-            .or_else(|| map.values().find_map(|value| find_json_field(value, field))),
-        serde_json::Value::Array(values) => values
-            .iter()
-            .find_map(|value| find_json_field(value, field)),
-        _ => None,
-    }
+fn status_json(output: &str) -> Option<RestoreObservedCanisterStatus> {
+    parse_canister_status_evidence(output).map(|evidence| evidence.status)
+}
+
+pub(super) fn parse_canister_status_evidence(
+    output: &str,
+) -> Option<RestoreCanisterStatusEvidence> {
+    let response = serde_json::from_str::<RestoreCanisterStatusResponse>(output).ok()?;
+    let status = if response.status.eq_ignore_ascii_case("running") {
+        RestoreObservedCanisterStatus::Running
+    } else if response.status.eq_ignore_ascii_case("stopped") {
+        RestoreObservedCanisterStatus::Stopped
+    } else if response.status.eq_ignore_ascii_case("stopping") {
+        RestoreObservedCanisterStatus::Stopping
+    } else {
+        return None;
+    };
+    Some(RestoreCanisterStatusEvidence {
+        status,
+        module_hash: response.module_hash,
+    })
 }
 
 #[cfg(test)]
@@ -107,13 +153,11 @@ mod tests {
 
         assert!(status_output_reports_stopped(&output));
 
-        let output = RestoreApplyCommandOutputPair::from_bytes(
-            br#"{"canister":{"status":"Stopped"}}"#,
-            b"",
-            1024,
-        );
-
-        assert!(status_output_reports_stopped(&output));
+        let evidence =
+            parse_canister_status_evidence(r#"{"status":"Running","module_hash":"0x0123"}"#)
+                .expect("status evidence");
+        assert_eq!(evidence.status, RestoreObservedCanisterStatus::Running);
+        assert_eq!(evidence.module_hash.as_deref(), Some("0x0123"));
     }
 
     #[test]

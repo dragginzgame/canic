@@ -392,6 +392,7 @@ fn push_member_operation(
         snapshot_id,
         artifact_path,
         artifact_checksum,
+        expected_module_hash: check.and_then(|_| member.source_snapshot.module_hash.clone()),
         verification_kind: check.map(|check| check.kind.clone()),
     });
 }
@@ -461,12 +462,14 @@ fn append_deployment_verification_operations(
         || plan.source_root_canister.clone(),
         |member| member.target_canister.clone(),
     );
+    let expected_module_hash = root.and_then(|member| member.source_snapshot.module_hash.clone());
     for check in &plan.deployment_verification_checks {
         push_deployment_operation(
             operations,
             next_sequence,
             &source_canister,
             &target_canister,
+            expected_module_hash.clone(),
             check,
         );
     }
@@ -478,6 +481,7 @@ fn push_deployment_operation(
     next_sequence: &mut usize,
     source_canister: &str,
     target_canister: &str,
+    expected_module_hash: Option<String>,
     check: &VerificationCheck,
 ) {
     let sequence = *next_sequence;
@@ -494,6 +498,7 @@ fn push_deployment_operation(
         snapshot_id: None,
         artifact_path: None,
         artifact_checksum: None,
+        expected_module_hash,
         verification_kind: Some(check.kind.clone()),
     });
 }
@@ -517,6 +522,8 @@ pub struct RestoreApplyDryRunOperation {
     pub artifact_path: Option<String>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_checksum: Option<ArtifactChecksum>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub expected_module_hash: Option<String>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub verification_kind: Option<String>,
 }

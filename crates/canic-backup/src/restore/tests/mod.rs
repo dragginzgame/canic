@@ -62,6 +62,8 @@ fn command_preview_journal(
             snapshot_id: Some("snap-root".to_string()),
             artifact_path: Some("artifacts/root".to_string()),
             artifact_checksum,
+            snapshot_ids_before: None,
+            expected_module_hash: None,
             verification_kind: verification_kind.map(str::to_string),
         }],
         operation_receipts: Vec::new(),
@@ -164,4 +166,6 @@ fn set_member_artifact(
 
 mod apply_dry_run;
 mod apply_journal;
+#[cfg(unix)]
+mod operational_readiness;
 mod plan;

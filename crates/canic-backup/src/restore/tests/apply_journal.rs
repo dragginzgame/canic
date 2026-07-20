@@ -1,5 +1,9 @@
 use super::*;
 
+fn bind_upload_inventory(journal: &mut RestoreApplyJournal, sequence: usize) {
+    journal.operations[sequence].snapshot_ids_before = Some(Vec::new());
+}
+
 fn completed_upload_receipt(
     operation: &RestoreApplyJournalOperation,
     attempt: usize,
@@ -44,6 +48,7 @@ fn apply_command_output_bounds_to_tail_bytes() {
 #[test]
 fn apply_journal_rejects_duplicate_operation_receipt_attempts() {
     let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    bind_upload_inventory(&mut journal, 0);
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark upload completed");
@@ -93,6 +98,7 @@ fn apply_journal_rejects_duplicate_operation_receipt_attempts() {
 #[test]
 fn apply_journal_rejects_zero_operation_receipt_attempt() {
     let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    bind_upload_inventory(&mut journal, 0);
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark upload completed");
@@ -161,6 +167,7 @@ fn apply_journal_receipt_serializes_explicit_null_fields() {
 #[test]
 fn apply_journal_command_receipts_require_audit_fields() {
     let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    bind_upload_inventory(&mut journal, 0);
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark upload completed");
@@ -250,6 +257,7 @@ fn apply_journal_command_receipts_require_audit_fields() {
 #[test]
 fn apply_journal_upload_receipt_binds_artifact_checksum() {
     let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
+    bind_upload_inventory(&mut journal, 0);
     journal
         .mark_operation_completed_at(0, Some("unix:1".to_string()))
         .expect("mark upload completed");
@@ -412,6 +420,8 @@ fn apply_journal_requires_exact_current_optional_fields() {
         "artifact_path",
         "artifact_checksum",
         "verification_kind",
+        "snapshot_ids_before",
+        "expected_module_hash",
     ] {
         let mut value =
             serde_json::to_value(&journal.operations[0]).expect("serialize journal operation");
@@ -545,6 +555,7 @@ fn apply_journal_command_preview_reports_full_ready_row() {
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+    bind_upload_inventory(&mut journal, 0);
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark operation completed");
@@ -709,6 +720,8 @@ fn apply_journal_command_preview_reports_load_command() {
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+    bind_upload_inventory(&mut journal, 0);
+    bind_upload_inventory(&mut journal, 1);
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark root upload completed");
@@ -810,6 +823,8 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+    bind_upload_inventory(&mut journal, 0);
+    bind_upload_inventory(&mut journal, 1);
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark root upload completed");
@@ -947,6 +962,8 @@ fn apply_journal_validation_rejects_unsupported_verification_kind() {
             snapshot_id: Some("snap-root".to_string()),
             artifact_path: Some("artifacts/root".to_string()),
             artifact_checksum: None,
+            snapshot_ids_before: None,
+            expected_module_hash: None,
             verification_kind: Some("query".to_string()),
         }],
         operation_receipts: Vec::new(),
@@ -1038,6 +1055,7 @@ fn apply_journal_validation_rejects_failed_without_reason() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+    bind_upload_inventory(&mut journal, 0);
     journal.operations[0].state = RestoreApplyOperationState::Failed;
     journal.operations[0].blocking_reasons = Vec::new();
     journal.blocked_operations -= 1;
@@ -1056,7 +1074,7 @@ fn apply_journal_mark_next_operation_pending_claims_first_operation() {
     let mut journal = command_preview_journal(RestoreApplyOperationKind::UploadSnapshot, None);
 
     journal
-        .mark_next_operation_pending_at(Some("2026-05-04T12:00:00Z".to_string()))
+        .mark_upload_snapshot_pending_at(0, Some("2026-05-04T12:00:00Z".to_string()), Vec::new())
         .expect("mark operation pending");
     let report = journal.report();
     let preview = journal.next_command_preview();
@@ -1264,6 +1282,7 @@ fn apply_journal_mark_completed_advances_next_ready_operation() {
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+    bind_upload_inventory(&mut journal, 0);
 
     journal
         .mark_operation_completed_at(0, None)
@@ -1358,6 +1377,7 @@ fn apply_journal_mark_failed_records_reason() {
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+    bind_upload_inventory(&mut journal, 0);
 
     journal
         .mark_operation_failed_at(0, "icp-load-failed".to_string(), None)
@@ -1401,6 +1421,7 @@ fn apply_journal_retry_failed_operation_marks_ready() {
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let mut journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
+    bind_upload_inventory(&mut journal, 0);
     journal
         .mark_operation_failed_at(0, "icp-upload-failed".to_string(), None)
         .expect("mark failed operation");
