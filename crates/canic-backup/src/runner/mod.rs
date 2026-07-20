@@ -6,7 +6,8 @@ pub use types::*;
 
 use crate::{
     execution::{
-        BackupExecutionJournal, BackupExecutionOperationReceipt, BackupExecutionOperationState,
+        BackupExecutionJournal, BackupExecutionOperationReceipt,
+        BackupExecutionOperationReceiptOutcome, BackupExecutionOperationState,
     },
     persistence::{BackupLayout, CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
     plan::{BackupOperationKind, BackupPlan},
@@ -100,46 +101,44 @@ fn execute_ready_operations(
         }
 
         let mut command_lock = backup_command_lock(layout, &operation)?;
-        if operation.state == BackupExecutionOperationState::Pending {
-            if operation.kind == BackupOperationKind::Stop {
-                if let Some(receipt) = reconcile_pending_stop(executor, journal, &operation)? {
-                    finish_reconciled_command_lock(&operation, command_lock.take())?;
-                    journal.record_operation_receipt(receipt)?;
-                    layout.write_execution_journal(journal)?;
-                    executed.push(BackupRunExecutedOperation::completed(&operation));
-                    continue;
-                }
+        let reconciled_receipt = if operation.state == BackupExecutionOperationState::Pending {
+            if let Some(completed_status) = lifecycle_completed_status(&operation.kind) {
+                reconcile_pending_lifecycle(executor, journal, &operation, completed_status)?
             } else if operation.kind == BackupOperationKind::CreateSnapshot {
-                if let Some(receipt) =
-                    reconcile_pending_snapshot_create(executor, layout, plan, journal, &operation)?
-                {
-                    finish_reconciled_command_lock(&operation, command_lock.take())?;
-                    journal.record_operation_receipt(receipt)?;
-                    layout.write_execution_journal(journal)?;
-                    executed.push(BackupRunExecutedOperation::completed(&operation));
-                    continue;
-                }
+                reconcile_pending_snapshot_create(executor, layout, plan, journal, &operation)?
             } else {
                 reject_unknown_backup_command_outcome(&operation, command_lock.take())?;
+                None
             }
         } else {
-            if operation.kind == BackupOperationKind::CreateSnapshot {
-                if let Some(receipt) = prepare_snapshot_create_attempt(
+            if let Some(completed_status) = lifecycle_completed_status(&operation.kind) {
+                prepare_lifecycle_attempt(
+                    config,
+                    executor,
+                    layout,
+                    journal,
+                    &operation,
+                    completed_status,
+                )?
+            } else if operation.kind == BackupOperationKind::CreateSnapshot {
+                prepare_snapshot_create_attempt(
                     config, executor, layout, plan, journal, &operation,
-                )? {
-                    finish_reconciled_command_lock(&operation, command_lock.take())?;
-                    journal.record_operation_receipt(receipt)?;
-                    layout.write_execution_journal(journal)?;
-                    executed.push(BackupRunExecutedOperation::completed(&operation));
-                    continue;
-                }
+                )?
             } else {
                 journal.mark_operation_pending_at(
                     operation.sequence,
                     Some(state_updated_at(config.updated_at.as_ref())),
                 )?;
                 layout.write_execution_journal(journal)?;
+                None
             }
+        };
+        if let Some(receipt) = reconciled_receipt {
+            finish_reconciled_command_lock(&operation, command_lock.take())?;
+            journal.record_operation_receipt(receipt)?;
+            layout.write_execution_journal(journal)?;
+            executed.push(BackupRunExecutedOperation::completed(&operation));
+            continue;
         }
 
         let operation_result = execute_operation_receipt(
@@ -177,6 +176,38 @@ fn execute_ready_operations(
             }
         }
     }
+}
+
+fn prepare_lifecycle_attempt(
+    config: &BackupRunnerConfig,
+    executor: &mut impl BackupRunnerExecutor,
+    layout: &BackupLayout,
+    journal: &mut BackupExecutionJournal,
+    operation: &crate::execution::BackupExecutionJournalOperation,
+    completed_status: BackupRunnerCanisterStatus,
+) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
+    let reconcile_previous_attempt = operation.state == BackupExecutionOperationState::Failed
+        || journal.operation_receipts.iter().any(|receipt| {
+            receipt.sequence == operation.sequence
+                && receipt.outcome == BackupExecutionOperationReceiptOutcome::Failed
+        });
+    journal.mark_operation_pending_at(
+        operation.sequence,
+        Some(state_updated_at(config.updated_at.as_ref())),
+    )?;
+    layout.write_execution_journal(journal)?;
+    if !reconcile_previous_attempt {
+        return Ok(None);
+    }
+    let pending_operation = journal
+        .operations
+        .iter()
+        .find(|candidate| candidate.sequence == operation.sequence)
+        .cloned()
+        .ok_or(
+            crate::execution::BackupExecutionJournalError::OperationNotFound(operation.sequence),
+        )?;
+    reconcile_pending_lifecycle(executor, journal, &pending_operation, completed_status)
 }
 
 fn prepare_snapshot_create_attempt(
@@ -309,10 +340,11 @@ fn observe_snapshot_inventory(
     Ok(snapshots)
 }
 
-fn reconcile_pending_stop(
+fn reconcile_pending_lifecycle(
     executor: &mut impl BackupRunnerExecutor,
     journal: &BackupExecutionJournal,
     operation: &crate::execution::BackupExecutionJournalOperation,
+    completed_status: BackupRunnerCanisterStatus,
 ) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
     let target = operation.target_canister_id.as_deref().ok_or(
         BackupRunnerError::MissingOperationTarget {
@@ -326,20 +358,30 @@ fn reconcile_pending_stop(
             message: error.message,
         }
     })?;
-    match status {
-        BackupRunnerCanisterStatus::Running => Ok(None),
-        BackupRunnerCanisterStatus::Stopped => {
-            Ok(Some(BackupExecutionOperationReceipt::completed(
-                journal,
-                operation,
-                Some(current_timestamp_marker()),
-            )))
-        }
-        BackupRunnerCanisterStatus::Stopping => Err(BackupRunnerError::CanisterStatusUnsettled {
+    if status == completed_status {
+        return Ok(Some(BackupExecutionOperationReceipt::completed(
+            journal,
+            operation,
+            Some(current_timestamp_marker()),
+        )));
+    }
+    if status == BackupRunnerCanisterStatus::Stopping {
+        return Err(BackupRunnerError::CanisterStatusUnsettled {
             sequence: operation.sequence,
             operation_id: operation.operation_id.clone(),
             status: status.label(),
-        }),
+        });
+    }
+    Ok(None)
+}
+
+const fn lifecycle_completed_status(
+    kind: &BackupOperationKind,
+) -> Option<BackupRunnerCanisterStatus> {
+    match kind {
+        BackupOperationKind::Stop => Some(BackupRunnerCanisterStatus::Stopped),
+        BackupOperationKind::Start => Some(BackupRunnerCanisterStatus::Running),
+        _ => None,
     }
 }
 

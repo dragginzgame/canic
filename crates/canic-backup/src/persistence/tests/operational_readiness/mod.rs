@@ -4,10 +4,10 @@
 //! Does not own: the frozen case manifest or production recovery policy.
 //! Boundary: binds deterministic process loss to real durable layout operations.
 
+mod lifecycle_effect;
 mod pending_claim;
 #[cfg(unix)]
 mod snapshot_create;
-mod stop_effect;
 
 use super::*;
 use crate::{

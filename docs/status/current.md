@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.3`.
-- The latest published release is `v0.94.3` at
-  `4d493cd0ef46d60c2ea3974a95f23e65ba9098ae`.
-- The `v0.94.3` source tree is
-  `dc6a1fc6e80c3105f5083e0499d21fd7c16e52e8`; its product-tree hash is
-  `31e2ac5406faca2df9b3bdd17918dd55ecc7b984dcb223356e45932487d9e7c3`.
+- The workspace package version is `0.94.4`.
+- The latest published release is `v0.94.4` at
+  `4862cdb8ad54991e27cae716a46a47d8f8a2653e`.
+- The `v0.94.4` source tree is
+  `7e5e20cecd38d3628af991d53c44d07261913860`; its product-tree hash is
+  `76a5793efcf88636be5333cead6deb662d0d28f43a480dcc09e72759c1c07dd7`.
   Its Cargo.lock SHA-256 is
-  `7aabb4df2e858a50c28b36f4a35328e10860414044d6d73c1edbb0994c99decc`.
+  `9430425de91e78de5bf61898da544187d854a6120b1596391bf4ae464b8e0b41`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -225,10 +225,14 @@ Historical detail is archived at:
 - Released `v0.94.3` proves backup preflight and pending-claim publication,
   resumes exact local pending work, and reconciles committed stop from typed
   target status without a second stop.
-- The open `0.94.4` draft reconciles committed snapshot creation from one
-  exact inventory delta and reconstructs lost execution receipts from complete
+- Released `v0.94.4` reconciles committed snapshot creation from one exact
+  inventory delta and reconstructs lost execution receipts from complete
   artifact evidence. Versioned backup documents remain version 1; superseded
   shapes are hard-rejected with no migration or fallback reader.
+- The open `0.94.5` draft gives stop and start one lifecycle-status recovery
+  authority. Committed start is adopted without a second command, exact
+  stopped state justifies one start, and returned-failure retry reconciles
+  before mutation.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is

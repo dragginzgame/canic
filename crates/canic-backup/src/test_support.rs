@@ -23,6 +23,7 @@ use std::{
 pub struct FakeBackupRunnerExecutor {
     pub commands: Vec<String>,
     pub fail_on: Option<FakeBackupRunnerFailure>,
+    pub canister_statuses: BTreeMap<String, BackupRunnerCanisterStatus>,
     pub snapshots: BTreeMap<String, Vec<BackupRunnerSnapshot>>,
 }
 
@@ -127,7 +128,11 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
         canister_id: &str,
     ) -> Result<BackupRunnerCanisterStatus, BackupRunnerCommandError> {
         self.commands.push(format!("status:{canister_id}"));
-        Ok(BackupRunnerCanisterStatus::Running)
+        Ok(self
+            .canister_statuses
+            .get(canister_id)
+            .copied()
+            .unwrap_or(BackupRunnerCanisterStatus::Running))
     }
 
     fn snapshot_inventory(
@@ -144,6 +149,8 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
         _command_lifetime: CommandLifetimeHandle,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("stop:{canister_id}"));
+        self.canister_statuses
+            .insert(canister_id.to_string(), BackupRunnerCanisterStatus::Stopped);
         Ok(())
     }
 
@@ -153,6 +160,8 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
         _command_lifetime: CommandLifetimeHandle,
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands.push(format!("start:{canister_id}"));
+        self.canister_statuses
+            .insert(canister_id.to_string(), BackupRunnerCanisterStatus::Running);
         Ok(())
     }
 
