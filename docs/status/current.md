@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.0`.
-- The latest published release is `v0.94.0` at
-  `c23027aa73685d1fc23ea70f83afaaedf5e0761a`.
-- The `v0.94.0` source tree is
-  `9321d016af410e04fae6daad3d1ba30d36cf33e5`; its product-tree hash is
-  `b658018432e8abdff201f5f7f2309a3376049bbfadc3ee8bdcd2d81379ee2168`.
+- The workspace package version is `0.94.1`.
+- The latest published release is `v0.94.1` at
+  `528a16606e6f6f005c251a498a019400df51eee3`.
+- The `v0.94.1` source tree is
+  `821c8cd8cbebb3ddf6ad9a8f072636b9e3c1119c`; its product-tree hash is
+  `80c8cc6f7313c636f7d6c2b087ed37ed6f4459681d7dd960984aa712de6d0dae`.
   Its Cargo.lock SHA-256 is
-  `e9554b651175fe343392f927243901f1895952e95c1486dc717530a5b04386d1`.
+  `b424a625f164153a1213acde09eb6014d40c5feb73fb99918ada07419c640a7d`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -786,11 +786,13 @@ JSON keys, aliases, or direct named-network paths.
 The accepted 0.94 design has confirmed its exact operation and durable-
 transition inventory and completed the early disposable-platform gate.
 Snapshot create, upload, stopped-target restore observation, and exact repeated
-restore are available through a managed local ICP deployment. The journal-
-lock finding is released in `v0.94.0`. The current worktree fixes the command-
-lifetime finding with one intended-child inherited lock per mutating operation
-and hard-cuts the unsafe restore pending-to-ready reset. Live commands,
-quiescent unknown outcomes, and repeatable read-only verification now have
-distinct typed behavior; restore runner JSON advances to version 2 without a
-version-1 compatibility path. The next bounded action is freezing the
-executable crash-point manifest and beginning the backup/verification cases.
+restore are available through a managed local ICP deployment. Journal and
+command-lifetime ownership plus the restore pending-recovery hard cut are
+released through `v0.94.1`.
+
+The current 0.94.2 draft freezes one executable 106-case protocol manifest.
+Deterministic acknowledged `SIGKILL` tests pass both sides of initial
+execution-journal publication (`B01`) and backup verification before document
+validation, during checksum, and after its result (`V01` through `V03`), with
+no backup-layout byte or path mutation. The next bounded action is backup
+plan/preflight publication points `B02` and `B03`.

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.2` freezes the exact 106-case executable recovery manifest and begins
+  it with deterministic process-death proof for execution-journal publication
+  and read-only backup verification.
+
 - `0.94.1` is potentially breaking: mutating backup and restore commands now
   retain a restart-visible lifetime lock through their complete descendant
   tree, while restore hard-cuts the unsafe pending-reset command and version-1
