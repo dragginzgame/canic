@@ -13,7 +13,7 @@ mod nonroot;
 mod root;
 pub mod timer;
 
-use crate::ops::storage::icp_refill::IcpRefillStoreOps;
+use crate::ops::storage::{icp_refill::IcpRefillStoreOps, intent::IntentStoreOps};
 use crate::{
     InternalError, InternalErrorOrigin,
     log::Topic,
@@ -33,14 +33,16 @@ pub struct RuntimeWorkflow;
 
 impl RuntimeWorkflow {
     /// Start timers that should run on all non-root canisters.
-    pub fn start_all() {
+    pub fn start_all() -> Result<(), InternalError> {
         workflow::runtime::log::LogRetentionWorkflow::start();
         workflow::runtime::cycles::CycleTrackerWorkflow::start();
+        workflow::runtime::intent::IntentCleanupWorkflow::start()?;
+        Ok(())
     }
 
     /// Start timers that should run on role-attestation-refreshing non-root canisters.
-    pub fn start_all_with_role_attestation_refresh() {
-        Self::start_all();
+    pub fn start_all_with_role_attestation_refresh() -> Result<(), InternalError> {
+        Self::start_all()
     }
 
     /// Start timers that should run only on root canisters.
@@ -55,6 +57,7 @@ impl RuntimeWorkflow {
         // start shared timers too, but root only records cycle balance samples
         workflow::runtime::log::LogRetentionWorkflow::start();
         workflow::runtime::cycles::CycleTrackerWorkflow::start_standard_only();
+        workflow::runtime::intent::IntentCleanupWorkflow::start()?;
 
         // root-only services
         workflow::pool::scheduler::PoolSchedulerWorkflow::start();
@@ -83,6 +86,8 @@ pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
 pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
     IcpRefillStoreOps::rebuild_indexes()
         .map_err(|err| err.with_diagnostic_context("rebuild ICP-refill derived indexes"))?;
+    IntentStoreOps::rebuild_expiry_index()
+        .map_err(|err| err.with_diagnostic_context("rebuild intent expiry derived index"))?;
 
     Ok(())
 }

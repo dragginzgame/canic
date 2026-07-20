@@ -104,7 +104,6 @@ impl IntentMetricOutcome {
 pub enum IntentMetricReason {
     Capacity,
     Expired,
-    Idle,
     NoExpired,
     Ok,
     Overflow,
@@ -118,7 +117,6 @@ impl IntentMetricReason {
         match self {
             Self::Capacity => "capacity",
             Self::Expired => "expired",
-            Self::Idle => "idle",
             Self::NoExpired => "no_expired",
             Self::Ok => "ok",
             Self::Overflow => "overflow",

@@ -11,12 +11,17 @@ bounded host wait is inventoried and dispositioned. The public hard-cut
 surface, scheduler arbitration rules, owner trigger model, service bounds, and
 closeout gate are frozen.
 
-The open `0.95.1` draft completes Slice B. All current canister timer owners
+Released `v0.95.1` completes Slice B. All current canister timer owners
 route through one common workflow and one one-shot-only IC platform boundary.
 Request sequence and generation arbitration, schedule-during-run merging,
 after-completion recurrence, consuming cancellation, live status, and the
-public hard cuts are implemented and validated. Slice C is authorized after
-`.1` is released.
+public hard cuts are implemented and validated.
+
+The open `0.95.2` draft begins Slice C with the finite local-intent owner.
+One lifecycle-rebuilt stable index contains only finite expiry deadlines;
+bounded callbacks follow its exact earliest deadline, while TTL-free intents
+leave the process unregistered and idle. Pool, placement acknowledgement, and
+log owner migrations remain separate subsequent Slice C batches.
 
 ## Immutable Baseline
 
@@ -62,16 +67,31 @@ The canonical report is
 - No stable state, configuration schema, dependency, host wait, backup,
   restore, receipt-reclamation, or Cargo package version changes are present.
 
+## Slice C Intent Evidence
+
+- One stable derived index at core-runtime memory allocation 44 is ordered by
+  cleanup deadline and intent identity and rebuilt before timer startup.
+- Local-intent and cost-guard workflow authorities maintain that index across
+  reserve and terminal transitions; direct production cost-guard mutation is
+  structurally limited to the workflow owner.
+- One callback processes at most 32 due intents, continues through a new timer
+  message when more are due, retries storage failure after one minute, and
+  stops when the index is empty.
+- PocketIC proves exact scheduling, upgrade reconstruction, finite capacity
+  release, TTL-free retention, and truthful active/idle runtime status.
+- Intent record and receipt schemas, public Candid, configuration, dependencies,
+  and Cargo package versions are unchanged.
+
 ## Finding Index
 
 | Finding | Severity | State | Owner |
 | --- | --- | --- | --- |
-| `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in open 0.95.1 | common timer workflow |
-| `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in open 0.95.1 | common timer workflow |
-| `CANIC-095-TIMER-003` false live timer status | P2 | fixed in open 0.95.1 | common timer workflow/runtime projection |
-| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | accepted for owner slices | log, pool, intent workflows |
-| `CANIC-095-TIMER-005` unrelated full scans | P2 | accepted for owner slices | intent and placement ops/workflows |
-| `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in open 0.95.1 | timer workflow and lifecycle facade |
+| `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in released 0.95.1 | common timer workflow |
+| `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in released 0.95.1 | common timer workflow |
+| `CANIC-095-TIMER-003` false live timer status | P2 | fixed in released 0.95.1 | common timer workflow/runtime projection |
+| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent owner fixed in open 0.95.2; log/pool remain | log, pool, intent workflows |
+| `CANIC-095-TIMER-005` unrelated full scans | P2 | intent owner fixed in open 0.95.2; placement remains | intent and placement ops/workflows |
+| `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in released 0.95.1 | timer workflow and lifecycle facade |
 | `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | accepted for Slice D | cycle/top-up workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
@@ -93,7 +113,7 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Release the validated Slice B common-authority batch as `0.95.1`. Then begin
-Slice C with the derived finite-intent expiry index and exact earliest-deadline
-scheduling; do not combine it with placement acknowledgement or pool/log
-migrations until that first owner boundary is proven.
+Finish targeted validation for the open `0.95.2` finite-intent owner and release
+it as a bounded Slice C batch. Then select the next independent Slice C owner;
+do not combine pool, placement acknowledgement, and log migrations into one
+unreviewable change.

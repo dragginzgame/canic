@@ -24,9 +24,9 @@ use crate::{
     },
     ops::storage::StorageOpsError,
     storage::stable::intent::{
-        INTENT_STORE_SCHEMA_VERSION, IntentPendingEntryRecord, IntentRecord,
-        IntentResourceTotalsRecord, IntentState, IntentStore, IntentStoreMetaRecord,
-        ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
+        INTENT_STORE_SCHEMA_VERSION, IntentExpiryEntryRecord, IntentExpiryKeyRecord,
+        IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord, IntentState,
+        IntentStore, IntentStoreMetaRecord, ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
     view::intent::ReceiptBackedIntentPage,
 };
@@ -35,6 +35,7 @@ use std::ops::Bound;
 use thiserror::Error as ThisError;
 
 pub const RECEIPT_BACKED_INTENT_RECORD_LIMIT: u64 = 100_000;
+const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 // -----------------------------------------------------------------------------
 // Errors
@@ -92,6 +93,44 @@ pub enum IntentStoreOpsError {
 
     #[error("intent pending index already exists for {0}")]
     PendingIndexExists(IntentId),
+
+    #[error("intent pending index does not match primary record for {0}")]
+    PendingIndexMismatch(IntentId),
+
+    #[error("intent pending total mismatch: metadata={metadata}, index={index}")]
+    PendingTotalMismatch { metadata: u64, index: u64 },
+
+    #[error("intent {id} finite expiry overflows: created_at={created_at}, ttl_secs={ttl_secs}")]
+    ExpiryDeadlineOverflow {
+        id: IntentId,
+        created_at: u64,
+        ttl_secs: u64,
+    },
+
+    #[error("intent expiry index already exists for {id} at {due_at_secs}")]
+    ExpiryIndexExists { id: IntentId, due_at_secs: u64 },
+
+    #[error("intent expiry index missing for {id} at {due_at_secs}")]
+    ExpiryIndexMissing { id: IntentId, due_at_secs: u64 },
+
+    #[error("intent expiry index value mismatch at {due_at_secs}: key={key_id}, value={value_id}")]
+    ExpiryIndexValueMismatch {
+        due_at_secs: u64,
+        key_id: IntentId,
+        value_id: IntentId,
+    },
+
+    #[error(
+        "intent expiry index key mismatch for {id}: expected={expected_due_at_secs}, found={found_due_at_secs}"
+    )]
+    ExpiryIndexKeyMismatch {
+        id: IntentId,
+        expected_due_at_secs: u64,
+        found_due_at_secs: u64,
+    },
+
+    #[error("TTL-free intent {0} appears in the finite-expiry index")]
+    TtlFreeIntentInExpiryIndex(IntentId),
 
     #[error("multiple pending intents exist for resource {0}")]
     MultiplePendingForResource(IntentResourceKey),
@@ -179,17 +218,30 @@ impl IntentStoreOps {
         now_secs: u64,
     ) -> Result<IntentRecord, InternalError> {
         let meta = ensure_schema()?;
+        let expiry_key = expiry_key(intent_id, created_at, ttl_secs)?;
 
         if let Some(existing) = IntentStore::get_record(intent_id) {
-            if is_record_expired(now_secs, &existing) {
+            if is_record_expired(now_secs, &existing)? {
                 return Err(expired_err(intent_id, &existing).into());
             }
             ensure_compatible(&existing, &resource_key, quantity, ttl_secs)?;
+            if existing.state == IntentState::Pending {
+                ensure_pending_indexes(&existing)?;
+            }
             return Ok(existing);
         }
 
         if IntentStore::get_pending(intent_id).is_some() {
             return Err(IntentStoreOpsError::PendingIndexExists(intent_id).into());
+        }
+        if let Some(expiry_key) = expiry_key
+            && IntentStore::get_expiry(expiry_key).is_some()
+        {
+            return Err(IntentStoreOpsError::ExpiryIndexExists {
+                id: intent_id,
+                due_at_secs: expiry_key.due_at_secs,
+            }
+            .into());
         }
 
         let totals = IntentStore::get_totals(&resource_key).unwrap_or_default();
@@ -223,6 +275,14 @@ impl IntentStoreOps {
         }
 
         IntentStore::insert_pending(intent_id, pending);
+        if let Some(expiry_key) = expiry_key {
+            let previous =
+                IntentStore::insert_expiry(expiry_key, IntentExpiryEntryRecord { intent_id });
+            assert!(
+                previous.is_none(),
+                "validated intent expiry index insertion replaced an entry"
+            );
+        }
         IntentStore::set_totals(resource_key, new_totals);
         IntentStore::set_meta(meta);
 
@@ -247,11 +307,11 @@ impl IntentStoreOps {
             IntentState::Pending => {}
         }
 
-        if is_record_expired(now, &record) {
+        if is_record_expired(now, &record)? {
             return Err(expired_err(intent_id, &record).into());
         }
 
-        ensure_pending_exists(intent_id)?;
+        ensure_pending_indexes(&record)?;
 
         let totals = IntentStore::get_totals(&record.resource_key)
             .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?;
@@ -271,13 +331,7 @@ impl IntentStoreOps {
             ..record.clone()
         };
 
-        remove_pending_and_apply(
-            intent_id,
-            record.resource_key,
-            new_totals,
-            meta,
-            updated.clone(),
-        );
+        remove_pending_and_apply(record.resource_key, new_totals, meta, updated.clone());
         Ok(updated)
     }
 
@@ -299,7 +353,7 @@ impl IntentStoreOps {
             IntentState::Pending => {}
         }
 
-        ensure_pending_exists(intent_id)?;
+        ensure_pending_indexes(&record)?;
 
         let totals = IntentStore::get_totals(&record.resource_key)
             .ok_or_else(|| IntentStoreOpsError::TotalsMissing(record.resource_key.clone()))?;
@@ -319,13 +373,7 @@ impl IntentStoreOps {
             ..record.clone()
         };
 
-        remove_pending_and_apply(
-            intent_id,
-            record.resource_key,
-            new_totals,
-            meta,
-            updated.clone(),
-        );
+        remove_pending_and_apply(record.resource_key, new_totals, meta, updated.clone());
         Ok(updated)
     }
 
@@ -368,6 +416,19 @@ impl IntentStoreOps {
         IntentStore::get_totals(resource_key).unwrap_or_default()
     }
 
+    /// Return the exact cleanup deadline for a validated finite local intent.
+    pub fn cleanup_due_at_secs(intent_id: IntentId) -> Result<Option<u64>, InternalError> {
+        let record =
+            IntentStore::get_record(intent_id).ok_or(IntentStoreOpsError::NotFound(intent_id))?;
+        if record.state != IntentState::Pending {
+            return Ok(None);
+        }
+        ensure_pending_indexes(&record)?;
+        expiry_key(record.id, record.created_at, record.ttl_secs)
+            .map(|key| key.map(|key| key.due_at_secs))
+            .map_err(InternalError::from)
+    }
+
     /// Reset both intent stores through the ops authority for isolated unit tests.
     #[cfg(test)]
     pub(crate) fn reset_for_tests() {
@@ -394,13 +455,20 @@ impl IntentStoreOps {
     }
 
     #[cfg(test)]
-    pub fn pending_entries_at(now: u64) -> Vec<IntentPendingIndexEntryRecord> {
+    pub(crate) fn clear_totals_for_tests() {
+        IntentStore::import_totals(crate::storage::stable::intent::IntentTotalsData::default());
+    }
+
+    #[cfg(test)]
+    pub fn pending_entries_at(
+        now: u64,
+    ) -> Result<Vec<IntentPendingIndexEntryRecord>, InternalError> {
         let mut entries = Vec::new();
 
-        IntentStore::with_pending_entries(|pending| {
+        IntentStore::with_pending_entries(|pending| -> Result<(), IntentStoreOpsError> {
             for entry in pending.iter() {
                 let record = entry.value();
-                if is_pending_entry_expired(now, &record) {
+                if is_pending_entry_expired(*entry.key(), now, &record)? {
                     continue;
                 }
                 entries.push(IntentPendingIndexEntryRecord {
@@ -408,24 +476,85 @@ impl IntentStoreOps {
                     record,
                 });
             }
-        });
+            Ok(())
+        })?;
 
-        entries
+        Ok(entries)
     }
 
-    pub fn list_expired_pending_intents(now: u64) -> Vec<IntentId> {
-        let mut expired = Vec::new();
+    /// Return at most `limit` expiry-ordered local intents whose cleanup deadline is due.
+    pub fn list_due_expiry_intents(
+        now_secs: u64,
+        limit: usize,
+    ) -> Result<Vec<IntentId>, InternalError> {
+        IntentStore::with_expiry_entries(|index| -> Result<Vec<IntentId>, IntentStoreOpsError> {
+            let mut due = Vec::with_capacity(limit);
+            for entry in index.iter() {
+                let key = *entry.key();
+                if key.due_at_secs > now_secs || due.len() == limit {
+                    break;
+                }
+                validate_expiry_entry(key, entry.value())?;
+                due.push(key.intent_id);
+            }
+            Ok::<Vec<IntentId>, IntentStoreOpsError>(due)
+        })
+        .map_err(InternalError::from)
+    }
 
-        IntentStore::with_pending_entries(|pending| {
-            for entry in pending.iter() {
-                let record = entry.value();
-                if is_pending_entry_expired(now, &record) {
-                    expired.push(*entry.key());
+    /// Return the earliest validated finite local-intent cleanup deadline.
+    pub fn next_expiry_at_secs() -> Result<Option<u64>, InternalError> {
+        IntentStore::with_expiry_entries(|index| -> Result<Option<u64>, IntentStoreOpsError> {
+            let Some(entry) = index.iter().next() else {
+                return Ok(None);
+            };
+            let key = *entry.key();
+            validate_expiry_entry(key, entry.value())?;
+            Ok(Some(key.due_at_secs))
+        })
+        .map_err(InternalError::from)
+    }
+
+    /// Rebuild the derived finite-expiry index from canonical pending intent state.
+    pub fn rebuild_expiry_index() -> Result<(), InternalError> {
+        let meta = ensure_schema()?;
+        let entries = IntentStore::with_pending_entries(|pending| {
+            let index_total = pending.len();
+            if index_total != meta.pending_total {
+                return Err(IntentStoreOpsError::PendingTotalMismatch {
+                    metadata: meta.pending_total,
+                    index: index_total,
+                });
+            }
+
+            let mut entries = Vec::new();
+            for pending_entry in pending.iter() {
+                let intent_id = *pending_entry.key();
+                let pending_record = pending_entry.value();
+                let record = IntentStore::get_record(intent_id)
+                    .ok_or(IntentStoreOpsError::NotFound(intent_id))?;
+                ensure_pending_record_matches(&record, &pending_record)?;
+                if let Some(key) = expiry_key(intent_id, record.created_at, record.ttl_secs)? {
+                    entries.push(key);
                 }
             }
-        });
+            Ok::<Vec<IntentExpiryKeyRecord>, IntentStoreOpsError>(entries)
+        })?;
 
-        expired
+        IntentStore::clear_expiry_index();
+        for key in entries {
+            let previous = IntentStore::insert_expiry(
+                key,
+                IntentExpiryEntryRecord {
+                    intent_id: key.intent_id,
+                },
+            );
+            assert!(
+                previous.is_none(),
+                "rebuilt intent expiry index contains a duplicate key"
+            );
+        }
+        Ok(())
     }
 
     /// Return the sole pending local intent for one exact resource key.
@@ -454,9 +583,15 @@ impl IntentStoreOps {
         })
     }
 
-    /// Return the stored local TTL-index count without scanning that index.
-    pub fn expirable_pending_total() -> Result<u64, InternalError> {
+    /// Return the stored total for all pending local intents.
+    #[cfg(test)]
+    pub(crate) fn pending_total() -> Result<u64, InternalError> {
         Ok(ensure_schema()?.pending_total)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn expiry_index_total_for_tests() -> u64 {
+        IntentStore::with_expiry_entries(crate::cdk::structures::btreemap::BTreeMap::len)
     }
 
     // -------------------------------------------------------------------------
@@ -514,10 +649,10 @@ fn settle_pair_at(
             (IntentSettlement::AbortIfPending, IntentState::Pending) => IntentState::Aborted,
         };
 
-        if target_state == IntentState::Committed && is_record_expired(now, &record) {
+        if target_state == IntentState::Committed && is_record_expired(now, &record)? {
             return Err(expired_err(intent_id, &record).into());
         }
-        ensure_pending_exists(intent_id)?;
+        ensure_pending_indexes(&record)?;
 
         let current_totals = match totals_by_resource.get(&record.resource_key) {
             Some(totals) => *totals,
@@ -562,7 +697,7 @@ fn settle_pair_at(
     }
 
     for record in updates {
-        IntentStore::remove_pending(record.id);
+        remove_pending_indexes(&record);
         IntentStore::insert_record(record);
     }
     for (resource_key, totals) in totals_by_resource {
@@ -868,25 +1003,101 @@ const fn terminal_evidence(state: &ReceiptBackedIntentState) -> Option<TerminalE
     }
 }
 
-fn ensure_pending_exists(intent_id: IntentId) -> Result<(), IntentStoreOpsError> {
-    if IntentStore::get_pending(intent_id).is_none() {
-        Err(IntentStoreOpsError::PendingIndexMissing(intent_id))
-    } else {
-        Ok(())
+fn ensure_pending_indexes(record: &IntentRecord) -> Result<(), IntentStoreOpsError> {
+    let pending = IntentStore::get_pending(record.id)
+        .ok_or(IntentStoreOpsError::PendingIndexMissing(record.id))?;
+    ensure_pending_record_matches(record, &pending)?;
+
+    if let Some(key) = expiry_key(record.id, record.created_at, record.ttl_secs)? {
+        let indexed =
+            IntentStore::get_expiry(key).ok_or(IntentStoreOpsError::ExpiryIndexMissing {
+                id: record.id,
+                due_at_secs: key.due_at_secs,
+            })?;
+        if indexed.intent_id != record.id {
+            return Err(IntentStoreOpsError::ExpiryIndexValueMismatch {
+                due_at_secs: key.due_at_secs,
+                key_id: record.id,
+                value_id: indexed.intent_id,
+            });
+        }
     }
+    Ok(())
+}
+
+fn ensure_pending_record_matches(
+    record: &IntentRecord,
+    pending: &IntentPendingEntryRecord,
+) -> Result<(), IntentStoreOpsError> {
+    if record.state != IntentState::Pending
+        || record.resource_key != pending.resource_key
+        || record.quantity != pending.quantity
+        || record.created_at != pending.created_at
+        || record.ttl_secs != pending.ttl_secs
+    {
+        return Err(IntentStoreOpsError::PendingIndexMismatch(record.id));
+    }
+    Ok(())
+}
+
+fn validate_expiry_entry(
+    key: IntentExpiryKeyRecord,
+    record: IntentExpiryEntryRecord,
+) -> Result<(), IntentStoreOpsError> {
+    if record.intent_id != key.intent_id {
+        return Err(IntentStoreOpsError::ExpiryIndexValueMismatch {
+            due_at_secs: key.due_at_secs,
+            key_id: key.intent_id,
+            value_id: record.intent_id,
+        });
+    }
+    let pending = IntentStore::get_pending(key.intent_id)
+        .ok_or(IntentStoreOpsError::PendingIndexMissing(key.intent_id))?;
+    let record = IntentStore::get_record(key.intent_id)
+        .ok_or(IntentStoreOpsError::NotFound(key.intent_id))?;
+    ensure_pending_record_matches(&record, &pending)?;
+    let expected = expiry_key(record.id, record.created_at, record.ttl_secs)?
+        .ok_or(IntentStoreOpsError::TtlFreeIntentInExpiryIndex(record.id))?;
+    if expected != key {
+        return Err(IntentStoreOpsError::ExpiryIndexKeyMismatch {
+            id: record.id,
+            expected_due_at_secs: expected.due_at_secs,
+            found_due_at_secs: key.due_at_secs,
+        });
+    }
+    Ok(())
 }
 
 fn remove_pending_and_apply(
-    intent_id: IntentId,
     resource_key: IntentResourceKey,
     totals: IntentResourceTotalsRecord,
     meta: IntentStoreMetaRecord,
     record: IntentRecord,
 ) {
-    IntentStore::remove_pending(intent_id);
+    remove_pending_indexes(&record);
     IntentStore::set_totals(resource_key, totals);
     IntentStore::set_meta(meta);
     IntentStore::insert_record(record);
+}
+
+fn remove_pending_indexes(record: &IntentRecord) {
+    let removed_pending = IntentStore::remove_pending(record.id);
+    assert!(
+        removed_pending.is_some(),
+        "validated pending intent index disappeared before removal"
+    );
+    if let Some(key) = expiry_key(record.id, record.created_at, record.ttl_secs)
+        .unwrap_or_else(|err| panic!("validated intent expiry became invalid: {err}"))
+    {
+        let removed_expiry = IntentStore::remove_expiry(key);
+        assert_eq!(
+            removed_expiry,
+            Some(IntentExpiryEntryRecord {
+                intent_id: record.id
+            }),
+            "validated intent expiry index changed before removal"
+        );
+    }
 }
 
 fn expired_err(id: IntentId, r: &IntentRecord) -> IntentStoreOpsError {
@@ -936,17 +1147,50 @@ fn expires_at(created_at: u64, ttl_secs: Option<u64>) -> Option<u64> {
     ttl_secs.and_then(|ttl| created_at.checked_add(ttl))
 }
 
-fn is_expired(now: u64, created_at: u64, ttl_secs: Option<u64>) -> bool {
-    match ttl_secs.and_then(|t| created_at.checked_add(t)) {
-        Some(exp) => now > exp,
-        None => false,
+fn expiry_key(
+    intent_id: IntentId,
+    created_at: u64,
+    ttl_secs: Option<u64>,
+) -> Result<Option<IntentExpiryKeyRecord>, IntentStoreOpsError> {
+    let Some(ttl_secs) = ttl_secs else {
+        return Ok(None);
+    };
+    let due_at_secs = created_at
+        .checked_add(ttl_secs)
+        .and_then(|expires_at| expires_at.checked_add(1))
+        .filter(|due_at_secs| *due_at_secs <= u64::MAX / NANOS_PER_SECOND)
+        .ok_or(IntentStoreOpsError::ExpiryDeadlineOverflow {
+            id: intent_id,
+            created_at,
+            ttl_secs,
+        })?;
+    Ok(Some(IntentExpiryKeyRecord {
+        due_at_secs,
+        intent_id,
+    }))
+}
+
+fn is_expired(
+    intent_id: IntentId,
+    now: u64,
+    created_at: u64,
+    ttl_secs: Option<u64>,
+) -> Result<bool, IntentStoreOpsError> {
+    match expiry_key(intent_id, created_at, ttl_secs)? {
+        Some(key) => Ok(now >= key.due_at_secs),
+        None => Ok(false),
     }
 }
 
-fn is_record_expired(now: u64, record: &IntentRecord) -> bool {
-    is_expired(now, record.created_at, record.ttl_secs)
+fn is_record_expired(now: u64, record: &IntentRecord) -> Result<bool, IntentStoreOpsError> {
+    is_expired(record.id, now, record.created_at, record.ttl_secs)
 }
 
-fn is_pending_entry_expired(now: u64, entry: &IntentPendingEntryRecord) -> bool {
-    is_expired(now, entry.created_at, entry.ttl_secs)
+#[cfg(test)]
+fn is_pending_entry_expired(
+    intent_id: IntentId,
+    now: u64,
+    entry: &IntentPendingEntryRecord,
+) -> Result<bool, IntentStoreOpsError> {
+    is_expired(intent_id, now, entry.created_at, entry.ttl_secs)
 }

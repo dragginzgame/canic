@@ -6,13 +6,13 @@ use canic_core::{
         model::replay::CommandKind,
         ops::{
             config::ConfigOps,
-            cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+            cost_guard::{CostGuardPermit, CostGuardRequest},
             ic::{IcOps, mgmt::MgmtOps},
         },
         workflow::canister_lifecycle::{
             CanisterLifecycleEvent, CanisterLifecycleResult, CanisterLifecycleWorkflow,
         },
-        workflow::cost_guard::map_cost_guard_reserve_error,
+        workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
     log,
     log::Topic,
@@ -61,10 +61,10 @@ pub async fn create_canister_with_deployment_guard(
 
     match result {
         Ok(result) => {
-            CostGuardOps::complete(&cost_permit, IcOps::now_secs())?;
+            CostGuardWorkflow::complete(&cost_permit, IcOps::now_secs())?;
             Ok(result)
         }
-        Err(err) => Err(CostGuardOps::recover_after_failure(
+        Err(err) => Err(CostGuardWorkflow::recover_after_failure(
             &cost_permit,
             IcOps::now_secs(),
             err,
@@ -89,7 +89,7 @@ fn reserve_control_plane_deployment_cost_guard(
         .initial_cycles
         .to_u128();
 
-    CostGuardOps::reserve(CostGuardRequest {
+    CostGuardWorkflow::reserve(CostGuardRequest {
         cost_class: CostClass::ManagementDeployment,
         command_kind: CommandKind::new(command_kind)
             .expect("control-plane deployment command kind is a valid static label"),

@@ -31,8 +31,7 @@ pub mod ops {
 
     pub mod cost_guard {
         pub use crate::ops::cost_guard::{
-            CostGuardOps, CostGuardPermit, CostGuardRequest, CostGuardReserveError,
-            CostGuardReservePublicKind,
+            CostGuardPermit, CostGuardRequest, CostGuardReserveError, CostGuardReservePublicKind,
         };
     }
 
@@ -107,7 +106,7 @@ pub mod workflow {
     }
 
     pub mod cost_guard {
-        pub use crate::workflow::cost_guard::map_cost_guard_reserve_error;
+        pub use crate::workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error};
     }
 
     pub mod ic {

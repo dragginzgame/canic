@@ -23,13 +23,15 @@ use crate::{
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
     workflow::{
-        config::{WORKFLOW_INIT_DELAY, WORKFLOW_INTENT_CLEANUP_INTERVAL},
+        config::WORKFLOW_INTENT_CLEANUP_RETRY_INTERVAL,
         runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
     },
 };
 use std::time::Duration;
 
-const CLEANUP_INTERVAL: Duration = WORKFLOW_INTENT_CLEANUP_INTERVAL;
+const CLEANUP_BATCH_SIZE: usize = 32;
+const CLEANUP_RETRY_INTERVAL: Duration = WORKFLOW_INTENT_CLEANUP_RETRY_INTERVAL;
+const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 /// Direct workflow for locally decidable, expirable reservations.
 pub struct LocalIntentWorkflow;
@@ -105,7 +107,7 @@ impl LocalIntentWorkflow {
             IntentMetricOutcome::Completed,
             IntentMetricReason::Ok,
         );
-        IntentCleanupWorkflow::ensure_started();
+        IntentCleanupWorkflow::schedule_intent(intent_id)?;
         Ok(intent_id)
     }
 
@@ -125,6 +127,7 @@ impl LocalIntentWorkflow {
             IntentMetricOutcome::Completed,
             IntentMetricReason::Ok,
         );
+        IntentCleanupWorkflow::reconcile_after_terminal();
         Ok(())
     }
 
@@ -144,6 +147,7 @@ impl LocalIntentWorkflow {
             IntentMetricOutcome::Completed,
             IntentMetricReason::Ok,
         );
+        IntentCleanupWorkflow::reconcile_after_terminal();
         Ok(())
     }
 }
@@ -282,49 +286,73 @@ fn ensure_canic_owned_resource_key(
 pub struct IntentCleanupWorkflow;
 
 impl IntentCleanupWorkflow {
-    /// Start periodic intent cleanup sweeps.
-    pub fn ensure_started() {
-        TimerWorkflow::schedule(TimerKey::IntentCleanup, WORKFLOW_INIT_DELAY, || async {
-            let completed = Self::cleanup();
-            if Self::stop_when_idle() {
-                TimerRunResult::no_work(TimerDirective::Stop)
-            } else if completed {
-                TimerRunResult::success(1, TimerDirective::RecurAfter(CLEANUP_INTERVAL))
-            } else {
-                TimerRunResult::retryable_failure(TimerDirective::RetryAfter(CLEANUP_INTERVAL))
-            }
-        });
+    /// Reconstruct the sole live cleanup deadline from the stable expiry index.
+    pub fn start() -> Result<(), InternalError> {
+        Self::reconcile()
     }
 
-    /// Run a cleanup sweep immediately.
-    #[must_use]
-    pub fn cleanup() -> bool {
-        if Self::stop_when_idle() {
-            record_cleanup_intent(
-                IntentMetricOperation::Cleanup,
-                IntentMetricOutcome::Completed,
-                IntentMetricReason::Idle,
-            );
-            return true;
-        }
-
+    fn run_due_batch() -> TimerRunResult {
         let now = IcOps::now_secs();
-        let expired = IntentStoreOps::list_expired_pending_intents(now);
+        let result = Self::cleanup_due_batch(now);
+        let aborted = match result {
+            Ok(aborted) => aborted,
+            Err(err) => {
+                record_cleanup_intent(
+                    IntentMetricOperation::Cleanup,
+                    IntentMetricOutcome::Failed,
+                    IntentMetricReason::StorageFailed,
+                );
+                log!(Topic::Memory, Warn, "intent cleanup batch failed: {err}");
+                return TimerRunResult {
+                    outcome: crate::domain::runtime::TimerExecutionOutcome::RetryableFailure,
+                    work_count: 0,
+                    directive: TimerDirective::RetryAfter(CLEANUP_RETRY_INTERVAL),
+                };
+            }
+        };
 
-        if expired.is_empty() {
+        let directive = match Self::next_directive(now) {
+            Ok(directive) => directive,
+            Err(err) => {
+                log!(
+                    Topic::Memory,
+                    Warn,
+                    "intent cleanup deadline reconciliation failed: {err}"
+                );
+                return TimerRunResult {
+                    outcome: crate::domain::runtime::TimerExecutionOutcome::RetryableFailure,
+                    work_count: u64::try_from(aborted).unwrap_or(u64::MAX),
+                    directive: TimerDirective::RetryAfter(CLEANUP_RETRY_INTERVAL),
+                };
+            }
+        };
+
+        if aborted == 0 {
             record_cleanup_intent(
                 IntentMetricOperation::Cleanup,
                 IntentMetricOutcome::Completed,
                 IntentMetricReason::NoExpired,
             );
-            return true;
+            TimerRunResult::no_work(directive)
+        } else {
+            record_cleanup_intent(
+                IntentMetricOperation::Cleanup,
+                IntentMetricOutcome::Completed,
+                IntentMetricReason::Ok,
+            );
+            log!(
+                Topic::Memory,
+                Info,
+                "intent cleanup: aborted={aborted} batch_limit={CLEANUP_BATCH_SIZE}"
+            );
+            TimerRunResult::success(u64::try_from(aborted).unwrap_or(u64::MAX), directive)
         }
+    }
 
-        let expired_total = expired.len();
-        let mut aborted = 0usize;
-        let mut errors = 0usize;
-
-        for intent_id in expired {
+    fn cleanup_due_batch(now_secs: u64) -> Result<usize, InternalError> {
+        let due = IntentStoreOps::list_due_expiry_intents(now_secs, CLEANUP_BATCH_SIZE)?;
+        let mut aborted = 0;
+        for intent_id in due {
             match IntentStoreOps::abort_intent_if_pending(intent_id) {
                 Ok(true) => {
                     record_cleanup_intent(
@@ -334,65 +362,82 @@ impl IntentCleanupWorkflow {
                     );
                     aborted += 1;
                 }
-                Ok(false) => {}
+                Ok(false) => {
+                    return Err(InternalError::invariant(
+                        InternalErrorOrigin::Workflow,
+                        format!("due intent {intent_id} ceased to be pending before cleanup"),
+                    ));
+                }
                 Err(err) => {
                     record_cleanup_intent(
                         IntentMetricOperation::Abort,
                         IntentMetricOutcome::Failed,
                         IntentMetricReason::StorageFailed,
                     );
-                    errors += 1;
-                    log!(
-                        Topic::Memory,
-                        Warn,
-                        "intent cleanup abort failed id={intent_id}: {err}"
+                    return Err(
+                        err.with_diagnostic_context(format!("abort due local intent {intent_id}"))
                     );
                 }
             }
         }
+        Ok(aborted)
+    }
 
-        log!(
-            Topic::Memory,
-            Info,
-            "intent cleanup: expired={expired_total} aborted={aborted} errors={errors}"
-        );
+    pub(crate) fn schedule_intent(intent_id: IntentId) -> Result<(), InternalError> {
+        if let Some(due_at_secs) = IntentStoreOps::cleanup_due_at_secs(intent_id)? {
+            Self::schedule_at(due_at_secs)?;
+        }
+        Ok(())
+    }
 
-        if errors == 0 {
-            record_cleanup_intent(
-                IntentMetricOperation::Cleanup,
-                IntentMetricOutcome::Completed,
-                IntentMetricReason::Ok,
-            );
-        } else {
+    pub(crate) fn reconcile_after_terminal() {
+        if let Err(err) = Self::reconcile() {
             record_cleanup_intent(
                 IntentMetricOperation::Cleanup,
                 IntentMetricOutcome::Failed,
                 IntentMetricReason::StorageFailed,
             );
+            log!(
+                Topic::Memory,
+                Warn,
+                "intent cleanup timer reconciliation failed after terminal transition: {err}"
+            );
         }
-
-        errors == 0
     }
 
-    // Return whether no expirable pending intent remains.
-    fn stop_when_idle() -> bool {
-        match IntentStoreOps::expirable_pending_total() {
-            Ok(0) => true,
-            Ok(_) => false,
-            Err(err) => {
-                record_cleanup_intent(
-                    IntentMetricOperation::Cleanup,
-                    IntentMetricOutcome::Failed,
-                    IntentMetricReason::StorageFailed,
-                );
-                log!(
-                    Topic::Memory,
-                    Warn,
-                    "intent cleanup pending check failed: {err}"
-                );
-                false
-            }
+    fn reconcile() -> Result<(), InternalError> {
+        let deadline_ns = IntentStoreOps::next_expiry_at_secs()?
+            .map(Self::deadline_ns)
+            .transpose()?;
+        TimerWorkflow::reconcile_at(TimerKey::IntentCleanup, deadline_ns, || async {
+            Self::run_due_batch()
+        });
+        Ok(())
+    }
+
+    fn schedule_at(due_at_secs: u64) -> Result<(), InternalError> {
+        let deadline_ns = Self::deadline_ns(due_at_secs)?;
+        TimerWorkflow::schedule_at(TimerKey::IntentCleanup, deadline_ns, || async {
+            Self::run_due_batch()
+        });
+        Ok(())
+    }
+
+    fn next_directive(now_secs: u64) -> Result<TimerDirective, InternalError> {
+        match IntentStoreOps::next_expiry_at_secs()? {
+            None => Ok(TimerDirective::Stop),
+            Some(due_at_secs) if due_at_secs <= now_secs => Ok(TimerDirective::ContinueImmediately),
+            Some(due_at_secs) => Ok(TimerDirective::ScheduleAt(Self::deadline_ns(due_at_secs)?)),
         }
+    }
+
+    fn deadline_ns(due_at_secs: u64) -> Result<u64, InternalError> {
+        due_at_secs.checked_mul(NANOS_PER_SECOND).ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("intent cleanup deadline overflows nanoseconds: {due_at_secs}"),
+            )
+        })
     }
 }
 
@@ -544,5 +589,64 @@ mod tests {
                 .expect("consumer namespace remains available"),
             BeginReceiptBackedIntentResult::Created { revision: 1 }
         ));
+    }
+
+    #[test]
+    fn cleanup_due_work_is_bounded_and_continues_until_the_expiry_index_is_empty() {
+        let _guard = seams::lock();
+        IntentStoreOps::reset_for_tests();
+        let resource_key = IntentResourceKey::new("cleanup:bounded");
+        for seed in 1..=33 {
+            IntentStoreOps::try_reserve(IntentId(seed), resource_key.clone(), 1, 10, Some(0), 10)
+                .expect("reserve due intent");
+        }
+        IntentStoreOps::try_reserve(IntentId(34), resource_key, 1, 10, None, 10)
+            .expect("reserve TTL-free intent");
+
+        assert_eq!(
+            IntentCleanupWorkflow::cleanup_due_batch(11).expect("first bounded batch"),
+            CLEANUP_BATCH_SIZE
+        );
+        assert!(matches!(
+            IntentCleanupWorkflow::next_directive(11).expect("continuation directive"),
+            TimerDirective::ContinueImmediately
+        ));
+        assert_eq!(
+            IntentCleanupWorkflow::cleanup_due_batch(11).expect("second bounded batch"),
+            1
+        );
+        assert!(matches!(
+            IntentCleanupWorkflow::next_directive(11).expect("terminal directive"),
+            TimerDirective::Stop
+        ));
+        assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 1);
+        assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
+    }
+
+    #[test]
+    fn cleanup_failure_preserves_the_due_intent_and_exact_expiry_entry() {
+        let _guard = seams::lock();
+        IntentStoreOps::reset_for_tests();
+        let intent_id = IntentId(41);
+        IntentStoreOps::try_reserve(
+            intent_id,
+            IntentResourceKey::new("cleanup:failure"),
+            1,
+            10,
+            Some(0),
+            10,
+        )
+        .expect("reserve due intent");
+        IntentStoreOps::clear_totals_for_tests();
+
+        IntentCleanupWorkflow::cleanup_due_batch(11)
+            .expect_err("missing totals must preserve typed storage failure");
+        assert!(IntentStoreOps::is_pending_for_tests(intent_id).expect("pending intent remains"));
+        assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 1);
+        assert_eq!(
+            IntentStoreOps::list_due_expiry_intents(11, CLEANUP_BATCH_SIZE)
+                .expect("due intent remains indexed"),
+            vec![intent_id]
+        );
     }
 }

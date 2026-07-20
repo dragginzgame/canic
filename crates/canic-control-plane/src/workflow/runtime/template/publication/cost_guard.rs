@@ -10,10 +10,10 @@ use canic_core::{
         error::InternalError,
         model::replay::CommandKind,
         ops::{
-            cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+            cost_guard::{CostGuardPermit, CostGuardRequest},
             ic::{IcOps, mgmt::MgmtOps},
         },
-        workflow::cost_guard::map_cost_guard_reserve_error,
+        workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
     log,
     log::Topic,
@@ -50,7 +50,7 @@ impl PublicationCostGuard {
             IcOps::now_secs(),
             MgmtOps::canister_cycle_balance().to_u128(),
         );
-        let permit = CostGuardOps::reserve(request).map_err(map_cost_guard_reserve_error)?;
+        let permit = CostGuardWorkflow::reserve(request).map_err(map_cost_guard_reserve_error)?;
         log!(
             Topic::Wasm,
             Info,
@@ -73,10 +73,10 @@ impl PublicationCostGuard {
     pub(super) fn settle<T>(self, result: Result<T, InternalError>) -> Result<T, InternalError> {
         match result {
             Ok(value) => {
-                CostGuardOps::complete(&self.permit, IcOps::now_secs())?;
+                CostGuardWorkflow::complete(&self.permit, IcOps::now_secs())?;
                 Ok(value)
             }
-            Err(err) => Err(CostGuardOps::recover_after_failure(
+            Err(err) => Err(CostGuardWorkflow::recover_after_failure(
                 &self.permit,
                 IcOps::now_secs(),
                 err,
@@ -189,7 +189,7 @@ mod tests {
                 .saturating_sub(1),
         );
 
-        let err = CostGuardOps::reserve(request)
+        let err = CostGuardWorkflow::reserve(request)
             .map_err(map_cost_guard_reserve_error)
             .expect_err("publication must reject insufficient cycle headroom");
 

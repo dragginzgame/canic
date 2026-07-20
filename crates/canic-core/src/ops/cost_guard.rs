@@ -255,23 +255,6 @@ impl CostGuardOps {
         )
     }
 
-    /// Recover a failed protected operation and retain any settlement failure
-    /// as diagnostic context on the original typed error.
-    #[must_use]
-    pub fn recover_after_failure(
-        permit: &CostGuardPermit,
-        now_secs: u64,
-        error: InternalError,
-    ) -> InternalError {
-        match Self::recover(permit, now_secs) {
-            Ok(()) => error,
-            Err(recovery_error) => error.with_diagnostic_context(format!(
-                "cost guard recovery failed for reservation {}: {recovery_error}",
-                permit.reservation_id
-            )),
-        }
-    }
-
     /// abort
     ///
     /// Release all pending cost guard intents for tests that stop before commit/recovery.
@@ -496,7 +479,7 @@ mod tests {
             err.public_kind(),
             Some(CostGuardReservePublicKind::ResourceExhausted)
         );
-        assert_eq!(IntentStoreOps::expirable_pending_total().expect("meta"), 0);
+        assert_eq!(IntentStoreOps::pending_total().expect("meta"), 0);
     }
 
     #[test]
@@ -510,10 +493,7 @@ mod tests {
         let err = CostGuardOps::reserve(request(10)).expect_err("intent id exhaustion rejects");
 
         assert!(matches!(err, CostGuardReserveError::Store(_)));
-        assert_eq!(
-            IntentStoreOps::expirable_pending_total().expect("pending"),
-            0
-        );
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 0);
     }
 
     #[test]
@@ -555,17 +535,11 @@ mod tests {
         reset();
 
         let permit = CostGuardOps::reserve(request(10)).expect("reservation");
-        assert_eq!(
-            IntentStoreOps::expirable_pending_total().expect("pending"),
-            2
-        );
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 2);
 
         CostGuardOps::abort(&permit).expect("abort");
 
-        assert_eq!(
-            IntentStoreOps::expirable_pending_total().expect("pending"),
-            0
-        );
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 0);
     }
 
     #[test]
@@ -578,10 +552,7 @@ mod tests {
         CostGuardOps::complete(&permit, 10)
             .expect_err("aborted reservation must reject completion");
 
-        assert_eq!(
-            IntentStoreOps::expirable_pending_total().expect("pending"),
-            1
-        );
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 1);
         assert!(
             IntentStoreOps::abort_intent_if_pending(permit.quota_intent_id).expect("quota cleanup")
         );
@@ -595,13 +566,15 @@ mod tests {
         IntentStoreOps::abort(permit.quota_intent_id).expect("abort quota intent");
         let original = InternalError::resource_exhausted("protected operation failed");
 
-        let error = CostGuardOps::recover_after_failure(&permit, 10, original);
+        let recovery_error = CostGuardOps::recover(&permit, 10)
+            .expect_err("aborted quota intent must reject recovery");
+        let error = original.with_diagnostic_context(format!(
+            "cost guard recovery failed for reservation {}: {recovery_error}",
+            permit.reservation_id
+        ));
 
         assert!(error.is_public_resource_exhausted());
-        assert_eq!(
-            IntentStoreOps::expirable_pending_total().expect("pending"),
-            1
-        );
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 1);
         assert!(
             IntentStoreOps::abort_intent_if_pending(permit.reservation_id)
                 .expect("reservation cleanup")
@@ -616,10 +589,7 @@ mod tests {
 
         CostGuardOps::recover(&permit, 10).expect("recover cost guard");
 
-        assert_eq!(
-            IntentStoreOps::expirable_pending_total().expect("pending"),
-            0
-        );
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 0);
         IntentStoreOps::commit_at(permit.quota_intent_id, 10).expect("quota intent is committed");
         assert!(
             !IntentStoreOps::abort_intent_if_pending(permit.reservation_id)

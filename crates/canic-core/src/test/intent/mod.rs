@@ -80,14 +80,8 @@ impl IntentTestOps {
         IntentStoreOps::totals(resource_key)
     }
 
-    #[must_use]
-    pub fn pending_entries_at(now: u64) -> Vec<IntentPendingIndexEntryRecord> {
-        IntentStoreOps::pending_entries_at(now)
-    }
-
-    #[must_use]
-    pub fn expired_pending_ids(now: u64) -> Vec<IntentId> {
-        IntentStoreOps::list_expired_pending_intents(now)
+    pub fn pending_entries_at(now: u64) -> Result<Vec<IntentPendingIndexEntryRecord>, String> {
+        IntentStoreOps::pending_entries_at(now).map_err(|err| err.to_string())
     }
 
     // -------------------------------------------------------------------------

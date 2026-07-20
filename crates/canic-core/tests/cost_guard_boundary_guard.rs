@@ -31,32 +31,37 @@ fn production_cost_guard_call_sites_match_reviewed_inventory() {
         }
     });
 
-    let expected = BTreeMap::from([
-        (
-            "src/workflow/canister_lifecycle/mod.rs".to_string(),
-            (1, 2, 0, 2),
-        ),
-        (
-            "src/workflow/ic/icp_refill/cost_guard.rs".to_string(),
-            (1, 1, 1, 0),
-        ),
-        (
-            "src/workflow/pool/create_empty.rs".to_string(),
-            (1, 2, 0, 2),
-        ),
-        (
-            "src/workflow/rpc/request/handler/execute.rs".to_string(),
-            (1, 2, 0, 3),
-        ),
-        (
-            "src/workflow/rpc/request/handler/nonroot_cycles.rs".to_string(),
-            (1, 2, 0, 2),
-        ),
-    ]);
+    let expected = BTreeMap::from([("src/workflow/cost_guard/mod.rs".to_string(), (1, 1, 1, 0))]);
 
     assert_eq!(
         actual, expected,
-        "production cost-guard flow inventory changed; review replay identity, effect, response staging, settlement, and retry behavior before updating this inventory"
+        "only CostGuardWorkflow may couple cost-guard storage mutation to intent-expiry scheduling"
+    );
+}
+
+#[test]
+fn control_plane_cost_guard_mutation_uses_core_workflow_authority() {
+    let control_plane_workflow = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace crates directory")
+        .join("canic-control-plane/src/workflow");
+    let mut violations = Vec::new();
+
+    scan_rust_files(&control_plane_workflow, &mut |path, contents| {
+        if path.file_name().is_some_and(|name| name == "tests.rs")
+            || path.components().any(|part| part.as_os_str() == "tests")
+        {
+            return;
+        }
+        let production = contents.split("\n#[cfg(test)]").next().unwrap_or(contents);
+        if production.contains("CostGuardOps::") {
+            violations.push(display(path));
+        }
+    });
+
+    assert!(
+        violations.is_empty(),
+        "control-plane workflows must use CostGuardWorkflow so finite reservations cannot bypass expiry scheduling: {violations:?}"
     );
 }
 

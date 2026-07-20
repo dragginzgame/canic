@@ -8,14 +8,14 @@ use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
     ops::{
-        cost_guard::{CostGuardOps, CostGuardPermit, CostGuardRequest},
+        cost_guard::{CostGuardPermit, CostGuardRequest},
         ic::IcOps,
         replay::receipt::{ReplayReceiptToken, record_cost_guard_settlement},
     },
     replay_policy::CostClass,
     view::icp_refill::IcpRefillOperation,
     workflow::{
-        cost_guard::map_cost_guard_reserve_error,
+        cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         ic::icp_refill::{
             ICP_REFILL_REPLAY_COMMAND_KIND,
             replay::{icp_refill_command_kind, operation_id_display},
@@ -37,7 +37,7 @@ pub(super) fn reserve_icp_refill_cost_guard_if_needed(
         return Ok(());
     }
 
-    let permit = CostGuardOps::reserve(icp_refill_cost_guard_request(
+    let permit = CostGuardWorkflow::reserve(icp_refill_cost_guard_request(
         token,
         IcOps::canister_self(),
         IcOps::canister_cycle_balance().to_u128(),
@@ -89,7 +89,7 @@ pub(super) fn complete_icp_refill_cost_guard(
     let Some(cost_permit) = cost_permit else {
         return Ok(());
     };
-    CostGuardOps::complete(cost_permit, IcOps::now_secs())
+    CostGuardWorkflow::complete(cost_permit, IcOps::now_secs())
 }
 
 pub(super) fn recover_icp_refill_cost_guard(
@@ -98,7 +98,7 @@ pub(super) fn recover_icp_refill_cost_guard(
     let Some(cost_permit) = cost_permit else {
         return Ok(());
     };
-    CostGuardOps::recover(cost_permit, IcOps::now_secs())
+    CostGuardWorkflow::recover(cost_permit, IcOps::now_secs())
 }
 
 fn log_icp_refill_cost_guard_reserved(operation: &IcpRefillOperation) {

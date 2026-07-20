@@ -207,10 +207,10 @@ fn expired_intents_remain_reserved_until_cleanup() {
     assert_eq!(reserved_totals.reserved_qty, 3);
     assert_eq!(reserved_totals.pending_count, 1);
 
-    let pending = IntentStoreOps::pending_entries_at(now);
+    let pending = IntentStoreOps::pending_entries_at(now).expect("pending view");
     assert!(pending.is_empty());
 
-    let expired = IntentStoreOps::list_expired_pending_intents(now);
+    let expired = IntentStoreOps::list_due_expiry_intents(now, 32).expect("expiry index");
     assert_eq!(expired, vec![intent_id]);
 
     IntentStoreOps::commit_at(intent_id, now).unwrap_err();
@@ -221,6 +221,109 @@ fn expired_intents_remain_reserved_until_cleanup() {
 
     assert!(IntentStoreOps::abort_intent_if_pending(intent_id).expect("cleanup abort"));
     assert_eq!(totals(&resource_key), IntentResourceTotalsRecord::default());
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
+}
+
+#[test]
+fn finite_expiry_index_is_ordered_bounded_and_excludes_ttl_free_intents() {
+    reset();
+    let ttl_free = IntentId(20);
+    let later = IntentId(21);
+    let earlier_high_id = IntentId(23);
+    let earlier_low_id = IntentId(22);
+
+    IntentStoreOps::try_reserve(ttl_free, key(), 1, CREATED_AT, None, CREATED_AT)
+        .expect("TTL-free reservation");
+    IntentStoreOps::try_reserve(later, key(), 1, CREATED_AT, Some(9), CREATED_AT)
+        .expect("later finite reservation");
+    IntentStoreOps::try_reserve(earlier_high_id, key(), 1, CREATED_AT, Some(4), CREATED_AT)
+        .expect("earlier high-ID reservation");
+    IntentStoreOps::try_reserve(earlier_low_id, key(), 1, CREATED_AT, Some(4), CREATED_AT)
+        .expect("earlier low-ID reservation");
+
+    assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 4);
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 3);
+    assert_eq!(
+        IntentStoreOps::next_expiry_at_secs().expect("next expiry"),
+        Some(15)
+    );
+    assert!(
+        IntentStoreOps::list_due_expiry_intents(14, 32)
+            .expect("not yet due")
+            .is_empty()
+    );
+    assert_eq!(
+        IntentStoreOps::list_due_expiry_intents(15, 1).expect("bounded due page"),
+        vec![earlier_low_id]
+    );
+    assert_eq!(
+        IntentStoreOps::list_due_expiry_intents(15, 32).expect("ordered due page"),
+        vec![earlier_low_id, earlier_high_id]
+    );
+}
+
+#[test]
+fn terminal_transition_removes_exact_finite_expiry_entry() {
+    reset();
+    let committed_id = IntentId(24);
+    let aborted_id = IntentId(25);
+    reserve(committed_id, key(), 1, Some(200)).expect("committed reservation");
+    reserve(aborted_id, key(), 1, Some(300)).expect("aborted reservation");
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 2);
+
+    IntentStoreOps::commit_at(committed_id, NOW).expect("commit before due deadline");
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 1);
+    IntentStoreOps::abort(aborted_id).expect("abort reservation");
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
+    assert_eq!(
+        IntentStoreOps::next_expiry_at_secs().expect("empty index"),
+        None
+    );
+}
+
+#[test]
+fn finite_expiry_overflow_rejects_without_partial_reservation() {
+    reset();
+    let intent_id = IntentId(26);
+    let error = IntentStoreOps::try_reserve(
+        intent_id,
+        key(),
+        1,
+        u64::MAX / NANOS_PER_SECOND,
+        Some(1),
+        u64::MAX / NANOS_PER_SECOND,
+    )
+    .expect_err("unrepresentable cleanup deadline must reject");
+
+    assert_eq!(error.log_fields().0, InternalErrorClass::Ops);
+    assert!(IntentStore::get_record(intent_id).is_none());
+    assert!(IntentStore::get_pending(intent_id).is_none());
+    assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 0);
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
+}
+
+#[test]
+fn expiry_index_rebuild_uses_pending_authority_and_rejects_mismatch() {
+    reset();
+    let first = IntentId(27);
+    let second = IntentId(28);
+    reserve(first, key(), 1, Some(20)).expect("first reservation");
+    reserve(second, key(), 1, None).expect("TTL-free reservation");
+    IntentStore::clear_expiry_index();
+
+    IntentStoreOps::rebuild_expiry_index().expect("rebuild finite expiry index");
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 1);
+    assert_eq!(
+        IntentStoreOps::next_expiry_at_secs().expect("rebuilt deadline"),
+        Some(31)
+    );
+
+    let mut pending = IntentStore::get_pending(first).expect("pending row");
+    pending.quantity += 1;
+    IntentStore::insert_pending(first, pending);
+    IntentStoreOps::rebuild_expiry_index()
+        .expect_err("contradictory pending row must reject rebuild");
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 1);
 }
 
 #[test]
@@ -325,7 +428,11 @@ fn prevents_aggregate_overflow() {
     reserve(intent_id, resource_key.clone(), 1, None).expect_err("overflow should fail");
 
     assert!(IntentStore::get_record(intent_id).is_none());
-    assert!(IntentStoreOps::pending_entries_at(NOW).is_empty());
+    assert!(
+        IntentStoreOps::pending_entries_at(NOW)
+            .expect("pending view")
+            .is_empty()
+    );
 
     let raw = IntentStore::get_totals(&resource_key).expect("raw totals should exist");
     assert_eq!(raw.reserved_qty, u64::MAX, "totals should be unchanged");
@@ -354,7 +461,7 @@ fn receipt_backed_begin_replays_without_second_reservation_or_ttl_entry() {
     assert_eq!(totals_after_create.pending_count, 1);
     assert_eq!(meta(), local_meta_after_create);
     assert_eq!(local_meta_after_create.pending_total, 0);
-    assert!(IntentStoreOps::list_expired_pending_intents(u64::MAX).is_empty());
+    assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
     assert_eq!(ReceiptBackedIntentStore::len(), 1);
 
     assert_eq!(
