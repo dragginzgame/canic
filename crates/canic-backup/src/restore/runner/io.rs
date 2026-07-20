@@ -29,6 +29,18 @@ pub(super) fn write_apply_journal_file(
     Ok(())
 }
 
+#[cfg(all(test, unix))]
+pub(super) fn write_apply_journal_file_at_barriers(
+    path: &Path,
+    journal: &RestoreApplyJournal,
+    barriers: impl FnMut(crate::persistence::DurableWriteBarrier),
+) -> Result<(), RestoreRunnerError> {
+    journal.validate()?;
+    crate::persistence::write_json_durable_at_barriers(path, journal, barriers)
+        .map_err(crate::restore::RestorePersistenceError::from)?;
+    Ok(())
+}
+
 fn validate_terminal_operation_receipts(
     journal: &RestoreApplyJournal,
 ) -> Result<(), RestoreRunnerError> {

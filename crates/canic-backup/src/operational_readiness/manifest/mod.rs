@@ -351,7 +351,7 @@ fn backup_mutating_operations() -> Vec<BackupOperationKind> {
     ]
 }
 
-fn restore_operations() -> Vec<RestoreApplyOperationKind> {
+pub fn restore_operations() -> Vec<RestoreApplyOperationKind> {
     vec![
         RestoreApplyOperationKind::UploadSnapshot,
         RestoreApplyOperationKind::StopCanister,
@@ -394,7 +394,7 @@ pub fn backup_operation_label(operation: &BackupOperationKind) -> &'static str {
     }
 }
 
-const fn restore_operation_label(operation: &RestoreApplyOperationKind) -> &'static str {
+pub const fn restore_operation_label(operation: &RestoreApplyOperationKind) -> &'static str {
     match operation {
         RestoreApplyOperationKind::StopCanister => "stop-canister",
         RestoreApplyOperationKind::StartCanister => "start-canister",
