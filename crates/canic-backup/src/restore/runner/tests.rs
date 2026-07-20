@@ -54,12 +54,17 @@ const TERMINAL_CHILD_HANDSHAKE_ENV: &str = "CANIC_TEST_RESTORE_TERMINAL_HANDSHAK
 const RESPONSE_CHILD_ROOT_ENV: &str = "CANIC_TEST_RESTORE_RESPONSE_ROOT";
 #[cfg(unix)]
 const RESPONSE_CHILD_HANDSHAKE_ENV: &str = "CANIC_TEST_RESTORE_RESPONSE_HANDSHAKE";
+#[cfg(unix)]
+const PRECONDITION_CHILD_ROOT_ENV: &str = "CANIC_TEST_RESTORE_PRECONDITION_ROOT";
+#[cfg(unix)]
+const PRECONDITION_CHILD_HANDSHAKE_ENV: &str = "CANIC_TEST_RESTORE_PRECONDITION_HANDSHAKE";
 
 #[cfg(unix)]
 #[test]
 fn interrupted_private_upload_staging_is_replaced_before_claim() {
     let Some(root) = std::env::var_os(STAGING_CHILD_ROOT_ENV) else {
         assert_case_defined("CANIC-094-R03/private-upload-staging/interrupted");
+        assert_case_defined("CANIC-094-C05/partial-private-stage/rejection");
         prove_interrupted_private_upload_staging();
         return;
     };
@@ -386,6 +391,13 @@ fn terminal_state_and_receipt_publish_atomically_for_each_restore_operation() {
                     "after-durable-write"
                 };
                 assert_case_defined(&format!("CANIC-094-R12/{operation_label}/{side}"));
+                if barrier == "before-rename"
+                    && let Some(point_id) = restore_effect_point_id(&operation)
+                {
+                    assert_case_defined(&format!(
+                        "{point_id}/{operation_label}/effect-committed-receipt-missing"
+                    ));
+                }
                 prove_restore_terminal_publication(operation.clone(), operation_label, barrier);
             }
         }
@@ -494,6 +506,7 @@ fn prove_restore_terminal_publication(
     if barrier == "after-directory-sync" {
         assert!(executor.commands.is_empty());
     } else {
+        assert_restore_effect_gap_recovery(&executor.commands, &operation_kind);
         assert_eq!(
             restore_mutating_command_count(&executor.commands),
             usize::from(operation_kind == RestoreApplyOperationKind::LoadSnapshot)
@@ -507,6 +520,253 @@ fn prove_restore_terminal_publication(
 
     fs::remove_dir_all(fixture.root).expect("remove restore terminal fixture");
     fs::remove_dir_all(handshake_root).expect("remove restore terminal handshake root");
+}
+
+fn restore_effect_point_id(operation: &RestoreApplyOperationKind) -> Option<&'static str> {
+    match operation {
+        RestoreApplyOperationKind::UploadSnapshot => None,
+        RestoreApplyOperationKind::StopCanister => Some("CANIC-094-R07"),
+        RestoreApplyOperationKind::LoadSnapshot => Some("CANIC-094-R08"),
+        RestoreApplyOperationKind::StartCanister => Some("CANIC-094-R09"),
+        RestoreApplyOperationKind::VerifyMember => Some("CANIC-094-R10"),
+        RestoreApplyOperationKind::VerifyDeployment => Some("CANIC-094-R11"),
+    }
+}
+
+fn assert_restore_effect_gap_recovery(
+    commands: &[RestoreApplyRunnerCommand],
+    operation: &RestoreApplyOperationKind,
+) {
+    match operation {
+        RestoreApplyOperationKind::UploadSnapshot => {
+            assert_eq!(commands.len(), 1);
+            assert!(is_snapshot_inventory_command(&commands[0]));
+        }
+        RestoreApplyOperationKind::StopCanister
+        | RestoreApplyOperationKind::StartCanister
+        | RestoreApplyOperationKind::VerifyMember
+        | RestoreApplyOperationKind::VerifyDeployment => {
+            assert_eq!(commands.len(), 1);
+            assert_eq!(commands[0].args.get(1).map(String::as_str), Some("status"));
+        }
+        RestoreApplyOperationKind::LoadSnapshot => {
+            assert_eq!(commands.len(), 2);
+            assert_eq!(commands[0].args.get(1).map(String::as_str), Some("status"));
+            assert_eq!(
+                commands[1].args.get(1).map(String::as_str),
+                Some("snapshot")
+            );
+            assert_eq!(commands[1].args.get(2).map(String::as_str), Some("restore"));
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn interrupted_stopped_canister_precondition_is_rechecked_before_load() {
+    let Some(root) = std::env::var_os(PRECONDITION_CHILD_ROOT_ENV) else {
+        assert_case_defined("CANIC-094-R05/stopped-canister-precondition/interrupted");
+        prove_interrupted_stopped_canister_precondition();
+        return;
+    };
+
+    let root = PathBuf::from(root);
+    let handshake_root = PathBuf::from(
+        std::env::var_os(PRECONDITION_CHILD_HANDSHAKE_ENV)
+            .expect("restore precondition handshake root"),
+    );
+    let config = runner_test_config(&root);
+    let mut executor = PreconditionBarrierExecutor { handshake_root };
+    restore_run_execute_with_executor(&config, &mut executor)
+        .expect("precondition crash child must not pass its barrier");
+    panic!("restore precondition child passed its armed barrier");
+}
+
+#[cfg(unix)]
+fn prove_interrupted_stopped_canister_precondition() {
+    let fixture = ready_restore_operation_fixture(
+        "canic-restore-interrupted-precondition",
+        RestoreApplyOperationKind::LoadSnapshot,
+    );
+    let handshake_root = temp_dir("canic-restore-interrupted-precondition-handshake");
+    fs::create_dir_all(&handshake_root).expect("create restore precondition handshake root");
+    let mut child = Command::new(std::env::current_exe().expect("resolve test executable"))
+        .args([
+            "--exact",
+            "restore::runner::tests::interrupted_stopped_canister_precondition_is_rechecked_before_load",
+            "--nocapture",
+        ])
+        .env(PRECONDITION_CHILD_ROOT_ENV, &fixture.root)
+        .env(PRECONDITION_CHILD_HANDSHAKE_ENV, &handshake_root)
+        .spawn()
+        .expect("spawn restore precondition child");
+
+    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    let interrupted: RestoreApplyJournal = serde_json::from_slice(
+        &fs::read(&fixture.config.journal).expect("read interrupted precondition journal"),
+    )
+    .expect("decode interrupted precondition journal");
+    assert_restore_terminal_pair(&interrupted, 1, false);
+
+    let mut executor = ScriptedExecutor::new([
+        status_output("Stopped"),
+        RestoreRunnerCommandOutput {
+            success: true,
+            status: "0".to_string(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+        },
+    ]);
+    let response = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect("resume after interrupted stopped-canister precondition");
+    let recovered: RestoreApplyJournal = serde_json::from_slice(
+        &fs::read(&fixture.config.journal).expect("read recovered precondition journal"),
+    )
+    .expect("decode recovered precondition journal");
+
+    assert!(response.complete);
+    assert_restore_terminal_pair(&recovered, 1, true);
+    assert_restore_effect_gap_recovery(
+        &executor.commands,
+        &RestoreApplyOperationKind::LoadSnapshot,
+    );
+
+    fs::remove_dir_all(fixture.root).expect("remove restore precondition fixture");
+    fs::remove_dir_all(handshake_root).expect("remove restore precondition handshake root");
+}
+
+#[test]
+fn stopped_canister_precondition_parse_failure_is_durable() {
+    let fixture = ready_restore_operation_fixture(
+        "canic-restore-precondition-parse-failure",
+        RestoreApplyOperationKind::LoadSnapshot,
+    );
+    let mut executor = ScriptedExecutor::new([RestoreRunnerCommandOutput {
+        success: true,
+        status: "0".to_string(),
+        stdout: b"not-json".to_vec(),
+        stderr: Vec::new(),
+    }]);
+
+    let error = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect_err("invalid stopped-canister evidence must fail closed");
+    let failed: RestoreApplyJournal = serde_json::from_slice(
+        &fs::read(&fixture.config.journal).expect("read failed precondition journal"),
+    )
+    .expect("decode failed precondition journal");
+
+    std::assert_matches!(error, RestoreRunnerError::CommandFailed { sequence: 1, .. });
+    assert_eq!(
+        restore_effect_command_count(&executor.commands, &RestoreApplyOperationKind::LoadSnapshot),
+        0
+    );
+    assert_eq!(
+        failed.operations[1].state,
+        RestoreApplyOperationState::Failed
+    );
+    assert_eq!(failed.operation_receipts.len(), 2);
+
+    fs::remove_dir_all(fixture.root).expect("remove parse-failure fixture");
+}
+
+#[test]
+fn stopped_canister_precondition_io_failure_is_durable_and_typed() {
+    let fixture = ready_restore_operation_fixture(
+        "canic-restore-precondition-io-failure",
+        RestoreApplyOperationKind::LoadSnapshot,
+    );
+    let mut executor = FailingPreconditionExecutor { calls: 0 };
+
+    let error = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect_err("stopped-canister observation IO failure must fail closed");
+    let failed: RestoreApplyJournal = serde_json::from_slice(
+        &fs::read(&fixture.config.journal).expect("read failed IO precondition journal"),
+    )
+    .expect("decode failed IO precondition journal");
+
+    std::assert_matches!(error, RestoreRunnerError::Io(_));
+    assert_eq!(executor.calls, 1);
+    assert_eq!(
+        failed.operations[1].state,
+        RestoreApplyOperationState::Failed
+    );
+    assert_eq!(failed.operation_receipts.len(), 2);
+    assert_eq!(
+        failed.operation_receipts[1].failure_reason.as_deref(),
+        Some("stopped-precondition-failed-observation-error-attempt-1-unix:3")
+    );
+
+    fs::remove_dir_all(fixture.root).expect("remove IO-failure fixture");
+}
+
+#[test]
+fn malformed_apply_journal_rejects_without_execution_or_repair() {
+    assert_case_defined("CANIC-094-C01/invalid-json/rejection");
+    let fixture = ready_restore_operation_fixture(
+        "canic-restore-malformed-apply-journal",
+        RestoreApplyOperationKind::StopCanister,
+    );
+    let malformed = br#"{"journal_version":1,"backup_id":"truncated""#;
+    fs::write(&fixture.config.journal, malformed).expect("write malformed apply journal");
+    let mut executor = ScriptedExecutor::new([]);
+
+    let error = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect_err("malformed apply journal must reject before execution");
+
+    std::assert_matches!(error, RestoreRunnerError::Json(_));
+    assert!(executor.commands.is_empty());
+    assert_eq!(
+        fs::read(&fixture.config.journal).expect("read preserved malformed journal"),
+        malformed
+    );
+
+    fs::remove_dir_all(fixture.root).expect("remove malformed-journal fixture");
+}
+
+#[test]
+fn successful_upload_without_snapshot_identity_persists_failed_receipt() {
+    assert_case_defined("CANIC-094-C09/missing-command-identity/rejection");
+    let fixture = upload_fixture("canic-restore-upload-missing-identity");
+    let mut executor = ScriptedExecutor::new([
+        snapshot_inventory_output(&[]),
+        RestoreRunnerCommandOutput {
+            success: true,
+            status: "0".to_string(),
+            stdout: br#"{"message":"upload complete"}"#.to_vec(),
+            stderr: Vec::new(),
+        },
+    ]);
+
+    let error = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect_err("upload without a snapshot identity must fail closed");
+    let failed: RestoreApplyJournal = serde_json::from_slice(
+        &fs::read(&fixture.config.journal).expect("read missing-identity journal"),
+    )
+    .expect("decode missing-identity journal");
+
+    std::assert_matches!(
+        error,
+        RestoreRunnerError::CommandFailed { sequence: 0, ref status }
+            if status == "missing-uploaded-snapshot-id"
+    );
+    assert_eq!(
+        restore_effect_command_count(
+            &executor.commands,
+            &RestoreApplyOperationKind::UploadSnapshot
+        ),
+        1
+    );
+    assert_eq!(
+        failed.operations[0].state,
+        RestoreApplyOperationState::Failed
+    );
+    assert_eq!(failed.operation_receipts.len(), 1);
+    assert_eq!(
+        failed.operation_receipts[0].failure_reason.as_deref(),
+        Some("missing-uploaded-snapshot-id")
+    );
+
+    fs::remove_dir_all(fixture.root).expect("remove missing-identity fixture");
 }
 
 fn assert_restore_terminal_pair(
@@ -694,6 +954,7 @@ fn execute_upload_uses_private_verified_copy_and_records_checksum() {
 
 #[test]
 fn execute_upload_rejects_source_replacement_before_claim() {
+    assert_case_defined("CANIC-094-C04/unsafe-or-invalid-artifact/rejection");
     let fixture = upload_fixture("canic-restore-source-replacement");
     fs::write(fixture.root.join("artifacts/root"), b"replacement").expect("replace source bytes");
     let mut executor = InspectingExecutor {
@@ -714,6 +975,9 @@ fn execute_upload_rejects_source_replacement_before_claim() {
         }
     );
     assert_eq!(executor.calls, 0);
+    let stage_root = super::artifact::restore_upload_stage_root(&fixture.config.journal)
+        .expect("restore upload stage root");
+    assert!(!stage_root.exists());
     let persisted: RestoreApplyJournal =
         serde_json::from_slice(&fs::read(&fixture.config.journal).expect("read unchanged journal"))
             .expect("decode unchanged journal");
@@ -1384,6 +1648,41 @@ impl RestoreRunnerCommandExecutor for ScriptedExecutor {
     }
 }
 
+#[cfg(unix)]
+struct PreconditionBarrierExecutor {
+    handshake_root: PathBuf,
+}
+
+#[cfg(unix)]
+impl RestoreRunnerCommandExecutor for PreconditionBarrierExecutor {
+    fn execute(
+        &mut self,
+        command: &RestoreApplyRunnerCommand,
+        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+    ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
+        assert_eq!(command.args.get(1).map(String::as_str), Some("status"));
+        hold_at_acknowledged_barrier(&self.handshake_root);
+    }
+}
+
+struct FailingPreconditionExecutor {
+    calls: usize,
+}
+
+impl RestoreRunnerCommandExecutor for FailingPreconditionExecutor {
+    fn execute(
+        &mut self,
+        command: &RestoreApplyRunnerCommand,
+        _command_lifetime: Option<crate::persistence::CommandLifetimeHandle>,
+    ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
+        self.calls += 1;
+        assert_eq!(command.args.get(1).map(String::as_str), Some("status"));
+        Err(std::io::Error::other(
+            "simulated stopped-canister observation failure",
+        ))
+    }
+}
+
 fn status_output(status: &str) -> RestoreRunnerCommandOutput {
     RestoreRunnerCommandOutput {
         success: true,
@@ -1512,5 +1811,378 @@ impl RestoreRunnerCommandExecutor for InspectingExecutor {
             stdout: br#"{"snapshot_id":"uploaded-snapshot"}"#.to_vec(),
             stderr: Vec::new(),
         })
+    }
+}
+
+#[cfg(unix)]
+mod command_in_flight {
+    use super::*;
+    use crate::persistence::{CommandLifetimeHandle, CommandLifetimeLockError};
+    use rustix::io::{FdFlags, fcntl_getfd, fcntl_setfd};
+    use std::{
+        fs::File,
+        io,
+        os::{
+            fd::{BorrowedFd, FromRawFd},
+            unix::process::CommandExt,
+        },
+        process::Child,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    const ROLE_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_ROLE";
+    const ROOT_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_ROOT";
+    const OPERATION_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_OPERATION";
+    const HANDSHAKE_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_HANDSHAKE";
+    const COMMAND_FD_ENV: &str = "CANIC_TEST_RESTORE_IN_FLIGHT_FD";
+
+    #[test]
+    fn orphaned_command_tree_blocks_restart_for_every_mutating_restore_operation() {
+        match std::env::var(ROLE_ENV).ok().as_deref() {
+            Some("runner") => run_owner_role(),
+            Some("external") => run_external_role(),
+            Some("descendant") => run_descendant_role(),
+            Some(role) => panic!("unsupported restore command-in-flight role: {role}"),
+            None => {
+                assert_case_defined("CANIC-094-C07/lock-evidence/rejection");
+                for operation in [
+                    RestoreApplyOperationKind::UploadSnapshot,
+                    RestoreApplyOperationKind::StopCanister,
+                    RestoreApplyOperationKind::LoadSnapshot,
+                    RestoreApplyOperationKind::StartCanister,
+                ] {
+                    prove_orphaned_command_tree_blocks_restart(operation);
+                }
+            }
+        }
+    }
+
+    fn prove_orphaned_command_tree_blocks_restart(operation: RestoreApplyOperationKind) {
+        let operation_label = restore_operation_label(&operation);
+        assert_case_defined(&format!(
+            "CANIC-094-R14/{operation_label}/owner-dead-command-in-flight"
+        ));
+        let fixture = ready_restore_operation_fixture(
+            &format!("canic-restore-command-tree-{operation_label}"),
+            operation.clone(),
+        );
+        let before: RestoreApplyJournal = serde_json::from_slice(
+            &fs::read(&fixture.config.journal).expect("read command-tree journal"),
+        )
+        .expect("decode command-tree journal");
+        let target_sequence = before
+            .next_transition_operation()
+            .expect("target command-tree operation")
+            .sequence;
+        let receipt_count = before.operation_receipts.len();
+        let handshake_root = temp_dir(&format!(
+            "canic-restore-command-tree-handshake-{operation_label}"
+        ));
+        fs::create_dir_all(&handshake_root).expect("create restore command-tree handshake root");
+
+        let mut owner = spawn_owner(&fixture.root, operation_label, &handshake_root);
+        kill_child_at_acknowledged_barrier(&mut owner, &handshake_root);
+
+        let pending_bytes =
+            fs::read(&fixture.config.journal).expect("read owner-dead restore journal");
+        let pending: RestoreApplyJournal =
+            serde_json::from_slice(&pending_bytes).expect("decode owner-dead restore journal");
+        assert_restore_terminal_pair(&pending, target_sequence, false);
+        assert!(!effect_marker(&handshake_root).exists());
+
+        fs::write(
+            direct_release_marker(&handshake_root),
+            b"release direct owner\n",
+        )
+        .expect("release direct restore command descriptor");
+        crate::test_support::wait_for_path(
+            &direct_closed_marker(&handshake_root),
+            "direct restore command descriptor close",
+        );
+
+        let mut blocked_executor = ScriptedExecutor::new([]);
+        let error = restore_run_execute_with_executor(&fixture.config, &mut blocked_executor)
+            .expect_err("live restore command descendant must block restart");
+
+        std::assert_matches!(
+            error,
+            RestoreRunnerError::CommandInFlight {
+                sequence,
+                operation: blocked_operation,
+                ..
+            } if sequence == target_sequence && blocked_operation == operation
+        );
+        assert!(blocked_executor.commands.is_empty());
+        assert_eq!(
+            fs::read(&fixture.config.journal).expect("read blocked restore journal"),
+            pending_bytes
+        );
+        assert!(!effect_marker(&handshake_root).exists());
+
+        fs::write(effect_release_marker(&handshake_root), b"commit effect\n")
+            .expect("release restore effect descendant");
+        crate::test_support::wait_for_path(
+            &effect_marker(&handshake_root),
+            "committed restore effect",
+        );
+        crate::test_support::wait_for_path(
+            &external_complete_marker(&handshake_root),
+            "external restore command completion",
+        );
+        wait_for_command_quiescence(&fixture.config.journal, target_sequence);
+
+        let mut recovery_executor =
+            ScriptedExecutor::new(restore_terminal_recovery_outputs(&operation));
+        let response = restore_run_execute_with_executor(&fixture.config, &mut recovery_executor)
+            .expect("recover quiescent restore command tree");
+        let recovered: RestoreApplyJournal = serde_json::from_slice(
+            &fs::read(&fixture.config.journal).expect("read recovered command-tree journal"),
+        )
+        .expect("decode recovered command-tree journal");
+
+        assert!(response.complete);
+        assert_restore_terminal_pair(&recovered, target_sequence, true);
+        assert_eq!(recovered.operation_receipts.len(), receipt_count + 1);
+        assert_restore_effect_gap_recovery(&recovery_executor.commands, &operation);
+        if operation == RestoreApplyOperationKind::UploadSnapshot {
+            let stage_root =
+                super::super::artifact::restore_upload_stage_root(&fixture.config.journal)
+                    .expect("restore upload stage root");
+            assert!(!stage_root.exists());
+        }
+
+        fs::remove_dir_all(fixture.root).expect("remove restore command-tree fixture");
+        fs::remove_dir_all(handshake_root).expect("remove restore command-tree handshake root");
+    }
+
+    fn spawn_owner(root: &Path, operation_label: &str, handshake_root: &Path) -> Child {
+        Command::new(std::env::current_exe().expect("resolve test executable"))
+            .args([
+                "--exact",
+                "restore::runner::tests::command_in_flight::orphaned_command_tree_blocks_restart_for_every_mutating_restore_operation",
+                "--nocapture",
+            ])
+            .env(ROLE_ENV, "runner")
+            .env(ROOT_ENV, root)
+            .env(OPERATION_ENV, operation_label)
+            .env(HANDSHAKE_ENV, handshake_root)
+            .spawn()
+            .expect("spawn restore runner owner")
+    }
+
+    fn run_owner_role() {
+        let root = required_path(ROOT_ENV);
+        let operation = required_operation();
+        let handshake_root = required_path(HANDSHAKE_ENV);
+        let config = runner_test_config(&root);
+        let mut executor = InFlightRestoreExecutor {
+            operation: operation.clone(),
+            handshake_root,
+        };
+        restore_run_execute_with_executor(&config, &mut executor)
+            .unwrap_or_else(|error| panic!("execute {operation:?} in owner process: {error}"));
+        panic!("restore runner owner returned before process-death barrier");
+    }
+
+    fn run_external_role() {
+        let handshake_root = required_path(HANDSHAKE_ENV);
+        let mut descendant =
+            Command::new(std::env::current_exe().expect("resolve test executable"));
+        descendant
+            .args([
+                "--exact",
+                "restore::runner::tests::command_in_flight::orphaned_command_tree_blocks_restart_for_every_mutating_restore_operation",
+                "--nocapture",
+            ])
+            .env(ROLE_ENV, "descendant");
+        let mut descendant = descendant.spawn().expect("spawn restore effect descendant");
+        crate::test_support::wait_for_child_path(
+            &mut descendant,
+            &handshake_root.join("descendant-ready"),
+            "restore effect descendant readiness",
+        );
+
+        fs::write(handshake_root.join("barrier-ready"), b"ready\n")
+            .expect("signal restore command-in-flight barrier");
+        crate::test_support::wait_for_path(
+            &handshake_root.join("barrier-acknowledged"),
+            "restore command-in-flight acknowledgement",
+        );
+        fs::write(handshake_root.join("barrier-armed"), b"armed\n")
+            .expect("arm restore owner-death barrier");
+        crate::test_support::wait_for_path(
+            &direct_release_marker(&handshake_root),
+            "direct restore descriptor release",
+        );
+
+        let raw_fd = std::env::var(COMMAND_FD_ENV)
+            .expect("inherited restore command descriptor")
+            .parse::<i32>()
+            .expect("numeric restore command descriptor");
+        // SAFETY: this exec'd test process inherited this descriptor without a
+        // Rust owner. The descendant was spawned first and retains its copy.
+        unsafe {
+            drop(File::from_raw_fd(raw_fd));
+        }
+        fs::write(direct_closed_marker(&handshake_root), b"closed\n")
+            .expect("signal direct restore descriptor close");
+
+        let status = descendant
+            .wait()
+            .expect("wait for restore effect descendant");
+        assert!(
+            status.success(),
+            "restore effect descendant failed: {status}"
+        );
+        fs::write(external_complete_marker(&handshake_root), b"complete\n")
+            .expect("signal external restore command completion");
+    }
+
+    fn run_descendant_role() {
+        let handshake_root = required_path(HANDSHAKE_ENV);
+        fs::write(handshake_root.join("descendant-ready"), b"ready\n")
+            .expect("signal restore effect descendant readiness");
+        crate::test_support::wait_for_path(
+            &effect_release_marker(&handshake_root),
+            "restore effect release",
+        );
+        fs::write(effect_marker(&handshake_root), b"committed\n")
+            .expect("record modeled restore effect");
+    }
+
+    struct InFlightRestoreExecutor {
+        operation: RestoreApplyOperationKind,
+        handshake_root: PathBuf,
+    }
+
+    impl RestoreRunnerCommandExecutor for InFlightRestoreExecutor {
+        fn execute(
+            &mut self,
+            command: &RestoreApplyRunnerCommand,
+            command_lifetime: Option<CommandLifetimeHandle>,
+        ) -> Result<RestoreRunnerCommandOutput, std::io::Error> {
+            if !command.mutates {
+                if is_snapshot_inventory_command(command) {
+                    return Ok(snapshot_inventory_output(&[]));
+                }
+                assert_eq!(command.args.get(1).map(String::as_str), Some("status"));
+                return Ok(status_output("Stopped"));
+            }
+
+            assert_command_matches_operation(command, &self.operation);
+            let command_lifetime = command_lifetime
+                .ok_or_else(|| std::io::Error::other("missing restore command lifetime"))?;
+            let mut external =
+                Command::new(std::env::current_exe().map_err(std::io::Error::other)?);
+            external
+                .args([
+                    "--exact",
+                    "restore::runner::tests::command_in_flight::orphaned_command_tree_blocks_restart_for_every_mutating_restore_operation",
+                    "--nocapture",
+                ])
+                .env(ROLE_ENV, "external")
+                .env(OPERATION_ENV, restore_operation_label(&self.operation))
+                .env(HANDSHAKE_ENV, &self.handshake_root)
+                .env(COMMAND_FD_ENV, command_lifetime.raw_fd().to_string());
+            inherit_command_descriptor(&mut external, command_lifetime);
+            let status = external.status()?;
+            if !status.success() {
+                return Err(std::io::Error::other(format!(
+                    "external restore command failed: {status}"
+                )));
+            }
+
+            Ok(RestoreRunnerCommandOutput {
+                success: true,
+                status: "0".to_string(),
+                stdout: if self.operation == RestoreApplyOperationKind::UploadSnapshot {
+                    br#"{"snapshot_id":"uploaded-snapshot"}"#.to_vec()
+                } else {
+                    Vec::new()
+                },
+                stderr: Vec::new(),
+            })
+        }
+    }
+
+    fn assert_command_matches_operation(
+        command: &RestoreApplyRunnerCommand,
+        operation: &RestoreApplyOperationKind,
+    ) {
+        assert_eq!(
+            restore_effect_command_count(std::slice::from_ref(command), operation),
+            1
+        );
+    }
+
+    fn wait_for_command_quiescence(journal: &Path, sequence: usize) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match CommandLifetimeLock::acquire(journal, sequence) {
+                Ok(lock) => {
+                    lock.finish().expect("finish restore quiescence probe");
+                    return;
+                }
+                Err(CommandLifetimeLockError::InFlight { .. }) if Instant::now() < deadline => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("restore command tree did not become quiescent: {error:?}"),
+            }
+        }
+    }
+
+    fn inherit_command_descriptor(command: &mut Command, handle: CommandLifetimeHandle) {
+        let raw_fd = handle.raw_fd();
+        // SAFETY: the runner-owned command lock keeps the descriptor valid
+        // through spawn; child setup only clears close-on-exec on that fd.
+        unsafe {
+            command.pre_exec(move || {
+                // SAFETY: the runner retains the descriptor through spawn.
+                let fd = BorrowedFd::borrow_raw(raw_fd);
+                let mut flags = fcntl_getfd(fd).map_err(errno_to_io)?;
+                flags.remove(FdFlags::CLOEXEC);
+                fcntl_setfd(fd, flags).map_err(errno_to_io)
+            });
+        }
+    }
+
+    fn errno_to_io(error: rustix::io::Errno) -> io::Error {
+        io::Error::from_raw_os_error(error.raw_os_error())
+    }
+
+    fn required_operation() -> RestoreApplyOperationKind {
+        let label = std::env::var(OPERATION_ENV).expect("restore command-in-flight operation");
+        restore_operations()
+            .into_iter()
+            .find(|operation| restore_operation_label(operation) == label)
+            .expect("supported restore command-in-flight operation")
+    }
+
+    fn required_path(name: &str) -> PathBuf {
+        PathBuf::from(
+            std::env::var_os(name)
+                .unwrap_or_else(|| panic!("required restore command-in-flight environment {name}")),
+        )
+    }
+
+    fn direct_release_marker(root: &Path) -> PathBuf {
+        root.join("direct-release")
+    }
+
+    fn direct_closed_marker(root: &Path) -> PathBuf {
+        root.join("direct-closed")
+    }
+
+    fn effect_release_marker(root: &Path) -> PathBuf {
+        root.join("effect-release")
+    }
+
+    fn effect_marker(root: &Path) -> PathBuf {
+        root.join("effect-committed")
+    }
+
+    fn external_complete_marker(root: &Path) -> PathBuf {
+        root.join("external-complete")
     }
 }

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.12`.
-- The latest published release is `v0.94.12` at
-  `a067216ca18e6512033cc0214579d45c927b71fb`.
-- The `v0.94.12` source tree is
-  `8c062f7d11efed07ca08a13ea86ab8c1fb3b3352`; its product-tree hash is
-  `782e4f06aec6fe7798cd94b778a220537aaf243e311dd774093577a7cafa423b`.
+- The workspace package version is `0.94.13`.
+- The latest published release is `v0.94.13` at
+  `aa9af623ddfbb37ca530cf44b32115ec020af59f`.
+- The `v0.94.13` source tree is
+  `36b12043b10749ffc9035e490f1b7539f321b252`; its product-tree hash is
+  `b72e1fb3a2a1fa4e45b9b3d07fbc69b1de9bb00e3bc32b20d3befa27fecc4d47`.
   Its Cargo.lock SHA-256 is
-  `48fc3ce75fcf16b58506f9667019e5f996fab8f315afdd84441f89bc1609d67f`.
+  `7ec3e0afce39dbb83229b508c7f60aac41e267d16f91e88704f1c22cbe5a5515`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -269,11 +269,12 @@ Historical detail is archived at:
   `>=1.1.0,<2.0.0`. Both durable sides of initial restore-plan and apply-
   journal publication now survive acknowledged process death, bringing the
   frozen matrix to 60 passing cases with 46 pending.
-- The open `0.94.13` draft completes private restore staging, all pending-
-  claim and terminal publication sides, and final-response loss. Upload
-  staging skipped by process death is removed before terminal publication or
-  during reconciliation. The frozen matrix is 86 passing cases with 20
-  pending.
+- Released `v0.94.13` completes private restore staging, all pending-claim and
+  terminal publication sides, and final-response loss. Upload staging skipped
+  by process death is removed before terminal publication or reconciliation.
+- The open `0.94.14` draft completes the remaining stopped-precondition,
+  effect/receipt, command-tree, and rejection cases. All 106 frozen protocol
+  cases and all seven required journeys pass; no case remains pending.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -909,10 +910,15 @@ requires ICP CLI `>=1.1.0,<2.0.0`. No version 2, alias, legacy parser, or
 compatibility fallback exists; Candid and Cargo package versions are
 unchanged.
 
-The open 0.94.13 draft completes `R03`, all 12 `R04` pending-claim cases, all
-12 `R12` terminal state/receipt cases, and `R13` final-response loss. It also
+Released 0.94.13 completes `R03`, all 12 `R04` pending-claim cases, all 12
+`R12` terminal state/receipt cases, and `R13` final-response loss. It also
 removes private upload staging before terminal persistence and during
 committed-effect reconciliation, so process death cannot retain a completed
-staged snapshot after the journal advances. Eighty-six of 106 frozen cases
-pass; the remaining 20 restore-effect, command-tree, and rejection cases are
-still the bounded closeout work, so 0.94 is not yet declared closed.
+staged snapshot after the journal advances.
+
+The open 0.94.14 draft completes `R05`, `R07` through `R11`, all four `R14`
+owner-dead command-tree cases, and `C01` through `C10`. Returned stopped-state
+observation I/O failures now persist one failed operation/receipt pair before
+preserving the typed cause. All 106 frozen cases and all seven required
+journeys pass, so publishing this candidate closes 0.94; further cleanup is
+outside the line.

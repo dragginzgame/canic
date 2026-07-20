@@ -3,6 +3,7 @@ use crate::{
     execution::BackupExecutionOperationState,
     journal::{ArtifactJournalEntry, ArtifactState, DownloadJournal, DownloadOperationMetrics},
     manifest::{BackupUnitKind, IdentityMode},
+    operational_readiness::manifest::assert_case_defined,
     persistence::{BackupLayout, CommandLifetimeLock, JournalLock},
     plan::{
         AuthorityEvidence, BackupOperationKind, BackupPlan, BackupPlanBuildInput, BackupScopeKind,
@@ -22,6 +23,7 @@ const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab
 
 #[test]
 fn runner_rejects_stale_download_journal_topology_before_snapshot_creation() {
+    assert_case_defined("CANIC-094-C03/stale-authority-identity/rejection");
     let root = prepared_layout("canic-backup-runner-stale-download-topology");
     let layout = BackupLayout::new(root.clone());
     let stale_hash = "f".repeat(64);
