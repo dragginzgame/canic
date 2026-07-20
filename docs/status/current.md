@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.6`.
-- The latest published release is `v0.94.6` at
-  `a077cb2dee6fb38567d747083e63caea4318e427`.
-- The `v0.94.6` source tree is
-  `1bcbf8ad318bcafeae48e641f14cc8bdb8114980`; its product-tree hash is
-  `d67a662b1f0153d7c327821aaa09081758c6f4595329ff580d1da3ecd81d7305`.
+- The workspace package version is `0.94.7`.
+- The latest published release is `v0.94.7` at
+  `6a8cc9f6eb45e2cd603d87cb638b8fd0618b9081`.
+- The `v0.94.7` source tree is
+  `e8d325bfc4e6eb9633cfd14211eee3726a24b00f`; its product-tree hash is
+  `40d11ab44879a1419567b48fb7c983984c20a54fb14e5d0e44c3e12dd1dcc0d3`.
   Its Cargo.lock SHA-256 is
-  `5f9d4b5c77b6971f67d004a0e56231873faf3553a400bb4aa7f7fd6028a46c8d`.
+  `66ee80229930ec7af7ac2a957dd459146f4d18db6ed40faf5865dac4917bec6b`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -238,11 +238,15 @@ Historical detail is archived at:
   preserves `Downloaded` or later evidence for its canonical recovery
   boundary. Artifact-journal states now reject fields owned by another
   transition.
-- The open `0.94.7` draft reconciles both sides of the `Downloaded`
+- Released `v0.94.7` reconciles both sides of the `Downloaded`
   artifact-journal write. A non-durable write retains `Created` and justifies
   one redownload; a durable exact row rebuilds the normal receipt and proceeds
   to checksum without another command. Missing or mismatched staging rejects
   before execution-journal mutation.
+- The open `0.94.8` draft proves a checksum completed only in memory is safely
+  recomputed after process death from unchanged staged bytes. Missing or
+  unsafe input fails closed without claiming checksum-verified state. The
+  existing production runner and secure traversal required no change.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -828,10 +832,14 @@ Released `v0.94.6` completes `B09`: a pending snapshot download resumes only
 from exact `Created` artifact authority, replaces uncommitted private staging,
 and rejects unsafe entries.
 
-The open 0.94.7 draft completes both `B10` write sides. A non-durable
+Released `v0.94.7` completes both `B10` write sides. A non-durable
 `Downloaded` transition retains `Created` and performs one redownload; a
 durable exact transition reconstructs the normal receipt and proceeds to
-checksum with zero download commands. Twenty-nine of 106 protocol cases now
-pass. Persisted document versions, operator-facing contracts, and package
-versions remain unchanged. The next bounded action is `B11` during checksum
-calculation.
+checksum with zero download commands.
+
+The open 0.94.8 draft completes `B11` with deterministic process-death proof.
+A checksum lost with child memory is recomputed from unchanged staged bytes,
+while missing or unsafe input never becomes verified progress. Thirty of 106
+protocol cases now pass. Production code, persisted documents, operator-facing
+contracts, and package versions remain unchanged. The next bounded action is
+both `B12` sides of the `ChecksumVerified` artifact-journal transition.
