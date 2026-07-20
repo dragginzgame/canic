@@ -5,6 +5,8 @@
 //! Boundary: binds deterministic process loss to real durable layout operations.
 
 #[cfg(unix)]
+mod checksum_effect;
+#[cfg(unix)]
 mod download_effect;
 #[cfg(unix)]
 mod download_transition;
