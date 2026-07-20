@@ -16,7 +16,7 @@ use canic_backup::{
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
     runner::{
         BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerExecutor,
-        BackupRunnerSnapshotReceipt,
+        BackupRunnerSnapshot,
     },
 };
 use canic_host::icp::{IcpCanisterStatusReport, IcpCli};
@@ -81,6 +81,25 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         runner_canister_status(canister_id, &report)
     }
 
+    fn snapshot_inventory(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<Vec<BackupRunnerSnapshot>, BackupRunnerCommandError> {
+        self.icp
+            .snapshot_inventory(canister_id)
+            .map(|snapshots| {
+                snapshots
+                    .into_iter()
+                    .map(|snapshot| BackupRunnerSnapshot {
+                        snapshot_id: snapshot.snapshot_id,
+                        taken_at_timestamp: snapshot.taken_at_timestamp,
+                        total_size_bytes: snapshot.total_size_bytes,
+                    })
+                    .collect()
+            })
+            .map_err(runner_icp_error)
+    }
+
     fn stop_canister(
         &mut self,
         canister_id: &str,
@@ -105,13 +124,13 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         &mut self,
         canister_id: &str,
         command_lifetime: CommandLifetimeHandle,
-    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
+    ) -> Result<BackupRunnerSnapshot, BackupRunnerCommandError> {
         self.command_icp(command_lifetime)
-            .snapshot_create_receipt(canister_id)
-            .map(|receipt| BackupRunnerSnapshotReceipt {
-                snapshot_id: receipt.snapshot_id,
-                taken_at_timestamp: receipt.taken_at_timestamp,
-                total_size_bytes: receipt.total_size_bytes,
+            .snapshot_create(canister_id)
+            .map(|snapshot| BackupRunnerSnapshot {
+                snapshot_id: snapshot.snapshot_id,
+                taken_at_timestamp: snapshot.taken_at_timestamp,
+                total_size_bytes: snapshot.total_size_bytes,
             })
             .map_err(runner_icp_error)
     }

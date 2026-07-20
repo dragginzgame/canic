@@ -261,6 +261,8 @@ fn write_verified_layout(root: &Path, layout: &BackupLayout, manifest: &Deployme
             ArtifactJournalEntry {
                 canister_id: member.canister_id.clone(),
                 snapshot_id: member.source_snapshot.snapshot_id.clone(),
+                snapshot_taken_at_timestamp: None,
+                snapshot_total_size_bytes: None,
                 state: ArtifactState::Durable,
                 temp_path: None,
                 artifact_path: member.source_snapshot.artifact_path.clone(),

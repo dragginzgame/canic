@@ -18,8 +18,7 @@ pub use diagnostic::{IcpDiagnostic, classify_icp_diagnostic};
 pub use error::IcpCommandError;
 pub use model::{
     ICP_CLI_SUPPORTED_VERSION_RANGE, IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli,
-    IcpCliVersion, IcpRawOutput, IcpSnapshotCreateReceipt, LocalReplicaTarget,
-    REQUIRED_ICP_CLI_VERSION,
+    IcpCliVersion, IcpRawOutput, IcpSnapshot, LocalReplicaTarget, REQUIRED_ICP_CLI_VERSION,
 };
 pub use response::{IcpJsonResponseError, decode_json_response, decode_json_result_response};
 pub use run::{

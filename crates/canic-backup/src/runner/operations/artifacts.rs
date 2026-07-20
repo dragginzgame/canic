@@ -15,7 +15,7 @@ use crate::{
     },
     plan::BackupPlan,
     runner::{
-        BackupRunnerConfig, BackupRunnerError, BackupRunnerExecutor,
+        BackupRunnerConfig, BackupRunnerError, BackupRunnerExecutor, BackupRunnerSnapshot,
         manifest::build_manifest,
         operations::{
             command_failed,
@@ -41,23 +41,85 @@ pub(super) fn execute_create_snapshot(
     command_lifetime: CommandLifetimeHandle,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
-    let mut download_journal = read_or_new_download_journal(layout, plan, journal)?;
-    if let Some(existing) = download_journal
-        .artifacts
-        .iter()
-        .find(|artifact| artifact.canister_id == target)
-    {
-        let mut receipt = BackupExecutionOperationReceipt::completed(
-            journal,
-            operation,
-            Some(current_timestamp_marker()),
-        );
-        receipt.snapshot_id = Some(existing.snapshot_id.clone());
+    if let Some(receipt) = recorded_snapshot_receipt(layout, plan, journal, operation, &target)? {
         return Ok(receipt);
     }
     let snapshot = executor
         .create_snapshot(&target, command_lifetime)
         .map_err(|error| command_failed(operation.sequence, error))?;
+    persist_created_snapshot(layout, plan, journal, operation, &target, snapshot)
+}
+
+pub(in crate::runner) fn recorded_snapshot_receipt(
+    layout: &BackupLayout,
+    plan: &BackupPlan,
+    journal: &BackupExecutionJournal,
+    operation: &BackupExecutionJournalOperation,
+    target: &str,
+) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
+    let download_journal = read_or_new_download_journal(layout, plan, journal)?;
+    let matching = download_journal
+        .artifacts
+        .iter()
+        .filter(|artifact| artifact.canister_id == target)
+        .collect::<Vec<_>>();
+    match matching.as_slice() {
+        [] => Ok(None),
+        [artifact] => Ok(Some(snapshot_receipt(
+            journal,
+            operation,
+            BackupRunnerSnapshot {
+                snapshot_id: artifact.snapshot_id.clone(),
+                taken_at_timestamp: artifact.snapshot_taken_at_timestamp,
+                total_size_bytes: artifact.snapshot_total_size_bytes,
+            },
+        ))),
+        artifacts => Err(BackupRunnerError::AmbiguousArtifactSnapshot {
+            sequence: operation.sequence,
+            target_canister_id: target.to_string(),
+            snapshot_ids: artifacts
+                .iter()
+                .map(|artifact| artifact.snapshot_id.clone())
+                .collect(),
+        }),
+    }
+}
+
+pub(in crate::runner) fn persist_created_snapshot(
+    layout: &BackupLayout,
+    plan: &BackupPlan,
+    journal: &BackupExecutionJournal,
+    operation: &BackupExecutionJournalOperation,
+    target: &str,
+    snapshot: BackupRunnerSnapshot,
+) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
+    let mut download_journal = read_or_new_download_journal(layout, plan, journal)?;
+    let receipt = snapshot_receipt(journal, operation, snapshot.clone());
+
+    upsert_artifact_entry(
+        &mut download_journal,
+        ArtifactJournalEntry {
+            canister_id: target.to_string(),
+            snapshot_id: snapshot.snapshot_id,
+            snapshot_taken_at_timestamp: snapshot.taken_at_timestamp,
+            snapshot_total_size_bytes: snapshot.total_size_bytes,
+            state: ArtifactState::Created,
+            temp_path: None,
+            artifact_path: artifact_relative_path(target),
+            checksum_algorithm: "sha256".to_string(),
+            checksum: None,
+            updated_at: current_timestamp_marker(),
+        },
+    );
+    layout.write_journal(&download_journal)?;
+    Ok(receipt)
+}
+
+fn snapshot_receipt(
+    journal: &BackupExecutionJournal,
+    operation: &BackupExecutionJournalOperation,
+    snapshot: BackupRunnerSnapshot,
+) -> BackupExecutionOperationReceipt {
     let mut receipt = BackupExecutionOperationReceipt::completed(
         journal,
         operation,
@@ -66,22 +128,7 @@ pub(super) fn execute_create_snapshot(
     receipt.snapshot_id = Some(snapshot.snapshot_id.clone());
     receipt.snapshot_taken_at_timestamp = snapshot.taken_at_timestamp;
     receipt.snapshot_total_size_bytes = snapshot.total_size_bytes;
-
-    upsert_artifact_entry(
-        &mut download_journal,
-        ArtifactJournalEntry {
-            canister_id: target.clone(),
-            snapshot_id: snapshot.snapshot_id,
-            state: ArtifactState::Created,
-            temp_path: None,
-            artifact_path: artifact_relative_path(&target),
-            checksum_algorithm: "sha256".to_string(),
-            checksum: None,
-            updated_at: current_timestamp_marker(),
-        },
-    );
-    layout.write_journal(&download_journal)?;
-    Ok(receipt)
+    receipt
 }
 
 pub(super) fn execute_download_snapshot(

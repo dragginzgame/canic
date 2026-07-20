@@ -12,7 +12,11 @@ use crate::{
     plan::{BackupOperationKind, BackupPlan},
     timestamp::{current_timestamp_marker, state_updated_at, timestamp_marker, timestamp_seconds},
 };
-use operations::execute_operation_receipt;
+use operations::{
+    execute_operation_receipt, operation_target, persist_created_snapshot,
+    recorded_snapshot_receipt,
+};
+use std::collections::{BTreeMap, BTreeSet};
 
 const PREFLIGHT_TTL_SECONDS: u64 = 300;
 
@@ -105,15 +109,37 @@ fn execute_ready_operations(
                     executed.push(BackupRunExecutedOperation::completed(&operation));
                     continue;
                 }
+            } else if operation.kind == BackupOperationKind::CreateSnapshot {
+                if let Some(receipt) =
+                    reconcile_pending_snapshot_create(executor, layout, plan, journal, &operation)?
+                {
+                    finish_reconciled_command_lock(&operation, command_lock.take())?;
+                    journal.record_operation_receipt(receipt)?;
+                    layout.write_execution_journal(journal)?;
+                    executed.push(BackupRunExecutedOperation::completed(&operation));
+                    continue;
+                }
             } else {
                 reject_unknown_backup_command_outcome(&operation, command_lock.take())?;
             }
         } else {
-            journal.mark_operation_pending_at(
-                operation.sequence,
-                Some(state_updated_at(config.updated_at.as_ref())),
-            )?;
-            layout.write_execution_journal(journal)?;
+            if operation.kind == BackupOperationKind::CreateSnapshot {
+                if let Some(receipt) = prepare_snapshot_create_attempt(
+                    config, executor, layout, plan, journal, &operation,
+                )? {
+                    finish_reconciled_command_lock(&operation, command_lock.take())?;
+                    journal.record_operation_receipt(receipt)?;
+                    layout.write_execution_journal(journal)?;
+                    executed.push(BackupRunExecutedOperation::completed(&operation));
+                    continue;
+                }
+            } else {
+                journal.mark_operation_pending_at(
+                    operation.sequence,
+                    Some(state_updated_at(config.updated_at.as_ref())),
+                )?;
+                layout.write_execution_journal(journal)?;
+            }
         }
 
         let operation_result = execute_operation_receipt(
@@ -151,6 +177,136 @@ fn execute_ready_operations(
             }
         }
     }
+}
+
+fn prepare_snapshot_create_attempt(
+    config: &BackupRunnerConfig,
+    executor: &mut impl BackupRunnerExecutor,
+    layout: &BackupLayout,
+    plan: &BackupPlan,
+    journal: &mut BackupExecutionJournal,
+    operation: &crate::execution::BackupExecutionJournalOperation,
+) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
+    let recovering_previous_attempt = operation.snapshot_ids_before.is_some();
+    let snapshot_ids_before = if recovering_previous_attempt {
+        operation.snapshot_ids_before.clone().ok_or(
+            crate::execution::BackupExecutionJournalError::MissingField(
+                "operations[].snapshot_ids_before",
+            ),
+        )?
+    } else {
+        let target = operation_target(operation)?;
+        let snapshots = observe_snapshot_inventory(executor, operation, &target)?;
+        let mut snapshot_ids = snapshots
+            .into_iter()
+            .map(|snapshot| snapshot.snapshot_id)
+            .collect::<Vec<_>>();
+        snapshot_ids.sort();
+        snapshot_ids
+    };
+    journal.mark_snapshot_create_pending_at(
+        operation.sequence,
+        Some(state_updated_at(config.updated_at.as_ref())),
+        snapshot_ids_before,
+    )?;
+    layout.write_execution_journal(journal)?;
+    if !recovering_previous_attempt {
+        return Ok(None);
+    }
+    let pending_operation = journal
+        .operations
+        .iter()
+        .find(|candidate| candidate.sequence == operation.sequence)
+        .cloned()
+        .ok_or(
+            crate::execution::BackupExecutionJournalError::OperationNotFound(operation.sequence),
+        )?;
+    reconcile_pending_snapshot_create(executor, layout, plan, journal, &pending_operation)
+}
+
+fn reconcile_pending_snapshot_create(
+    executor: &mut impl BackupRunnerExecutor,
+    layout: &BackupLayout,
+    plan: &BackupPlan,
+    journal: &BackupExecutionJournal,
+    operation: &crate::execution::BackupExecutionJournalOperation,
+) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
+    let target = operation_target(operation)?;
+    if let Some(receipt) = recorded_snapshot_receipt(layout, plan, journal, operation, &target)? {
+        return Ok(Some(receipt));
+    }
+    let baseline = operation.snapshot_ids_before.as_ref().ok_or(
+        crate::execution::BackupExecutionJournalError::MissingField(
+            "operations[].snapshot_ids_before",
+        ),
+    )?;
+    let baseline = baseline.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let observed = observe_snapshot_inventory(executor, operation, &target)?
+        .into_iter()
+        .map(|snapshot| (snapshot.snapshot_id.clone(), snapshot))
+        .collect::<BTreeMap<_, _>>();
+    let missing = baseline
+        .iter()
+        .filter(|snapshot_id| !observed.contains_key(**snapshot_id))
+        .map(|snapshot_id| (*snapshot_id).to_string())
+        .collect::<Vec<_>>();
+    if !missing.is_empty() {
+        return Err(BackupRunnerError::SnapshotInventoryLostBaseline {
+            sequence: operation.sequence,
+            operation_id: operation.operation_id.clone(),
+            snapshot_ids: missing,
+        });
+    }
+    let mut created = observed
+        .into_iter()
+        .filter(|(snapshot_id, _)| !baseline.contains(snapshot_id.as_str()))
+        .collect::<Vec<_>>();
+    match created.len() {
+        0 => Ok(None),
+        1 => {
+            let snapshot = created.pop().expect("one snapshot candidate").1;
+            persist_created_snapshot(layout, plan, journal, operation, &target, snapshot).map(Some)
+        }
+        _ => Err(BackupRunnerError::SnapshotIdentityAmbiguous {
+            sequence: operation.sequence,
+            operation_id: operation.operation_id.clone(),
+            snapshot_ids: created
+                .into_iter()
+                .map(|(snapshot_id, _)| snapshot_id)
+                .collect(),
+        }),
+    }
+}
+
+fn observe_snapshot_inventory(
+    executor: &mut impl BackupRunnerExecutor,
+    operation: &crate::execution::BackupExecutionJournalOperation,
+    target: &str,
+) -> Result<Vec<BackupRunnerSnapshot>, BackupRunnerError> {
+    let snapshots = executor.snapshot_inventory(target).map_err(|error| {
+        BackupRunnerError::SnapshotInventoryFailed {
+            sequence: operation.sequence,
+            status: error.status,
+            message: error.message,
+        }
+    })?;
+    let mut identities = BTreeSet::new();
+    for snapshot in &snapshots {
+        if snapshot.snapshot_id.trim().is_empty() {
+            return Err(BackupRunnerError::InvalidSnapshotIdentity {
+                sequence: operation.sequence,
+                operation_id: operation.operation_id.clone(),
+            });
+        }
+        if !identities.insert(snapshot.snapshot_id.as_str()) {
+            return Err(BackupRunnerError::DuplicateSnapshotIdentity {
+                sequence: operation.sequence,
+                operation_id: operation.operation_id.clone(),
+                snapshot_id: snapshot.snapshot_id.clone(),
+            });
+        }
+    }
+    Ok(snapshots)
 }
 
 fn reconcile_pending_stop(

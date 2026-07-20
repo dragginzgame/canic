@@ -3,16 +3,13 @@ use std::path::Path;
 use super::{
     command::command_display,
     error::IcpCommandError,
-    model::{IcpCli, IcpSnapshotCreateReceipt},
+    model::{IcpCli, IcpSnapshot},
     run::{run_json, run_status},
 };
 
 impl IcpCli {
-    /// Create one canister snapshot and return the ICP CLI JSON receipt.
-    pub fn snapshot_create_receipt(
-        &self,
-        canister: &str,
-    ) -> Result<IcpSnapshotCreateReceipt, IcpCommandError> {
+    /// Create one canister snapshot and return its typed metadata.
+    pub fn snapshot_create(&self, canister: &str) -> Result<IcpSnapshot, IcpCommandError> {
         let mut command = self.canister_command();
         command.args(["snapshot", "create", canister]);
         command.arg("--json");
@@ -22,7 +19,16 @@ impl IcpCli {
 
     /// Create one canister snapshot and resolve the resulting snapshot id.
     pub fn snapshot_create_id(&self, canister: &str) -> Result<String, IcpCommandError> {
-        Ok(self.snapshot_create_receipt(canister)?.snapshot_id)
+        Ok(self.snapshot_create(canister)?.snapshot_id)
+    }
+
+    /// List the authoritative snapshots currently retained for one canister.
+    pub fn snapshot_inventory(&self, canister: &str) -> Result<Vec<IcpSnapshot>, IcpCommandError> {
+        let mut command = self.canister_command();
+        command.args(["snapshot", "list", canister]);
+        command.arg("--json");
+        self.add_target_args(&mut command);
+        run_json(&mut command)
     }
 
     /// Download one canister snapshot into an artifact directory.

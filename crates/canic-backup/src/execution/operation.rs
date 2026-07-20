@@ -12,6 +12,7 @@ impl BackupExecutionJournalOperation {
             target_canister_id: operation.target_canister_id.clone(),
             state: BackupExecutionOperationState::Ready,
             state_updated_at: None,
+            snapshot_ids_before: None,
             blocking_reasons: Vec::new(),
         }
     }
@@ -26,6 +27,7 @@ impl BackupExecutionJournalOperation {
             "operations[].target_canister_id",
             self.target_canister_id.as_deref(),
         )?;
+        self.validate_snapshot_inventory()?;
         if matches!(
             self.state,
             BackupExecutionOperationState::Pending
@@ -63,5 +65,39 @@ impl BackupExecutionJournalOperation {
             | BackupExecutionOperationState::Failed
             | BackupExecutionOperationState::Skipped => Ok(()),
         }
+    }
+
+    fn validate_snapshot_inventory(&self) -> Result<(), BackupExecutionJournalError> {
+        let Some(snapshot_ids) = &self.snapshot_ids_before else {
+            if self.kind == crate::plan::BackupOperationKind::CreateSnapshot
+                && matches!(
+                    self.state,
+                    BackupExecutionOperationState::Pending
+                        | BackupExecutionOperationState::Completed
+                        | BackupExecutionOperationState::Failed
+                )
+            {
+                return Err(BackupExecutionJournalError::MissingField(
+                    "operations[].snapshot_ids_before",
+                ));
+            }
+            return Ok(());
+        };
+        if self.kind != crate::plan::BackupOperationKind::CreateSnapshot {
+            return Err(BackupExecutionJournalError::UnexpectedSnapshotInventory(
+                self.sequence,
+            ));
+        }
+        let mut unique = std::collections::BTreeSet::new();
+        for snapshot_id in snapshot_ids {
+            validate_nonempty("operations[].snapshot_ids_before[]", snapshot_id)?;
+            if !unique.insert(snapshot_id) {
+                return Err(BackupExecutionJournalError::DuplicateSnapshotIdentity {
+                    sequence: self.sequence,
+                    snapshot_id: snapshot_id.clone(),
+                });
+            }
+        }
+        Ok(())
     }
 }

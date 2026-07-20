@@ -43,7 +43,7 @@ fn failed_snapshot_after_stop_is_retryable_and_requires_restart() {
     let mut journal = accepted_journal();
     complete_operation(&mut journal, 4);
     journal
-        .mark_operation_pending_at(5, Some("unix:30".to_string()))
+        .mark_snapshot_create_pending_at(5, Some("unix:30".to_string()), Vec::new())
         .expect("mark snapshot pending");
     let operation = journal.operations[5].clone();
     let receipt = BackupExecutionOperationReceipt::failed(
@@ -68,5 +68,12 @@ fn failed_snapshot_after_stop_is_retryable_and_requires_restart() {
     assert_eq!(
         journal.next_ready_operation().expect("next op").state,
         BackupExecutionOperationState::Ready
+    );
+    assert_eq!(
+        journal
+            .next_ready_operation()
+            .expect("next op")
+            .snapshot_ids_before,
+        Some(Vec::new())
     );
 }

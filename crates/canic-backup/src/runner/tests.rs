@@ -133,6 +133,7 @@ fn runner_executes_plan_and_finalizes_manifest() {
         vec![
             format!("status:{APP}"),
             format!("stop:{APP}"),
+            format!("snapshot-list:{APP}"),
             format!("snapshot:{APP}"),
             format!("start:{APP}"),
             format!("download:{APP}:snap-app"),
@@ -210,6 +211,7 @@ fn runner_resumes_after_max_steps_without_replaying_completed_work() {
         vec![
             format!("status:{APP}"),
             format!("stop:{APP}"),
+            format!("snapshot-list:{APP}"),
             format!("snapshot:{APP}"),
         ]
     );
@@ -363,6 +365,7 @@ fn runner_records_failed_operation_and_retries_from_that_operation() {
         vec![
             format!("status:{APP}"),
             format!("stop:{APP}"),
+            format!("snapshot-list:{APP}"),
             format!("snapshot:{APP}"),
         ]
     );
@@ -382,6 +385,7 @@ fn runner_records_failed_operation_and_retries_from_that_operation() {
     assert_eq!(
         retry_executor.commands,
         vec![
+            format!("snapshot-list:{APP}"),
             format!("snapshot:{APP}"),
             format!("start:{APP}"),
             format!("download:{APP}:snap-app"),
@@ -584,6 +588,8 @@ fn download_journal(backup_id: &str, topology_hash: &str, snapshot_id: &str) -> 
         artifacts: vec![ArtifactJournalEntry {
             canister_id: APP.to_string(),
             snapshot_id: snapshot_id.to_string(),
+            snapshot_taken_at_timestamp: Some(1_778_709_681_897_818_005),
+            snapshot_total_size_bytes: Some(272_586_987),
             state: ArtifactState::Created,
             temp_path: None,
             artifact_path: APP.to_string(),

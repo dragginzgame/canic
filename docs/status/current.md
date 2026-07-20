@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.2`.
-- The latest published release is `v0.94.2` at
-  `80423d94cd553b84f76f46d9913815ea3f0c400b`.
-- The `v0.94.2` source tree is
-  `0e98f8ad7bc235db76b7d3636054d34f2058231f`; its product-tree hash is
-  `5114176053490d3eef99f6c304d201dc5b10e18782cd589e6453719c05a13e56`.
+- The workspace package version is `0.94.3`.
+- The latest published release is `v0.94.3` at
+  `4d493cd0ef46d60c2ea3974a95f23e65ba9098ae`.
+- The `v0.94.3` source tree is
+  `dc6a1fc6e80c3105f5083e0499d21fd7c16e52e8`; its product-tree hash is
+  `31e2ac5406faca2df9b3bdd17918dd55ecc7b984dcb223356e45932487d9e7c3`.
   Its Cargo.lock SHA-256 is
-  `6ad7a421bb485680b419579e5f36e31c735d3e55dcce62fb03df816c919fb8a3`.
+  `7aabb4df2e858a50c28b36f4a35328e10860414044d6d73c1edbb0994c99decc`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -216,6 +216,19 @@ Historical detail is archived at:
   journal locking with one no-follow, close-on-exec kernel authority. Live
   owners remain exclusive, abrupt process death releases ownership, and stale
   regular sidecars no longer block recovery.
+- Released `v0.94.1` retains one restart-visible command-lifetime lock through
+  each mutating backup/restore command tree and hard-cuts unsafe pending-reset
+  recovery. Quiescent unknown effects halt without blind replay.
+- Released `v0.94.2` freezes the executable 106-case protocol and proves
+  execution-journal publication plus read-only verification across process
+  death.
+- Released `v0.94.3` proves backup preflight and pending-claim publication,
+  resumes exact local pending work, and reconciles committed stop from typed
+  target status without a second stop.
+- The open `0.94.4` draft reconciles committed snapshot creation from one
+  exact inventory delta and reconstructs lost execution receipts from complete
+  artifact evidence. Versioned backup documents remain version 1; superseded
+  shapes are hard-rejected with no migration or fallback reader.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is

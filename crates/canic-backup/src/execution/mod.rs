@@ -171,6 +171,29 @@ impl BackupExecutionJournal {
         sequence: usize,
         updated_at: Option<String>,
     ) -> Result<(), BackupExecutionJournalError> {
+        self.mark_operation_pending_with_snapshot_inventory_at(sequence, updated_at, None)
+    }
+
+    /// Mark one snapshot-create operation pending with its exact pre-effect inventory.
+    pub fn mark_snapshot_create_pending_at(
+        &mut self,
+        sequence: usize,
+        updated_at: Option<String>,
+        snapshot_ids_before: Vec<String>,
+    ) -> Result<(), BackupExecutionJournalError> {
+        self.mark_operation_pending_with_snapshot_inventory_at(
+            sequence,
+            updated_at,
+            Some(snapshot_ids_before),
+        )
+    }
+
+    fn mark_operation_pending_with_snapshot_inventory_at(
+        &mut self,
+        sequence: usize,
+        updated_at: Option<String>,
+        snapshot_ids_before: Option<Vec<String>>,
+    ) -> Result<(), BackupExecutionJournalError> {
         validate_nonempty("updated_at", updated_at.as_deref().unwrap_or_default())?;
         let expected = self
             .next_ready_operation()
@@ -198,12 +221,20 @@ impl BackupExecutionJournal {
             });
         }
 
+        let previous_operation = self.operations[index].clone();
+        let previous_restart_required = self.restart_required;
         let operation = &mut self.operations[index];
         operation.state = BackupExecutionOperationState::Pending;
         operation.state_updated_at = updated_at;
+        operation.snapshot_ids_before = snapshot_ids_before;
         operation.blocking_reasons.clear();
         self.refresh_restart_required();
-        self.validate()
+        if let Err(error) = self.validate() {
+            self.operations[index] = previous_operation;
+            self.restart_required = previous_restart_required;
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Record one operation receipt and transition the matching operation.

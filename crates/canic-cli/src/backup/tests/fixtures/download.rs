@@ -18,6 +18,8 @@ pub(in crate::backup::tests) fn journal_with_checksum(checksum: String) -> Downl
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),
             snapshot_id: "root-snapshot".to_string(),
+            snapshot_taken_at_timestamp: None,
+            snapshot_total_size_bytes: None,
             state: ArtifactState::Durable,
             temp_path: None,
             artifact_path: "artifacts/root".to_string(),
@@ -39,6 +41,8 @@ pub(in crate::backup::tests) fn created_journal() -> DownloadJournal {
         artifacts: vec![ArtifactJournalEntry {
             canister_id: ROOT.to_string(),
             snapshot_id: "root-snapshot".to_string(),
+            snapshot_taken_at_timestamp: None,
+            snapshot_total_size_bytes: None,
             state: ArtifactState::Created,
             temp_path: None,
             artifact_path: "artifacts/root".to_string(),
