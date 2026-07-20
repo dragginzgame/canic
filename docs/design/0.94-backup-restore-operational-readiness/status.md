@@ -4,21 +4,24 @@ Last updated: 2026-07-20
 
 ## Current State
 
-The maintainer released checksum-bound artifact publication as `v0.94.9`.
+The maintainer released durable artifact and manifest reconciliation as
+`v0.94.10`.
 The capability, command-lifetime, pending-claim, lifecycle, snapshot-create,
 download-effect, downloaded-transition, checksum, and artifact-publication
 findings and proof gaps are fixed or completed in released code.
 
-The current 0.94.10 draft completes both durable artifact-journal transition
-sides (`B14`) and both final-manifest publication sides (`B15`). Restart
-verifies every canonical directory already marked `Durable`, then publishes or
-adopts only the exact manifest derived from current plan and journal authority.
-Missing or changed bytes, conflicting manifests, and premature manifests fail
-closed. `write_manifest` is hard-cut to `publish_manifest`, and the two public
-error enums gain exact conflict causes; CLI syntax, Candid, durable document
-shapes, package versions, and genuine version `1` fields are unchanged. The
-aggregate verification journey passes; the backup crash journey remains
-pending until every assigned case passes.
+The current 0.94.11 draft completes all 12 terminal execution receipt/state
+publication cases (`B16`) and final-successful-response loss (`B17`). Every
+post-preflight operation publishes terminal state and its receipt in one
+durable execution-journal document. Restart from the pre-write side reconciles
+through the operation's canonical authority; restart from the post-write side
+skips the completed operation with exactly one receipt and no repeated
+mutation. Losing the final response after complete persistence replays the
+same completed backup with zero commands, receipts, or layout changes. No
+product defect or public recovery surface was required. CLI syntax, Candid,
+durable document shapes, package versions, and genuine version `1` fields are
+unchanged. The aggregate verification journey passes; the backup crash journey
+remains pending until every assigned case passes.
 
 Known non-blocking structural residue deferred from 0.93: none. The baseline
 risks below are bounded operational proof gaps intentionally assigned to 0.94,
@@ -41,10 +44,10 @@ not unfinished structural cleanup.
 | Journey | State | Evidence | Findings |
 | --- | --- | --- | --- |
 | `CANIC-094-J01` complete backup/verify/restore | pending | none | none |
-| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); [snapshot-create reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); [start reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); [download staging](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); [downloaded transition](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); [checksum calculation](../../audits/reports/2026-07/2026-07-20/0.94-checksum-effect-recomputation.md); [checksum transition](../../audits/reports/2026-07/2026-07-20/0.94-checksum-transition-reconciliation.md); [artifact publication](../../audits/reports/2026-07/2026-07-20/0.94-artifact-publication-reconciliation.md); [durable transition](../../audits/reports/2026-07/2026-07-20/0.94-durable-artifact-transition-reconciliation.md); [manifest publication](../../audits/reports/2026-07/2026-07-20/0.94-manifest-publication-reconciliation.md); `B01`-`B15` | `CANIC-094-BACKUP-001` through `-010` fixed; B11 no finding |
+| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); [snapshot-create reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); [start reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); [download staging](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); [downloaded transition](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); [checksum calculation](../../audits/reports/2026-07/2026-07-20/0.94-checksum-effect-recomputation.md); [checksum transition](../../audits/reports/2026-07/2026-07-20/0.94-checksum-transition-reconciliation.md); [artifact publication](../../audits/reports/2026-07/2026-07-20/0.94-artifact-publication-reconciliation.md); [durable transition](../../audits/reports/2026-07/2026-07-20/0.94-durable-artifact-transition-reconciliation.md); [manifest publication](../../audits/reports/2026-07/2026-07-20/0.94-manifest-publication-reconciliation.md); [terminal receipt](../../audits/reports/2026-07/2026-07-20/0.94-terminal-receipt-publication.md); [final response](../../audits/reports/2026-07/2026-07-20/0.94-final-response-loss.md); `B01`-`B17` | `CANIC-094-BACKUP-001` through `-010` fixed; B11, B16, and B17 no finding |
 | `CANIC-094-J03` verification interruption | pass | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `V01`-`V03`; resumed | none |
 | `CANIC-094-J04` restore crash matrix | pending | none | none |
-| `CANIC-094-J05` completed-operation replay | pending | none | none |
+| `CANIC-094-J05` completed-operation replay | pending | [backup replay](../../audits/reports/2026-07/2026-07-20/0.94-final-response-loss.md); restore replay pending | none |
 | `CANIC-094-J06` corruption/rejection matrix | pending | none | none |
 | `CANIC-094-J07` realistic multi-canister journey | pending | none | none |
 
@@ -210,6 +213,15 @@ still requires a reproducible required-journey finding.
   publishes an absent manifest or adopts an exact durable manifest without
   replacement. Conflicting content is preserved and rejected; premature
   content blocks the runner before another operation can execute.
+- All 12 `B16` terminal execution receipt/state publication sides: passed
+  under `SIGKILL`. Before the durable rename, restart reconciles each of the
+  six operations from its canonical authority and writes one terminal pair.
+  After rename and directory sync, restart skips the completed operation with
+  exactly one matching receipt. No mutating command or receipt is duplicated.
+- `B17` final-successful-response loss: passed under `SIGKILL`. Replay returns
+  the same completed backup identity and terminal summary with zero executor
+  commands or executed operations. The journal, receipts, and complete layout
+  tree remain byte-for-byte unchanged.
 - `V01` before-validation, `V02` during-checksum, and `V03` after-result
   process-death cases: passed; the backup layout path/type/byte inventory is
   unchanged.
@@ -218,11 +230,11 @@ still requires a reproducible required-journey finding.
 - Changelog governance: passed.
 - Design/status Markdown and link review: passed.
 - Whitespace/diff hygiene: passed.
-- Crash-point execution: 38 cases passed; 68 remain pending.
+- Crash-point execution: 51 cases passed; 55 remain pending.
 - Realistic environment journey: not started.
 
 ## Next Action
 
-Execute all 12 `B16` terminal execution receipt/state publication cases across
-the six post-preflight operation variants. Each terminal state and receipt
-must survive together, and restart must append no duplicate receipt.
+Execute all four `B18` owner-dead/command-in-flight cases for stop,
+snapshot-create, start, and download. Restart must reject while the original
+command tree is alive, then reconcile or resume only after quiescence.

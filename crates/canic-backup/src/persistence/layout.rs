@@ -178,6 +178,18 @@ impl BackupLayout {
         write_json_durable(&self.execution_journal_path(), journal)
     }
 
+    #[cfg(all(test, unix))]
+    pub(crate) fn write_execution_journal_at_barriers(
+        &self,
+        journal: &BackupExecutionJournal,
+        barriers: impl FnMut(crate::persistence::DurableWriteBarrier),
+    ) -> Result<(), PersistenceError> {
+        use crate::persistence::write_json_durable_at_barriers;
+
+        journal.validate()?;
+        write_json_durable_at_barriers(&self.execution_journal_path(), journal, barriers)
+    }
+
     /// Read and validate a backup execution journal from this layout.
     pub fn read_execution_journal(&self) -> Result<BackupExecutionJournal, PersistenceError> {
         let journal = read_json(&self.execution_journal_path())?;

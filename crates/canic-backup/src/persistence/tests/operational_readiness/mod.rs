@@ -21,7 +21,11 @@ mod lifecycle_effect;
 mod manifest_publication;
 mod pending_claim;
 #[cfg(unix)]
+mod response_loss;
+#[cfg(unix)]
 mod snapshot_create;
+#[cfg(unix)]
+mod terminal_transition;
 
 use super::*;
 use crate::{

@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.11` proves terminal backup state and its matching receipt publish as
+  one durable document for every operation, with deterministic recovery and
+  no duplicate effect or receipt across either crash side; a lost final
+  response now also replays the same completed backup without changing state.
+
 - `0.94.10` reconciles durable artifacts and final-manifest publication,
   verifying canonical bytes in place and adopting only the exact immutable
   manifest while rejecting missing, conflicting, or premature evidence.

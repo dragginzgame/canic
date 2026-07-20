@@ -35,6 +35,30 @@ pub fn backup_run_execute_with_executor(
     config: &BackupRunnerConfig,
     executor: &mut impl BackupRunnerExecutor,
 ) -> Result<BackupRunResponse, BackupRunnerError> {
+    backup_run_execute_with_terminal_writer(config, executor, &mut |layout, journal| {
+        layout.write_execution_journal(journal)
+    })
+}
+
+#[cfg(all(test, unix))]
+pub(crate) fn backup_run_execute_with_terminal_barriers(
+    config: &BackupRunnerConfig,
+    executor: &mut impl BackupRunnerExecutor,
+    mut barriers: impl FnMut(crate::persistence::DurableWriteBarrier),
+) -> Result<BackupRunResponse, BackupRunnerError> {
+    backup_run_execute_with_terminal_writer(config, executor, &mut |layout, journal| {
+        layout.write_execution_journal_at_barriers(journal, &mut barriers)
+    })
+}
+
+fn backup_run_execute_with_terminal_writer(
+    config: &BackupRunnerConfig,
+    executor: &mut impl BackupRunnerExecutor,
+    terminal_writer: &mut impl FnMut(
+        &BackupLayout,
+        &BackupExecutionJournal,
+    ) -> Result<(), crate::persistence::PersistenceError>,
+) -> Result<BackupRunResponse, BackupRunnerError> {
     let layout = BackupLayout::new(config.out.clone());
     let _lock = JournalLock::acquire(&layout.execution_journal_path())?;
     let mut plan = layout.read_backup_plan()?;
@@ -49,7 +73,14 @@ pub fn backup_run_execute_with_executor(
     reject_premature_manifest(&layout, &journal)?;
 
     accept_preflight_if_needed(config, executor, &layout, &mut plan, &mut journal)?;
-    execute_ready_operations(config, executor, &layout, &plan, &mut journal)
+    execute_ready_operations(
+        config,
+        executor,
+        &layout,
+        &plan,
+        &mut journal,
+        terminal_writer,
+    )
 }
 
 fn reject_premature_manifest(
@@ -111,6 +142,10 @@ fn execute_ready_operations(
     layout: &BackupLayout,
     plan: &BackupPlan,
     journal: &mut BackupExecutionJournal,
+    terminal_writer: &mut impl FnMut(
+        &BackupLayout,
+        &BackupExecutionJournal,
+    ) -> Result<(), crate::persistence::PersistenceError>,
 ) -> Result<BackupRunResponse, BackupRunnerError> {
     let mut executed = Vec::new();
 
@@ -176,7 +211,7 @@ fn execute_ready_operations(
         if let Some(receipt) = reconciled_receipt {
             finish_reconciled_command_lock(&operation, command_lock.take())?;
             journal.record_operation_receipt(receipt)?;
-            layout.write_execution_journal(journal)?;
+            terminal_writer(layout, journal)?;
             executed.push(BackupRunExecutedOperation::completed(&operation));
             continue;
         }
@@ -199,7 +234,7 @@ fn execute_ready_operations(
         match operation_result {
             Ok(receipt) => {
                 journal.record_operation_receipt(receipt)?;
-                layout.write_execution_journal(journal)?;
+                terminal_writer(layout, journal)?;
                 executed.push(BackupRunExecutedOperation::completed(&operation));
             }
             Err(error) => {
@@ -210,7 +245,7 @@ fn execute_ready_operations(
                     error.to_string(),
                 );
                 journal.record_operation_receipt(receipt)?;
-                layout.write_execution_journal(journal)?;
+                terminal_writer(layout, journal)?;
                 executed.push(BackupRunExecutedOperation::failed(&operation));
                 return Err(error);
             }
