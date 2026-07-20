@@ -154,6 +154,13 @@ fn prove_pending_claim_barrier(
                 receipt_count,
                 expected_command.expect("start command"),
             );
+        } else if expected_kind == BackupOperationKind::DownloadSnapshot {
+            prove_pending_download_resumes_private_staging(
+                &root,
+                &expected_operation,
+                receipt_count,
+                expected_command.expect("download command"),
+            );
         } else if expected_command.is_some() {
             prove_unknown_external_operation_halts(&root, &expected_operation, &observed);
         } else {
@@ -250,6 +257,27 @@ fn prove_pending_start_observes_then_executes(
         executor.commands,
         vec![format!("status:{target}"), start_command]
     );
+    assert_operation_completed_once(&journal, expected_operation, receipt_count);
+}
+
+fn prove_pending_download_resumes_private_staging(
+    root: &Path,
+    expected_operation: &BackupExecutionJournalOperation,
+    receipt_count: usize,
+    download_command: String,
+) {
+    let mut executor = FakeBackupRunnerExecutor::default();
+    let response = backup_run_execute_with_executor(
+        &runner_config(root.to_path_buf(), Some(1)),
+        &mut executor,
+    )
+    .expect("resume pending download into private staging");
+    let journal = BackupLayout::new(root.to_path_buf())
+        .read_execution_journal()
+        .expect("read resumed download journal");
+
+    assert_eq!(response.executed_operation_count, 1);
+    assert_eq!(executor.commands, vec![download_command]);
     assert_operation_completed_once(&journal, expected_operation, receipt_count);
 }
 

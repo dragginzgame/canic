@@ -1,5 +1,6 @@
 use crate::{
     execution::{BackupExecutionJournalOperation, BackupExecutionResumeSummary},
+    journal::ArtifactState,
     persistence::CommandLifetimeHandle,
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
 };
@@ -289,6 +290,35 @@ pub enum BackupRunnerError {
     },
 
     #[error(
+        "backup operation {sequence} artifact snapshot for target {target_canister_id} does not match the execution receipt: expected={expected_snapshot_id}, actual={actual_snapshot_id}"
+    )]
+    ArtifactDownloadSnapshotMismatch {
+        sequence: usize,
+        target_canister_id: String,
+        expected_snapshot_id: String,
+        actual_snapshot_id: String,
+    },
+
+    #[error(
+        "backup operation {sequence} artifact path for target {target_canister_id} does not match the runner path: journal={journal_path}, expected={expected_path}"
+    )]
+    ArtifactPathMismatch {
+        sequence: usize,
+        target_canister_id: String,
+        journal_path: String,
+        expected_path: String,
+    },
+
+    #[error(
+        "backup operation {sequence} cannot replace staging for target {target_canister_id} while artifact state is {state:?}"
+    )]
+    ArtifactDownloadStateConflict {
+        sequence: usize,
+        target_canister_id: String,
+        state: ArtifactState,
+    },
+
+    #[error(
         "backup operation {sequence} artifact temp path for target {target_canister_id} does not match expected runner path: journal={journal_path}, expected={expected_path}"
     )]
     ArtifactTempPathMismatch {
@@ -296,6 +326,16 @@ pub enum BackupRunnerError {
         target_canister_id: String,
         journal_path: String,
         expected_path: String,
+    },
+
+    #[error(
+        "backup operation {sequence} artifact temp path for target {target_canister_id} is unsafe: {path} ({kind})"
+    )]
+    ArtifactTempPathUnsafeEntry {
+        sequence: usize,
+        target_canister_id: String,
+        path: String,
+        kind: String,
     },
 
     #[error("backup operation {sequence} failed: {status}: {message}")]

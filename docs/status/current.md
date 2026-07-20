@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.4`.
-- The latest published release is `v0.94.4` at
-  `4862cdb8ad54991e27cae716a46a47d8f8a2653e`.
-- The `v0.94.4` source tree is
-  `7e5e20cecd38d3628af991d53c44d07261913860`; its product-tree hash is
-  `76a5793efcf88636be5333cead6deb662d0d28f43a480dcc09e72759c1c07dd7`.
+- The workspace package version is `0.94.5`.
+- The latest published release is `v0.94.5` at
+  `3a9ad2a32014e47a2536d5e19ce5a6343383d415`.
+- The `v0.94.5` source tree is
+  `baef5d491155459e163f0974f24f56b37feeea8b`; its product-tree hash is
+  `c7fc022774021ee646acf40549645ef85c64180de5fcf3a8ab68df648df428c8`.
   Its Cargo.lock SHA-256 is
-  `9430425de91e78de5bf61898da544187d854a6120b1596391bf4ae464b8e0b41`.
+  `b6ba785c0d03d355090dd275cdc2819ef28f61198dd58bcaf86b33311cc6a58c`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -229,10 +229,15 @@ Historical detail is archived at:
   inventory delta and reconstructs lost execution receipts from complete
   artifact evidence. Versioned backup documents remain version 1; superseded
   shapes are hard-rejected with no migration or fallback reader.
-- The open `0.94.5` draft gives stop and start one lifecycle-status recovery
+- Released `v0.94.5` gives stop and start one lifecycle-status recovery
   authority. Committed start is adopted without a second command, exact
   stopped state justifies one start, and returned-failure retry reconciles
   before mutation.
+- The open `0.94.6` draft replaces only uncommitted private download staging
+  after an exact `Created` artifact claim, rejects unsafe staging entries, and
+  preserves `Downloaded` or later evidence for its canonical recovery
+  boundary. Artifact-journal states now reject fields owned by another
+  transition.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -808,14 +813,16 @@ command-lifetime ownership plus the restore pending-recovery hard cut are
 released through `v0.94.1`; the frozen executable protocol baseline is
 released in `v0.94.2`.
 
-The current 0.94.3 draft adds deterministic acknowledged `SIGKILL` proof on
-both sides of the preflight-applied plan (`B02`), preflight acceptance (`B03`),
-every post-preflight pending claim (`B04`), and the committed-stop/receipt-loss
-boundary (`B05`). It fixes two resulting recovery defects: pending checksum
-verification and manifest finalization resume without a second claim, while a
-pending stop reconciles only from exact lifecycle status after command
-quiescence. Snapshot-create, start, and download remain pending and fail closed
-without effect-specific evidence. Twenty-two of 106 protocol cases now pass.
-The public injected backup executor trait gains the required typed status read;
-persisted and operator-facing contracts are unchanged. The next bounded action
-is the `B06` snapshot-create effect case.
+Released `v0.94.3` through `v0.94.5` prove preflight, every post-preflight
+pending claim, stop, snapshot creation, created-artifact publication, and
+start across their assigned process-death boundaries. Exact lifecycle status
+and snapshot inventory reconcile committed effects without duplicate
+commands.
+
+The open 0.94.6 draft completes `B09`: a pending snapshot download resumes
+only from exact `Created` artifact authority, replaces uncommitted private
+staging, rejects unsafe entries, and preserves `Downloaded` or later evidence.
+Twenty-seven of 106 protocol cases now pass. Persisted document versions,
+operator-facing contracts, and package versions remain unchanged. The next
+bounded action is `B10` on both sides of the `Downloaded` artifact-journal
+transition.

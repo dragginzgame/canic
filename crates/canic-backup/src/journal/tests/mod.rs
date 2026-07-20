@@ -97,6 +97,51 @@ fn resume_action_matches_artifact_state() {
 }
 
 #[test]
+fn artifact_states_reject_fields_owned_by_other_transitions() {
+    let mut created = valid_journal();
+    created.artifacts[0].state = ArtifactState::Created;
+    created.artifacts[0].checksum = None;
+    created.artifacts[0].temp_path = Some("artifacts/root.tmp".to_string());
+    let error = created
+        .validate()
+        .expect_err("created artifact cannot claim a temp path");
+    std::assert_matches!(
+        error,
+        JournalValidationError::UnexpectedField {
+            field: "artifacts[].temp_path",
+            state: ArtifactState::Created,
+        }
+    );
+
+    let mut downloaded = valid_journal();
+    downloaded.artifacts[0].state = ArtifactState::Downloaded;
+    downloaded.artifacts[0].temp_path = Some("artifacts/root.tmp".to_string());
+    let error = downloaded
+        .validate()
+        .expect_err("downloaded artifact cannot claim a checksum");
+    std::assert_matches!(
+        error,
+        JournalValidationError::UnexpectedField {
+            field: "artifacts[].checksum",
+            state: ArtifactState::Downloaded,
+        }
+    );
+
+    let mut durable = valid_journal();
+    durable.artifacts[0].temp_path = Some("artifacts/root.tmp".to_string());
+    let error = durable
+        .validate()
+        .expect_err("durable artifact cannot retain a temp path");
+    std::assert_matches!(
+        error,
+        JournalValidationError::UnexpectedField {
+            field: "artifacts[].temp_path",
+            state: ArtifactState::Durable,
+        }
+    );
+}
+
+#[test]
 fn journal_state_names_match_their_rust_variants_without_serde_rules() {
     assert_eq!(
         serde_json::to_value(ArtifactState::ChecksumVerified).expect("serialize artifact state"),
