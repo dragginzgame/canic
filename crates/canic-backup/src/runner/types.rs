@@ -36,6 +36,12 @@ pub trait BackupRunnerExecutor {
         expires_at: &str,
     ) -> Result<BackupExecutionPreflightReceipts, BackupRunnerCommandError>;
 
+    /// Observe one canister's authoritative lifecycle status.
+    fn canister_status(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<BackupRunnerCanisterStatus, BackupRunnerCommandError>;
+
     /// Stop one selected canister.
     fn stop_canister(
         &mut self,
@@ -65,6 +71,30 @@ pub trait BackupRunnerExecutor {
         artifact_path: &Path,
         command_lifetime: CommandLifetimeHandle,
     ) -> Result<(), BackupRunnerCommandError>;
+}
+
+///
+/// BackupRunnerCanisterStatus
+///
+/// Typed lifecycle status used to reconcile interrupted backup operations.
+///
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BackupRunnerCanisterStatus {
+    Running,
+    Stopped,
+    Stopping,
+}
+
+impl BackupRunnerCanisterStatus {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Running => "Running",
+            Self::Stopped => "Stopped",
+            Self::Stopping => "Stopping",
+        }
+    }
 }
 
 ///
@@ -144,6 +174,22 @@ pub enum BackupRunnerError {
         operation_id: String,
         lock_path: String,
         kind: String,
+    },
+
+    #[error(
+        "backup operation {sequence} {operation_id} observed unsettled canister status {status}"
+    )]
+    CanisterStatusUnsettled {
+        sequence: usize,
+        operation_id: String,
+        status: &'static str,
+    },
+
+    #[error("backup operation {sequence} canister status observation failed: {status}: {message}")]
+    CanisterStatusFailed {
+        sequence: usize,
+        status: String,
+        message: String,
     },
 
     #[error("backup operation {sequence} {operation_id} is missing its command lifetime handle")]

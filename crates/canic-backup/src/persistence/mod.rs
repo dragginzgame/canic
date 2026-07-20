@@ -23,6 +23,8 @@ pub use integrity::{
 };
 pub(crate) use journal_lock::{JournalLock, JournalLockError};
 pub(crate) use json::write_json_durable;
+#[cfg(test)]
+pub(crate) use json::{DurableWriteBarrier, write_json_durable_at_barriers};
 pub use layout::BackupLayout;
 
 #[cfg(test)]

@@ -39,7 +39,7 @@ fn replace_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum DurableWriteBarrier {
+pub enum DurableWriteBarrier {
     BeforeRename,
     AfterDirectorySync,
 }
@@ -78,7 +78,7 @@ fn replace_bytes_at_barriers(
 }
 
 #[cfg(test)]
-pub(super) fn write_json_durable_at_barriers<T>(
+pub fn write_json_durable_at_barriers<T>(
     path: &Path,
     value: &T,
     barrier: impl FnMut(DurableWriteBarrier),

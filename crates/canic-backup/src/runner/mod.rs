@@ -5,10 +5,12 @@ mod types;
 pub use types::*;
 
 use crate::{
-    execution::{BackupExecutionJournal, BackupExecutionOperationState},
+    execution::{
+        BackupExecutionJournal, BackupExecutionOperationReceipt, BackupExecutionOperationState,
+    },
     persistence::{BackupLayout, CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
-    plan::BackupPlan,
-    timestamp::{state_updated_at, timestamp_marker, timestamp_seconds},
+    plan::{BackupOperationKind, BackupPlan},
+    timestamp::{current_timestamp_marker, state_updated_at, timestamp_marker, timestamp_seconds},
 };
 use operations::execute_operation_receipt;
 
@@ -95,14 +97,24 @@ fn execute_ready_operations(
 
         let mut command_lock = backup_command_lock(layout, &operation)?;
         if operation.state == BackupExecutionOperationState::Pending {
-            reject_unknown_backup_command_outcome(&operation, command_lock.take())?;
+            if operation.kind == BackupOperationKind::Stop {
+                if let Some(receipt) = reconcile_pending_stop(executor, journal, &operation)? {
+                    finish_reconciled_command_lock(&operation, command_lock.take())?;
+                    journal.record_operation_receipt(receipt)?;
+                    layout.write_execution_journal(journal)?;
+                    executed.push(BackupRunExecutedOperation::completed(&operation));
+                    continue;
+                }
+            } else {
+                reject_unknown_backup_command_outcome(&operation, command_lock.take())?;
+            }
+        } else {
+            journal.mark_operation_pending_at(
+                operation.sequence,
+                Some(state_updated_at(config.updated_at.as_ref())),
+            )?;
+            layout.write_execution_journal(journal)?;
         }
-
-        journal.mark_operation_pending_at(
-            operation.sequence,
-            Some(state_updated_at(config.updated_at.as_ref())),
-        )?;
-        layout.write_execution_journal(journal)?;
 
         let operation_result = execute_operation_receipt(
             config,
@@ -139,6 +151,53 @@ fn execute_ready_operations(
             }
         }
     }
+}
+
+fn reconcile_pending_stop(
+    executor: &mut impl BackupRunnerExecutor,
+    journal: &BackupExecutionJournal,
+    operation: &crate::execution::BackupExecutionJournalOperation,
+) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
+    let target = operation.target_canister_id.as_deref().ok_or(
+        BackupRunnerError::MissingOperationTarget {
+            sequence: operation.sequence,
+        },
+    )?;
+    let status = executor.canister_status(target).map_err(|error| {
+        BackupRunnerError::CanisterStatusFailed {
+            sequence: operation.sequence,
+            status: error.status,
+            message: error.message,
+        }
+    })?;
+    match status {
+        BackupRunnerCanisterStatus::Running => Ok(None),
+        BackupRunnerCanisterStatus::Stopped => {
+            Ok(Some(BackupExecutionOperationReceipt::completed(
+                journal,
+                operation,
+                Some(current_timestamp_marker()),
+            )))
+        }
+        BackupRunnerCanisterStatus::Stopping => Err(BackupRunnerError::CanisterStatusUnsettled {
+            sequence: operation.sequence,
+            operation_id: operation.operation_id.clone(),
+            status: status.label(),
+        }),
+    }
+}
+
+fn finish_reconciled_command_lock(
+    operation: &crate::execution::BackupExecutionJournalOperation,
+    command_lock: Option<CommandLifetimeLock>,
+) -> Result<(), BackupRunnerError> {
+    command_lock
+        .ok_or_else(|| BackupRunnerError::MissingCommandLifetime {
+            sequence: operation.sequence,
+            operation_id: operation.operation_id.clone(),
+        })?
+        .finish()
+        .map_err(|error| backup_command_lock_error(operation, error))
 }
 
 fn reject_unknown_backup_command_outcome(

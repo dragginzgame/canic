@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Purpose
 
@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.1`.
-- The latest published release is `v0.94.1` at
-  `528a16606e6f6f005c251a498a019400df51eee3`.
-- The `v0.94.1` source tree is
-  `821c8cd8cbebb3ddf6ad9a8f072636b9e3c1119c`; its product-tree hash is
-  `80c8cc6f7313c636f7d6c2b087ed37ed6f4459681d7dd960984aa712de6d0dae`.
+- The workspace package version is `0.94.2`.
+- The latest published release is `v0.94.2` at
+  `80423d94cd553b84f76f46d9913815ea3f0c400b`.
+- The `v0.94.2` source tree is
+  `0e98f8ad7bc235db76b7d3636054d34f2058231f`; its product-tree hash is
+  `5114176053490d3eef99f6c304d201dc5b10e18782cd589e6453719c05a13e56`.
   Its Cargo.lock SHA-256 is
-  `b424a625f164153a1213acde09eb6014d40c5feb73fb99918ada07419c640a7d`.
+  `6ad7a421bb485680b419579e5f36e31c735d3e55dcce62fb03df816c919fb8a3`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -788,11 +788,17 @@ transition inventory and completed the early disposable-platform gate.
 Snapshot create, upload, stopped-target restore observation, and exact repeated
 restore are available through a managed local ICP deployment. Journal and
 command-lifetime ownership plus the restore pending-recovery hard cut are
-released through `v0.94.1`.
+released through `v0.94.1`; the frozen executable protocol baseline is
+released in `v0.94.2`.
 
-The current 0.94.2 draft freezes one executable 106-case protocol manifest.
-Deterministic acknowledged `SIGKILL` tests pass both sides of initial
-execution-journal publication (`B01`) and backup verification before document
-validation, during checksum, and after its result (`V01` through `V03`), with
-no backup-layout byte or path mutation. The next bounded action is backup
-plan/preflight publication points `B02` and `B03`.
+The current 0.94.3 draft adds deterministic acknowledged `SIGKILL` proof on
+both sides of the preflight-applied plan (`B02`), preflight acceptance (`B03`),
+every post-preflight pending claim (`B04`), and the committed-stop/receipt-loss
+boundary (`B05`). It fixes two resulting recovery defects: pending checksum
+verification and manifest finalization resume without a second claim, while a
+pending stop reconciles only from exact lifecycle status after command
+quiescence. Snapshot-create, start, and download remain pending and fail closed
+without effect-specific evidence. Twenty-two of 106 protocol cases now pass.
+The public injected backup executor trait gains the required typed status read;
+persisted and operator-facing contracts are unchanged. The next bounded action
+is the `B06` snapshot-create effect case.

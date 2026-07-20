@@ -1,20 +1,24 @@
 # 0.94 Backup and Restore Operational Readiness - Status
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Current State
 
-The maintainer released the command-quiescence and fail-closed pending-
-recovery batch as `v0.94.1`. All three findings from the capability and first
-recovery traces are fixed in released code.
+The maintainer released the executable protocol baseline as `v0.94.2`. All
+three findings from the capability and first recovery traces are fixed in
+released code.
 
-The current worktree freezes the exact executable protocol manifest at 106
-unique cases. The first deterministic process-death cases pass on both sides
-of initial execution-journal publication (`B01`) and around read-only
-verification (`V01` through `V03`). The aggregate backup and verification
-proof now passes; the backup crash journey remains pending until every case
-assigned to it passes. Persisted journals, public APIs, CLI/JSON output,
-Candid, and package versions are unchanged.
+The current worktree proves process death on both durable-write sides of the
+preflight-applied plan (`B02`), preflight acceptance (`B03`), and all six
+post-preflight pending claims (`B04`). The committed-stop case (`B05`) also
+passes: restart reconciles `Stopped` into the normal receipt without a second
+stop. Two reproduced liveness defects are fixed. Pending checksum verification
+and manifest finalization resume without a second claim; snapshot-create,
+start, and download remain fail-closed without effect-specific evidence. The
+aggregate verification journey passes; the backup crash journey remains
+pending until every assigned case passes. Persisted journals, CLI/JSON output,
+Candid, and package versions are unchanged. The public injected backup executor
+trait receives one required typed status observation as a pre-1.0 hard cut.
 
 Known non-blocking structural residue deferred from 0.93: none. The baseline
 risks below are bounded operational proof gaps intentionally assigned to 0.94,
@@ -37,7 +41,7 @@ not unfinished structural cleanup.
 | Journey | State | Evidence | Findings |
 | --- | --- | --- | --- |
 | `CANIC-094-J01` complete backup/verify/restore | pending | none | none |
-| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `B01` | none |
+| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); `B01`-`B05` | `CANIC-094-BACKUP-001` and `-002` fixed |
 | `CANIC-094-J03` verification interruption | pass | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `V01`-`V03`; resumed | none |
 | `CANIC-094-J04` restore crash matrix | pending | none | none |
 | `CANIC-094-J05` completed-operation replay | pending | none | none |
@@ -117,6 +121,8 @@ still requires a reproducible required-journey finding.
 | `CANIC-094-LOCK-001` | P1 | fixed in `v0.94.0` | backup persistence lock | `C07`; live exclusion, close-on-exec, unsafe entry, and `SIGKILL` tests |
 | `CANIC-094-PROC-001` | P1 | fixed in `v0.94.1` | host external command execution | [command-quiescence report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md); `B18`, `R14` |
 | `CANIC-094-RESTORE-001` | P1 | fixed in `v0.94.1` | restore pending recovery | [pending-recovery report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md) |
+| `CANIC-094-BACKUP-001` | P1 | fixed in current 0.94.3 draft | backup pending local recovery | [pending-claim report](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); `B04` |
+| `CANIC-094-BACKUP-002` | P1 | fixed in current 0.94.3 draft | backup stop recovery | [stop-reconciliation report](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); `B05` |
 
 ## Validation State
 
@@ -137,6 +143,18 @@ still requires a reproducible required-journey finding.
 - Executable 106-case manifest count, point, uniqueness, and variant guards:
   passed.
 - `B01` before-rename and after-directory-sync process-death cases: passed.
+- `B02` preflight-applied-plan publication before rename and after directory
+  sync: passed; restart performs only read-only target status checks.
+- `B03` preflight-acceptance publication before rename and after directory
+  sync: passed; restart either repeats read-only preflight or adopts the exact
+  accepted journal without commands.
+- All 12 `B04` pending-claim cases: passed. Before-claim loss executes the
+  selected operation once; a pending stop observes status before action;
+  durable snapshot-create, start, and download claims halt without a command;
+  pending checksum and finalization operations resume once.
+- `B05` committed-stop/receipt-loss: passed. Restart observes the exact target
+  as `Stopped`, appends one normal receipt, and issues no second stop. Unsettled,
+  failed, wrong-identity, and unknown status observations reject.
 - `V01` before-validation, `V02` during-checksum, and `V03` after-result
   process-death cases: passed; the backup layout path/type/byte inventory is
   unchanged.
@@ -145,12 +163,12 @@ still requires a reproducible required-journey finding.
 - Changelog governance: passed.
 - Design/status Markdown and link review: passed.
 - Whitespace/diff hygiene: passed.
-- Crash-point execution: five cases passed; 101 remain pending.
+- Crash-point execution: 22 cases passed; 84 remain pending.
 - Realistic environment journey: not started.
 
 ## Next Action
 
-Execute backup plan/preflight publication points `B02` and `B03` through the
-same deterministic persistence barrier. Effect-specific reconciliation
-remains journey-driven: the command lock does not authorize blind replay of a
-quiescent unknown mutation.
+Execute `B06` at the snapshot-create effect/receipt boundary. Recovery must
+bind one observed snapshot identity to the exact target without creating a
+second snapshot; operator action remains acceptable only if the maintained
+flow subsequently completes.
