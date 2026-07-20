@@ -70,6 +70,7 @@ fn manifest_publication_survives_process_death_on_both_write_sides() {
 
 #[test]
 fn pending_finalize_rejects_conflicting_manifest_without_replacing_it() {
+    assert_case_defined("CANIC-094-C06/publication-journal-disagreement/rejection");
     let (root, layout, finalize, _canonical, mut expected) =
         prepared_pending_manifest("manifest-publication-conflict");
     expected.created_at = "unix:999".to_string();

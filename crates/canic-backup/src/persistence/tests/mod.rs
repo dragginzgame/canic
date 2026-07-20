@@ -14,6 +14,7 @@ use crate::{
         DeploymentSection, IdentityMode, SourceMetadata, SourceSnapshot, ToolMetadata,
         VerificationCheck, VerificationPlan,
     },
+    operational_readiness::manifest::assert_case_defined,
     plan::{
         AuthorityEvidence, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
         SnapshotReadAuthority, build_backup_plan,
@@ -148,6 +149,7 @@ fn execution_integrity_verifies_plan_and_journal_match() {
 
 #[test]
 fn execution_integrity_rejects_plan_journal_operation_mismatch() {
+    assert_case_defined("CANIC-094-C02/identity-or-operation-mismatch/rejection");
     let root = temp_dir("canic-backup-execution-integrity-mismatch");
     let layout = BackupLayout::new(root.clone());
     let plan = valid_backup_plan();
@@ -169,6 +171,7 @@ fn execution_integrity_rejects_plan_journal_operation_mismatch() {
 
 #[test]
 fn execution_integrity_rejects_completed_mutation_without_receipt() {
+    assert_case_defined("CANIC-094-C08/terminal-receipt-disagreement/rejection");
     let root = temp_dir("canic-backup-execution-integrity-missing-receipt");
     let layout = BackupLayout::new(root.clone());
     let plan = valid_backup_plan();

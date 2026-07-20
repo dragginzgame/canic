@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.14` completes the frozen 106-case operational-readiness matrix,
+  durably records stopped-state observation failures, and proves restore
+  recovery remains fail-closed across effect gaps, orphaned commands, and
+  corrupt or contradictory evidence.
+
 - `0.94.13` proves private restore staging, every pending claim, every atomic
   terminal state/receipt pair, and final-response replay across process death,
   while ensuring interrupted upload staging cannot survive reconciliation.

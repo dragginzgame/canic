@@ -39,6 +39,27 @@ pub(super) fn enforce_stopped_canister_precondition(
     }))
 }
 
+pub(super) fn stopped_canister_precondition_observation_failure(
+    config: &RestoreRunnerConfig,
+    operation: &RestoreApplyJournalOperation,
+    attempt: usize,
+    updated_at: Option<&String>,
+) -> RestoreStoppedPreconditionFailure {
+    RestoreStoppedPreconditionFailure {
+        command: stopped_canister_status_command(config, operation),
+        status_label: RESTORE_RUN_STOPPED_PRECONDITION_FAILED.to_string(),
+        output: RestoreApplyCommandOutputPair::from_bytes(
+            b"",
+            b"",
+            RESTORE_RUN_OUTPUT_RECEIPT_LIMIT,
+        ),
+        failure_reason: format!(
+            "{RESTORE_RUN_STOPPED_PRECONDITION_FAILED}-observation-error-attempt-{attempt}-{}",
+            state_updated_at(updated_at)
+        ),
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum RestoreObservedCanisterStatus {
     Running,

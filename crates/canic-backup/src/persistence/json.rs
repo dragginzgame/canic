@@ -188,6 +188,7 @@ fn create_sibling_temp(path: &Path, parent: &Path) -> io::Result<(PathBuf, File)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::operational_readiness::manifest::assert_case_defined;
     use crate::test_support::temp_dir;
     use serde::Serializer;
 
@@ -223,6 +224,7 @@ mod tests {
 
     #[test]
     fn serialization_failure_preserves_the_previous_document() {
+        assert_case_defined("CANIC-094-C10/persistence-failure/rejection");
         let root = temp_dir("canic-backup-durable-json-serialize");
         let path = root.join("journal.json");
         fs::create_dir_all(&root).expect("create temp root");
@@ -242,6 +244,7 @@ mod tests {
 
     #[test]
     fn rename_failure_removes_the_staging_file() {
+        assert_case_defined("CANIC-094-C10/persistence-failure/rejection");
         let root = temp_dir("canic-backup-durable-json-rename");
         let path = root.join("journal.json");
         fs::create_dir_all(&path).expect("create conflicting target directory");

@@ -17,6 +17,7 @@ use super::{
     precondition::{
         RestoreObservedCanisterStatus, enforce_stopped_canister_precondition,
         observe_canister_status, parse_canister_status_evidence,
+        stopped_canister_precondition_observation_failure,
     },
     status::{
         enforce_restore_run_command_available, enforce_restore_run_executable,
@@ -34,7 +35,7 @@ use crate::{
     persistence::{CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
     timestamp::state_updated_at,
 };
-use std::{collections::BTreeSet, path::Path};
+use std::{collections::BTreeSet, ops::ControlFlow, path::Path};
 
 /// Execute ready restore apply journal operations through an injected command executor.
 pub fn restore_run_execute_with_executor(
@@ -235,43 +236,26 @@ fn restore_run_execute_prepared_operation(
     config: &RestoreRunnerConfig,
     executor: &mut impl RestoreRunnerCommandExecutor,
     journal: &mut RestoreApplyJournal,
-    mut prepared: RestoreRunPreparedOperation,
+    prepared: RestoreRunPreparedOperation,
     terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
 ) -> Result<RestoreRunStepOutcome, RestoreRunnerError> {
     if prepared.reconciled_success.is_some() {
         return restore_run_commit_reconciled_success(config, journal, prepared, terminal_writer);
     }
+    let mut prepared = match restore_run_enforce_stopped_precondition(
+        config,
+        executor,
+        journal,
+        prepared,
+        terminal_writer,
+    )? {
+        ControlFlow::Continue(prepared) => prepared,
+        ControlFlow::Break(outcome) => return Ok(outcome),
+    };
     let command_lifetime = prepared
         .command_lock
         .as_ref()
         .map(CommandLifetimeLock::handle);
-    if prepared.command.requires_stopped_canister {
-        let precondition = enforce_stopped_canister_precondition(
-            config,
-            executor,
-            &prepared.operation,
-            prepared.attempt,
-            config.updated_at.as_ref(),
-            command_lifetime,
-        );
-        match precondition {
-            Ok(Some(outcome)) => {
-                finish_restore_command_lock(&mut prepared)?;
-                return restore_run_commit_precondition_failure(
-                    config,
-                    journal,
-                    prepared,
-                    outcome,
-                    terminal_writer,
-                );
-            }
-            Ok(None) => {}
-            Err(error) => {
-                finish_restore_command_lock(&mut prepared)?;
-                return Err(error);
-            }
-        }
-    }
 
     let output = executor.execute(&prepared.command, command_lifetime);
     finish_restore_command_lock(&mut prepared)?;
@@ -333,6 +317,61 @@ fn restore_run_execute_prepared_operation(
         output_pair,
         terminal_writer,
     )
+}
+
+fn restore_run_enforce_stopped_precondition(
+    config: &RestoreRunnerConfig,
+    executor: &mut impl RestoreRunnerCommandExecutor,
+    journal: &mut RestoreApplyJournal,
+    mut prepared: RestoreRunPreparedOperation,
+    terminal_writer: &mut impl FnMut(&Path, &RestoreApplyJournal) -> Result<(), RestoreRunnerError>,
+) -> Result<ControlFlow<RestoreRunStepOutcome, RestoreRunPreparedOperation>, RestoreRunnerError> {
+    if !prepared.command.requires_stopped_canister {
+        return Ok(ControlFlow::Continue(prepared));
+    }
+
+    let precondition = enforce_stopped_canister_precondition(
+        config,
+        executor,
+        &prepared.operation,
+        prepared.attempt,
+        config.updated_at.as_ref(),
+        prepared
+            .command_lock
+            .as_ref()
+            .map(CommandLifetimeLock::handle),
+    );
+    match precondition {
+        Ok(Some(outcome)) => {
+            finish_restore_command_lock(&mut prepared)?;
+            let outcome = restore_run_commit_precondition_failure(
+                config,
+                journal,
+                prepared,
+                outcome,
+                terminal_writer,
+            )?;
+            Ok(ControlFlow::Break(outcome))
+        }
+        Ok(None) => Ok(ControlFlow::Continue(prepared)),
+        Err(error) => {
+            let outcome = stopped_canister_precondition_observation_failure(
+                config,
+                &prepared.operation,
+                prepared.attempt,
+                config.updated_at.as_ref(),
+            );
+            finish_restore_command_lock(&mut prepared)?;
+            let _ = restore_run_commit_precondition_failure(
+                config,
+                journal,
+                prepared,
+                outcome,
+                terminal_writer,
+            )?;
+            Err(error)
+        }
+    }
 }
 
 fn restore_run_commit_reconciled_success(
