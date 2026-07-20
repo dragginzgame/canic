@@ -20,11 +20,13 @@ use crate::{
     timestamp::{current_timestamp_marker, state_updated_at},
 };
 
+pub(super) use artifacts::{
+    ensure_pending_download_replayable, persist_created_snapshot, recorded_snapshot_receipt,
+};
 use artifacts::{
     execute_create_snapshot, execute_download_snapshot, execute_finalize_manifest,
     execute_verify_artifact,
 };
-pub(super) use artifacts::{persist_created_snapshot, recorded_snapshot_receipt};
 
 pub(super) fn execute_operation_receipt(
     config: &BackupRunnerConfig,

@@ -4,6 +4,8 @@
 //! Does not own: the frozen case manifest or production recovery policy.
 //! Boundary: binds deterministic process loss to real durable layout operations.
 
+#[cfg(unix)]
+mod download_effect;
 mod lifecycle_effect;
 mod pending_claim;
 #[cfg(unix)]

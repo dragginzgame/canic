@@ -30,7 +30,13 @@ use crate::{
     timestamp::current_timestamp_marker,
 };
 
-use std::{fs, path::Path};
+use std::{
+    fs::{self, DirBuilder},
+    path::{Path, PathBuf},
+};
+
+#[cfg(unix)]
+use std::os::unix::fs::DirBuilderExt;
 
 pub(super) fn execute_create_snapshot(
     executor: &mut impl BackupRunnerExecutor,
@@ -140,11 +146,7 @@ pub(super) fn execute_download_snapshot(
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
     let snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
-    let temp_path = artifact_temp_path(layout.root(), &target);
-    if temp_path.exists() {
-        fs::remove_dir_all(&temp_path)?;
-    }
-    fs::create_dir_all(&temp_path)?;
+    let temp_path = prepare_download_temp_directory(layout, operation.sequence, &target)?;
     executor
         .download_snapshot(&target, &snapshot_id, &temp_path, command_lifetime)
         .map_err(|error| command_failed(operation.sequence, error))?;
@@ -162,6 +164,105 @@ pub(super) fn execute_download_snapshot(
     );
     receipt.artifact_path = Some(artifact_relative_path(&target));
     Ok(receipt)
+}
+
+pub(in crate::runner) fn ensure_pending_download_replayable(
+    layout: &BackupLayout,
+    journal: &BackupExecutionJournal,
+    operation: &BackupExecutionJournalOperation,
+) -> Result<(), BackupRunnerError> {
+    let target = operation_target(operation)?;
+    let expected_snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
+    let download_journal = layout.read_journal()?;
+    let matching = download_journal
+        .artifacts
+        .iter()
+        .filter(|artifact| artifact.canister_id == target)
+        .collect::<Vec<_>>();
+    let entry = match matching.as_slice() {
+        [] => {
+            return Err(BackupRunnerError::MissingArtifactEntry {
+                sequence: operation.sequence,
+                target_canister_id: target,
+            });
+        }
+        [entry] => *entry,
+        entries => {
+            return Err(BackupRunnerError::AmbiguousArtifactSnapshot {
+                sequence: operation.sequence,
+                target_canister_id: target,
+                snapshot_ids: entries
+                    .iter()
+                    .map(|entry| entry.snapshot_id.clone())
+                    .collect(),
+            });
+        }
+    };
+    if entry.snapshot_id != expected_snapshot_id {
+        return Err(BackupRunnerError::ArtifactDownloadSnapshotMismatch {
+            sequence: operation.sequence,
+            target_canister_id: target,
+            expected_snapshot_id,
+            actual_snapshot_id: entry.snapshot_id.clone(),
+        });
+    }
+    let expected_path = artifact_relative_path(&target);
+    if entry.artifact_path != expected_path {
+        return Err(BackupRunnerError::ArtifactPathMismatch {
+            sequence: operation.sequence,
+            target_canister_id: target,
+            journal_path: entry.artifact_path.clone(),
+            expected_path,
+        });
+    }
+    if entry.state != ArtifactState::Created {
+        return Err(BackupRunnerError::ArtifactDownloadStateConflict {
+            sequence: operation.sequence,
+            target_canister_id: target,
+            state: entry.state,
+        });
+    }
+    Ok(())
+}
+
+fn prepare_download_temp_directory(
+    layout: &BackupLayout,
+    sequence: usize,
+    target: &str,
+) -> Result<PathBuf, BackupRunnerError> {
+    let temp_path = artifact_temp_path(layout.root(), target);
+    match fs::symlink_metadata(&temp_path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(BackupRunnerError::ArtifactTempPathUnsafeEntry {
+                sequence,
+                target_canister_id: target.to_string(),
+                path: temp_path.display().to_string(),
+                kind: artifact_entry_kind(&metadata),
+            });
+        }
+        Ok(_) => fs::remove_dir_all(&temp_path)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    let mut builder = DirBuilder::new();
+    #[cfg(unix)]
+    builder.mode(0o700);
+    builder.create(&temp_path)?;
+    Ok(temp_path)
+}
+
+fn artifact_entry_kind(metadata: &fs::Metadata) -> String {
+    let file_type = metadata.file_type();
+    if file_type.is_symlink() {
+        "Symlink"
+    } else if file_type.is_file() {
+        "File"
+    } else if file_type.is_dir() {
+        "Directory"
+    } else {
+        "Special"
+    }
+    .to_string()
 }
 
 pub(super) fn execute_verify_artifact(

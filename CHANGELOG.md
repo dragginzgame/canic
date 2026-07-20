@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.6` safely replaces interrupted private snapshot-download staging,
+  preserves stronger artifact-journal evidence, and rejects contradictory or
+  unsafe staging authority before mutation.
+
 - `0.94.5` reconciles interrupted start operations through the canonical
   lifecycle-status authority, preventing duplicate starts after process or
   command-output failure.

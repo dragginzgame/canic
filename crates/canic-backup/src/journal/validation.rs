@@ -65,18 +65,23 @@ impl ArtifactJournalEntry {
             ));
         }
 
-        if matches!(
-            self.state,
-            ArtifactState::Downloaded | ArtifactState::ChecksumVerified
-        ) {
-            validate_required_option("artifacts[].temp_path", self.temp_path.as_deref())?;
-        }
-
-        if matches!(
-            self.state,
-            ArtifactState::ChecksumVerified | ArtifactState::Durable
-        ) {
-            validate_required_hash("artifacts[].checksum", self.checksum.as_deref())?;
+        match self.state {
+            ArtifactState::Created => {
+                validate_absent("artifacts[].temp_path", self.temp_path.as_ref(), self.state)?;
+                validate_absent("artifacts[].checksum", self.checksum.as_ref(), self.state)?;
+            }
+            ArtifactState::Downloaded => {
+                validate_required_option("artifacts[].temp_path", self.temp_path.as_deref())?;
+                validate_absent("artifacts[].checksum", self.checksum.as_ref(), self.state)?;
+            }
+            ArtifactState::ChecksumVerified => {
+                validate_required_option("artifacts[].temp_path", self.temp_path.as_deref())?;
+                validate_required_hash("artifacts[].checksum", self.checksum.as_deref())?;
+            }
+            ArtifactState::Durable => {
+                validate_absent("artifacts[].temp_path", self.temp_path.as_ref(), self.state)?;
+                validate_required_hash("artifacts[].checksum", self.checksum.as_deref())?;
+            }
         }
 
         Ok(())
@@ -103,6 +108,12 @@ pub enum JournalValidationError {
 
     #[error("field {0} must not be empty")]
     EmptyField(&'static str),
+
+    #[error("field {field} must be absent when artifact state is {state:?}")]
+    UnexpectedField {
+        field: &'static str,
+        state: ArtifactState,
+    },
 
     #[error("field {field} must be a relative artifact path under the backup root: {value}")]
     InvalidArtifactPath { field: &'static str, value: String },
@@ -167,6 +178,18 @@ fn validate_required_option(
     match value {
         Some(value) => validate_nonempty(field, value),
         None => Err(JournalValidationError::EmptyField(field)),
+    }
+}
+
+const fn validate_absent<T>(
+    field: &'static str,
+    value: Option<&T>,
+    state: ArtifactState,
+) -> Result<(), JournalValidationError> {
+    if value.is_some() {
+        Err(JournalValidationError::UnexpectedField { field, state })
+    } else {
+        Ok(())
     }
 }
 
