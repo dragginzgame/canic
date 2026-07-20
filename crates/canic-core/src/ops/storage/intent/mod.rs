@@ -20,15 +20,17 @@ use crate::{
             RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
             SettleReceiptBackedIntentResult, TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence,
         },
+        placement::allocation::is_placement_resource_key,
         replay::OperationId,
     },
     ops::storage::StorageOpsError,
     storage::stable::intent::{
         INTENT_STORE_SCHEMA_VERSION, IntentExpiryEntryRecord, IntentExpiryKeyRecord,
         IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord, IntentState,
-        IntentStore, IntentStoreMetaRecord, ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
+        IntentStore, IntentStoreMetaRecord, PlacementAcknowledgementEntryRecord,
+        ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
-    view::intent::ReceiptBackedIntentPage,
+    view::intent::PlacementAcknowledgementPage,
 };
 use std::collections::BTreeMap;
 use std::ops::Bound;
@@ -134,6 +136,27 @@ pub enum IntentStoreOpsError {
 
     #[error("multiple pending intents exist for resource {0}")]
     MultiplePendingForResource(IntentResourceKey),
+
+    #[error("placement acknowledgement index already exists for {0}")]
+    PlacementAcknowledgementIndexExists(OperationId),
+
+    #[error("placement acknowledgement index missing for {0}")]
+    PlacementAcknowledgementIndexMissing(OperationId),
+
+    #[error("placement acknowledgement index key {key} contains operation {value}")]
+    PlacementAcknowledgementIndexValueMismatch {
+        key: OperationId,
+        value: OperationId,
+    },
+
+    #[error("unexpected placement acknowledgement index entry for {0}")]
+    PlacementAcknowledgementUnexpectedIndex(OperationId),
+
+    #[error("placement acknowledgement index references missing intent {0}")]
+    PlacementAcknowledgementPrimaryMissing(OperationId),
+
+    #[error("placement acknowledgement intent {0} is not a terminal placement record")]
+    PlacementAcknowledgementPrimaryMismatch(OperationId),
 
     #[error("intent store schema mismatch (expected {expected}, found {found})")]
     SchemaMismatch { expected: u32, found: u32 },
@@ -727,6 +750,7 @@ impl ReceiptBackedIntentOps {
 
         if let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) {
             ensure_receipt_backed_record_schema(&record)?;
+            validate_placement_acknowledgement_index_for_record(&record)?;
             if record.payload_binding != input.payload_binding
                 || record.resource_key != input.resource_key
                 || record.quantity != input.quantity
@@ -742,6 +766,13 @@ impl ReceiptBackedIntentOps {
                 current_records: record_count,
                 limit: record_limit,
             });
+        }
+
+        if ReceiptBackedIntentStore::get_placement_acknowledgement(input.operation_id).is_some() {
+            return Err(
+                IntentStoreOpsError::PlacementAcknowledgementUnexpectedIndex(input.operation_id)
+                    .into(),
+            );
         }
 
         let totals = IntentStore::get_totals(&input.resource_key).unwrap_or_default();
@@ -784,9 +815,16 @@ impl ReceiptBackedIntentOps {
 
     pub fn load(operation_id: OperationId) -> Result<Option<ReceiptBackedIntent>, InternalError> {
         let Some(record) = ReceiptBackedIntentStore::get(operation_id) else {
+            if ReceiptBackedIntentStore::get_placement_acknowledgement(operation_id).is_some() {
+                return Err(IntentStoreOpsError::PlacementAcknowledgementPrimaryMissing(
+                    operation_id,
+                )
+                .into());
+            }
             return Ok(None);
         };
         ensure_receipt_backed_record_schema(&record)?;
+        validate_placement_acknowledgement_index_for_record(&record)?;
         Ok(Some(record.into_intent()))
     }
 
@@ -800,6 +838,7 @@ impl ReceiptBackedIntentOps {
             return Ok(SettleReceiptBackedIntentResult::NotFound);
         };
         ensure_receipt_backed_record_schema(&record)?;
+        validate_placement_acknowledgement_index_for_record(&record)?;
 
         if record.payload_binding != input.expected_payload_binding {
             return Ok(SettleReceiptBackedIntentResult::BindingConflict);
@@ -857,36 +896,85 @@ impl ReceiptBackedIntentOps {
         };
 
         IntentStore::set_totals(updated.resource_key.clone(), new_totals);
-        ReceiptBackedIntentStore::insert(updated);
+        ReceiptBackedIntentStore::insert(updated.clone());
+        if is_placement_resource_key(&updated.resource_key) {
+            let acknowledgement = PlacementAcknowledgementEntryRecord {
+                operation_id: updated.operation_id,
+            };
+            if ReceiptBackedIntentStore::insert_placement_acknowledgement(acknowledgement).is_some()
+            {
+                return Err(IntentStoreOpsError::PlacementAcknowledgementIndexExists(
+                    updated.operation_id,
+                )
+                .into());
+            }
+        }
 
         Ok(SettleReceiptBackedIntentResult::Settled { revision, state })
     }
 
-    /// Return one bounded page of receipt-backed intents after an exact map cursor.
-    pub(crate) fn list_page(
+    /// Return whether exact terminal placement acknowledgement work exists.
+    pub(crate) fn has_placement_acknowledgements() -> Result<bool, InternalError> {
+        ReceiptBackedIntentStore::with_placement_acknowledgements(|index| {
+            let Some(entry) = index.iter().next() else {
+                return Ok(false);
+            };
+            validate_placement_acknowledgement_entry(*entry.key(), entry.value())?;
+            Ok::<bool, IntentStoreOpsError>(true)
+        })
+        .map_err(InternalError::from)
+    }
+
+    /// Return one bounded placement-only page after an exact index cursor.
+    pub(crate) fn list_placement_acknowledgement_page(
         cursor: Option<OperationId>,
         limit: usize,
-    ) -> Result<ReceiptBackedIntentPage, InternalError> {
-        ReceiptBackedIntentStore::with_records(|records| {
+    ) -> Result<PlacementAcknowledgementPage, InternalError> {
+        ReceiptBackedIntentStore::with_placement_acknowledgements(|index| {
             let mut entries = match cursor {
-                Some(cursor) => records.range((Bound::Excluded(cursor), Bound::Unbounded)),
-                None => records.iter(),
+                Some(cursor) => index.range((Bound::Excluded(cursor), Bound::Unbounded)),
+                None => index.iter(),
             };
             let mut intents = Vec::with_capacity(limit);
             for entry in entries.by_ref().take(limit) {
-                let record = entry.value();
-                ensure_receipt_backed_record_schema(&record)?;
+                let record = validate_placement_acknowledgement_entry(*entry.key(), entry.value())?;
                 intents.push(record.into_intent());
             }
             let next_cursor = entries
                 .next()
                 .and_then(|_| intents.last().map(|intent| intent.operation_id));
-            Ok::<ReceiptBackedIntentPage, IntentStoreOpsError>(ReceiptBackedIntentPage {
+            Ok::<PlacementAcknowledgementPage, IntentStoreOpsError>(PlacementAcknowledgementPage {
                 intents,
                 next_cursor,
             })
         })
         .map_err(InternalError::from)
+    }
+
+    /// Rebuild the placement-only derived index from canonical terminal intent state.
+    pub fn rebuild_placement_acknowledgement_index() -> Result<(), InternalError> {
+        let operation_ids = ReceiptBackedIntentStore::with_records(|records| {
+            let mut operation_ids = Vec::new();
+            for entry in records.iter() {
+                let record = entry.value();
+                ensure_receipt_backed_record_schema(&record)?;
+                if receipt_requires_placement_acknowledgement(&record) {
+                    operation_ids.push(record.operation_id);
+                }
+            }
+            Ok::<Vec<OperationId>, IntentStoreOpsError>(operation_ids)
+        })?;
+
+        ReceiptBackedIntentStore::clear_placement_acknowledgement_index();
+        for operation_id in operation_ids {
+            let record = PlacementAcknowledgementEntryRecord { operation_id };
+            let previous = ReceiptBackedIntentStore::insert_placement_acknowledgement(record);
+            assert!(
+                previous.is_none(),
+                "rebuilt placement acknowledgement index contains a duplicate operation"
+            );
+        }
+        Ok(())
     }
 
     /// Delete one exact terminal record without changing its already-settled totals.
@@ -898,6 +986,7 @@ impl ReceiptBackedIntentOps {
             return Ok(RemoveTerminalReceiptBackedIntentResult::NotFound);
         };
         ensure_receipt_backed_record_schema(&record)?;
+        validate_placement_acknowledgement_index_for_record(&record)?;
 
         if record.payload_binding != input.expected_payload_binding {
             return Ok(RemoveTerminalReceiptBackedIntentResult::BindingConflict);
@@ -911,11 +1000,26 @@ impl ReceiptBackedIntentOps {
             return Ok(RemoveTerminalReceiptBackedIntentResult::NotTerminal);
         }
 
+        let remove_acknowledgement = is_placement_resource_key(&record.resource_key);
         let removed = ReceiptBackedIntentStore::remove(input.operation_id).ok_or(
             IntentStoreOpsError::ReceiptBackedConflict(input.operation_id),
         )?;
         if removed != record {
             return Err(IntentStoreOpsError::ReceiptBackedConflict(input.operation_id).into());
+        }
+        if remove_acknowledgement {
+            let removed =
+                ReceiptBackedIntentStore::remove_placement_acknowledgement(input.operation_id);
+            if removed
+                != Some(PlacementAcknowledgementEntryRecord {
+                    operation_id: input.operation_id,
+                })
+            {
+                return Err(IntentStoreOpsError::PlacementAcknowledgementIndexMissing(
+                    input.operation_id,
+                )
+                .into());
+            }
         }
 
         Ok(RemoveTerminalReceiptBackedIntentResult::Removed)
@@ -1001,6 +1105,54 @@ const fn terminal_evidence(state: &ReceiptBackedIntentState) -> Option<TerminalE
         ReceiptBackedIntentState::Committed { evidence }
         | ReceiptBackedIntentState::RolledBack { evidence } => Some(*evidence),
     }
+}
+
+fn receipt_requires_placement_acknowledgement(record: &ReceiptBackedIntentRecord) -> bool {
+    !matches!(record.state, ReceiptBackedIntentState::Pending)
+        && is_placement_resource_key(&record.resource_key)
+}
+
+fn validate_placement_acknowledgement_index_for_record(
+    record: &ReceiptBackedIntentRecord,
+) -> Result<(), IntentStoreOpsError> {
+    let indexed = ReceiptBackedIntentStore::get_placement_acknowledgement(record.operation_id);
+    match (receipt_requires_placement_acknowledgement(record), indexed) {
+        (true, None) => Err(IntentStoreOpsError::PlacementAcknowledgementIndexMissing(
+            record.operation_id,
+        )),
+        (true, Some(entry)) if entry.operation_id != record.operation_id => Err(
+            IntentStoreOpsError::PlacementAcknowledgementIndexValueMismatch {
+                key: record.operation_id,
+                value: entry.operation_id,
+            },
+        ),
+        (false, Some(_)) => {
+            Err(IntentStoreOpsError::PlacementAcknowledgementUnexpectedIndex(record.operation_id))
+        }
+        (true, Some(_)) | (false, None) => Ok(()),
+    }
+}
+
+fn validate_placement_acknowledgement_entry(
+    operation_id: OperationId,
+    entry: PlacementAcknowledgementEntryRecord,
+) -> Result<ReceiptBackedIntentRecord, IntentStoreOpsError> {
+    if entry.operation_id != operation_id {
+        return Err(
+            IntentStoreOpsError::PlacementAcknowledgementIndexValueMismatch {
+                key: operation_id,
+                value: entry.operation_id,
+            },
+        );
+    }
+    let record = ReceiptBackedIntentStore::get(operation_id).ok_or(
+        IntentStoreOpsError::PlacementAcknowledgementPrimaryMissing(operation_id),
+    )?;
+    ensure_receipt_backed_record_schema(&record)?;
+    if !receipt_requires_placement_acknowledgement(&record) {
+        return Err(IntentStoreOpsError::PlacementAcknowledgementPrimaryMismatch(operation_id));
+    }
+    Ok(record)
 }
 
 fn ensure_pending_indexes(record: &IntentRecord) -> Result<(), IntentStoreOpsError> {

@@ -117,15 +117,6 @@ impl TimerRunResult {
     }
 
     #[must_use]
-    pub const fn retryable_failure(directive: TimerDirective) -> Self {
-        Self {
-            outcome: TimerExecutionOutcome::RetryableFailure,
-            work_count: 0,
-            directive,
-        }
-    }
-
-    #[must_use]
     pub const fn invariant_failure() -> Self {
         Self {
             outcome: TimerExecutionOutcome::InvariantFailure,

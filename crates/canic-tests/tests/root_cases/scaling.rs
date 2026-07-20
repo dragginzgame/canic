@@ -1,4 +1,11 @@
-use canic::{Error, dto::placement::scaling::ScalingRegistryResponse};
+use canic::{
+    Error,
+    dto::{
+        placement::scaling::ScalingRegistryResponse,
+        runtime::{CanicRuntimeStatus, TimerProcessCondition, TimerRegistrationStatus},
+    },
+    protocol,
+};
 use canic_testing_internal::canister;
 use canic_tests::root::{
     RootSetupProfile,
@@ -48,6 +55,29 @@ fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
     setup.pic.tick_n(10);
 
     let after = count_workers(&setup.pic, setup.root_id, scale_hub_pid);
+    let runtime_status: Result<Result<CanicRuntimeStatus, Error>, _> = setup.pic.query_call_as(
+        scale_hub_pid,
+        setup.root_id,
+        protocol::CANIC_RUNTIME_STATUS,
+        (),
+    );
+    let runtime_status = runtime_status
+        .expect("scale_hub runtime status transport failed")
+        .expect("scale_hub runtime status application failed");
+    let acknowledgement = runtime_status
+        .timers
+        .iter()
+        .find(|timer| timer.subsystem == "placement" && timer.name == "receipt_ack")
+        .expect("scale_hub should expose placement acknowledgement ownership");
+    assert_eq!(
+        acknowledgement.registration,
+        TimerRegistrationStatus::Unregistered
+    );
+    assert_eq!(acknowledgement.condition, TimerProcessCondition::Idle);
+    assert!(
+        acknowledgement.executions_since_runtime_start >= 1,
+        "placement creation should drain its exact root receipt"
+    );
     drop(setup);
 
     assert_eq!(after, before + 1);

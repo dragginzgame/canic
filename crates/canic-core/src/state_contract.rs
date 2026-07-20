@@ -18,7 +18,7 @@ use crate::role_contract::allocation::memory::{
     env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
     intent::{
         INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID,
-        INTENT_TOTALS_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+        INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
@@ -568,8 +568,8 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::intent::{
         IntentExpiryEntryRecord, IntentExpiryIndexData, IntentMetaData, IntentPendingData,
         IntentPendingEntryRecord, IntentRecord, IntentRecordsData, IntentResourceTotalsRecord,
-        IntentStoreMetaRecord, IntentTotalsData, ReceiptBackedIntentRecord,
-        ReceiptBackedIntentsData,
+        IntentStoreMetaRecord, IntentTotalsData, PlacementAcknowledgementEntryRecord,
+        PlacementAcknowledgementIndexData, ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
     };
 
     vec![
@@ -620,6 +620,14 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
             IntentExpiryIndexData::STATE_CONTRACT_NAME,
             115,
             "intent_expiry_index_restores_exact_ordered_deadlines",
+        ),
+        state_domain(
+            "placement_acknowledgement_index",
+            PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
+            PlacementAcknowledgementEntryRecord::STATE_CONTRACT_NAME,
+            PlacementAcknowledgementIndexData::STATE_CONTRACT_NAME,
+            116,
+            "placement_acknowledgement_index_restores_exact_terminal_operations",
         ),
     ]
 }
@@ -753,6 +761,7 @@ mod tests {
             INTENT_PENDING_ID,
             RECEIPT_BACKED_INTENT_RECORDS_ID,
             INTENT_EXPIRY_INDEX_ID,
+            PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
             CANISTER_POOL_ID,
             SCALING_REGISTRY_ID,
             DIRECTORY_REGISTRY_ID,
@@ -981,8 +990,8 @@ mod tests {
         use crate::storage::stable::intent::{
             IntentExpiryEntryRecord, IntentExpiryIndexData, IntentMetaData, IntentPendingData,
             IntentPendingEntryRecord, IntentRecord, IntentRecordsData, IntentResourceTotalsRecord,
-            IntentStoreMetaRecord, IntentTotalsData, ReceiptBackedIntentRecord,
-            ReceiptBackedIntentsData,
+            IntentStoreMetaRecord, IntentTotalsData, PlacementAcknowledgementEntryRecord,
+            PlacementAcknowledgementIndexData, ReceiptBackedIntentRecord, ReceiptBackedIntentsData,
         };
 
         let descriptors = canic_state_descriptors();
@@ -1021,6 +1030,11 @@ mod tests {
                 "intent_expiry_index",
                 IntentExpiryEntryRecord::STATE_CONTRACT_NAME,
                 IntentExpiryIndexData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "placement_acknowledgement_index",
+                PlacementAcknowledgementEntryRecord::STATE_CONTRACT_NAME,
+                PlacementAcknowledgementIndexData::STATE_CONTRACT_NAME,
             ),
         ] {
             let declaration = runtime_intents

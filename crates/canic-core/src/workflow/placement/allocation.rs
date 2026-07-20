@@ -9,8 +9,6 @@ use crate::{
     cdk::types::Principal,
     dto::{error::Error, rpc::CreateCanisterParent},
     ids::CanisterRole,
-    log,
-    log::Topic,
     model::{
         intent::{
             BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, ReceiptBackedIntent,
@@ -18,7 +16,7 @@ use crate::{
             RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
             SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
         },
-        placement::allocation::{PlacementAllocationIdentity, is_placement_resource_key},
+        placement::allocation::PlacementAllocationIdentity,
         replay::{OperationId, ReplayPayloadHasher},
     },
     ops::{
@@ -26,21 +24,13 @@ use crate::{
         runtime::env::EnvOps,
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
-    workflow::runtime::{
-        intent::ReceiptBackedIntentWorkflow,
-        timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
+    workflow::{
+        placement::acknowledgement::PlacementAcknowledgementWorkflow,
+        runtime::intent::ReceiptBackedIntentWorkflow,
     },
 };
-use std::{cell::Cell, time::Duration};
 
 const ALLOCATION_RESULT_COMMAND: &str = "placement.allocate_child.result";
-const ROOT_RECEIPT_ACK_BATCH_SIZE: usize = 32;
-const ROOT_RECEIPT_ACK_RETRY_DELAY: Duration = Duration::from_mins(1);
-
-thread_local! {
-    static ROOT_RECEIPT_ACK_CURSOR: Cell<Option<OperationId>> = const { Cell::new(None) };
-    static ROOT_RECEIPT_ACK_RETRY_NEEDED: Cell<bool> = const { Cell::new(false) };
-}
 
 ///
 /// PlacementAllocationRequest
@@ -151,11 +141,6 @@ impl PlacementAllocationWorkflow {
         settle_allocation(permit, child_pid, TerminalEvidenceDecision::RolledBack)
     }
 
-    /// Schedule a bounded drain of durable terminal placement acknowledgements.
-    pub fn schedule_root_receipt_acknowledgement_drain() {
-        schedule_root_receipt_acknowledgement_drain(Duration::ZERO);
-    }
-
     /// Commit registered membership, then hand retained receipt release to the durable drain.
     pub fn finish_registered_child(
         permit: &PlacementAllocationPermit,
@@ -251,80 +236,13 @@ const fn state_matches_decision(
 
 fn finish_terminal_allocation(permit: &PlacementAllocationPermit) -> Result<(), InternalError> {
     if permit.root_receipt_may_exist {
-        schedule_root_receipt_acknowledgement_drain(Duration::ZERO);
-        Ok(())
+        PlacementAcknowledgementWorkflow::schedule_if_pending()
     } else {
         remove_terminal_intent(
             permit.identity.operation_id,
             permit.identity.payload_binding,
         )
     }
-}
-
-fn schedule_root_receipt_acknowledgement_drain(delay: Duration) {
-    TimerWorkflow::schedule(TimerKey::PlacementReceiptAcknowledgement, delay, || async {
-        match drain_root_receipt_acknowledgements().await {
-            None => TimerRunResult::no_work(TimerDirective::Stop),
-            Some(next_delay) if next_delay.is_zero() => {
-                TimerRunResult::success(1, TimerDirective::ContinueImmediately)
-            }
-            Some(next_delay) => {
-                TimerRunResult::retryable_failure(TimerDirective::RetryAfter(next_delay))
-            }
-        }
-    });
-}
-
-async fn drain_root_receipt_acknowledgements() -> Option<Duration> {
-    let cursor = ROOT_RECEIPT_ACK_CURSOR.get();
-    let page = match ReceiptBackedIntentOps::list_page(cursor, ROOT_RECEIPT_ACK_BATCH_SIZE) {
-        Ok(page) => page,
-        Err(err) => {
-            log!(
-                Topic::Rpc,
-                Warn,
-                "placement receipt acknowledgement queue scan failed: {err}"
-            );
-            ROOT_RECEIPT_ACK_RETRY_NEEDED.set(true);
-            return Some(ROOT_RECEIPT_ACK_RETRY_DELAY);
-        }
-    };
-    ROOT_RECEIPT_ACK_CURSOR.set(page.next_cursor);
-    let mut page_failed = false;
-
-    for intent in page.intents.into_iter().filter(|intent| {
-        !matches!(intent.state, ReceiptBackedIntentState::Pending)
-            && is_placement_resource_key(&intent.resource_key)
-    }) {
-        let operation_id = intent.operation_id;
-        let result = async {
-            RequestOps::acknowledge_placement_receipt(operation_id).await?;
-            remove_exact_terminal_intent(&intent)
-        }
-        .await;
-        if let Err(err) = result {
-            page_failed = true;
-            ROOT_RECEIPT_ACK_RETRY_NEEDED.set(true);
-            log!(
-                Topic::Rpc,
-                Warn,
-                "placement receipt acknowledgement retry failed operation_id={operation_id}: {err}"
-            );
-        }
-    }
-
-    if page.next_cursor.is_some() {
-        return Some(if page_failed {
-            ROOT_RECEIPT_ACK_RETRY_DELAY
-        } else {
-            Duration::ZERO
-        });
-    }
-
-    ROOT_RECEIPT_ACK_CURSOR.set(None);
-    ROOT_RECEIPT_ACK_RETRY_NEEDED
-        .replace(false)
-        .then_some(ROOT_RECEIPT_ACK_RETRY_DELAY)
 }
 
 fn remove_terminal_intent(
@@ -343,7 +261,9 @@ fn remove_terminal_intent(
     remove_exact_terminal_intent(&intent)
 }
 
-fn remove_exact_terminal_intent(intent: &ReceiptBackedIntent) -> Result<(), InternalError> {
+pub(super) fn remove_exact_terminal_intent(
+    intent: &ReceiptBackedIntent,
+) -> Result<(), InternalError> {
     let result =
         ReceiptBackedIntentOps::remove_terminal(&RemoveTerminalReceiptBackedIntentInput {
             operation_id: intent.operation_id,
@@ -517,6 +437,10 @@ mod tests {
         assert_eq!(totals.reserved_qty, 1);
         assert_eq!(totals.committed_qty, 0);
         assert_eq!(totals.pending_count, 1);
+        assert!(
+            !ReceiptBackedIntentOps::has_placement_acknowledgements()
+                .expect("pending placement must not be queued for acknowledgement")
+        );
         assert_eq!(
             PlacementAllocationWorkflow::next_sequence(&first.identity),
             0,
@@ -583,6 +507,10 @@ mod tests {
             ReceiptBackedIntentOps::load(request.identity.operation_id)
                 .expect("load cleaned intent")
                 .is_none()
+        );
+        assert!(
+            !ReceiptBackedIntentOps::has_placement_acknowledgements()
+                .expect("placement acknowledgement index")
         );
         assert_eq!(
             IntentStoreOps::totals(&request.identity.resource_key),

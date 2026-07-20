@@ -16,7 +16,7 @@ use crate::{
     },
     role_contract::allocation::memory::intent::{
         INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID,
-        INTENT_TOTALS_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+        INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     storage::prelude::*,
 };
@@ -57,6 +57,21 @@ eager_static! {
     > = RefCell::new(
         StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_expiry_index.v1", ty = IntentExpiryEntryRecord, id = INTENT_EXPIRY_INDEX_ID)),
     );
+}
+
+eager_static! {
+    static PLACEMENT_ACKNOWLEDGEMENT_INDEX: RefCell<
+        StableBtreeMap<
+            OperationId,
+            PlacementAcknowledgementEntryRecord,
+            VirtualMemory<DefaultMemoryImpl>,
+        >
+    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
+        authority = CANIC_CORE_MEMORY_AUTHORITY,
+        key = "canic.core.placement_acknowledgement_index.v1",
+        ty = PlacementAcknowledgementEntryRecord,
+        id = PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID
+    )));
 }
 
 eager_static! {
@@ -364,6 +379,23 @@ impl_storable_bounded!(
     false
 );
 
+/// Stable value proving that an exact placement operation is queued for root acknowledgement.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PlacementAcknowledgementEntryRecord {
+    pub operation_id: OperationId,
+}
+
+impl PlacementAcknowledgementEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "PlacementAcknowledgementEntryRecord";
+    pub const STORABLE_MAX_SIZE: u32 = 128;
+}
+
+impl_storable_bounded!(
+    PlacementAcknowledgementEntryRecord,
+    PlacementAcknowledgementEntryRecord::STORABLE_MAX_SIZE,
+    false
+);
+
 ///
 /// IntentMetaData
 ///
@@ -492,6 +524,23 @@ pub struct ReceiptBackedIntentsData {
 
 impl ReceiptBackedIntentsData {
     pub const STATE_CONTRACT_NAME: &'static str = "ReceiptBackedIntentsData";
+}
+
+/// One logical placement-acknowledgement index snapshot row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PlacementAcknowledgementIndexEntryRecord {
+    pub operation_id: OperationId,
+    pub record: PlacementAcknowledgementEntryRecord,
+}
+
+/// Canonical placement-acknowledgement derived-index allocation snapshot.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PlacementAcknowledgementIndexData {
+    pub entries: Vec<PlacementAcknowledgementIndexEntryRecord>,
+}
+
+impl PlacementAcknowledgementIndexData {
+    pub const STATE_CONTRACT_NAME: &'static str = "PlacementAcknowledgementIndexData";
 }
 
 ///
@@ -642,6 +691,42 @@ impl ReceiptBackedIntentStore {
     ) -> R {
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| f(records))
     }
+
+    #[must_use]
+    pub(crate) fn get_placement_acknowledgement(
+        operation_id: OperationId,
+    ) -> Option<PlacementAcknowledgementEntryRecord> {
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| index.get(&operation_id))
+    }
+
+    pub(crate) fn insert_placement_acknowledgement(
+        record: PlacementAcknowledgementEntryRecord,
+    ) -> Option<PlacementAcknowledgementEntryRecord> {
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX
+            .with_borrow_mut(|index| index.insert(record.operation_id, record))
+    }
+
+    pub(crate) fn remove_placement_acknowledgement(
+        operation_id: OperationId,
+    ) -> Option<PlacementAcknowledgementEntryRecord> {
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(|index| index.remove(&operation_id))
+    }
+
+    pub(crate) fn clear_placement_acknowledgement_index() {
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+    }
+
+    pub(crate) fn with_placement_acknowledgements<R>(
+        f: impl FnOnce(
+            &StableBtreeMap<
+                OperationId,
+                PlacementAcknowledgementEntryRecord,
+                VirtualMemory<DefaultMemoryImpl>,
+            >,
+        ) -> R,
+    ) -> R {
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| f(index))
+    }
 }
 
 //
@@ -791,8 +876,33 @@ impl ReceiptBackedIntentStore {
         });
     }
 
+    #[must_use]
+    pub(crate) fn export_placement_acknowledgement_index() -> PlacementAcknowledgementIndexData {
+        PlacementAcknowledgementIndexData {
+            entries: PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| {
+                index
+                    .iter()
+                    .map(|entry| PlacementAcknowledgementIndexEntryRecord {
+                        operation_id: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_placement_acknowledgement_index(data: PlacementAcknowledgementIndexData) {
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(|index| {
+            index.clear_new();
+            for entry in data.entries {
+                index.insert(entry.operation_id, entry.record);
+            }
+        });
+    }
+
     pub(crate) fn reset_for_tests() {
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
     }
 }
 
@@ -936,17 +1046,33 @@ mod tests {
             updated_at_ns: 17,
         };
         ReceiptBackedIntentStore::insert(record);
+        ReceiptBackedIntentStore::insert_placement_acknowledgement(
+            PlacementAcknowledgementEntryRecord { operation_id },
+        );
         let records_data = ReceiptBackedIntentStore::export_records();
+        let acknowledgement_data =
+            ReceiptBackedIntentStore::export_placement_acknowledgement_index();
 
         ReceiptBackedIntentStore::reset_for_tests();
         assert_eq!(
             ReceiptBackedIntentStore::export_records(),
             ReceiptBackedIntentsData::default()
         );
+        assert_eq!(
+            ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
+            PlacementAcknowledgementIndexData::default()
+        );
 
         ReceiptBackedIntentStore::import_records(records_data.clone());
+        ReceiptBackedIntentStore::import_placement_acknowledgement_index(
+            acknowledgement_data.clone(),
+        );
         assert_eq!(ReceiptBackedIntentStore::len(), 1);
         assert_eq!(ReceiptBackedIntentStore::export_records(), records_data);
+        assert_eq!(
+            ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
+            acknowledgement_data
+        );
         IntentStore::reset_for_tests();
     }
 }
