@@ -23,6 +23,16 @@ bounded callbacks follow its exact earliest deadline, while TTL-free intents
 leave the process unregistered and idle. Pool, placement acknowledgement, and
 log owner migrations remain separate subsequent Slice C batches.
 
+The accepted design now includes a maintainer-approved duration amendment.
+Cadences are no longer retained merely because the audit recorded them.
+Durations must be semantic zero, an authoritative deadline, bounded retry
+policy, explicit safety observation, or application-supplied. Local invariant
+failures stop failed instead of polling. Each built-in owner must freeze a
+compact decision record covering its inputs, formula, lower and upper bounds,
+advance/reset events, failure window, idle cost, and evidence. Pool, placement,
+and auth do not inherit their old minute or 30-minute values; cycle safety must
+derive its bounds from balance/headroom evidence before Slice D implementation.
+
 ## Immutable Baseline
 
 - Release anchor: `v0.94.14`.
@@ -113,7 +123,8 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Finish targeted validation for the open `0.95.2` finite-intent owner and release
-it as a bounded Slice C batch. Then select the next independent Slice C owner;
-do not combine pool, placement acknowledgement, and log migrations into one
-unreviewable change.
+Align the open `0.95.2` intent failure directive with the duration amendment:
+local storage/invariant failure must stop failed rather than retry every minute.
+Then finish targeted validation and release the bounded intent batch. Select
+the next independent Slice C owner without combining pool, placement
+acknowledgement, and log migrations into one unreviewable change.
