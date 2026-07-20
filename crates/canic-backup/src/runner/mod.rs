@@ -15,7 +15,7 @@ use crate::{
 };
 use operations::{
     execute_operation_receipt, operation_target, persist_created_snapshot,
-    reconcile_pending_download, recorded_snapshot_receipt,
+    reconcile_pending_artifact_verification, reconcile_pending_download, recorded_snapshot_receipt,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -108,6 +108,8 @@ fn execute_ready_operations(
                 reconcile_pending_snapshot_create(executor, layout, plan, journal, &operation)?
             } else if operation.kind == BackupOperationKind::DownloadSnapshot {
                 reconcile_pending_download(layout, journal, &operation)?
+            } else if operation.kind == BackupOperationKind::VerifyArtifact {
+                reconcile_pending_artifact_verification(layout, journal, &operation)?
             } else {
                 reject_unknown_backup_command_outcome(&operation, command_lock.take())?;
                 None
@@ -391,13 +393,28 @@ fn finish_reconciled_command_lock(
     operation: &crate::execution::BackupExecutionJournalOperation,
     command_lock: Option<CommandLifetimeLock>,
 ) -> Result<(), BackupRunnerError> {
+    let Some(command_lock) = command_lock else {
+        if backup_operation_uses_command_lock(&operation.kind) {
+            return Err(BackupRunnerError::MissingCommandLifetime {
+                sequence: operation.sequence,
+                operation_id: operation.operation_id.clone(),
+            });
+        }
+        return Ok(());
+    };
     command_lock
-        .ok_or_else(|| BackupRunnerError::MissingCommandLifetime {
-            sequence: operation.sequence,
-            operation_id: operation.operation_id.clone(),
-        })?
         .finish()
         .map_err(|error| backup_command_lock_error(operation, error))
+}
+
+const fn backup_operation_uses_command_lock(kind: &BackupOperationKind) -> bool {
+    matches!(
+        kind,
+        BackupOperationKind::Stop
+            | BackupOperationKind::CreateSnapshot
+            | BackupOperationKind::Start
+            | BackupOperationKind::DownloadSnapshot
+    )
 }
 
 fn reject_unknown_backup_command_outcome(
@@ -422,13 +439,7 @@ fn backup_command_lock(
     layout: &BackupLayout,
     operation: &crate::execution::BackupExecutionJournalOperation,
 ) -> Result<Option<CommandLifetimeLock>, BackupRunnerError> {
-    if !matches!(
-        operation.kind,
-        crate::plan::BackupOperationKind::Stop
-            | crate::plan::BackupOperationKind::CreateSnapshot
-            | crate::plan::BackupOperationKind::Start
-            | crate::plan::BackupOperationKind::DownloadSnapshot
-    ) {
+    if !backup_operation_uses_command_lock(&operation.kind) {
         return Ok(None);
     }
 

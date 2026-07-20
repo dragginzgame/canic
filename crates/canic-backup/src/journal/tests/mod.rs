@@ -184,17 +184,46 @@ fn resume_report_counts_states_and_actions() {
 }
 
 #[test]
-fn state_transitions_are_monotonic() {
+fn state_transitions_require_the_canonical_next_state() {
     let mut entry = valid_journal().artifacts.remove(0);
 
-    let err = entry
+    let backward = entry
         .advance_to(
             ArtifactState::Downloaded,
             "2026-04-10T12:01:00Z".to_string(),
         )
         .expect_err("durable cannot move back to downloaded");
+    std::assert_matches!(
+        backward,
+        JournalValidationError::InvalidStateTransition { .. }
+    );
 
-    std::assert_matches!(err, JournalValidationError::InvalidStateTransition { .. });
+    entry.state = ArtifactState::Created;
+    let repeated = entry
+        .advance_to(ArtifactState::Created, "2026-04-10T12:01:00Z".to_string())
+        .expect_err("artifact state cannot be overwritten in place");
+    std::assert_matches!(
+        repeated,
+        JournalValidationError::InvalidStateTransition { .. }
+    );
+
+    let skipped = entry
+        .advance_to(
+            ArtifactState::ChecksumVerified,
+            "2026-04-10T12:01:00Z".to_string(),
+        )
+        .expect_err("artifact state cannot skip the download transition");
+    std::assert_matches!(
+        skipped,
+        JournalValidationError::InvalidStateTransition { .. }
+    );
+
+    entry
+        .advance_to(
+            ArtifactState::Downloaded,
+            "2026-04-10T12:01:00Z".to_string(),
+        )
+        .expect("created artifact advances to downloaded");
 }
 
 #[test]

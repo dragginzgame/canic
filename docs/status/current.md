@@ -837,9 +837,16 @@ Released `v0.94.7` completes both `B10` write sides. A non-durable
 durable exact transition reconstructs the normal receipt and proceeds to
 checksum with zero download commands.
 
-The open 0.94.8 draft completes `B11` with deterministic process-death proof.
-A checksum lost with child memory is recomputed from unchanged staged bytes,
-while missing or unsafe input never becomes verified progress. Thirty of 106
-protocol cases now pass. Production code, persisted documents, operator-facing
-contracts, and package versions remain unchanged. The next bounded action is
-both `B12` sides of the `ChecksumVerified` artifact-journal transition.
+Released `v0.94.8` completes `B11` with deterministic process-death proof. A
+checksum lost with child memory is recomputed from unchanged staged bytes,
+while missing or unsafe input never becomes verified progress.
+
+The open 0.94.9 draft completes both `B12` and both `B13` write sides. Restart
+adopts an exact durable checksum row only after rehashing the same staging;
+first publication and canonical recovery also verify their exact tree against
+that recorded hash. Changed bytes and conflicting destinations reject without
+advancing artifact authority. Thirty-four of 106 protocol cases now pass.
+Durable shapes, CLI/JSON/Candid surfaces, Cargo versions, and genuine version
+`1` fields remain unchanged; the public Rust runner error enum adds one exact
+state-conflict cause. The next bounded action is both `B14` sides of the
+`ChecksumVerified -> Durable` artifact-journal transition.

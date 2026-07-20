@@ -20,8 +20,8 @@ use crate::{
         operations::{
             command_failed,
             journal::{
-                artifact_entry_mut, read_or_new_download_journal, snapshot_id_for_target,
-                upsert_artifact_entry,
+                artifact_entry, artifact_entry_mut, read_or_new_download_journal,
+                snapshot_id_for_target, upsert_artifact_entry,
             },
             operation_target,
             path::{artifact_relative_path, artifact_temp_path, ensure_expected_temp_path},
@@ -169,47 +169,8 @@ pub(in crate::runner) fn reconcile_pending_download(
     let target = operation_target(operation)?;
     let expected_snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
     let download_journal = layout.read_journal()?;
-    let matching = download_journal
-        .artifacts
-        .iter()
-        .filter(|artifact| artifact.canister_id == target)
-        .collect::<Vec<_>>();
-    let entry = match matching.as_slice() {
-        [] => {
-            return Err(BackupRunnerError::MissingArtifactEntry {
-                sequence: operation.sequence,
-                target_canister_id: target,
-            });
-        }
-        [entry] => *entry,
-        entries => {
-            return Err(BackupRunnerError::AmbiguousArtifactSnapshot {
-                sequence: operation.sequence,
-                target_canister_id: target,
-                snapshot_ids: entries
-                    .iter()
-                    .map(|entry| entry.snapshot_id.clone())
-                    .collect(),
-            });
-        }
-    };
-    if entry.snapshot_id != expected_snapshot_id {
-        return Err(BackupRunnerError::ArtifactDownloadSnapshotMismatch {
-            sequence: operation.sequence,
-            target_canister_id: target,
-            expected_snapshot_id,
-            actual_snapshot_id: entry.snapshot_id.clone(),
-        });
-    }
-    let expected_path = artifact_relative_path(&target);
-    if entry.artifact_path != expected_path {
-        return Err(BackupRunnerError::ArtifactPathMismatch {
-            sequence: operation.sequence,
-            target_canister_id: target,
-            journal_path: entry.artifact_path.clone(),
-            expected_path,
-        });
-    }
+    let entry = artifact_entry(&download_journal, operation.sequence, &target)?;
+    validate_artifact_identity(operation, &target, &expected_snapshot_id, entry)?;
     match entry.state {
         ArtifactState::Created => Ok(None),
         ArtifactState::Downloaded => {
@@ -227,6 +188,71 @@ pub(in crate::runner) fn reconcile_pending_download(
             state,
         }),
     }
+}
+
+pub(in crate::runner) fn reconcile_pending_artifact_verification(
+    layout: &BackupLayout,
+    journal: &BackupExecutionJournal,
+    operation: &BackupExecutionJournalOperation,
+) -> Result<Option<BackupExecutionOperationReceipt>, BackupRunnerError> {
+    let target = operation_target(operation)?;
+    let expected_snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
+    let download_journal = layout.read_journal()?;
+    let entry = artifact_entry(&download_journal, operation.sequence, &target)?;
+    validate_artifact_identity(operation, &target, &expected_snapshot_id, entry)?;
+
+    match entry.state {
+        ArtifactState::Downloaded => Ok(None),
+        ArtifactState::ChecksumVerified => {
+            let temp_path = entry
+                .temp_path
+                .as_deref()
+                .expect("validated ChecksumVerified artifact has a temporary path");
+            let expected_checksum = entry
+                .checksum
+                .as_deref()
+                .expect("validated ChecksumVerified artifact has a checksum");
+            ensure_expected_temp_path(layout, operation.sequence, &target, temp_path)?;
+            let actual_checksum = ArtifactChecksum::from_path(Path::new(temp_path))?;
+            actual_checksum.verify(expected_checksum)?;
+            Ok(Some(verification_receipt(
+                journal,
+                operation,
+                expected_checksum.to_string(),
+            )))
+        }
+        state => Err(BackupRunnerError::ArtifactVerificationStateConflict {
+            sequence: operation.sequence,
+            target_canister_id: target,
+            state,
+        }),
+    }
+}
+
+fn validate_artifact_identity(
+    operation: &BackupExecutionJournalOperation,
+    target: &str,
+    expected_snapshot_id: &str,
+    entry: &ArtifactJournalEntry,
+) -> Result<(), BackupRunnerError> {
+    if entry.snapshot_id != expected_snapshot_id {
+        return Err(BackupRunnerError::ArtifactDownloadSnapshotMismatch {
+            sequence: operation.sequence,
+            target_canister_id: target.to_string(),
+            expected_snapshot_id: expected_snapshot_id.to_string(),
+            actual_snapshot_id: entry.snapshot_id.clone(),
+        });
+    }
+    let expected_path = artifact_relative_path(target);
+    if entry.artifact_path != expected_path {
+        return Err(BackupRunnerError::ArtifactPathMismatch {
+            sequence: operation.sequence,
+            target_canister_id: target.to_string(),
+            journal_path: entry.artifact_path.clone(),
+            expected_path,
+        });
+    }
+    Ok(())
 }
 
 fn download_receipt(
@@ -316,29 +342,45 @@ pub(super) fn execute_verify_artifact(
     operation: &BackupExecutionJournalOperation,
 ) -> Result<BackupExecutionOperationReceipt, BackupRunnerError> {
     let target = operation_target(operation)?;
+    let expected_snapshot_id = snapshot_id_for_target(journal, operation.sequence, &target)?;
     let mut download_journal = layout.read_journal()?;
-    let entry = artifact_entry_mut(&mut download_journal, operation.sequence, &target)?;
-    let temp_path =
-        entry
-            .temp_path
-            .as_deref()
-            .ok_or_else(|| BackupRunnerError::MissingArtifactEntry {
+    let temp_path = {
+        let entry = artifact_entry(&download_journal, operation.sequence, &target)?;
+        validate_artifact_identity(operation, &target, &expected_snapshot_id, entry)?;
+        if entry.state != ArtifactState::Downloaded {
+            return Err(BackupRunnerError::ArtifactVerificationStateConflict {
                 sequence: operation.sequence,
                 target_canister_id: target.clone(),
-            })?;
-    ensure_expected_temp_path(layout, operation.sequence, &target, temp_path)?;
-    let checksum = ArtifactChecksum::from_path(Path::new(temp_path))?;
+                state: entry.state,
+            });
+        }
+        entry
+            .temp_path
+            .clone()
+            .expect("validated Downloaded artifact has a temporary path")
+    };
+    ensure_expected_temp_path(layout, operation.sequence, &target, &temp_path)?;
+    let checksum = ArtifactChecksum::from_path(Path::new(&temp_path))?;
+    let entry = artifact_entry_mut(&mut download_journal, operation.sequence, &target)?;
     entry.checksum = Some(checksum.hash.clone());
     entry.advance_to(ArtifactState::ChecksumVerified, current_timestamp_marker())?;
     layout.write_journal(&download_journal)?;
 
+    Ok(verification_receipt(journal, operation, checksum.hash))
+}
+
+fn verification_receipt(
+    journal: &BackupExecutionJournal,
+    operation: &BackupExecutionJournalOperation,
+    checksum: String,
+) -> BackupExecutionOperationReceipt {
     let mut receipt = BackupExecutionOperationReceipt::completed(
         journal,
         operation,
         Some(current_timestamp_marker()),
     );
-    receipt.checksum = Some(checksum.hash);
-    Ok(receipt)
+    receipt.checksum = Some(checksum);
+    receipt
 }
 
 pub(super) fn execute_finalize_manifest(

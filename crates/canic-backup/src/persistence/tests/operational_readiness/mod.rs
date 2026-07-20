@@ -4,8 +4,12 @@
 //! Does not own: the frozen case manifest or production recovery policy.
 //! Boundary: binds deterministic process loss to real durable layout operations.
 
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+mod artifact_publication;
 #[cfg(unix)]
 mod checksum_effect;
+#[cfg(unix)]
+mod checksum_transition;
 #[cfg(unix)]
 mod download_effect;
 #[cfg(unix)]

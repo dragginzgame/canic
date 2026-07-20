@@ -25,7 +25,8 @@ use artifacts::{
     execute_verify_artifact,
 };
 pub(super) use artifacts::{
-    persist_created_snapshot, reconcile_pending_download, recorded_snapshot_receipt,
+    persist_created_snapshot, reconcile_pending_artifact_verification, reconcile_pending_download,
+    recorded_snapshot_receipt,
 };
 
 pub(super) fn execute_operation_receipt(

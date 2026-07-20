@@ -82,14 +82,45 @@ pub(super) fn artifact_entry_mut<'a>(
     sequence: usize,
     target: &str,
 ) -> Result<&'a mut ArtifactJournalEntry, BackupRunnerError> {
-    journal
+    let index = artifact_entry_index(journal, sequence, target)?;
+    Ok(&mut journal.artifacts[index])
+}
+
+pub(super) fn artifact_entry<'a>(
+    journal: &'a DownloadJournal,
+    sequence: usize,
+    target: &str,
+) -> Result<&'a ArtifactJournalEntry, BackupRunnerError> {
+    let index = artifact_entry_index(journal, sequence, target)?;
+    Ok(&journal.artifacts[index])
+}
+
+fn artifact_entry_index(
+    journal: &DownloadJournal,
+    sequence: usize,
+    target: &str,
+) -> Result<usize, BackupRunnerError> {
+    let matching = journal
         .artifacts
-        .iter_mut()
-        .find(|entry| entry.canister_id == target)
-        .ok_or_else(|| BackupRunnerError::MissingArtifactEntry {
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| entry.canister_id == target)
+        .collect::<Vec<_>>();
+    match matching.as_slice() {
+        [] => Err(BackupRunnerError::MissingArtifactEntry {
             sequence,
             target_canister_id: target.to_string(),
-        })
+        }),
+        [(index, _)] => Ok(*index),
+        entries => Err(BackupRunnerError::AmbiguousArtifactSnapshot {
+            sequence,
+            target_canister_id: target.to_string(),
+            snapshot_ids: entries
+                .iter()
+                .map(|(_, entry)| entry.snapshot_id.clone())
+                .collect(),
+        }),
+    }
 }
 
 pub(super) fn snapshot_id_for_target(

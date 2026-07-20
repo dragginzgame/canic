@@ -85,7 +85,7 @@ impl ArtifactJournalEntry {
         }
     }
 
-    /// Advance this artifact to a later journal state.
+    /// Advance this artifact through the next canonical journal state.
     pub fn advance_to(
         &mut self,
         next_state: ArtifactState,
@@ -107,7 +107,7 @@ impl ArtifactJournalEntry {
 ///
 /// ArtifactState
 ///
-/// Monotonic durable state for one snapshot artifact.
+/// Ordered durable state for one snapshot artifact.
 /// Owned by backup journaling and used to derive idempotent resume actions.
 ///
 
@@ -120,20 +120,15 @@ pub enum ArtifactState {
 }
 
 impl ArtifactState {
-    /// Return whether this state can advance monotonically to `next`.
+    /// Return whether `next` is the canonical immediate successor.
     #[must_use]
     pub const fn can_advance_to(self, next: Self) -> bool {
-        self.as_order() <= next.as_order()
-    }
-
-    /// Return the stable ordering used by the journal state machine.
-    const fn as_order(self) -> u8 {
-        match self {
-            Self::Created => 0,
-            Self::Downloaded => 1,
-            Self::ChecksumVerified => 2,
-            Self::Durable => 3,
-        }
+        matches!(
+            (self, next),
+            (Self::Created, Self::Downloaded)
+                | (Self::Downloaded, Self::ChecksumVerified)
+                | (Self::ChecksumVerified, Self::Durable)
+        )
     }
 }
 
