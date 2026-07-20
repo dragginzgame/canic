@@ -14,8 +14,8 @@ use crate::{
     timestamp::{current_timestamp_marker, state_updated_at, timestamp_marker, timestamp_seconds},
 };
 use operations::{
-    ensure_pending_download_replayable, execute_operation_receipt, operation_target,
-    persist_created_snapshot, recorded_snapshot_receipt,
+    execute_operation_receipt, operation_target, persist_created_snapshot,
+    reconcile_pending_download, recorded_snapshot_receipt,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -107,8 +107,7 @@ fn execute_ready_operations(
             } else if operation.kind == BackupOperationKind::CreateSnapshot {
                 reconcile_pending_snapshot_create(executor, layout, plan, journal, &operation)?
             } else if operation.kind == BackupOperationKind::DownloadSnapshot {
-                ensure_pending_download_replayable(layout, journal, &operation)?;
-                None
+                reconcile_pending_download(layout, journal, &operation)?
             } else {
                 reject_unknown_backup_command_outcome(&operation, command_lock.take())?;
                 None

@@ -6,6 +6,8 @@
 
 #[cfg(unix)]
 mod download_effect;
+#[cfg(unix)]
+mod download_transition;
 mod lifecycle_effect;
 mod pending_claim;
 #[cfg(unix)]

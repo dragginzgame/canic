@@ -310,7 +310,7 @@ pub enum BackupRunnerError {
     },
 
     #[error(
-        "backup operation {sequence} cannot replace staging for target {target_canister_id} while artifact state is {state:?}"
+        "backup operation {sequence} cannot reconcile pending download for target {target_canister_id} while artifact state is {state:?}"
     )]
     ArtifactDownloadStateConflict {
         sequence: usize,
@@ -326,6 +326,15 @@ pub enum BackupRunnerError {
         target_canister_id: String,
         journal_path: String,
         expected_path: String,
+    },
+
+    #[error(
+        "backup operation {sequence} artifact temp path for target {target_canister_id} is missing: {path}"
+    )]
+    ArtifactTempPathMissing {
+        sequence: usize,
+        target_canister_id: String,
+        path: String,
     },
 
     #[error(

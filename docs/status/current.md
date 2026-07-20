@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.5`.
-- The latest published release is `v0.94.5` at
-  `3a9ad2a32014e47a2536d5e19ce5a6343383d415`.
-- The `v0.94.5` source tree is
-  `baef5d491155459e163f0974f24f56b37feeea8b`; its product-tree hash is
-  `c7fc022774021ee646acf40549645ef85c64180de5fcf3a8ab68df648df428c8`.
+- The workspace package version is `0.94.6`.
+- The latest published release is `v0.94.6` at
+  `a077cb2dee6fb38567d747083e63caea4318e427`.
+- The `v0.94.6` source tree is
+  `1bcbf8ad318bcafeae48e641f14cc8bdb8114980`; its product-tree hash is
+  `d67a662b1f0153d7c327821aaa09081758c6f4595329ff580d1da3ecd81d7305`.
   Its Cargo.lock SHA-256 is
-  `b6ba785c0d03d355090dd275cdc2819ef28f61198dd58bcaf86b33311cc6a58c`.
+  `5f9d4b5c77b6971f67d004a0e56231873faf3553a400bb4aa7f7fd6028a46c8d`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -233,11 +233,16 @@ Historical detail is archived at:
   authority. Committed start is adopted without a second command, exact
   stopped state justifies one start, and returned-failure retry reconciles
   before mutation.
-- The open `0.94.6` draft replaces only uncommitted private download staging
+- Released `v0.94.6` replaces only uncommitted private download staging
   after an exact `Created` artifact claim, rejects unsafe staging entries, and
   preserves `Downloaded` or later evidence for its canonical recovery
   boundary. Artifact-journal states now reject fields owned by another
   transition.
+- The open `0.94.7` draft reconciles both sides of the `Downloaded`
+  artifact-journal write. A non-durable write retains `Created` and justifies
+  one redownload; a durable exact row rebuilds the normal receipt and proceeds
+  to checksum without another command. Missing or mismatched staging rejects
+  before execution-journal mutation.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -819,10 +824,14 @@ start across their assigned process-death boundaries. Exact lifecycle status
 and snapshot inventory reconcile committed effects without duplicate
 commands.
 
-The open 0.94.6 draft completes `B09`: a pending snapshot download resumes
-only from exact `Created` artifact authority, replaces uncommitted private
-staging, rejects unsafe entries, and preserves `Downloaded` or later evidence.
-Twenty-seven of 106 protocol cases now pass. Persisted document versions,
-operator-facing contracts, and package versions remain unchanged. The next
-bounded action is `B10` on both sides of the `Downloaded` artifact-journal
-transition.
+Released `v0.94.6` completes `B09`: a pending snapshot download resumes only
+from exact `Created` artifact authority, replaces uncommitted private staging,
+and rejects unsafe entries.
+
+The open 0.94.7 draft completes both `B10` write sides. A non-durable
+`Downloaded` transition retains `Created` and performs one redownload; a
+durable exact transition reconstructs the normal receipt and proceeds to
+checksum with zero download commands. Twenty-nine of 106 protocol cases now
+pass. Persisted document versions, operator-facing contracts, and package
+versions remain unchanged. The next bounded action is `B11` during checksum
+calculation.
