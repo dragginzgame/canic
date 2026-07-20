@@ -42,6 +42,10 @@ pub struct RestoreApplyJournalOperation {
     #[serde(deserialize_with = "crate::serialization::required_option")]
     pub artifact_checksum: Option<ArtifactChecksum>,
     #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub snapshot_ids_before: Option<Vec<String>>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
+    pub expected_module_hash: Option<String>,
+    #[serde(deserialize_with = "crate::serialization::required_option")]
     pub verification_kind: Option<String>,
 }
 
@@ -68,6 +72,8 @@ impl RestoreApplyJournalOperation {
             snapshot_id: operation.snapshot_id.clone(),
             artifact_path: operation.artifact_path.clone(),
             artifact_checksum: operation.artifact_checksum.clone(),
+            snapshot_ids_before: None,
+            expected_module_hash: operation.expected_module_hash.clone(),
             verification_kind: operation.verification_kind.clone(),
         }
     }
@@ -80,6 +86,8 @@ impl RestoreApplyJournalOperation {
             validate_apply_journal_nonempty("operations[].state_updated_at", updated_at)?;
         }
         self.validate_operation_fields()?;
+        self.validate_snapshot_inventory()?;
+        self.validate_expected_module_hash()?;
 
         match self.state {
             RestoreApplyOperationState::Blocked if self.blocking_reasons.is_empty() => Err(
@@ -162,6 +170,56 @@ impl RestoreApplyJournalOperation {
                 sequence: self.sequence,
                 source,
             })
+    }
+
+    fn validate_snapshot_inventory(&self) -> Result<(), RestoreApplyJournalError> {
+        let Some(snapshot_ids) = &self.snapshot_ids_before else {
+            if self.operation == RestoreApplyOperationKind::UploadSnapshot
+                && matches!(
+                    self.state,
+                    RestoreApplyOperationState::Pending
+                        | RestoreApplyOperationState::Completed
+                        | RestoreApplyOperationState::Failed
+                )
+            {
+                return Err(RestoreApplyJournalError::MissingField(
+                    "operations[].snapshot_ids_before",
+                ));
+            }
+            return Ok(());
+        };
+        if self.operation != RestoreApplyOperationKind::UploadSnapshot {
+            return Err(RestoreApplyJournalError::UnexpectedSnapshotInventory(
+                self.sequence,
+            ));
+        }
+        let mut unique = BTreeSet::new();
+        for snapshot_id in snapshot_ids {
+            validate_apply_journal_nonempty("operations[].snapshot_ids_before[]", snapshot_id)?;
+            if !unique.insert(snapshot_id) {
+                return Err(RestoreApplyJournalError::DuplicateSnapshotIdentity {
+                    sequence: self.sequence,
+                    snapshot_id: snapshot_id.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_expected_module_hash(&self) -> Result<(), RestoreApplyJournalError> {
+        let Some(expected) = &self.expected_module_hash else {
+            return Ok(());
+        };
+        validate_apply_journal_nonempty("operations[].expected_module_hash", expected)?;
+        if !matches!(
+            self.operation,
+            RestoreApplyOperationKind::VerifyMember | RestoreApplyOperationKind::VerifyDeployment
+        ) {
+            return Err(RestoreApplyJournalError::UnexpectedExpectedModuleHash(
+                self.sequence,
+            ));
+        }
+        Ok(())
     }
 
     fn validate_required_field<'a>(
@@ -291,6 +349,20 @@ pub enum RestoreApplyJournalError {
         operation: RestoreApplyOperationKind,
         field: &'static str,
     },
+
+    #[error(
+        "restore apply journal operation {sequence} snapshot inventory repeats identity {snapshot_id}"
+    )]
+    DuplicateSnapshotIdentity {
+        sequence: usize,
+        snapshot_id: String,
+    },
+
+    #[error("restore apply journal operation {0} cannot carry snapshot inventory evidence")]
+    UnexpectedSnapshotInventory(usize),
+
+    #[error("restore apply journal operation {0} cannot carry an expected module hash")]
+    UnexpectedExpectedModuleHash(usize),
 
     #[error("restore apply journal operation {sequence} uses unsupported verification kind {kind}")]
     UnsupportedVerificationKind { sequence: usize, kind: String },

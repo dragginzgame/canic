@@ -237,6 +237,8 @@ mod tests {
                 snapshot_id: None,
                 artifact_path: None,
                 artifact_checksum: None,
+                snapshot_ids_before: None,
+                expected_module_hash: None,
                 verification_kind: None,
             }],
             operation_receipts: Vec::new(),

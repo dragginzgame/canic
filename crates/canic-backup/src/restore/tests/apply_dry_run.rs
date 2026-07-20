@@ -173,6 +173,7 @@ fn apply_dry_run_requires_exact_current_optional_fields() {
         "artifact_path",
         "artifact_checksum",
         "verification_kind",
+        "expected_module_hash",
     ] {
         let mut value =
             serde_json::to_value(&dry_run.operations[0]).expect("serialize dry-run operation");

@@ -20,7 +20,6 @@ mod output;
 mod replica;
 mod restore;
 mod scaffold;
-mod snapshot;
 mod state;
 mod status;
 mod support;
@@ -86,9 +85,6 @@ pub enum CliError {
 
     #[error("fleet: {0}")]
     Fleets(#[from] fleets::FleetCommandError),
-
-    #[error("snapshot: {0}")]
-    Snapshot(#[from] snapshot::SnapshotCommandError),
 
     #[error("state: {0}")]
     State(#[from] state::StateCommandError),
@@ -166,7 +162,6 @@ where
         "medic" => medic::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
-        "snapshot" => snapshot::run(tail).map_err(CliError::from),
         "state" => state::run(tail).map_err(CliError::from),
         "status" => status::run(tail).map_err(CliError::from),
         "token" => token::run(tail).map_err(CliError::from),

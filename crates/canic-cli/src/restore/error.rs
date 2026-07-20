@@ -69,15 +69,6 @@ pub enum RestoreCommandError {
     },
 
     #[error(
-        "restore operation {sequence} {operation:?} has a quiescent command with an unknown external outcome: {lock_path}"
-    )]
-    RestoreCommandOutcomeUnknown {
-        sequence: usize,
-        operation: canic_backup::restore::RestoreApplyOperationKind,
-        lock_path: String,
-    },
-
-    #[error(
         "restore operation {sequence} {operation:?} command lock path is unsafe: {lock_path} ({kind})"
     )]
     RestoreCommandLockUnsafeEntry {
@@ -85,6 +76,37 @@ pub enum RestoreCommandError {
         operation: canic_backup::restore::RestoreApplyOperationKind,
         lock_path: String,
         kind: String,
+    },
+
+    #[error("restore operation {sequence} canister status observation failed: status={status}")]
+    RestoreCanisterStatusObservationFailed { sequence: usize, status: String },
+
+    #[error("restore operation {sequence} returned an unknown canister status")]
+    RestoreCanisterStatusUnknown { sequence: usize },
+
+    #[error("restore operation {sequence} observed unsettled canister status")]
+    RestoreCanisterStatusUnsettled { sequence: usize },
+
+    #[error("restore operation {sequence} snapshot inventory observation failed: status={status}")]
+    RestoreSnapshotInventoryObservationFailed { sequence: usize, status: String },
+
+    #[error("restore operation {sequence} returned invalid snapshot inventory")]
+    RestoreInvalidSnapshotInventory { sequence: usize },
+
+    #[error(
+        "restore operation {sequence} snapshot inventory lost baseline identities: {snapshot_ids:?}"
+    )]
+    RestoreSnapshotInventoryLostBaseline {
+        sequence: usize,
+        snapshot_ids: Vec<String>,
+    },
+
+    #[error(
+        "restore operation {sequence} uploaded snapshot identity is ambiguous: {snapshot_ids:?}"
+    )]
+    RestoreUploadedSnapshotIdentityAmbiguous {
+        sequence: usize,
+        snapshot_ids: Vec<String>,
     },
 
     #[error("restore plan for backup {backup_id} is not restore-ready: reasons={reasons:?}")]
@@ -210,6 +232,10 @@ pub enum RestoreCommandError {
 }
 
 impl From<RestoreRunnerError> for RestoreCommandError {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the boundary preserves every restore runner variant as a distinct typed CLI cause"
+    )]
     fn from(error: RestoreRunnerError) -> Self {
         match error {
             RestoreRunnerError::ArtifactStageChecksum { sequence, source } => {
@@ -242,15 +268,6 @@ impl From<RestoreRunnerError> for RestoreCommandError {
                 operation,
                 lock_path,
             },
-            RestoreRunnerError::CommandOutcomeUnknown {
-                sequence,
-                operation,
-                lock_path,
-            } => Self::RestoreCommandOutcomeUnknown {
-                sequence,
-                operation,
-                lock_path,
-            },
             RestoreRunnerError::CommandLockUnsafeEntry {
                 sequence,
                 operation,
@@ -261,6 +278,35 @@ impl From<RestoreRunnerError> for RestoreCommandError {
                 operation,
                 lock_path,
                 kind,
+            },
+            RestoreRunnerError::CanisterStatusObservationFailed { sequence, status } => {
+                Self::RestoreCanisterStatusObservationFailed { sequence, status }
+            }
+            RestoreRunnerError::CanisterStatusUnknown { sequence } => {
+                Self::RestoreCanisterStatusUnknown { sequence }
+            }
+            RestoreRunnerError::CanisterStatusUnsettled { sequence } => {
+                Self::RestoreCanisterStatusUnsettled { sequence }
+            }
+            RestoreRunnerError::SnapshotInventoryObservationFailed { sequence, status } => {
+                Self::RestoreSnapshotInventoryObservationFailed { sequence, status }
+            }
+            RestoreRunnerError::InvalidSnapshotInventory { sequence } => {
+                Self::RestoreInvalidSnapshotInventory { sequence }
+            }
+            RestoreRunnerError::SnapshotInventoryLostBaseline {
+                sequence,
+                snapshot_ids,
+            } => Self::RestoreSnapshotInventoryLostBaseline {
+                sequence,
+                snapshot_ids,
+            },
+            RestoreRunnerError::UploadedSnapshotIdentityAmbiguous {
+                sequence,
+                snapshot_ids,
+            } => Self::RestoreUploadedSnapshotIdentityAmbiguous {
+                sequence,
+                snapshot_ids,
             },
             RestoreRunnerError::Failed {
                 backup_id,

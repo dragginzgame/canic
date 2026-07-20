@@ -1,4 +1,6 @@
 mod apply;
+#[cfg(unix)]
+mod operational_readiness;
 mod options;
 mod plan;
 mod run;
@@ -17,7 +19,10 @@ use canic_backup::{
         VerificationCheck, VerificationPlan,
     },
     persistence::BackupLayout,
-    restore::{RestoreApplyDryRun, RestoreApplyJournal, RestorePlanner},
+    restore::{
+        RestoreApplyDryRun, RestoreApplyJournal, RestorePersistenceError, RestorePlanner,
+        write_restore_apply_journal,
+    },
 };
 use std::{
     ffi::OsString,
@@ -108,7 +113,9 @@ fn write_fake_icp_upload(root: &Path, uploaded_snapshot_id: &str) -> PathBuf {
     let path = root.join("icp-upload-ok");
     fs::write(
         &path,
-        format!("#!/bin/sh\nprintf '%s\\n' '{{\"snapshot_id\":\"{uploaded_snapshot_id}\"}}'\n"),
+        format!(
+            "#!/bin/sh\nif [ \"$3\" = list ]; then\n  printf '%s\\n' '{{\"snapshots\":[]}}'\nelse\n  printf '%s\\n' '{{\"snapshot_id\":\"{uploaded_snapshot_id}\"}}'\nfi\n"
+        ),
     )
     .expect("write fake icp");
     let mut permissions = fs::metadata(&path)
@@ -125,13 +132,44 @@ fn write_fake_icp_upload_without_id(root: &Path) -> PathBuf {
     use std::os::unix::fs::PermissionsExt;
 
     let path = root.join("icp-upload-missing-id");
-    fs::write(&path, "#!/bin/sh\nprintf 'Upload completed\\n'\n").expect("write fake icp");
+    fs::write(
+        &path,
+        "#!/bin/sh\nif [ \"$3\" = list ]; then\n  printf '%s\\n' '{\"snapshots\":[]}'\nelse\n  printf 'Upload completed\\n'\nfi\n",
+    )
+    .expect("write fake icp");
     let mut permissions = fs::metadata(&path)
         .expect("fake icp metadata")
         .permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&path, permissions).expect("make fake icp executable");
     path
+}
+
+// Write a fake icp executable with valid inventory observation and a failed upload.
+#[cfg(unix)]
+fn write_fake_icp_upload_failure(root: &Path) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let path = root.join("icp-upload-failed");
+    fs::write(
+        &path,
+        "#!/bin/sh\nif [ \"$3\" = list ]; then\n  printf '%s\\n' '{\"snapshots\":[]}'\n  exit 0\nfi\nexit 1\n",
+    )
+    .expect("write fake icp");
+    let mut permissions = fs::metadata(&path)
+        .expect("fake icp metadata")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&path, permissions).expect("make fake icp executable");
+    path
+}
+
+// Put the first upload into a valid pending state for CLI boundary tests.
+fn mark_first_upload_pending(journal: &mut RestoreApplyJournal, updated_at: &str) {
+    journal.operations[0].snapshot_ids_before = Some(Vec::new());
+    journal
+        .mark_next_operation_pending_at(Some(updated_at.to_string()))
+        .expect("mark upload pending");
 }
 
 // Build one manually ready apply journal for runner-focused CLI tests.

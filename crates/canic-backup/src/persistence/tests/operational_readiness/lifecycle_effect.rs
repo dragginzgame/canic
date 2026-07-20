@@ -72,7 +72,7 @@ fn committed_start_without_receipt_is_reconciled_from_exact_status() {
 }
 
 #[test]
-fn explicit_retry_after_committed_start_command_failure_reconciles_status() {
+fn committed_start_command_failure_is_reconciled_during_containment() {
     let (root, state_path, layout) = prepared_start_operation("failed-start-command");
     let mut failing_executor = LifecycleEffectExecutor::new(state_path.clone()).fail_after_start();
 
@@ -85,53 +85,43 @@ fn explicit_retry_after_committed_start_command_failure_reconciles_status() {
         .read_execution_journal()
         .expect("read failed start execution journal");
     let start = failed
-        .next_ready_operation()
+        .operations
+        .iter()
+        .find(|operation| operation.kind == crate::plan::BackupOperationKind::Start)
         .cloned()
-        .expect("failed start operation");
+        .expect("contained start operation");
 
     std::assert_matches!(
         error,
         crate::runner::BackupRunnerError::CommandFailed { status, .. }
             if status == "start-output"
     );
-    assert_eq!(start.state, BackupExecutionOperationState::Failed);
+    assert_eq!(start.state, BackupExecutionOperationState::Completed);
     assert_eq!(read_state(&state_path), "Running");
-
-    let mut retrying = failed;
-    retrying
-        .retry_failed_operation_at(start.sequence, Some("unix:30".to_string()))
-        .expect("mark failed start ready for explicit retry");
-    layout
-        .write_execution_journal(&retrying)
-        .expect("write explicit start retry");
-
-    let mut recovery_executor = LifecycleEffectExecutor::new(state_path).reject_start();
-    let response = backup_run_execute_with_executor(
-        &runner_config(root.clone(), Some(1)),
-        &mut recovery_executor,
-    )
-    .expect("reconcile committed start before explicit retry");
-    let recovered = layout
-        .read_execution_journal()
-        .expect("read recovered start execution journal");
-
-    assert_eq!(response.executed_operation_count, 1);
     assert_eq!(
-        recovery_executor.commands,
-        vec![format!("status:{}", target(&start))]
+        failing_executor.commands,
+        vec![
+            format!("start:{}", target(&start)),
+            format!("status:{}", target(&start)),
+        ]
     );
     assert_eq!(
-        recovered.operations[start.sequence].state,
-        BackupExecutionOperationState::Completed
-    );
-    assert_eq!(
-        recovered
+        failed
             .operation_receipts
             .iter()
             .filter(|receipt| receipt.sequence == start.sequence)
             .count(),
         2
     );
+
+    let mut replay_executor = LifecycleEffectExecutor::new(state_path).reject_start();
+    let replay = backup_run_execute_with_executor(
+        &runner_config(root.clone(), Some(0)),
+        &mut replay_executor,
+    )
+    .expect("completed containment is idempotently observable");
+    assert_eq!(replay.executed_operation_count, 0);
+    assert!(replay_executor.commands.is_empty());
     fs::remove_dir_all(root).expect("remove failed start recovery layout");
 }
 

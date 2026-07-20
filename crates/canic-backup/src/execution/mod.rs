@@ -153,6 +153,119 @@ impl BackupExecutionJournal {
             .min_by_key(|operation| operation.sequence)
     }
 
+    /// Return the next start needed to restore availability after a backup failure.
+    #[must_use]
+    pub(crate) fn next_failure_containment_start(
+        &self,
+    ) -> Option<&BackupExecutionJournalOperation> {
+        self.operations
+            .iter()
+            .filter(|operation| {
+                operation.kind == BackupOperationKind::Start
+                    && matches!(
+                        operation.state,
+                        BackupExecutionOperationState::Ready
+                            | BackupExecutionOperationState::Pending
+                            | BackupExecutionOperationState::Failed
+                    )
+                    && operation.target_canister_id.as_ref().is_some_and(|target| {
+                        self.operations.iter().any(|candidate| {
+                            candidate.kind == BackupOperationKind::Stop
+                                && candidate.target_canister_id.as_ref() == Some(target)
+                                && candidate.state == BackupExecutionOperationState::Completed
+                        })
+                    })
+            })
+            .min_by_key(|operation| operation.sequence)
+    }
+
+    /// Claim one start that is allowed to bypass a failed primary operation.
+    pub(crate) fn mark_failure_containment_start_pending_at(
+        &mut self,
+        sequence: usize,
+        updated_at: Option<String>,
+    ) -> Result<(), BackupExecutionJournalError> {
+        validate_nonempty("updated_at", updated_at.as_deref().unwrap_or_default())?;
+        let eligible = self
+            .next_failure_containment_start()
+            .is_some_and(|operation| operation.sequence == sequence);
+        if !eligible {
+            return Err(BackupExecutionJournalError::OperationNotFailureContainmentStart(sequence));
+        }
+        let index = self.operation_index(sequence)?;
+        if !matches!(
+            self.operations[index].state,
+            BackupExecutionOperationState::Ready | BackupExecutionOperationState::Failed
+        ) {
+            return Err(BackupExecutionJournalError::InvalidOperationTransition {
+                sequence,
+                from: self.operations[index].state.clone(),
+                to: BackupExecutionOperationState::Pending,
+            });
+        }
+
+        let previous_operation = self.operations[index].clone();
+        let previous_restart_required = self.restart_required;
+        self.operations[index].state = BackupExecutionOperationState::Pending;
+        self.operations[index].state_updated_at = updated_at;
+        self.operations[index].blocking_reasons.clear();
+        self.refresh_restart_required();
+        if let Err(error) = self.validate() {
+            self.operations[index] = previous_operation;
+            self.restart_required = previous_restart_required;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Rearm the paired stop/start after availability was restored before snapshot completion.
+    pub(crate) fn rearm_after_failure_containment(
+        &mut self,
+        start_sequence: usize,
+        updated_at: Option<String>,
+    ) -> Result<(), BackupExecutionJournalError> {
+        validate_nonempty("updated_at", updated_at.as_deref().unwrap_or_default())?;
+        let start_index = self.operation_index(start_sequence)?;
+        let start = &self.operations[start_index];
+        if start.kind != BackupOperationKind::Start
+            || start.state != BackupExecutionOperationState::Completed
+        {
+            return Err(
+                BackupExecutionJournalError::OperationNotFailureContainmentStart(start_sequence),
+            );
+        }
+        let target = start.target_canister_id.clone();
+        let stop_index = self
+            .operations
+            .iter()
+            .position(|operation| {
+                operation.kind == BackupOperationKind::Stop
+                    && operation.target_canister_id == target
+                    && operation.state == BackupExecutionOperationState::Completed
+            })
+            .ok_or(
+                BackupExecutionJournalError::OperationNotFailureContainmentStart(start_sequence),
+            )?;
+        let previous_stop = self.operations[stop_index].clone();
+        let previous_start = self.operations[start_index].clone();
+        let previous_restart_required = self.restart_required;
+        for index in [stop_index, start_index] {
+            self.operations[index].state = BackupExecutionOperationState::Ready;
+            self.operations[index]
+                .state_updated_at
+                .clone_from(&updated_at);
+            self.operations[index].blocking_reasons.clear();
+        }
+        self.refresh_restart_required();
+        if let Err(error) = self.validate() {
+            self.operations[stop_index] = previous_stop;
+            self.operations[start_index] = previous_start;
+            self.restart_required = previous_restart_required;
+            return Err(error);
+        }
+        Ok(())
+    }
+
     /// Mark the next transitionable operation pending.
     pub fn mark_next_operation_pending_at(
         &mut self,
@@ -357,18 +470,18 @@ impl BackupExecutionJournal {
     }
 
     fn derived_restart_required(&self) -> bool {
-        let stopped = self.operations.iter().any(|operation| {
-            operation.kind == BackupOperationKind::Stop
-                && operation.state == BackupExecutionOperationState::Completed
-        });
-        let unstarted = self.operations.iter().any(|operation| {
-            operation.kind == BackupOperationKind::Start
-                && !matches!(
-                    operation.state,
-                    BackupExecutionOperationState::Completed
-                        | BackupExecutionOperationState::Skipped
-                )
-        });
-        stopped && unstarted
+        self.operations.iter().any(|stop| {
+            stop.kind == BackupOperationKind::Stop
+                && stop.state == BackupExecutionOperationState::Completed
+                && self.operations.iter().any(|start| {
+                    start.kind == BackupOperationKind::Start
+                        && start.target_canister_id == stop.target_canister_id
+                        && !matches!(
+                            start.state,
+                            BackupExecutionOperationState::Completed
+                                | BackupExecutionOperationState::Skipped
+                        )
+                })
+        })
     }
 }

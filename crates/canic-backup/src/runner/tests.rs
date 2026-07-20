@@ -236,6 +236,50 @@ fn runner_resumes_after_max_steps_without_replaying_completed_work() {
     );
 }
 
+#[test]
+fn runner_restores_availability_when_snapshot_preparation_fails() {
+    let root = prepared_layout("canic-backup-runner-preparation-containment");
+    let layout = BackupLayout::new(root.clone());
+    let mut executor = FakeExecutor::default();
+    backup_run_execute_with_executor(&runner_config(root.clone(), Some(1)), &mut executor)
+        .expect("stop target before snapshot preparation");
+    executor.commands.clear();
+    executor.fail_on = Some(FakeFailure::SnapshotInventory);
+
+    let error = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
+        .expect_err("snapshot inventory observation must fail");
+    let journal = layout
+        .read_execution_journal()
+        .expect("read contained execution journal");
+
+    std::assert_matches!(
+        error,
+        BackupRunnerError::SnapshotInventoryFailed { ref status, .. }
+            if status == "snapshot-list"
+    );
+    assert!(!journal.restart_required);
+    for kind in [
+        BackupOperationKind::Stop,
+        BackupOperationKind::CreateSnapshot,
+        BackupOperationKind::Start,
+    ] {
+        assert_eq!(
+            journal
+                .operations
+                .iter()
+                .find(|operation| operation.kind == kind)
+                .expect("operation in contained snapshot phase")
+                .state,
+            BackupExecutionOperationState::Ready
+        );
+    }
+    assert_eq!(
+        executor.commands,
+        vec![format!("snapshot-list:{APP}"), format!("start:{APP}")]
+    );
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
 // Ensure a published artifact is reverified after interruption before its durable journal update.
 #[test]
 fn runner_recovers_artifact_published_before_durable_journal_transition() {
@@ -354,12 +398,11 @@ fn runner_records_failed_operation_and_retries_from_that_operation() {
             message,
         } if status == "snapshot" && message == "simulated snapshot failure"
     );
-    assert!(failed_summary.restart_required);
+    assert!(!failed_summary.restart_required);
     assert_eq!(failed_summary.failed_operations, 1);
-    assert_eq!(
-        failed_summary.next_operation.expect("failed op").state,
-        BackupExecutionOperationState::Failed
-    );
+    let next = failed_summary.next_operation.expect("rearmed stop");
+    assert_eq!(next.kind, BackupOperationKind::Stop);
+    assert_eq!(next.state, BackupExecutionOperationState::Ready);
     assert_eq!(
         failing_executor.commands,
         vec![
@@ -367,6 +410,7 @@ fn runner_records_failed_operation_and_retries_from_that_operation() {
             format!("stop:{APP}"),
             format!("snapshot-list:{APP}"),
             format!("snapshot:{APP}"),
+            format!("start:{APP}"),
         ]
     );
 
@@ -385,6 +429,7 @@ fn runner_records_failed_operation_and_retries_from_that_operation() {
     assert_eq!(
         retry_executor.commands,
         vec![
+            format!("stop:{APP}"),
             format!("snapshot-list:{APP}"),
             format!("snapshot:{APP}"),
             format!("start:{APP}"),

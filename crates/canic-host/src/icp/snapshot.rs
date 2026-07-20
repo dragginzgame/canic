@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde::Deserialize;
+
 use super::{
     command::command_display,
     error::IcpCommandError,
@@ -28,7 +30,7 @@ impl IcpCli {
         command.args(["snapshot", "list", canister]);
         command.arg("--json");
         self.add_target_args(&mut command);
-        run_json(&mut command)
+        run_json::<IcpSnapshotInventory>(&mut command).map(|inventory| inventory.snapshots)
     }
 
     /// Download one canister snapshot into an artifact directory.
@@ -69,4 +71,10 @@ impl IcpCli {
         self.add_target_args(&mut command);
         command_display(&command)
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct IcpSnapshotInventory {
+    pub(super) snapshots: Vec<IcpSnapshot>,
 }

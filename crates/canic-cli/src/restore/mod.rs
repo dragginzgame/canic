@@ -29,13 +29,12 @@ use enforce::{
     enforce_restore_status_requirements,
 };
 use io::{
-    RestorePrepareReport, default_restore_apply_journal_path, default_restore_plan_path,
-    read_manifest_source, read_mapping, read_plan, restore_apply_backup_dir,
-    restore_apply_plan_path, restore_prepare_backup_dir, restore_run_journal_path,
-    restore_status_journal_path, verify_backup_layout_if_required,
-    verify_prepared_journal_backup_root, write_apply_dry_run, write_apply_journal_file,
-    write_apply_journal_if_requested, write_plan, write_plan_file, write_prepare_report,
-    write_restore_run, write_restore_status,
+    RestorePrepareReport, create_or_adopt_prepare_documents, default_restore_apply_journal_path,
+    default_restore_plan_path, read_manifest_source, read_mapping, read_plan,
+    restore_apply_backup_dir, restore_apply_plan_path, restore_prepare_backup_dir,
+    restore_run_journal_path, restore_status_journal_path, verify_backup_layout_if_required,
+    verify_prepared_journal_backup_root, write_apply_dry_run, write_apply_journal_if_requested,
+    write_plan, write_prepare_report, write_restore_run, write_restore_status,
 };
 
 pub use error::RestoreCommandError;
@@ -148,10 +147,8 @@ fn restore_prepare(
     };
     let plan = plan_restore(&plan_options)?;
     enforce_restore_plan_requirements(&plan_options, &plan)?;
-    write_plan_file(&plan_path, &plan)?;
-
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &backup_dir)?;
-    write_apply_journal_file(&journal_path, &dry_run)?;
+    create_or_adopt_prepare_documents(&plan_path, &plan, &journal_path, &dry_run)?;
 
     Ok(RestorePrepareReport {
         backup_dir: backup_dir.display().to_string(),

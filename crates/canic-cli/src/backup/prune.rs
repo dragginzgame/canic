@@ -14,10 +14,8 @@ pub(super) fn backup_prune(
     let selected = entries
         .iter()
         .enumerate()
-        .filter(|(index, entry)| {
-            (options.failed && entry.status == BackupListStatus::Failed)
-                || options.keep.is_some_and(|keep| *index >= keep)
-        })
+        .filter(|(_, entry)| entry.status == BackupListStatus::Complete)
+        .skip(options.keep)
         .map(|(index, entry)| BackupPruneEntry {
             index: index + 1,
             dir: entry.dir.clone(),

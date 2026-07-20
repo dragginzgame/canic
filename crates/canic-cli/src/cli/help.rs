@@ -127,11 +127,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Deployment,
     },
     CommandSpec {
-        name: "snapshot",
-        about: "Capture and download canister snapshots",
-        scope: CommandScope::BackupRestore,
-    },
-    CommandSpec {
         name: "backup",
         about: "Plan, inspect, and verify backups",
         scope: CommandScope::BackupRestore,

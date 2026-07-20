@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.12` hard-cuts duplicate and destructive backup/restore paths, adds
+  evidence-backed failure containment and restore reconciliation, and proves
+  real two-canister `A -> B -> A` recovery plus effect/receipt crash handling
+  on the checksum-pinned ICP CLI 1.1.0 boundary.
+
 - `0.94.11` proves terminal backup state and its matching receipt publish as
   one durable document for every operation, with deterministic recovery and
   no duplicate effect or receipt across either crash side; a lost final
@@ -55,8 +60,8 @@ Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
 - `0.94.1` is potentially breaking: mutating backup and restore commands now
   retain a restart-visible lifetime lock through their complete descendant
-  tree, while restore hard-cuts the unsafe pending-reset command and version-1
-  runner JSON.
+  tree, while restore hard-cuts the unsafe pending-reset command and its
+  alternate output shape while retaining one runner JSON version `1` shape.
 
 - `0.94.0` makes kernel ownership the sole backup/restore journal-lock
   authority, preserving live exclusion while restoring liveness immediately

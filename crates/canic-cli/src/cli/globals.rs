@@ -150,7 +150,6 @@ fn command_accepts_global_icp(command: &str, tail: &[OsString]) -> bool {
             tail.first().and_then(|arg| arg.to_str()),
             Some("start" | "status" | "stop")
         ),
-        "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
         _ => false,
@@ -165,7 +164,6 @@ fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool 
         "deploy" => deploy_leaf_accepts_global_environment(tail),
         "info" => info_leaf_accepts_globals(tail),
         "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
-        "snapshot" => tail.first().and_then(|arg| arg.to_str()) == Some("download"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
         _ => false,

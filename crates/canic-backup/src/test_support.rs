@@ -18,6 +18,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(unix)]
+use std::{
+    process::Child,
+    thread,
+    time::{Duration, Instant},
+};
+
 /// Test executor that records backup commands and returns exact typed receipts.
 #[derive(Default)]
 pub struct FakeBackupRunnerExecutor {
@@ -31,6 +38,7 @@ pub struct FakeBackupRunnerExecutor {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum FakeBackupRunnerFailure {
     Preflight,
+    SnapshotInventory,
     CreateSnapshot,
 }
 
@@ -140,6 +148,12 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
         canister_id: &str,
     ) -> Result<Vec<BackupRunnerSnapshot>, BackupRunnerCommandError> {
         self.commands.push(format!("snapshot-list:{canister_id}"));
+        if self.fail_on == Some(FakeBackupRunnerFailure::SnapshotInventory) {
+            return Err(BackupRunnerCommandError::failed(
+                "snapshot-list",
+                "simulated snapshot inventory failure",
+            ));
+        }
         Ok(self.snapshots.get(canister_id).cloned().unwrap_or_default())
     }
 
@@ -223,4 +237,59 @@ fn unique_name(prefix: &str) -> String {
         .expect("system time after epoch")
         .as_nanos();
     format!("{prefix}-{}-{nanos}", std::process::id())
+}
+
+/// Kill one test child only after both sides acknowledge the named crash barrier.
+#[cfg(unix)]
+pub fn kill_child_at_acknowledged_barrier(child: &mut Child, root: &Path) {
+    let ready_path = root.join("barrier-ready");
+    let acknowledge_path = root.join("barrier-acknowledged");
+    let armed_path = root.join("barrier-armed");
+    wait_for_child_path(child, &ready_path, "child barrier");
+    fs::write(&acknowledge_path, b"acknowledged\n").expect("acknowledge child barrier");
+    wait_for_child_path(child, &armed_path, "armed child barrier");
+    child.kill().expect("kill child at acknowledged barrier");
+    child.wait().expect("reap killed child");
+}
+
+/// Signal that a test child reached its barrier, then wait to be killed.
+#[cfg(unix)]
+pub fn hold_at_acknowledged_barrier(root: &Path) -> ! {
+    let ready_path = root.join("barrier-ready");
+    let acknowledge_path = root.join("barrier-acknowledged");
+    let armed_path = root.join("barrier-armed");
+    fs::write(&ready_path, b"ready\n").expect("signal child barrier");
+    wait_for_path(&acknowledge_path, "parent barrier acknowledgement");
+    fs::write(&armed_path, b"armed\n").expect("arm child crash");
+    loop {
+        thread::sleep(Duration::from_secs(1));
+    }
+}
+
+#[cfg(unix)]
+pub fn wait_for_child_path(child: &mut Child, path: &Path, description: &str) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !path.is_file() {
+        assert!(
+            child.try_wait().expect("inspect crash child").is_none(),
+            "crash child exited before {description}"
+        );
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for {description}"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[cfg(unix)]
+pub fn wait_for_path(path: &Path, description: &str) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !path.is_file() {
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for {description}"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
 }

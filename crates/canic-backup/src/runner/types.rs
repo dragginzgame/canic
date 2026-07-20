@@ -374,6 +374,13 @@ pub enum BackupRunnerError {
         message: String,
     },
 
+    #[error("backup failure containment failed after {primary}: {containment}")]
+    FailureContainmentFailed {
+        #[source]
+        primary: Box<Self>,
+        containment: Box<Self>,
+    },
+
     #[error("backup preflight failed: {status}: {message}")]
     PreflightFailed { status: String, message: String },
 

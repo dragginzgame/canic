@@ -53,8 +53,7 @@ fn usage_lists_command_families() {
     assert!(plain.find("    evidence") < plain.find("    info"));
     assert!(plain.find("    info") < plain.find("    cycles"));
     assert!(plain.find("    cycles") < plain.find("    token"));
-    assert!(plain.find("    token") < plain.find("    snapshot"));
-    assert!(plain.find("    snapshot") < plain.find("    backup"));
+    assert!(plain.find("    token") < plain.find("    backup"));
     assert!(plain.find("    backup") < plain.find("    restore"));
     assert!(plain.contains("Options:"));
     assert!(plain.contains("--icp <path>"));
@@ -80,7 +79,6 @@ fn usage_lists_command_families() {
     assert!(plain.contains("fleet"));
     assert!(plain.contains("replica"));
     assert!(plain.contains("install"));
-    assert!(plain.contains("snapshot"));
     assert!(plain.contains("backup"));
     assert!(plain.contains("restore"));
     assert!(!plain.contains("    endpoints"));
@@ -186,8 +184,6 @@ fn command_family_help_returns_ok() {
         &["token", "balance", "--help"],
         &["token", "icp", "balance", "--help"],
         &["token", "transfer", "--help"],
-        &["snapshot", "--help"],
-        &["snapshot", "download", "--help"],
         &["status", "--help"],
     ] {
         assert_run_ok(args);
@@ -238,7 +234,7 @@ fn icp_backed_command_rejects_unparseable_icp_cli_before_running_subcommand() {
 
     assert!(text.contains("unsupported icp-cli version"));
     assert!(text.contains("found: icp development build"));
-    assert!(text.contains("required: icp-cli >=1.0.0, <2.0.0"));
+    assert!(text.contains("required: icp-cli >=1.1.0, <2.0.0"));
     assert!(!text.contains("unsupported replica command ran"));
 }
 
@@ -316,15 +312,6 @@ fn version_flags_return_ok() {
     );
     assert!(run([OsString::from("restore"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("token"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("snapshot"), OsString::from("--version")]).is_ok());
-    assert!(
-        run([
-            OsString::from("snapshot"),
-            OsString::from("download"),
-            OsString::from("--version")
-        ])
-        .is_ok()
-    );
 }
 
 #[test]

@@ -257,6 +257,37 @@ impl RestoreApplyJournal {
         )
     }
 
+    /// Mark one upload pending with its exact pre-effect snapshot inventory.
+    pub(in crate::restore) fn mark_upload_snapshot_pending_at(
+        &mut self,
+        sequence: usize,
+        updated_at: Option<String>,
+        snapshot_ids_before: Vec<String>,
+    ) -> Result<(), RestoreApplyJournalError> {
+        let index = self
+            .operations
+            .iter()
+            .position(|operation| operation.sequence == sequence)
+            .ok_or(RestoreApplyJournalError::OperationNotFound(sequence))?;
+        if self.operations[index].operation != RestoreApplyOperationKind::UploadSnapshot {
+            return Err(RestoreApplyJournalError::UnexpectedSnapshotInventory(
+                sequence,
+            ));
+        }
+        let previous = self.operations[index].snapshot_ids_before.clone();
+        self.operations[index].snapshot_ids_before = Some(snapshot_ids_before);
+        if let Err(error) = self.transition_operation(
+            sequence,
+            RestoreApplyOperationState::Pending,
+            Vec::new(),
+            updated_at,
+        ) {
+            self.operations[index].snapshot_ids_before = previous;
+            return Err(error);
+        }
+        Ok(())
+    }
+
     /// Retry one failed restore apply operation by moving it back to ready.
     pub fn retry_failed_operation_at(
         &mut self,

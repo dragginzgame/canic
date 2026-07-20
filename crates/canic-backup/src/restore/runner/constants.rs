@@ -32,5 +32,7 @@ pub(super) const RESTORE_RUN_RECEIPT_STATE_READY: &str = "ready";
 pub(super) const RESTORE_RUN_COMMAND_EXIT_PREFIX: &str = "runner-command-exit";
 pub(super) const RESTORE_RUN_MISSING_UPLOADED_SNAPSHOT_ID: &str = "missing-uploaded-snapshot-id";
 pub(super) const RESTORE_RUN_STOPPED_PRECONDITION_FAILED: &str = "stopped-precondition-failed";
-pub(super) const RESTORE_RUN_RESPONSE_VERSION: u16 = 2;
+pub(super) const RESTORE_RUN_VERIFICATION_EVIDENCE_MISMATCH: &str =
+    "verification-evidence-mismatch";
+pub(super) const RESTORE_RUN_RESPONSE_VERSION: u16 = 1;
 pub(super) const RESTORE_RUN_OUTPUT_RECEIPT_LIMIT: usize = 64 * 1024;

@@ -38,7 +38,6 @@ fn parses_backup_prune_options() {
     let options = BackupPruneOptions::parse([
         OsString::from("--dir"),
         OsString::from("archive"),
-        OsString::from("--failed"),
         OsString::from("--keep"),
         OsString::from("5"),
         OsString::from("--dry-run"),
@@ -48,8 +47,7 @@ fn parses_backup_prune_options() {
     .expect("parse prune options");
 
     assert_eq!(options.dir, PathBuf::from("archive"));
-    assert!(options.failed);
-    assert_eq!(options.keep, Some(5));
+    assert_eq!(options.keep, 5);
     assert!(options.dry_run);
     assert_eq!(options.out, Some(PathBuf::from("prune.txt")));
 }
