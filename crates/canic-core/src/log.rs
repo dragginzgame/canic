@@ -1,6 +1,5 @@
 use crate::{
-    ops::{ic::IcOps, runtime::log::LogOps},
-    storage::stable::env::Env,
+    ops::ic::IcOps, storage::stable::env::Env, workflow::runtime::log::LogRetentionWorkflow,
 };
 use candid::CandidType;
 use serde::{Deserialize, Serialize};
@@ -144,7 +143,9 @@ macro_rules! log {
 pub fn __append_runtime_log(crate_name: &str, topic: Option<Topic>, level: Level, message: &str) {
     let created_at = IcOps::now_secs();
 
-    if let Err(err) = LogOps::append_runtime_log(crate_name, topic, level, message, created_at) {
+    if let Err(err) =
+        LogRetentionWorkflow::append_runtime_log(crate_name, topic, level, message, created_at)
+    {
         #[cfg(debug_assertions)]
         crate::cdk::println!("log append failed: {err}");
 

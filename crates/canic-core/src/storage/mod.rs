@@ -20,7 +20,6 @@ pub mod prelude {
         cdk::types::{Cycles, Principal},
         eager_static,
         ids::{CanisterRole, SubnetRole},
-        storage::StorageError,
     };
     pub use serde::{Deserialize, Serialize};
 }
@@ -34,8 +33,17 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum StorageError {
-    #[error(transparent)]
-    StableMemory(#[from] stable::StableMemoryError),
+    #[error("runtime log count invariant is inconsistent")]
+    LogCountInvariant,
+
+    #[error("runtime log sequence {0} already exists")]
+    LogSequenceConflict(u64),
+
+    #[error("runtime log sequence exhausted")]
+    LogSequenceExhausted,
+
+    #[error("runtime log timestamp regressed from {previous} to {current}")]
+    LogTimestampRegressed { previous: u64, current: u64 },
 }
 
 impl From<StorageError> for InternalError {

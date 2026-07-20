@@ -37,7 +37,7 @@ pub struct RuntimeWorkflow;
 impl RuntimeWorkflow {
     /// Start timers that should run on all non-root canisters.
     pub fn start_all() -> Result<(), InternalError> {
-        workflow::runtime::log::LogRetentionWorkflow::start();
+        workflow::runtime::log::LogRetentionWorkflow::start()?;
         workflow::runtime::cycles::CycleTrackerWorkflow::start();
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
         Ok(())
@@ -58,7 +58,7 @@ impl RuntimeWorkflow {
         })?;
 
         // start shared timers too, but root only records cycle balance samples
-        workflow::runtime::log::LogRetentionWorkflow::start();
+        workflow::runtime::log::LogRetentionWorkflow::start()?;
         workflow::runtime::cycles::CycleTrackerWorkflow::start_standard_only();
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
 

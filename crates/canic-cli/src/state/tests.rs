@@ -153,11 +153,11 @@ fn manifest_json_is_manifest_directly() {
     assert!(json.get("command").is_none());
     assert_eq!(json["roles"][0]["canister_role"], "root");
     assert!(
-        json["roles"][0]["reserved_memory"]
+        json["roles"][0]["state"]
             .as_array()
-            .expect("reserved memory")
+            .expect("state domains")
             .iter()
-            .any(|entry| entry["label"] == "log_index")
+            .any(|entry| entry["domain"] == "runtime_log")
     );
 }
 
@@ -175,7 +175,7 @@ fn text_renderers_include_stable_fields() {
     assert!(manifest.contains("migration_policy: new_domain"));
     assert!(manifest.contains("template_manifests"));
     assert!(manifest.contains("reserved_memory"));
-    assert!(manifest.contains("log_index"));
+    assert!(manifest.contains("runtime_log"));
 }
 
 #[test]

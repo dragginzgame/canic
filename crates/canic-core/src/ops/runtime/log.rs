@@ -11,10 +11,10 @@ use crate::{
         page::{Page, PageRequest},
     },
     log::{Level, Topic},
-    ops::{config::ConfigOps, runtime::RuntimeOpsError},
+    ops::runtime::RuntimeOpsError,
     storage::{
         StorageError,
-        stable::log::{Log, LogEntryRecord, RetentionSummary, apply_retention},
+        stable::log::{Log, LogEntryRecord, LogRetentionBatch},
     },
 };
 use thiserror::Error as ThisError;
@@ -60,13 +60,12 @@ impl LogOps {
         level: Level,
         message: &str,
         created_at: u64,
-    ) -> Result<u64, InternalError> {
+        max_entries: u64,
+        max_entry_bytes: u32,
+    ) -> Result<Option<u64>, InternalError> {
         if !crate::log::is_ready() {
-            return Ok(0);
+            return Ok(None);
         }
-
-        let cfg = ConfigOps::log_config()?;
-        let max_entries = usize::try_from(cfg.max_entries).unwrap_or(usize::MAX);
 
         let entry = LogEntryRecord {
             crate_name: crate_name.to_string(),
@@ -76,23 +75,42 @@ impl LogOps {
             message: message.to_string(),
         };
 
-        let id = Log::append(max_entries, cfg.max_entry_bytes, entry).map_err(LogOpsError::from)?;
+        let id = Log::append(max_entries, max_entry_bytes, entry).map_err(LogOpsError::from)?;
 
         Ok(id)
     }
 
-    /// Apply log retention using explicit parameters.
-    ///
-    /// Returns a summary describing how many entries were removed.
-    pub fn apply_retention(
-        cutoff: Option<u64>,
-        max_entries: usize,
-        max_entry_bytes: u32,
-    ) -> Result<RetentionSummary, InternalError> {
-        let summary =
-            apply_retention(cutoff, max_entries, max_entry_bytes).map_err(LogOpsError::from)?;
+    /// Remove one bounded batch of entries older than the strict cutoff.
+    #[must_use]
+    pub fn retain_created_before(cutoff: u64, limit: usize) -> LogRetentionBatch {
+        Log::retain_created_before(cutoff, limit)
+    }
 
-        Ok(summary)
+    /// Return the oldest retained entry timestamp.
+    #[must_use]
+    pub fn oldest_created_at() -> Option<u64> {
+        Log::oldest_created_at()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn append_test_entry(created_at: u64) {
+        Log::append(
+            1_000,
+            1_000,
+            LogEntryRecord {
+                crate_name: "canic-test".to_string(),
+                created_at,
+                level: Level::Info,
+                topic: None,
+                message: "entry".to_string(),
+            },
+        )
+        .expect("append test log");
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reset_for_tests() {
+        Log::reset_for_tests();
     }
 
     // ---------------------------------------------------------------------

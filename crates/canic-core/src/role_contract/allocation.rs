@@ -38,10 +38,9 @@ pub mod memory {
     pub mod observability {
         pub const CYCLE_TRACKER_ID: u8 = 29;
         pub const CYCLE_TOPUP_EVENTS_ID: u8 = 30;
-        pub const LOG_INDEX_ID: u8 = 31;
-        pub const LOG_DATA_ID: u8 = 32;
         pub const ICP_REFILL_RECORDS_ID: u8 = 33;
         pub const CYCLES_FUNDING_LEDGER_ID: u8 = 34;
+        pub const LOG_ENTRIES_ID: u8 = 35;
     }
 
     pub mod intent {
@@ -96,7 +95,7 @@ use memory::{
     },
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
-        LOG_DATA_ID, LOG_INDEX_ID,
+        LOG_ENTRIES_ID,
     },
     placement::{
         DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENT_ID,
@@ -129,9 +128,8 @@ const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID
 const CORE_RUNTIME_OBSERVABILITY_IDS: &[MemoryId] = &[
     MemoryId::new(CYCLE_TRACKER_ID),
     MemoryId::new(CYCLE_TOPUP_EVENTS_ID),
-    MemoryId::new(LOG_INDEX_ID),
-    MemoryId::new(LOG_DATA_ID),
     MemoryId::new(CYCLES_FUNDING_LEDGER_ID),
+    MemoryId::new(LOG_ENTRIES_ID),
 ];
 const CORE_ICP_REFILL_RECORDS_IDS: &[MemoryId] = &[MemoryId::new(ICP_REFILL_RECORDS_ID)];
 const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[

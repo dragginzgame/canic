@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.3`.
-- The latest published release is `v0.95.3` at
-  `73231a7613397cc75004b3c2b5e25ee3b44a98ee`.
-- The `v0.95.3` source tree is
-  `171e9e8ecda7d305812621a4de5f6b8445a181f3`; its Cargo.lock SHA-256 is
-  `95feb453597a6f0b9b7a57d9fea690dfff08e83c89daedc13bf8856d8772e7b5`.
+- The workspace package version is `0.95.4`.
+- The latest published release is `v0.95.4` at
+  `371d44a361a6f8ce005ea1b9e9bee5e2c0b400c4`.
+- The `v0.95.4` source tree is
+  `3454b96b05104374c1c52dbd91c53bdcec8150c4`; its Cargo.lock SHA-256 is
+  `e1ddeaa56f8cc1b9cf73c77f43f37981a76a174069d23fd1bf519a967170c8f4`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -298,11 +298,17 @@ Historical detail is archived at:
   accepted bounded backoff. Direct inspection also corrected the log audit:
   entry-count retention is still sweep-owned, so log migration remains an
   isolated later batch rather than being folded into pool work.
-- The open `0.95.4` batch adds one lifecycle-rebuilt stable index containing
+- Released `v0.95.4` adds one lifecycle-rebuilt stable index containing
   only terminal placement acknowledgements. Empty roles execute no callbacks;
   root transport failure uses the frozen 1/2/4/8/16/30-minute backoff, while
   root rejection and local contradictions stop failed. A maintained scaling
   PocketIC journey drains real acknowledgements back to idle.
+- The open `0.95.5` batch completes Slice C. Count and byte retention are
+  enforced during append by one ordered runtime-log authority; optional age
+  retention removes at most 256 rows at the exact oldest deadline. The default
+  no-age policy executes zero callbacks. Append-only allocations 31 and 32 are
+  hard-cut in favor of the modeled `runtime_log` domain at allocation 35, with
+  no migration or compatibility reader for non-authoritative old log history.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -332,9 +338,10 @@ identities, request/generation arbitration, after-completion recurrence,
 consuming cancellation, truthful live status, and one lifecycle facade.
 Released `.2` completes the first Slice C owner: finite local-intent expiry.
 Released `.3` removes idle pool polling and corrects intent invariant failure.
-The open `.4` batch owns placement acknowledgement through one terminal-only
-derived index and pending-only scheduler without combining the blocked log
-storage-authority work.
+Released `.4` owns placement acknowledgement through one terminal-only
+derived index and pending-only scheduler. The open `.5` batch gives log count,
+byte, and age retention one ordered mutation authority and removes the final
+Slice C polling interval.
 Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
 backup/restore changes, and compatibility layers remain excluded.
 
@@ -857,10 +864,9 @@ First primary results:
 
 ## Next Action
 
-Release the validated open `0.95.4` placement acknowledgement batch. Then take
-log retention as the final independent Slice C owner, keeping its sweep-owned
-count cap and age deletion under one bounded mutation authority before removing
-the interval.
+Complete and release the open `0.95.5` log-retention batch. Then begin Slice D
+by freezing the independent cycle-sampling and automatic-top-up duration
+decisions before changing either owner.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

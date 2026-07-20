@@ -22,10 +22,10 @@ One lifecycle-rebuilt stable index contains only finite expiry deadlines;
 bounded callbacks follow its exact earliest deadline, while TTL-free intents
 leave the process unregistered and idle. Released `v0.95.3` removes the
 pool maintenance interval, makes `pool:pending` the sole event/retry owner, and
-corrects intent invariant failure to stop rather than self-retry. The open
-`0.95.4` batch gives placement acknowledgement a durable terminal-only index
-and pending-only bounded recovery. Log retention remains separate and blocked
-on the count-authority correction admitted below.
+corrects intent invariant failure to stop rather than self-retry. Released
+`v0.95.4` gives placement acknowledgement a durable terminal-only index and
+pending-only bounded recovery. The open `0.95.5` batch completes Slice C with
+append-owned count enforcement and exact deadline-driven log age retention.
 
 The accepted design now includes a maintainer-approved duration amendment.
 Cadences are no longer retained merely because the audit recorded them.
@@ -117,7 +117,7 @@ The canonical report is
 
 ## Slice C Placement Evidence
 
-- The open `0.95.4` batch adds core-runtime allocation 45 as a derived index
+- Released `v0.95.4` adds core-runtime allocation 45 as a derived index
   containing only terminal placement operation identities. Lifecycle rebuilds
   it from canonical receipt-backed intents before scheduling begins.
 - Empty indexes remain `unregistered + idle`. Producers and lifecycle recovery
@@ -133,6 +133,24 @@ The canonical report is
   classification, and bounds. A maintained scaling PocketIC topology proves
   real root acknowledgement drains back to idle.
 
+## Slice C Log Evidence
+
+- The open `0.95.5` batch hard-cuts the append-only allocations 31 and 32 and
+  their full-history rewrite. One ordered stable map at allocation 35 now owns
+  current runtime-log records and exact oldest-row removal.
+- Append owns both entry-byte truncation and the count limit. At steady state
+  it evicts at most one displaced row; lowering the compiled count below
+  retained history clears non-authoritative logs in one bounded hard cut.
+- Age retention schedules only `oldest.created_at + max_age_secs + 1s`, which
+  preserves the existing strict cutoff. Each callback removes at most 256 due
+  rows and continues through a separate timer message only while more are due.
+- With the default `max_age_secs` unset, `log_retention:run` remains
+  `unregistered + idle` with zero callbacks rather than waking 144 times/day.
+  Local configuration or storage contradictions stop failed.
+- Runtime-log Candid and configuration shapes are unchanged. The state
+  manifest now declares one `runtime_log` v1 domain; retired append-only log
+  history has no migration, alias, fallback, or parallel reader.
+
 ## Finding Index
 
 | Finding | Severity | State | Owner |
@@ -140,11 +158,11 @@ The canonical report is
 | `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-003` false live timer status | P2 | fixed in released 0.95.1 | common timer workflow/runtime projection |
-| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in open 0.95.4; log remains | log, pool, intent, placement workflows |
-| `CANIC-095-TIMER-005` unrelated full scans | P2 | intent fixed in released 0.95.2; placement fixed in open 0.95.4 | intent and placement ops/workflows |
+| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in released 0.95.4; log fixed in open 0.95.5 | log, pool, intent, placement workflows |
+| `CANIC-095-TIMER-005` unrelated full scans | P2 | intent fixed in released 0.95.2; placement fixed in released 0.95.4 | intent and placement ops/workflows |
 | `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in released 0.95.1 | timer workflow and lifecycle facade |
 | `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | accepted for Slice D | cycle/top-up workflow |
-| `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | accepted for later isolated Slice C batch | log storage/ops/workflow |
+| `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | fixed in open 0.95.5 | log storage/ops/workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
 reproducible timer-owner evidence.
@@ -165,6 +183,6 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Release the validated open `0.95.4` placement acknowledgement batch. Then take
-log retention as the final independent Slice C owner, keeping count and age
-mutation under one canonical bounded authority before removing its interval.
+Complete and release the open `0.95.5` log-retention batch, then begin Slice D
+by freezing the independent cycle-sampling and automatic-top-up duration
+decisions before changing either owner.

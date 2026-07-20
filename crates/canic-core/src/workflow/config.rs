@@ -17,9 +17,6 @@ pub const WORKFLOW_INIT_DELAY: Duration = Duration::from_secs(30);
 /// Shared cadence for cycle tracking (60 minutes).
 pub const WORKFLOW_CYCLE_TRACK_INTERVAL: Duration = Duration::from_hours(1);
 
-/// Shared cadence for log retention (10 minutes).
-pub const WORKFLOW_LOG_RETENTION_INTERVAL: Duration = Duration::from_mins(10);
-
 /// Root delegated-proof renewal sweep cadence (1 minute).
 pub const WORKFLOW_AUTH_RENEWAL_INTERVAL: Duration = Duration::from_mins(1);
 
