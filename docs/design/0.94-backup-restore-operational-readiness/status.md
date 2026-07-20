@@ -4,21 +4,22 @@ Last updated: 2026-07-20
 
 ## Current State
 
-The maintainer released downloaded-artifact transition recovery as `v0.94.7`.
+The maintainer released checksum-calculation interruption proof as `v0.94.8`.
 The capability, command-lifetime, pending-claim, lifecycle, snapshot-create,
-download-effect, and downloaded-transition findings are fixed in released
-code.
+download-effect, downloaded-transition, and checksum-calculation findings and
+proof gaps are fixed or completed in released code.
 
-The current 0.94.8 draft completes checksum-calculation interruption (`B11`).
-A child computes the real secure checksum and is killed before any artifact-
-journal transition or execution receipt. Restart recomputes the same checksum
-from unchanged exact `Downloaded` staging, records one receipt, and invokes no
-external command. Missing staging and unsafe symlink input fail closed while
-the artifact remains `Downloaded`. The existing production replay and secure
-traversal paths required no change. The aggregate verification journey passes;
-the backup crash journey remains pending until every assigned case passes.
-Public APIs, CLI syntax, Candid, durable documents, and package versions are
-unchanged.
+The current 0.94.9 draft completes both checksum-verified transition sides
+(`B12`) and both canonical artifact-publication sides (`B13`). Restart treats
+an exact durable checksum row as authority, rehashes exact staging, and
+reconstructs its receipt without replacing the checksum. Publication rehashes
+the private tree before rename and recovery rehashes the canonical tree before
+adoption. Changed bytes and conflicting destinations fail closed without
+advancing artifact authority. The public Rust runner error enum gains one
+exact state-conflict cause; CLI syntax, Candid, durable document shapes,
+package versions, and genuine version `1` fields are unchanged. The aggregate
+verification journey passes; the backup crash journey remains pending until
+every assigned case passes.
 
 Known non-blocking structural residue deferred from 0.93: none. The baseline
 risks below are bounded operational proof gaps intentionally assigned to 0.94,
@@ -41,7 +42,7 @@ not unfinished structural cleanup.
 | Journey | State | Evidence | Findings |
 | --- | --- | --- | --- |
 | `CANIC-094-J01` complete backup/verify/restore | pending | none | none |
-| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); [snapshot-create reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); [start reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); [download staging](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); [downloaded transition](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); [checksum calculation](../../audits/reports/2026-07/2026-07-20/0.94-checksum-effect-recomputation.md); `B01`-`B11` | `CANIC-094-BACKUP-001` through `-006` fixed; B11 no finding |
+| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); [snapshot-create reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); [start reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); [download staging](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); [downloaded transition](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); [checksum calculation](../../audits/reports/2026-07/2026-07-20/0.94-checksum-effect-recomputation.md); [checksum transition](../../audits/reports/2026-07/2026-07-20/0.94-checksum-transition-reconciliation.md); [artifact publication](../../audits/reports/2026-07/2026-07-20/0.94-artifact-publication-reconciliation.md); `B01`-`B13` | `CANIC-094-BACKUP-001` through `-008` fixed; B11 no finding |
 | `CANIC-094-J03` verification interruption | pass | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `V01`-`V03`; resumed | none |
 | `CANIC-094-J04` restore crash matrix | pending | none | none |
 | `CANIC-094-J05` completed-operation replay | pending | none | none |
@@ -127,6 +128,8 @@ still requires a reproducible required-journey finding.
 | `CANIC-094-BACKUP-004` | P1 | fixed in `v0.94.5` | backup start recovery | [start-reconciliation report](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); `B08` |
 | `CANIC-094-BACKUP-005` | P1 | fixed in `v0.94.6` | backup download-staging recovery | [download-staging report](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); `B09` |
 | `CANIC-094-BACKUP-006` | P1 | fixed in `v0.94.7` | downloaded-artifact transition recovery | [downloaded-transition report](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); `B10` |
+| `CANIC-094-BACKUP-007` | P1 | fixed in 0.94.9 draft | checksum-verified transition recovery | [checksum-transition report](../../audits/reports/2026-07/2026-07-20/0.94-checksum-transition-reconciliation.md); `B12` |
+| `CANIC-094-BACKUP-008` | P1 | fixed in 0.94.9 draft | checksum-bound artifact publication | [artifact-publication report](../../audits/reports/2026-07/2026-07-20/0.94-artifact-publication-reconciliation.md); `B13` |
 
 ## Validation State
 
@@ -187,6 +190,17 @@ still requires a reproducible required-journey finding.
   unchanged staged bytes, records one receipt, and executes no external
   command. Missing and unsafe input reject without claiming checksum-verified
   artifact state.
+- Both `B12` checksum-verified transition sides: passed under `SIGKILL`.
+  Before rename, restart retains `Downloaded` and computes the normal checksum.
+  After rename and directory sync, restart rehashes exact staging, adopts the
+  recorded checksum, and reconstructs one receipt without rewriting the row.
+  Changed staging returns the typed checksum mismatch without weakening either
+  durable journal or publishing a canonical artifact.
+- Both `B13` canonical artifact-publication sides: passed under `SIGKILL`.
+  Before rename, restart retains and publishes only exact checksum-bound
+  staging. After rename and directory sync, restart rehashes and adopts the
+  canonical directory without another rename. Changed staging and conflicting
+  destinations reject without advancing the artifact journal or manifest.
 - `V01` before-validation, `V02` during-checksum, and `V03` after-result
   process-death cases: passed; the backup layout path/type/byte inventory is
   unchanged.
@@ -195,12 +209,11 @@ still requires a reproducible required-journey finding.
 - Changelog governance: passed.
 - Design/status Markdown and link review: passed.
 - Whitespace/diff hygiene: passed.
-- Crash-point execution: 30 cases passed; 76 remain pending.
+- Crash-point execution: 34 cases passed; 72 remain pending.
 - Realistic environment journey: not started.
 
 ## Next Action
 
-Execute `B12` on both sides of the `ChecksumVerified` artifact-journal
-transition. Restart must publish only exact checksum-bound staging, adopt a
-durable transition without recomputing or weakening its authority, and reject
-missing or conflicting evidence.
+Execute `B14` on both sides of the `ChecksumVerified -> Durable` artifact-
+journal transition. Restart must reconcile exact canonical bytes with the
+journal checksum without redownloading or republishing the artifact.

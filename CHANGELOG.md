@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.9` makes checksum-verified staging authoritative across restart and
+  publishes only bytes matching its recorded hash, safely adopting exact
+  canonical directories while rejecting conflicting evidence.
+
 - `0.94.8` proves checksum calculation is safely repeatable after process
   death, preserves unchanged staged bytes, and fails closed on missing or
   unsafe checksum input without adding product recovery machinery.

@@ -198,7 +198,7 @@ fn prove_checksum_recomputation() {
     fs::remove_dir_all(handshake_root).expect("remove checksum handshake root");
 }
 
-fn prepared_pending_checksum(
+pub(super) fn prepared_pending_checksum(
     name: &str,
 ) -> (
     PathBuf,

@@ -15,6 +15,16 @@ pub enum ArtifactCommitOutcome {
     Recovered,
 }
 
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "android", target_vendor = "apple")
+))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArtifactCommitBarrier {
+    BeforePublication,
+    AfterPublicationSync,
+}
+
 /// Durably publish or recover one checksum-verified snapshot directory.
 pub fn commit_artifact_directory(
     temporary: &Path,
@@ -33,6 +43,30 @@ pub fn commit_artifact_directory(
             platform: std::env::consts::OS,
         })
     }
+}
+
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "android", target_vendor = "apple")
+))]
+pub fn commit_artifact_directory_at_barriers(
+    temporary: &Path,
+    canonical: &Path,
+    expected_checksum: &str,
+    mut at_barrier: impl FnMut(ArtifactCommitBarrier),
+) -> Result<ArtifactCommitOutcome, PersistenceError> {
+    supported::commit_with_hook(temporary, canonical, expected_checksum, |step, _| {
+        match step {
+            supported::ArtifactCommitStep::Publication => {
+                at_barrier(ArtifactCommitBarrier::BeforePublication);
+            }
+            supported::ArtifactCommitStep::PublicationDurable => {
+                at_barrier(ArtifactCommitBarrier::AfterPublicationSync);
+            }
+            _ => {}
+        }
+        Ok(())
+    })
 }
 
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
@@ -60,13 +94,14 @@ mod supported {
         RootDirectorySync,
         Publication,
         ParentDirectorySync,
+        PublicationDurable,
     }
 
     pub(super) fn commit_with_hook(
         temporary: &Path,
         canonical: &Path,
         expected_checksum: &str,
-        mut before: impl FnMut(ArtifactCommitStep, &Path) -> io::Result<()>,
+        mut at_step: impl FnMut(ArtifactCommitStep, &Path) -> io::Result<()>,
     ) -> Result<ArtifactCommitOutcome, PersistenceError> {
         let (parent, temporary_name, canonical_name) = sibling_paths(temporary, canonical)?;
         let temporary_exists = path_exists_without_following(temporary)?;
@@ -75,8 +110,9 @@ mod supported {
 
         match (temporary_exists, canonical_exists) {
             (true, false) => {
-                sync_tree(&parent_fd, temporary_name, temporary, false, &mut before)?;
-                before(ArtifactCommitStep::Publication, canonical)?;
+                let checksum = sync_tree(&parent_fd, temporary_name, temporary, &mut at_step)?;
+                checksum.verify(expected_checksum)?;
+                at_step(ArtifactCommitStep::Publication, canonical)?;
                 unix_fs::renameat_with(
                     &parent_fd,
                     temporary_name,
@@ -85,18 +121,17 @@ mod supported {
                     RenameFlags::NOREPLACE,
                 )
                 .map_err(errno_to_io)?;
-                before(ArtifactCommitStep::ParentDirectorySync, parent)?;
+                at_step(ArtifactCommitStep::ParentDirectorySync, parent)?;
                 unix_fs::fsync(&parent_fd).map_err(errno_to_io)?;
+                at_step(ArtifactCommitStep::PublicationDurable, canonical)?;
                 Ok(ArtifactCommitOutcome::Published)
             }
             (false, true) => {
-                let checksum = sync_tree(&parent_fd, canonical_name, canonical, true, &mut before)?
-                    .ok_or_else(|| {
-                        io::Error::other("artifact recovery checksum was not collected")
-                    })?;
+                let checksum = sync_tree(&parent_fd, canonical_name, canonical, &mut at_step)?;
                 checksum.verify(expected_checksum)?;
-                before(ArtifactCommitStep::ParentDirectorySync, parent)?;
+                at_step(ArtifactCommitStep::ParentDirectorySync, parent)?;
                 unix_fs::fsync(&parent_fd).map_err(errno_to_io)?;
+                at_step(ArtifactCommitStep::PublicationDurable, canonical)?;
                 Ok(ArtifactCommitOutcome::Recovered)
             }
             (true, true) => Err(PersistenceError::ArtifactCommitPathConflict {
@@ -150,9 +185,8 @@ mod supported {
         parent_fd: &impl AsFd,
         directory_name: &OsStr,
         display_root: &Path,
-        calculate_checksum: bool,
-        before: &mut impl FnMut(ArtifactCommitStep, &Path) -> io::Result<()>,
-    ) -> Result<Option<ArtifactChecksum>, PersistenceError> {
+        at_step: &mut impl FnMut(ArtifactCommitStep, &Path) -> io::Result<()>,
+    ) -> Result<ArtifactChecksum, PersistenceError> {
         let directory_fd = unix_fs::openat(
             parent_fd,
             directory_name,
@@ -160,23 +194,23 @@ mod supported {
             Mode::empty(),
         )
         .map_err(errno_to_io)?;
-        let mut checksums = calculate_checksum.then(Vec::new);
+        let mut checksums = Vec::new();
         sync_directory(
             &directory_fd,
             Path::new(""),
             display_root,
             &mut checksums,
-            before,
+            at_step,
         )?;
-        Ok(checksums.map(ArtifactChecksum::from_relative_file_checksums))
+        Ok(ArtifactChecksum::from_relative_file_checksums(checksums))
     }
 
     fn sync_directory(
         directory_fd: &OwnedFd,
         relative_directory: &Path,
         display_root: &Path,
-        checksums: &mut Option<Vec<(PathBuf, ArtifactChecksum)>>,
-        before: &mut impl FnMut(ArtifactCommitStep, &Path) -> io::Result<()>,
+        checksums: &mut Vec<(PathBuf, ArtifactChecksum)>,
+        at_step: &mut impl FnMut(ArtifactCommitStep, &Path) -> io::Result<()>,
     ) -> Result<(), PersistenceError> {
         let mut directory = Dir::read_from(directory_fd).map_err(errno_to_io)?;
         while let Some(entry) = directory.read() {
@@ -198,17 +232,15 @@ mod supported {
                     let child_fd = open_child(directory_fd, entry.file_name())?;
                     ensure_opened_type(&child_fd, FileType::RegularFile, &display_path)?;
                     let mut file = File::from(child_fd);
-                    before(ArtifactCommitStep::RegularFileSync, &display_path)?;
+                    at_step(ArtifactCommitStep::RegularFileSync, &display_path)?;
                     file.sync_all()?;
-                    if let Some(checksums) = checksums {
-                        file.seek(SeekFrom::Start(0))?;
-                        checksums.push((relative_path, ArtifactChecksum::from_reader(&mut file)?));
-                    }
+                    file.seek(SeekFrom::Start(0))?;
+                    checksums.push((relative_path, ArtifactChecksum::from_reader(&mut file)?));
                 }
                 FileType::Directory => {
                     let child_fd = open_child(directory_fd, entry.file_name())?;
                     ensure_opened_type(&child_fd, FileType::Directory, &display_path)?;
-                    sync_directory(&child_fd, &relative_path, display_root, checksums, before)?;
+                    sync_directory(&child_fd, &relative_path, display_root, checksums, at_step)?;
                 }
                 kind => return Err(unsupported_entry(&display_path, kind)),
             }
@@ -225,7 +257,7 @@ mod supported {
                 display_root.join(relative_directory),
             )
         };
-        before(step, &display_path)?;
+        at_step(step, &display_path)?;
         unix_fs::fsync(directory_fd).map_err(errno_to_io)?;
         Ok(())
     }
@@ -374,6 +406,31 @@ mod tests {
     }
 
     #[test]
+    fn changed_temporary_tree_cannot_be_published_under_an_old_checksum() {
+        let root = temp_dir("canic-backup-artifact-changed-before-publication");
+        let temporary = root.join("snapshot.tmp");
+        let canonical = root.join("snapshot");
+        write_tree(&temporary);
+        let expected = checksum(&temporary);
+        fs::write(temporary.join("root.txt"), b"changed snapshot")
+            .expect("change temporary artifact");
+
+        let error = commit_with_hook(&temporary, &canonical, &expected, |_, _| Ok(()))
+            .expect_err("changed temporary artifact must reject");
+
+        std::assert_matches!(
+            error,
+            PersistenceError::Checksum(
+                crate::artifacts::ArtifactChecksumError::ChecksumMismatch { .. }
+            )
+        );
+        assert!(temporary.exists());
+        assert!(!canonical.exists());
+
+        fs::remove_dir_all(root).expect("remove changed temporary root");
+    }
+
+    #[test]
     fn injected_commit_failures_never_expose_a_partial_tree() {
         let steps = [
             ArtifactCommitStep::RegularFileSync,
@@ -381,6 +438,7 @@ mod tests {
             ArtifactCommitStep::RootDirectorySync,
             ArtifactCommitStep::Publication,
             ArtifactCommitStep::ParentDirectorySync,
+            ArtifactCommitStep::PublicationDurable,
         ];
 
         for step in steps {
@@ -401,7 +459,10 @@ mod tests {
             .expect_err("injected step must fail");
             std::assert_matches!(error, PersistenceError::Io(_));
 
-            if step == ArtifactCommitStep::ParentDirectorySync {
+            if matches!(
+                step,
+                ArtifactCommitStep::ParentDirectorySync | ArtifactCommitStep::PublicationDurable
+            ) {
                 assert!(!temporary.exists());
                 assert_eq!(checksum(&canonical), expected);
                 let recovered = commit_with_hook(&temporary, &canonical, &expected, |_, _| Ok(()))

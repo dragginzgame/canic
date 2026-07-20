@@ -319,6 +319,15 @@ pub enum BackupRunnerError {
     },
 
     #[error(
+        "backup operation {sequence} cannot reconcile pending artifact verification for target {target_canister_id} while artifact state is {state:?}"
+    )]
+    ArtifactVerificationStateConflict {
+        sequence: usize,
+        target_canister_id: String,
+        state: ArtifactState,
+    },
+
+    #[error(
         "backup operation {sequence} artifact temp path for target {target_canister_id} does not match expected runner path: journal={journal_path}, expected={expected_path}"
     )]
     ArtifactTempPathMismatch {

@@ -14,6 +14,11 @@ mod json;
 mod layout;
 
 pub(crate) use artifact_commit::commit_artifact_directory;
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "android", target_vendor = "apple")
+))]
+pub(crate) use artifact_commit::{ArtifactCommitBarrier, commit_artifact_directory_at_barriers};
 pub use command_lifetime_lock::CommandLifetimeHandle;
 pub(crate) use command_lifetime_lock::{CommandLifetimeLock, CommandLifetimeLockError};
 pub use error::PersistenceError;
