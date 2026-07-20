@@ -35,6 +35,20 @@ where
 }
 
 fn replace_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace_bytes_at_barriers(path, bytes, |_| {})
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum DurableWriteBarrier {
+    BeforeRename,
+    AfterDirectorySync,
+}
+
+fn replace_bytes_at_barriers(
+    path: &Path,
+    bytes: &[u8],
+    mut barrier: impl FnMut(DurableWriteBarrier),
+) -> io::Result<()> {
     let parent = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -51,13 +65,29 @@ fn replace_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
         return Err(error);
     }
     drop(temp_file);
+    barrier(DurableWriteBarrier::BeforeRename);
 
     if let Err(error) = fs::rename(&temp_path, path) {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
 
-    File::open(parent)?.sync_all()
+    File::open(parent)?.sync_all()?;
+    barrier(DurableWriteBarrier::AfterDirectorySync);
+    Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn write_json_durable_at_barriers<T>(
+    path: &Path,
+    value: &T,
+    barrier: impl FnMut(DurableWriteBarrier),
+) -> Result<(), PersistenceError>
+where
+    T: Serialize,
+{
+    let bytes = serde_json::to_vec_pretty(value)?;
+    replace_bytes_at_barriers(path, &bytes, barrier).map_err(PersistenceError::from)
 }
 
 fn create_sibling_temp(path: &Path, parent: &Path) -> io::Result<(PathBuf, File)> {

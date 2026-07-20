@@ -10,6 +10,8 @@ pub mod execution;
 mod hash;
 pub mod journal;
 pub mod manifest;
+#[cfg(test)]
+pub(crate) mod operational_readiness;
 pub mod persistence;
 pub mod plan;
 pub mod registry;

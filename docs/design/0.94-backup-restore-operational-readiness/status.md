@@ -4,18 +4,17 @@ Last updated: 2026-07-19
 
 ## Current State
 
-The maintainer released the first 0.94 batch as `v0.94.0`. The exact operation
-and durable-transition inventory is confirmed, and the early disposable-
-platform capability gate is complete with two findings.
+The maintainer released the command-quiescence and fail-closed pending-
+recovery batch as `v0.94.1`. All three findings from the capability and first
+recovery traces are fixed in released code.
 
-`CANIC-094-LOCK-001` is released in `v0.94.0`. `CANIC-094-PROC-001` is fixed in
-the current worktree by binding each mutating command tree to one inherited
-kernel lock while keeping unrelated descriptors close-on-exec.
-`CANIC-094-RESTORE-001` is also fixed in the current worktree: restore can no
-longer reset an unknown pending mutation to ready or synthesize a recovery
-receipt. Restore runner JSON is hard-cut to version 2 and the obsolete CLI,
-API, mode flag, and receipt-summary field are removed without aliases.
-Persisted journals, Candid, and package versions are unchanged.
+The current worktree freezes the exact executable protocol manifest at 106
+unique cases. The first deterministic process-death cases pass on both sides
+of initial execution-journal publication (`B01`) and around read-only
+verification (`V01` through `V03`). The aggregate backup and verification
+proof now passes; the backup crash journey remains pending until every case
+assigned to it passes. Persisted journals, public APIs, CLI/JSON output,
+Candid, and package versions are unchanged.
 
 Known non-blocking structural residue deferred from 0.93: none. The baseline
 risks below are bounded operational proof gaps intentionally assigned to 0.94,
@@ -38,8 +37,8 @@ not unfinished structural cleanup.
 | Journey | State | Evidence | Findings |
 | --- | --- | --- | --- |
 | `CANIC-094-J01` complete backup/verify/restore | pending | none | none |
-| `CANIC-094-J02` backup crash matrix | pending | none | none |
-| `CANIC-094-J03` verification interruption | pending | none | none |
+| `CANIC-094-J02` backup crash matrix | pending | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `B01` | none |
+| `CANIC-094-J03` verification interruption | pass | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `V01`-`V03`; resumed | none |
 | `CANIC-094-J04` restore crash matrix | pending | none | none |
 | `CANIC-094-J05` completed-operation replay | pending | none | none |
 | `CANIC-094-J06` corruption/rejection matrix | pending | none | none |
@@ -58,6 +57,8 @@ are tracked separately.
 - Expected interruption cases: 52 backup, three verification, and 41 restore.
 - Expected rejection cases: ten.
 - Frozen minimum: 106 protocol cases plus the seven aggregate journeys.
+- Executable manifest: frozen with exact area counts, point coverage, unique
+  case identities, and operation-variant multipliers.
 
 Adding a variant, durable transition, external effect, or crash-case generator
 requires a design amendment and updated count before execution continues.
@@ -114,8 +115,8 @@ still requires a reproducible required-journey finding.
 | Finding | Severity | Status | Owner | Evidence |
 | --- | --- | --- | --- | --- |
 | `CANIC-094-LOCK-001` | P1 | fixed in `v0.94.0` | backup persistence lock | `C07`; live exclusion, close-on-exec, unsafe entry, and `SIGKILL` tests |
-| `CANIC-094-PROC-001` | P1 | fixed in worktree | host external command execution | [command-quiescence report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md); `B18`, `R14` |
-| `CANIC-094-RESTORE-001` | P1 | fixed in worktree | restore pending recovery | [pending-recovery report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md) |
+| `CANIC-094-PROC-001` | P1 | fixed in `v0.94.1` | host external command execution | [command-quiescence report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md); `B18`, `R14` |
+| `CANIC-094-RESTORE-001` | P1 | fixed in `v0.94.1` | restore pending recovery | [pending-recovery report](../../audits/reports/2026-07/2026-07-19/0.94-command-quiescence-and-pending-recovery.md) |
 
 ## Validation State
 
@@ -133,17 +134,23 @@ still requires a reproducible required-journey finding.
   rejection: passed.
 - Pending read-only restore verification replay: passed.
 - Restore CLI option and run suites after the pending-reset hard cut: passed.
+- Executable 106-case manifest count, point, uniqueness, and variant guards:
+  passed.
+- `B01` before-rename and after-directory-sync process-death cases: passed.
+- `V01` before-validation, `V02` during-checksum, and `V03` after-result
+  process-death cases: passed; the backup layout path/type/byte inventory is
+  unchanged.
 - Strict targeted Clippy for `canic-backup`, `canic-host`, and `canic-cli`:
   passed.
 - Changelog governance: passed.
 - Design/status Markdown and link review: passed.
 - Whitespace/diff hygiene: passed.
-- Crash-point execution: not started.
+- Crash-point execution: five cases passed; 101 remain pending.
 - Realistic environment journey: not started.
 
 ## Next Action
 
-Freeze the executable crash-point manifest against the now-proven command-
-quiescence boundary, then begin the backup and verification baseline cases.
-Effect-specific reconciliation remains journey-driven: the command lock does
-not authorize blind replay of a quiescent unknown mutation.
+Execute backup plan/preflight publication points `B02` and `B03` through the
+same deterministic persistence barrier. Effect-specific reconciliation
+remains journey-driven: the command lock does not authorize blind replay of a
+quiescent unknown mutation.

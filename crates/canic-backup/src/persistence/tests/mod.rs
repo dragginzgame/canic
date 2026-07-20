@@ -1,3 +1,6 @@
+#[cfg(unix)]
+mod operational_readiness;
+
 use super::*;
 use crate::test_support::temp_dir;
 use crate::{
