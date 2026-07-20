@@ -5,19 +5,15 @@ use crate::{
     manifest::{BackupUnitKind, IdentityMode},
     persistence::{BackupLayout, CommandLifetimeLock, JournalLock},
     plan::{
-        AuthorityEvidence, AuthorityProofSource, BackupExecutionPreflightReceipts,
-        BackupOperationKind, BackupPlan, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
-        ControlAuthorityReceipt, QuiescencePolicy, QuiescencePreflightReceipt,
-        QuiescencePreflightTarget, SnapshotReadAuthority, SnapshotReadAuthorityReceipt,
-        TopologyPreflightReceipt, TopologyPreflightTarget, build_backup_plan,
+        AuthorityEvidence, BackupOperationKind, BackupPlan, BackupPlanBuildInput, BackupScopeKind,
+        ControlAuthority, QuiescencePolicy, SnapshotReadAuthority, build_backup_plan,
     },
     registry::RegistryEntry,
-    test_support::temp_dir,
+    test_support::{
+        FakeBackupRunnerExecutor as FakeExecutor, FakeBackupRunnerFailure as FakeFailure, temp_dir,
+    },
 };
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
 const ROOT: &str = "aaaaa-aa";
 const APP: &str = "renrk-eyaaa-aaaaa-aaada-cai";
@@ -412,7 +408,7 @@ fn runner_rejects_locked_execution_journal_before_running_commands() {
     assert!(executor.commands.is_empty());
 }
 
-// Ensure restart cannot observe or replay a pending effect while its prior command tree lives.
+// Ensure restart observes a pending stop only after its prior command tree exits.
 #[test]
 fn runner_preserves_pending_operation_while_command_is_in_flight() {
     let root = prepared_layout("canic-backup-runner-command-in-flight");
@@ -469,30 +465,29 @@ fn runner_preserves_pending_operation_while_command_is_in_flight() {
     );
 
     command_lock.finish().expect("release prior command lock");
-    let error = backup_run_execute_with_executor(&runner_config(root.clone(), None), &mut executor)
-        .expect_err("quiescent unknown outcome must stop resume");
+    let response =
+        backup_run_execute_with_executor(&runner_config(root.clone(), Some(1)), &mut executor)
+            .expect("quiescent running target permits one stop");
     let persisted = layout
         .read_execution_journal()
-        .expect("read preserved pending journal");
+        .expect("read reconciled stop journal");
 
-    std::assert_matches!(
-        error,
-        BackupRunnerError::CommandOutcomeUnknown {
-            sequence,
-            operation_id,
-            ..
-        } if sequence == operation.sequence && operation_id == operation.operation_id
+    assert_eq!(response.executed_operation_count, 1);
+    assert_eq!(
+        executor.commands,
+        vec![format!("status:{APP}"), format!("stop:{APP}")]
     );
-    assert!(executor.commands.is_empty());
     assert_eq!(
         persisted.operations[operation.sequence].state,
-        BackupExecutionOperationState::Pending
+        BackupExecutionOperationState::Completed
     );
-    assert!(
+    assert_eq!(
         persisted
             .operation_receipts
             .iter()
-            .all(|receipt| receipt.sequence != operation.sequence)
+            .filter(|receipt| receipt.sequence == operation.sequence)
+            .count(),
+        1
     );
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -565,155 +560,6 @@ fn runner_rejects_unexpected_download_temp_path() {
 
     fs::remove_dir_all(root).expect("remove temp root");
     std::assert_matches!(err, BackupRunnerError::ArtifactTempPathMismatch { .. });
-}
-
-#[derive(Default)]
-struct FakeExecutor {
-    commands: Vec<String>,
-    fail_on: Option<FakeFailure>,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-enum FakeFailure {
-    Preflight,
-    CreateSnapshot,
-}
-
-impl BackupRunnerExecutor for FakeExecutor {
-    fn preflight_receipts(
-        &mut self,
-        plan: &BackupPlan,
-        preflight_id: &str,
-        validated_at: &str,
-        expires_at: &str,
-    ) -> Result<BackupExecutionPreflightReceipts, BackupRunnerCommandError> {
-        for target in &plan.targets {
-            self.commands.push(format!("status:{}", target.canister_id));
-        }
-        if self.fail_on == Some(FakeFailure::Preflight) {
-            return Err(BackupRunnerCommandError::failed(
-                "preflight",
-                "simulated preflight failure",
-            ));
-        }
-        Ok(BackupExecutionPreflightReceipts {
-            plan_id: plan.plan_id.clone(),
-            preflight_id: preflight_id.to_string(),
-            validated_at: validated_at.to_string(),
-            expires_at: expires_at.to_string(),
-            topology: TopologyPreflightReceipt {
-                plan_id: plan.plan_id.clone(),
-                preflight_id: preflight_id.to_string(),
-                topology_hash_before_quiesce: plan.topology_hash_before_quiesce.clone(),
-                topology_hash_at_preflight: plan.topology_hash_before_quiesce.clone(),
-                targets: plan
-                    .targets
-                    .iter()
-                    .map(TopologyPreflightTarget::from)
-                    .collect(),
-                validated_at: validated_at.to_string(),
-                expires_at: expires_at.to_string(),
-                message: None,
-            },
-            control_authority: plan
-                .targets
-                .iter()
-                .map(|target| ControlAuthorityReceipt {
-                    plan_id: plan.plan_id.clone(),
-                    preflight_id: preflight_id.to_string(),
-                    target_canister_id: target.canister_id.clone(),
-                    authority: ControlAuthority::operator_controller(AuthorityEvidence::Proven),
-                    proof_source: AuthorityProofSource::ManagementStatus,
-                    validated_at: validated_at.to_string(),
-                    expires_at: expires_at.to_string(),
-                    message: None,
-                })
-                .collect(),
-            snapshot_read_authority: plan
-                .targets
-                .iter()
-                .map(|target| SnapshotReadAuthorityReceipt {
-                    plan_id: plan.plan_id.clone(),
-                    preflight_id: preflight_id.to_string(),
-                    target_canister_id: target.canister_id.clone(),
-                    authority: SnapshotReadAuthority::operator_controller(
-                        AuthorityEvidence::Proven,
-                    ),
-                    proof_source: AuthorityProofSource::ManagementStatus,
-                    validated_at: validated_at.to_string(),
-                    expires_at: expires_at.to_string(),
-                    message: None,
-                })
-                .collect(),
-            quiescence: QuiescencePreflightReceipt {
-                plan_id: plan.plan_id.clone(),
-                preflight_id: preflight_id.to_string(),
-                quiescence_policy: plan.quiescence_policy.clone(),
-                accepted: true,
-                targets: plan
-                    .targets
-                    .iter()
-                    .map(QuiescencePreflightTarget::from)
-                    .collect(),
-                validated_at: validated_at.to_string(),
-                expires_at: expires_at.to_string(),
-                message: None,
-            },
-        })
-    }
-
-    fn stop_canister(
-        &mut self,
-        canister_id: &str,
-        _command_lifetime: crate::persistence::CommandLifetimeHandle,
-    ) -> Result<(), BackupRunnerCommandError> {
-        self.commands.push(format!("stop:{canister_id}"));
-        Ok(())
-    }
-
-    fn start_canister(
-        &mut self,
-        canister_id: &str,
-        _command_lifetime: crate::persistence::CommandLifetimeHandle,
-    ) -> Result<(), BackupRunnerCommandError> {
-        self.commands.push(format!("start:{canister_id}"));
-        Ok(())
-    }
-
-    fn create_snapshot(
-        &mut self,
-        canister_id: &str,
-        _command_lifetime: crate::persistence::CommandLifetimeHandle,
-    ) -> Result<BackupRunnerSnapshotReceipt, BackupRunnerCommandError> {
-        self.commands.push(format!("snapshot:{canister_id}"));
-        if self.fail_on == Some(FakeFailure::CreateSnapshot) {
-            return Err(BackupRunnerCommandError::failed(
-                "snapshot",
-                "simulated snapshot failure",
-            ));
-        }
-        Ok(BackupRunnerSnapshotReceipt {
-            snapshot_id: "snap-app".to_string(),
-            taken_at_timestamp: Some(1_778_709_681_897_818_005),
-            total_size_bytes: Some(272_586_987),
-        })
-    }
-
-    fn download_snapshot(
-        &mut self,
-        canister_id: &str,
-        snapshot_id: &str,
-        artifact_path: &Path,
-        _command_lifetime: crate::persistence::CommandLifetimeHandle,
-    ) -> Result<(), BackupRunnerCommandError> {
-        self.commands
-            .push(format!("download:{canister_id}:{snapshot_id}"));
-        fs::create_dir_all(artifact_path)
-            .map_err(|err| BackupRunnerCommandError::failed("io", err.to_string()))?;
-        fs::write(artifact_path.join("snapshot.bin"), b"app snapshot")
-            .map_err(|err| BackupRunnerCommandError::failed("io", err.to_string()))?;
-        Ok(())
-    }
 }
 
 fn prepared_layout(name: &str) -> PathBuf {

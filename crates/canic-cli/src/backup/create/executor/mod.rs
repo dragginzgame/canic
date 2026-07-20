@@ -7,14 +7,19 @@
 mod errors;
 mod preflight;
 mod registry;
+#[cfg(test)]
+mod tests;
 
 use super::super::options::BackupCreateOptions;
 use canic_backup::{
     persistence::CommandLifetimeHandle,
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
-    runner::{BackupRunnerCommandError, BackupRunnerExecutor, BackupRunnerSnapshotReceipt},
+    runner::{
+        BackupRunnerCanisterStatus, BackupRunnerCommandError, BackupRunnerExecutor,
+        BackupRunnerSnapshotReceipt,
+    },
 };
-use canic_host::icp::IcpCli;
+use canic_host::icp::{IcpCanisterStatusReport, IcpCli};
 use std::path::{Path, PathBuf};
 
 use errors::runner_icp_error;
@@ -65,6 +70,17 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         )
     }
 
+    fn canister_status(
+        &mut self,
+        canister_id: &str,
+    ) -> Result<BackupRunnerCanisterStatus, BackupRunnerCommandError> {
+        let report = self
+            .icp
+            .canister_status_report(canister_id)
+            .map_err(runner_icp_error)?;
+        runner_canister_status(canister_id, &report)
+    }
+
     fn stop_canister(
         &mut self,
         canister_id: &str,
@@ -110,5 +126,29 @@ impl BackupRunnerExecutor for BackupIcpRunnerExecutor {
         self.command_icp(command_lifetime)
             .snapshot_download(canister_id, snapshot_id, artifact_path)
             .map_err(runner_icp_error)
+    }
+}
+
+fn runner_canister_status(
+    expected_canister_id: &str,
+    report: &IcpCanisterStatusReport,
+) -> Result<BackupRunnerCanisterStatus, BackupRunnerCommandError> {
+    if report.id != expected_canister_id {
+        return Err(BackupRunnerCommandError::failed(
+            "icp-status",
+            format!(
+                "icp canister status returned id {} for expected canister {expected_canister_id}",
+                report.id
+            ),
+        ));
+    }
+    match report.status.as_str() {
+        "Running" => Ok(BackupRunnerCanisterStatus::Running),
+        "Stopped" => Ok(BackupRunnerCanisterStatus::Stopped),
+        "Stopping" => Ok(BackupRunnerCanisterStatus::Stopping),
+        status => Err(BackupRunnerCommandError::failed(
+            "icp-status",
+            format!("unsupported canister status {status}"),
+        )),
     }
 }

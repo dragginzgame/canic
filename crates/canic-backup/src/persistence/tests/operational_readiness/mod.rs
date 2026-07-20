@@ -4,10 +4,16 @@
 //! Does not own: the frozen case manifest or production recovery policy.
 //! Boundary: binds deterministic process loss to real durable layout operations.
 
+mod pending_claim;
+mod stop_effect;
+
 use super::*;
 use crate::{
     operational_readiness::manifest::assert_case_defined,
-    persistence::json::{DurableWriteBarrier, write_json_durable_at_barriers},
+    persistence::{DurableWriteBarrier, write_json_durable_at_barriers},
+    plan::{AuthorityEvidence, BackupOperationKind},
+    runner::{BackupRunnerConfig, BackupRunnerExecutor, backup_run_execute_with_executor},
+    test_support::FakeBackupRunnerExecutor,
 };
 
 #[cfg(unix)]
@@ -28,6 +34,14 @@ const VERIFY_CHILD_ROOT_ENV: &str = "CANIC_TEST_VERIFY_CRASH_ROOT";
 const VERIFY_CHILD_BARRIER_ENV: &str = "CANIC_TEST_VERIFY_CRASH_BARRIER";
 #[cfg(unix)]
 const VERIFY_CHILD_HANDSHAKE_ENV: &str = "CANIC_TEST_VERIFY_CRASH_HANDSHAKE";
+#[cfg(unix)]
+const PREFLIGHT_CHILD_ROOT_ENV: &str = "CANIC_TEST_PREFLIGHT_CRASH_ROOT";
+#[cfg(unix)]
+const PREFLIGHT_CHILD_DOCUMENT_ENV: &str = "CANIC_TEST_PREFLIGHT_CRASH_DOCUMENT";
+#[cfg(unix)]
+const PREFLIGHT_CHILD_BARRIER_ENV: &str = "CANIC_TEST_PREFLIGHT_CRASH_BARRIER";
+#[cfg(unix)]
+const PREFLIGHT_CHILD_HANDSHAKE_ENV: &str = "CANIC_TEST_PREFLIGHT_CRASH_HANDSHAKE";
 
 #[cfg(unix)]
 #[test]
@@ -116,6 +130,65 @@ fn verification_survives_process_death_without_mutating_layout() {
         hold_at_acknowledged_barrier(&handshake_root);
     }
     panic!("unsupported or unarmed verification barrier: {barrier_name}");
+}
+
+#[cfg(unix)]
+#[test]
+fn preflight_publications_survive_process_death_without_starting_mutation() {
+    let Some(root) = std::env::var_os(PREFLIGHT_CHILD_ROOT_ENV) else {
+        for (document, barrier_name, case_id) in [
+            (
+                "plan",
+                "before-rename",
+                "CANIC-094-B02/preflight-applied-plan-publication/before-durable-write",
+            ),
+            (
+                "plan",
+                "after-directory-sync",
+                "CANIC-094-B02/preflight-applied-plan-publication/after-durable-write",
+            ),
+            (
+                "journal",
+                "before-rename",
+                "CANIC-094-B03/preflight-acceptance/before-durable-write",
+            ),
+            (
+                "journal",
+                "after-directory-sync",
+                "CANIC-094-B03/preflight-acceptance/after-durable-write",
+            ),
+        ] {
+            assert_case_defined(case_id);
+            prove_preflight_publication_barrier(document, barrier_name);
+        }
+        return;
+    };
+
+    let root = std::path::PathBuf::from(root);
+    let document = std::env::var(PREFLIGHT_CHILD_DOCUMENT_ENV).expect("preflight document");
+    let barrier_name = std::env::var(PREFLIGHT_CHILD_BARRIER_ENV).expect("preflight barrier name");
+    let handshake_root = std::path::PathBuf::from(
+        std::env::var_os(PREFLIGHT_CHILD_HANDSHAKE_ENV).expect("preflight handshake root"),
+    );
+    let layout = BackupLayout::new(root);
+    let initial_plan = declared_backup_plan();
+    let (updated_plan, accepted_journal) = accepted_preflight_documents(&initial_plan);
+
+    match document.as_str() {
+        "plan" => write_document_at_barrier(
+            &layout.backup_plan_path(),
+            &updated_plan,
+            &barrier_name,
+            &handshake_root,
+        ),
+        "journal" => write_document_at_barrier(
+            &layout.execution_journal_path(),
+            &accepted_journal,
+            &barrier_name,
+            &handshake_root,
+        ),
+        _ => panic!("unsupported preflight crash document: {document}"),
+    }
 }
 
 #[cfg(unix)]
@@ -219,6 +292,162 @@ fn prove_verification_barrier(barrier_name: &str) {
     assert_eq!(after, before);
     fs::remove_dir_all(root).expect("remove verification layout");
     fs::remove_dir_all(handshake_root).expect("remove verification handshake root");
+}
+
+#[cfg(unix)]
+fn prove_preflight_publication_barrier(document: &str, barrier_name: &str) {
+    let root = temp_dir(&format!("canic-backup-preflight-{document}-{barrier_name}"));
+    let handshake_root = temp_dir(&format!(
+        "canic-backup-preflight-handshake-{document}-{barrier_name}"
+    ));
+    fs::create_dir_all(&handshake_root).expect("create preflight handshake root");
+    let layout = BackupLayout::new(root.clone());
+    let initial_plan = declared_backup_plan();
+    let initial_journal =
+        BackupExecutionJournal::from_plan(&initial_plan).expect("initial execution journal");
+    let (updated_plan, accepted_journal) = accepted_preflight_documents(&initial_plan);
+    layout
+        .write_backup_plan(if document == "journal" {
+            &updated_plan
+        } else {
+            &initial_plan
+        })
+        .expect("write pre-crash backup plan");
+    layout
+        .write_execution_journal(&initial_journal)
+        .expect("write pre-crash execution journal");
+    let mut child = Command::new(std::env::current_exe().expect("resolve test executable"))
+        .args([
+            "--exact",
+            "persistence::tests::operational_readiness::preflight_publications_survive_process_death_without_starting_mutation",
+            "--nocapture",
+        ])
+        .env(PREFLIGHT_CHILD_ROOT_ENV, &root)
+        .env(PREFLIGHT_CHILD_DOCUMENT_ENV, document)
+        .env(PREFLIGHT_CHILD_BARRIER_ENV, barrier_name)
+        .env(PREFLIGHT_CHILD_HANDSHAKE_ENV, &handshake_root)
+        .spawn()
+        .expect("spawn preflight publication child");
+
+    kill_child_at_acknowledged_barrier(&mut child, &handshake_root);
+    let observed_plan = layout.read_backup_plan().expect("read plan after crash");
+    let observed_journal = layout
+        .read_execution_journal()
+        .expect("read journal after crash");
+
+    match (document, barrier_name) {
+        ("plan", "before-rename") => assert_eq!(observed_plan, initial_plan),
+        ("plan", "after-directory-sync") | ("journal", _) => {
+            assert_eq!(observed_plan, updated_plan);
+        }
+        _ => panic!("unsupported preflight proof case: {document}/{barrier_name}"),
+    }
+    if document == "journal" && barrier_name == "after-directory-sync" {
+        assert_eq!(observed_journal, accepted_journal);
+    } else {
+        assert_eq!(observed_journal, initial_journal);
+        assert_mutation_is_blocked(&observed_journal);
+    }
+
+    let mut executor = FakeBackupRunnerExecutor::default();
+    let response = backup_run_execute_with_executor(
+        &BackupRunnerConfig {
+            out: root.clone(),
+            max_steps: Some(0),
+            updated_at: Some("unix:10".to_string()),
+            tool_name: "canic".to_string(),
+            tool_version: "test".to_string(),
+        },
+        &mut executor,
+    )
+    .expect("restart reconciles preflight publication");
+    let final_plan = layout.read_backup_plan().expect("read reconciled plan");
+    let final_journal = layout
+        .read_execution_journal()
+        .expect("read reconciled journal");
+
+    assert!(!response.complete);
+    assert!(response.max_steps_reached);
+    assert_eq!(response.executed_operation_count, 0);
+    assert_eq!(final_plan, updated_plan);
+    assert_eq!(final_journal, accepted_journal);
+    assert!(
+        executor
+            .commands
+            .iter()
+            .all(|command| command.starts_with("status:"))
+    );
+    if document == "journal" && barrier_name == "after-directory-sync" {
+        assert!(executor.commands.is_empty());
+    } else {
+        assert_eq!(executor.commands.len(), initial_plan.targets.len());
+    }
+
+    fs::remove_dir_all(root).expect("remove preflight crash layout");
+    fs::remove_dir_all(handshake_root).expect("remove preflight handshake root");
+}
+
+fn declared_backup_plan() -> BackupPlan {
+    let mut plan = valid_backup_plan();
+    for target in &mut plan.targets {
+        target.control_authority.evidence = AuthorityEvidence::Declared;
+        target.snapshot_read_authority.evidence = AuthorityEvidence::Declared;
+    }
+    plan.validate().expect("declared backup plan");
+    plan
+}
+
+fn accepted_preflight_documents(initial_plan: &BackupPlan) -> (BackupPlan, BackupExecutionJournal) {
+    let mut executor = FakeBackupRunnerExecutor::default();
+    let receipts = executor
+        .preflight_receipts(initial_plan, "preflight-run-001", "unix:10", "unix:310")
+        .expect("build preflight receipts");
+    let mut updated_plan = initial_plan.clone();
+    updated_plan
+        .apply_execution_preflight_receipts(&receipts, "unix:10")
+        .expect("apply preflight receipts to plan");
+    let mut accepted_journal =
+        BackupExecutionJournal::from_plan(initial_plan).expect("execution journal");
+    accepted_journal
+        .accept_preflight_receipts_at(&receipts, Some("unix:10".to_string()))
+        .expect("accept preflight receipts in journal");
+    (updated_plan, accepted_journal)
+}
+
+fn assert_mutation_is_blocked(journal: &BackupExecutionJournal) {
+    let stop = journal
+        .operations
+        .iter()
+        .find(|operation| operation.kind == BackupOperationKind::Stop)
+        .expect("stop operation");
+    assert!(!journal.preflight_accepted);
+    assert_eq!(stop.state, BackupExecutionOperationState::Blocked);
+}
+
+#[cfg(unix)]
+fn write_document_at_barrier<T: serde::Serialize>(
+    path: &Path,
+    document: &T,
+    barrier_name: &str,
+    handshake_root: &Path,
+) -> ! {
+    let target = durable_write_barrier(barrier_name);
+    write_json_durable_at_barriers(path, document, |barrier| {
+        if barrier == target {
+            hold_at_acknowledged_barrier(handshake_root);
+        }
+    })
+    .expect("write document in crash child");
+    panic!("durable-write child passed its armed barrier");
+}
+
+#[cfg(unix)]
+fn durable_write_barrier(barrier_name: &str) -> DurableWriteBarrier {
+    match barrier_name {
+        "before-rename" => DurableWriteBarrier::BeforeRename,
+        "after-directory-sync" => DurableWriteBarrier::AfterDirectorySync,
+        _ => panic!("unsupported durable-write barrier: {barrier_name}"),
+    }
 }
 
 #[cfg(unix)]

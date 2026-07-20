@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
 
+- `0.94.3` proves preflight, pending-claim, and committed-stop crash
+  boundaries, preserving unknown effects while recovering exact local and
+  status-backed outcomes.
+
 - `0.94.2` freezes the exact 106-case executable recovery manifest and begins
   it with deterministic process-death proof for execution-journal publication
   and read-only backup verification.

@@ -331,7 +331,7 @@ fn push_case(
     });
 }
 
-fn backup_post_preflight_operations() -> Vec<BackupOperationKind> {
+pub fn backup_post_preflight_operations() -> Vec<BackupOperationKind> {
     vec![
         BackupOperationKind::Stop,
         BackupOperationKind::CreateSnapshot,
@@ -379,7 +379,7 @@ fn subject_label(subject: &ProtocolSubject) -> &'static str {
     }
 }
 
-const fn backup_operation_label(operation: &BackupOperationKind) -> &'static str {
+pub fn backup_operation_label(operation: &BackupOperationKind) -> &'static str {
     match operation {
         BackupOperationKind::ValidateTopology => "validate-topology",
         BackupOperationKind::ValidateControlAuthority => "validate-control-authority",
