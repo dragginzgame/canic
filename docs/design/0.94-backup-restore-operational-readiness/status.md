@@ -4,10 +4,11 @@ Last updated: 2026-07-20
 
 ## Current State
 
-The maintainer released operational closeout hardening as `v0.94.12`.
+The maintainer released the complete 0.94 line through `v0.94.14`.
 The capability, command-lifetime, pending-claim, lifecycle, snapshot-create,
-download-effect, downloaded-transition, checksum, and artifact-publication
-findings and proof gaps are fixed or completed in released code.
+download-effect, downloaded-transition, checksum, artifact-publication,
+effect/receipt, stopped-precondition, command-tree, and rejection findings and
+proof gaps are fixed or completed in released code.
 
 The released 0.94.12 batch retains all four completed backup command-in-flight
 cases and fixes seven finding-backed closeout defects. `canic backup create` is
@@ -31,9 +32,9 @@ terminal-publication sides, and final-response loss. It removes stale private
 upload staging before terminal persistence and on committed-effect
 reconciliation.
 
-The open 0.94.14 draft completes the remaining restore precondition,
+Released `v0.94.14` completes the remaining restore precondition,
 effect/receipt, command-tree, and rejection boundaries. All 106 frozen cases
-and all seven required journeys now pass. Its one P2 finding fixes durable
+and all seven required journeys pass. Its one P2 finding fixes durable
 failure evidence for a returned stopped-state observation I/O error without
 adding a persisted field or compatibility path.
 
@@ -60,7 +61,7 @@ not unfinished structural cleanup.
 | `CANIC-094-J01` complete backup/verify/restore | pass | [realistic recovery and closeout hardening](../../audits/reports/2026-07/2026-07-20/0.94-realistic-recovery-and-closeout-hardening.md); resumed/completed | closeout findings fixed in `v0.94.12` |
 | `CANIC-094-J02` backup crash matrix | pass | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); [preflight publication](../../audits/reports/2026-07/2026-07-20/0.94-preflight-publication-crash-cases.md); [pending claims](../../audits/reports/2026-07/2026-07-20/0.94-backup-pending-claim-crash-cases.md); [stop reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-stop-effect-reconciliation.md); [snapshot-create reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-snapshot-create-reconciliation.md); [start reconciliation](../../audits/reports/2026-07/2026-07-20/0.94-start-effect-reconciliation.md); [download staging](../../audits/reports/2026-07/2026-07-20/0.94-download-staging-reconciliation.md); [downloaded transition](../../audits/reports/2026-07/2026-07-20/0.94-downloaded-transition-reconciliation.md); [checksum calculation](../../audits/reports/2026-07/2026-07-20/0.94-checksum-effect-recomputation.md); [checksum transition](../../audits/reports/2026-07/2026-07-20/0.94-checksum-transition-reconciliation.md); [artifact publication](../../audits/reports/2026-07/2026-07-20/0.94-artifact-publication-reconciliation.md); [durable transition](../../audits/reports/2026-07/2026-07-20/0.94-durable-artifact-transition-reconciliation.md); [manifest publication](../../audits/reports/2026-07/2026-07-20/0.94-manifest-publication-reconciliation.md); [terminal receipt](../../audits/reports/2026-07/2026-07-20/0.94-terminal-receipt-publication.md); [final response](../../audits/reports/2026-07/2026-07-20/0.94-final-response-loss.md); [command quiescence](../../audits/reports/2026-07/2026-07-20/0.94-backup-command-quiescence.md); `B01`-`B18`; reconciled/resumed | `CANIC-094-BACKUP-001` through `-010` fixed; B11 and B16-B18 no finding |
 | `CANIC-094-J03` verification interruption | pass | [protocol baseline](../../audits/reports/2026-07/2026-07-19/0.94-executable-recovery-protocol-baseline.md); `V01`-`V03`; resumed | none |
-| `CANIC-094-J04` restore crash matrix | pass | [real upload effect/receipt crash](../../audits/reports/2026-07/2026-07-20/0.94-realistic-recovery-and-closeout-hardening.md); [restore journal crash closure](../../audits/reports/2026-07/2026-07-20/0.94-restore-journal-crash-closure.md); [restore recovery matrix closeout](../../audits/reports/2026-07/2026-07-20/0.94-restore-recovery-matrix-closeout.md); `R01`-`R14`; reconciled/resumed | restore recovery findings fixed in 0.94.12 through 0.94.14 draft |
+| `CANIC-094-J04` restore crash matrix | pass | [real upload effect/receipt crash](../../audits/reports/2026-07/2026-07-20/0.94-realistic-recovery-and-closeout-hardening.md); [restore journal crash closure](../../audits/reports/2026-07/2026-07-20/0.94-restore-journal-crash-closure.md); [restore recovery matrix closeout](../../audits/reports/2026-07/2026-07-20/0.94-restore-recovery-matrix-closeout.md); `R01`-`R14`; reconciled/resumed | restore recovery findings fixed in `v0.94.12` through `v0.94.14` |
 | `CANIC-094-J05` completed-operation replay | pass | [backup replay](../../audits/reports/2026-07/2026-07-20/0.94-final-response-loss.md); [real completed backup and restore replay](../../audits/reports/2026-07/2026-07-20/0.94-realistic-recovery-and-closeout-hardening.md) | none |
 | `CANIC-094-J06` corruption/rejection matrix | pass | [restore recovery matrix closeout](../../audits/reports/2026-07/2026-07-20/0.94-restore-recovery-matrix-closeout.md); `C01`-`C10`; safely halted or retryable as specified | none |
 | `CANIC-094-J07` realistic multi-canister journey | pass | [realistic recovery and closeout hardening](../../audits/reports/2026-07/2026-07-20/0.94-realistic-recovery-and-closeout-hardening.md); local ICP; `A -> B -> A`; reconciled/resumed | closeout findings fixed in `v0.94.12` |
@@ -127,7 +128,7 @@ Evidence:
 - At the release anchor, coverage was strong at model and injected-executor
   level but had not closed the required real multi-canister process-restart
   journey. Released 0.94.12 closes that aggregate journey, and the open
-  0.94.14 draft closes the exact restore and rejection cases.
+  released `v0.94.14` closes the exact restore and rejection cases.
 
 These began as validation targets rather than pre-judged implementation fixes.
 Confirmed items are tracked in the finding index; any further product change
@@ -158,7 +159,7 @@ still requires a reproducible required-journey finding.
 | `CANIC-094-VERIFY-001` | P1 | fixed in `v0.94.12` | restore semantic verification | [realistic recovery and closeout hardening](../../audits/reports/2026-07/2026-07-20/0.94-realistic-recovery-and-closeout-hardening.md) |
 | `CANIC-094-ICP-001` | P1 | fixed in `v0.94.12` | ICP snapshot inventory boundary | [realistic recovery and closeout hardening](../../audits/reports/2026-07/2026-07-20/0.94-realistic-recovery-and-closeout-hardening.md) |
 | `CANIC-094-RESTORE-003` | P2 | fixed in `v0.94.13` | restore private upload staging | [restore journal crash closure](../../audits/reports/2026-07/2026-07-20/0.94-restore-journal-crash-closure.md); `R03`, `R12` |
-| `CANIC-094-RESTORE-004` | P2 | fixed in 0.94.14 draft | restore stopped-precondition failure evidence | [restore recovery matrix closeout](../../audits/reports/2026-07/2026-07-20/0.94-restore-recovery-matrix-closeout.md); `R05` |
+| `CANIC-094-RESTORE-004` | P2 | fixed in `v0.94.14` | restore stopped-precondition failure evidence | [restore recovery matrix closeout](../../audits/reports/2026-07/2026-07-20/0.94-restore-recovery-matrix-closeout.md); `R05` |
 
 ## Validation State
 
@@ -308,8 +309,8 @@ still requires a reproducible required-journey finding.
   `R07`-`R11`, all four `R14` command-tree variants, and `C01`-`C10`.
 - Realistic environment journey: passed; disposable network stopped.
 
-## Next Action
+## Closeout
 
-Publish the 0.94.14 candidate and close 0.94. The finite matrix, all required
-journeys, and all findings are complete; further general cleanup belongs to a
-separately designed line.
+0.94 is closed at `v0.94.14`. The finite matrix, all required journeys, and all
+findings are complete. Timer-authority work proceeds under the separately
+accepted 0.95 design; further backup/restore expansion requires a new design.

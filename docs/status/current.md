@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.94.13`.
-- The latest published release is `v0.94.13` at
-  `aa9af623ddfbb37ca530cf44b32115ec020af59f`.
-- The `v0.94.13` source tree is
-  `36b12043b10749ffc9035e490f1b7539f321b252`; its product-tree hash is
-  `b72e1fb3a2a1fa4e45b9b3d07fbc69b1de9bb00e3bc32b20d3befa27fecc4d47`.
+- The workspace package version is `0.94.14`.
+- The latest published release is `v0.94.14` at
+  `7d5cca4fceae1cb29644b3c1de12cf6a576e0503`.
+- The `v0.94.14` source tree is
+  `2c5155fc8ebbf7a69066f50b4cf1810b264b0071`; its product-tree hash is
+  `5599ed0e0f6e77b197e63cc4d3bd5bce0ce166ca8390c40f4a87203b89779ce2`.
   Its Cargo.lock SHA-256 is
-  `7ec3e0afce39dbb83229b508c7f60aac41e267d16f91e88704f1c22cbe5a5515`.
+  `0263c0acf3a2fdd34017ceab6ef528f0d1ab352bf3d1a08a2f1ad1de19f99823`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -272,16 +272,21 @@ Historical detail is archived at:
 - Released `v0.94.13` completes private restore staging, all pending-claim and
   terminal publication sides, and final-response loss. Upload staging skipped
   by process death is removed before terminal publication or reconciliation.
-- The open `0.94.14` draft completes the remaining stopped-precondition,
+- Released `v0.94.14` completes the remaining stopped-precondition,
   effect/receipt, command-tree, and rejection cases. All 106 frozen protocol
   cases and all seven required journeys pass; no case remains pending.
+- The open `0.95.0` draft closes 0.94's status records, anchors the timer line
+  to `v0.94.14`, inventories every timer and bounded host wait, reproduces
+  seven findings, freezes every owner disposition and the public hard-cut
+  surface, and adds an executable source inventory guard. Production timer
+  behavior is unchanged in this audit-only batch.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
-  [0.94 backup and restore operational readiness](../design/0.94-backup-restore-operational-readiness/0.94-design.md).
+  [0.95 timer authority and scheduling consolidation](../design/0.95-timer-authority-and-scheduling-consolidation/0.95-design.md).
 - Current development notes are in the
-  [0.94 changelog](../changelog/0.94.md); released 0.93 notes remain in the
-  [0.93 changelog](../changelog/0.93.md), and the completed 0.92 line remains in the
+  [0.95 changelog](../changelog/0.95.md); released 0.94 notes remain in the
+  [0.94 changelog](../changelog/0.94.md), and the completed 0.92 line remains in the
   [0.92 changelog](../changelog/0.92.md).
 
 ## Current Decision
@@ -293,13 +298,17 @@ backup/restore readiness. Those bounded operational proofs move to the active
 0.94 design rather than extending 0.93 as another open-ended audit.
 Known non-blocking structural residue deferred from 0.93: none.
 
-0.94 focuses only on backup and restore operational readiness. Its accepted
-finish line is an early disposable-environment capability probe, a frozen
-crash-point matrix, deterministic process-restart evidence, corruption/replay
-rejection, and one realistic multi-canister state restore. Product changes
-require a journey-backed finding. General cleanup, dependency work, unrelated
-CI work, compatibility layers, speculative abstraction, and unproven public-
-surface changes remain out of scope.
+0.94 is closed at `v0.94.14`. All 106 frozen process-death/rejection cases and
+all seven required journeys pass, every finding is fixed, and the realistic
+multi-canister state restore is complete.
+
+0.95 focuses only on timer authority and scheduling consolidation. Slice A is
+complete: direct timer access has one owner, every timer/process and bounded
+host wait is dispositioned, seven findings are reproduced, and the public
+hard-cut surface plus owner bounds are frozen. Slice B may now implement the
+common arbitration authority. Receipt reclamation remains 0.96 scope; general
+cleanup, dependency work, backup/restore changes, and compatibility layers
+remain excluded.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -916,9 +925,9 @@ removes private upload staging before terminal persistence and during
 committed-effect reconciliation, so process death cannot retain a completed
 staged snapshot after the journal advances.
 
-The open 0.94.14 draft completes `R05`, `R07` through `R11`, all four `R14`
+Released `v0.94.14` completes `R05`, `R07` through `R11`, all four `R14`
 owner-dead command-tree cases, and `C01` through `C10`. Returned stopped-state
 observation I/O failures now persist one failed operation/receipt pair before
 preserving the typed cause. All 106 frozen cases and all seven required
-journeys pass, so publishing this candidate closes 0.94; further cleanup is
-outside the line.
+journeys pass. The line is closed; further backup/restore work requires a new
+design.

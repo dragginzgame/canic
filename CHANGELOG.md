@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.95.x] - 2026-07-20 - Timer Authority And Scheduling Consolidation
+
+Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
+
+- `0.95.0` closes 0.94 at its exact released anchor and freezes the exhaustive
+  timer, lifecycle-deferral, public-surface, and bounded-host-wait inventory
+  with seven finding-backed implementation dispositions.
+
 ## [0.94.x] - 2026-07-19 - Backup And Restore Operational Readiness
 
 Detailed patch breakdown: [docs/changelog/0.94.md](docs/changelog/0.94.md)
