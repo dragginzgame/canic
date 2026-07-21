@@ -11,8 +11,8 @@ use crate::{
     ids::CanisterRole,
     model::{
         intent::{
-            BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, ReceiptBackedIntent,
-            ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
+            BeginPlacementReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
+            ReceiptBackedIntent, ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
             RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
             SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
         },
@@ -302,14 +302,14 @@ pub(super) fn remove_exact_terminal_intent(
 fn begin_allocation(
     request: &PlacementAllocationRequest,
 ) -> Result<PlacementAllocationPermit, InternalError> {
-    let input = BeginReceiptBackedIntentInput {
+    let input = BeginPlacementReceiptBackedIntentInput {
         operation_id: request.identity.operation_id,
         payload_binding: request.identity.payload_binding,
         resource_key: request.identity.resource_key.clone(),
         quantity: 1,
         reservation_limit: request.reservation_limit,
     };
-    let begin_result = ReceiptBackedIntentWorkflow::begin_canic_owned_or_load(&input)?;
+    let begin_result = ReceiptBackedIntentWorkflow::begin_placement_or_load(&input)?;
     let (revision, root_receipt_may_exist) = match begin_result {
         BeginReceiptBackedIntentResult::Created { revision } => (revision, false),
         BeginReceiptBackedIntentResult::ExistingPending { revision } => (revision, true),
@@ -335,6 +335,13 @@ fn begin_allocation(
                     "placement allocation operation {} has conflicting bound input",
                     request.identity.operation_id
                 ),
+            ));
+        }
+        BeginReceiptBackedIntentResult::ReplayWindowClosed { .. }
+        | BeginReceiptBackedIntentResult::ReplayWindowTooLong { .. } => {
+            return Err(InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "placement admission unexpectedly applied an application replay window",
             ));
         }
         BeginReceiptBackedIntentResult::CapacityExceeded {

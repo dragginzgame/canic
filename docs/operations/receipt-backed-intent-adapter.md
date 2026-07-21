@@ -17,8 +17,8 @@ domain responses.
 For every first entrance or retry, the adapter must:
 
 1. Authenticate and validate the complete domain request.
-2. Derive one deterministic `OperationId`, `PayloadBinding`, resource key, and
-   quantity from that request.
+2. Derive one deterministic `OperationId`, `PayloadBinding`, resource key,
+   quantity, and absolute replay deadline from that immutable authorization.
 3. Call `ReceiptBackedIntentApi::begin_or_load` before the external effect.
 4. Execute the effect only for `Created`.
 5. Validate any returned or later observed domain receipt.
@@ -28,6 +28,12 @@ For every first entrance or retry, the adapter must:
 
 There is no `await` inside either Canic mutation. The adapter performs the
 external call between begin and settlement.
+
+The replay deadline is required and may not move forward on retry. It must not
+exceed the currently verified authorization expiry. Canic accepts an absent
+operation only while `now < replay_deadline_ns`, with at most 24 hours
+remaining. Exact retained operations are loaded before that temporal decision,
+so pending and terminal results remain observable at and after their deadline.
 
 ## Resource Namespace Ownership
 
@@ -50,6 +56,8 @@ reserved without the leading `canic:` namespace.
 | `ExistingCommitted` | Return or reconstruct the stored success. |
 | `ExistingRolledBack` | Return or reconstruct the stored no-effect result. |
 | `BindingConflict` | Reject without making an external call. |
+| `ReplayWindowClosed` | Reject the absent operation without making an external call. |
+| `ReplayWindowTooLong` | Reject the adapter deadline without making an external call. |
 | `CapacityExceeded` | Reject this new operation without changing state. |
 | `StoreCapacityReached` | Reject this new operation without changing state. |
 
@@ -82,7 +90,7 @@ begin and settlement decisions instead of collapsing them into an optional
 record. Its focused PocketIC proof covers:
 
 - creation and exact pending replay;
-- changed payload or resource rejection;
+- changed payload, resource, or deadline rejection;
 - shared-resource capacity rejection;
 - not-found, stale-revision, and binding-conflict settlement;
 - pending state across a same-Wasm upgrade;

@@ -16,6 +16,17 @@ Use the explicit module paths for the larger bundled surfaces:
 - `canic::cdk::*` for curated IC CDK helpers
 - `canic::memory::*` for stable-memory helpers and macros
 
+## Crate Boundary
+
+Use `canic`, including `canic::cdk`, only from configured canister role
+packages. Each role package must declare its own direct, normal runtime
+dependency on `canic`.
+
+Shared runtime libraries must not depend on `canic` or use `canic::cdk`.
+Keep their domain logic framework-independent; when they need generic IC types
+or APIs, depend on upstream crates such as `candid` or `ic-cdk` directly. This
+keeps every role package's runtime graph to one direct path to Canic.
+
 ## Feature Contract
 
 The default feature set contains only `metrics`. Disable default features when

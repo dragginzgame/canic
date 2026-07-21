@@ -22,9 +22,11 @@ use crate::{
         replay::OperationId,
     },
     role_contract::allocation::memory::intent::{
-        INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+        APPLICATION_RECEIPT_REPLAY_ID, INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
+        RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     storage::stable::intent::{
+        APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION, ApplicationReceiptReplayRecord,
         IntentResourceTotalsRecord, PlacementAcknowledgementEntryRecord, ReceiptBackedIntentRecord,
     },
 };
@@ -116,6 +118,14 @@ fn receipt_backed_stable_capacity_envelope_is_measured_at_the_admission_limit() 
             PlacementAcknowledgementEntryRecord { operation_id },
         )
     }));
+    let replay_ascending = measure_map(ascending().map(|seed| {
+        let record = application_replay_record(seed);
+        (record.operation_id, record)
+    }));
+    let replay_permuted = measure_map(permuted().map(|seed| {
+        let record = application_replay_record(seed);
+        (record.operation_id, record)
+    }));
     let totals_ascending = measure_map(ascending().map(|seed| (resource_key(seed), max_totals())));
     let totals_permuted = measure_map(permuted().map(|seed| (resource_key(seed), max_totals())));
 
@@ -125,7 +135,20 @@ fn receipt_backed_stable_capacity_envelope_is_measured_at_the_admission_limit() 
     assert_eq!(acknowledgements_permuted, (1_463, 317));
     assert_eq!(totals_ascending, (1_768, 545));
     assert_eq!(totals_permuted, (1_768, 469));
-    assert_eq!(managed_ascending_pages(), (2_707, 452, 545, 3_969));
+    assert_eq!(
+        application_replay_record(u64::MAX).to_bytes().len(),
+        ApplicationReceiptReplayRecord::STORABLE_MAX_SIZE as usize
+    );
+    assert_eq!(replay_ascending, (1_430, 442));
+    assert_eq!(replay_permuted, (1_430, 381));
+    assert_eq!(
+        managed_application_ascending_pages(),
+        (2_707, 442, 545, 3_969)
+    );
+    assert_eq!(
+        managed_placement_ascending_pages(),
+        (2_707, 452, 545, 3_969)
+    );
 }
 
 fn measure_map<K, V>(entries: impl IntoIterator<Item = (K, V)>) -> (u32, u64)
@@ -142,7 +165,7 @@ where
     (btree_page_size(&memory), memory.size())
 }
 
-fn managed_ascending_pages() -> (u64, u64, u64, u64) {
+fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
     let physical = VectorMemory::default();
     let manager = MemoryManager::init(physical.clone());
     let primary_memory = manager.get(MemoryId::new(RECEIPT_BACKED_INTENT_RECORDS_ID));
@@ -165,6 +188,31 @@ fn managed_ascending_pages() -> (u64, u64, u64, u64) {
     (
         primary_memory.size(),
         acknowledgement_memory.size(),
+        totals_memory.size(),
+        physical.size(),
+    )
+}
+
+fn managed_application_ascending_pages() -> (u64, u64, u64, u64) {
+    let physical = VectorMemory::default();
+    let manager = MemoryManager::init(physical.clone());
+    let primary_memory = manager.get(MemoryId::new(RECEIPT_BACKED_INTENT_RECORDS_ID));
+    let replay_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID));
+    let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));
+    let mut primary = StableBtreeMap::init(primary_memory.clone());
+    let mut replay = StableBtreeMap::init(replay_memory.clone());
+    let mut totals = StableBtreeMap::init(totals_memory.clone());
+
+    for seed in ascending() {
+        let record = receipt_record(seed, terminal_state());
+        let operation_id = record.operation_id;
+        primary.insert(operation_id, record);
+        replay.insert(operation_id, application_replay_record(seed));
+        totals.insert(resource_key(seed), max_totals());
+    }
+    (
+        primary_memory.size(),
+        replay_memory.size(),
         totals_memory.size(),
         physical.size(),
     )
@@ -227,5 +275,13 @@ fn receipt_record(seed: u64, state: ReceiptBackedIntentState) -> ReceiptBackedIn
         revision: u64::MAX,
         created_at_ns: u64::MAX,
         updated_at_ns: u64::MAX,
+    }
+}
+
+fn application_replay_record(seed: u64) -> ApplicationReceiptReplayRecord {
+    ApplicationReceiptReplayRecord {
+        schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+        operation_id: operation_id(seed),
+        replay_deadline_ns: u64::MAX,
     }
 }

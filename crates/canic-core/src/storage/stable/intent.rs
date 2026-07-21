@@ -15,8 +15,9 @@ use crate::{
         replay::OperationId,
     },
     role_contract::allocation::memory::intent::{
-        INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID,
-        INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
+        APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
+        INTENT_RECORDS_ID, INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
+        RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     storage::prelude::*,
 };
@@ -27,6 +28,7 @@ use std::{borrow::Cow, cell::RefCell};
 //
 
 pub const INTENT_STORE_SCHEMA_VERSION: u32 = 1;
+pub const APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION: u32 = 1;
 
 eager_static! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, VirtualMemory<DefaultMemoryImpl>>> =
@@ -34,6 +36,21 @@ eager_static! {
             crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent_meta.v1", ty = IntentStoreMetaRecord, id = INTENT_META_ID),
             IntentStoreMetaRecord::default(),
         ));
+}
+
+eager_static! {
+    static APPLICATION_RECEIPT_REPLAY: RefCell<
+        StableBtreeMap<
+            OperationId,
+            ApplicationReceiptReplayRecord,
+            VirtualMemory<DefaultMemoryImpl>,
+        >
+    > = RefCell::new(StableBtreeMap::init(crate::ic_memory_key!(
+        authority = CANIC_CORE_MEMORY_AUTHORITY,
+        key = "canic.core.application_receipt_replay.v1",
+        ty = ApplicationReceiptReplayRecord,
+        id = APPLICATION_RECEIPT_REPLAY_ID
+    )));
 }
 
 eager_static! {
@@ -379,6 +396,25 @@ impl_storable_bounded!(
     false
 );
 
+/// Stable replay deadline for one application-owned receipt-backed intent.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ApplicationReceiptReplayRecord {
+    pub schema_version: u32,
+    pub operation_id: OperationId,
+    pub replay_deadline_ns: u64,
+}
+
+impl ApplicationReceiptReplayRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ApplicationReceiptReplayRecord";
+    pub const STORABLE_MAX_SIZE: u32 = 124;
+}
+
+impl_storable_bounded!(
+    ApplicationReceiptReplayRecord,
+    ApplicationReceiptReplayRecord::STORABLE_MAX_SIZE,
+    false
+);
+
 /// Stable value proving that an exact placement operation is queued for root acknowledgement.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PlacementAcknowledgementEntryRecord {
@@ -524,6 +560,23 @@ pub struct ReceiptBackedIntentsData {
 
 impl ReceiptBackedIntentsData {
     pub const STATE_CONTRACT_NAME: &'static str = "ReceiptBackedIntentsData";
+}
+
+/// One logical application replay metadata snapshot row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApplicationReceiptReplayEntryRecord {
+    pub operation_id: OperationId,
+    pub record: ApplicationReceiptReplayRecord,
+}
+
+/// Canonical application receipt replay metadata allocation snapshot.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ApplicationReceiptReplayData {
+    pub entries: Vec<ApplicationReceiptReplayEntryRecord>,
+}
+
+impl ApplicationReceiptReplayData {
+    pub const STATE_CONTRACT_NAME: &'static str = "ApplicationReceiptReplayData";
 }
 
 /// One logical placement-acknowledgement index snapshot row.
@@ -694,6 +747,32 @@ impl ReceiptBackedIntentStore {
         ) -> R,
     ) -> R {
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow(|records| f(records))
+    }
+
+    #[must_use]
+    pub(crate) fn get_application_replay(
+        operation_id: OperationId,
+    ) -> Option<ApplicationReceiptReplayRecord> {
+        APPLICATION_RECEIPT_REPLAY.with_borrow(|records| records.get(&operation_id))
+    }
+
+    pub(crate) fn insert_application_replay(
+        record: ApplicationReceiptReplayRecord,
+    ) -> Option<ApplicationReceiptReplayRecord> {
+        APPLICATION_RECEIPT_REPLAY
+            .with_borrow_mut(|records| records.insert(record.operation_id, record))
+    }
+
+    pub(crate) fn with_application_replay<R>(
+        f: impl FnOnce(
+            &StableBtreeMap<
+                OperationId,
+                ApplicationReceiptReplayRecord,
+                VirtualMemory<DefaultMemoryImpl>,
+            >,
+        ) -> R,
+    ) -> R {
+        APPLICATION_RECEIPT_REPLAY.with_borrow(|records| f(records))
     }
 
     #[must_use]
@@ -881,6 +960,30 @@ impl ReceiptBackedIntentStore {
     }
 
     #[must_use]
+    pub(crate) fn export_application_replay() -> ApplicationReceiptReplayData {
+        ApplicationReceiptReplayData {
+            entries: APPLICATION_RECEIPT_REPLAY.with_borrow(|records| {
+                records
+                    .iter()
+                    .map(|entry| ApplicationReceiptReplayEntryRecord {
+                        operation_id: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_application_replay(data: ApplicationReceiptReplayData) {
+        APPLICATION_RECEIPT_REPLAY.with_borrow_mut(|records| {
+            records.clear_new();
+            for entry in data.entries {
+                records.insert(entry.operation_id, entry.record);
+            }
+        });
+    }
+
+    #[must_use]
     pub(crate) fn export_placement_acknowledgement_index() -> PlacementAcknowledgementIndexData {
         PlacementAcknowledgementIndexData {
             entries: PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| {
@@ -906,6 +1009,7 @@ impl ReceiptBackedIntentStore {
 
     pub(crate) fn reset_for_tests() {
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
+        APPLICATION_RECEIPT_REPLAY.with_borrow_mut(StableBtreeMap::clear_new);
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
     }
 }
@@ -1032,7 +1136,8 @@ mod tests {
     #[test]
     fn receipt_backed_allocations_round_trip_through_canonical_data_snapshots() {
         IntentStore::reset_for_tests();
-        let operation_id = OperationId::from_bytes([7; 32]);
+        let application_operation_id = OperationId::from_bytes([7; 32]);
+        let placement_operation_id = OperationId::from_bytes([8; 32]);
         let evidence = TerminalEvidence::new(
             Principal::from_slice(&[1; 29]),
             TerminalEvidenceDecision::Committed,
@@ -1040,7 +1145,7 @@ mod tests {
         );
         let record = ReceiptBackedIntentRecord {
             schema_version: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
-            operation_id,
+            operation_id: application_operation_id,
             payload_binding: PayloadBinding::new([9; 32]),
             resource_key: IntentResourceKey::new("mint:collection"),
             quantity: 11,
@@ -1050,10 +1155,29 @@ mod tests {
             updated_at_ns: 17,
         };
         ReceiptBackedIntentStore::insert(record);
+        ReceiptBackedIntentStore::insert(ReceiptBackedIntentRecord {
+            schema_version: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
+            operation_id: placement_operation_id,
+            payload_binding: PayloadBinding::new([10; 32]),
+            resource_key: IntentResourceKey::new(format!("canic:placement:{}", "a".repeat(64))),
+            quantity: 1,
+            state: ReceiptBackedIntentState::Committed { evidence },
+            revision: 2,
+            created_at_ns: 13,
+            updated_at_ns: 17,
+        });
+        ReceiptBackedIntentStore::insert_application_replay(ApplicationReceiptReplayRecord {
+            schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+            operation_id: application_operation_id,
+            replay_deadline_ns: 23,
+        });
         ReceiptBackedIntentStore::insert_placement_acknowledgement(
-            PlacementAcknowledgementEntryRecord { operation_id },
+            PlacementAcknowledgementEntryRecord {
+                operation_id: placement_operation_id,
+            },
         );
         let records_data = ReceiptBackedIntentStore::export_records();
+        let replay_data = ReceiptBackedIntentStore::export_application_replay();
         let acknowledgement_data =
             ReceiptBackedIntentStore::export_placement_acknowledgement_index();
 
@@ -1063,16 +1187,25 @@ mod tests {
             ReceiptBackedIntentsData::default()
         );
         assert_eq!(
+            ReceiptBackedIntentStore::export_application_replay(),
+            ApplicationReceiptReplayData::default()
+        );
+        assert_eq!(
             ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
             PlacementAcknowledgementIndexData::default()
         );
 
         ReceiptBackedIntentStore::import_records(records_data.clone());
+        ReceiptBackedIntentStore::import_application_replay(replay_data.clone());
         ReceiptBackedIntentStore::import_placement_acknowledgement_index(
             acknowledgement_data.clone(),
         );
-        assert_eq!(ReceiptBackedIntentStore::len(), 1);
+        assert_eq!(ReceiptBackedIntentStore::len(), 2);
         assert_eq!(ReceiptBackedIntentStore::export_records(), records_data);
+        assert_eq!(
+            ReceiptBackedIntentStore::export_application_replay(),
+            replay_data
+        );
         assert_eq!(
             ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
             acknowledgement_data

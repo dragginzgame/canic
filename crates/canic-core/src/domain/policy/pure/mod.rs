@@ -11,6 +11,7 @@ pub mod cycles;
 pub mod cycles_funding;
 pub mod env;
 pub mod icp_refill;
+pub mod intent;
 pub mod log;
 pub mod placement;
 pub mod pool;

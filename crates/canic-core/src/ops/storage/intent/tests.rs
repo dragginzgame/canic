@@ -5,22 +5,25 @@ use crate::{
     ids::CanisterRole,
     model::{
         intent::{
-            BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, PayloadBinding,
-            ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
+            BeginPlacementReceiptBackedIntentInput, BeginReceiptBackedIntentInput,
+            BeginReceiptBackedIntentResult, MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS,
+            PayloadBinding, ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
             RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
             SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
         },
         placement::allocation::PlacementAllocationIdentity,
     },
     storage::stable::intent::{
-        IntentStore, IntentTotalsData, PlacementAcknowledgementEntryRecord,
-        PlacementAcknowledgementIndexData, PlacementAcknowledgementIndexEntryRecord,
-        ReceiptBackedIntentStore,
+        APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION, ApplicationReceiptReplayData,
+        ApplicationReceiptReplayEntryRecord, ApplicationReceiptReplayRecord, IntentStore,
+        IntentTotalsData, PlacementAcknowledgementEntryRecord, PlacementAcknowledgementIndexData,
+        PlacementAcknowledgementIndexEntryRecord, ReceiptBackedIntentStore,
     },
 };
 
 const CREATED_AT: u64 = 10;
 const NOW: u64 = 100;
+const REPLAY_DEADLINE: u64 = 10_000;
 
 #[derive(Clone, Copy, Debug)]
 enum Op {
@@ -71,10 +74,31 @@ fn receipt_input(byte: u8) -> BeginReceiptBackedIntentInput {
         resource_key: key(),
         quantity: 5,
         reservation_limit: 20,
+        replay_deadline_ns: REPLAY_DEADLINE,
     }
 }
 
-fn placement_receipt_input(sequence: u64) -> BeginReceiptBackedIntentInput {
+fn begin_receipt(
+    input: &BeginReceiptBackedIntentInput,
+    now_ns: u64,
+) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+    ReceiptBackedIntentOps::begin_or_load(input, now_ns, ReceiptReplayWindowDecision::Open)
+}
+
+fn begin_receipt_with_limit(
+    input: &BeginReceiptBackedIntentInput,
+    now_ns: u64,
+    record_limit: u64,
+) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+    ReceiptBackedIntentOps::begin_or_load_with_limit(
+        input,
+        now_ns,
+        ReceiptReplayWindowDecision::Open,
+        record_limit,
+    )
+}
+
+fn placement_receipt_input(sequence: u64) -> BeginPlacementReceiptBackedIntentInput {
     let identity = PlacementAllocationIdentity::scaling(
         Principal::from_slice(&[7; 29]),
         "workers",
@@ -82,7 +106,7 @@ fn placement_receipt_input(sequence: u64) -> BeginReceiptBackedIntentInput {
         &CanisterRole::new("worker"),
         None,
     );
-    BeginReceiptBackedIntentInput {
+    BeginPlacementReceiptBackedIntentInput {
         operation_id: identity.operation_id,
         payload_binding: identity.payload_binding,
         resource_key: identity.resource_key,
@@ -472,14 +496,14 @@ fn receipt_backed_begin_replays_without_second_reservation_or_ttl_entry() {
     let input = receipt_input(1);
 
     assert_eq!(
-        ReceiptBackedIntentOps::begin_or_load(&input, 100).expect("create"),
+        begin_receipt(&input, 100).expect("create"),
         BeginReceiptBackedIntentResult::Created { revision: 1 }
     );
     let totals_after_create = totals(&input.resource_key);
     let local_meta_after_create = meta();
 
     assert_eq!(
-        ReceiptBackedIntentOps::begin_or_load(&input, 200).expect("replay"),
+        begin_receipt(&input, 200).expect("replay"),
         BeginReceiptBackedIntentResult::ExistingPending { revision: 1 }
     );
     assert_eq!(totals(&input.resource_key), totals_after_create);
@@ -491,8 +515,7 @@ fn receipt_backed_begin_replays_without_second_reservation_or_ttl_entry() {
     assert_eq!(ReceiptBackedIntentStore::len(), 1);
 
     assert_eq!(
-        ReceiptBackedIntentOps::begin_or_load_with_limit(&input, 300, 1)
-            .expect("existing at capacity"),
+        begin_receipt_with_limit(&input, 300, 1).expect("existing at capacity"),
         BeginReceiptBackedIntentResult::ExistingPending { revision: 1 }
     );
 
@@ -516,10 +539,103 @@ fn receipt_backed_begin_replays_without_second_reservation_or_ttl_entry() {
 }
 
 #[test]
+fn application_receipt_replay_window_is_checked_only_after_exact_lookup_misses() {
+    reset();
+    let mut retained = receipt_input(40);
+    retained.replay_deadline_ns = 101;
+    assert_eq!(
+        begin_receipt(&retained, 100).expect("create retained receipt"),
+        BeginReceiptBackedIntentResult::Created { revision: 1 }
+    );
+    assert_eq!(
+        ReceiptBackedIntentOps::begin_or_load(&retained, 101, ReceiptReplayWindowDecision::Closed,)
+            .expect("retained receipt remains observable at deadline"),
+        BeginReceiptBackedIntentResult::ExistingPending { revision: 1 }
+    );
+
+    let mut closed = receipt_input(41);
+    closed.replay_deadline_ns = 200;
+    assert_eq!(
+        ReceiptBackedIntentOps::begin_or_load_with_limit(
+            &closed,
+            200,
+            ReceiptReplayWindowDecision::Closed,
+            0,
+        )
+        .expect("closed replay decision"),
+        BeginReceiptBackedIntentResult::ReplayWindowClosed {
+            replay_deadline_ns: 200,
+        }
+    );
+    assert!(ReceiptBackedIntentStore::get(closed.operation_id).is_none());
+    assert!(ReceiptBackedIntentStore::get_application_replay(closed.operation_id).is_none());
+
+    let mut maximum = receipt_input(42);
+    maximum.replay_deadline_ns = 300 + MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS;
+    assert_eq!(
+        begin_receipt(&maximum, 300).expect("maximum replay window"),
+        BeginReceiptBackedIntentResult::Created { revision: 1 }
+    );
+
+    let mut overlong = receipt_input(43);
+    overlong.replay_deadline_ns = 400 + MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS + 1;
+    assert_eq!(
+        ReceiptBackedIntentOps::begin_or_load_with_limit(
+            &overlong,
+            400,
+            ReceiptReplayWindowDecision::TooLong {
+                remaining_ns: MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS + 1,
+            },
+            0,
+        )
+        .expect("overlong replay decision"),
+        BeginReceiptBackedIntentResult::ReplayWindowTooLong {
+            remaining_ns: MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS + 1,
+            maximum_ns: MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS,
+        }
+    );
+    assert!(ReceiptBackedIntentStore::get(overlong.operation_id).is_none());
+}
+
+#[test]
+fn application_replay_metadata_contradictions_fail_closed() {
+    reset();
+    let input = receipt_input(44);
+    begin_receipt(&input, 100).expect("create application receipt");
+
+    ReceiptBackedIntentStore::import_application_replay(ApplicationReceiptReplayData::default());
+    let missing = ReceiptBackedIntentOps::load(input.operation_id)
+        .expect_err("application receipt without replay metadata must reject");
+    assert_eq!(
+        missing.log_fields(),
+        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+    );
+
+    reset();
+    let orphan_id = operation_id(45);
+    ReceiptBackedIntentStore::import_application_replay(ApplicationReceiptReplayData {
+        entries: vec![ApplicationReceiptReplayEntryRecord {
+            operation_id: orphan_id,
+            record: ApplicationReceiptReplayRecord {
+                schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+                operation_id: orphan_id,
+                replay_deadline_ns: REPLAY_DEADLINE,
+            },
+        }],
+    });
+    let orphan = ReceiptBackedIntentOps::load(orphan_id)
+        .expect_err("orphan application replay metadata must reject");
+    assert_eq!(
+        orphan.log_fields(),
+        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+    );
+}
+
+#[test]
 fn receipt_backed_begin_conflicts_without_mutation() {
     reset();
     let input = receipt_input(2);
-    ReceiptBackedIntentOps::begin_or_load(&input, 100).expect("create");
+    begin_receipt(&input, 100).expect("create");
     let totals_after_create = totals(&input.resource_key);
     let receipt_count_after_create = ReceiptBackedIntentStore::len();
 
@@ -536,9 +652,13 @@ fn receipt_backed_begin_conflicts_without_mutation() {
             quantity: input.quantity + 1,
             ..input.clone()
         },
+        BeginReceiptBackedIntentInput {
+            replay_deadline_ns: input.replay_deadline_ns + 1,
+            ..input.clone()
+        },
     ] {
         assert_eq!(
-            ReceiptBackedIntentOps::begin_or_load(&conflict, 200).expect("conflict"),
+            begin_receipt(&conflict, 200).expect("conflict"),
             BeginReceiptBackedIntentResult::BindingConflict
         );
     }
@@ -553,8 +673,7 @@ fn receipt_backed_rejects_unsupported_schemas_without_mutation() {
     let mut unsupported = receipt_input(6);
     unsupported.payload_binding.schema_version = PAYLOAD_BINDING_SCHEMA_VERSION + 1;
 
-    let begin_error = ReceiptBackedIntentOps::begin_or_load(&unsupported, 100)
-        .expect_err("unsupported binding schema");
+    let begin_error = begin_receipt(&unsupported, 100).expect_err("unsupported binding schema");
     assert_eq!(
         begin_error.log_fields(),
         (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
@@ -571,7 +690,7 @@ fn receipt_backed_rejects_unsupported_schemas_without_mutation() {
     assert_eq!(ReceiptBackedIntentStore::len(), 0);
 
     let input = receipt_input(6);
-    ReceiptBackedIntentOps::begin_or_load(&input, 200).expect("create supported intent");
+    begin_receipt(&input, 200).expect("create supported intent");
     let mut evidence = terminal_evidence(TerminalEvidenceDecision::Committed, 6);
     evidence.schema_version = TERMINAL_EVIDENCE_SCHEMA_VERSION + 1;
     let settle_error = ReceiptBackedIntentOps::settle_if_pending(
@@ -601,13 +720,11 @@ fn receipt_backed_rejects_unsupported_schemas_without_mutation() {
 #[test]
 fn terminal_receipt_cleanup_is_scoped_exact_and_preserves_totals() {
     reset();
-    let mut target = receipt_input(20);
-    target.resource_key = IntentResourceKey::new("target:test");
-    let mut other = receipt_input(21);
-    other.resource_key = IntentResourceKey::new("other:test");
+    let target = placement_receipt_input(20);
+    let other = placement_receipt_input(21);
 
     for input in [&target, &other] {
-        ReceiptBackedIntentOps::begin_or_load(input, 100).expect("create intent");
+        ReceiptBackedIntentOps::begin_placement_or_load(input, 100).expect("create intent");
         ReceiptBackedIntentOps::settle_if_pending(
             &SettleReceiptBackedIntentInput {
                 operation_id: input.operation_id,
@@ -659,13 +776,22 @@ fn placement_acknowledgement_index_is_exact_bounded_and_rebuilt_from_terminal_au
     let second = placement_receipt_input(2);
     let generic = receipt_input(23);
 
-    for input in [&first, &second, &generic] {
-        ReceiptBackedIntentOps::begin_or_load(input, 100).expect("create intent");
+    for input in [&first, &second] {
+        ReceiptBackedIntentOps::begin_placement_or_load(input, 100)
+            .expect("create placement intent");
+    }
+    begin_receipt(&generic, 100).expect("create application intent");
+
+    for (operation_id, payload_binding) in [
+        (first.operation_id, first.payload_binding),
+        (second.operation_id, second.payload_binding),
+        (generic.operation_id, generic.payload_binding),
+    ] {
         ReceiptBackedIntentOps::settle_if_pending(
             &SettleReceiptBackedIntentInput {
-                operation_id: input.operation_id,
+                operation_id,
                 expected_revision: 1,
-                expected_payload_binding: input.payload_binding,
+                expected_payload_binding: payload_binding,
                 evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 24),
             },
             200,
@@ -730,7 +856,7 @@ fn placement_acknowledgement_index_is_exact_bounded_and_rebuilt_from_terminal_au
 fn placement_acknowledgement_index_corruption_fails_closed() {
     reset();
     let input = placement_receipt_input(3);
-    ReceiptBackedIntentOps::begin_or_load(&input, 100).expect("create placement intent");
+    ReceiptBackedIntentOps::begin_placement_or_load(&input, 100).expect("create placement intent");
     ReceiptBackedIntentOps::settle_if_pending(
         &SettleReceiptBackedIntentInput {
             operation_id: input.operation_id,
@@ -772,7 +898,7 @@ fn receipt_backed_begin_enforces_shared_resource_and_store_capacity() {
     input.quantity = 2;
     input.reservation_limit = 5;
     assert_eq!(
-        ReceiptBackedIntentOps::begin_or_load(&input, 100).expect("capacity result"),
+        begin_receipt(&input, 100).expect("capacity result"),
         BeginReceiptBackedIntentResult::CapacityExceeded {
             current_quantity: 4,
             requested_quantity: 2,
@@ -783,8 +909,7 @@ fn receipt_backed_begin_enforces_shared_resource_and_store_capacity() {
 
     input.reservation_limit = 10;
     assert_eq!(
-        ReceiptBackedIntentOps::begin_or_load_with_limit(&input, 100, 0)
-            .expect("store capacity result"),
+        begin_receipt_with_limit(&input, 100, 0).expect("store capacity result"),
         BeginReceiptBackedIntentResult::StoreCapacityReached {
             current_records: 0,
             limit: 0,
@@ -797,7 +922,7 @@ fn receipt_backed_begin_enforces_shared_resource_and_store_capacity() {
 fn receipt_backed_commit_is_compare_and_set_and_idempotent() {
     reset();
     let input = receipt_input(4);
-    ReceiptBackedIntentOps::begin_or_load(&input, 100).expect("create");
+    begin_receipt(&input, 100).expect("create");
     let evidence = terminal_evidence(TerminalEvidenceDecision::Committed, 7);
     let settle = SettleReceiptBackedIntentInput {
         operation_id: input.operation_id,
@@ -827,7 +952,12 @@ fn receipt_backed_commit_is_compare_and_set_and_idempotent() {
     );
     assert_eq!(totals(&input.resource_key), totals_after_settle);
     assert_eq!(
-        ReceiptBackedIntentOps::begin_or_load(&input, 350).expect("terminal replay"),
+        ReceiptBackedIntentOps::begin_or_load(
+            &input,
+            input.replay_deadline_ns,
+            ReceiptReplayWindowDecision::Closed,
+        )
+        .expect("terminal replay at deadline"),
         BeginReceiptBackedIntentResult::ExistingCommitted {
             revision: 2,
             evidence,
@@ -847,7 +977,7 @@ fn receipt_backed_commit_is_compare_and_set_and_idempotent() {
 fn receipt_backed_rollback_and_revision_conflict_preserve_exact_totals() {
     reset();
     let input = receipt_input(5);
-    ReceiptBackedIntentOps::begin_or_load(&input, 100).expect("create");
+    begin_receipt(&input, 100).expect("create");
     let evidence = terminal_evidence(TerminalEvidenceDecision::RolledBack, 9);
     let stale = SettleReceiptBackedIntentInput {
         operation_id: input.operation_id,

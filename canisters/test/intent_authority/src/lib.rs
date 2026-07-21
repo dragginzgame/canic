@@ -46,6 +46,13 @@ enum ReceiptBeginStatus {
     ExistingCommitted,
     ExistingRolledBack,
     BindingConflict,
+    ReplayWindowClosed {
+        replay_deadline_ns: u64,
+    },
+    ReplayWindowTooLong {
+        remaining_ns: u64,
+        maximum_ns: u64,
+    },
     CapacityExceeded {
         current_quantity: u64,
         requested_quantity: u64,
@@ -143,6 +150,7 @@ fn begin_receipt(
     payload_seed: u8,
     resource_seed: u8,
     quantity: u64,
+    replay_deadline_ns: u64,
 ) -> Result<ReceiptBeginView, String> {
     init_memory();
     let operation_id = operation_id(operation_seed);
@@ -152,6 +160,7 @@ fn begin_receipt(
         resource_key: receipt_key(resource_seed)?,
         quantity,
         reservation_limit: RECEIPT_CAPACITY,
+        replay_deadline_ns,
     })
     .map_err(|err| err.to_string())?;
 
@@ -167,6 +176,16 @@ fn begin_receipt(
             ReceiptBeginStatus::ExistingRolledBack
         }
         BeginReceiptBackedIntentResult::BindingConflict => ReceiptBeginStatus::BindingConflict,
+        BeginReceiptBackedIntentResult::ReplayWindowClosed { replay_deadline_ns } => {
+            ReceiptBeginStatus::ReplayWindowClosed { replay_deadline_ns }
+        }
+        BeginReceiptBackedIntentResult::ReplayWindowTooLong {
+            remaining_ns,
+            maximum_ns,
+        } => ReceiptBeginStatus::ReplayWindowTooLong {
+            remaining_ns,
+            maximum_ns,
+        },
         BeginReceiptBackedIntentResult::CapacityExceeded {
             current_quantity,
             requested_quantity,
@@ -190,6 +209,8 @@ fn begin_receipt(
         | ReceiptBeginStatus::ExistingCommitted
         | ReceiptBeginStatus::ExistingRolledBack => load_receipt_view(operation_id)?,
         ReceiptBeginStatus::BindingConflict
+        | ReceiptBeginStatus::ReplayWindowClosed { .. }
+        | ReceiptBeginStatus::ReplayWindowTooLong { .. }
         | ReceiptBeginStatus::CapacityExceeded { .. }
         | ReceiptBeginStatus::StoreCapacityReached { .. } => None,
     };
