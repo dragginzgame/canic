@@ -4,10 +4,11 @@ Last updated: 2026-07-21
 
 ## Current State
 
-0.98 is proposed and has no product implementation. It follows the active 0.96
-receipt line and the proposed 0.97 role-owned dependency/CDK line. No package
-version, manifest, runtime, config, public API, test package, changelog, or
-downstream repository change is authorized by the proposal alone.
+0.98 is proposed, baseline-blocked, and has no product implementation. It
+follows the active 0.96 receipt line and the proposed 0.97 role-owned
+dependency/CDK line. No package version, manifest, runtime, config, public API,
+test package, changelog, or downstream repository change is authorized by the
+proposal alone.
 
 The line removes exactly three findings proven by the repository-wide
 architectural sediment audit:
@@ -26,9 +27,9 @@ targets, or compatibility modes are permitted.
 
 ## Release Boundary
 
-- Current immutable anchor: v0.96.3.
-- Open current work: 0.96.4 terminal eligibility/capacity under the 0.96
-  receipt design.
+- Provisional evidence anchor: released v0.96.4. This is not the 0.98
+  implementation baseline.
+- Open current work: the unfinished 0.96 receipt/reclamation line.
 - Preceding proposed line: 0.97 role-owned runtime dependencies and CDK
   surface.
 - Canonical 0.98 design: [0.98-design.md](0.98-design.md).
@@ -50,7 +51,16 @@ targets, or compatibility modes are permitted.
 | A — dead project protocol package | pending | Workspace contains no consumerless protocol placeholder |
 | B — receipt-backed test narrowing | pending | One focused current intent conformance; no LocalIntent external await |
 | C — randomness contract hard cut | pending | No accepted no-op config or unreachable raw_rand runtime path |
-| D — contract accounting and closeout | pending | Exact product/test/config/metric/package impact recorded |
+| Closeout — contract accounting | pending | Exact product/test/config/metric/package impact recorded |
+
+## Implementation Prerequisite
+
+Implementation may begin only after 0.96 and 0.97 are both closed. At that
+point the 0.98 design and this page must name the exact released 0.97 tag and
+commit, the deletion/reachability inventory must be rerun against that
+immutable tree, and Slice B must contain the exact assertion manifest from the
+final released 0.96 receipt contract. Until all three actions are complete,
+0.98 is not implementation-ready.
 
 ## Explicit Non-Goals
 
@@ -70,10 +80,10 @@ targets, or compatibility modes are permitted.
 
 ## Next Action
 
-Wait for maintainer acceptance and the preceding release boundaries. When 0.98
-opens, re-run the exact post-0.97 consumer inventory, then implement Slice A
-only. Do not begin by changing versions or by combining all deletions into one
-unreviewable patch.
+Wait for the preceding release boundaries. When they close, freeze the exact
+0.97 baseline, rerun the complete consumer/contract inventory, and pin the
+final 0.96 receipt assertions before implementing Slice A. Do not begin by
+changing versions or by combining all deletions into one unreviewable patch.
 
 ## Completion Gate
 
@@ -81,12 +91,19 @@ unreviewable patch.
 
 - all three findings are deleted;
 - current config without randomness still builds;
-- explicit randomness input fails through strict typed parsing;
+- explicit randomness input fails through
+  ConfigInvalid(path) -> CoreConfig(Project) -> CannotParseToml with typed
+  logical-path and unknown-field evidence, without raw Serde-text matching;
 - the three deleted packages are absent from Cargo metadata and lock data;
-- the focused receipt-backed PocketIC test preserves the released 0.96
-  contract;
-- legitimate LocalIntent tests remain;
-- product Candid, stable state, backup/restore, and deployment contracts have
-  no unclassified change;
+- the focused receipt-backed PocketIC test preserves every exact assertion in
+  the frozen final-0.96 manifest;
+- legitimate LocalIntent tests remain, and maintained code, fixtures,
+  examples, and docs contain no rollback based solely on an externally
+  uncertain result;
+- product stable IDs/schemas and generic LocalIntent/ReceiptBackedIntent
+  formats are unchanged, obsolete intent_authority test-only state is
+  accounted, and surviving receipt state remains upgrade-compatible;
+- product Candid, backup/restore, and deployment contracts have no
+  unclassified change;
 - no compatibility surface is added; and
 - one 0.98 closeout report records the exact contract and deletion evidence.
