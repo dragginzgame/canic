@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
-    domain::policy::pure::intent::decide_receipt_replay_window,
+    domain::{policy::pure::intent::decide_receipt_replay_window, runtime::FailureSeverity},
     ids::IntentId,
     log,
     log::Topic,
@@ -22,6 +22,7 @@ use crate::{
             IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
             IntentMetrics,
         },
+        runtime::recent_failure::{RecentFailureInput, RecentFailureOps},
         storage::intent::{IntentStoreOps, ReceiptBackedIntentOps},
     },
     workflow::runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
@@ -29,6 +30,32 @@ use crate::{
 
 const CLEANUP_BATCH_SIZE: usize = 32;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct IntentCleanupBatch {
+    application_receipts_removed: usize,
+    local_intents_aborted: usize,
+}
+
+impl IntentCleanupBatch {
+    fn work_count(self) -> Result<u64, InternalError> {
+        let total = self
+            .application_receipts_removed
+            .checked_add(self.local_intents_aborted)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    "intent cleanup batch count overflow",
+                )
+            })?;
+        u64::try_from(total).map_err(|_| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "intent cleanup batch count exceeds u64",
+            )
+        })
+    }
+}
 
 /// Direct workflow for locally decidable, expirable reservations.
 pub struct LocalIntentWorkflow;
@@ -249,6 +276,7 @@ impl ReceiptBackedIntentWorkflow {
                 IntentMetricOutcome::Completed,
                 IntentMetricReason::Ok,
             );
+            IntentCleanupWorkflow::reconcile_after_terminal();
         }
         Ok(result)
     }
@@ -297,14 +325,15 @@ impl IntentCleanupWorkflow {
     }
 
     fn run_due_batch() -> TimerRunResult {
-        Self::run_due_batch_at(IcOps::now_secs())
+        Self::run_due_batch_at(IcOps::now_nanos())
     }
 
-    fn run_due_batch_at(now: u64) -> TimerRunResult {
-        let result = Self::cleanup_due_batch(now);
-        let aborted = match result {
-            Ok(aborted) => aborted,
+    fn run_due_batch_at(now_ns: u64) -> TimerRunResult {
+        let result = Self::cleanup_due_batch(now_ns);
+        let batch = match result {
+            Ok(batch) => batch,
             Err(err) => {
+                record_cleanup_failure(&err);
                 record_cleanup_intent(
                     IntentMetricOperation::Cleanup,
                     IntentMetricOutcome::Failed,
@@ -315,9 +344,10 @@ impl IntentCleanupWorkflow {
             }
         };
 
-        let directive = match Self::next_directive(now) {
+        let directive = match Self::next_directive(now_ns) {
             Ok(directive) => directive,
             Err(err) => {
+                record_cleanup_failure(&err);
                 log!(
                     Topic::Memory,
                     Warn,
@@ -325,13 +355,21 @@ impl IntentCleanupWorkflow {
                 );
                 return TimerRunResult {
                     outcome: crate::domain::runtime::TimerExecutionOutcome::InvariantFailure,
-                    work_count: u64::try_from(aborted).unwrap_or(u64::MAX),
+                    work_count: batch.work_count().unwrap_or(u64::MAX),
                     directive: TimerDirective::Stop,
                 };
             }
         };
 
-        if aborted == 0 {
+        let work_count = match batch.work_count() {
+            Ok(work_count) => work_count,
+            Err(err) => {
+                record_cleanup_failure(&err);
+                log!(Topic::Memory, Warn, "intent cleanup count failed: {err}");
+                return TimerRunResult::invariant_failure();
+            }
+        };
+        if work_count == 0 {
             record_cleanup_intent(
                 IntentMetricOperation::Cleanup,
                 IntentMetricOutcome::Completed,
@@ -347,14 +385,34 @@ impl IntentCleanupWorkflow {
             log!(
                 Topic::Memory,
                 Info,
-                "intent cleanup: aborted={aborted} batch_limit={CLEANUP_BATCH_SIZE}"
+                "intent cleanup: application_receipts_removed={} local_intents_aborted={} batch_limit={CLEANUP_BATCH_SIZE}",
+                batch.application_receipts_removed,
+                batch.local_intents_aborted,
             );
-            TimerRunResult::success(u64::try_from(aborted).unwrap_or(u64::MAX), directive)
+            TimerRunResult::success(work_count, directive)
         }
     }
 
-    fn cleanup_due_batch(now_secs: u64) -> Result<usize, InternalError> {
-        let due = IntentStoreOps::list_due_expiry_intents(now_secs, CLEANUP_BATCH_SIZE)?;
+    fn cleanup_due_batch(now_ns: u64) -> Result<IntentCleanupBatch, InternalError> {
+        let application =
+            ReceiptBackedIntentOps::reclaim_due_application_receipts(now_ns, CLEANUP_BATCH_SIZE)?;
+        let application_receipts_removed =
+            usize::try_from(application.removed_records).map_err(|_| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    "application receipt cleanup count exceeds usize",
+                )
+            })?;
+        let local_limit = CLEANUP_BATCH_SIZE
+            .checked_sub(application_receipts_removed)
+            .ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    "application receipt cleanup exceeded its batch limit",
+                )
+            })?;
+        let now_secs = now_ns / NANOS_PER_SECOND;
+        let due = IntentStoreOps::list_due_expiry_intents(now_secs, local_limit)?;
         let mut aborted = 0;
         for intent_id in due {
             match IntentStoreOps::abort_intent_if_pending(intent_id) {
@@ -384,7 +442,10 @@ impl IntentCleanupWorkflow {
                 }
             }
         }
-        Ok(aborted)
+        Ok(IntentCleanupBatch {
+            application_receipts_removed,
+            local_intents_aborted: aborted,
+        })
     }
 
     pub(crate) fn schedule_intent(intent_id: IntentId) -> Result<(), InternalError> {
@@ -396,6 +457,7 @@ impl IntentCleanupWorkflow {
 
     pub(crate) fn reconcile_after_terminal() {
         if let Err(err) = Self::reconcile() {
+            record_cleanup_failure(&err);
             record_cleanup_intent(
                 IntentMetricOperation::Cleanup,
                 IntentMetricOutcome::Failed,
@@ -410,9 +472,7 @@ impl IntentCleanupWorkflow {
     }
 
     fn reconcile() -> Result<(), InternalError> {
-        let deadline_ns = IntentStoreOps::next_expiry_at_secs()?
-            .map(Self::deadline_ns)
-            .transpose()?;
+        let deadline_ns = Self::next_cleanup_deadline_ns()?;
         TimerWorkflow::reconcile_at(TimerKey::IntentCleanup, deadline_ns, || async {
             Self::run_due_batch()
         });
@@ -427,12 +487,24 @@ impl IntentCleanupWorkflow {
         Ok(())
     }
 
-    fn next_directive(now_secs: u64) -> Result<TimerDirective, InternalError> {
-        match IntentStoreOps::next_expiry_at_secs()? {
+    fn next_directive(now_ns: u64) -> Result<TimerDirective, InternalError> {
+        match Self::next_cleanup_deadline_ns()? {
             None => Ok(TimerDirective::Stop),
-            Some(due_at_secs) if due_at_secs <= now_secs => Ok(TimerDirective::ContinueImmediately),
-            Some(due_at_secs) => Ok(TimerDirective::ScheduleAt(Self::deadline_ns(due_at_secs)?)),
+            Some(deadline_ns) if deadline_ns <= now_ns => Ok(TimerDirective::ContinueImmediately),
+            Some(deadline_ns) => Ok(TimerDirective::ScheduleAt(deadline_ns)),
         }
+    }
+
+    fn next_cleanup_deadline_ns() -> Result<Option<u64>, InternalError> {
+        let local = IntentStoreOps::next_expiry_at_secs()?
+            .map(Self::deadline_ns)
+            .transpose()?;
+        let application = ReceiptBackedIntentOps::application_capacity()?.next_eligibility_at_ns;
+        Ok(match (local, application) {
+            (Some(local), Some(application)) => Some(local.min(application)),
+            (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
+            (None, None) => None,
+        })
     }
 
     fn deadline_ns(due_at_secs: u64) -> Result<u64, InternalError> {
@@ -452,6 +524,18 @@ fn record_cleanup_intent(
     reason: IntentMetricReason,
 ) {
     IntentMetrics::record(IntentMetricSurface::Cleanup, operation, outcome, reason);
+}
+
+fn record_cleanup_failure(err: &InternalError) {
+    let (class, origin) = err.log_fields();
+    RecentFailureOps::record(RecentFailureInput {
+        occurred_at_ns: IcOps::now_nanos(),
+        subsystem: "intent_cleanup".to_string(),
+        code: "intent_cleanup_invariant".to_string(),
+        severity: FailureSeverity::Error,
+        summary: format!("class={class} origin={origin}: {err}"),
+        correlation_id: None,
+    });
 }
 
 fn record_intent(
@@ -485,6 +569,17 @@ mod tests {
             quantity: 1,
             reservation_limit: 1,
             replay_deadline_ns: u64::MAX,
+        }
+    }
+
+    fn application_receipt_input(seed: u8) -> BeginReceiptBackedIntentInput {
+        BeginReceiptBackedIntentInput {
+            operation_id: OperationId::from_bytes([seed; 32]),
+            payload_binding: PayloadBinding::new([seed.wrapping_add(1); 32]),
+            resource_key: IntentResourceKey::new(format!("application:{seed}")),
+            quantity: 1,
+            reservation_limit: 1,
+            replay_deadline_ns: 1_000,
         }
     }
 
@@ -621,19 +716,29 @@ mod tests {
             .expect("reserve TTL-free intent");
 
         assert_eq!(
-            IntentCleanupWorkflow::cleanup_due_batch(11).expect("first bounded batch"),
-            CLEANUP_BATCH_SIZE
+            IntentCleanupWorkflow::cleanup_due_batch(11 * NANOS_PER_SECOND)
+                .expect("first bounded batch"),
+            IntentCleanupBatch {
+                application_receipts_removed: 0,
+                local_intents_aborted: CLEANUP_BATCH_SIZE,
+            }
         );
         assert!(matches!(
-            IntentCleanupWorkflow::next_directive(11).expect("continuation directive"),
+            IntentCleanupWorkflow::next_directive(11 * NANOS_PER_SECOND)
+                .expect("continuation directive"),
             TimerDirective::ContinueImmediately
         ));
         assert_eq!(
-            IntentCleanupWorkflow::cleanup_due_batch(11).expect("second bounded batch"),
-            1
+            IntentCleanupWorkflow::cleanup_due_batch(11 * NANOS_PER_SECOND)
+                .expect("second bounded batch"),
+            IntentCleanupBatch {
+                application_receipts_removed: 0,
+                local_intents_aborted: 1,
+            }
         );
         assert!(matches!(
-            IntentCleanupWorkflow::next_directive(11).expect("terminal directive"),
+            IntentCleanupWorkflow::next_directive(11 * NANOS_PER_SECOND)
+                .expect("terminal directive"),
             TimerDirective::Stop
         ));
         assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 1);
@@ -641,9 +746,81 @@ mod tests {
     }
 
     #[test]
+    fn application_and_local_cleanup_share_one_exact_batch_budget() {
+        let _guard = seams::lock();
+        IntentStoreOps::reset_for_tests();
+        for seed in 1..=33 {
+            let input = application_receipt_input(seed);
+            ReceiptBackedIntentOps::begin_or_load(
+                &input,
+                100,
+                crate::model::intent::ReceiptReplayWindowDecision::Open,
+            )
+            .expect("create application receipt");
+            ReceiptBackedIntentOps::settle_if_pending(
+                &SettleReceiptBackedIntentInput {
+                    operation_id: input.operation_id,
+                    expected_revision: 1,
+                    expected_payload_binding: input.payload_binding,
+                    evidence: TerminalEvidence::new(
+                        Principal::from_slice(&[3; 29]),
+                        TerminalEvidenceDecision::Committed,
+                        [seed; 32],
+                    ),
+                },
+                200,
+            )
+            .expect("settle application receipt");
+        }
+        IntentStoreOps::try_reserve(
+            IntentId(50),
+            IntentResourceKey::new("cleanup:shared"),
+            1,
+            10,
+            Some(0),
+            10,
+        )
+        .expect("reserve due local intent");
+        let due_at_ns = 200 + crate::model::intent::RECEIPT_TERMINAL_OBSERVATION_GRACE_NS;
+
+        assert_eq!(
+            IntentCleanupWorkflow::cleanup_due_batch(due_at_ns).expect("first shared batch"),
+            IntentCleanupBatch {
+                application_receipts_removed: CLEANUP_BATCH_SIZE,
+                local_intents_aborted: 0,
+            }
+        );
+        assert!(matches!(
+            IntentCleanupWorkflow::next_directive(due_at_ns).expect("continue shared cleanup"),
+            TimerDirective::ContinueImmediately
+        ));
+        assert!(IntentStoreOps::is_pending_for_tests(IntentId(50)).expect("local intent remains"));
+
+        assert_eq!(
+            IntentCleanupWorkflow::cleanup_due_batch(due_at_ns).expect("second shared batch"),
+            IntentCleanupBatch {
+                application_receipts_removed: 1,
+                local_intents_aborted: 1,
+            }
+        );
+        assert!(matches!(
+            IntentCleanupWorkflow::next_directive(due_at_ns).expect("finish shared cleanup"),
+            TimerDirective::Stop
+        ));
+        assert_eq!(
+            ReceiptBackedIntentOps::application_capacity()
+                .expect("empty application capacity")
+                .application_records,
+            0
+        );
+        assert!(!IntentStoreOps::is_pending_for_tests(IntentId(50)).expect("local intent removed"));
+    }
+
+    #[test]
     fn cleanup_failure_preserves_the_due_intent_and_exact_expiry_entry() {
         let _guard = seams::lock();
         IntentStoreOps::reset_for_tests();
+        RecentFailureOps::reset();
         let intent_id = IntentId(41);
         IntentStoreOps::try_reserve(
             intent_id,
@@ -656,7 +833,7 @@ mod tests {
         .expect("reserve due intent");
         IntentStoreOps::clear_totals_for_tests();
 
-        IntentCleanupWorkflow::cleanup_due_batch(11)
+        IntentCleanupWorkflow::cleanup_due_batch(11 * NANOS_PER_SECOND)
             .expect_err("missing totals must preserve typed storage failure");
         assert!(IntentStoreOps::is_pending_for_tests(intent_id).expect("pending intent remains"));
         assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 1);
@@ -666,11 +843,19 @@ mod tests {
             vec![intent_id]
         );
 
-        let result = IntentCleanupWorkflow::run_due_batch_at(11);
+        let result = IntentCleanupWorkflow::run_due_batch_at(11 * NANOS_PER_SECOND);
         assert_eq!(
             result.outcome,
             crate::domain::runtime::TimerExecutionOutcome::InvariantFailure
         );
         assert_eq!(result.directive, TimerDirective::Stop);
+        let failure = RecentFailureOps::snapshot()
+            .into_iter()
+            .next()
+            .expect("protected cleanup diagnostic");
+        assert_eq!(failure.subsystem, "intent_cleanup");
+        assert_eq!(failure.code, "intent_cleanup_invariant");
+        assert_eq!(failure.severity, FailureSeverity::Error);
+        RecentFailureOps::reset();
     }
 }
