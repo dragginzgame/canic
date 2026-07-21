@@ -1099,9 +1099,9 @@ role_attestation_cache = true
     fs::remove_dir_all(root).expect("remove temp root");
 }
 
-// Ensure project medic accepts required features inherited from workspace dependencies.
+// Ensure project medic rejects role features inherited from workspace dependencies.
 #[test]
-fn project_config_quality_checks_accept_workspace_required_canic_features() {
+fn project_config_quality_checks_reject_workspace_canic_features() {
     let root = temp_dir("canic-cli-medic-project-workspace-required-features");
     let config = write_medic_config(
         &root,
@@ -1142,14 +1142,19 @@ role_attestation_cache = true
 
     let checks = project_config_quality_checks(&root, &[config]);
 
-    assert!(checks.iter().any(|check| {
-        check.subject == "demo.app"
-            && check.code == "role_required_canic_feature_present"
-            && check.status == MedicStatus::Pass
-    }));
-    assert!(!checks.iter().any(|check| {
-        check.subject == "demo.app" && check.code == "role_contract_required_feature_missing"
-    }));
+    let check = checks
+        .iter()
+        .find(|check| {
+            check.subject == "demo.app"
+                && check.code == "role_contract_dependency_shape_unsupported"
+        })
+        .unwrap_or_else(|| panic!("workspace feature rejection: {checks:#?}"));
+    assert_eq!(check.status, MedicStatus::Fail);
+    assert!(
+        check
+            .detail
+            .contains("workspace Canic dependency must not select features")
+    );
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -1605,10 +1610,10 @@ fn write_medic_role_contract_workspace(root: &std::path::Path, features: &[&str]
         format!(
             r#"[workspace]
 members = ["crates/canic", "crates/canic-core", "fleets/demo/*"]
-resolver = "3"
+resolver = "2"
 
 [workspace.dependencies]
-canic = {{ path = "crates/canic", features = [{features}] }}
+canic = {{ path = "crates/canic", default-features = false, features = [{features}] }}
 "#
         ),
     )
@@ -1704,15 +1709,19 @@ fn write_medic_package_with_canic_features(
         .collect::<Vec<_>>()
         .join(", ");
     fs::write(
-        path,
+        &path,
         format!(
             r#"[package]
 name = "{fleet}_{role}"
 edition = "2024"
 version = "0.1.0"
+build = "build.rs"
 
 [dependencies]
 canic = {{ workspace = true, features = [{features}] }}
+
+[build-dependencies]
+canic = {{ workspace = true, features = [] }}
 
 [package.metadata.canic]
 fleet = "{fleet}"
@@ -1721,6 +1730,11 @@ role = "{role}"
         ),
     )
     .expect("write package manifest");
+    fs::write(
+        path.parent().expect("package parent").join("build.rs"),
+        "fn main() {\n    canic::build!(\"../canic.toml\");\n}\n",
+    )
+    .expect("write package build script");
     generate_medic_fixture_lockfile(root);
 }
 

@@ -1,0 +1,6 @@
+[workspace]
+members = ["role"]
+resolver = "2"
+
+[workspace.dependencies]
+canic = { path = "../../../../../canic", default-features = false }

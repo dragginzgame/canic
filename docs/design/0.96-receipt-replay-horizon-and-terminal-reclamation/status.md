@@ -4,7 +4,7 @@ Last updated: 2026-07-21
 
 ## Current State
 
-0.96 is active at released `v0.96.7`. Audit-only Slice A is released as `v0.96.0`; the full
+0.96 is closed at immutable `v0.96.8` with a `pass` verdict. Audit-only Slice A is released as `v0.96.0`; the full
 Canic-side receipt consumer and authority inventory is frozen. Released
 `v0.96.1` measures the existing stable-capacity envelope and fixes two
 independent totals-store defects. Released `v0.96.2` hard-cuts application
@@ -16,9 +16,9 @@ Released `v0.96.5` adds its constant-time capacity and earliest-eligibility
 projection. Released `v0.96.6` hard-cuts the inherited ceiling to 1,000 records
 and enables exact bounded terminal reclamation through the existing intent
 timer. Released `v0.96.7` caps the remaining durable resource-total authority
-and projects both capacities through guarded runtime status. Open `0.96.8`
-hard-cuts the stale day-scale timing to a one-hour replay maximum and
-15-minute terminal observation grace before closeout.
+and projects both capacities through guarded runtime status. Released
+`v0.96.8` hard-cuts stale day-scale timing to a one-hour replay maximum and
+15-minute terminal observation grace.
 
 The previously reviewed Toko checkout is approximately one month behind
 current development and remains historical evidence only. It does not define
@@ -247,7 +247,7 @@ The canonical report is
   structured JSON. The existing controller guard remains the only endpoint
   authority.
 
-## Open 0.96.8 Transaction-Scale Retention
+## Released 0.96.8 Transaction-Scale Retention
 
 The canonical report is
 [0.96.8 transaction-scale receipt retention](../../audits/reports/2026-07/2026-07-21/0.96-transaction-retention-0.96.8.md).
@@ -281,7 +281,7 @@ The canonical report is
 | `CANIC-096-GATE-006` committed resource-total cardinality has no finite Canic bound | P1 | fixed in v0.96.7 by shared hard admission ceiling and guarded projection | Canic intent admission |
 | `CANIC-096-RECONCILE-007` lifecycle receipt reconciliation amplifies ordered scans with per-row cross-map point lookups | P2 | fixed in v0.96.3 | Canic receipt storage ops/lifecycle |
 | `CANIC-096-CAPACITY-008` admitted pending application work has no reserved terminal-index capacity | P1 | fixed in v0.96.4 | Canic receipt storage ops |
-| `CANIC-096-RETENTION-009` stale downstream evidence imposes day-scale retention on resolved crypto actions | P1 | fixed in open 0.96.8 by one-hour replay maximum and 15-minute observation grace | Canic replay/retention policy |
+| `CANIC-096-RETENTION-009` stale downstream evidence imposes day-scale retention on resolved crypto actions | P1 | fixed in v0.96.8 by one-hour replay maximum and 15-minute observation grace | Canic replay/retention policy |
 
 No other product finding is admitted without a design amendment and direct
 receipt-path evidence.
@@ -375,16 +375,16 @@ receipt-path evidence.
   check also passed.
 - Released 0.96.7 layering guards, changelog governance, formatting, and diff
   hygiene: passed.
-- Open 0.96.8 exact replay/grace model and policy boundaries: 2 passed.
-- Open 0.96.8 intent storage ops: 32 passed; runtime intent workflow: 7
+- Released 0.96.8 exact replay/grace model and policy boundaries: 2 passed.
+- Released 0.96.8 intent storage ops: 32 passed; runtime intent workflow: 7
   passed, including rejection of noncanonical durable eligibility timing.
-- Open 0.96.8 real-Wasm PocketIC receipt lifecycle: 1 passed with the one-hour
+- Released 0.96.8 real-Wasm PocketIC receipt lifecycle: 1 passed with the one-hour
   ceiling, post-boundary terminal reclamation, pending retention, closed
   replay rejection, and committed-accounting preservation.
-- Open 0.96.8 strict targeted Clippy passed for `canic-core` all-feature
+- Released 0.96.8 strict targeted Clippy passed for `canic-core` all-feature
   lib/tests and the `canic-tests` receipt target. The all-feature `canic-core`
   Wasm32 check also passed.
-- Open 0.96.8 layering guards, changelog governance, formatting, and diff
+- Released 0.96.8 layering guards, changelog governance, formatting, and diff
   hygiene: passed.
 
 ## Accepted Canic-Side Decisions
@@ -424,8 +424,9 @@ receipt-path evidence.
 
 ## Remaining Closeout Work
 
-1. Complete targeted validation for open `0.96.8`.
-2. Release the hard cut and record closeout at its immutable identity.
+None. The immutable
+[0.96 closeout](../../audits/release-lines/0.96-closeout.md) records a `pass`
+verdict at `v0.96.8`.
 
 Toko's action identity, binding vectors, batch/rate envelope, ledger
 idempotency, recovery, and entrypoint cleanup remain required before Toko
@@ -433,6 +434,6 @@ adopts the API. They do not gate Canic's generic reclamation implementation.
 
 ## Next Action
 
-Complete only the `0.96.8` transaction-timing hard cut and validation, then
-close 0.96. Do not broaden it into unrelated intent, storage, timer,
-ICP-refill, downstream inspection, or cleanup.
+Proceed to the accepted 0.97 role-owned dependency/CDK and root-manual-refill
+line. Do not reopen 0.96 for unrelated intent, storage, timer, downstream, or
+cleanup work.

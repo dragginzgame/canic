@@ -1,0 +1,21 @@
+controllers = []
+app_index = []
+
+[fleet]
+name = "fixture_protected_sibling"
+
+[roles.root]
+kind = "root"
+package = "role"
+
+[roles.app]
+kind = "canister"
+package = "role"
+
+[subnets.prime]
+
+[subnets.prime.canisters.root]
+kind = "root"
+
+[subnets.prime.canisters.app]
+kind = "service"

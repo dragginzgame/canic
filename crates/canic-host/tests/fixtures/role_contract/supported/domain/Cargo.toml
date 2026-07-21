@@ -1,0 +1,9 @@
+[package]
+name = "fixture_supported_domain"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+

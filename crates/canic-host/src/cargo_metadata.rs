@@ -1,3 +1,9 @@
+//! Module: cargo_metadata
+//!
+//! Responsibility: execute and decode bounded host-side Cargo evidence commands.
+//! Does not own: role dependency policy or workspace discovery decisions.
+//! Boundary: callers receive typed metadata or raw package-selected tree output.
+
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::{
@@ -17,6 +23,8 @@ pub struct CargoMetadata {
     pub packages: Vec<CargoMetadataPackage>,
     #[serde(default)]
     pub resolve: Option<CargoMetadataResolve>,
+    #[serde(default)]
+    pub workspace_root: PathBuf,
 }
 
 ///
@@ -38,6 +46,17 @@ pub struct CargoMetadataPackage {
     pub dependencies: Vec<CargoMetadataDependency>,
     #[serde(default)]
     pub features: BTreeMap<String, Vec<String>>,
+    #[serde(default)]
+    pub targets: Vec<CargoMetadataTarget>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct CargoMetadataTarget {
+    pub name: String,
+    #[serde(default)]
+    pub kind: Vec<String>,
+    #[serde(default)]
+    pub src_path: PathBuf,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -112,6 +131,65 @@ pub fn cargo_metadata_for_manifest(
     }
 
     run_cargo_metadata(command)
+}
+
+/// Query the complete Cargo package catalog without treating its union graph
+/// as role-specific activation evidence.
+pub fn cargo_metadata_catalog_for_manifest(
+    manifest_path: &Path,
+    locked_offline: bool,
+) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
+    let mut command = cargo_metadata_command(manifest_path);
+    if locked_offline {
+        command.args(["--locked", "--offline"]);
+    }
+
+    run_cargo_metadata(command)
+}
+
+/// Query one package-selected normal dependency tree for the requested target.
+pub fn cargo_tree_for_package(
+    manifest_path: &Path,
+    package_spec: &str,
+    filter_platform: &str,
+    locked_offline: bool,
+    format: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut command = cargo_command();
+    command
+        .current_dir(manifest_path.parent().unwrap_or_else(|| Path::new(".")))
+        .args([
+            "tree",
+            "--manifest-path",
+            &manifest_path.display().to_string(),
+            "--package",
+            package_spec,
+            "--target",
+            filter_platform,
+            "--edges",
+            "normal",
+            "--prefix",
+            "depth",
+            "--no-dedupe",
+            "--charset",
+            "ascii",
+            "--format",
+            format,
+        ]);
+    if locked_offline {
+        command.args(["--locked", "--offline"]);
+    }
+
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "cargo tree failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+
+    Ok(String::from_utf8(output.stdout)?)
 }
 
 fn cargo_metadata_command(manifest_path: &Path) -> std::process::Command {

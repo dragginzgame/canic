@@ -6,7 +6,7 @@ version = { workspace = true }
 publish = false
 
 [dependencies]
-canic = { workspace = true }
+canic = { workspace = true, features = ["metrics"] }
 
 [lints]
 workspace = true

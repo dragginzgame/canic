@@ -13,9 +13,9 @@ pub use descriptor::{
 
 pub(crate) use package::validate_declared_role_package_from_config;
 pub use package::{
-    PackageValidationMode, RolePackageEvidence, RolePackageValidation, declared_role_manifest_path,
-    validate_built_in_wasm_store_package, validate_declared_role_package,
-    validate_internal_test_wasm_packages,
+    PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
+    declared_role_manifest_path, validate_built_in_wasm_store_package,
+    validate_declared_role_package, validate_internal_test_wasm_packages,
 };
 
 use canic_core::{
@@ -46,7 +46,7 @@ pub fn resolve_declared_role_contract(
 #[must_use]
 pub fn resolve_declared_role_package_contract(
     config_path: &Path,
-    evidence: &RolePackageEvidence,
+    evidence: &RoleCargoGraphEvidence,
 ) -> RoleContractResolution {
     let config_source = match fs::read_to_string(config_path) {
         Ok(source) => source,
@@ -75,7 +75,7 @@ pub fn resolve_declared_role_package_contract(
 #[must_use]
 pub(crate) fn resolve_declared_role_package_contract_from_config(
     config: &canic_core::bootstrap::compiled::ConfigModel,
-    evidence: &RolePackageEvidence,
+    evidence: &RoleCargoGraphEvidence,
 ) -> RoleContractResolution {
     resolve_role_contract(RoleContractInput {
         source: RoleContractSource::Declared {
@@ -89,7 +89,7 @@ pub(crate) fn resolve_declared_role_package_contract_from_config(
 
 #[must_use]
 pub fn resolve_built_in_wasm_store_contract(
-    evidence: &RolePackageEvidence,
+    evidence: &RoleCargoGraphEvidence,
 ) -> RoleContractResolution {
     resolve_role_contract(RoleContractInput {
         source: RoleContractSource::BuiltIn(BuiltInRoleKind::WasmStore),
@@ -133,9 +133,9 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
             "memory ID {} is claimed by {first:?} and {second:?}",
             memory_id.get()
         ),
-        RoleContractFinding::MultipleCanicPackages { package_ids } => format!(
+        RoleContractFinding::MultipleCanicPackages { packages } => format!(
             "the wasm runtime graph reaches multiple Canic packages: {}",
-            package_ids.join(", ")
+            packages.join(", ")
         ),
         RoleContractFinding::PackageAmbiguous { role } => {
             format!("multiple Cargo packages resolve for role {role}")

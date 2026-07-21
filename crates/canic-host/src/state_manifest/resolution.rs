@@ -8,9 +8,10 @@
 //! resolved manifest or blocking role-contract findings.
 
 use crate::role_contract::{
-    PackageValidationMode, RolePackageEvidence, RolePackageValidation, materialize_state_manifest,
-    resolve_built_in_wasm_store_contract, resolve_declared_role_package_contract,
-    validate_built_in_wasm_store_package, validate_declared_role_package,
+    PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
+    materialize_state_manifest, resolve_built_in_wasm_store_contract,
+    resolve_declared_role_package_contract, validate_built_in_wasm_store_package,
+    validate_declared_role_package,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -42,7 +43,7 @@ pub fn resolve_project_state_manifest(
     role_filter: Option<&str>,
 ) -> StateManifestResolution {
     let mut contracts = BTreeMap::<String, ResolvedRoleContract>::new();
-    let mut evidence = Vec::<RolePackageEvidence>::new();
+    let mut evidence = Vec::<RoleCargoGraphEvidence>::new();
     let mut errors = Vec::new();
     let mut matched_declared_role = false;
 
@@ -158,7 +159,7 @@ fn collect_contract(
 
 fn existing_built_in_wasm_store_manifest(
     project_root: &Path,
-    evidence: &[RolePackageEvidence],
+    evidence: &[RoleCargoGraphEvidence],
 ) -> Option<PathBuf> {
     for candidate in [
         project_root.join("crates/canic-wasm-store/Cargo.toml"),

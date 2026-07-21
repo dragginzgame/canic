@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.97.x] - 2026-07-22 - Role-Owned Runtime Dependencies And CDK Surface
+
+Detailed patch breakdown: [docs/changelog/0.97.md](docs/changelog/0.97.md)
+
+- `0.97.0` closes 0.96 at immutable `v0.96.8`, freezes the complete
+  role-graph, public-CDK, macro-plumbing, and root-manual-refill inventory,
+  and hard-cuts role Cargo authority to explicit declarations plus one
+  target-correct protected-package graph.
+
 ## [0.96.x] - 2026-07-21 - Receipt Replay Horizon And Terminal Reclamation
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
