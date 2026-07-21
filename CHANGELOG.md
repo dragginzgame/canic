@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
 
+- `0.96.3` replaces receipt lifecycle lookup amplification with one linear,
+  fail-closed index reconciliation before placement acknowledgement rebuild.
+
 - `0.96.2` hard-cuts application receipt admission to one immutable absolute
   deadline, rejects expired or overlong absent operations before capacity, and
   stores exact replay metadata without changing placement or adding cleanup.

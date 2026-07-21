@@ -86,9 +86,8 @@ pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
         .map_err(|err| err.with_diagnostic_context("rebuild ICP-refill derived indexes"))?;
     IntentStoreOps::rebuild_expiry_index()
         .map_err(|err| err.with_diagnostic_context("rebuild intent expiry derived index"))?;
-    ReceiptBackedIntentOps::rebuild_placement_acknowledgement_index().map_err(|err| {
-        err.with_diagnostic_context("rebuild placement acknowledgement derived index")
-    })?;
+    ReceiptBackedIntentOps::reconcile_receipt_indexes()
+        .map_err(|err| err.with_diagnostic_context("reconcile receipt-backed intent indexes"))?;
 
     Ok(())
 }

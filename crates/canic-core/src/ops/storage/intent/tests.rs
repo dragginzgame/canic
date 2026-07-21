@@ -119,6 +119,72 @@ fn terminal_evidence(decision: TerminalEvidenceDecision, byte: u8) -> TerminalEv
     TerminalEvidence::new(Principal::from_slice(&[1; 29]), decision, [byte; 32])
 }
 
+fn application_replay_contradiction_cases(
+    canonical: ApplicationReceiptReplayEntryRecord,
+    placement_operation_id: OperationId,
+) -> [(&'static str, ApplicationReceiptReplayData); 5] {
+    let orphan_id = operation_id(251);
+    [
+        ("missing", ApplicationReceiptReplayData::default()),
+        (
+            "wrong schema",
+            ApplicationReceiptReplayData {
+                entries: vec![ApplicationReceiptReplayEntryRecord {
+                    record: ApplicationReceiptReplayRecord {
+                        schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION + 1,
+                        ..canonical.record
+                    },
+                    ..canonical
+                }],
+            },
+        ),
+        (
+            "wrong identity",
+            ApplicationReceiptReplayData {
+                entries: vec![ApplicationReceiptReplayEntryRecord {
+                    record: ApplicationReceiptReplayRecord {
+                        operation_id: orphan_id,
+                        ..canonical.record
+                    },
+                    ..canonical
+                }],
+            },
+        ),
+        (
+            "orphan",
+            ApplicationReceiptReplayData {
+                entries: vec![
+                    canonical,
+                    ApplicationReceiptReplayEntryRecord {
+                        operation_id: orphan_id,
+                        record: ApplicationReceiptReplayRecord {
+                            schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+                            operation_id: orphan_id,
+                            replay_deadline_ns: REPLAY_DEADLINE,
+                        },
+                    },
+                ],
+            },
+        ),
+        (
+            "Canic-owned",
+            ApplicationReceiptReplayData {
+                entries: vec![
+                    canonical,
+                    ApplicationReceiptReplayEntryRecord {
+                        operation_id: placement_operation_id,
+                        record: ApplicationReceiptReplayRecord {
+                            schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+                            operation_id: placement_operation_id,
+                            replay_deadline_ns: REPLAY_DEADLINE,
+                        },
+                    },
+                ],
+            },
+        ),
+    ]
+}
+
 #[test]
 fn idempotent_ops_do_not_double_count() {
     // -------------------------------------------------------------------------
@@ -632,6 +698,60 @@ fn application_replay_metadata_contradictions_fail_closed() {
 }
 
 #[test]
+fn receipt_index_reconciliation_is_ordered_fail_closed_and_non_mutating_on_error() {
+    reset();
+    let application = receipt_input(46);
+    begin_receipt(&application, 100).expect("create application receipt");
+    let canonical_application = ReceiptBackedIntentStore::export_application_replay().entries[0];
+
+    let placement = placement_receipt_input(46);
+    ReceiptBackedIntentOps::begin_placement_or_load(&placement, 100)
+        .expect("create placement receipt");
+    ReceiptBackedIntentOps::settle_if_pending(
+        &SettleReceiptBackedIntentInput {
+            operation_id: placement.operation_id,
+            expected_revision: 1,
+            expected_payload_binding: placement.payload_binding,
+            evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 46),
+        },
+        200,
+    )
+    .expect("settle placement receipt");
+
+    let sentinel_id = operation_id(250);
+    let sentinel_index = PlacementAcknowledgementIndexData {
+        entries: vec![PlacementAcknowledgementIndexEntryRecord {
+            operation_id: sentinel_id,
+            record: PlacementAcknowledgementEntryRecord {
+                operation_id: sentinel_id,
+            },
+        }],
+    };
+    ReceiptBackedIntentStore::import_placement_acknowledgement_index(sentinel_index.clone());
+
+    for (name, replay) in
+        application_replay_contradiction_cases(canonical_application, placement.operation_id)
+    {
+        ReceiptBackedIntentStore::import_application_replay(replay);
+        ReceiptBackedIntentOps::reconcile_receipt_indexes()
+            .expect_err("contradictory receipt indexes must reject");
+        assert_eq!(
+            ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
+            sentinel_index,
+            "placement index mutated for {name} application replay contradiction"
+        );
+    }
+
+    ReceiptBackedIntentStore::import_application_replay(ApplicationReceiptReplayData {
+        entries: vec![canonical_application],
+    });
+    ReceiptBackedIntentOps::reconcile_receipt_indexes().expect("canonical indexes reconcile");
+    let reconciled = ReceiptBackedIntentStore::export_placement_acknowledgement_index();
+    assert_eq!(reconciled.entries.len(), 1);
+    assert_eq!(reconciled.entries[0].operation_id, placement.operation_id);
+}
+
+#[test]
 fn receipt_backed_begin_conflicts_without_mutation() {
     reset();
     let input = receipt_input(2);
@@ -833,8 +953,7 @@ fn placement_acknowledgement_index_is_exact_bounded_and_rebuilt_from_terminal_au
             }],
         },
     );
-    ReceiptBackedIntentOps::rebuild_placement_acknowledgement_index()
-        .expect("rebuild from canonical records");
+    ReceiptBackedIntentOps::reconcile_receipt_indexes().expect("rebuild from canonical records");
     let rebuilt = ReceiptBackedIntentOps::list_placement_acknowledgement_page(None, 10)
         .expect("rebuilt placement page");
     assert_eq!(rebuilt.intents.len(), 2);
