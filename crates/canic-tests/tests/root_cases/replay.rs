@@ -21,7 +21,7 @@ use canic_testing_internal::canister;
 use canic_tests::root::{
     RootSetupProfile,
     harness::{RootSetup, setup_cached_root},
-    workers::create_worker,
+    workers::{create_worker, prepare_worker_for_explicit_parent_funding},
 };
 use std::time::Duration;
 
@@ -128,9 +128,10 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
         .subnet_index
-        .get(&canister::SCALE_HUB)
+        .get(&canister::TEST)
         .copied()
-        .expect("scale_hub canister must exist");
+        .expect("test canister must exist");
+    let baseline_metrics = root_capability_metrics(&setup);
     let request = Request::Cycles(CyclesRequest {
         cycles: 1_111_000,
         metadata: Some(metadata([36u8; 32], 120_000_000_000)),
@@ -151,14 +152,35 @@ fn cycles_routes_through_dispatcher_and_replay_duplicate_same() {
 
     let metrics = root_capability_metrics(&setup);
     drop(setup);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 1);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ReplayDuplicateSame"),
+        metric_delta(&metrics, &baseline_metrics, "RequestCycles", "Authorized"),
         1
     );
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayAccepted"
+        ),
+        1
+    );
+    assert_eq!(
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayDuplicateSame"
+        ),
+        1
+    );
+    assert_eq!(
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ExecutionSuccess"
+        ),
         1
     );
 }
@@ -286,6 +308,7 @@ fn parent_cycles_request_increases_direct_child_balance() {
         .copied()
         .expect("scale_hub canister must exist");
     let caller = create_worker(&setup.pic, parent).expect("scale_hub must create one worker");
+    prepare_worker_for_explicit_parent_funding(&setup.pic, caller);
     let amount = 654_000u128;
 
     let response: Result<Result<u128, Error>, _> =
@@ -367,6 +390,7 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
 fn replay_rejects_cross_variant_same_request_id() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup.root_id;
+    let baseline_metrics = root_capability_metrics(&setup);
 
     let metadata = metadata([11u8; 32], 120_000_000_000);
     let target = setup
@@ -401,11 +425,21 @@ fn replay_rejects_cross_variant_same_request_id() {
     let metrics = root_capability_metrics(&setup);
     drop(setup);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ReplayDuplicateConflict"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayDuplicateConflict"
+        ),
         1
     );
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ExecutionSuccess"
+        ),
         0
     );
 }
@@ -418,6 +452,7 @@ fn replay_rejects_same_variant_mutated_payload() {
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
+    let baseline_metrics = root_capability_metrics(&setup);
 
     let metadata = metadata([12u8; 32], 120_000_000_000);
 
@@ -442,11 +477,21 @@ fn replay_rejects_same_variant_mutated_payload() {
     let metrics = root_capability_metrics(&setup);
     drop(setup);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ReplayDuplicateConflict"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayDuplicateConflict"
+        ),
         1
     );
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ExecutionSuccess"
+        ),
         1
     );
 }
@@ -459,6 +504,7 @@ fn replay_returns_cached_response_for_identical_request() {
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
+    let baseline_metrics = root_capability_metrics(&setup);
 
     let metadata = metadata([13u8; 32], 120_000_000_000);
     let request = Request::Cycles(CyclesRequest {
@@ -481,13 +527,31 @@ fn replay_returns_cached_response_for_identical_request() {
 
     let metrics = root_capability_metrics(&setup);
     drop(setup);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ReplayDuplicateSame"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayAccepted"
+        ),
         1
     );
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayDuplicateSame"
+        ),
+        1
+    );
+    assert_eq!(
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ExecutionSuccess"
+        ),
         1
     );
 }
@@ -497,10 +561,11 @@ fn cycles_request_above_default_policy_is_clamped_and_transferred() {
     let setup = setup_cached_root(RootSetupProfile::Capability);
     let caller = setup
         .subnet_index
-        .get(&canister::SCALE_HUB)
+        .get(&canister::TEST)
         .copied()
-        .expect("scale_hub canister must exist");
+        .expect("test canister must exist");
     let expected_grant = 5_000_000_000_000u128;
+    let baseline_metrics = root_capability_metrics(&setup);
 
     let request = Request::Cycles(CyclesRequest {
         cycles: u128::MAX,
@@ -524,10 +589,26 @@ fn cycles_request_above_default_policy_is_clamped_and_transferred() {
 
     let metrics = root_capability_metrics(&setup);
     drop(setup);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 1);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "Authorized"), 1);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayAccepted"
+        ),
+        1
+    );
+    assert_eq!(
+        metric_delta(&metrics, &baseline_metrics, "RequestCycles", "Authorized"),
+        1
+    );
+    assert_eq!(
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ExecutionSuccess"
+        ),
         1
     );
 }
@@ -540,6 +621,7 @@ fn replay_rejects_ttl_above_max() {
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
+    let baseline_metrics = root_capability_metrics(&setup);
 
     let request = Request::Cycles(CyclesRequest {
         cycles: 1,
@@ -552,12 +634,30 @@ fn replay_rejects_ttl_above_max() {
     let metrics = root_capability_metrics(&setup);
     drop(setup);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ReplayTtlExceeded"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayTtlExceeded"
+        ),
         1
     );
-    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayAccepted"), 0);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayAccepted"
+        ),
+        0
+    );
+    assert_eq!(
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ExecutionSuccess"
+        ),
         0
     );
 }
@@ -570,6 +670,7 @@ fn replay_rejects_expired_request() {
         .get(&canister::TEST)
         .copied()
         .expect("test canister must exist");
+    let baseline_metrics = root_capability_metrics(&setup);
 
     let metadata = metadata([15u8; 32], 1_000_000_000);
     let request = Request::Cycles(CyclesRequest {
@@ -592,9 +693,22 @@ fn replay_rejects_expired_request() {
 
     let metrics = root_capability_metrics(&setup);
     drop(setup);
-    assert_eq!(metric_count(&metrics, "RequestCycles", "ReplayExpired"), 1);
     assert_eq!(
-        metric_count(&metrics, "RequestCycles", "ExecutionSuccess"),
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ReplayExpired"
+        ),
+        1
+    );
+    assert_eq!(
+        metric_delta(
+            &metrics,
+            &baseline_metrics,
+            "RequestCycles",
+            "ExecutionSuccess"
+        ),
         1
     );
 }
@@ -817,6 +931,17 @@ fn metric_count(entries: &[MetricEntry], capability: &str, event: &str) -> u64 {
         })
         .map(metric_entry_count)
         .sum()
+}
+
+fn metric_delta(
+    after: &[MetricEntry],
+    before: &[MetricEntry],
+    capability: &str,
+    event: &str,
+) -> u64 {
+    metric_count(after, capability, event)
+        .checked_sub(metric_count(before, capability, event))
+        .expect("capability metric count must not decrease")
 }
 
 fn root_capability_count_total(entries: &[MetricEntry]) -> u64 {

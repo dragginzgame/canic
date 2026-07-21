@@ -30,9 +30,11 @@ Released `v0.95.6` begins Slice D by separating event-owned cycle history from
 one configuration-gated automatic-funding safety owner. Released `v0.95.7`
 makes that owner nonroot-only, hard-cuts automatic root ICP
 conversion, reduces the maximum observation gap to one hour, and binds
-successful child requests to parent funding cooldown. Open `0.95.8` replaces
-the remaining fixed auth recurrence with exact durable refresh, in-flight,
-expiry, and typed retry deadlines.
+successful child requests to parent funding cooldown. Released `v0.95.8`
+replaces the remaining fixed auth recurrence with exact durable refresh,
+in-flight, expiry, and typed retry deadlines. Open `0.95.9` addresses the
+closeout audit's topology/funding race, checked cycle-deadline requirement, and
+obsolete role-attestation timer route before the cumulative gate.
 
 The accepted design now includes a maintainer-approved duration amendment.
 Cadences are no longer retained merely because the audit recorded them.
@@ -181,6 +183,14 @@ The canonical report is
   admission, kill switch, replay exclusion, cost guard, request clamping,
   cumulative child budget, cooldown, and available balance. The child timer
   cannot bypass those controls or trigger unbounded ICP conversion.
+- Open `0.95.9` preserves that fail-closed admission while reconciling the
+  existing child owner when authoritative topology arrives after placement.
+  No authorization class becomes retryable, and no polling, grace delay,
+  duplicate timer, or extra history write is introduced. Cycle deadline
+  multiplication and addition now return typed invariant failure on overflow.
+  The initial topology recovery event is consumed once per runtime start so
+  unrelated later topology changes cannot restart terminal capacity or policy
+  rejection repeatedly.
 - History is written at lifecycle and funding boundaries. Each observation
   purges at most 128 expired balance rows and 128 top-up-event rows under the
   unchanged seven-day window. Candid and stable shapes are unchanged; the
@@ -188,7 +198,7 @@ The canonical report is
 
 ## Slice D Auth Evidence
 
-- Open `0.95.8` gives `auth_renewal:run` one deadline reconstructed from the
+- Released `v0.95.8` gives `auth_renewal:run` one deadline reconstructed from the
   current registry-bound chain-key batch and root-owned issuer renewal state.
   No template or disabled auth leaves it `unregistered + idle`.
 - Prepared and signed batches continue immediately. A persisted `Signing`
@@ -217,12 +227,15 @@ The canonical report is
 | `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-003` false live timer status | P2 | fixed in released 0.95.1 | common timer workflow/runtime projection |
-| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in released 0.95.4; log fixed in released 0.95.5; cycle history fixed in released 0.95.6; root top-up fixed in released 0.95.7; auth fixed in open 0.95.8 | log, pool, intent, placement, auth, and cycle workflows |
+| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in released 0.95.4; log fixed in released 0.95.5; cycle history fixed in released 0.95.6; root top-up fixed in released 0.95.7; auth fixed in released 0.95.8 | log, pool, intent, placement, auth, and cycle workflows |
 | `CANIC-095-TIMER-005` unrelated full scans | P2 | intent fixed in released 0.95.2; placement fixed in released 0.95.4 | intent and placement ops/workflows |
 | `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in released 0.95.1 | timer workflow and lifecycle facade |
 | `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | audit assumption corrected in released 0.95.7: automatic root refill was obsolete, so the flow and its config surface are hard-cut; manual ICP conversion remains | cycle/top-up and ICP-refill workflows |
 | `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | fixed in released 0.95.5 | log storage/ops/workflow |
-| `CANIC-095-TIMER-009` auth renewal polls and erases timer outcomes | P1 | fixed in open 0.95.8 | auth renewal ops/workflow and common timer workflow |
+| `CANIC-095-TIMER-009` auth renewal polls and erases timer outcomes | P1 | fixed in released 0.95.8 | auth renewal ops/workflow and common timer workflow |
+| `CANIC-095-TIMER-010` child funding can stop before parent topology admission | P1 | fixed in open 0.95.9 | topology and cycle workflows |
+| `CANIC-095-TIMER-011` cycle deadlines saturate instead of failing closed | P2 | fixed in open 0.95.9 | cycle workflow |
+| `CANIC-095-TIMER-012` obsolete role-attestation timer routing survives without an owner | P2 | fixed in open 0.95.9 | build, lifecycle, and runtime startup |
 
 No other product finding is admitted to 0.95 without a design amendment and
 reproducible timer-owner evidence.
@@ -243,6 +256,6 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Complete and release open `0.95.8`, then run the cumulative 0.95 closeout gate
-and compare the final owner matrix with the frozen Slice A baseline. Do not
-extend the line into unrelated cleanup.
+Complete open `0.95.9`, run its topology/funding PocketIC regression and the
+cumulative 0.95 closeout gate, then compare the final owner matrix with the
+frozen Slice A baseline. Do not extend the line into unrelated cleanup.

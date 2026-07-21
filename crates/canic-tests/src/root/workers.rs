@@ -1,6 +1,8 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
+use std::time::Duration;
+
 use canic::{
     Error,
     cdk::types::Principal,
@@ -16,6 +18,9 @@ use canic_testing_internal::canister::SCALE_REPLICA;
 use canic_testing_internal::pic::CanicPicExt;
 use ic_testkit::pic::Pic;
 
+const TC: u128 = 1_000_000_000_000;
+const DEFAULT_FUNDING_COOLDOWN_SECS: u64 = 60;
+
 /// Create a worker canister via the given hub canister.
 pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> {
     let worker_pid: Result<Principal, Error> =
@@ -23,6 +28,14 @@ pub fn create_worker(pic: &Pic, hub_pid: Principal) -> Result<Principal, Error> 
     let worker_pid = worker_pid?;
     wait_for_worker_sync(pic, hub_pid, worker_pid);
     Ok(worker_pid)
+}
+
+/// Move a configured worker beyond autonomous funding before an explicit
+/// child-to-parent funding call is measured.
+pub fn prepare_worker_for_explicit_parent_funding(pic: &Pic, worker_pid: Principal) {
+    pic.add_cycles(worker_pid, 20 * TC);
+    pic.advance_time(Duration::from_secs(DEFAULT_FUNDING_COOLDOWN_SECS + 1));
+    pic.tick();
 }
 
 /// Count worker canisters registered under a given parent.

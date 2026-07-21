@@ -29,7 +29,6 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 config,
                 config_source,
                 config_path,
-                cfg!(canic_role_attestation_refresh),
             );
 
             $crate::__canic_after_optional_start_init_hook!(
@@ -58,7 +57,6 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 config,
                 config_source,
                 config_path,
-                cfg!(canic_role_attestation_refresh),
             );
 
             $crate::__canic_after_optional_start_init_hook!(
@@ -67,7 +65,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::core::time::Duration::ZERO,
-                        "canic:user:init",
+                        "canic:user:post_upgrade",
                         async move {
                             canic_setup().await;
                             canic_upgrade().await;
@@ -134,7 +132,6 @@ macro_rules! __canic_start_local_lifecycle_core {
                 config,
                 config_source,
                 config_path,
-                cfg!(canic_role_attestation_refresh),
             );
 
             $crate::__canic_after_optional_start_init_hook!(
@@ -163,7 +160,6 @@ macro_rules! __canic_start_local_lifecycle_core {
                 config,
                 config_source,
                 config_path,
-                cfg!(canic_role_attestation_refresh),
             );
 
             $crate::__canic_after_optional_start_init_hook!(
@@ -172,7 +168,7 @@ macro_rules! __canic_start_local_lifecycle_core {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::core::time::Duration::ZERO,
-                        "canic:user:init",
+                        "canic:user:post_upgrade",
                         async move {
                             canic_setup().await;
                             canic_upgrade().await;
@@ -266,7 +262,7 @@ macro_rules! __canic_root_lifecycle_core {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_post_upgrade_root_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::core::time::Duration::ZERO,
-                        "canic:user:init",
+                        "canic:user:post_upgrade",
                         async move {
                             canic_setup().await;
                             canic_upgrade().await;

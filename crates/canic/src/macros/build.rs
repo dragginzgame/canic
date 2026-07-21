@@ -95,7 +95,6 @@ macro_rules! __canic_build_internal {
         $body
 
         // Emit compile-time endpoint surface flags from validated config.
-        println!("cargo:rustc-check-cfg=cfg(canic_role_attestation_refresh)");
         println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
         println!("cargo:rustc-check-cfg=cfg(canic_delegated_token_issuer)");
         println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");
@@ -199,9 +198,6 @@ macro_rules! __canic_build_internal {
             .unwrap_or_else(|finding| panic!("role contract rejected: {finding:?}"))
         };
 
-        let role_attestation_refresh = __canic_capabilities.contains(
-            &$crate::__internal::core::role_contract::RoleCapabilityKey::RoleAttestationVerifier,
-        );
         let delegated_token_issuer = __canic_capabilities.contains(
             &$crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenIssuer,
         );
@@ -223,10 +219,6 @@ macro_rules! __canic_build_internal {
 
         if has_icrc21 && $cfg.standards.as_ref().is_some_and(|standards| standards.icrc21) {
             println!("cargo:rustc-cfg=canic_icrc21_enabled");
-        }
-
-        if role_attestation_refresh {
-            println!("cargo:rustc-cfg=canic_role_attestation_refresh");
         }
 
         if delegated_token_issuer {

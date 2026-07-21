@@ -373,6 +373,16 @@ impl TimerWorkflow {
                 .map_or(0, |entry| entry.consecutive_expected_failures)
         })
     }
+
+    /// Return whether one built-in owner stopped on an invariant failure.
+    #[must_use]
+    pub(crate) fn is_failed(key: TimerKey) -> bool {
+        TIMERS.with_borrow(|timers| {
+            timers
+                .get(&TimerIdentity::BuiltIn(key))
+                .is_some_and(|entry| entry.condition == TimerProcessCondition::Failed)
+        })
+    }
 }
 
 fn ensure_bounded_entry<F, Fut>(identity: TimerIdentity, key: TimerKey, task: F)

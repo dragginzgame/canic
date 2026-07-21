@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
 
+- `0.95.9` closes the timer line by making child funding reconcile from
+  authoritative topology, checking cycle deadlines, and hard-cutting obsolete
+  timer routing without weakening parent admission or adding polling.
+
 - `0.95.8` hard-cuts fixed one-minute delegated-proof polling in favor of
   exact durable refresh/retry deadlines, typed bounded recovery, and truthful
   idle reconciliation after auth configuration changes.

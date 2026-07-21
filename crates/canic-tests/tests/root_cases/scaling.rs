@@ -1,21 +1,26 @@
+use std::time::Duration;
+
 use canic::{
     Error,
+    cdk::types::Principal,
     dto::{
         placement::scaling::ScalingRegistryResponse,
-        runtime::{CanicRuntimeStatus, TimerProcessCondition, TimerRegistrationStatus},
+        runtime::{
+            CanicRuntimeStatus, CanicTimerStatus, TimerProcessCondition, TimerRegistrationStatus,
+        },
     },
     protocol,
 };
 use canic_testing_internal::canister;
 use canic_tests::root::{
     RootSetupProfile,
-    harness::setup_cached_root,
+    harness::{RootSetup, setup_root},
     workers::{count_workers, create_worker},
 };
 
 #[test]
 fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
-    let setup = setup_cached_root(RootSetupProfile::Scaling);
+    let setup = setup_root(RootSetupProfile::Scaling);
 
     let scale_hub_pid = setup
         .subnet_index
@@ -52,23 +57,8 @@ fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
         }
         Err(err) => panic!("create_worker application failed: {err:?}"),
     }
-    setup.pic.tick_n(10);
-
     let after = count_workers(&setup.pic, setup.root_id, scale_hub_pid);
-    let runtime_status: Result<Result<CanicRuntimeStatus, Error>, _> = setup.pic.query_call_as(
-        scale_hub_pid,
-        setup.root_id,
-        protocol::CANIC_RUNTIME_STATUS,
-        (),
-    );
-    let runtime_status = runtime_status
-        .expect("scale_hub runtime status transport failed")
-        .expect("scale_hub runtime status application failed");
-    let acknowledgement = runtime_status
-        .timers
-        .iter()
-        .find(|timer| timer.subsystem == "placement" && timer.name == "receipt_ack")
-        .expect("scale_hub should expose placement acknowledgement ownership");
+    let acknowledgement = wait_for_placement_acknowledgement(&setup, scale_hub_pid);
     assert_eq!(
         acknowledgement.registration,
         TimerRegistrationStatus::Unregistered
@@ -81,6 +71,38 @@ fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
     drop(setup);
 
     assert_eq!(after, before + 1);
+}
+
+fn wait_for_placement_acknowledgement(
+    setup: &RootSetup,
+    scale_hub_pid: Principal,
+) -> CanicTimerStatus {
+    for _ in 0..50 {
+        let runtime_status: Result<Result<CanicRuntimeStatus, Error>, _> = setup.pic.query_call_as(
+            scale_hub_pid,
+            setup.root_id,
+            protocol::CANIC_RUNTIME_STATUS,
+            (),
+        );
+        let runtime_status = runtime_status
+            .expect("scale_hub runtime status transport failed")
+            .expect("scale_hub runtime status application failed");
+        let acknowledgement = runtime_status
+            .timers
+            .into_iter()
+            .find(|timer| timer.subsystem == "placement" && timer.name == "receipt_ack")
+            .expect("scale_hub should expose placement acknowledgement ownership");
+        if acknowledgement.registration == TimerRegistrationStatus::Unregistered
+            && acknowledgement.condition == TimerProcessCondition::Idle
+            && acknowledgement.executions_since_runtime_start >= 1
+        {
+            return acknowledgement;
+        }
+        setup.pic.advance_time(Duration::from_secs(1));
+        setup.pic.tick();
+    }
+
+    panic!("placement acknowledgement did not drain within 50 ticks");
 }
 
 fn is_threshold_key_unavailable(err: &canic::Error) -> bool {

@@ -118,7 +118,7 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
         ),
         (
             "crates/canic-core/src/workflow/runtime/cycles/mod.rs".to_string(),
-            2,
+            3,
         ),
         (
             "crates/canic-core/src/workflow/runtime/intent.rs".to_string(),

@@ -15,7 +15,6 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        with_role_attestation_refresh: bool,
     ) {
         lifecycle::init::nonroot::init_nonroot_canister_before_bootstrap(
             role,
@@ -23,7 +22,6 @@ impl LifecycleApi {
             config,
             config_source,
             config_path,
-            with_role_attestation_refresh,
         );
     }
 
@@ -36,14 +34,12 @@ impl LifecycleApi {
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
-        with_role_attestation_refresh: bool,
     ) {
         lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_before_bootstrap(
             role,
             config,
             config_source,
             config_path,
-            with_role_attestation_refresh,
         );
     }
 
