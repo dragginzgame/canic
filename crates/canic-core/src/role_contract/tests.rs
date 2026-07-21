@@ -384,8 +384,8 @@ fn surplus_state_feature_allocates_normally() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 62, 63,
-            64, 65,
+            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 62,
+            63, 64, 65,
         ]
     );
 }
@@ -423,7 +423,7 @@ fn repeated_selection_merges_allocation_provenance() {
         allocation_ids(&contract.allocations),
         vec![
             11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46,
-            49, 80, 81, 82, 83, 84,
+            47, 49, 80, 81, 82, 83, 84,
         ]
     );
 }
@@ -442,8 +442,8 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 80, 81,
-            82, 83, 85,
+            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 80,
+            81, 82, 83, 85,
         ]
     );
     assert_eq!(

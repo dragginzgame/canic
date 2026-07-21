@@ -224,6 +224,7 @@ receipt-path evidence.
   passed.
 - Open 0.96.4 state contract, allocation inventory, and authority guard: 16
   passed.
+- Open 0.96.4 complete role-contract allocation projections: 14 passed.
 - Explicit updated 100,000-row capacity probe: 1 passed with 726/626
   eligibility pages and a 4,737-page managed high-water subtotal.
 - Strict targeted `canic-core` all-feature lib/tests Clippy: passed.
