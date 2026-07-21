@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.96.3`.
-- The latest published release is `v0.96.3` at
-  `e5c3b7be7014b67fbb1ad18a30aae7843b2ae83d`.
-- The `v0.96.3` source tree is
-  `09974e599161d8275939812980a2728b025c1f25`; its product-tree hash is
-  `b105dbf33206f6b694f62247fb74e610446e2bd1b08a219e518f272e56421cc2` and
+- The workspace package version is `0.96.4`.
+- The latest published release is `v0.96.4` at
+  `08767aa42ff46355f60536748da4eab922ed4d9a`.
+- The `v0.96.4` source tree is
+  `49188b6b389ab736fac985af9b8d688ec6ac03e2`; its product-tree hash is
+  `67eedbdfb91537a81f841539db4eb15e2dcc4d06340252c6bf7b0111af4bcbb1` and
   its Cargo.lock SHA-256 is
-  `b8d15e2dbdacfb218b6126dcea33e5781eda5470ac4ba9e867d171a6ba482cd4`.
+  `1ea7ab9f89ab9aebd876f841654be1a54b7a3b30695722c06f19fd5e3a8b6f3b`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -339,13 +339,14 @@ Historical detail is archived at:
   receipt rows. Released `v0.96.1` measures the current 100,000-row
   stable-capacity envelope, corrects the totals record's undersized stable
   bound, and removes exact zero-total rows. Terminal reclamation remains blocked
-  on Toko's per-action identity, recovery/rate/resource-cardinality policy, and
-  the final eligibility-allocation envelope. Released `v0.96.2` implements the
+  on Toko's per-action identity and recovery/rate/resource-cardinality policy,
+  plus the final bounded-cleanup and diagnostic proof. Released `v0.96.2` implements the
   independently safe replay-deadline admission hard cut. Released `v0.96.3`
-  corrects its lifecycle reconciliation to one ordered linear pass. Open
-  `0.96.4` freezes a 24-hour terminal observation grace, provisions exact
+  corrects its lifecycle reconciliation to one ordered linear pass. Released
+  `v0.96.4` freezes a 24-hour terminal observation grace, provisions exact
   settlement-index capacity at admission, and persists ordered terminal
-  eligibility without enabling deletion.
+  eligibility. Open `0.96.5` adds constant-time count, headroom, physical
+  reservation, and earliest-eligibility projection without enabling deletion.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -401,11 +402,15 @@ removes exact zero totals after abort or rollback. Released `.2` requires an
 absolute application deadline, closes absent operations at equality, enforces
 the source-backed 24-hour maximum, and stores one exact adjunct at allocation
 46. Released `.3` replaces the resulting lookup-amplified lifecycle validation
-with one ordered pass over each canonical map. Open `.4` adds the sole ordered
+with one ordered pass over each canonical map. Released `.4` adds the sole ordered
 terminal-eligibility authority at allocation 47, a fixed 24-hour observation
 grace, and admission-time reservation of the measured 726-page high-water
 envelope. Settlement now persists exact eligibility before its primary and
-aggregate transition; no cleanup timer or deletion is enabled. The complete
+aggregate transition. Open `.5` derives total and reserved slots from replay
+map length, terminal count from eligibility-map length, pending count by
+checked subtraction, and the next deadline from the first validated
+eligibility key. It adds no counter cell or stable allocation; no cleanup timer
+or deletion is enabled. The complete
 application receipt high-water subtotal is 4,737 physical pages, or 296.0625
 MiB, through the pinned base `MemoryManager`. Production placement keeps its
 separate acknowledgement-owned removal and stores no application deadline.
@@ -940,7 +945,8 @@ Freeze Toko's per-mint action identity, recovery flow, stack-mint disposition,
 and batch/rate/resource-cardinality envelope. The
 read-only downstream tree remains unchanged at the recorded snapshot and still
 supplies none of those missing contracts. Eligibility shape, observation grace,
-and physical settlement reservation are now fixed in open `0.96.4`; use the
+and physical settlement reservation are fixed in `v0.96.4`; canonical count
+and earliest-eligibility observation are fixed in open `0.96.5`. Use the
 accepted downstream values before enabling bounded deletion or timer work. Do
 not extend 0.96 into unrelated cleanup.
 

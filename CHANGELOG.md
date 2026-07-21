@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
 
+- `0.96.5` derives exact application receipt capacity and next eligibility
+  from the two existing ordered indexes, avoiding scans, duplicate counters,
+  another stable allocation, and any cleanup activation.
+
 - `0.96.4` freezes a 24-hour terminal observation grace, reserves the measured
   terminal-index envelope at admission, and persists exact ordered eligibility
   without enabling deletion.
