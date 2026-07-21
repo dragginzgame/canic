@@ -878,6 +878,12 @@ impl ReceiptBackedIntentStore {
             .with_borrow_mut(|records| records.insert(record.operation_id, record))
     }
 
+    pub(crate) fn remove_application_replay(
+        operation_id: OperationId,
+    ) -> Option<ApplicationReceiptReplayRecord> {
+        APPLICATION_RECEIPT_REPLAY.with_borrow_mut(|records| records.remove(&operation_id))
+    }
+
     pub(crate) fn with_application_replay<R>(
         f: impl FnOnce(
             &StableBtreeMap<
@@ -919,6 +925,12 @@ impl ReceiptBackedIntentStore {
         record: ApplicationReceiptEligibilityRecord,
     ) -> Option<ApplicationReceiptEligibilityRecord> {
         APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.insert(key, record))
+    }
+
+    pub(crate) fn remove_application_eligibility(
+        key: ApplicationReceiptEligibilityKeyRecord,
+    ) -> Option<ApplicationReceiptEligibilityRecord> {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.remove(&key))
     }
 
     pub(crate) fn with_application_eligibility<R>(
@@ -993,7 +1005,7 @@ pub(super) fn application_eligibility_required_pages(record_count: u64) -> Optio
     // ic-stable-structures 0.7.2 uses minimum degree six, so every non-root
     // node owns at least five entries. The 2,362-byte node allocation has a
     // 16-byte allocator header; 116 bytes cover the map, allocator, and spare
-    // chunk headers. The explicit 100,000-row probe locks these pinned values.
+    // chunk headers. The explicit admission-limit probe locks these pinned values.
     let maximum_nodes = record_count
         .checked_add(APPLICATION_RECEIPT_ELIGIBILITY_MIN_NODE_ENTRIES - 1)?
         / APPLICATION_RECEIPT_ELIGIBILITY_MIN_NODE_ENTRIES;
@@ -1265,7 +1277,7 @@ mod tests {
     fn application_eligibility_capacity_reservation_is_conservative_and_bounded() {
         assert_eq!(application_eligibility_required_pages(0), Some(1));
         assert_eq!(application_eligibility_required_pages(1), Some(1));
-        assert_eq!(application_eligibility_required_pages(100_000), Some(726));
+        assert_eq!(application_eligibility_required_pages(1_000), Some(8));
         assert_eq!(application_eligibility_required_pages(u64::MAX), None);
         assert!(!ReceiptBackedIntentStore::reserve_application_eligibility_capacity(u64::MAX));
     }

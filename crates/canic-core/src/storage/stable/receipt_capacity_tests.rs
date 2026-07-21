@@ -34,7 +34,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-const RECORDS: u64 = 100_000;
+const RECORDS: u64 = 1_000;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct PreviousTotalsRecord {
@@ -85,7 +85,7 @@ fn corrected_totals_bound_loads_the_existing_v2_map_without_a_reader() {
 }
 
 #[test]
-#[ignore = "explicit 100,000-row 0.96 stable-capacity measurement"]
+#[ignore = "explicit 1,000-row 0.96 stable-capacity measurement"]
 fn receipt_backed_stable_capacity_envelope_is_measured_at_the_admission_limit() {
     assert_eq!(
         receipt_record(u64::MAX, ReceiptBackedIntentState::Pending)
@@ -133,33 +133,27 @@ fn receipt_backed_stable_capacity_envelope_is_measured_at_the_admission_limit() 
     let totals_ascending = measure_map(ascending().map(|seed| (resource_key(seed), max_totals())));
     let totals_permuted = measure_map(permuted().map(|seed| (resource_key(seed), max_totals())));
 
-    assert_eq!(primary_ascending, (8_855, 2_707));
-    assert_eq!(primary_permuted, (8_855, 1_899));
-    assert_eq!(acknowledgements_ascending, (1_463, 452));
-    assert_eq!(acknowledgements_permuted, (1_463, 317));
-    assert_eq!(totals_ascending, (1_768, 545));
-    assert_eq!(totals_permuted, (1_768, 469));
+    assert_eq!(primary_ascending, (8_855, 27));
+    assert_eq!(primary_permuted, (8_855, 20));
+    assert_eq!(acknowledgements_ascending, (1_463, 5));
+    assert_eq!(acknowledgements_permuted, (1_463, 4));
+    assert_eq!(totals_ascending, (1_768, 6));
+    assert_eq!(totals_permuted, (1_768, 5));
     assert_eq!(
         application_replay_record(u64::MAX).to_bytes().len(),
         ApplicationReceiptReplayRecord::STORABLE_MAX_SIZE as usize
     );
-    assert_eq!(replay_ascending, (1_430, 442));
-    assert_eq!(replay_permuted, (1_430, 381));
+    assert_eq!(replay_ascending, (1_430, 5));
+    assert_eq!(replay_permuted, (1_430, 4));
     assert_eq!(
         application_eligibility_entry(u64::MAX).1.to_bytes().len(),
         ApplicationReceiptEligibilityRecord::STORABLE_MAX_SIZE as usize
     );
-    assert_eq!(eligibility_ascending, (2_362, 726));
-    assert_eq!(eligibility_permuted, (2_362, 626));
-    assert_eq!(
-        managed_application_ascending_pages(),
-        (2_707, 442, 726, 545, 4_737)
-    );
-    assert_eq!(managed_reserved_application_ascending_pages(), (726, 4_737));
-    assert_eq!(
-        managed_placement_ascending_pages(),
-        (2_707, 452, 545, 3_969)
-    );
+    assert_eq!(eligibility_ascending, (2_362, 8));
+    assert_eq!(eligibility_permuted, (2_362, 6));
+    assert_eq!(managed_application_ascending_pages(), (27, 5, 8, 6, 513));
+    assert_eq!(managed_reserved_application_ascending_pages(), (8, 513));
+    assert_eq!(managed_placement_ascending_pages(), (27, 5, 6, 385));
 }
 
 fn measure_map<K, V>(entries: impl IntoIterator<Item = (K, V)>) -> (u32, u64)
@@ -229,7 +223,7 @@ fn managed_application_ascending_pages_with_reservation(
 
     if reserve_eligibility {
         let required_pages = super::intent::application_eligibility_required_pages(RECORDS)
-            .expect("100,000-row eligibility reservation must be representable");
+            .expect("admission-limit eligibility reservation must be representable");
         let current_pages = eligibility_memory.size();
         assert!(eligibility_memory.grow(required_pages - current_pages) >= 0);
     }

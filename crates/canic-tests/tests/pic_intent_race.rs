@@ -211,6 +211,7 @@ fn assert_receipt_backed_adapter_conformance(
         rollback_pending,
         replay_deadline_ns,
     );
+    assert_terminal_reclamation(pic, authority_id, replay_deadline_ns);
 }
 
 fn assert_pending_begin_decisions(
@@ -547,6 +548,52 @@ fn assert_rolled_back_decisions(
                 revision: 1,
                 state: ReceiptStateView::Pending,
             }),
+        }
+    );
+}
+
+fn assert_terminal_reclamation(
+    pic: &ic_testkit::pic::Pic,
+    authority_id: Principal,
+    replay_deadline_ns: u64,
+) {
+    pic.advance_time(Duration::from_hours(25));
+    pic.tick();
+    pic.tick();
+
+    assert_eq!(load_receipt(pic, authority_id, 11), None);
+    assert_eq!(load_receipt(pic, authority_id, 31), None);
+    assert!(matches!(
+        load_receipt(pic, authority_id, 41),
+        Some(ReceiptIntentView {
+            state: ReceiptStateView::Pending,
+            ..
+        })
+    ));
+    assert_eq!(
+        begin_receipt(pic, authority_id, 11, 12, 1, 1, replay_deadline_ns),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::ReplayWindowClosed { replay_deadline_ns },
+            intent: None,
+        }
+    );
+    assert_eq!(
+        begin_receipt(
+            pic,
+            authority_id,
+            21,
+            22,
+            1,
+            1,
+            pic.current_time_nanos() + NANOS_PER_HOUR,
+        ),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::CapacityExceeded {
+                current_quantity: 1,
+                requested_quantity: 1,
+                limit: 1,
+            },
+            intent: None,
         }
     );
 }

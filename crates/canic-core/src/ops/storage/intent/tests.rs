@@ -71,6 +71,12 @@ fn operation_id(byte: u8) -> OperationId {
     OperationId::from_bytes([byte; 32])
 }
 
+fn operation_id_u64(value: u64) -> OperationId {
+    let mut bytes = [0; 32];
+    bytes[..8].copy_from_slice(&value.to_be_bytes());
+    OperationId::from_bytes(bytes)
+}
+
 fn receipt_input(byte: u8) -> BeginReceiptBackedIntentInput {
     BeginReceiptBackedIntentInput {
         operation_id: operation_id(byte),
@@ -78,6 +84,17 @@ fn receipt_input(byte: u8) -> BeginReceiptBackedIntentInput {
         resource_key: key(),
         quantity: 5,
         reservation_limit: 20,
+        replay_deadline_ns: REPLAY_DEADLINE,
+    }
+}
+
+fn receipt_input_u64(value: u64) -> BeginReceiptBackedIntentInput {
+    BeginReceiptBackedIntentInput {
+        operation_id: operation_id_u64(value),
+        payload_binding: PayloadBinding::new(operation_id_u64(value).into_bytes()),
+        resource_key: IntentResourceKey::new(format!("resource:{value}")),
+        quantity: 1,
+        reservation_limit: 1,
         replay_deadline_ns: REPLAY_DEADLINE,
     }
 }
@@ -1282,6 +1299,8 @@ fn application_capacity_uses_maintained_counts_and_first_eligibility_key() {
 
     let pending = ReceiptBackedIntentOps::application_capacity().expect("pending capacity");
     assert_eq!(pending.total_records, 1);
+    assert_eq!(pending.application_records, 1);
+    assert_eq!(pending.canic_owned_records, 0);
     assert_eq!(pending.pending_records, 1);
     assert_eq!(pending.terminal_records, 0);
     assert_eq!(
@@ -1305,6 +1324,8 @@ fn application_capacity_uses_maintained_counts_and_first_eligibility_key() {
 
     let terminal = ReceiptBackedIntentOps::application_capacity().expect("terminal capacity");
     assert_eq!(terminal.total_records, 1);
+    assert_eq!(terminal.application_records, 1);
+    assert_eq!(terminal.canic_owned_records, 0);
     assert_eq!(terminal.pending_records, 0);
     assert_eq!(terminal.terminal_records, 1);
     assert_eq!(terminal.record_limit, RECEIPT_BACKED_INTENT_RECORD_LIMIT);
@@ -1313,6 +1334,160 @@ fn application_capacity_uses_maintained_counts_and_first_eligibility_key() {
         terminal.next_eligibility_at_ns,
         Some(200 + RECEIPT_TERMINAL_OBSERVATION_GRACE_NS)
     );
+}
+
+#[test]
+fn application_capacity_includes_canic_owned_rows_in_shared_record_headroom() {
+    reset();
+    let placement = placement_receipt_input(49);
+    ReceiptBackedIntentOps::begin_placement_or_load(&placement, 100)
+        .expect("create Canic-owned receipt");
+    let application = receipt_input(50);
+    begin_receipt(&application, 100).expect("create application receipt");
+
+    let capacity = ReceiptBackedIntentOps::application_capacity().expect("project capacity");
+    assert_eq!(capacity.total_records, 2);
+    assert_eq!(capacity.application_records, 1);
+    assert_eq!(capacity.canic_owned_records, 1);
+    assert_eq!(capacity.pending_records, 1);
+    assert_eq!(capacity.terminal_records, 0);
+    assert_eq!(
+        capacity.remaining_record_headroom,
+        RECEIPT_BACKED_INTENT_RECORD_LIMIT - 2
+    );
+    assert_eq!(capacity.reserved_terminal_slots, 1);
+}
+
+#[test]
+fn compiled_receipt_limit_admits_exactly_one_thousand_distinct_records() {
+    reset();
+    for value in 0..RECEIPT_BACKED_INTENT_RECORD_LIMIT {
+        assert_eq!(
+            begin_receipt(&receipt_input_u64(value), 100).expect("admit bounded receipt"),
+            BeginReceiptBackedIntentResult::Created { revision: 1 }
+        );
+    }
+
+    let capacity = ReceiptBackedIntentOps::application_capacity().expect("capacity at limit");
+    assert_eq!(capacity.total_records, RECEIPT_BACKED_INTENT_RECORD_LIMIT);
+    assert_eq!(capacity.remaining_record_headroom, 0);
+    assert_eq!(capacity.reserved_terminal_pages, 8);
+    assert_eq!(
+        begin_receipt(&receipt_input_u64(RECEIPT_BACKED_INTENT_RECORD_LIMIT), 100,)
+            .expect("reject receipt above limit"),
+        BeginReceiptBackedIntentResult::StoreCapacityReached {
+            current_records: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+            limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+        }
+    );
+}
+
+#[test]
+fn due_application_reclamation_is_exact_bounded_and_preserves_resource_totals() {
+    reset();
+    let first = receipt_input(51);
+    let second = receipt_input(52);
+    begin_receipt(&first, 100).expect("create first receipt");
+    begin_receipt(&second, 100).expect("create second receipt");
+    let first_evidence = terminal_evidence(TerminalEvidenceDecision::Committed, 51);
+    let second_evidence = terminal_evidence(TerminalEvidenceDecision::RolledBack, 52);
+    for (input, evidence) in [(&first, first_evidence), (&second, second_evidence)] {
+        ReceiptBackedIntentOps::settle_if_pending(
+            &SettleReceiptBackedIntentInput {
+                operation_id: input.operation_id,
+                expected_revision: 1,
+                expected_payload_binding: input.payload_binding,
+                evidence,
+            },
+            200,
+        )
+        .expect("settle application receipt");
+    }
+    let eligible_at_ns = 200 + RECEIPT_TERMINAL_OBSERVATION_GRACE_NS;
+    let totals_before = totals(&first.resource_key);
+
+    assert_eq!(
+        ReceiptBackedIntentOps::reclaim_due_application_receipts(eligible_at_ns - 1, 1)
+            .expect("not-yet-due batch")
+            .removed_records,
+        0
+    );
+    let first_batch = ReceiptBackedIntentOps::reclaim_due_application_receipts(eligible_at_ns, 1)
+        .expect("first bounded batch");
+    assert_eq!(first_batch.removed_records, 1);
+    assert_eq!(first_batch.next_eligibility_at_ns, Some(eligible_at_ns));
+    assert!(
+        ReceiptBackedIntentOps::load(first.operation_id)
+            .expect("load reclaimed receipt")
+            .is_none()
+    );
+    assert!(
+        ReceiptBackedIntentOps::load(second.operation_id)
+            .expect("load retained receipt")
+            .is_some()
+    );
+    assert_eq!(totals(&first.resource_key), totals_before);
+
+    let second_batch = ReceiptBackedIntentOps::reclaim_due_application_receipts(eligible_at_ns, 1)
+        .expect("second bounded batch");
+    assert_eq!(second_batch.removed_records, 1);
+    assert_eq!(second_batch.next_eligibility_at_ns, None);
+    assert_eq!(totals(&first.resource_key), totals_before);
+    assert_eq!(
+        ReceiptBackedIntentOps::begin_or_load(
+            &first,
+            eligible_at_ns,
+            ReceiptReplayWindowDecision::Closed,
+        )
+        .expect("retry reclaimed authorization"),
+        BeginReceiptBackedIntentResult::ReplayWindowClosed {
+            replay_deadline_ns: first.replay_deadline_ns,
+        }
+    );
+}
+
+#[test]
+fn poisoned_earliest_application_eligibility_rejects_before_any_reclamation() {
+    reset();
+    let first = receipt_input(53);
+    let second = receipt_input(54);
+    for input in [&first, &second] {
+        begin_receipt(input, 100).expect("create application receipt");
+        ReceiptBackedIntentOps::settle_if_pending(
+            &SettleReceiptBackedIntentInput {
+                operation_id: input.operation_id,
+                expected_revision: 1,
+                expected_payload_binding: input.payload_binding,
+                evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 53),
+            },
+            200,
+        )
+        .expect("settle application receipt");
+    }
+    let mut eligibility = ReceiptBackedIntentStore::export_application_eligibility();
+    eligibility.entries[0].record.payload_binding = PayloadBinding::new([250; 32]);
+    ReceiptBackedIntentStore::import_application_eligibility(eligibility);
+    let records_before = ReceiptBackedIntentStore::export_records();
+    let replay_before = ReceiptBackedIntentStore::export_application_replay();
+    let eligibility_before = ReceiptBackedIntentStore::export_application_eligibility();
+    let totals_before = IntentStore::export_totals();
+
+    ReceiptBackedIntentOps::reclaim_due_application_receipts(
+        200 + RECEIPT_TERMINAL_OBSERVATION_GRACE_NS,
+        32,
+    )
+    .expect_err("poisoned earliest entry must stop cleanup");
+
+    assert_eq!(ReceiptBackedIntentStore::export_records(), records_before);
+    assert_eq!(
+        ReceiptBackedIntentStore::export_application_replay(),
+        replay_before
+    );
+    assert_eq!(
+        ReceiptBackedIntentStore::export_application_eligibility(),
+        eligibility_before
+    );
+    assert_eq!(IntentStore::export_totals(), totals_before);
 }
 
 #[test]

@@ -27,7 +27,7 @@ targets, or compatibility modes are permitted.
 
 ## Release Boundary
 
-- Provisional evidence anchor: released v0.96.4. This is not the 0.98
+- Provisional evidence anchor: released v0.96.5. This is not the 0.98
   implementation baseline.
 - Open current work: the unfinished 0.96 receipt/reclamation line.
 - Preceding proposed line: 0.97 role-owned runtime dependencies and CDK

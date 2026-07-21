@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
 
+- `0.96.6` hard-cuts the receipt ceiling from 100,000 to 1,000 records and
+  gives eligible terminal application receipts one exact, bounded cleanup
+  owner through the existing intent timer without changing resource totals.
+
 - `0.96.5` derives exact application receipt capacity and next eligibility
   from the two existing ordered indexes, avoiding scans, duplicate counters,
   another stable allocation, and any cleanup activation.

@@ -35,13 +35,16 @@ use crate::{
         IntentState, IntentStore, IntentStoreMetaRecord, PlacementAcknowledgementEntryRecord,
         ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
-    view::intent::{ApplicationReceiptCapacityView, PlacementAcknowledgementPage},
+    view::intent::{
+        ApplicationReceiptCapacityView, ApplicationReceiptReclamationBatch,
+        PlacementAcknowledgementPage,
+    },
 };
 use std::collections::BTreeMap;
 use std::ops::Bound;
 use thiserror::Error as ThisError;
 
-pub const RECEIPT_BACKED_INTENT_RECORD_LIMIT: u64 = 100_000;
+pub const RECEIPT_BACKED_INTENT_RECORD_LIMIT: u64 = 1_000;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 // -----------------------------------------------------------------------------
@@ -249,6 +252,9 @@ pub enum IntentStoreOpsError {
 
     #[error("application receipt terminal-capacity reservation count overflow")]
     ApplicationReceiptEligibilityReservationOverflow,
+
+    #[error("application receipt reclamation count exceeds u64")]
+    ApplicationReceiptReclamationCountOverflow,
 
     #[error(
         "application receipt terminal-capacity reservation unavailable for {required_records} records"
@@ -940,12 +946,18 @@ impl ReceiptBackedIntentOps {
 
     /// Return the maintained application receipt capacity and retention projection.
     pub(crate) fn application_capacity() -> Result<ApplicationReceiptCapacityView, InternalError> {
-        let total_records = ReceiptBackedIntentStore::application_replay_len();
+        let total_records = ReceiptBackedIntentStore::len();
+        let application_records = ReceiptBackedIntentStore::application_replay_len();
+        let canic_owned_records = checked_sub(
+            total_records,
+            application_records,
+            "Canic-owned receipt records",
+        )?;
         let terminal_records = ReceiptBackedIntentStore::with_application_eligibility(
             crate::cdk::structures::btreemap::BTreeMap::len,
         );
         let pending_records = checked_sub(
-            total_records,
+            application_records,
             terminal_records,
             "application pending records",
         )?;
@@ -959,14 +971,53 @@ impl ReceiptBackedIntentOps {
 
         Ok(ApplicationReceiptCapacityView {
             total_records,
+            application_records,
+            canic_owned_records,
             pending_records,
             terminal_records,
             record_limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
             remaining_record_headroom,
-            reserved_terminal_slots: total_records,
+            reserved_terminal_slots: application_records,
             reserved_terminal_pages:
                 ReceiptBackedIntentStore::application_eligibility_reserved_pages(),
             next_eligibility_at_ns,
+        })
+    }
+
+    /// Remove one validated bounded prefix of due terminal application receipts.
+    pub(crate) fn reclaim_due_application_receipts(
+        now_ns: u64,
+        limit: usize,
+    ) -> Result<ApplicationReceiptReclamationBatch, InternalError> {
+        let candidates = collect_due_application_reclamation_candidates(now_ns, limit)?;
+        let removed_records = u64::try_from(candidates.len())
+            .map_err(|_| IntentStoreOpsError::ApplicationReceiptReclamationCountOverflow)?;
+
+        for candidate in candidates {
+            let removed = ReceiptBackedIntentStore::remove_application_eligibility(candidate.key);
+            assert_eq!(
+                removed,
+                Some(candidate.eligibility),
+                "validated application eligibility changed before reclamation"
+            );
+            let removed =
+                ReceiptBackedIntentStore::remove_application_replay(candidate.primary.operation_id);
+            assert_eq!(
+                removed,
+                Some(candidate.replay),
+                "validated application replay metadata changed before reclamation"
+            );
+            let removed = ReceiptBackedIntentStore::remove(candidate.primary.operation_id);
+            assert_eq!(
+                removed,
+                Some(candidate.primary),
+                "validated application receipt changed before reclamation"
+            );
+        }
+
+        Ok(ApplicationReceiptReclamationBatch {
+            removed_records,
+            next_eligibility_at_ns: validate_first_application_eligibility()?,
         })
     }
 
@@ -1189,6 +1240,14 @@ type ExpectedApplicationEligibility = (
     ApplicationReceiptEligibilityRecord,
 );
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ApplicationReceiptReclamationCandidate {
+    key: ApplicationReceiptEligibilityKeyRecord,
+    eligibility: ApplicationReceiptEligibilityRecord,
+    replay: ApplicationReceiptReplayRecord,
+    primary: ReceiptBackedIntentRecord,
+}
+
 fn validate_receipt_record_limit() -> Result<(), IntentStoreOpsError> {
     let records = ReceiptBackedIntentStore::len();
     if records <= RECEIPT_BACKED_INTENT_RECORD_LIMIT {
@@ -1246,6 +1305,59 @@ fn validate_first_application_eligibility() -> Result<Option<u64>, IntentStoreOp
     )?;
     validate_expected_application_eligibility(expected_key, expected, key, actual)?;
     Ok(Some(key.eligible_at_ns))
+}
+
+fn collect_due_application_reclamation_candidates(
+    now_ns: u64,
+    limit: usize,
+) -> Result<Vec<ApplicationReceiptReclamationCandidate>, IntentStoreOpsError> {
+    let due = ReceiptBackedIntentStore::with_application_eligibility(|eligibility| {
+        eligibility
+            .iter()
+            .take_while(|entry| entry.key().eligible_at_ns <= now_ns)
+            .take(limit)
+            .map(|entry| (*entry.key(), entry.value()))
+            .collect::<Vec<_>>()
+    });
+
+    due.into_iter()
+        .map(|(key, eligibility)| validate_application_reclamation_candidate(key, eligibility))
+        .collect()
+}
+
+fn validate_application_reclamation_candidate(
+    key: ApplicationReceiptEligibilityKeyRecord,
+    eligibility: ApplicationReceiptEligibilityRecord,
+) -> Result<ApplicationReceiptReclamationCandidate, IntentStoreOpsError> {
+    validate_application_eligibility_identity(key.operation_id, eligibility)?;
+    let primary = ReceiptBackedIntentStore::get(key.operation_id).ok_or(
+        IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(key.operation_id),
+    )?;
+    ensure_receipt_backed_record_schema(&primary)?;
+    if is_canic_owned_intent_resource_key(&primary.resource_key)
+        || matches!(primary.state, ReceiptBackedIntentState::Pending)
+    {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(key.operation_id),
+        );
+    }
+    validate_placement_acknowledgement_index_for_record(&primary)?;
+
+    let replay = ReceiptBackedIntentStore::get_application_replay(key.operation_id).ok_or(
+        IntentStoreOpsError::ApplicationReceiptReplayMissing(key.operation_id),
+    )?;
+    validate_application_replay_identity(key.operation_id, replay)?;
+    let (expected_key, expected) = expected_application_eligibility(&primary, replay)?.ok_or(
+        IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(key.operation_id),
+    )?;
+    validate_expected_application_eligibility(expected_key, expected, key, eligibility)?;
+
+    Ok(ApplicationReceiptReclamationCandidate {
+        key,
+        eligibility,
+        replay,
+        primary,
+    })
 }
 
 fn collect_expected_receipt_indexes()

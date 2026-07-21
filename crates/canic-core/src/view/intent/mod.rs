@@ -10,12 +10,21 @@ use crate::model::{intent::ReceiptBackedIntent, replay::OperationId};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ApplicationReceiptCapacityView {
     pub total_records: u64,
+    pub application_records: u64,
+    pub canic_owned_records: u64,
     pub pending_records: u64,
     pub terminal_records: u64,
     pub record_limit: u64,
     pub remaining_record_headroom: u64,
     pub reserved_terminal_slots: u64,
     pub reserved_terminal_pages: u64,
+    pub next_eligibility_at_ns: Option<u64>,
+}
+
+/// Result of one bounded exact application-receipt reclamation batch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApplicationReceiptReclamationBatch {
+    pub removed_records: u64,
     pub next_eligibility_at_ns: Option<u64>,
 }
 
