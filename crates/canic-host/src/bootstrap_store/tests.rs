@@ -18,7 +18,10 @@ fn generated_wasm_store_wrapper_enables_wasm_store_canister_feature() {
     let manifest = fs::read_to_string(wrapper_root.join("Cargo.toml"))
         .expect("read generated wrapper manifest");
 
-    assert!(manifest.contains("features = [\"wasm-store-canister\"]"));
+    assert!(manifest.contains("resolver = \"2\""));
+    assert!(manifest.contains("default-features = false"));
+    assert!(manifest.contains("features = [\"metrics\", \"wasm-store-canister\"]"));
+    assert!(manifest.contains("features = []"));
     assert!(!manifest.contains("features = [\"control-plane\"]"));
     assert!(manifest.contains("canic = { path = "));
     assert!(manifest.contains("[package.metadata.canic]"));

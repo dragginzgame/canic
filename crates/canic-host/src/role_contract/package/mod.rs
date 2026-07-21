@@ -468,7 +468,7 @@ fn validate_metadata_package(
         };
         direct_features.insert(feature);
     }
-    validate_selected_canic_features(graph, direct_edge, &direct_features)?;
+    validate_selected_canic_features(graph, direct_edge, canic_package, &direct_features)?;
 
     Ok(RoleCargoGraphEvidence {
         fleet: expected_fleet.to_string(),
@@ -485,6 +485,7 @@ fn validate_metadata_package(
 fn validate_selected_canic_features(
     graph: &CargoGraphEvidence,
     direct_edge: &CargoGraphEdge,
+    canic_package: &CargoMetadataPackage,
     direct_features: &BTreeSet<CanicFeatureKey>,
 ) -> Result<(), RoleContractFinding> {
     let canic = graph
@@ -502,12 +503,37 @@ fn validate_selected_canic_features(
             })
         })
         .collect::<Result<BTreeSet<_>, _>>()?;
-    if &actual != direct_features {
+    let expected = selected_canic_cargo_feature_closure(canic_package, direct_features);
+    if actual != expected {
         return Err(unsupported_finding(
-            "package-selected Canic features do not match the canonical role declaration",
+            "package-selected Canic features do not match the canonical role declaration and public Cargo implication closure",
         ));
     }
     Ok(())
+}
+
+fn selected_canic_cargo_feature_closure(
+    canic_package: &CargoMetadataPackage,
+    direct_features: &BTreeSet<CanicFeatureKey>,
+) -> BTreeSet<CanicFeatureKey> {
+    let mut selected = direct_features.clone();
+    let mut frontier = direct_features.iter().copied().collect::<Vec<_>>();
+    while let Some(feature) = frontier.pop() {
+        for member in canic_package
+            .features
+            .get(feature.cargo_name())
+            .into_iter()
+            .flatten()
+        {
+            let Some(implied) = CanicFeatureKey::from_cargo_name(member) else {
+                continue;
+            };
+            if selected.insert(implied) {
+                frontier.push(implied);
+            }
+        }
+    }
+    selected
 }
 
 fn exact_manifest_package<'a>(

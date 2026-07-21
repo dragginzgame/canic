@@ -305,6 +305,49 @@ fn transitive_runtime_canic_path_is_rejected() {
 }
 
 #[test]
+fn selected_canic_features_accept_only_public_cargo_implications() {
+    let mut packages = [
+        package("role", "role@1", "/tmp/role/Cargo.toml"),
+        package(CANIC_PACKAGE, "canic@1", "/tmp/canic/Cargo.toml"),
+    ];
+    packages[1].features.insert(
+        "blob-storage-billing".to_string(),
+        vec![
+            "blob-storage".to_string(),
+            "canic-core/blob-storage-billing".to_string(),
+        ],
+    );
+    let nodes = [
+        node("role@1", vec![normal_edge("canic", "canic@1")]),
+        node("canic@1", Vec::new()),
+    ];
+    let mut graph = runtime_graph(&packages, &nodes);
+    graph
+        .packages
+        .get_mut("canic@1")
+        .expect("Canic graph package")
+        .enabled_features = BTreeSet::from([
+        "blob-storage".to_string(),
+        "blob-storage-billing".to_string(),
+    ]);
+    let direct_edge = &graph.edges["role@1"][0];
+    let declared = BTreeSet::from([CanicFeatureKey::BlobStorageBilling]);
+
+    validate_selected_canic_features(&graph, direct_edge, &packages[1], &declared)
+        .expect("public Cargo-implied blob storage feature");
+
+    graph
+        .packages
+        .get_mut("canic@1")
+        .expect("Canic graph package")
+        .enabled_features
+        .insert("metrics".to_string());
+    assert!(
+        validate_selected_canic_features(&graph, direct_edge, &packages[1], &declared).is_err()
+    );
+}
+
+#[test]
 fn alternate_protected_package_path_names_the_target_and_dependency_alias() {
     let packages = [
         package("role", "role@1", "/tmp/role/Cargo.toml"),

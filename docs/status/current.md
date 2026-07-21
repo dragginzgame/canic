@@ -969,10 +969,11 @@ First primary results:
   production CLI/config/package comparisons, a `v0.91.6`-to-`v0.92.11`
   PocketIC state upgrade, 52 current stable-record tests, 19 protocol tests, 7
   manifest tests, 15 provenance/policy tests, and 195 backup/restore tests.
-- Open `0.97.0` Slice B validation passes 30 host role-contract tests, 51 CLI
-  Medic tests, 14 core role-contract tests, the exact built-in state-manifest
-  regression, seven workspace-manifest checks, changelog governance, semantic
-  facade checks for the built-in Wasm store and delegation root, strict
+- Open `0.97.0` Slice B validation passes 31 host role-contract tests, 51 CLI
+  Medic tests, 14 core role-contract tests, all 21 host state-manifest tests,
+  three generated-bootstrap-store tests, seven workspace-manifest checks,
+  changelog governance, semantic facade checks for the built-in Wasm store and
+  delegation root, strict
   all-target Clippy for core/host/CLI, formatting, and diff hygiene. The
   repository-root project Medic remains non-passing only on the separately
   existing cross-fleet role-name ambiguity in state-manifest discovery; no
