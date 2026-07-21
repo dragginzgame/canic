@@ -11,8 +11,10 @@ pub const PAYLOAD_BINDING_SCHEMA_VERSION: u32 = 1;
 pub const RECEIPT_BACKED_INTENT_SCHEMA_VERSION: u32 = 1;
 pub const TERMINAL_EVIDENCE_SCHEMA_VERSION: u32 = 1;
 pub const CANIC_INTENT_RESOURCE_PREFIX: &str = "canic:";
-pub const MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS: u64 = 24 * 60 * 60 * 1_000_000_000;
-pub const RECEIPT_TERMINAL_OBSERVATION_GRACE_NS: u64 = MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS;
+/// Inclusive maximum remaining window accepted for a new application receipt.
+pub const MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS: u64 = 60 * 60 * 1_000_000_000;
+/// Post-settlement grace embedded in exact durable terminal eligibility keys.
+pub const RECEIPT_TERMINAL_OBSERVATION_GRACE_NS: u64 = 15 * 60 * 1_000_000_000;
 
 /// Pure temporal admission decision supplied by the workflow policy boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -233,6 +235,11 @@ mod tests {
 
     #[test]
     fn terminal_eligibility_preserves_both_retention_deadlines() {
+        assert_eq!(
+            MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS,
+            3_600_000_000_000
+        );
+        assert_eq!(RECEIPT_TERMINAL_OBSERVATION_GRACE_NS, 900_000_000_000);
         assert_eq!(
             receipt_terminal_eligible_at(100, 50),
             Some(50 + RECEIPT_TERMINAL_OBSERVATION_GRACE_NS)

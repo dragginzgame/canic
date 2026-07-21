@@ -16,7 +16,7 @@ const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 const INSTALL_CODE_RETRY_LIMIT: usize = 3;
 const NANOS_PER_HOUR: u64 = 60 * 60 * 1_000_000_000;
-const MAX_REPLAY_WINDOW_NS: u64 = 24 * NANOS_PER_HOUR;
+const MAX_REPLAY_WINDOW_NS: u64 = NANOS_PER_HOUR;
 const CANISTERS: [&str; 3] = ["intent_authority", "intent_external", "intent_client"];
 static BUILD_ONCE: Once = Once::new();
 
@@ -557,7 +557,7 @@ fn assert_terminal_reclamation(
     authority_id: Principal,
     replay_deadline_ns: u64,
 ) {
-    pic.advance_time(Duration::from_hours(25));
+    pic.advance_time(Duration::from_mins(61));
     pic.tick();
     pic.tick();
 
