@@ -105,14 +105,20 @@ impl RuntimeAuthWorkflow {
 pub(super) async fn install_chain_key_delegation_proof_batch(
     plan: ChainKeyRootDelegationBatchInstallPlan,
     now_ns: u64,
-) -> ChainKeyDelegationProofBatchInstallResult {
-    install_chain_key_delegation_proofs(
+) -> ChainKeyDelegationProofBatchInstallOutcome {
+    let result = install_chain_key_delegation_proofs(
         plan.batch_id,
         plan.proofs,
         now_ns,
         install_delegation_proof_on_issuer,
     )
-    .await
+    .await;
+    ChainKeyDelegationProofBatchInstallOutcome {
+        installed_count: result.installed_count,
+        failure: result
+            .first_failure
+            .map(IssuerProofInstallError::into_renewal_error),
+    }
 }
 
 async fn install_chain_key_delegation_proofs<F, Fut>(
@@ -125,7 +131,7 @@ where
     F: FnMut(Principal, InstallActiveDelegationProofRequest) -> Fut,
     Fut: Future<Output = Result<(), IssuerProofInstallError>>,
 {
-    let mut installed_any = false;
+    let mut installed_count = 0u64;
     let mut first_failure = None;
     for proof in proofs {
         let issuer_pid = proof.issuer_pid;
@@ -137,9 +143,11 @@ where
         .await;
         match result {
             Ok(()) => {
-                installed_any = AuthOps::record_chain_key_root_delegation_install_success(
+                if AuthOps::record_chain_key_root_delegation_install_success(
                     batch_id, issuer_pid, cert_hash, now_ns,
-                ) || installed_any;
+                ) {
+                    installed_count = installed_count.saturating_add(1);
+                }
             }
             Err(failure) => {
                 AuthOps::record_chain_key_root_delegation_install_failure(
@@ -155,7 +163,7 @@ where
         }
     }
     ChainKeyDelegationProofBatchInstallResult {
-        installed_any,
+        installed_count,
         first_failure,
     }
 }
@@ -192,13 +200,18 @@ fn issuer_install_response(
 }
 
 pub(super) struct ChainKeyDelegationProofBatchInstallResult {
-    pub(super) installed_any: bool,
+    installed_count: u64,
     first_failure: Option<IssuerProofInstallError>,
+}
+
+pub(super) struct ChainKeyDelegationProofBatchInstallOutcome {
+    pub(super) installed_count: u64,
+    pub(super) failure: Option<InternalError>,
 }
 
 impl ChainKeyDelegationProofBatchInstallResult {
     fn into_explicit_result(self, issuer_pid: Principal) -> Result<(), InternalError> {
-        if self.installed_any {
+        if self.installed_count > 0 {
             return Ok(());
         }
         match self.first_failure {
@@ -249,6 +262,24 @@ impl IssuerProofInstallError {
                 "chain-key delegation proof installation response from issuer {issuer_pid} was invalid"
             )))
             .with_diagnostic_context(cause.to_string()),
+            Self::RejectedByIssuer(err) => InternalError::public(err),
+        }
+    }
+
+    fn into_renewal_error(self) -> InternalError {
+        match self {
+            Self::RequestEncoding(cause) => InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("chain-key delegation proof request encoding failed: {cause}"),
+            ),
+            Self::Transport(cause) => InternalError::infra(
+                InternalErrorOrigin::Infra,
+                format!("chain-key delegation proof installation transport failed: {cause}"),
+            ),
+            Self::InvalidResponse(cause) => InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                format!("chain-key delegation proof installation response was invalid: {cause}"),
+            ),
             Self::RejectedByIssuer(err) => InternalError::public(err),
         }
     }
@@ -342,7 +373,7 @@ mod tests {
             |_issuer_pid, _request| async { Ok(()) },
         ));
 
-        assert!(!result.installed_any);
+        assert_eq!(result.installed_count, 0);
         assert!(result.first_failure.is_none());
     }
 
@@ -366,14 +397,14 @@ mod tests {
         ));
 
         assert_eq!(calls.get(), 1);
-        assert!(!result.installed_any);
+        assert_eq!(result.installed_count, 0);
         assert!(result.first_failure.is_some());
     }
 
     #[test]
     fn explicit_provisioning_transport_failure_is_typed_as_unavailable() {
         let result = ChainKeyDelegationProofBatchInstallResult {
-            installed_any: false,
+            installed_count: 0,
             first_failure: Some(IssuerProofInstallError::Transport(InternalError::infra(
                 InternalErrorOrigin::Infra,
                 "transport failed",
@@ -403,7 +434,7 @@ mod tests {
         );
 
         let result = ChainKeyDelegationProofBatchInstallResult {
-            installed_any: false,
+            installed_count: 0,
             first_failure: Some(failure),
         };
         let err = result
@@ -411,5 +442,46 @@ mod tests {
             .expect_err("issuer application rejection must reach the root facade");
 
         assert_eq!(err.public_error(), Some(&rejected));
+    }
+
+    #[test]
+    fn renewal_install_failures_preserve_retry_and_terminal_classification() {
+        let transport = IssuerProofInstallError::Transport(InternalError::infra(
+            InternalErrorOrigin::Infra,
+            "transport failed",
+        ))
+        .into_renewal_error();
+        assert_eq!(transport.class(), crate::InternalErrorClass::Infra);
+        assert_eq!(transport.origin(), InternalErrorOrigin::Infra);
+
+        let invalid_response = IssuerProofInstallError::InvalidResponse(InternalError::infra(
+            InternalErrorOrigin::Infra,
+            "invalid response",
+        ))
+        .into_renewal_error();
+        assert_eq!(
+            invalid_response.class(),
+            crate::InternalErrorClass::Invariant
+        );
+        assert_eq!(invalid_response.origin(), InternalErrorOrigin::Workflow);
+
+        let request_encoding = IssuerProofInstallError::RequestEncoding(InternalError::infra(
+            InternalErrorOrigin::Infra,
+            "encoding failed",
+        ))
+        .into_renewal_error();
+        assert_eq!(
+            request_encoding.class(),
+            crate::InternalErrorClass::Invariant
+        );
+        assert_eq!(request_encoding.origin(), InternalErrorOrigin::Workflow);
+
+        let rejected = Error::new(
+            ErrorCode::AuthProofExpired,
+            "issuer rejected expired proof".to_string(),
+        );
+        let public =
+            IssuerProofInstallError::RejectedByIssuer(rejected.clone()).into_renewal_error();
+        assert_eq!(public.public_error(), Some(&rejected));
     }
 }

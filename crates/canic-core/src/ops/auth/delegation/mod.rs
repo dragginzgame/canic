@@ -28,7 +28,7 @@ use super::{
 };
 use super::{
     ChainKeyRootDelegationBatchSigningResult, ChainKeyRootDelegationBatchSweepResult,
-    PrepareChainKeyRootDelegationBatchInput,
+    PrepareChainKeyRootDelegationBatchInput, RootIssuerRenewalTiming,
 };
 use crate::{
     InternalError,
@@ -105,6 +105,59 @@ impl AuthOps {
 
     pub(crate) fn has_enabled_root_issuer_renewal_templates() -> bool {
         root_issuer_renewal::has_enabled_root_issuer_renewal_templates()
+    }
+
+    pub(crate) fn root_issuer_renewal_timing(
+        now_ns: u64,
+    ) -> Result<RootIssuerRenewalTiming, InternalError> {
+        if !Self::has_enabled_root_issuer_renewal_templates() {
+            return Ok(RootIssuerRenewalTiming {
+                next_deadline_ns: None,
+                earliest_active_proof_expires_at_ns: None,
+            });
+        }
+
+        let (registry_epoch, registry_hash) = current_chain_key_registry_identity()?;
+        let earliest_active_proof_expires_at_ns =
+            root_issuer_renewal::earliest_active_root_issuer_proof_expiry_ns(
+                now_ns,
+                registry_epoch,
+                registry_hash,
+            );
+        let next_deadline_ns = chain_key_batch::current_chain_key_batch_deadline_ns(
+            now_ns,
+            registry_epoch,
+            registry_hash,
+        )
+        .or_else(|| {
+            if root_issuer_renewal::all_enabled_root_issuer_proofs_match_registry(
+                now_ns,
+                registry_epoch,
+                registry_hash,
+            ) {
+                root_issuer_renewal::next_root_issuer_renewal_template_deadline_ns(now_ns)
+            } else {
+                Some(now_ns)
+            }
+        });
+
+        Ok(RootIssuerRenewalTiming {
+            next_deadline_ns,
+            earliest_active_proof_expires_at_ns,
+        })
+    }
+
+    pub(crate) fn defer_retryable_chain_key_root_delegation_batch(
+        now_ns: u64,
+        retry_after_ns: u64,
+    ) -> Result<bool, InternalError> {
+        let (registry_epoch, registry_hash) = current_chain_key_registry_identity()?;
+        Ok(chain_key_batch::defer_retryable_chain_key_batch(
+            now_ns,
+            retry_after_ns,
+            registry_epoch,
+            registry_hash,
+        ))
     }
 
     pub(crate) fn plan_due_chain_key_root_delegation_batch(
@@ -258,6 +311,20 @@ impl AuthOps {
     pub(crate) const fn chain_key_root_sign_enabled() -> bool {
         cfg!(feature = "auth-chain-key-root-sign")
     }
+}
+
+fn current_chain_key_registry_identity() -> Result<(u64, [u8; 32]), InternalError> {
+    let root_key_policy = AuthOps::auth_proof_verifier_config()?
+        .chain_key_root
+        .ok_or_else(|| {
+            AuthValidationError::Auth(
+                "auth.delegated_tokens.chain_key_root_proof is required when root_proof_mode=\"chain_key_batch\""
+                    .to_string(),
+            )
+        })?
+        .policy;
+    let registry = chain_key_registry::current_chain_key_delegated_auth_registry(&root_key_policy)?;
+    Ok((registry.snapshot.registry_epoch, registry.hash))
 }
 
 const fn chain_key_batch_sweep_result(

@@ -1279,6 +1279,39 @@ fn chain_key_template_due_respects_refresh_and_template_fingerprint() {
     let mut delayed = state;
     delayed.next_attempt_after_ns = 150;
     assert!(!chain_key_template_due(100, fingerprint, Some(&delayed)));
+    assert!(chain_key_template_due(100, [9; 32], Some(&delayed)));
+}
+
+#[test]
+fn retryable_batch_deadline_is_persisted_and_capped_before_expiry() {
+    let signing_policy = signing_policy();
+    let issuer = p(61);
+    AuthStateOps::upsert_root_issuer_policy(policy(issuer));
+    AuthStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
+    let prepared = prepare_due_batch_with_test_approvals(input(&signing_policy))
+        .expect("prepare should build a batch");
+    let batch_id = prepared.batch_id.expect("prepare should return a batch id");
+    let mut batch = AuthStateOps::chain_key_root_delegation_batch(batch_id)
+        .expect("prepared batch should be stored");
+    batch.status = ChainKeyRootDelegationBatchStatus::Installing;
+    batch.failure = Some("issuer transport failed".to_string());
+    let expires_at_ns = batch.header.expires_at_ns;
+    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+
+    assert!(defer_retryable_chain_key_batch(
+        2_000,
+        u64::MAX,
+        11,
+        [22; 32]
+    ));
+
+    let stored = AuthStateOps::chain_key_root_delegation_batch(batch_id)
+        .expect("retryable batch should remain stored");
+    assert_eq!(stored.retry_after_ns, Some(expires_at_ns - 1));
+    assert_eq!(
+        current_chain_key_batch_deadline_ns(2_000, 11, [22; 32]),
+        Some(expires_at_ns - 1)
+    );
 }
 
 #[test]

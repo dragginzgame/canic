@@ -53,11 +53,11 @@ pub(super) fn chain_key_template_due(
     let Some(state) = state else {
         return true;
     };
-    if now_ns < state.next_attempt_after_ns {
-        return false;
-    }
     if state.template_fingerprint != template_fingerprint {
         return true;
+    }
+    if now_ns < state.next_attempt_after_ns {
+        return false;
     }
     state
         .last_installed_refresh_after_ns

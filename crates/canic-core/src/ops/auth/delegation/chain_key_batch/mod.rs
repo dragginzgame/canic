@@ -316,6 +316,56 @@ fn reusable_in_flight_chain_key_batch(
     batches.into_iter().next()
 }
 
+pub(super) fn current_chain_key_batch_deadline_ns(
+    now_ns: u64,
+    registry_epoch: u64,
+    registry_hash: [u8; 32],
+) -> Option<u64> {
+    let batch = reusable_in_flight_chain_key_batch(now_ns, None, registry_epoch, registry_hash)?;
+    Some(match batch.status {
+        ChainKeyRootDelegationBatchStatus::Prepared | ChainKeyRootDelegationBatchStatus::Signed => {
+            now_ns
+        }
+        ChainKeyRootDelegationBatchStatus::Signing => batch.header.expires_at_ns,
+        ChainKeyRootDelegationBatchStatus::Installing
+        | ChainKeyRootDelegationBatchStatus::FailedRetryable => batch
+            .retry_after_ns
+            .unwrap_or(now_ns)
+            .min(batch.header.expires_at_ns)
+            .max(now_ns),
+        ChainKeyRootDelegationBatchStatus::Installed => return None,
+    })
+}
+
+pub(super) fn defer_retryable_chain_key_batch(
+    now_ns: u64,
+    retry_after_ns: u64,
+    registry_epoch: u64,
+    registry_hash: [u8; 32],
+) -> bool {
+    let Some(mut batch) =
+        reusable_in_flight_chain_key_batch(now_ns, None, registry_epoch, registry_hash)
+    else {
+        return false;
+    };
+    if !matches!(
+        batch.status,
+        ChainKeyRootDelegationBatchStatus::Installing
+            | ChainKeyRootDelegationBatchStatus::FailedRetryable
+    ) || batch.failure.is_none()
+    {
+        return false;
+    }
+
+    batch.retry_after_ns = Some(
+        retry_after_ns
+            .min(batch.header.expires_at_ns - 1)
+            .max(now_ns),
+    );
+    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+    true
+}
+
 fn mark_stale_preinstall_chain_key_batches(registry_epoch: u64, registry_hash: [u8; 32]) -> usize {
     let mut stale_count = 0usize;
     for mut batch in AuthStateOps::chain_key_root_delegation_batches() {

@@ -114,7 +114,7 @@ fn expected_scheduling_inventory() -> BTreeMap<String, usize> {
         ),
         (
             "crates/canic-core/src/workflow/runtime/auth/renewal.rs".to_string(),
-            1,
+            2,
         ),
         (
             "crates/canic-core/src/workflow/runtime/cycles/mod.rs".to_string(),

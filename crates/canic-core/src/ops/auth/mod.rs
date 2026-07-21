@@ -35,7 +35,7 @@ pub use types::{
     ChainKeyRootDelegationBatchSigningResult, ChainKeyRootDelegationBatchSweepResult,
     PrepareChainKeyRootDelegationBatchInput, PrepareDelegatedTokenIssuerProofInput,
     PrepareRootRoleAttestationInput, PreparedDelegatedTokenIssuerProof,
-    PreparedRootRoleAttestation, VerifyDelegatedTokenRuntimeInput,
+    PreparedRootRoleAttestation, RootIssuerRenewalTiming, VerifyDelegatedTokenRuntimeInput,
 };
 
 const ROLE_ATTESTATION_PROOF_HASH_DOMAIN: &[u8] = b"CANIC_ROLE_ATTESTATION_V1";

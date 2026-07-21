@@ -91,6 +91,19 @@ pub struct ChainKeyRootDelegationBatchSigningResult {
 }
 
 ///
+/// RootIssuerRenewalTiming
+///
+/// Read-only auth-ops projection used by the renewal workflow to reconstruct
+/// its exact deadline and bound retries by currently installed proof validity.
+///
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RootIssuerRenewalTiming {
+    pub next_deadline_ns: Option<u64>,
+    pub earliest_active_proof_expires_at_ns: Option<u64>,
+}
+
+///
 /// PreparedRootRoleAttestation
 ///
 /// Prepared role attestation material and retrieval expiry.

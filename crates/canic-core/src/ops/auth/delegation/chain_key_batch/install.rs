@@ -244,6 +244,11 @@ fn next_chain_key_batch_for_install(now_ns: u64) -> Option<ChainKeyRootDelegatio
                     | ChainKeyRootDelegationBatchStatus::Installing
             )
         })
+        .filter(|batch| {
+            batch
+                .retry_after_ns
+                .is_none_or(|retry_after_ns| now_ns >= retry_after_ns)
+        })
         .collect::<Vec<_>>();
     batches.sort_by(|left, right| {
         left.prepared_at_ns

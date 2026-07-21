@@ -41,14 +41,9 @@ use crate::{
 pub struct RuntimeAuthWorkflow;
 
 impl RuntimeAuthWorkflow {
-    /// Start root-managed delegated-proof renewal sweeps when templates exist.
-    pub fn start_root_delegation_renewal_timer_if_configured() -> Result<(), InternalError> {
-        renewal::RootDelegationRenewalWorkflow::start_if_configured()
-    }
-
-    /// Start root-managed delegated-proof renewal sweeps promptly after template changes.
-    pub fn start_root_delegation_renewal_timer_soon_if_configured() -> Result<(), InternalError> {
-        renewal::RootDelegationRenewalWorkflow::start_soon_if_configured()
+    /// Reconstruct or update the root issuer renewal deadline from durable authority.
+    pub fn reconcile_root_issuer_renewal() -> Result<(), InternalError> {
+        renewal::RootIssuerRenewalWorkflow::reconcile()
     }
 
     /// Fail fast when root delegated-auth config requires missing crypto support.

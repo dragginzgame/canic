@@ -64,7 +64,7 @@ impl RuntimeWorkflow {
 
         // root-only services
         workflow::pool::scheduler::PoolSchedulerWorkflow::start();
-        workflow::runtime::auth::RuntimeAuthWorkflow::start_root_delegation_renewal_timer_if_configured()?;
+        workflow::runtime::auth::RuntimeAuthWorkflow::reconcile_root_issuer_renewal()?;
         Ok(())
     }
 }

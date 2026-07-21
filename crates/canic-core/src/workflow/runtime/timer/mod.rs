@@ -318,35 +318,6 @@ impl TimerWorkflow {
         cancel(TimerIdentity::Application(id.0))
     }
 
-    /// Ensure one built-in recurring process is configured and scheduled.
-    /// Returns true only when this call installed the process definition.
-    pub fn ensure_recurring<F, Fut>(
-        key: TimerKey,
-        initial_delay: Duration,
-        interval: Duration,
-        task: F,
-    ) -> bool
-    where
-        F: FnMut() -> Fut + 'static,
-        Fut: Future<Output = ()> + 'static,
-    {
-        let mut task = task;
-        let factory = timer_factory(move || {
-            let future = task();
-            async move {
-                future.await;
-                TimerRunResult::success(1, TimerDirective::RecurAfter(interval))
-            }
-        });
-        ensure_builtin(
-            key,
-            initial_delay,
-            TimerMode::Interval,
-            TimerSchedulingMode::AfterCompletion,
-            factory,
-        )
-    }
-
     /// Configure one built-in bounded process if needed and request its next run.
     pub fn schedule<F, Fut>(key: TimerKey, delay: Duration, task: F)
     where
