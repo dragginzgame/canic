@@ -97,7 +97,7 @@ pub const fn evaluate_hub_self_refill(
         Ok(decision) => decision,
         Err(err) => return Err(err),
     };
-    if input.hub_cycles >= decision.threshold_cycles {
+    if input.hub_cycles > decision.threshold_cycles {
         return Err(IcpRefillPolicyViolation::HubCyclesAboveThreshold {
             current_cycles: input.hub_cycles,
             threshold_cycles: decision.threshold_cycles,
@@ -195,19 +195,27 @@ mod tests {
     }
 
     #[test]
-    fn hub_self_refill_requires_balance_below_threshold() {
+    fn hub_self_refill_rejects_balance_above_threshold() {
         let mut input = input();
-        input.hub_cycles = 2 * TC;
+        input.hub_cycles = 2 * TC + 1;
 
         let err = evaluate_hub_self_refill(Some(&policy()), input).expect_err("threshold gate");
 
         assert_eq!(
             err,
             IcpRefillPolicyViolation::HubCyclesAboveThreshold {
-                current_cycles: 2 * TC,
+                current_cycles: 2 * TC + 1,
                 threshold_cycles: 2 * TC,
             }
         );
+    }
+
+    #[test]
+    fn hub_self_refill_accepts_exact_threshold() {
+        let mut input = input();
+        input.hub_cycles = 2 * TC;
+
+        evaluate_hub_self_refill(Some(&policy()), input).expect("threshold refill");
     }
 
     #[test]

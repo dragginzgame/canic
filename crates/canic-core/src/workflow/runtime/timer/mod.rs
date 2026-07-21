@@ -38,7 +38,7 @@ thread_local! {
 #[remain::sorted]
 pub enum TimerKey {
     AuthRenewal,
-    CycleTracking,
+    CycleTopup,
     IntentCleanup,
     LogRetention,
     PlacementReceiptAcknowledgement,
@@ -49,7 +49,7 @@ impl TimerKey {
     const fn label(self) -> &'static str {
         match self {
             Self::AuthRenewal => "auth_renewal:run",
-            Self::CycleTracking => "cycles:tracking",
+            Self::CycleTopup => "cycles:topup",
             Self::IntentCleanup => "intent_cleanup:run",
             Self::LogRetention => "log_retention:run",
             Self::PlacementReceiptAcknowledgement => "placement:receipt_ack",
@@ -347,43 +347,6 @@ impl TimerWorkflow {
         )
     }
 
-    /// Ensure one recurring process with a distinct first invocation is scheduled.
-    pub fn ensure_recurring_with_initial<FInit, InitFut, FTick, TickFut>(
-        key: TimerKey,
-        initial_delay: Duration,
-        initial_task: FInit,
-        interval: Duration,
-        tick_task: FTick,
-    ) -> bool
-    where
-        FInit: FnOnce() -> InitFut + 'static,
-        InitFut: Future<Output = ()> + 'static,
-        FTick: FnMut() -> TickFut + 'static,
-        TickFut: Future<Output = ()> + 'static,
-    {
-        let mut initial_task = Some(initial_task);
-        let mut tick_task = tick_task;
-        let factory = timer_factory(move || {
-            let future: Pin<Box<dyn Future<Output = ()>>> =
-                if let Some(initial_task) = initial_task.take() {
-                    Box::pin(initial_task())
-                } else {
-                    Box::pin(tick_task())
-                };
-            async move {
-                future.await;
-                TimerRunResult::success(1, TimerDirective::RecurAfter(interval))
-            }
-        });
-        ensure_builtin(
-            key,
-            initial_delay,
-            TimerMode::Interval,
-            TimerSchedulingMode::AfterCompletion,
-            factory,
-        )
-    }
-
     /// Configure one built-in bounded process if needed and request its next run.
     pub fn schedule<F, Fut>(key: TimerKey, delay: Duration, task: F)
     where
@@ -428,6 +391,16 @@ impl TimerWorkflow {
     #[must_use]
     pub fn statuses() -> Vec<TimerRuntimeSnapshot> {
         TIMERS.with_borrow(|timers| timers.values().map(TimerEntry::snapshot).collect())
+    }
+
+    /// Return the completed retryable-failure streak for one built-in owner.
+    #[must_use]
+    pub(crate) fn consecutive_expected_failures(key: TimerKey) -> u64 {
+        TIMERS.with_borrow(|timers| {
+            timers
+                .get(&TimerIdentity::BuiltIn(key))
+                .map_or(0, |entry| entry.consecutive_expected_failures)
+        })
     }
 }
 
@@ -811,7 +784,7 @@ mod tests {
     fn fixed_timer_labels_are_unique_and_low_cardinality() {
         let keys = [
             TimerKey::AuthRenewal,
-            TimerKey::CycleTracking,
+            TimerKey::CycleTopup,
             TimerKey::IntentCleanup,
             TimerKey::LogRetention,
             TimerKey::PlacementReceiptAcknowledgement,

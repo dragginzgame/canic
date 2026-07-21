@@ -1,9 +1,21 @@
+//! Module: workflow::runtime::cycles
+//!
+//! Responsibility: record cycle observations and run configured automatic funding.
+//! Does not own: funding policy, stable telemetry schemas, or timer arbitration.
+//! Boundary: lifecycle and funding events record history; one timer owns top-up safety.
+
 pub mod query;
 
 use crate::{
+    InternalError, InternalErrorClass,
     cdk::types::Cycles,
-    domain::icp_refill::IcpRefillStatus,
-    domain::policy::pure as policy,
+    config::schema::TopupPolicy,
+    domain::{
+        icp_refill::{IcpRefillStatus, icp_refill_outcome_is_resumable},
+        policy::pure as policy,
+        runtime::TimerExecutionOutcome,
+    },
+    dto::error::ErrorCode,
     log,
     log::Topic,
     ops::{
@@ -14,318 +26,417 @@ use crate::{
         storage::cycles::{CycleTopupEventOps, CycleTrackerOps},
     },
     workflow::{
-        config::{WORKFLOW_CYCLE_TRACK_INTERVAL, WORKFLOW_INIT_DELAY},
         ic::icp_refill::IcpRefillWorkflow,
-        runtime::timer::{TimerKey, TimerWorkflow},
+        runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
     },
 };
-use std::{cell::RefCell, thread::LocalKey, time::Duration};
+use std::time::Duration;
+use thiserror::Error as ThisError;
 
-thread_local! {
-    static TOPUP_IN_FLIGHT: RefCell<bool> = const { RefCell::new(false) };
-    static ICP_REFILL_IN_FLIGHT: RefCell<bool> = const { RefCell::new(false) };
+const NANOS_PER_SECOND: u64 = 1_000_000_000;
+const RETENTION_BATCH_SIZE: usize = 128;
+const RETRY_INITIAL: Duration = Duration::from_mins(1);
+const RETRY_MAX: Duration = Duration::from_mins(30);
+
+#[derive(Clone)]
+enum AutomaticTopupKind {
+    Parent { amount: Cycles },
+    RootIcp,
 }
 
-const TRACKER_INTERVAL: Duration = WORKFLOW_CYCLE_TRACK_INTERVAL;
-
-///
-/// CycleTrackingMode
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CycleTrackingMode {
-    StandardOnly,
-    StandardWithAutoTopup,
+#[derive(Clone)]
+struct AutomaticTopupConfig {
+    threshold: u128,
+    kind: AutomaticTopupKind,
 }
-
-impl CycleTrackingMode {
-    const fn auto_topup_enabled(self) -> bool {
-        matches!(self, Self::StandardWithAutoTopup)
-    }
-}
-
-///
-/// CycleBalanceSample
-///
 
 struct CycleBalanceSample {
     timestamp_secs: u64,
     cycles: Cycles,
 }
 
-///
-/// CycleTrackerWorkflow
-///
+#[derive(Debug, ThisError)]
+enum AutomaticTopupError {
+    #[error(transparent)]
+    Internal(#[from] InternalError),
 
-pub struct CycleTrackerWorkflow;
+    #[error(
+        "hub ICP self-refill operation_id={operation_id:?} status={status:?} error={error_code:?}"
+    )]
+    RootOutcome {
+        operation_id: [u8; 32],
+        status: IcpRefillStatus,
+        error_code: Option<crate::domain::icp_refill::IcpRefillErrorCode>,
+        ledger_block_recorded: bool,
+    },
+}
 
-impl CycleTrackerWorkflow {
-    /// Start recurring cycle tracking.
-    /// Safe to call multiple times.
-    pub fn start() {
-        Self::start_internal(CycleTrackingMode::StandardWithAutoTopup);
-    }
-
-    /// Record recurring cycle balance snapshots without top-up decisions.
-    /// Safe to call multiple times.
-    pub(crate) fn start_standard_only() {
-        Self::start_internal(CycleTrackingMode::StandardOnly);
-    }
-
-    // Start the recurring cycle tracker with the requested policy surface.
-    fn start_internal(mode: CycleTrackingMode) {
-        let scheduled = match mode {
-            CycleTrackingMode::StandardOnly => Self::schedule_standard_interval(mode),
-            CycleTrackingMode::StandardWithAutoTopup => Self::schedule_topup_interval(mode),
-        };
-
-        if scheduled {
-            Self::record_standard_sample();
+impl AutomaticTopupError {
+    fn is_retryable(&self) -> bool {
+        match self {
+            Self::Internal(err) => is_retryable_funding_error(err),
+            Self::RootOutcome {
+                status,
+                error_code,
+                ledger_block_recorded,
+                ..
+            } => icp_refill_outcome_is_resumable(*status, *error_code, *ledger_block_recorded),
         }
     }
+}
 
-    fn schedule_standard_interval(mode: CycleTrackingMode) -> bool {
-        TimerWorkflow::ensure_recurring(
-            TimerKey::CycleTracking,
-            TRACKER_INTERVAL,
-            TRACKER_INTERVAL,
-            move || async move {
-                Self::track_internal(mode);
-                let _ = Self::purge();
-            },
-        )
+/// Runtime owner for cycle observations and configured automatic funding.
+pub struct CycleWorkflow;
+
+impl CycleWorkflow {
+    /// Record the lifecycle balance and reconcile the sole top-up safety deadline.
+    pub fn start() -> Result<(), InternalError> {
+        let config = Self::automatic_topup_config()?;
+        let previous = Self::latest_observation();
+        let sample = Self::read_sample();
+        Self::record_observation(&sample);
+
+        if config.is_none() {
+            CyclesTopupMetrics::record_policy_missing();
+        }
+        let deadline = config.as_ref().map(|config| {
+            Self::deadline_ns(
+                IcOps::now_nanos(),
+                policy::cycles::cycle_topup_timing(
+                    sample.timestamp_secs,
+                    sample.cycles.to_u128(),
+                    config.threshold,
+                    previous,
+                ),
+            )
+        });
+        TimerWorkflow::reconcile_at(TimerKey::CycleTopup, deadline, || async {
+            Self::run_topup().await
+        });
+        Ok(())
     }
 
-    fn schedule_topup_interval(mode: CycleTrackingMode) -> bool {
-        TimerWorkflow::ensure_recurring_with_initial(
-            TimerKey::CycleTracking,
-            WORKFLOW_INIT_DELAY,
-            move || async move {
-                Self::evaluate_current_topup();
-            },
-            TRACKER_INTERVAL,
-            move || async move {
-                Self::track_internal(mode);
-                let _ = Self::purge();
-            },
-        )
-    }
+    async fn run_topup() -> TimerRunResult {
+        let config = match Self::automatic_topup_config() {
+            Ok(Some(config)) => config,
+            Ok(None) => return TimerRunResult::no_work(TimerDirective::Stop),
+            Err(err) => {
+                CyclesTopupMetrics::record_config_error();
+                log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
+                return TimerRunResult::invariant_failure();
+            }
+        };
+        let previous = Self::latest_observation();
+        let sample = Self::read_sample();
+        Self::record_observation(&sample);
+        let timing = policy::cycles::cycle_topup_timing(
+            sample.timestamp_secs,
+            sample.cycles.to_u128(),
+            config.threshold,
+            previous,
+        );
 
-    // Record cycle balance and optionally evaluate auto-top-up policy.
-    fn track_internal(mode: CycleTrackingMode) {
-        let sample = Self::read_standard_sample();
+        if !matches!(timing, policy::cycles::CycleTopupTiming::Due) {
+            CyclesTopupMetrics::record_above_threshold();
+            return TimerRunResult::no_work(Self::directive(IcOps::now_nanos(), timing));
+        }
 
-        if mode.auto_topup_enabled() {
-            if EnvOps::is_root() {
-                if Self::check_hub_self_refill(&sample.cycles) {
-                    CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
-                    return;
+        let result = match &config.kind {
+            AutomaticTopupKind::Parent { amount } => Self::request_parent_funding(amount).await,
+            AutomaticTopupKind::RootIcp => Self::request_root_refill(&sample.cycles).await,
+        };
+        let after = Self::read_sample();
+        Self::record_observation(&after);
+
+        match result {
+            Ok(()) => {
+                let timing = policy::cycles::cycle_topup_timing(
+                    after.timestamp_secs,
+                    after.cycles.to_u128(),
+                    config.threshold,
+                    Some(policy::cycles::CycleBalanceObservation {
+                        timestamp_secs: sample.timestamp_secs,
+                        balance: sample.cycles.to_u128(),
+                    }),
+                );
+                TimerRunResult::success(1, Self::directive(IcOps::now_nanos(), timing))
+            }
+            Err(failure) if failure.is_retryable() => {
+                log!(
+                    Topic::Cycles,
+                    Warn,
+                    "automatic top-up will retry: {}",
+                    failure
+                );
+                let streak = TimerWorkflow::consecutive_expected_failures(TimerKey::CycleTopup);
+                TimerRunResult {
+                    outcome: TimerExecutionOutcome::RetryableFailure,
+                    work_count: 0,
+                    directive: TimerDirective::RetryAfter(retry_delay(streak)),
                 }
-            } else {
-                Self::check_auto_topup(&sample.cycles);
+            }
+            Err(failure) => {
+                log!(
+                    Topic::Cycles,
+                    Error,
+                    "automatic top-up stopped: {}",
+                    failure
+                );
+                TimerRunResult::invariant_failure()
             }
         }
-
-        CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
     }
 
-    fn record_standard_sample() {
-        let sample = Self::read_standard_sample();
-        CycleTrackerOps::record(sample.timestamp_secs, sample.cycles);
+    async fn request_parent_funding(amount: &Cycles) -> Result<(), AutomaticTopupError> {
+        CyclesTopupMetrics::record_request_scheduled();
+        CycleTopupEventOps::record_scheduled(IcOps::now_secs(), amount.clone());
+        match RequestOps::request_cycles(amount.to_u128()).await {
+            Ok(response) => {
+                let transferred = Cycles::from(response.cycles_transferred);
+                CyclesTopupMetrics::record_request_ok();
+                CycleTopupEventOps::record_ok(
+                    IcOps::now_secs(),
+                    amount.clone(),
+                    transferred.clone(),
+                );
+                log!(
+                    Topic::Cycles,
+                    Ok,
+                    "requested {amount}, topped up by {transferred}, now {}",
+                    IcOps::canister_cycle_balance()
+                );
+                Ok(())
+            }
+            Err(err) => {
+                CyclesTopupMetrics::record_request_err();
+                CycleTopupEventOps::record_err(IcOps::now_secs(), amount.clone(), err.to_string());
+                Err(err.into())
+            }
+        }
     }
 
-    fn read_standard_sample() -> CycleBalanceSample {
+    async fn request_root_refill(hub_cycles: &Cycles) -> Result<(), AutomaticTopupError> {
+        CyclesTopupMetrics::record_request_scheduled();
+        match IcpRefillWorkflow::execute_hub_self_refill(hub_cycles.clone()).await {
+            Ok(response) if response.status == IcpRefillStatus::Completed => {
+                CyclesTopupMetrics::record_request_ok();
+                log!(
+                    Topic::Cycles,
+                    Ok,
+                    "hub ICP self-refill completed operation_id={:?} cycles_sent={:?}",
+                    response.operation_id,
+                    response.cycles_sent
+                );
+                Ok(())
+            }
+            Ok(response) => {
+                CyclesTopupMetrics::record_request_err();
+                Err(AutomaticTopupError::RootOutcome {
+                    operation_id: response.operation_id,
+                    status: response.status,
+                    error_code: response.error_code,
+                    ledger_block_recorded: response.ledger_block_index.is_some(),
+                })
+            }
+            Err(err) => {
+                CyclesTopupMetrics::record_request_err();
+                Err(err.into())
+            }
+        }
+    }
+
+    fn automatic_topup_config() -> Result<Option<AutomaticTopupConfig>, InternalError> {
+        let canister = ConfigOps::current_canister()?;
+        Ok(select_automatic_topup_config(
+            EnvOps::is_root(),
+            canister.topup,
+        ))
+    }
+
+    fn read_sample() -> CycleBalanceSample {
         CycleBalanceSample {
             timestamp_secs: IcOps::now_secs(),
             cycles: IcOps::canister_cycle_balance(),
         }
     }
 
-    fn evaluate_current_topup() {
-        let cycles = IcOps::canister_cycle_balance();
-        if EnvOps::is_root() {
-            Self::check_hub_self_refill(&cycles);
-            return;
-        }
-
-        Self::check_auto_topup(&cycles);
+    fn latest_observation() -> Option<policy::cycles::CycleBalanceObservation> {
+        CycleTrackerOps::latest().map(|(timestamp_secs, cycles)| {
+            policy::cycles::CycleBalanceObservation {
+                timestamp_secs,
+                balance: cycles.to_u128(),
+            }
+        })
     }
 
-    fn check_hub_self_refill(cycles: &Cycles) -> bool {
-        let canister_cfg = match ConfigOps::current_canister() {
-            Ok(cfg) => cfg,
-            Err(err) => {
-                CyclesTopupMetrics::record_config_error();
-                log!(Topic::Cycles, Warn, "hub ICP self-refill skipped: {err}");
-                return false;
-            }
-        };
-        let Some(topup) = canister_cfg.topup else {
-            return false;
-        };
-        let Some(icp_refill) = topup.icp_refill else {
-            return false;
-        };
-        if !icp_refill.enabled {
-            return false;
-        }
-        if cycles.to_u128() >= icp_refill.min_hub_cycles_before_refill.to_u128() {
-            return false;
-        }
-
-        let should_refill = mark_in_flight(&ICP_REFILL_IN_FLIGHT);
-
-        if !should_refill {
-            CyclesTopupMetrics::record_request_in_flight();
-            return true;
-        }
-
-        CyclesTopupMetrics::record_request_scheduled();
-        let hub_cycles = cycles.clone();
-        IcOps::spawn(async move {
-            let result = IcpRefillWorkflow::execute_hub_self_refill(hub_cycles).await;
-
-            clear_in_flight(&ICP_REFILL_IN_FLIGHT);
-
-            match result {
-                Ok(response) if response.status == IcpRefillStatus::Completed => {
-                    CyclesTopupMetrics::record_request_ok();
-                    log!(
-                        Topic::Cycles,
-                        Ok,
-                        "hub ICP self-refill completed operation_id={:?} cycles_sent={:?}",
-                        response.operation_id,
-                        response.cycles_sent
-                    );
-                }
-                Ok(response) => {
-                    CyclesTopupMetrics::record_request_err();
-                    log!(
-                        Topic::Cycles,
-                        Warn,
-                        "hub ICP self-refill advanced operation_id={:?} status={:?} error={:?}",
-                        response.operation_id,
-                        response.status,
-                        response.error_code
-                    );
-                }
-                Err(err) => {
-                    CyclesTopupMetrics::record_request_err();
-                    log!(Topic::Cycles, Error, "hub ICP self-refill failed: {err}");
-                }
-            }
-        });
-
-        true
+    fn record_observation(sample: &CycleBalanceSample) {
+        CycleTrackerOps::record(sample.timestamp_secs, sample.cycles.clone());
+        Self::purge_history(sample.timestamp_secs);
     }
 
-    fn check_auto_topup(cycles: &Cycles) {
-        let canister_cfg = match ConfigOps::current_canister() {
-            Ok(cfg) => cfg,
-            Err(err) => {
-                CyclesTopupMetrics::record_config_error();
-                log!(Topic::Cycles, Warn, "auto topup skipped: {err}");
-                return;
-            }
-        };
-        if canister_cfg.topup.is_none() {
-            CyclesTopupMetrics::record_policy_missing();
-            return;
-        }
-
-        let topup_policy =
-            canister_cfg
-                .topup
-                .as_ref()
-                .map(|topup| policy::cycles::TopupPolicyInput {
-                    threshold: topup.threshold.clone(),
-                    amount: topup.amount.clone(),
-                });
-
-        let Some(plan) = policy::cycles::should_topup(cycles.to_u128(), topup_policy.as_ref())
-        else {
-            CyclesTopupMetrics::record_above_threshold();
-            return;
-        };
-
-        let should_request = mark_in_flight(&TOPUP_IN_FLIGHT);
-
-        if !should_request {
-            CyclesTopupMetrics::record_request_in_flight();
-            return;
-        }
-
-        CyclesTopupMetrics::record_request_scheduled();
-        let requested_cycles = plan.amount;
-        CycleTopupEventOps::record_scheduled(IcOps::now_secs(), requested_cycles.clone());
-        IcOps::spawn(async move {
-            let result = RequestOps::request_cycles(requested_cycles.to_u128()).await;
-
-            clear_in_flight(&TOPUP_IN_FLIGHT);
-
-            match result {
-                Ok(res) => {
-                    CyclesTopupMetrics::record_request_ok();
-                    CycleTopupEventOps::record_ok(
-                        IcOps::now_secs(),
-                        requested_cycles.clone(),
-                        Cycles::from(res.cycles_transferred),
-                    );
-                    log!(
-                        Topic::Cycles,
-                        Ok,
-                        "requested {}, topped up by {}, now {}",
-                        requested_cycles,
-                        Cycles::from(res.cycles_transferred),
-                        IcOps::canister_cycle_balance()
-                    );
-                }
-                Err(e) => {
-                    CyclesTopupMetrics::record_request_err();
-                    CycleTopupEventOps::record_err(
-                        IcOps::now_secs(),
-                        requested_cycles,
-                        e.to_string(),
-                    );
-                    log!(Topic::Cycles, Error, "failed to request cycles: {e}");
-                }
-            }
-        });
-    }
-
-    /// Purge old entries based on the retention window.
-    #[must_use]
-    pub fn purge() -> bool {
-        let now = IcOps::now_secs();
-        let cutoff = policy::cycles::retention_cutoff(now);
-        let purged = CycleTrackerOps::purge_before(cutoff);
-        let purged_topups = CycleTopupEventOps::purge_before(cutoff);
-
-        if purged > 0 || purged_topups > 0 {
+    fn purge_history(now_secs: u64) {
+        let cutoff = policy::cycles::retention_cutoff(now_secs);
+        let purged_tracker = CycleTrackerOps::purge_before(cutoff, RETENTION_BATCH_SIZE);
+        let purged_topups = CycleTopupEventOps::purge_before(cutoff, RETENTION_BATCH_SIZE);
+        if purged_tracker > 0 || purged_topups > 0 {
             log!(
                 Topic::Cycles,
                 Info,
-                "cycle_tracker: purged {purged} balance entries and {purged_topups} topup events"
+                "cycle history: purged {purged_tracker} balance entries and {purged_topups} top-up events"
             );
         }
+    }
 
-        purged > 0 || purged_topups > 0
+    const fn deadline_ns(now_ns: u64, timing: policy::cycles::CycleTopupTiming) -> u64 {
+        match timing {
+            policy::cycles::CycleTopupTiming::Due => now_ns,
+            policy::cycles::CycleTopupTiming::CheckAfter { delay_secs } => {
+                now_ns.saturating_add(delay_secs.saturating_mul(NANOS_PER_SECOND))
+            }
+        }
+    }
+
+    const fn directive(now_ns: u64, timing: policy::cycles::CycleTopupTiming) -> TimerDirective {
+        match timing {
+            policy::cycles::CycleTopupTiming::Due => {
+                TimerDirective::ScheduleAt(now_ns.saturating_add(
+                    policy::cycles::CYCLE_TOPUP_MIN_CHECK_SECS.saturating_mul(NANOS_PER_SECOND),
+                ))
+            }
+            policy::cycles::CycleTopupTiming::CheckAfter { .. } => {
+                TimerDirective::ScheduleAt(Self::deadline_ns(now_ns, timing))
+            }
+        }
     }
 }
 
-fn mark_in_flight(flag: &'static LocalKey<RefCell<bool>>) -> bool {
-    flag.with_borrow_mut(|in_flight| {
-        if *in_flight {
-            false
-        } else {
-            *in_flight = true;
-            true
+fn select_automatic_topup_config(
+    is_root: bool,
+    topup: Option<TopupPolicy>,
+) -> Option<AutomaticTopupConfig> {
+    let topup = topup?;
+    if is_root {
+        let icp_refill = topup.icp_refill?;
+        if !icp_refill.enabled {
+            return None;
         }
+        return Some(AutomaticTopupConfig {
+            threshold: icp_refill.min_hub_cycles_before_refill.to_u128(),
+            kind: AutomaticTopupKind::RootIcp,
+        });
+    }
+
+    Some(AutomaticTopupConfig {
+        threshold: topup.threshold.to_u128(),
+        kind: AutomaticTopupKind::Parent {
+            amount: topup.amount,
+        },
     })
 }
 
-fn clear_in_flight(flag: &'static LocalKey<RefCell<bool>>) {
-    flag.with_borrow_mut(|in_flight| {
-        *in_flight = false;
-    });
+fn is_retryable_funding_error(err: &InternalError) -> bool {
+    matches!(
+        err.class(),
+        InternalErrorClass::Infra | InternalErrorClass::Ops
+    ) || err
+        .public_error()
+        .is_some_and(|err| matches!(err.code, ErrorCode::Conflict | ErrorCode::ResourceExhausted))
+}
+
+fn retry_delay(streak: u64) -> Duration {
+    let exponent = u32::try_from(streak.min(5)).unwrap_or(5);
+    let multiplier = 1u32 << exponent;
+    RETRY_INITIAL
+        .checked_mul(multiplier)
+        .unwrap_or(RETRY_MAX)
+        .min(RETRY_MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        InternalErrorOrigin, config::schema::IcpRefillPolicy, dto::error::Error as PublicError,
+    };
+
+    #[test]
+    fn automatic_topup_retry_backoff_is_bounded_and_deterministic() {
+        assert_eq!(retry_delay(0), Duration::from_mins(1));
+        assert_eq!(retry_delay(1), Duration::from_mins(2));
+        assert_eq!(retry_delay(4), Duration::from_mins(16));
+        assert_eq!(retry_delay(5), Duration::from_mins(30));
+        assert_eq!(retry_delay(u64::MAX), Duration::from_mins(30));
+    }
+
+    #[test]
+    fn only_transport_and_recoverable_public_funding_failures_retry() {
+        assert!(is_retryable_funding_error(&InternalError::ops(
+            InternalErrorOrigin::Ops,
+            "transport"
+        )));
+        assert!(is_retryable_funding_error(&InternalError::public(
+            PublicError::conflict("in flight")
+        )));
+        assert!(is_retryable_funding_error(&InternalError::public(
+            PublicError::exhausted("cooldown")
+        )));
+        assert!(!is_retryable_funding_error(&InternalError::public(
+            PublicError::forbidden("disabled")
+        )));
+        assert!(!is_retryable_funding_error(&InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "contradiction"
+        )));
+
+        assert!(
+            AutomaticTopupError::RootOutcome {
+                operation_id: [1; 32],
+                status: IcpRefillStatus::Transferred,
+                error_code: None,
+                ledger_block_recorded: true,
+            }
+            .is_retryable()
+        );
+        assert!(
+            !AutomaticTopupError::RootOutcome {
+                operation_id: [2; 32],
+                status: IcpRefillStatus::Failed,
+                error_code: Some(crate::domain::icp_refill::IcpRefillErrorCode::NotifyMaxAttempts),
+                ledger_block_recorded: true,
+            }
+            .is_retryable()
+        );
+    }
+
+    #[test]
+    fn configured_root_and_nonroot_select_their_single_funding_paths() {
+        let topup = TopupPolicy {
+            threshold: Cycles::new(10),
+            amount: Cycles::new(5),
+            icp_refill: Some(IcpRefillPolicy {
+                enabled: true,
+                min_hub_cycles_before_refill: Cycles::new(2),
+                max_refill_e8s_per_call: 100,
+                min_xdr_permyriad_per_icp: None,
+                ledger_canister_id: None,
+                cmc_canister_id: None,
+                allow_ic_system_canister_overrides: false,
+            }),
+        };
+
+        let root = select_automatic_topup_config(true, Some(topup.clone()))
+            .expect("configured root policy");
+        assert_eq!(root.threshold, 2);
+        assert!(matches!(root.kind, AutomaticTopupKind::RootIcp));
+
+        let nonroot =
+            select_automatic_topup_config(false, Some(topup)).expect("configured parent policy");
+        assert_eq!(nonroot.threshold, 10);
+        assert!(matches!(
+            nonroot.kind,
+            AutomaticTopupKind::Parent { amount } if amount == Cycles::new(5)
+        ));
+        assert!(select_automatic_topup_config(true, Some(TopupPolicy::default())).is_none());
+        assert!(select_automatic_topup_config(false, None).is_none());
+    }
 }

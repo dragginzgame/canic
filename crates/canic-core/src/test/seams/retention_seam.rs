@@ -9,7 +9,7 @@ use crate::{
 fn retention_uses_policy_cutoff_for_cycles() {
     let _guard = lock();
 
-    let _ = CycleTrackerOps::purge_before(u64::MAX);
+    let _ = CycleTrackerOps::purge_before(u64::MAX, usize::MAX);
 
     let now = 1_000_000;
     let cutoff = policy::cycles::retention_cutoff(now);
@@ -18,7 +18,7 @@ fn retention_uses_policy_cutoff_for_cycles() {
     CycleTrackerOps::record(cutoff, Cycles::new(2));
     CycleTrackerOps::record(cutoff + 1, Cycles::new(3));
 
-    let purged = CycleTrackerOps::purge_before(cutoff);
+    let purged = CycleTrackerOps::purge_before(cutoff, usize::MAX);
     assert_eq!(purged, 1);
 
     let timestamps: Vec<u64> = CycleTrackerOps::entries()

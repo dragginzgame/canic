@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
 
+- `0.95.6` separates automatic cycle funding from diagnostic history writes,
+  enables configured root ICP self-refill, and schedules one non-overlapping
+  top-up owner from balance headroom instead of a coupled hourly interval.
+
 - `0.95.5` replaces periodic full-history log retention with append-owned
   count bounds and one exact, bounded age-deadline owner that remains idle
   when no age policy is configured.

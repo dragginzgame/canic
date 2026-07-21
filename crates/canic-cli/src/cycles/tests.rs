@@ -343,7 +343,7 @@ fn summarizes_burn_and_topup_rates() {
     assert_eq!(report.burn_cycles_per_hour, Some(7_000_000_000_000));
 }
 
-// Ensure fresh top-ups are visible before the next hourly tracker sample.
+// Ensure fresh top-ups are visible between durable balance observations.
 #[test]
 fn summarizes_post_sample_topup_events_against_live_balance() {
     let entry = RegistryEntry {

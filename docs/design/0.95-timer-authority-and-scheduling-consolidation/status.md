@@ -24,8 +24,11 @@ leave the process unregistered and idle. Released `v0.95.3` removes the
 pool maintenance interval, makes `pool:pending` the sole event/retry owner, and
 corrects intent invariant failure to stop rather than self-retry. Released
 `v0.95.4` gives placement acknowledgement a durable terminal-only index and
-pending-only bounded recovery. The open `0.95.5` batch completes Slice C with
+pending-only bounded recovery. Released `v0.95.5` completes Slice C with
 append-owned count enforcement and exact deadline-driven log age retention.
+The open `0.95.6` batch begins Slice D by separating event-owned cycle history
+from one configuration-gated automatic-funding safety owner and making
+configured root ICP self-refill reachable.
 
 The accepted design now includes a maintainer-approved duration amendment.
 Cadences are no longer retained merely because the audit recorded them.
@@ -135,7 +138,7 @@ The canonical report is
 
 ## Slice C Log Evidence
 
-- The open `0.95.5` batch hard-cuts the append-only allocations 31 and 32 and
+- Released `v0.95.5` hard-cuts the append-only allocations 31 and 32 and
   their full-history rewrite. One ordered stable map at allocation 35 now owns
   current runtime-log records and exact oldest-row removal.
 - Append owns both entry-byte truncation and the count limit. At steady state
@@ -151,6 +154,27 @@ The canonical report is
   manifest now declares one `runtime_log` v1 domain; retired append-only log
   history has no migration, alias, fallback, or parallel reader.
 
+## Slice D Cycle Evidence
+
+- The open `0.95.6` batch replaces `cycles:tracking` with one independent
+  `cycles:topup` owner. Disabled roles record their lifecycle observation and
+  remain `unregistered + idle`; no history-only callback remains.
+- Configured nonroot roles await the existing parent-funding request, while an
+  enabled root `topup.icp_refill` policy now reaches the existing hub
+  self-refill workflow. The common timer's running state replaces both heap
+  in-flight flags and the detached funding task.
+- Above threshold, the next check derives from headroom and the greater of
+  twice observed burn or a threshold-per-day floor. The accepted safety window
+  is one minute to six hours after reserving five minutes for funding and five
+  minutes of margin; observations older than 12 hours use the floor.
+- Work is due at or below threshold. Retryable transport, conflict, cooldown,
+  capacity, and resumable root-refill outcomes use the 1/2/4/8/16/30-minute
+  progression. Other public/configuration contradictions and terminal refill
+  outcomes stop failed.
+- History is written at lifecycle and funding boundaries. Each observation
+  purges at most 128 expired balance rows and 128 top-up-event rows under the
+  unchanged seven-day window. Public and stable shapes are unchanged.
+
 ## Finding Index
 
 | Finding | Severity | State | Owner |
@@ -158,11 +182,11 @@ The canonical report is
 | `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-003` false live timer status | P2 | fixed in released 0.95.1 | common timer workflow/runtime projection |
-| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in released 0.95.4; log fixed in open 0.95.5 | log, pool, intent, placement workflows |
+| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in released 0.95.4; log fixed in released 0.95.5; cycle history fixed in open 0.95.6 | log, pool, intent, placement, and cycle workflows |
 | `CANIC-095-TIMER-005` unrelated full scans | P2 | intent fixed in released 0.95.2; placement fixed in released 0.95.4 | intent and placement ops/workflows |
 | `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in released 0.95.1 | timer workflow and lifecycle facade |
-| `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | accepted for Slice D | cycle/top-up workflow |
-| `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | fixed in open 0.95.5 | log storage/ops/workflow |
+| `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | fixed in open 0.95.6 | cycle/top-up workflow |
+| `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | fixed in released 0.95.5 | log storage/ops/workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
 reproducible timer-owner evidence.
@@ -183,6 +207,6 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Complete and release the open `0.95.5` log-retention batch, then begin Slice D
-by freezing the independent cycle-sampling and automatic-top-up duration
-decisions before changing either owner.
+Complete and release the open `0.95.6` cycle-observation and automatic-top-up
+batch, then freeze the delegated-proof renewal deadline and retry decision for
+the remaining Slice D owner.

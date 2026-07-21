@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.4`.
-- The latest published release is `v0.95.4` at
-  `371d44a361a6f8ce005ea1b9e9bee5e2c0b400c4`.
-- The `v0.95.4` source tree is
-  `3454b96b05104374c1c52dbd91c53bdcec8150c4`; its Cargo.lock SHA-256 is
-  `e1ddeaa56f8cc1b9cf73c77f43f37981a76a174069d23fd1bf519a967170c8f4`.
+- The workspace package version is `0.95.5`.
+- The latest published release is `v0.95.5` at
+  `72bbd7bdb72033a37aab5ab3fbf71239b2150e19`.
+- The `v0.95.5` source tree is
+  `f4d35ccfc9796bf1b8d8be8ecd8ceb60c451f894`; its Cargo.lock SHA-256 is
+  `f3f0d607d8ff4270d5033eb4991fe68adac63456222805e807748323e39924ad`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -303,12 +303,18 @@ Historical detail is archived at:
   root transport failure uses the frozen 1/2/4/8/16/30-minute backoff, while
   root rejection and local contradictions stop failed. A maintained scaling
   PocketIC journey drains real acknowledgements back to idle.
-- The open `0.95.5` batch completes Slice C. Count and byte retention are
+- Released `v0.95.5` completes Slice C. Count and byte retention are
   enforced during append by one ordered runtime-log authority; optional age
   retention removes at most 256 rows at the exact oldest deadline. The default
   no-age policy executes zero callbacks. Append-only allocations 31 and 32 are
   hard-cut in favor of the modeled `runtime_log` domain at allocation 35, with
   no migration or compatibility reader for non-authoritative old log history.
+- The open `0.95.6` batch begins Slice D. It replaces coupled hourly cycle
+  tracking/top-up with event-owned balance history and one configuration-gated
+  `cycles:topup` safety owner. Disabled roles execute zero callbacks;
+  configured root ICP self-refill is reachable and funding is awaited under
+  common non-overlap. Headroom, conservative burn, and bounded retry now own
+  every cycle-timer duration.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -864,9 +870,9 @@ First primary results:
 
 ## Next Action
 
-Complete and release the open `0.95.5` log-retention batch. Then begin Slice D
-by freezing the independent cycle-sampling and automatic-top-up duration
-decisions before changing either owner.
+Complete and release the open `0.95.6` cycle-observation and automatic-top-up
+batch. Then freeze and implement the delegated-proof renewal deadline and
+retry policy as the remaining Slice D owner.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with
