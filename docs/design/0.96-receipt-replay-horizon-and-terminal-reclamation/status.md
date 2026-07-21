@@ -4,7 +4,7 @@ Last updated: 2026-07-21
 
 ## Current State
 
-0.96 is active. Audit-only Slice A is released as `v0.96.0`; the full
+0.96 is active at released `v0.96.7`. Audit-only Slice A is released as `v0.96.0`; the full
 Canic-side receipt consumer and authority inventory is frozen. Released
 `v0.96.1` measures the existing stable-capacity envelope and fixes two
 independent totals-store defects. Released `v0.96.2` hard-cuts application
@@ -15,29 +15,29 @@ terminal-index envelope at admission, and persists exact terminal eligibility.
 Released `v0.96.5` adds its constant-time capacity and earliest-eligibility
 projection. Released `v0.96.6` hard-cuts the inherited ceiling to 1,000 records
 and enables exact bounded terminal reclamation through the existing intent
-timer. Open `0.96.7` caps the remaining durable resource-total authority and
-projects both capacities through guarded runtime status.
+timer. Released `v0.96.7` caps the remaining durable resource-total authority
+and projects both capacities through guarded runtime status. Open `0.96.8`
+hard-cuts the stale day-scale timing to a one-hour replay maximum and
+15-minute terminal observation grace before closeout.
 
-The reviewed Toko signed-token ceiling now fixes Canic's maximum remaining
-application replay window at 24 hours. Toko still has no receipt consumer,
-per-mint action identity, recovery endpoint, ledger replay receipt, explicit
-mint batch bound, or operation-rate limit. Those are Toko adoption
-requirements, not Canic product gates. Canic owns its generic capacity,
-retention, scheduling, reclamation, and diagnostics; consumers conform
-afterward.
+The previously reviewed Toko checkout is approximately one month behind
+current development and remains historical evidence only. It does not define
+current downstream entrypoints, API use, state, or timing. Current Toko
+conformance remains downstream work and does not replace Canic's generic
+retention authority.
 
 ## Immutable Baseline
 
-- Release anchor: `v0.96.6`.
-- Source commit: `f1dde09dfb5105fcdfa35f87b0419e6e09f82516`.
-- Source tree: `1354dc31a25a6c37be2d1af42f1160d4d6671381`.
+- Release anchor: `v0.96.7`.
+- Source commit: `50866071cbec04f84392db9968cb0fa29b8076ca`.
+- Source tree: `eddfc2d6e0c0e59f8e0f81e4e952f97878a60cac`.
 - Product-tree hash:
-  `32fc4b51826036d264fd77f5490ae4ea0cf9901805a2f07b12fa696679db2ce7`.
+  `5fbc8aca488601041f40f50cb41c54d51420aba5708bf0e3a88010ed033fffe7`.
 - Cargo.lock SHA-256:
-  `22a5157dd0a2991b484570e47fb641b9ce748b82d42a839a09902fd3fe4214f6`.
+  `6ca730a82a375ea7ee0645b1c5e68f871d94341f8ed3160d5815cadb26db7fab`.
 - Rust toolchain: `rustc 1.97.0 (2d8144b78 2026-07-07)`.
-- Workspace package version at anchor: `0.96.6`.
-- Read-only downstream snapshot: Toko
+- Workspace package version at anchor: `0.96.7`.
+- Historical read-only downstream snapshot, not current adoption evidence: Toko
   `485f586184651d67739b8e9c0ec489fea6a16b3a`, tree
   `e3c5a9317b6d2017119ab88ee7009663b3f1a1c8`, clean worktree.
 
@@ -45,6 +45,9 @@ afterward.
 
 The canonical report is
 [0.96 receipt contract Slice A](../../audits/reports/2026-07/2026-07-21/0.96-receipt-contract-slice-a.md).
+
+The downstream bullets in this section record the historical snapshot used by
+released `v0.96.0`; they are not claims about current Toko.
 
 - One common stable primary receipt map exists at allocation 43.
 - One placement-only acknowledgement index exists at allocation 45.
@@ -91,8 +94,8 @@ The canonical report is
   values are all zero. Rollback and abort no longer retain empty stable rows;
   reads still project the same zero totals.
 - Nonzero committed totals cannot be reclaimed with a terminal receipt. This
-  identified the durable resource-cardinality bound now fixed in open
-  `0.96.7` as a Canic-owned admission responsibility.
+  identified the durable resource-cardinality bound fixed in `v0.96.7` as a
+  Canic-owned admission responsibility.
 
 ## Released Slice C Replay Admission
 
@@ -220,7 +223,7 @@ The canonical report is
   committed and rolled-back removal, retains pending work, rejects the expired
   authorization after removal, and preserves committed resource accounting.
 
-## Open 0.96.7 Resource Totals And Guarded Capacity
+## Released 0.96.7 Resource Totals And Guarded Capacity
 
 The canonical report is
 [0.96.7 resource totals and guarded capacity](../../audits/reports/2026-07/2026-07-21/0.96-resource-totals-and-capacity-status-0.96.7.md).
@@ -244,6 +247,28 @@ The canonical report is
   structured JSON. The existing controller guard remains the only endpoint
   authority.
 
+## Open 0.96.8 Transaction-Scale Retention
+
+The canonical report is
+[0.96.8 transaction-scale receipt retention](../../audits/reports/2026-07/2026-07-21/0.96-transaction-retention-0.96.8.md).
+
+- The maximum remaining replay window is hard-cut from 24 hours to one hour.
+  This is a ceiling; adapters may supply shorter immutable action deadlines.
+- Terminal observation grace is hard-cut from 24 hours to 15 minutes. The
+  eligibility formula remains
+  `max(replay_deadline_ns, terminal_timestamp_ns + observation_grace_ns)`.
+- An operation settled no later than its replay deadline is reclaimable within
+  75 minutes of admission at the maximum window. A later recovery remains
+  protected until 15 minutes after its actual terminal transition. The
+  existing exact deadline timer, 1,000-record ceiling, typed decisions, stable
+  shapes, indexes, and cleanup batch remain unchanged.
+- Pending outcomes are not age-deleted. Definitive failures settle rolled back
+  immediately; ambiguous effects require authoritative downstream recovery.
+- Because terminal eligibility keys persist the exact policy result, guarded
+  capacity must report `terminal_application_receipt_records = 0` before
+  upgrade. Pending rows remain valid; old terminal timing rejects rather than
+  being rewritten or accepted through a compatibility path.
+
 ## Finding Index
 
 | Finding | Severity | State | Owner |
@@ -253,9 +278,10 @@ The canonical report is
 | `CANIC-096-GATE-003` downstream mint action identity, recovery, bypass disposition, and numeric envelope are absent | adoption | does not block Canic; required before Toko consumes the completed contract | Toko owner |
 | `CANIC-096-CAPACITY-004` totals record declares 64 bytes but can validly encode to 69 | P1 | fixed in v0.96.1 | Canic stable intent storage |
 | `CANIC-096-CAPACITY-005` abort and rollback retain empty totals rows | P2 | fixed in v0.96.1 | Canic intent storage ops |
-| `CANIC-096-GATE-006` committed resource-total cardinality has no finite Canic bound | P1 | fixed in open 0.96.7 by shared hard admission ceiling and guarded projection | Canic intent admission |
+| `CANIC-096-GATE-006` committed resource-total cardinality has no finite Canic bound | P1 | fixed in v0.96.7 by shared hard admission ceiling and guarded projection | Canic intent admission |
 | `CANIC-096-RECONCILE-007` lifecycle receipt reconciliation amplifies ordered scans with per-row cross-map point lookups | P2 | fixed in v0.96.3 | Canic receipt storage ops/lifecycle |
 | `CANIC-096-CAPACITY-008` admitted pending application work has no reserved terminal-index capacity | P1 | fixed in v0.96.4 | Canic receipt storage ops |
+| `CANIC-096-RETENTION-009` stale downstream evidence imposes day-scale retention on resolved crypto actions | P1 | fixed in open 0.96.8 by one-hour replay maximum and 15-minute observation grace | Canic replay/retention policy |
 
 No other product finding is admitted without a design amendment and direct
 receipt-path evidence.
@@ -332,22 +358,33 @@ receipt-path evidence.
 - Released 0.96.6 PocketIC receipt lifecycle: 1 passed through real Wasm timer
   reclamation, pending retention, closed post-removal replay, and preserved
   committed accounting.
-- Open 0.96.7 intent storage ops: 32 passed, including shared total saturation,
+- Released 0.96.7 intent storage ops: 32 passed, including shared total saturation,
   existing-resource admission, rejection non-mutation, exact slot reopening,
   and lifecycle rejection above the hard cut.
-- Open 0.96.7 runtime intent workflow: 7 passed.
-- Open 0.96.7 runtime API: 13 passed, including exact pass/warn/fail boundaries
+- Released 0.96.7 runtime intent workflow: 7 passed.
+- Released 0.96.7 runtime API: 13 passed, including exact pass/warn/fail boundaries
   and unavailable-projection failure classification.
-- Open 0.96.7 recent-failure projection: 3 passed; receipt authority inventory:
+- Released 0.96.7 recent-failure projection: 3 passed; receipt authority inventory:
   2 passed.
-- Open 0.96.7 Candid protocol: 1 passed; inspect text/JSON focused suite: 17
+- Released 0.96.7 Candid protocol: 1 passed; inspect text/JSON focused suite: 17
   passed.
-- Open 0.96.7 real-Wasm PocketIC guarded runtime-status projection: 1 passed.
-- Open 0.96.7 strict targeted Clippy passed for `canic-core` all-feature
+- Released 0.96.7 real-Wasm PocketIC guarded runtime-status projection: 1 passed.
+- Released 0.96.7 strict targeted Clippy passed for `canic-core` all-feature
   lib/tests, the `canic` protocol test, `canic-cli` lib/tests, and the
   `canic-tests` installed-canister target. The all-feature `canic-core` Wasm32
   check also passed.
-- Open 0.96.7 layering guards, changelog governance, formatting, and diff
+- Released 0.96.7 layering guards, changelog governance, formatting, and diff
+  hygiene: passed.
+- Open 0.96.8 exact replay/grace model and policy boundaries: 2 passed.
+- Open 0.96.8 intent storage ops: 32 passed; runtime intent workflow: 7
+  passed, including rejection of noncanonical durable eligibility timing.
+- Open 0.96.8 real-Wasm PocketIC receipt lifecycle: 1 passed with the one-hour
+  ceiling, post-boundary terminal reclamation, pending retention, closed
+  replay rejection, and committed-accounting preservation.
+- Open 0.96.8 strict targeted Clippy passed for `canic-core` all-feature
+  lib/tests and the `canic-tests` receipt target. The all-feature `canic-core`
+  Wasm32 check also passed.
+- Open 0.96.8 layering guards, changelog governance, formatting, and diff
   hygiene: passed.
 
 ## Accepted Canic-Side Decisions
@@ -356,9 +393,9 @@ receipt-path evidence.
 - An absent application operation is closed at `now >= replay_deadline_ns`.
 - No minimum execution window is added; a future deadline is admissible up to
   the frozen maximum horizon.
-- The maximum accepted remaining application replay window is exactly 24
-  hours, inclusive.
-- Terminal observation grace is exactly 24 hours and is not caller input.
+- The maximum accepted remaining application replay window is exactly one
+  hour, inclusive.
+- Terminal observation grace is exactly 15 minutes and is not caller input.
 - Existing pending and terminal rows remain observable while retained even
   after their deadline.
 - Pending state is never deleted because of age.
@@ -387,7 +424,8 @@ receipt-path evidence.
 
 ## Remaining Closeout Work
 
-1. Run the human-owned cumulative release matrix.
+1. Complete targeted validation for open `0.96.8`.
+2. Release the hard cut and record closeout at its immutable identity.
 
 Toko's action identity, binding vectors, batch/rate envelope, ledger
 idempotency, recovery, and entrypoint cleanup remain required before Toko
@@ -395,7 +433,6 @@ adopts the API. They do not gate Canic's generic reclamation implementation.
 
 ## Next Action
 
-Run the human-owned cumulative release matrix to close 0.96. Toko adoption
-evidence follows the completed Canic contract and does not gate product
-reclamation. Do not broaden 0.96 into unrelated intent, storage, timer,
-ICP-refill, or downstream cleanup.
+Complete only the `0.96.8` transaction-timing hard cut and validation, then
+close 0.96. Do not broaden it into unrelated intent, storage, timer,
+ICP-refill, downstream inspection, or cleanup.

@@ -5,7 +5,8 @@ Last updated: 2026-07-21
 ## Current State
 
 0.97 is proposed with its Cargo contract complete. The active product line
-remains 0.96 at the released `v0.96.1` anchor. No 0.97 product implementation,
+remains 0.96 at the released `v0.96.7` anchor with an open `0.96.8` timing
+hard cut. No 0.97 product implementation,
 package-version change, downstream edit, or public API removal is authorized
 before maintainer acceptance and the 0.96 boundary permits the next line.
 

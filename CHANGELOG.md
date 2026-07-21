@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
 
+- `0.96.8` hard-cuts transaction replay and terminal observation from
+  day-scale retention to a one-hour replay ceiling and 15-minute grace.
+
 - `0.96.7` caps shared durable resource totals at 1,000 identities and exposes
   exact receipt/resource headroom through guarded runtime status and inspect.
 

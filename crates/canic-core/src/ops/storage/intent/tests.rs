@@ -234,7 +234,7 @@ fn application_eligibility_contradiction_cases(
     [
         ("missing", ApplicationReceiptEligibilityData::default()),
         (
-            "wrong key",
+            "noncanonical timing",
             ApplicationReceiptEligibilityData {
                 entries: vec![wrong_key],
             },
