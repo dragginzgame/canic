@@ -24,19 +24,17 @@ impl RuntimeAuthWorkflow {
     pub fn upsert_root_issuer_policy(
         request: RootIssuerPolicyUpsertRequest,
     ) -> Result<RootIssuerPolicyResponse, InternalError> {
-        let policy = AuthOps::root_issuer_policy_from_request(request);
-        validate_root_issuer_policy_upsert(&policy).map_err(map_policy_upsert_error)?;
-        Ok(AuthOps::commit_root_issuer_policy(policy))
+        upsert_root_issuer_policy_with_reconcile(request, Self::reconcile_root_issuer_renewal)
     }
 
     /// Admit and persist one root-managed issuer renewal template.
     pub fn upsert_root_issuer_renewal_template(
         request: RootIssuerRenewalTemplateUpsertRequest,
     ) -> Result<RootIssuerRenewalTemplateResponse, InternalError> {
-        upsert_root_issuer_renewal_template_with_start(
+        upsert_root_issuer_renewal_template_with_reconcile(
             request,
             IcOps::now_nanos(),
-            Self::start_root_delegation_renewal_timer_soon_if_configured,
+            Self::reconcile_root_issuer_renewal,
         )
     }
 
@@ -48,10 +46,24 @@ impl RuntimeAuthWorkflow {
     }
 }
 
-fn upsert_root_issuer_renewal_template_with_start<F>(
+fn upsert_root_issuer_policy_with_reconcile<F>(
+    request: RootIssuerPolicyUpsertRequest,
+    reconcile: F,
+) -> Result<RootIssuerPolicyResponse, InternalError>
+where
+    F: FnOnce() -> Result<(), InternalError>,
+{
+    let policy = AuthOps::root_issuer_policy_from_request(request);
+    validate_root_issuer_policy_upsert(&policy).map_err(map_policy_upsert_error)?;
+    let response = AuthOps::commit_root_issuer_policy(policy);
+    reconcile()?;
+    Ok(response)
+}
+
+fn upsert_root_issuer_renewal_template_with_reconcile<F>(
     request: RootIssuerRenewalTemplateUpsertRequest,
     now_ns: u64,
-    start_timer: F,
+    reconcile: F,
 ) -> Result<RootIssuerRenewalTemplateResponse, InternalError>
 where
     F: FnOnce() -> Result<(), InternalError>,
@@ -61,11 +73,8 @@ where
     validate_root_issuer_renewal_template_upsert(policy.as_ref(), &template)
         .map_err(map_renewal_template_upsert_error)?;
 
-    let enabled = template.enabled;
     let response = AuthOps::commit_root_issuer_renewal_template(template, now_ns);
-    if enabled {
-        start_timer()?;
-    }
+    reconcile()?;
     Ok(response)
 }
 
@@ -153,6 +162,22 @@ mod tests {
     }
 
     #[test]
+    fn root_issuer_policy_mutation_precedes_timer_reconciliation() {
+        let issuer_pid = p(126);
+        let reconciled = Cell::new(false);
+
+        let response = upsert_root_issuer_policy_with_reconcile(policy_request(issuer_pid), || {
+            assert!(AuthStateOps::root_issuer_policy(issuer_pid).is_some());
+            reconciled.set(true);
+            Ok(())
+        })
+        .expect("valid policy should reconcile renewal ownership");
+
+        assert_eq!(response.issuer.issuer_pid, issuer_pid);
+        assert!(reconciled.get());
+    }
+
+    #[test]
     fn root_issuer_policy_rejections_preserve_policy_and_registry_epoch() {
         let issuer_pid = p(122);
         RuntimeAuthWorkflow::upsert_root_issuer_policy(policy_request(issuer_pid))
@@ -184,32 +209,35 @@ mod tests {
     }
 
     #[test]
-    fn renewal_template_admission_precedes_mutation_and_timer_start() {
+    fn renewal_template_admission_precedes_mutation_and_timer_reconciliation() {
         let issuer_pid = p(123);
         RuntimeAuthWorkflow::upsert_root_issuer_policy(policy_request(issuer_pid))
             .expect("root issuer policy should be accepted");
-        let timer_starts = Cell::new(0);
+        let reconciliations = Cell::new(0);
 
-        let response =
-            upsert_root_issuer_renewal_template_with_start(renewal_request(issuer_pid), 90, || {
+        let response = upsert_root_issuer_renewal_template_with_reconcile(
+            renewal_request(issuer_pid),
+            90,
+            || {
                 assert!(AuthStateOps::root_issuer_renewal_template(issuer_pid).is_some());
-                timer_starts.set(timer_starts.get() + 1);
+                reconciliations.set(reconciliations.get() + 1);
                 Ok(())
-            })
-            .expect("matching renewal template should be accepted");
+            },
+        )
+        .expect("matching renewal template should be accepted");
 
         assert_eq!(response.template.issuer_pid, issuer_pid);
-        assert_eq!(timer_starts.get(), 1);
+        assert_eq!(reconciliations.get(), 1);
         assert!(AuthStateOps::root_issuer_renewal_template(issuer_pid).is_some());
     }
 
     #[test]
-    fn renewal_template_rejections_preserve_state_and_skip_timer() {
+    fn renewal_template_rejections_preserve_state_and_skip_timer_reconciliation() {
         let issuer_pid = p(124);
         RuntimeAuthWorkflow::upsert_root_issuer_policy(policy_request(issuer_pid))
             .expect("root issuer policy should be accepted");
         let epoch_before = AuthStateOps::delegated_auth_registry_epoch();
-        let timer_started = Cell::new(false);
+        let reconciled = Cell::new(false);
 
         let mut zero_ttl = renewal_request(issuer_pid);
         zero_ttl.cert_ttl_ns = 0;
@@ -226,8 +254,8 @@ mod tests {
             (unregistered, ErrorCode::Forbidden),
         ] {
             let rejected_issuer = request.issuer_pid;
-            let err = upsert_root_issuer_renewal_template_with_start(request, 90, || {
-                timer_started.set(true);
+            let err = upsert_root_issuer_renewal_template_with_reconcile(request, 90, || {
+                reconciled.set(true);
                 Ok(())
             })
             .expect_err("invalid renewal template must be rejected");
@@ -238,7 +266,25 @@ mod tests {
             );
             assert!(AuthStateOps::root_issuer_renewal_template(rejected_issuer).is_none());
             assert_eq!(AuthStateOps::delegated_auth_registry_epoch(), epoch_before);
-            assert!(!timer_started.get());
+            assert!(!reconciled.get());
         }
+    }
+
+    #[test]
+    fn disabling_last_template_still_reconciles_timer_to_idle() {
+        let issuer_pid = p(127);
+        let mut request = renewal_request(issuer_pid);
+        request.enabled = false;
+        request.grants.clear();
+        let reconciled = Cell::new(false);
+
+        let response = upsert_root_issuer_renewal_template_with_reconcile(request, 90, || {
+            reconciled.set(true);
+            Ok(())
+        })
+        .expect("disabled template should be staged and timer reconciled");
+
+        assert!(!response.template.enabled);
+        assert!(reconciled.get());
     }
 }

@@ -20,6 +20,9 @@ use canic::{
         error::ErrorCode,
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
+        runtime::{
+            CanicRuntimeStatus, TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
+        },
     },
     ids::{CanisterRole, cap},
     protocol,
@@ -523,7 +526,6 @@ fn delegated_auth_timer_batches_multiple_issuers_with_one_signature() {
         .collect::<Vec<_>>();
 
     let management_updates_after_renewal = root_management_update_completed_count(&setup);
-    drop(setup);
     assert_eq!(
         management_updates_after_renewal,
         management_updates_before + 2,
@@ -533,6 +535,30 @@ fn delegated_auth_timer_batches_multiple_issuers_with_one_signature() {
         statuses[0].issuer_pid, statuses[1].issuer_pid,
         "test must cover two distinct issuer canisters"
     );
+
+    let expected_refresh_at_ns = issuers
+        .iter()
+        .filter_map(|(_, issuer_pid)| {
+            root_issuer_renewal_status(&setup, *issuer_pid)
+                .state
+                .and_then(|state| state.last_installed_refresh_after_ns)
+        })
+        .min()
+        .expect("installed proofs must expose their refresh deadline");
+    let scheduled = root_auth_renewal_timer(&setup);
+    assert_eq!(scheduled.registration, TimerRegistrationStatus::Scheduled);
+    assert_eq!(scheduled.condition, TimerProcessCondition::Active);
+    assert_eq!(scheduled.scheduling_mode, TimerSchedulingMode::Deadline);
+    assert_eq!(scheduled.next_due_at_ns, Some(expected_refresh_at_ns));
+
+    for (_, issuer_pid) in &issuers {
+        set_root_issuer_renewal_template(&setup, *issuer_pid, false);
+    }
+    let idle = root_auth_renewal_timer(&setup);
+    assert_eq!(idle.registration, TimerRegistrationStatus::Unregistered);
+    assert_eq!(idle.condition, TimerProcessCondition::Idle);
+    assert_eq!(idle.next_due_at_ns, None);
+    drop(setup);
 }
 
 fn upsert_root_issuer_policy(setup: &RootSetup, issuer_pid: Principal) {
@@ -554,13 +580,17 @@ fn upsert_root_issuer_policy(setup: &RootSetup, issuer_pid: Principal) {
 }
 
 fn upsert_root_issuer_renewal_template(setup: &RootSetup, issuer_pid: Principal) {
+    set_root_issuer_renewal_template(setup, issuer_pid, true);
+}
+
+fn set_root_issuer_renewal_template(setup: &RootSetup, issuer_pid: Principal, enabled: bool) {
     let response: Result<RootIssuerRenewalTemplateResponse, Error> =
         setup.pic.update_call_or_panic(
             setup.root_id,
             protocol::CANIC_UPSERT_ROOT_ISSUER_RENEWAL_TEMPLATE,
             (RootIssuerRenewalTemplateUpsertRequest {
                 issuer_pid,
-                enabled: true,
+                enabled,
                 aud: DelegationAudience::Project("test".to_string()),
                 grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
                 cert_ttl_ns: 60 * SECOND_NS,
@@ -568,7 +598,32 @@ fn upsert_root_issuer_renewal_template(setup: &RootSetup, issuer_pid: Principal)
         );
     let response = response.expect("root issuer renewal template upsert application failed");
     assert_eq!(response.template.issuer_pid, issuer_pid);
-    assert!(response.template.enabled);
+    assert_eq!(response.template.enabled, enabled);
+}
+
+fn root_auth_renewal_timer(setup: &RootSetup) -> canic::dto::runtime::CanicTimerStatus {
+    let status: Result<CanicRuntimeStatus, Error> =
+        setup
+            .pic
+            .query_call_or_panic(setup.root_id, protocol::CANIC_RUNTIME_STATUS, ());
+    status
+        .expect("root runtime status application failed")
+        .timers
+        .into_iter()
+        .find(|timer| timer.subsystem == "auth_renewal" && timer.name == "run")
+        .expect("root runtime status must expose auth renewal ownership")
+}
+
+fn root_issuer_renewal_status(
+    setup: &RootSetup,
+    issuer_pid: Principal,
+) -> RootIssuerRenewalStatusResponse {
+    let status: Result<RootIssuerRenewalStatusResponse, Error> = setup.pic.query_call_or_panic(
+        setup.root_id,
+        protocol::CANIC_ROOT_ISSUER_RENEWAL_STATUS,
+        (RootIssuerRenewalStatusRequest { issuer_pid },),
+    );
+    status.expect("root issuer renewal status application failed")
 }
 
 fn wait_for_active_delegation_proof(
@@ -584,15 +639,9 @@ fn wait_for_active_delegation_proof(
         last_status = active_delegation_proof_status(setup, issuer_pid);
     }
 
-    let renewal_status: Result<RootIssuerRenewalStatusResponse, Error> =
-        setup.pic.query_call_or_panic(
-            setup.root_id,
-            protocol::CANIC_ROOT_ISSUER_RENEWAL_STATUS,
-            (RootIssuerRenewalStatusRequest { issuer_pid },),
-        );
     panic!(
         "chain-key renewal did not install active proof; issuer_status={last_status:?}; root_status={:?}",
-        renewal_status.expect("root renewal status query application failed")
+        root_issuer_renewal_status(setup, issuer_pid)
     );
 }
 

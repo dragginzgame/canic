@@ -258,3 +258,61 @@ fn root_issuer_renewal_status_projects_latest_chain_key_batch() {
     assert_eq!(installed.installed_at_ns, Some(40));
     assert_eq!(installed.failure, None);
 }
+
+#[test]
+fn renewal_template_deadline_uses_durable_refresh_and_retry_state() {
+    let template = root_issuer_renewal_template_from_request(upsert_request(p(90)));
+    let fingerprint = renewal_template_fingerprint(&template);
+    let state = RootIssuerRenewalState {
+        issuer_pid: template.issuer_pid,
+        template_fingerprint: fingerprint,
+        last_installed_cert_hash: Some([9; 32]),
+        last_installed_expires_at_ns: Some(500),
+        last_installed_refresh_after_ns: Some(160),
+        next_attempt_after_ns: 180,
+        updated_at_ns: 100,
+    };
+
+    assert_eq!(
+        root_issuer_renewal_template_deadline_ns(100, fingerprint, Some(&state)),
+        180
+    );
+    assert_eq!(
+        root_issuer_renewal_template_deadline_ns(190, fingerprint, Some(&state)),
+        190
+    );
+    assert_eq!(
+        root_issuer_renewal_template_deadline_ns(100, [8; 32], Some(&state)),
+        100
+    );
+}
+
+#[test]
+fn active_proof_authority_requires_exact_installed_registry_identity() {
+    let issuer_pid = p(91);
+    let template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
+    let fingerprint = renewal_template_fingerprint(&template);
+    AuthStateOps::upsert_root_issuer_renewal_template(template);
+    AuthStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
+        issuer_pid,
+        template_fingerprint: fingerprint,
+        last_installed_cert_hash: Some([12; 32]),
+        last_installed_expires_at_ns: Some(200),
+        last_installed_refresh_after_ns: Some(160),
+        next_attempt_after_ns: 160,
+        updated_at_ns: 40,
+    });
+    let mut batch = renewal_batch([11; 32], issuer_pid, [12; 32]);
+    batch.issuers[0].installed_at_ns = Some(40);
+    AuthStateOps::upsert_chain_key_root_delegation_batch(batch);
+
+    assert!(active_root_issuer_proof_matches_registry(
+        issuer_pid, [12; 32], 100, 1, [44; 32]
+    ));
+    assert!(!active_root_issuer_proof_matches_registry(
+        issuer_pid, [12; 32], 100, 2, [44; 32]
+    ));
+    assert!(!active_root_issuer_proof_matches_registry(
+        issuer_pid, [12; 32], 100, 1, [99; 32]
+    ));
+}

@@ -15,7 +15,7 @@ use crate::{
         RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     },
     log::Topic,
-    model::auth::RootIssuerRenewalTemplate,
+    model::auth::{RootIssuerRenewalState, RootIssuerRenewalTemplate},
     ops::storage::auth::{
         AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
     },
@@ -104,6 +104,116 @@ pub(super) fn has_enabled_root_issuer_renewal_templates() -> bool {
     AuthStateOps::root_issuer_renewal_templates()
         .iter()
         .any(|template| template.enabled)
+}
+
+pub(super) fn next_root_issuer_renewal_template_deadline_ns(now_ns: u64) -> Option<u64> {
+    AuthStateOps::root_issuer_renewal_templates()
+        .into_iter()
+        .filter(|template| template.enabled)
+        .map(|template| {
+            root_issuer_renewal_template_deadline_ns(
+                now_ns,
+                renewal_template_fingerprint(&template),
+                AuthStateOps::root_issuer_renewal_state(template.issuer_pid).as_ref(),
+            )
+        })
+        .min()
+}
+
+pub(super) fn earliest_active_root_issuer_proof_expiry_ns(
+    now_ns: u64,
+    registry_epoch: u64,
+    registry_hash: [u8; 32],
+) -> Option<u64> {
+    AuthStateOps::root_issuer_renewal_templates()
+        .into_iter()
+        .filter(|template| template.enabled)
+        .filter_map(|template| {
+            let fingerprint = renewal_template_fingerprint(&template);
+            let state = AuthStateOps::root_issuer_renewal_state(template.issuer_pid)?;
+            let expires_at_ns = state.last_installed_expires_at_ns?;
+            (state.template_fingerprint == fingerprint
+                && now_ns < expires_at_ns
+                && active_root_issuer_proof_matches_registry(
+                    template.issuer_pid,
+                    state.last_installed_cert_hash?,
+                    now_ns,
+                    registry_epoch,
+                    registry_hash,
+                ))
+            .then_some(expires_at_ns)
+        })
+        .min()
+}
+
+pub(super) fn all_enabled_root_issuer_proofs_match_registry(
+    now_ns: u64,
+    registry_epoch: u64,
+    registry_hash: [u8; 32],
+) -> bool {
+    AuthStateOps::root_issuer_renewal_templates()
+        .into_iter()
+        .filter(|template| template.enabled)
+        .all(|template| {
+            let Some(state) = AuthStateOps::root_issuer_renewal_state(template.issuer_pid) else {
+                return false;
+            };
+            state.template_fingerprint == renewal_template_fingerprint(&template)
+                && state
+                    .last_installed_expires_at_ns
+                    .is_some_and(|expires_at_ns| now_ns < expires_at_ns)
+                && state.last_installed_cert_hash.is_some_and(|cert_hash| {
+                    active_root_issuer_proof_matches_registry(
+                        template.issuer_pid,
+                        cert_hash,
+                        now_ns,
+                        registry_epoch,
+                        registry_hash,
+                    )
+                })
+        })
+}
+
+fn active_root_issuer_proof_matches_registry(
+    issuer_pid: crate::cdk::types::Principal,
+    cert_hash: [u8; 32],
+    now_ns: u64,
+    registry_epoch: u64,
+    registry_hash: [u8; 32],
+) -> bool {
+    AuthStateOps::chain_key_root_delegation_batches()
+        .into_iter()
+        .filter(|batch| {
+            now_ns < batch.header.expires_at_ns
+                && batch.header.registry_epoch == registry_epoch
+                && batch.header.registry_hash == registry_hash
+        })
+        .any(|batch| {
+            batch.issuers.iter().any(|issuer| {
+                issuer.issuer_pid == issuer_pid
+                    && issuer.cert_hash == cert_hash
+                    && issuer.installed_at_ns.is_some()
+            })
+        })
+}
+
+fn root_issuer_renewal_template_deadline_ns(
+    now_ns: u64,
+    template_fingerprint: [u8; 32],
+    state: Option<&RootIssuerRenewalState>,
+) -> u64 {
+    let Some(state) = state else {
+        return now_ns;
+    };
+    if state.template_fingerprint != template_fingerprint {
+        return now_ns;
+    }
+
+    state
+        .last_installed_refresh_after_ns
+        .unwrap_or(now_ns)
+        .max(state.next_attempt_after_ns)
+        .max(now_ns)
 }
 
 pub(super) fn root_issuer_renewal_template_from_request(

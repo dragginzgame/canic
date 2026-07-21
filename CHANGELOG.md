@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
 
+- `0.95.8` hard-cuts fixed one-minute delegated-proof polling in favor of
+  exact durable refresh/retry deadlines, typed bounded recovery, and truthful
+  idle reconciliation after auth configuration changes.
+
 - `0.95.7` makes root ICP-to-cycles conversion manual-only, hard-cuts its
   obsolete automatic policy path, and tightens parent-funded child top-up
   observation, cooldown, and abuse bounds.

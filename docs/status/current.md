@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.6`.
-- The latest published release is `v0.95.6` at
-  `9e297e65a47e783bfa2f58d8930f20fe9245fb26`.
-- The `v0.95.6` source tree is
-  `cd864dd8c5ebae2e9d749be1f3b63b13120f121d`; its Cargo.lock SHA-256 is
-  `983bceb853196999b1d8d93e75ceed80df425619e851234fa3b48c4ad7a2cdd5`.
+- The workspace package version is `0.95.7`.
+- The latest published release is `v0.95.7` at
+  `2066b2aec0debc4e6f525ceeaf0bda8eca4bc5d5`.
+- The `v0.95.7` source tree is
+  `fe810a00835fc248d5d62a91b3c8ac13a83d80d7`; its Cargo.lock SHA-256 is
+  `b5ae36a61c3d1f71c67c8fb08864daed5b5d43c6151882eacd5545fcb23093fa`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -311,13 +311,18 @@ Historical detail is archived at:
   no migration or compatibility reader for non-authoritative old log history.
 - Released `v0.95.6` begins Slice D. It replaces coupled hourly cycle
   tracking/top-up with event-owned balance history and one configuration-gated
-  `cycles:topup` safety owner. The open `0.95.7` correction makes automatic
+  `cycles:topup` safety owner. Released `v0.95.7` makes automatic
   funding nonroot-only, keeps root ICP conversion manual, removes its obsolete
   threshold and automatic workflow, bounds unattended balance observation to
   one hour, and prevents successful child requests from undercutting the
   configured parent cooldown. Parent admission, replay, cost, request,
   cumulative child-budget, cooldown, kill-switch, and balance controls remain
   authoritative.
+- Open `0.95.8` hard-cuts the one-minute delegated-proof recurrence and its
+  duplicate start-soon flow. One auth renewal owner reconstructs exact
+  registry-bound batch and issuer refresh deadlines, preserves typed failure
+  outcomes, retries only bounded external causes, and reconciles disabled
+  templates to idle. Runtime-log age deadline overflow now fails closed.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -351,9 +356,10 @@ Released `.4` owns placement acknowledgement through one terminal-only
 derived index and pending-only scheduler. Released `.5` gives log count, byte,
 and age retention one ordered mutation authority and removes the final Slice C
 polling interval. Released `.6` separates diagnostic cycle observations from
-automatic funding. Open `.7` restricts that funding owner to nonroot parent
+automatic funding. Released `.7` restricts that funding owner to nonroot parent
 requests, keeps root ICP conversion manual, and tightens its observation and
-abuse bounds.
+abuse bounds. Open `.8` replaces the last fixed built-in recurrence with exact
+delegated-proof refresh, durable batch, and typed retry deadlines.
 Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
 backup/restore changes, and compatibility layers remain excluded.
 
@@ -876,9 +882,9 @@ First primary results:
 
 ## Next Action
 
-Complete and release the open `0.95.7` manual-root/nonroot-top-up correction.
-Then freeze and implement the delegated-proof renewal deadline and retry policy
-as the remaining Slice D owner.
+Complete and release open `0.95.8`, then run the cumulative 0.95 closeout gate
+against the frozen owner inventory and Slice A baseline. Do not extend the
+line into unrelated cleanup.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

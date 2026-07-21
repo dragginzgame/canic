@@ -5,7 +5,7 @@
 //! Boundary: every runtime-log mutation reaches storage through this workflow.
 
 use crate::{
-    InternalError,
+    InternalError, InternalErrorOrigin,
     config::schema::LogConfig,
     domain::policy::pure as policy,
     log::{Level, Topic},
@@ -23,8 +23,7 @@ impl LogRetentionWorkflow {
     /// Reconstruct the sole live age deadline from retained log state.
     pub fn start() -> Result<(), InternalError> {
         let config = ConfigOps::log_config()?;
-        Self::reconcile(&config);
-        Ok(())
+        Self::reconcile(&config)
     }
 
     /// Append one count-bounded entry and reconcile the exact oldest age deadline.
@@ -45,15 +44,18 @@ impl LogRetentionWorkflow {
             config.max_entries,
             config.max_entry_bytes,
         )?;
-        Self::reconcile(&config);
-        Ok(())
+        Self::reconcile(&config)
     }
 
-    fn reconcile(config: &LogConfig) {
-        let deadline = config.max_age_secs.and_then(Self::next_deadline_ns);
+    fn reconcile(config: &LogConfig) -> Result<(), InternalError> {
+        let deadline = match config.max_age_secs {
+            Some(max_age_secs) => Self::next_deadline_ns(max_age_secs)?,
+            None => None,
+        };
         TimerWorkflow::reconcile_at(TimerKey::LogRetention, deadline, || async {
             Self::run_due_batch()
         });
+        Ok(())
     }
 
     fn run_due_batch() -> TimerRunResult {
@@ -81,7 +83,13 @@ impl LogRetentionWorkflow {
         let directive = if batch.more_due {
             TimerDirective::ContinueImmediately
         } else {
-            Self::next_directive(max_age_secs, now_secs)
+            match Self::next_directive(max_age_secs, now_secs) {
+                Ok(directive) => directive,
+                Err(err) => {
+                    IcOps::println(&format!("log retention stopped: {err}"));
+                    return TimerRunResult::invariant_failure();
+                }
+            }
         };
         if batch.dropped == 0 {
             TimerRunResult::no_work(directive)
@@ -90,23 +98,40 @@ impl LogRetentionWorkflow {
         }
     }
 
-    fn next_directive(max_age_secs: u64, now_secs: u64) -> TimerDirective {
-        match LogOps::oldest_created_at()
-            .and_then(|created_at| policy::log::age_expiry_at(created_at, max_age_secs))
-        {
-            None => TimerDirective::Stop,
-            Some(deadline_secs) if deadline_secs <= now_secs => TimerDirective::ContinueImmediately,
-            Some(deadline_secs) => {
-                TimerDirective::ScheduleAt(deadline_secs.saturating_mul(NANOS_PER_SECOND))
-            }
+    fn next_directive(max_age_secs: u64, now_secs: u64) -> Result<TimerDirective, InternalError> {
+        let Some(deadline_ns) = Self::next_deadline_ns(max_age_secs)? else {
+            return Ok(TimerDirective::Stop);
+        };
+        let now_ns = seconds_to_nanos(now_secs)?;
+        if deadline_ns <= now_ns {
+            Ok(TimerDirective::ContinueImmediately)
+        } else {
+            Ok(TimerDirective::ScheduleAt(deadline_ns))
         }
     }
 
-    fn next_deadline_ns(max_age_secs: u64) -> Option<u64> {
-        LogOps::oldest_created_at()
-            .and_then(|created_at| policy::log::age_expiry_at(created_at, max_age_secs))
-            .map(|deadline_secs| deadline_secs.saturating_mul(NANOS_PER_SECOND))
+    fn next_deadline_ns(max_age_secs: u64) -> Result<Option<u64>, InternalError> {
+        let Some(created_at) = LogOps::oldest_created_at() else {
+            return Ok(None);
+        };
+        let deadline_secs =
+            policy::log::age_expiry_at(created_at, max_age_secs).ok_or_else(|| {
+                InternalError::invariant(
+                    InternalErrorOrigin::Workflow,
+                    "runtime-log age deadline overflowed seconds",
+                )
+            })?;
+        seconds_to_nanos(deadline_secs).map(Some)
     }
+}
+
+fn seconds_to_nanos(seconds: u64) -> Result<u64, InternalError> {
+    seconds.checked_mul(NANOS_PER_SECOND).ok_or_else(|| {
+        InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "runtime-log age deadline overflowed nanoseconds",
+        )
+    })
 }
 
 #[cfg(test)]
@@ -122,19 +147,31 @@ mod tests {
     fn age_deadline_is_exact_and_empty_state_stops() {
         LogOps::reset_for_tests();
         assert_eq!(
-            LogRetentionWorkflow::next_directive(10, 100),
+            LogRetentionWorkflow::next_directive(10, 100).expect("empty state must be valid"),
             TimerDirective::Stop
         );
 
         append(100);
         assert_eq!(
-            LogRetentionWorkflow::next_directive(10, 110),
+            LogRetentionWorkflow::next_directive(10, 110).expect("deadline must fit"),
             TimerDirective::ScheduleAt(111 * NANOS_PER_SECOND)
         );
         assert_eq!(
-            LogRetentionWorkflow::next_directive(10, 111),
+            LogRetentionWorkflow::next_directive(10, 111).expect("deadline must fit"),
             TimerDirective::ContinueImmediately
         );
+    }
+
+    #[test]
+    fn age_deadline_overflow_fails_closed() {
+        LogOps::reset_for_tests();
+        append(u64::MAX / NANOS_PER_SECOND);
+
+        let err = LogRetentionWorkflow::next_deadline_ns(0)
+            .expect_err("unrepresentable nanosecond deadline must reject");
+
+        assert_eq!(err.class(), crate::InternalErrorClass::Invariant);
+        assert_eq!(err.origin(), InternalErrorOrigin::Workflow);
     }
 
     #[test]
