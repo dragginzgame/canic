@@ -1,6 +1,17 @@
+use std::time::Duration;
+
 use canic::{
-    Error, cdk::types::Principal, dto::placement::sharding::ShardingRegistryResponse,
+    Error,
+    cdk::types::Principal,
+    dto::{
+        placement::sharding::ShardingRegistryResponse,
+        runtime::{
+            CanicRuntimeStatus, CanicTimerStatus, TimerExecutionOutcome, TimerProcessCondition,
+            TimerRegistrationStatus,
+        },
+    },
     ids::CanisterRole,
+    protocol,
 };
 use canic_testing_internal::canister;
 use canic_testing_internal::pic::CanicPicExt;
@@ -25,19 +36,7 @@ fn user_hub_sharding_profile_prewarms_first_user_shard() {
 
     let user_hub_pid = user_hub_pid(&setup);
 
-    let registry: Result<Result<ShardingRegistryResponse, Error>, _> =
-        setup
-            .pic
-            .query_call_as(user_hub_pid, setup.root_id, "canic_sharding_registry", ());
-    let registry = registry
-        .expect("registry query transport failed")
-        .expect("registry query application failed");
-    let startup_shard_pid = registry
-        .0
-        .into_iter()
-        .find(|entry| entry.entry.pool == "user_shards")
-        .map(|entry| entry.pid)
-        .expect("startup user shard must exist before first account create");
+    let startup_shard_pid = startup_user_shard_pid(&setup, user_hub_pid);
 
     let created: Result<Result<Principal, Error>, _> = setup.pic.update_call(
         user_hub_pid,
@@ -62,6 +61,79 @@ fn user_hub_sharding_profile_prewarms_first_user_shard() {
             (canister::USER_SHARD, Some(user_hub_pid)),
         ],
     );
+}
+
+#[test]
+fn nested_shard_funding_recovers_after_parent_same_round_refill() {
+    let setup = setup_cached_root(RootSetupProfile::Sharding);
+    let user_hub_pid = user_hub_pid(&setup);
+    let shard_pid = startup_user_shard_pid(&setup, user_hub_pid);
+    let before = cycle_topup_timer(&setup, user_hub_pid, shard_pid);
+
+    setup.pic.advance_time(Duration::from_hours(1));
+    tick(&setup, 16);
+    let exhausted = cycle_topup_timer(&setup, user_hub_pid, shard_pid);
+    assert_eq!(
+        exhausted.last_outcome,
+        Some(TimerExecutionOutcome::RetryableFailure)
+    );
+    assert_eq!(exhausted.registration, TimerRegistrationStatus::Scheduled);
+    assert_eq!(exhausted.condition, TimerProcessCondition::Retrying);
+    assert_eq!(
+        exhausted.expected_failures_since_runtime_start,
+        before.expected_failures_since_runtime_start + 1
+    );
+
+    setup.pic.advance_time(Duration::from_mins(1));
+    tick(&setup, 16);
+    let recovered = cycle_topup_timer(&setup, user_hub_pid, shard_pid);
+    drop(setup);
+    assert_eq!(recovered.registration, TimerRegistrationStatus::Scheduled);
+    assert_eq!(recovered.condition, TimerProcessCondition::Active);
+    assert!(
+        recovered.successes_since_runtime_start > before.successes_since_runtime_start,
+        "nested shard should obtain funding after its parent refills"
+    );
+    assert_eq!(recovered.consecutive_expected_failures, 0);
+}
+
+fn startup_user_shard_pid(setup: &RootSetup, user_hub_pid: Principal) -> Principal {
+    let registry: Result<Result<ShardingRegistryResponse, Error>, _> =
+        setup
+            .pic
+            .query_call_as(user_hub_pid, setup.root_id, "canic_sharding_registry", ());
+    registry
+        .expect("registry query transport failed")
+        .expect("registry query application failed")
+        .0
+        .into_iter()
+        .find(|entry| entry.entry.pool == "user_shards")
+        .map(|entry| entry.pid)
+        .expect("startup user shard must exist before first account create")
+}
+
+fn cycle_topup_timer(
+    setup: &RootSetup,
+    caller: Principal,
+    canister_id: Principal,
+) -> CanicTimerStatus {
+    let status: Result<Result<CanicRuntimeStatus, Error>, _> =
+        setup
+            .pic
+            .query_call_as(canister_id, caller, protocol::CANIC_RUNTIME_STATUS, ());
+    status
+        .expect("runtime status transport failed")
+        .expect("runtime status application failed")
+        .timers
+        .into_iter()
+        .find(|timer| timer.subsystem == "cycles" && timer.name == "topup")
+        .expect("nested shard should expose cycle top-up ownership")
+}
+
+fn tick(setup: &RootSetup, count: usize) {
+    for _ in 0..count {
+        setup.pic.tick();
+    }
 }
 
 fn user_hub_pid(setup: &RootSetup) -> Principal {

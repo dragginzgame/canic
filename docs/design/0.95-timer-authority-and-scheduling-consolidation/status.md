@@ -32,9 +32,14 @@ makes that owner nonroot-only, hard-cuts automatic root ICP
 conversion, reduces the maximum observation gap to one hour, and binds
 successful child requests to parent funding cooldown. Released `v0.95.8`
 replaces the remaining fixed auth recurrence with exact durable refresh,
-in-flight, expiry, and typed retry deadlines. Open `0.95.9` addresses the
+in-flight, expiry, and typed retry deadlines. Released `v0.95.9` addresses the
 closeout audit's topology/funding race, checked cycle-deadline requirement, and
-obsolete role-attestation timer route before the cumulative gate.
+obsolete role-attestation timer route. Open `0.95.10` fixes the final measured
+same-round hierarchy ordering defect and records the cumulative owner/cost
+evidence.
+
+The candidate closeout evidence is
+[0.95 release-line closeout](../../audits/release-lines/0.95-closeout.md).
 
 The accepted design now includes a maintainer-approved duration amendment.
 Cadences are no longer retained merely because the audit recorded them.
@@ -177,13 +182,14 @@ The canonical report is
 - Work is due at or below threshold. A completed grant cannot be followed by
   another request before the configured parent cooldown or the one-minute
   observation floor. Transport/ops failure and in-progress conflict use the
-  1/2/4/8/16/30-minute progression; cooldown, cumulative-budget, capacity,
+  1/2/4/8/16/30-minute progression. A typed resource-exhaustion response gets
+  one one-minute recheck between successes; repeated exhaustion,
   authorization, and configuration rejection stop instead of polling.
 - The parent remains the single abuse-control authority for direct-child
   admission, kill switch, replay exclusion, cost guard, request clamping,
   cumulative child budget, cooldown, and available balance. The child timer
   cannot bypass those controls or trigger unbounded ICP conversion.
-- Open `0.95.9` preserves that fail-closed admission while reconciling the
+- Released `v0.95.9` preserves that fail-closed admission while reconciling the
   existing child owner when authoritative topology arrives after placement.
   No authorization class becomes retryable, and no polling, grace delay,
   duplicate timer, or extra history write is introduced. Cycle deadline
@@ -191,6 +197,11 @@ The canonical report is
   The initial topology recovery event is consumed once per runtime start so
   unrelated later topology changes cannot restart terminal capacity or policy
   rejection repeatedly.
+- Open `0.95.10` preserves insufficient parent capacity as the public typed
+  `ResourceExhausted` cause and permits one one-minute recovery attempt between
+  successful grants. The measured nested shard then succeeds after its parent
+  refills in the same timer round. A second exhaustion stops failed, so no
+  capacity-polling loop or weakened parent control is introduced.
 - History is written at lifecycle and funding boundaries. Each observation
   purges at most 128 expired balance rows and 128 top-up-event rows under the
   unchanged seven-day window. Candid and stable shapes are unchanged; the
@@ -233,9 +244,10 @@ The canonical report is
 | `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | audit assumption corrected in released 0.95.7: automatic root refill was obsolete, so the flow and its config surface are hard-cut; manual ICP conversion remains | cycle/top-up and ICP-refill workflows |
 | `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | fixed in released 0.95.5 | log storage/ops/workflow |
 | `CANIC-095-TIMER-009` auth renewal polls and erases timer outcomes | P1 | fixed in released 0.95.8 | auth renewal ops/workflow and common timer workflow |
-| `CANIC-095-TIMER-010` child funding can stop before parent topology admission | P1 | fixed in open 0.95.9 | topology and cycle workflows |
-| `CANIC-095-TIMER-011` cycle deadlines saturate instead of failing closed | P2 | fixed in open 0.95.9 | cycle workflow |
-| `CANIC-095-TIMER-012` obsolete role-attestation timer routing survives without an owner | P2 | fixed in open 0.95.9 | build, lifecycle, and runtime startup |
+| `CANIC-095-TIMER-010` child funding can stop before parent topology admission | P1 | fixed in released 0.95.9 | topology and cycle workflows |
+| `CANIC-095-TIMER-011` cycle deadlines saturate instead of failing closed | P2 | fixed in released 0.95.9 | cycle workflow |
+| `CANIC-095-TIMER-012` obsolete role-attestation timer routing survives without an owner | P2 | fixed in released 0.95.9 | build, lifecycle, and runtime startup |
+| `CANIC-095-TIMER-013` nested child capacity rejection can become terminal before its parent refills in the same timer round | P1 | fixed in open 0.95.10 | RPC typed-cause mapping and cycle workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
 reproducible timer-owner evidence.
@@ -256,6 +268,6 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Complete open `0.95.9`, run its topology/funding PocketIC regression and the
-cumulative 0.95 closeout gate, then compare the final owner matrix with the
-frozen Slice A baseline. Do not extend the line into unrelated cleanup.
+Complete open `0.95.10`, retain the nested-funding and 24-hour idle regression
+proofs in the maintained test driver, and close against the final owner/cost
+report. Do not extend the line into unrelated cleanup.

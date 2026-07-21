@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.8`.
-- The latest published release is `v0.95.8` at
-  `29488d01f2b7a7afb5c61fbcd5ff9e4ba17f6740`.
-- The `v0.95.8` source tree is
-  `683a02d61c9decd7bdb96b4f6b1713e45552cd69`; its Cargo.lock SHA-256 is
-  `ec187e281879f26fff11c2eaf673c5948c3beba077cb9513c6f6d863ad22486c`.
+- The workspace package version is `0.95.9`.
+- The latest published release is `v0.95.9` at
+  `e8f0786c0029017654c26504c110e925c3347512`.
+- The `v0.95.9` source tree is
+  `18140e5e1bc3286d736ba81f02f44996e4031558`; its Cargo.lock SHA-256 is
+  `de06e2ce221a02568a10b62d27f93a86f79bcf09f6f779e577acfa082b59d728`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -323,10 +323,16 @@ Historical detail is archived at:
   registry-bound batch and issuer refresh deadlines, preserves typed failure
   outcomes, retries only bounded external causes, and reconciles disabled
   templates to idle. Runtime-log age deadline overflow now fails closed.
-- Open `0.95.9` closes the timer line by reconciling configured child funding
-  when authoritative topology arrives, checking every cycle deadline, and
-  hard-cutting the behaviorless role-attestation timer route. Authorization
-  remains fail-closed and no polling or second funding timer is introduced.
+- Released `v0.95.9` reconciles configured child funding when authoritative
+  topology arrives, checks every cycle deadline, and hard-cuts the
+  behaviorless role-attestation timer route. Open `0.95.10` closes the measured
+  line by preserving typed insufficient-capacity rejection, permitting one
+  bounded same-round hierarchy recovery attempt, and retaining the final
+  owner/cost evidence in the maintained test and status surfaces.
+- The candidate [0.95 closeout report](../audits/release-lines/0.95-closeout.md)
+  records a pass verdict against the `v0.95.9` published input anchor and the
+  bounded `0.95.10` delta. The immutable `v0.95.10` identity remains a release
+  transaction output.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -363,10 +369,11 @@ polling interval. Released `.6` separates diagnostic cycle observations from
 automatic funding. Released `.7` restricts that funding owner to nonroot parent
 requests, keeps root ICP conversion manual, and tightens its observation and
 abuse bounds. Released `.8` replaces the last fixed built-in recurrence with
-exact delegated-proof refresh, durable batch, and typed retry deadlines. Open
-`.9` repairs the topology/funding initialization race and completes the
-hard-cut closeout residue without changing Candid, configuration, or stable
-contracts. The obsolete `canic-core` lifecycle-helper boolean is removed.
+exact delegated-proof refresh, durable batch, and typed retry deadlines.
+Released `.9` repairs the topology/funding initialization race and completes
+the hard-cut routing residue. Open `.10` fixes the measured child-before-parent
+funding order with one bounded retry and records the final 24-hour comparison.
+The obsolete `canic-core` lifecycle-helper boolean is removed.
 Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
 backup/restore changes, and compatibility layers remain excluded.
 
@@ -889,9 +896,9 @@ First primary results:
 
 ## Next Action
 
-Complete open `0.95.9`, including the real topology/funding PocketIC regression
-and cumulative 0.95 closeout gate against the frozen owner inventory and Slice
-A baseline. Do not extend the line into unrelated cleanup.
+Complete open `0.95.10` with its focused typed-cause, nested-funding,
+timer-authority, structural, and governance validation. Then close 0.95 at the
+recorded owner/cost matrix; do not extend the line into unrelated cleanup.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

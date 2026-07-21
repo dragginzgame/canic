@@ -3,8 +3,13 @@
 
 use candid::Principal;
 use canic::{
-    dto::runtime::{
-        CanicRuntimeStatus, TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
+    Error,
+    dto::{
+        metrics::{MetricEntry, MetricValue, MetricsKind},
+        page::{Page, PageRequest},
+        runtime::{
+            CanicRuntimeStatus, TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
+        },
     },
     protocol,
 };
@@ -145,8 +150,14 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
     tick(&fixture.pic, 8);
     begin_intent(&fixture.pic, canister_id, 1, Some(600))
         .expect("expired reservation should release capacity after lifecycle rebuild");
+    fixture.pic.advance_time(Duration::from_secs(602));
+    tick(&fixture.pic, 8);
+    let idle = intent_cleanup_status(&fixture.pic, canister_id);
+    assert_eq!(idle.registration, TimerRegistrationStatus::Unregistered);
+    assert_eq!(idle.condition, TimerProcessCondition::Idle);
 
     begin_intent(&fixture.pic, canister_id, 2, None).expect("TTL-free reservation should succeed");
+    let idle_timer_metrics = timer_metrics(&fixture.pic, canister_id);
     fixture.pic.advance_time(Duration::from_hours(24));
     tick(&fixture.pic, 8);
     assert!(
@@ -157,6 +168,14 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
     assert_eq!(idle.registration, TimerRegistrationStatus::Unregistered);
     assert_eq!(idle.condition, TimerProcessCondition::Idle);
     assert_eq!(idle.next_due_at_ns, None);
+    let after_timer_metrics = timer_metrics(&fixture.pic, canister_id);
+    for label in ["cycles:topup", "intent_cleanup:run", "log_retention:run"] {
+        assert_eq!(
+            timer_metric(&after_timer_metrics, label),
+            timer_metric(&idle_timer_metrics, label),
+            "idle timer owner {label} must execute no callback during 24 hours"
+        );
+    }
 }
 
 fn runtime_status(pic: &ic_testkit::pic::Pic, canister_id: Principal) -> CanicRuntimeStatus {
@@ -196,6 +215,40 @@ fn counts(pic: &ic_testkit::pic::Pic, canister_id: Principal) -> (u64, u64, u64)
         .query_call(canister_id, "timer_probe_counts", ())
         .expect("query timer probe counts");
     result.expect("timer probe counts application result")
+}
+
+fn timer_metrics(pic: &ic_testkit::pic::Pic, canister_id: Principal) -> Vec<MetricEntry> {
+    let response: Result<Page<MetricEntry>, Error> = pic
+        .query_call(
+            canister_id,
+            protocol::CANIC_METRICS,
+            (
+                MetricsKind::Runtime,
+                PageRequest {
+                    limit: 256,
+                    offset: 0,
+                },
+            ),
+        )
+        .expect("query runtime metrics");
+
+    response
+        .expect("runtime metrics application result")
+        .entries
+}
+
+fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
+    entries
+        .iter()
+        .find_map(|entry| {
+            (entry.labels == ["perf", "timer", label]).then(|| match entry.value {
+                MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
+                MetricValue::Count(_) | MetricValue::U128(_) => {
+                    panic!("timer performance metric must carry count and instructions")
+                }
+            })
+        })
+        .unwrap_or_default()
 }
 
 fn tick(pic: &ic_testkit::pic::Pic, count: usize) {

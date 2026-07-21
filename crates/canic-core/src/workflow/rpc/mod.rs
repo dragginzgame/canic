@@ -104,7 +104,8 @@ impl From<RpcWorkflowError> for InternalError {
             RpcWorkflowError::MissingReplayMetadata(_) => {
                 Self::public(PublicError::operation_id_required())
             }
-            RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
+            RpcWorkflowError::InsufficientFundingCycles { .. }
+            | RpcWorkflowError::FundingRequestExceedsChildBudget { .. }
             | RpcWorkflowError::FundingCooldownActive { .. } => Self::public(PublicError::policy(
                 ErrorCode::ResourceExhausted,
                 err.to_string(),
@@ -144,5 +145,19 @@ mod tests {
             .expect("expected public replay metadata error");
 
         assert_eq!(public.code, ErrorCode::OperationIdRequired);
+    }
+
+    #[test]
+    fn insufficient_funding_cycles_preserves_resource_exhaustion_cause() {
+        let internal: InternalError = RpcWorkflowError::InsufficientFundingCycles {
+            requested: 5_000,
+            available: 4_000,
+        }
+        .into();
+        let public = internal
+            .public_error()
+            .expect("expected public funding-capacity error");
+
+        assert_eq!(public.code, ErrorCode::ResourceExhausted);
     }
 }

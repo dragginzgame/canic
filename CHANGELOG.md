@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)
 
+- `0.95.10` closes the timer line with measured 24-hour owner evidence,
+  preserves typed hierarchical funding exhaustion, and gives nested children
+  one bounded recovery attempt after a same-round parent refill.
+
 - `0.95.9` closes the timer line by making child funding reconcile from
   authoritative topology, checking cycle deadlines, and hard-cutting obsolete
   timer routing without weakening parent admission or adding polling.
