@@ -15,7 +15,8 @@ use std::{
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 const INSTALL_CODE_RETRY_LIMIT: usize = 3;
-const MAX_REPLAY_WINDOW: Duration = Duration::from_hours(24);
+const NANOS_PER_HOUR: u64 = 60 * 60 * 1_000_000_000;
+const MAX_REPLAY_WINDOW_NS: u64 = 24 * NANOS_PER_HOUR;
 const CANISTERS: [&str; 3] = ["intent_authority", "intent_external", "intent_client"];
 static BUILD_ONCE: Once = Once::new();
 
@@ -188,7 +189,7 @@ fn assert_receipt_backed_adapter_conformance(
     evidence_source: Principal,
     authority_wasm: &[u8],
 ) {
-    let replay_deadline_ns = pic.current_time_nanos() + Duration::from_hours(1).as_nanos() as u64;
+    let replay_deadline_ns = pic.current_time_nanos() + NANOS_PER_HOUR;
     let pending = assert_pending_begin_decisions(pic, authority_id, replay_deadline_ns);
     assert_pending_settlement_decisions(pic, authority_id, evidence_source, &pending);
     upgrade_authority(pic, authority_id, authority_wasm);
@@ -272,9 +273,8 @@ fn assert_pending_begin_decisions(
     );
     assert_eq!(load_receipt(pic, authority_id, 51), None);
 
-    let maximum_ns = MAX_REPLAY_WINDOW.as_nanos() as u64;
-    let overlong_deadline_ns =
-        pic.current_time_nanos() + maximum_ns + Duration::from_hours(1).as_nanos() as u64;
+    let maximum_ns = MAX_REPLAY_WINDOW_NS;
+    let overlong_deadline_ns = pic.current_time_nanos() + maximum_ns + NANOS_PER_HOUR;
     let overlong = begin_receipt(pic, authority_id, 53, 54, 1, 1, overlong_deadline_ns);
     let ReceiptBeginStatus::ReplayWindowTooLong {
         remaining_ns,
