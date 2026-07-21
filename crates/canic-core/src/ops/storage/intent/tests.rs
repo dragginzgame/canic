@@ -684,7 +684,7 @@ fn receipt_backed_begin_replays_without_second_reservation_or_ttl_entry() {
     assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
     assert_eq!(ReceiptBackedIntentStore::len(), 1);
     assert!(
-        ReceiptBackedIntentStore::application_eligibility_reserved_pages_for_tests() >= 1,
+        ReceiptBackedIntentStore::application_eligibility_reserved_pages() >= 1,
         "application admission must reserve terminal-index memory"
     );
 
@@ -1271,6 +1271,47 @@ fn application_terminal_eligibility_is_exact_and_overflow_is_non_mutating() {
     assert_eq!(
         ReceiptBackedIntentStore::export_application_eligibility(),
         ApplicationReceiptEligibilityData::default()
+    );
+}
+
+#[test]
+fn application_capacity_uses_maintained_counts_and_first_eligibility_key() {
+    reset();
+    let input = receipt_input(49);
+    begin_receipt(&input, 100).expect("create application receipt");
+
+    let pending = ReceiptBackedIntentOps::application_capacity().expect("pending capacity");
+    assert_eq!(pending.total_records, 1);
+    assert_eq!(pending.pending_records, 1);
+    assert_eq!(pending.terminal_records, 0);
+    assert_eq!(
+        pending.remaining_record_headroom,
+        RECEIPT_BACKED_INTENT_RECORD_LIMIT - 1
+    );
+    assert_eq!(pending.reserved_terminal_slots, 1);
+    assert!(pending.reserved_terminal_pages >= 1);
+    assert_eq!(pending.next_eligibility_at_ns, None);
+
+    ReceiptBackedIntentOps::settle_if_pending(
+        &SettleReceiptBackedIntentInput {
+            operation_id: input.operation_id,
+            expected_revision: 1,
+            expected_payload_binding: input.payload_binding,
+            evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 49),
+        },
+        200,
+    )
+    .expect("settle application receipt");
+
+    let terminal = ReceiptBackedIntentOps::application_capacity().expect("terminal capacity");
+    assert_eq!(terminal.total_records, 1);
+    assert_eq!(terminal.pending_records, 0);
+    assert_eq!(terminal.terminal_records, 1);
+    assert_eq!(terminal.record_limit, RECEIPT_BACKED_INTENT_RECORD_LIMIT);
+    assert_eq!(terminal.reserved_terminal_slots, 1);
+    assert_eq!(
+        terminal.next_eligibility_at_ns,
+        Some(200 + RECEIPT_TERMINAL_OBSERVATION_GRACE_NS)
     );
 }
 

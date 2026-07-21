@@ -88,6 +88,8 @@ pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
         .map_err(|err| err.with_diagnostic_context("rebuild intent expiry derived index"))?;
     ReceiptBackedIntentOps::reconcile_receipt_indexes()
         .map_err(|err| err.with_diagnostic_context("reconcile receipt-backed intent indexes"))?;
+    let _application_receipt_capacity = ReceiptBackedIntentOps::application_capacity()
+        .map_err(|err| err.with_diagnostic_context("project application receipt capacity"))?;
 
     Ok(())
 }

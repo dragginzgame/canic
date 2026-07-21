@@ -35,7 +35,7 @@ use crate::{
         IntentState, IntentStore, IntentStoreMetaRecord, PlacementAcknowledgementEntryRecord,
         ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
-    view::intent::PlacementAcknowledgementPage,
+    view::intent::{ApplicationReceiptCapacityView, PlacementAcknowledgementPage},
 };
 use std::collections::BTreeMap;
 use std::ops::Bound;
@@ -174,6 +174,9 @@ pub enum IntentStoreOpsError {
 
     #[error("receipt-backed intent {0} has contradictory terminal evidence")]
     ReceiptBackedEvidenceConflict(OperationId),
+
+    #[error("receipt-backed intent record limit exceeded: records={records}, limit={limit}")]
+    ReceiptBackedRecordLimitExceeded { records: u64, limit: u64 },
 
     #[error("application receipt replay metadata missing for {0}")]
     ApplicationReceiptReplayMissing(OperationId),
@@ -935,6 +938,38 @@ impl ReceiptBackedIntentOps {
         Ok(Some(record.into_intent()))
     }
 
+    /// Return the maintained application receipt capacity and retention projection.
+    pub(crate) fn application_capacity() -> Result<ApplicationReceiptCapacityView, InternalError> {
+        let total_records = ReceiptBackedIntentStore::application_replay_len();
+        let terminal_records = ReceiptBackedIntentStore::with_application_eligibility(
+            crate::cdk::structures::btreemap::BTreeMap::len,
+        );
+        let pending_records = checked_sub(
+            total_records,
+            terminal_records,
+            "application pending records",
+        )?;
+        let next_eligibility_at_ns = validate_first_application_eligibility()?;
+        let remaining_record_headroom = RECEIPT_BACKED_INTENT_RECORD_LIMIT
+            .checked_sub(total_records)
+            .ok_or(IntentStoreOpsError::ReceiptBackedRecordLimitExceeded {
+                records: total_records,
+                limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+            })?;
+
+        Ok(ApplicationReceiptCapacityView {
+            total_records,
+            pending_records,
+            terminal_records,
+            record_limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+            remaining_record_headroom,
+            reserved_terminal_slots: total_records,
+            reserved_terminal_pages:
+                ReceiptBackedIntentStore::application_eligibility_reserved_pages(),
+            next_eligibility_at_ns,
+        })
+    }
+
     pub fn settle_if_pending(
         input: &SettleReceiptBackedIntentInput,
         now_ns: u64,
@@ -1009,26 +1044,7 @@ impl ReceiptBackedIntentOps {
             ..record
         };
 
-        if let Some(replay) = replay {
-            let (key, eligibility) = expected_application_eligibility(&updated, replay)?.ok_or(
-                IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(
-                    updated.operation_id,
-                ),
-            )?;
-            if ReceiptBackedIntentStore::get_application_eligibility(key).is_some() {
-                return Err(IntentStoreOpsError::ApplicationReceiptEligibilityExists(
-                    updated.operation_id,
-                )
-                .into());
-            }
-            let previous =
-                ReceiptBackedIntentStore::insert_application_eligibility(key, eligibility);
-            assert!(
-                previous.is_none(),
-                "prevalidated application eligibility insertion replaced an existing row"
-            );
-        }
-
+        insert_application_settlement_eligibility(&updated, replay)?;
         persist_resource_totals(updated.resource_key.clone(), new_totals);
         ReceiptBackedIntentStore::insert(updated.clone());
         if is_placement_resource_key(&updated.resource_key) {
@@ -1087,6 +1103,7 @@ impl ReceiptBackedIntentOps {
 
     /// Validate receipt adjunct ownership and rebuild the placement acknowledgement index.
     pub fn reconcile_receipt_indexes() -> Result<(), InternalError> {
+        validate_receipt_record_limit()?;
         let (operation_ids, expected_eligibility) = collect_expected_receipt_indexes()?;
         validate_application_eligibility_index(expected_eligibility)?;
 
@@ -1171,6 +1188,65 @@ type ExpectedApplicationEligibility = (
     ApplicationReceiptEligibilityKeyRecord,
     ApplicationReceiptEligibilityRecord,
 );
+
+fn validate_receipt_record_limit() -> Result<(), IntentStoreOpsError> {
+    let records = ReceiptBackedIntentStore::len();
+    if records <= RECEIPT_BACKED_INTENT_RECORD_LIMIT {
+        return Ok(());
+    }
+    Err(IntentStoreOpsError::ReceiptBackedRecordLimitExceeded {
+        records,
+        limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+    })
+}
+
+fn insert_application_settlement_eligibility(
+    updated: &ReceiptBackedIntentRecord,
+    replay: Option<ApplicationReceiptReplayRecord>,
+) -> Result<(), IntentStoreOpsError> {
+    let Some(replay) = replay else {
+        return Ok(());
+    };
+    let (key, eligibility) = expected_application_eligibility(updated, replay)?.ok_or(
+        IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(updated.operation_id),
+    )?;
+    if ReceiptBackedIntentStore::get_application_eligibility(key).is_some() {
+        return Err(IntentStoreOpsError::ApplicationReceiptEligibilityExists(
+            updated.operation_id,
+        ));
+    }
+    let previous = ReceiptBackedIntentStore::insert_application_eligibility(key, eligibility);
+    assert!(
+        previous.is_none(),
+        "prevalidated application eligibility insertion replaced an existing row"
+    );
+    Ok(())
+}
+
+fn validate_first_application_eligibility() -> Result<Option<u64>, IntentStoreOpsError> {
+    let Some((key, actual)) = ReceiptBackedIntentStore::first_application_eligibility() else {
+        return Ok(None);
+    };
+    validate_application_eligibility_identity(key.operation_id, actual)?;
+    let primary = ReceiptBackedIntentStore::get(key.operation_id).ok_or(
+        IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(key.operation_id),
+    )?;
+    ensure_receipt_backed_record_schema(&primary)?;
+    if is_canic_owned_intent_resource_key(&primary.resource_key) {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(key.operation_id),
+        );
+    }
+    let replay = ReceiptBackedIntentStore::get_application_replay(key.operation_id).ok_or(
+        IntentStoreOpsError::ApplicationReceiptReplayMissing(key.operation_id),
+    )?;
+    validate_application_replay_identity(key.operation_id, replay)?;
+    let (expected_key, expected) = expected_application_eligibility(&primary, replay)?.ok_or(
+        IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(key.operation_id),
+    )?;
+    validate_expected_application_eligibility(expected_key, expected, key, actual)?;
+    Ok(Some(key.eligible_at_ns))
+}
 
 fn collect_expected_receipt_indexes()
 -> Result<(Vec<OperationId>, Vec<ExpectedApplicationEligibility>), IntentStoreOpsError> {

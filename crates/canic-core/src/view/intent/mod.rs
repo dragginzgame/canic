@@ -6,6 +6,19 @@
 
 use crate::model::{intent::ReceiptBackedIntent, replay::OperationId};
 
+/// Read-only maintained application receipt capacity and retention projection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApplicationReceiptCapacityView {
+    pub total_records: u64,
+    pub pending_records: u64,
+    pub terminal_records: u64,
+    pub record_limit: u64,
+    pub remaining_record_headroom: u64,
+    pub reserved_terminal_slots: u64,
+    pub reserved_terminal_pages: u64,
+    pub next_eligibility_at_ns: Option<u64>,
+}
+
 /// Bounded placement-only acknowledgement page used by its durable cleanup owner.
 #[derive(Debug)]
 pub struct PlacementAcknowledgementPage {

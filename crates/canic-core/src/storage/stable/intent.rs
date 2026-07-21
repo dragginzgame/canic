@@ -934,6 +934,25 @@ impl ReceiptBackedIntentStore {
     }
 
     #[must_use]
+    pub(crate) fn first_application_eligibility() -> Option<(
+        ApplicationReceiptEligibilityKeyRecord,
+        ApplicationReceiptEligibilityRecord,
+    )> {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
+            state
+                .0
+                .iter()
+                .next()
+                .map(|entry| (*entry.key(), entry.value()))
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn application_eligibility_reserved_pages() -> u64 {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| state.1.size())
+    }
+
+    #[must_use]
     pub(crate) fn get_placement_acknowledgement(
         operation_id: OperationId,
     ) -> Option<PlacementAcknowledgementEntryRecord> {
@@ -1209,11 +1228,6 @@ impl ReceiptBackedIntentStore {
         APPLICATION_RECEIPT_REPLAY.with_borrow_mut(StableBtreeMap::clear_new);
         APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.clear_new());
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
-    }
-
-    #[must_use]
-    pub(crate) fn application_eligibility_reserved_pages_for_tests() -> u64 {
-        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| state.1.size())
     }
 }
 
