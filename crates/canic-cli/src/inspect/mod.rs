@@ -488,6 +488,19 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
             enabled_runtime_feature_rows(&blob_storage.blob_storage_features)
         ));
     }
+    if let Some(capacity) = &status.receipt_capacity {
+        lines.push(format!(
+            "receipt_capacity: status={} receipts={}/{} receipt_headroom={} resource_totals={}/{} resource_headroom={} warning_headroom_threshold={}",
+            capacity.status.label(),
+            capacity.receipt_records,
+            capacity.receipt_record_limit,
+            capacity.remaining_receipt_record_headroom,
+            capacity.resource_total_records,
+            capacity.resource_total_record_limit,
+            capacity.remaining_resource_total_headroom,
+            capacity.warning_headroom_threshold,
+        ));
+    }
 
     for timer in &status.timers {
         lines.push(format!(
@@ -803,6 +816,9 @@ mod tests {
         assert!(rendered.contains("recent_failures: 1"));
         assert!(rendered.contains("state_domains: 1"));
         assert!(rendered.contains("enabled_features: sharding"));
+        assert!(rendered.contains(
+            "receipt_capacity: status=pass receipts=12/1000 receipt_headroom=988 resource_totals=7/1000 resource_headroom=993 warning_headroom_threshold=100"
+        ));
         assert!(
             rendered
                 .contains("timer: runtime/heartbeat registration=scheduled condition=active mode=after_completion enabled=true")
@@ -861,6 +877,14 @@ mod tests {
         assert_eq!(
             value["runtime_status"]["status"]["state"]["domains"][0]["domain"],
             "env"
+        );
+        assert_eq!(
+            value["runtime_status"]["status"]["receipt_capacity"]["receipt_record_limit"],
+            1_000
+        );
+        assert_eq!(
+            value["runtime_status"]["status"]["receipt_capacity"]["remaining_resource_total_headroom"],
+            993
         );
         assert_eq!(
             value["runtime_status"]["status"]["recent_failures"][0]["redacted"],
@@ -984,6 +1008,7 @@ mod tests {
                     source: "compile_feature".to_string(),
                 }],
             }),
+            receipt_capacity: Some(sample_receipt_capacity()),
             recent_failures: vec![RecentFailure {
                 occurred_at_ns: 41,
                 subsystem: "runtime".to_string(),
@@ -1004,6 +1029,27 @@ mod tests {
                 warnings: Vec::new(),
             },
             status,
+        }
+    }
+
+    fn sample_receipt_capacity() -> canic_core::dto::runtime::RuntimeReceiptCapacityStatus {
+        canic_core::dto::runtime::RuntimeReceiptCapacityStatus {
+            status: canic_core::dto::runtime::RuntimeCheckStatus::Pass,
+            receipt_records: 12,
+            application_receipt_records: 10,
+            canic_owned_receipt_records: 2,
+            pending_application_receipt_records: 3,
+            terminal_application_receipt_records: 7,
+            receipt_record_limit: 1_000,
+            remaining_receipt_record_headroom: 988,
+            resource_total_records: 7,
+            resource_total_record_limit: 1_000,
+            remaining_resource_total_headroom: 993,
+            warning_headroom_threshold: 100,
+            reserved_terminal_slots: 10,
+            reserved_terminal_pages: 8,
+            next_terminal_eligibility_at_ns: Some(123),
+            source: "intent_storage".to_string(),
         }
     }
 

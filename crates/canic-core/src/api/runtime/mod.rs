@@ -1,6 +1,7 @@
 pub mod install;
 
 use crate::{
+    InternalError,
     cdk::types::Principal,
     domain::runtime::{
         FailureSeverity, HealthStatus, ReadinessStatus, RuntimeCheckStatus,
@@ -12,8 +13,8 @@ use crate::{
             CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, CanicTimerStatus,
             RUNTIME_INTROSPECTION_SCHEMA_VERSION, RuntimeAuthStatusSummary,
             RuntimeBlobStorageStatusSummary, RuntimeBuildInfo, RuntimeCheck, RuntimeDiagnostic,
-            RuntimeFeatureStatus, RuntimeStateDomainSummary, RuntimeStateSummary,
-            RuntimeTopologyStatus, RuntimeVisibilityEntry,
+            RuntimeFeatureStatus, RuntimeReceiptCapacityStatus, RuntimeStateDomainSummary,
+            RuntimeStateSummary, RuntimeTopologyStatus, RuntimeVisibilityEntry,
         },
     },
     ops::{
@@ -24,6 +25,7 @@ use crate::{
             ready::ReadyOps,
             recent_failure::{RecentFailureInput, RecentFailureOps},
         },
+        storage::intent::{RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD, ReceiptBackedIntentOps},
     },
     state_contract::{STATE_MANIFEST_SCHEMA_VERSION, canic_state_descriptors},
     workflow::runtime::timer::{TimerRuntimeSnapshot, TimerWorkflow},
@@ -206,10 +208,28 @@ impl RuntimeIntrospectionApi {
         let root = EnvOps::root_pid().ok();
         let parent = EnvOps::parent_pid().ok();
         let subnet = EnvOps::subnet_pid().ok();
-        let status = match readiness.status {
-            ReadinessStatus::Ready => RuntimeStatus::Ok,
-            ReadinessStatus::Degraded | ReadinessStatus::NotEvaluated => RuntimeStatus::Degraded,
-            ReadinessStatus::NotReady => RuntimeStatus::Failing,
+        let receipt_capacity_result = runtime_receipt_capacity();
+        let receipt_capacity_status = receipt_capacity_result
+            .as_ref()
+            .ok()
+            .map(|capacity| capacity.status);
+        let status = aggregate_runtime_status(readiness.status, receipt_capacity_status);
+        let (receipt_capacity, recent_failures) = match receipt_capacity_result {
+            Ok(capacity) => (Some(capacity), RecentFailureOps::snapshot()),
+            Err(err) => {
+                let (class, origin) = err.log_fields();
+                (
+                    None,
+                    RecentFailureOps::snapshot_with(RecentFailureInput {
+                        occurred_at_ns: observed_at_ns,
+                        subsystem: "intent_capacity".to_string(),
+                        code: "receipt_capacity_unavailable".to_string(),
+                        severity: FailureSeverity::Error,
+                        summary: format!("class={class} origin={origin}: {err}"),
+                        correlation_id: None,
+                    }),
+                )
+            }
         };
 
         CanicRuntimeStatus {
@@ -236,7 +256,8 @@ impl RuntimeIntrospectionApi {
             state,
             auth: Some(runtime_auth_status()),
             blob_storage: runtime_blob_storage_status(),
-            recent_failures: RecentFailureOps::snapshot(),
+            receipt_capacity,
+            recent_failures,
             visibility: runtime_visibility(),
             readiness,
             status,
@@ -286,6 +307,71 @@ fn runtime_auth_status() -> RuntimeAuthStatusSummary {
             .filter(|(name, _)| name.starts_with("auth-"))
             .map(|(name, enabled)| runtime_feature_status(name, enabled))
             .collect(),
+    }
+}
+
+fn runtime_receipt_capacity() -> Result<RuntimeReceiptCapacityStatus, InternalError> {
+    let capacity = ReceiptBackedIntentOps::receipt_capacity()?;
+    Ok(RuntimeReceiptCapacityStatus {
+        status: receipt_capacity_condition(
+            capacity.remaining_record_headroom,
+            capacity.remaining_resource_total_headroom,
+        ),
+        receipt_records: capacity.total_records,
+        application_receipt_records: capacity.application_records,
+        canic_owned_receipt_records: capacity.canic_owned_records,
+        pending_application_receipt_records: capacity.pending_records,
+        terminal_application_receipt_records: capacity.terminal_records,
+        receipt_record_limit: capacity.record_limit,
+        remaining_receipt_record_headroom: capacity.remaining_record_headroom,
+        resource_total_records: capacity.resource_total_records,
+        resource_total_record_limit: capacity.resource_total_record_limit,
+        remaining_resource_total_headroom: capacity.remaining_resource_total_headroom,
+        warning_headroom_threshold: RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD,
+        reserved_terminal_slots: capacity.reserved_terminal_slots,
+        reserved_terminal_pages: capacity.reserved_terminal_pages,
+        next_terminal_eligibility_at_ns: capacity.next_eligibility_at_ns,
+        source: "intent_storage".to_string(),
+    })
+}
+
+const fn receipt_capacity_condition(
+    remaining_receipt_records: u64,
+    remaining_resource_totals: u64,
+) -> RuntimeCheckStatus {
+    let minimum_headroom = if remaining_receipt_records < remaining_resource_totals {
+        remaining_receipt_records
+    } else {
+        remaining_resource_totals
+    };
+    if minimum_headroom == 0 {
+        RuntimeCheckStatus::Fail
+    } else if minimum_headroom <= RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD {
+        RuntimeCheckStatus::Warn
+    } else {
+        RuntimeCheckStatus::Pass
+    }
+}
+
+const fn aggregate_runtime_status(
+    readiness: ReadinessStatus,
+    receipt_capacity: Option<RuntimeCheckStatus>,
+) -> RuntimeStatus {
+    if matches!(readiness, ReadinessStatus::NotReady)
+        || matches!(
+            receipt_capacity,
+            None | Some(RuntimeCheckStatus::Fail | RuntimeCheckStatus::NotEvaluated)
+        )
+    {
+        RuntimeStatus::Failing
+    } else if matches!(
+        readiness,
+        ReadinessStatus::Degraded | ReadinessStatus::NotEvaluated
+    ) || matches!(receipt_capacity, Some(RuntimeCheckStatus::Warn))
+    {
+        RuntimeStatus::Degraded
+    } else {
+        RuntimeStatus::Ok
     }
 }
 
@@ -449,6 +535,7 @@ fn runtime_visibility() -> Vec<RuntimeVisibilityEntry> {
         ("state", RuntimeFieldVisibility::OperatorOnly),
         ("auth", RuntimeFieldVisibility::OperatorOnly),
         ("blob_storage", RuntimeFieldVisibility::FeatureGated),
+        ("receipt_capacity", RuntimeFieldVisibility::OperatorOnly),
         ("recent_failures", RuntimeFieldVisibility::OperatorOnly),
         ("readiness", RuntimeFieldVisibility::OperatorOnly),
         ("status", RuntimeFieldVisibility::OperatorOnly),
@@ -468,8 +555,13 @@ mod tests {
     use crate::domain::runtime::{
         TimerExecutionOutcome, TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
     };
+    use crate::ids::IntentResourceKey;
     use crate::ops::runtime::bootstrap::{BootstrapPhaseLabel, BootstrapStatusOps};
     use crate::ops::runtime::recent_failure::RecentFailureOps;
+    use crate::ops::storage::intent::{
+        INTENT_RESOURCE_TOTAL_RECORD_LIMIT, IntentStoreOps, RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+    };
+    use crate::storage::stable::intent::{IntentResourceTotalsRecord, IntentStore};
 
     #[test]
     fn health_is_minimal_and_schema_versioned() {
@@ -535,6 +627,7 @@ mod tests {
             ("state", RuntimeFieldVisibility::OperatorOnly),
             ("auth", RuntimeFieldVisibility::OperatorOnly),
             ("blob_storage", RuntimeFieldVisibility::FeatureGated),
+            ("receipt_capacity", RuntimeFieldVisibility::OperatorOnly),
             ("recent_failures", RuntimeFieldVisibility::OperatorOnly),
             ("readiness", RuntimeFieldVisibility::OperatorOnly),
             ("status", RuntimeFieldVisibility::OperatorOnly),
@@ -546,6 +639,110 @@ mod tests {
             assert_eq!(status.visibility[index].field, field);
             assert_eq!(status.visibility[index].visibility, visibility);
         }
+    }
+
+    #[test]
+    fn runtime_status_projects_empty_receipt_capacity() {
+        IntentStoreOps::reset_for_tests();
+
+        let status = RuntimeIntrospectionApi::runtime_status_for(
+            Principal::anonymous(),
+            100,
+            "test-canister",
+            "1.2.3",
+            "0.96.6",
+            7,
+        );
+        let capacity = status.receipt_capacity.expect("receipt capacity");
+
+        assert_eq!(capacity.status, RuntimeCheckStatus::Pass);
+        assert_eq!(capacity.receipt_records, 0);
+        assert_eq!(
+            capacity.receipt_record_limit,
+            RECEIPT_BACKED_INTENT_RECORD_LIMIT
+        );
+        assert_eq!(capacity.resource_total_records, 0);
+        assert_eq!(
+            capacity.resource_total_record_limit,
+            INTENT_RESOURCE_TOTAL_RECORD_LIMIT
+        );
+        assert_eq!(
+            capacity.warning_headroom_threshold,
+            RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD
+        );
+        assert_eq!(capacity.source, "intent_storage");
+    }
+
+    #[test]
+    fn receipt_capacity_condition_has_exact_warning_and_failure_boundaries() {
+        assert_eq!(
+            receipt_capacity_condition(RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD + 1, u64::MAX,),
+            RuntimeCheckStatus::Pass
+        );
+        assert_eq!(
+            receipt_capacity_condition(RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD, u64::MAX),
+            RuntimeCheckStatus::Warn
+        );
+        assert_eq!(
+            receipt_capacity_condition(u64::MAX, 1),
+            RuntimeCheckStatus::Warn
+        );
+        assert_eq!(
+            receipt_capacity_condition(u64::MAX, 0),
+            RuntimeCheckStatus::Fail
+        );
+        assert_eq!(
+            aggregate_runtime_status(ReadinessStatus::Ready, Some(RuntimeCheckStatus::Warn)),
+            RuntimeStatus::Degraded
+        );
+        assert_eq!(
+            aggregate_runtime_status(ReadinessStatus::Ready, None),
+            RuntimeStatus::Failing
+        );
+    }
+
+    #[test]
+    fn runtime_status_fails_closed_with_typed_capacity_diagnostic() {
+        IntentStoreOps::reset_for_tests();
+        RecentFailureOps::reset();
+        for value in 0..=INTENT_RESOURCE_TOTAL_RECORD_LIMIT {
+            IntentStore::set_totals(
+                IntentResourceKey::new(format!("runtime-capacity:{value}")),
+                IntentResourceTotalsRecord {
+                    reserved_qty: 0,
+                    committed_qty: 1,
+                    pending_count: 0,
+                },
+            );
+        }
+
+        let status = RuntimeIntrospectionApi::runtime_status_for(
+            Principal::anonymous(),
+            100,
+            "test-canister",
+            "1.2.3",
+            "0.96.6",
+            7,
+        );
+
+        assert_eq!(status.status, RuntimeStatus::Failing);
+        assert!(status.receipt_capacity.is_none());
+        let failure = status
+            .recent_failures
+            .first()
+            .expect("current capacity failure diagnostic");
+        assert_eq!(failure.subsystem, "intent_capacity");
+        assert_eq!(failure.code, "receipt_capacity_unavailable");
+        assert_eq!(failure.severity, FailureSeverity::Error);
+        assert!(
+            failure
+                .summary
+                .contains("resource-total record limit exceeded")
+        );
+        assert!(RecentFailureOps::snapshot().is_empty());
+
+        IntentStoreOps::reset_for_tests();
+        RecentFailureOps::reset();
     }
 
     #[test]

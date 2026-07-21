@@ -753,6 +753,11 @@ impl IntentStore {
         INTENT_TOTALS.with_borrow(|map| map.get(key))
     }
 
+    #[must_use]
+    pub(crate) fn totals_len() -> u64 {
+        INTENT_TOTALS.with_borrow(StableBtreeMap::len)
+    }
+
     pub(crate) fn set_totals(
         key: IntentResourceKey,
         totals: IntentResourceTotalsRecord,

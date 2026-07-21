@@ -8,7 +8,8 @@ use canic::{
         metrics::{MetricEntry, MetricValue, MetricsKind},
         page::{Page, PageRequest},
         runtime::{
-            CanicRuntimeStatus, TimerProcessCondition, TimerRegistrationStatus, TimerSchedulingMode,
+            CanicRuntimeStatus, RuntimeCheckStatus, TimerProcessCondition, TimerRegistrationStatus,
+            TimerSchedulingMode,
         },
     },
     protocol,
@@ -68,6 +69,15 @@ fn application_timers_cancel_and_recur_only_after_completion() {
             .iter()
             .all(|timer| { timer.name != "timer_once" && timer.name != "timer_cancelled" })
     );
+    let receipt_capacity = status
+        .receipt_capacity
+        .as_ref()
+        .expect("guarded receipt capacity status");
+    assert_eq!(receipt_capacity.status, RuntimeCheckStatus::Pass);
+    assert_eq!(receipt_capacity.receipt_records, 0);
+    assert_eq!(receipt_capacity.receipt_record_limit, 1_000);
+    assert_eq!(receipt_capacity.resource_total_records, 0);
+    assert_eq!(receipt_capacity.resource_total_record_limit, 1_000);
     let log_retention = status
         .timers
         .iter()

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.96.5`.
-- The latest published release is `v0.96.5` at
-  `ee32d97fa241af20d7c330b43f8659157e072427`.
-- The `v0.96.5` source tree is
-  `50ae33d50dcf9fa003bacb63119ded3c9b858c20`; its product-tree hash is
-  `ea7a222a1de95af72970ddb2944bf270bc789e9580addd3fd124d5c59d0dafb3` and
+- The workspace package version is `0.96.6`.
+- The latest published release is `v0.96.6` at
+  `f1dde09dfb5105fcdfa35f87b0419e6e09f82516`.
+- The `v0.96.6` source tree is
+  `1354dc31a25a6c37be2d1af42f1160d4d6671381`; its product-tree hash is
+  `32fc4b51826036d264fd77f5490ae4ea0cf9901805a2f07b12fa696679db2ce7` and
   its Cargo.lock SHA-256 is
-  `7de62668fe974e6819ea3b532357e255bc8d7e72735cc6973fc30bcf3b5b45fc`.
+  `22a5157dd0a2991b484570e47fb641b9ce748b82d42a839a09902fd3fe4214f6`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -344,9 +344,11 @@ Historical detail is archived at:
   `v0.96.4` freezes a 24-hour terminal observation grace, provisions exact
   settlement-index capacity at admission, and persists ordered terminal
   eligibility. Released `v0.96.5` adds constant-time count, headroom, physical
-  reservation, and earliest-eligibility projection. Open `0.96.6` hard-cuts
-  the ceiling to 1,000 and enables exact bounded reclamation without waiting
-  on downstream product policy.
+  reservation, and earliest-eligibility projection. Released `v0.96.6`
+  hard-cuts the ceiling to 1,000 and enables exact bounded reclamation without
+  waiting on downstream product policy. Open `0.96.7` caps the shared durable
+  resource-total map and exposes both capacity authorities through guarded
+  runtime status and inspect.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -408,23 +410,26 @@ grace, and admission-time reservation of the measured 726-page high-water
 envelope. Settlement now persists exact eligibility before its primary and
 aggregate transition. Released `.5` derives exact capacity from maintained
 index lengths and the first validated eligibility key without adding a counter
-cell or stable allocation. Open `.6` hard-cuts the shared primary ceiling from
-100,000 to 1,000 and gives terminal application receipts exact bounded removal
-through the existing `intent_cleanup:run` owner. The shared 32-item batch
+cell or stable allocation. Released `.6` hard-cuts the shared primary ceiling
+from 100,000 to 1,000 and gives terminal application receipts exact bounded
+removal through the existing `intent_cleanup:run` owner. The shared 32-item batch
 validates its complete application prefix before mutation, preserves resource
 totals, continues due backlog immediately, and stops with protected exact
 diagnostics on a contradictory earliest entry. The remeasured four-allocation
-application high-water is 513 physical pages, or 32.0625 MiB. Production
-placement keeps its separate acknowledgement-owned removal and stores no
-application deadline.
+application high-water is 513 physical pages, or 32.0625 MiB. Open `.7` caps
+the shared resource-total map at 1,000 identities. Existing resources remain
+usable at saturation, exact zero removal reopens a slot, and guarded runtime
+status/inspect reports both limits with warning at 100 remaining rows and
+failure at zero. Production placement keeps its separate
+acknowledgement-owned removal and stores no application deadline.
 The read-only Toko snapshot uses Canic 0.71.3 and contains no receipt consumer,
 so adoption needs no old-state reader or migration. Toko still needs a
 per-mint action identity, recovery path, explicit batch/rate envelope, and
 removal or integration of its parent-only stack mint before it adopts the
 completed Canic contract; those application choices do not gate Canic
-reclamation. Canic still needs to cap durable resource-total cardinality and
-freeze the guarded capacity diagnostic surface before 0.96 closeout. General
-cleanup, dependency work, backup/restore changes, and
+reclamation. Canic's product boundary is complete after `.7`; only cumulative
+release validation remains before 0.96 closeout. General cleanup, dependency
+work, backup/restore changes, and
 compatibility layers remain excluded.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
@@ -946,12 +951,10 @@ First primary results:
 
 ## Next Action
 
-Finish the Canic-owned Slice E boundary by capping durable resource-total
-cardinality and surfacing the maintained receipt-capacity projection through
-the existing guarded runtime-status authority. Then run the final focused and
-cumulative 0.96 validation. Toko waits on and later conforms to that completed
-Canic contract; its application identity, recovery, and traffic choices do not
-gate product reclamation. Do not extend 0.96 into unrelated cleanup.
+Run the human-owned cumulative release matrix to close 0.96. Toko waits on and
+later conforms to the completed Canic contract; its application identity,
+recovery, and traffic choices do not gate product reclamation. Do not extend
+0.96 into unrelated cleanup.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

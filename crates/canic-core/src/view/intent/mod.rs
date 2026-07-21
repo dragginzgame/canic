@@ -6,9 +6,9 @@
 
 use crate::model::{intent::ReceiptBackedIntent, replay::OperationId};
 
-/// Read-only maintained application receipt capacity and retention projection.
+/// Read-only maintained receipt and resource-total capacity projection.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ApplicationReceiptCapacityView {
+pub struct ReceiptCapacityView {
     pub total_records: u64,
     pub application_records: u64,
     pub canic_owned_records: u64,
@@ -16,6 +16,9 @@ pub struct ApplicationReceiptCapacityView {
     pub terminal_records: u64,
     pub record_limit: u64,
     pub remaining_record_headroom: u64,
+    pub resource_total_records: u64,
+    pub resource_total_record_limit: u64,
+    pub remaining_resource_total_headroom: u64,
     pub reserved_terminal_slots: u64,
     pub reserved_terminal_pages: u64,
     pub next_eligibility_at_ns: Option<u64>,
