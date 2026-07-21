@@ -26,11 +26,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true, features = ["wasm-store-canister"] }
+canic = { workspace = true, features = ["metrics", "wasm-store-canister"] }
 ic-cdk = { workspace = true }
 
 [build-dependencies]
-canic = { workspace = true }
+canic = { workspace = true, features = [] }
 
 [lints]
 workspace = true

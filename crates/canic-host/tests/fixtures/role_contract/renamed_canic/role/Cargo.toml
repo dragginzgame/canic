@@ -1,0 +1,20 @@
+[package]
+name = "fixture_renamed_canic_role"
+version = "0.0.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+[package.metadata.canic]
+fleet = "fixture_renamed_canic"
+role = "app"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+framework = { package = "canic", path = "../../../../../../canic", default-features = false, features = ["metrics"] }
+
+[build-dependencies]
+canic = { workspace = true, features = [] }

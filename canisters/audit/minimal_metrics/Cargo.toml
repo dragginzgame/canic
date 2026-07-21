@@ -21,7 +21,7 @@ canic = { path = "../../../crates/canic", default-features = false, features = [
 ic-cdk = { workspace = true }
 
 [build-dependencies]
-canic = { path = "../../../crates/canic", default-features = false, features = ["metrics"] }
+canic = { path = "../../../crates/canic", default-features = false, features = [] }
 
 [lints]
 workspace = true

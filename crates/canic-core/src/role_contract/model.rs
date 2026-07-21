@@ -291,7 +291,7 @@ pub enum RoleContractFinding {
         second: StateAllocationKey,
     },
     MultipleCanicPackages {
-        package_ids: Vec<String>,
+        packages: Vec<String>,
     },
     PackageAmbiguous {
         role: CanisterRole,

@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Purpose
 
@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.96.7`.
-- The latest published release is `v0.96.7` at
-  `50866071cbec04f84392db9968cb0fa29b8076ca`.
-- The `v0.96.7` source tree is
-  `eddfc2d6e0c0e59f8e0f81e4e952f97878a60cac`; its product-tree hash is
-  `5fbc8aca488601041f40f50cb41c54d51420aba5708bf0e3a88010ed033fffe7` and
+- The workspace package version is `0.96.8`.
+- The latest published release is `v0.96.8` at
+  `1314a1d11081264996aa06ffd6d9fc20f7f4bff1`.
+- The `v0.96.8` source tree is
+  `d615181a2b4dcc36d62ce1215cb170af6f3e5f2a`; its product-tree hash is
+  `5da8e2b3a58f41b61da9b8250db502e0cf66f118b4e0c3913e253ee803087dae` and
   its Cargo.lock SHA-256 is
-  `6ca730a82a375ea7ee0645b1c5e68f871d94341f8ed3160d5815cadb26db7fab`.
+  `ae549fab4669cd8ee2c0c5143ea55fa8ae76eb57b153af8b36a7726b66cb6acb`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -349,17 +349,18 @@ Historical detail is archived at:
   hard-cuts the ceiling to 1,000 and enables exact bounded reclamation without
   waiting on downstream product policy. Released `v0.96.7` caps the shared durable
   resource-total map and exposes both capacity authorities through guarded
-  runtime status and inspect. Open `0.96.8` replaces the stale day-scale
+  runtime status and inspect. Released `v0.96.8` replaces the stale day-scale
   transaction timing with a one-hour replay maximum and 15-minute terminal
   observation grace.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
-- The active line design is
+- The closed 0.96 line design is
   [0.96 receipt replay horizon and terminal reclamation](../design/0.96-receipt-replay-horizon-and-terminal-reclamation/0.96-design.md).
-- The next proposed line is
+- The active line design is
   [0.97 role-owned runtime dependencies and CDK surface](../design/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-design.md).
 - Current development notes are in the
-  [0.96 changelog](../changelog/0.96.md); released 0.95 notes remain in the
+  [0.97 changelog](../changelog/0.97.md); released 0.96 notes remain in the
+  [0.96 changelog](../changelog/0.96.md), released 0.95 notes remain in the
   [0.95 changelog](../changelog/0.95.md), released 0.94 notes remain in the
   [0.94 changelog](../changelog/0.94.md), and the completed 0.92 line remains in the
   [0.92 changelog](../changelog/0.92.md).
@@ -399,7 +400,7 @@ child-before-parent funding order with one bounded retry and records the final
 24-hour comparison. The obsolete `canic-core` lifecycle-helper boolean is
 removed.
 
-0.96 is active at released `v0.96.7`. Audit-only Slice A is released as `v0.96.0`; the Canic-side
+0.96 is closed at immutable `v0.96.8` with a `pass` verdict. Audit-only Slice A is released as `v0.96.0`; the Canic-side
 receipt authority is inventoried and guarded. Released `v0.96.1` records the
 existing 100,000-row stable footprint: the primary, placement acknowledgement,
 and resource totals allocations have a 3,969-page, 248.0625-MiB physical
@@ -431,13 +432,26 @@ The previous Toko checkout is historical and does not define current
 dependency, state, entrypoints, migration, or adoption behavior. Any consumer
 must supply immutable operation identity, deadline, external-effect recovery,
 and traffic evidence before adopting the API; those application choices do
-not gate Canic reclamation. Open `.8` hard-cuts the maximum remaining replay
+not gate Canic reclamation. Released `.8` hard-cuts the maximum remaining replay
 window from 24 hours to one hour and terminal observation grace from 24 hours
 to 15 minutes. Guarded capacity must show
 `terminal_application_receipt_records = 0` before upgrade; pending rows remain
 recoverable, while old terminal timing is rejected without a migration shim.
 General cleanup, dependency work, backup/restore changes, and compatibility
 layers remain excluded.
+
+0.97 is active after completing audit-only Slice A against immutable
+`v0.96.8` and implementing bounded Slice B in the open `0.97.0` batch. The
+frozen inventory classifies every public `canic::cdk` export and active
+consumer, all 26 role-shaped dependency/build declarations, the exact
+protected Canic closure, every Cargo evidence caller, deterministic path
+normalization, the isolated fixture matrix, and the full generic ICP-refill
+deletion set. Slice B gives every authoritative caller one canonical graph
+producer that intersects complete package identity, target-filtered metadata
+edges, and exact-role Cargo tree activation. It also hard-cuts implicit
+defaults, missing feature ownership, renamed Canic, unreviewed resolvers,
+feature-bearing build edges, and sibling protected-package paths. No package
+version changed.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -955,13 +969,21 @@ First primary results:
   production CLI/config/package comparisons, a `v0.91.6`-to-`v0.92.11`
   PocketIC state upgrade, 52 current stable-record tests, 19 protocol tests, 7
   manifest tests, 15 provenance/policy tests, and 195 backup/restore tests.
+- Open `0.97.0` Slice B validation passes 30 host role-contract tests, 51 CLI
+  Medic tests, 14 core role-contract tests, the exact built-in state-manifest
+  regression, seven workspace-manifest checks, changelog governance, semantic
+  facade checks for the built-in Wasm store and delegation root, strict
+  all-target Clippy for core/host/CLI, formatting, and diff hygiene. The
+  repository-root project Medic remains non-passing only on the separately
+  existing cross-fleet role-name ambiguity in state-manifest discovery; no
+  role dependency-shape finding is reported.
 
 ## Next Action
 
-Complete the bounded 0.96.8 transaction-timing hard cut and targeted
-validation, then close 0.96 at its resulting immutable release identity. Do
-not inspect the stale local Toko repository or broaden this slice into
-downstream, dependency, timer, or general cleanup.
+Finish and push the open `0.97.0` Slice B graph-evidence batch. Then begin
+Slice C at the frozen hidden macro-plumbing and public `canic::cdk` boundary.
+Do not inspect the stale local Toko repository, start the refill hard cut,
+change package versions, or reopen 0.96 in the graph batch.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

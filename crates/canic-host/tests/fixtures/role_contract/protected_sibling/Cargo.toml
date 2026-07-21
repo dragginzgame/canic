@@ -1,0 +1,7 @@
+[workspace]
+members = ["helper", "role"]
+resolver = "2"
+
+[workspace.dependencies]
+canic = { path = "../../../../../canic", default-features = false }
+canic-core = { path = "../../../../../canic-core", default-features = false }

@@ -9,7 +9,7 @@ readme = false
 publish = false
 
 [dependencies]
-canic = { workspace = true, features = ["blob-storage-billing"] }
+canic = { workspace = true, features = ["blob-storage-billing", "metrics"] }
 canic-testing-internal = { workspace = true }
 ic-testkit = { workspace = true }
 

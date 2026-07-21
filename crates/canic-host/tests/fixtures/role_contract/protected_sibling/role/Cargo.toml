@@ -1,0 +1,22 @@
+[package]
+name = "fixture_protected_sibling_role"
+version = "0.0.0"
+edition = "2024"
+publish = false
+build = "build.rs"
+
+[package.metadata.canic]
+fleet = "fixture_protected_sibling"
+role = "app"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+canic = { workspace = true, features = ["metrics"] }
+fixture_protected_helper = { path = "../helper" }
+
+[build-dependencies]
+canic = { workspace = true, features = [] }
+

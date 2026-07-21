@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 candid = { workspace = true }
-canic = { workspace = true }
+canic = { workspace = true, features = ["metrics"] }
 canic-control-plane = { workspace = true, features = [
     "root-control-plane",
     "wasm-store-canister",

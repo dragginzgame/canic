@@ -28,7 +28,7 @@ use canic_core::{
 use canic_host::{
     release_set::{ConfiguredRoleLifecycle, configured_fleet_name, configured_role_lifecycle},
     role_contract::{
-        PackageValidationMode, RolePackageEvidence, RolePackageValidation, finding_detail,
+        PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
         materialize_state_manifest, resolve_declared_role_package_contract,
         validate_declared_role_package,
     },
@@ -179,7 +179,7 @@ fn check_role_contract_resolution(
     root: &Path,
     config: &Path,
     role: &ConfiguredRoleLifecycle,
-    evidence: &RolePackageEvidence,
+    evidence: &RoleCargoGraphEvidence,
     requirements: &[RoleFeatureRequirement],
 ) -> Vec<MedicCheck> {
     match resolve_declared_role_package_contract(config, evidence) {
@@ -198,7 +198,7 @@ fn check_role_contract_resolution(
 fn check_resolved_role_contract(
     root: &Path,
     role: &ConfiguredRoleLifecycle,
-    evidence: &RolePackageEvidence,
+    evidence: &RoleCargoGraphEvidence,
     requirements: &[RoleFeatureRequirement],
     contract: &ResolvedRoleContract,
 ) -> Vec<MedicCheck> {
@@ -234,7 +234,7 @@ fn check_resolved_role_contract(
 fn check_role_resolution_finding(
     root: &Path,
     role: &ConfiguredRoleLifecycle,
-    evidence: &RolePackageEvidence,
+    evidence: &RoleCargoGraphEvidence,
     requirements: &[RoleFeatureRequirement],
     finding: &RoleContractFinding,
 ) -> Option<MedicCheck> {

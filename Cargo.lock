@@ -1196,7 +1196,6 @@ version = "0.96.8"
 dependencies = [
  "candid",
  "canic",
- "canic-control-plane",
  "ic-cdk",
  "sha2 0.10.9",
 ]

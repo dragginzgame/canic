@@ -5,16 +5,13 @@
 use canic::{
     CANIC_WASM_CHUNK_BYTES, Error,
     api::auth::AuthApi,
-    api::canister::CanisterRole,
+    api::canister::{CanisterRole, template::WasmStoreBootstrapApi},
     dto::auth::{DelegatedToken, SignedRoleAttestation},
-    prelude::*,
-};
-use canic_control_plane::{
-    api::template::WasmStoreBootstrapApi,
     dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateManifestInput},
     ids::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
+    prelude::*,
 };
 use sha2::{Digest, Sha256};
 
