@@ -9,12 +9,12 @@ use crate::{
     ids::{CanisterRole, SubnetRole},
     ops::{
         storage::children::CanisterChildrenOps,
+        storage::intent::IntentStoreOps,
         storage::placement::directory::{
             DirectoryClaimResult, DirectoryPendingClaim, DirectoryRegistryOps,
         },
         storage::registry::subnet::SubnetRegistryOps,
     },
-    storage::stable::intent::{IntentStore, ReceiptBackedIntentStore},
     test::{
         config::ConfigTestBuilder,
         seams::{lock, p},
@@ -79,8 +79,7 @@ fn install_directory_test_context(child_role: &CanisterRole, child_pid: Principa
 
     clear_subnet_registry();
     DirectoryRegistryOps::clear_for_test();
-    IntentStore::reset_for_tests();
-    ReceiptBackedIntentStore::reset_for_tests();
+    IntentStoreOps::reset_for_tests();
     CanisterChildrenOps::import_direct_children(hub_pid, vec![(child_pid, child_role.clone())]);
 
     let created_at = 0;

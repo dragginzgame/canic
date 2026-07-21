@@ -14,12 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.9`.
-- The latest published release is `v0.95.9` at
-  `e8f0786c0029017654c26504c110e925c3347512`.
-- The `v0.95.9` source tree is
-  `18140e5e1bc3286d736ba81f02f44996e4031558`; its Cargo.lock SHA-256 is
-  `de06e2ce221a02568a10b62d27f93a86f79bcf09f6f779e577acfa082b59d728`.
+- The workspace package version is `0.95.10`.
+- The latest published release is `v0.95.10` at
+  `a3ad7ff37996ceba2860a7b3fd56ca78d529199b`.
+- The `v0.95.10` source tree is
+  `4957308bb5baa32f0fa87af9d20d4d70ad6693e3`; its product-tree hash is
+  `efd454797e24935434c4f7725494284efa495256fb2c8c1b89ce0be8c39a73a1` and
+  its Cargo.lock SHA-256 is
+  `4cec6ab4e0295e690d00c27f62f7507d58d224bde76d489a7ff1327389c38b29`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -325,20 +327,24 @@ Historical detail is archived at:
   templates to idle. Runtime-log age deadline overflow now fails closed.
 - Released `v0.95.9` reconciles configured child funding when authoritative
   topology arrives, checks every cycle deadline, and hard-cuts the
-  behaviorless role-attestation timer route. Open `0.95.10` closes the measured
-  line by preserving typed insufficient-capacity rejection, permitting one
-  bounded same-round hierarchy recovery attempt, and retaining the final
-  owner/cost evidence in the maintained test and status surfaces.
-- The candidate [0.95 closeout report](../audits/release-lines/0.95-closeout.md)
-  records a pass verdict against the `v0.95.9` published input anchor and the
-  bounded `0.95.10` delta. The immutable `v0.95.10` identity remains a release
-  transaction output.
+  behaviorless role-attestation timer route. Released `v0.95.10` closes the
+  measured line by preserving typed insufficient-capacity rejection,
+  permitting one bounded same-round hierarchy recovery attempt, and retaining
+  the final owner/cost evidence in the maintained test and status surfaces.
+- The [0.95 closeout report](../audits/release-lines/0.95-closeout.md) records a
+  pass verdict at the immutable `v0.95.10` release identity.
+- Audit-only 0.96 Slice A anchors to `v0.95.10`, freezes the complete
+  in-repository receipt consumer and authority inventory, and traces the
+  sibling Toko mint flow read-only. Toko has not adopted the API and has no old
+  receipt rows, but product implementation remains blocked on its per-action
+  identity, recovery/rate policy, and the measured stable-capacity envelope.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
-  [0.95 timer authority and scheduling consolidation](../design/0.95-timer-authority-and-scheduling-consolidation/0.95-design.md).
+  [0.96 receipt replay horizon and terminal reclamation](../design/0.96-receipt-replay-horizon-and-terminal-reclamation/0.96-design.md).
 - Current development notes are in the
-  [0.95 changelog](../changelog/0.95.md); released 0.94 notes remain in the
+  [0.96 changelog](../changelog/0.96.md); released 0.95 notes remain in the
+  [0.95 changelog](../changelog/0.95.md), released 0.94 notes remain in the
   [0.94 changelog](../changelog/0.94.md), and the completed 0.92 line remains in the
   [0.92 changelog](../changelog/0.92.md).
 
@@ -355,11 +361,12 @@ Known non-blocking structural residue deferred from 0.93: none.
 all seven required journeys pass, every finding is fixed, and the realistic
 multi-canister state restore is complete.
 
-0.95 focuses only on timer authority and scheduling consolidation. Released
-`v0.95.0` completes Slice A and released `v0.95.1` completes the Slice B common
-authority: one direct platform owner, fixed built-in keys, opaque application
-identities, request/generation arbitration, after-completion recurrence,
-consuming cancellation, truthful live status, and one lifecycle facade.
+0.95 is closed at `v0.95.10`. It focused only on timer authority and
+scheduling consolidation. Released `v0.95.0` completes Slice A and released
+`v0.95.1` completes the Slice B common authority: one direct platform owner,
+fixed built-in keys, opaque application identities, request/generation
+arbitration, after-completion recurrence, consuming cancellation, truthful
+live status, and one lifecycle facade.
 Released `.2` completes the first Slice C owner: finite local-intent expiry.
 Released `.3` removes idle pool polling and corrects intent invariant failure.
 Released `.4` owns placement acknowledgement through one terminal-only
@@ -371,11 +378,20 @@ requests, keeps root ICP conversion manual, and tightens its observation and
 abuse bounds. Released `.8` replaces the last fixed built-in recurrence with
 exact delegated-proof refresh, durable batch, and typed retry deadlines.
 Released `.9` repairs the topology/funding initialization race and completes
-the hard-cut routing residue. Open `.10` fixes the measured child-before-parent
-funding order with one bounded retry and records the final 24-hour comparison.
-The obsolete `canic-core` lifecycle-helper boolean is removed.
-Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
-backup/restore changes, and compatibility layers remain excluded.
+the hard-cut routing residue. Released `.10` fixes the measured
+child-before-parent funding order with one bounded retry and records the final
+24-hour comparison. The obsolete `canic-core` lifecycle-helper boolean is
+removed.
+
+0.96 is active for audit-only Slice A. The Canic-side receipt authority is
+inventoried and guarded, but product behavior is unchanged. Application rows
+currently have no replay deadline or cleanup owner; production placement keeps
+its separate acknowledgement-owned removal. The read-only Toko snapshot uses
+Canic 0.71.3 and contains no receipt consumer, so adoption needs no old-state
+reader or migration. It does need a per-mint action identity, recovery path,
+explicit batch/rate bound, and removal or integration of its parent-only stack
+mint before the capacity mechanism can be frozen. General cleanup, dependency
+work, backup/restore changes, and compatibility layers remain excluded.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -896,9 +912,10 @@ First primary results:
 
 ## Next Action
 
-Complete open `0.95.10` with its focused typed-cause, nested-funding,
-timer-authority, structural, and governance validation. Then close 0.95 at the
-recorded owner/cost matrix; do not extend the line into unrelated cleanup.
+Freeze Toko's per-mint action identity, signed-expiry deadline rule, recovery
+flow, stack-mint disposition, and batch/rate envelope. Then measure the
+smallest stable-capacity mechanism before changing the receipt API, stable
+state, or timer. Do not invent durations or extend 0.96 into unrelated cleanup.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with
