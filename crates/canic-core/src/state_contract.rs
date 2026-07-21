@@ -17,9 +17,9 @@ use crate::role_contract::allocation::memory::{
     },
     env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
     intent::{
-        APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
-        INTENT_RECORDS_ID, INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
-        RECEIPT_BACKED_INTENT_RECORDS_ID,
+        APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
+        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     observability::{
         CYCLE_TOPUP_EVENTS_ID, CYCLE_TRACKER_ID, CYCLES_FUNDING_LEDGER_ID, ICP_REFILL_RECORDS_ID,
@@ -576,6 +576,7 @@ fn icp_refill_domains() -> Vec<StateDomainManifest> {
 
 fn runtime_intent_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::intent::{
+        ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityRecord,
         ApplicationReceiptReplayData, ApplicationReceiptReplayRecord, IntentExpiryEntryRecord,
         IntentExpiryIndexData, IntentMetaData, IntentPendingData, IntentPendingEntryRecord,
         IntentRecord, IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord,
@@ -647,6 +648,14 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
             ApplicationReceiptReplayData::STATE_CONTRACT_NAME,
             117,
             "application_receipt_replay_restores_exact_deadlines",
+        ),
+        state_domain(
+            "application_receipt_eligibility",
+            APPLICATION_RECEIPT_ELIGIBILITY_ID,
+            ApplicationReceiptEligibilityRecord::STATE_CONTRACT_NAME,
+            ApplicationReceiptEligibilityData::STATE_CONTRACT_NAME,
+            118,
+            "application_receipt_eligibility_restores_exact_terminal_deadlines",
         ),
     ]
 }
@@ -1004,6 +1013,7 @@ mod tests {
     #[test]
     fn intent_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::intent::{
+            ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityRecord,
             ApplicationReceiptReplayData, ApplicationReceiptReplayRecord, IntentExpiryEntryRecord,
             IntentExpiryIndexData, IntentMetaData, IntentPendingData, IntentPendingEntryRecord,
             IntentRecord, IntentRecordsData, IntentResourceTotalsRecord, IntentStoreMetaRecord,
@@ -1057,6 +1067,11 @@ mod tests {
                 "application_receipt_replay",
                 ApplicationReceiptReplayRecord::STATE_CONTRACT_NAME,
                 ApplicationReceiptReplayData::STATE_CONTRACT_NAME,
+            ),
+            (
+                "application_receipt_eligibility",
+                ApplicationReceiptEligibilityRecord::STATE_CONTRACT_NAME,
+                ApplicationReceiptEligibilityData::STATE_CONTRACT_NAME,
             ),
         ] {
             let declaration = runtime_intents

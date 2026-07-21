@@ -107,7 +107,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::CoreIcpRefillRecords, vec![33]),
         (
             StateAllocationKey::CoreRuntimeIntent,
-            vec![39, 40, 41, 42, 43, 44, 45, 46],
+            vec![39, 40, 41, 42, 43, 44, 45, 46, 47],
         ),
         (StateAllocationKey::CanisterPool, vec![49]),
         (StateAllocationKey::ScalingRegistry, vec![52]),

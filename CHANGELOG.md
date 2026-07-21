@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
 
+- `0.96.4` freezes a 24-hour terminal observation grace, reserves the measured
+  terminal-index envelope at admission, and persists exact ordered eligibility
+  without enabling deletion.
+
 - `0.96.3` replaces receipt lifecycle lookup amplification with one linear,
   fail-closed index reconciliation before placement acknowledgement rebuild.
 

@@ -7,16 +7,20 @@ use crate::{
         intent::{
             BeginPlacementReceiptBackedIntentInput, BeginReceiptBackedIntentInput,
             BeginReceiptBackedIntentResult, MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS,
-            PayloadBinding, ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
-            RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
-            SettleReceiptBackedIntentResult, TerminalEvidence, TerminalEvidenceDecision,
+            PayloadBinding, RECEIPT_TERMINAL_OBSERVATION_GRACE_NS, ReceiptBackedIntentState,
+            RemoveTerminalReceiptBackedIntentInput, RemoveTerminalReceiptBackedIntentResult,
+            SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult, TerminalEvidence,
+            TerminalEvidenceDecision,
         },
         placement::allocation::PlacementAllocationIdentity,
     },
     storage::stable::intent::{
-        APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION, ApplicationReceiptReplayData,
-        ApplicationReceiptReplayEntryRecord, ApplicationReceiptReplayRecord, IntentStore,
-        IntentTotalsData, PlacementAcknowledgementEntryRecord, PlacementAcknowledgementIndexData,
+        APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+        ApplicationReceiptEligibilityData, ApplicationReceiptEligibilityEntryRecord,
+        ApplicationReceiptEligibilityKeyRecord, ApplicationReceiptEligibilityRecord,
+        ApplicationReceiptReplayData, ApplicationReceiptReplayEntryRecord,
+        ApplicationReceiptReplayRecord, IntentStore, IntentTotalsData,
+        PlacementAcknowledgementEntryRecord, PlacementAcknowledgementIndexData,
         PlacementAcknowledgementIndexEntryRecord, ReceiptBackedIntentStore,
     },
 };
@@ -183,6 +187,106 @@ fn application_replay_contradiction_cases(
             },
         ),
     ]
+}
+
+fn application_eligibility_contradiction_cases(
+    canonical: ApplicationReceiptEligibilityEntryRecord,
+) -> [(&'static str, ApplicationReceiptEligibilityData); 7] {
+    let mut wrong_key = canonical;
+    wrong_key.key.eligible_at_ns += 1;
+    let mut wrong_schema = canonical;
+    wrong_schema.record.schema_version += 1;
+    let mut wrong_identity = canonical;
+    wrong_identity.record.operation_id = operation_id(247);
+    let mut wrong_binding = canonical;
+    wrong_binding.record.payload_binding = PayloadBinding::new([248; 32]);
+    let mut wrong_revision = canonical;
+    wrong_revision.record.terminal_revision += 1;
+    let extra_operation_id = operation_id(249);
+    let extra = ApplicationReceiptEligibilityEntryRecord {
+        key: ApplicationReceiptEligibilityKeyRecord {
+            eligible_at_ns: canonical.key.eligible_at_ns + 1,
+            operation_id: extra_operation_id,
+        },
+        record: ApplicationReceiptEligibilityRecord {
+            operation_id: extra_operation_id,
+            ..canonical.record
+        },
+    };
+
+    [
+        ("missing", ApplicationReceiptEligibilityData::default()),
+        (
+            "wrong key",
+            ApplicationReceiptEligibilityData {
+                entries: vec![wrong_key],
+            },
+        ),
+        (
+            "wrong schema",
+            ApplicationReceiptEligibilityData {
+                entries: vec![wrong_schema],
+            },
+        ),
+        (
+            "wrong identity",
+            ApplicationReceiptEligibilityData {
+                entries: vec![wrong_identity],
+            },
+        ),
+        (
+            "wrong binding",
+            ApplicationReceiptEligibilityData {
+                entries: vec![wrong_binding],
+            },
+        ),
+        (
+            "wrong revision",
+            ApplicationReceiptEligibilityData {
+                entries: vec![wrong_revision],
+            },
+        ),
+        (
+            "extra",
+            ApplicationReceiptEligibilityData {
+                entries: vec![canonical, extra],
+            },
+        ),
+    ]
+}
+
+fn assert_reconciliation_rejects_application_replay_contradictions(
+    canonical: ApplicationReceiptReplayEntryRecord,
+    placement_operation_id: OperationId,
+    sentinel: &PlacementAcknowledgementIndexData,
+) {
+    for (name, replay) in application_replay_contradiction_cases(canonical, placement_operation_id)
+    {
+        ReceiptBackedIntentStore::import_application_replay(replay);
+        ReceiptBackedIntentOps::reconcile_receipt_indexes()
+            .expect_err("contradictory receipt indexes must reject");
+        assert_eq!(
+            ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
+            *sentinel,
+            "placement index mutated for {name} application replay contradiction"
+        );
+    }
+}
+
+fn assert_reconciliation_rejects_application_eligibility_contradictions(
+    canonical: ApplicationReceiptEligibilityEntryRecord,
+    sentinel: &PlacementAcknowledgementIndexData,
+) {
+    for (name, eligibility) in application_eligibility_contradiction_cases(canonical) {
+        ReceiptBackedIntentStore::import_application_eligibility(eligibility);
+        ReceiptBackedIntentOps::reconcile_receipt_indexes()
+            .expect_err("contradictory terminal eligibility must reject");
+        assert_eq!(
+            ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
+            *sentinel,
+            "placement index mutated for {name} terminal eligibility contradiction"
+        );
+    }
 }
 
 #[test]
@@ -579,6 +683,10 @@ fn receipt_backed_begin_replays_without_second_reservation_or_ttl_entry() {
     assert_eq!(local_meta_after_create.pending_total, 0);
     assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
     assert_eq!(ReceiptBackedIntentStore::len(), 1);
+    assert!(
+        ReceiptBackedIntentStore::application_eligibility_reserved_pages_for_tests() >= 1,
+        "application admission must reserve terminal-index memory"
+    );
 
     assert_eq!(
         begin_receipt_with_limit(&input, 300, 1).expect("existing at capacity"),
@@ -702,7 +810,18 @@ fn receipt_index_reconciliation_is_ordered_fail_closed_and_non_mutating_on_error
     reset();
     let application = receipt_input(46);
     begin_receipt(&application, 100).expect("create application receipt");
+    ReceiptBackedIntentOps::settle_if_pending(
+        &SettleReceiptBackedIntentInput {
+            operation_id: application.operation_id,
+            expected_revision: 1,
+            expected_payload_binding: application.payload_binding,
+            evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 45),
+        },
+        150,
+    )
+    .expect("settle application receipt");
     let canonical_application = ReceiptBackedIntentStore::export_application_replay().entries[0];
+    let canonical_eligibility = ReceiptBackedIntentStore::export_application_eligibility();
 
     let placement = placement_receipt_input(46);
     ReceiptBackedIntentOps::begin_placement_or_load(&placement, 100)
@@ -729,22 +848,22 @@ fn receipt_index_reconciliation_is_ordered_fail_closed_and_non_mutating_on_error
     };
     ReceiptBackedIntentStore::import_placement_acknowledgement_index(sentinel_index.clone());
 
-    for (name, replay) in
-        application_replay_contradiction_cases(canonical_application, placement.operation_id)
-    {
-        ReceiptBackedIntentStore::import_application_replay(replay);
-        ReceiptBackedIntentOps::reconcile_receipt_indexes()
-            .expect_err("contradictory receipt indexes must reject");
-        assert_eq!(
-            ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
-            sentinel_index,
-            "placement index mutated for {name} application replay contradiction"
-        );
-    }
+    assert_reconciliation_rejects_application_replay_contradictions(
+        canonical_application,
+        placement.operation_id,
+        &sentinel_index,
+    );
 
     ReceiptBackedIntentStore::import_application_replay(ApplicationReceiptReplayData {
         entries: vec![canonical_application],
     });
+    let canonical_entry = canonical_eligibility.entries[0];
+    assert_reconciliation_rejects_application_eligibility_contradictions(
+        canonical_entry,
+        &sentinel_index,
+    );
+
+    ReceiptBackedIntentStore::import_application_eligibility(canonical_eligibility);
     ReceiptBackedIntentOps::reconcile_receipt_indexes().expect("canonical indexes reconcile");
     let reconciled = ReceiptBackedIntentStore::export_placement_acknowledgement_index();
     assert_eq!(reconciled.entries.len(), 1);
@@ -1090,6 +1209,69 @@ fn receipt_backed_commit_is_compare_and_set_and_idempotent() {
     ReceiptBackedIntentOps::settle_if_pending(&contradictory, 400)
         .expect_err("contradictory evidence must fail");
     assert_eq!(totals(&input.resource_key), totals_after_settle);
+}
+
+#[test]
+fn application_terminal_eligibility_is_exact_and_overflow_is_non_mutating() {
+    reset();
+    let input = receipt_input(47);
+    begin_receipt(&input, 100).expect("create application receipt");
+    let settle = SettleReceiptBackedIntentInput {
+        operation_id: input.operation_id,
+        expected_revision: 1,
+        expected_payload_binding: input.payload_binding,
+        evidence: terminal_evidence(TerminalEvidenceDecision::Committed, 47),
+    };
+    ReceiptBackedIntentOps::settle_if_pending(&settle, 200).expect("settle application receipt");
+
+    let eligibility = ReceiptBackedIntentStore::export_application_eligibility();
+    assert_eq!(eligibility.entries.len(), 1);
+    assert_eq!(
+        eligibility.entries[0],
+        ApplicationReceiptEligibilityEntryRecord {
+            key: ApplicationReceiptEligibilityKeyRecord {
+                eligible_at_ns: 200 + RECEIPT_TERMINAL_OBSERVATION_GRACE_NS,
+                operation_id: input.operation_id,
+            },
+            record: ApplicationReceiptEligibilityRecord {
+                schema_version: APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION,
+                operation_id: input.operation_id,
+                payload_binding: input.payload_binding,
+                terminal_revision: 2,
+            },
+        }
+    );
+
+    reset();
+    let overflow = receipt_input(48);
+    begin_receipt(&overflow, 100).expect("create overflow fixture");
+    let totals_before = totals(&overflow.resource_key);
+    let error = ReceiptBackedIntentOps::settle_if_pending(
+        &SettleReceiptBackedIntentInput {
+            operation_id: overflow.operation_id,
+            expected_revision: 1,
+            expected_payload_binding: overflow.payload_binding,
+            evidence: terminal_evidence(TerminalEvidenceDecision::RolledBack, 48),
+        },
+        u64::MAX,
+    )
+    .expect_err("overflowing terminal retention deadline must reject");
+    assert_eq!(
+        error.log_fields(),
+        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+    );
+    assert_eq!(totals(&overflow.resource_key), totals_before);
+    assert!(matches!(
+        ReceiptBackedIntentOps::load(overflow.operation_id)
+            .expect("pending receipt remains readable")
+            .expect("pending receipt remains present")
+            .state,
+        ReceiptBackedIntentState::Pending
+    ));
+    assert_eq!(
+        ReceiptBackedIntentStore::export_application_eligibility(),
+        ApplicationReceiptEligibilityData::default()
+    );
 }
 
 #[test]

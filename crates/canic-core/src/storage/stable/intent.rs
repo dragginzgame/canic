@@ -7,7 +7,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{
-        DefaultMemoryImpl, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
+        DefaultMemoryImpl, Memory, Storable, cell::Cell, memory::VirtualMemory, storable::Bound,
     },
     ids::{IntentId, IntentResourceKey},
     model::{
@@ -15,9 +15,9 @@ use crate::{
         replay::OperationId,
     },
     role_contract::allocation::memory::intent::{
-        APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID, INTENT_META_ID, INTENT_PENDING_ID,
-        INTENT_RECORDS_ID, INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
-        RECEIPT_BACKED_INTENT_RECORDS_ID,
+        APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
+        INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     storage::prelude::*,
 };
@@ -29,6 +29,19 @@ use std::{borrow::Cow, cell::RefCell};
 
 pub const INTENT_STORE_SCHEMA_VERSION: u32 = 1;
 pub const APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION: u32 = 1;
+pub const APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION: u32 = 1;
+const WASM_PAGE_BYTES: u64 = 65_536;
+const APPLICATION_RECEIPT_ELIGIBILITY_MIN_NODE_ENTRIES: u64 = 5;
+const APPLICATION_RECEIPT_ELIGIBILITY_CHUNK_BYTES: u64 = 2_378;
+const APPLICATION_RECEIPT_ELIGIBILITY_FIXED_BYTES: u64 = 116;
+
+type StableIntentMemory = VirtualMemory<DefaultMemoryImpl>;
+type ApplicationReceiptEligibilityMap = StableBtreeMap<
+    ApplicationReceiptEligibilityKeyRecord,
+    ApplicationReceiptEligibilityRecord,
+    StableIntentMemory,
+>;
+type ApplicationReceiptEligibilityState = (ApplicationReceiptEligibilityMap, StableIntentMemory);
 
 eager_static! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, VirtualMemory<DefaultMemoryImpl>>> =
@@ -51,6 +64,19 @@ eager_static! {
         ty = ApplicationReceiptReplayRecord,
         id = APPLICATION_RECEIPT_REPLAY_ID
     )));
+}
+
+eager_static! {
+    static APPLICATION_RECEIPT_ELIGIBILITY: RefCell<ApplicationReceiptEligibilityState> = {
+        let memory = crate::ic_memory_key!(
+            authority = CANIC_CORE_MEMORY_AUTHORITY,
+            key = "canic.core.application_receipt_eligibility.v1",
+            ty = ApplicationReceiptEligibilityRecord,
+            id = APPLICATION_RECEIPT_ELIGIBILITY_ID
+        );
+        let map = StableBtreeMap::init(memory.clone());
+        RefCell::new((map, memory))
+    };
 }
 
 eager_static! {
@@ -269,7 +295,7 @@ pub struct IntentRecord {
 
 impl IntentRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "IntentRecord";
-    pub const STORABLE_MAX_SIZE: u32 = 256;
+    pub const STORABLE_MAX_SIZE: u32 = 229;
 }
 
 impl_storable_bounded!(IntentRecord, IntentRecord::STORABLE_MAX_SIZE, false);
@@ -412,6 +438,78 @@ impl ApplicationReceiptReplayRecord {
 impl_storable_bounded!(
     ApplicationReceiptReplayRecord,
     ApplicationReceiptReplayRecord::STORABLE_MAX_SIZE,
+    false
+);
+
+/// Ordered stable key for one application receipt terminal-retention deadline.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct ApplicationReceiptEligibilityKeyRecord {
+    pub eligible_at_ns: u64,
+    pub operation_id: OperationId,
+}
+
+impl Storable for ApplicationReceiptEligibilityKeyRecord {
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 40,
+        is_fixed_size: true,
+    };
+
+    fn to_bytes(&self) -> Cow<'_, [u8]> {
+        Cow::Owned(self.into_bytes())
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(40);
+        bytes.extend_from_slice(&self.eligible_at_ns.to_be_bytes());
+        bytes.extend_from_slice(self.operation_id.as_bytes());
+        bytes
+    }
+
+    /// Decode the exact fixed-width stable eligibility key.
+    ///
+    /// # Panics
+    ///
+    /// Panics when stable memory contains a key that is not exactly forty bytes.
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        let bytes = <[u8; 40]>::try_from(bytes.as_ref()).unwrap_or_else(|_| {
+            panic!(
+                "stable ApplicationReceiptEligibilityKeyRecord is {} bytes; expected 40",
+                bytes.as_ref().len()
+            )
+        });
+        let (eligible_at_ns, operation_id) = bytes.split_at(8);
+        Self {
+            eligible_at_ns: u64::from_be_bytes(
+                eligible_at_ns
+                    .try_into()
+                    .expect("eligibility deadline width"),
+            ),
+            operation_id: OperationId::from_bytes(
+                operation_id
+                    .try_into()
+                    .expect("eligibility operation identity width"),
+            ),
+        }
+    }
+}
+
+/// Exact immutable binding for one application terminal eligibility entry.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ApplicationReceiptEligibilityRecord {
+    pub schema_version: u32,
+    pub operation_id: OperationId,
+    pub payload_binding: PayloadBinding,
+    pub terminal_revision: u64,
+}
+
+impl ApplicationReceiptEligibilityRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "ApplicationReceiptEligibilityRecord";
+    pub const STORABLE_MAX_SIZE: u32 = 229;
+}
+
+impl_storable_bounded!(
+    ApplicationReceiptEligibilityRecord,
+    ApplicationReceiptEligibilityRecord::STORABLE_MAX_SIZE,
     false
 );
 
@@ -573,6 +671,23 @@ pub struct ApplicationReceiptReplayEntryRecord {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ApplicationReceiptReplayData {
     pub entries: Vec<ApplicationReceiptReplayEntryRecord>,
+}
+
+/// One logical application terminal-eligibility snapshot row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ApplicationReceiptEligibilityEntryRecord {
+    pub key: ApplicationReceiptEligibilityKeyRecord,
+    pub record: ApplicationReceiptEligibilityRecord,
+}
+
+/// Canonical application terminal-eligibility allocation snapshot.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ApplicationReceiptEligibilityData {
+    pub entries: Vec<ApplicationReceiptEligibilityEntryRecord>,
+}
+
+impl ApplicationReceiptEligibilityData {
+    pub const STATE_CONTRACT_NAME: &'static str = "ApplicationReceiptEligibilityData";
 }
 
 impl ApplicationReceiptReplayData {
@@ -776,6 +891,49 @@ impl ReceiptBackedIntentStore {
     }
 
     #[must_use]
+    pub(crate) fn application_replay_len() -> u64 {
+        APPLICATION_RECEIPT_REPLAY.with_borrow(StableBtreeMap::len)
+    }
+
+    /// Provision the pinned B-tree's maximum live-node envelope before admission.
+    pub(crate) fn reserve_application_eligibility_capacity(record_count: u64) -> bool {
+        let Some(required_pages) = application_eligibility_required_pages(record_count) else {
+            return false;
+        };
+
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
+            let current_pages = state.1.size();
+            current_pages >= required_pages || state.1.grow(required_pages - current_pages) >= 0
+        })
+    }
+
+    #[must_use]
+    pub(crate) fn get_application_eligibility(
+        key: ApplicationReceiptEligibilityKeyRecord,
+    ) -> Option<ApplicationReceiptEligibilityRecord> {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| state.0.get(&key))
+    }
+
+    pub(crate) fn insert_application_eligibility(
+        key: ApplicationReceiptEligibilityKeyRecord,
+        record: ApplicationReceiptEligibilityRecord,
+    ) -> Option<ApplicationReceiptEligibilityRecord> {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.insert(key, record))
+    }
+
+    pub(crate) fn with_application_eligibility<R>(
+        f: impl FnOnce(
+            &StableBtreeMap<
+                ApplicationReceiptEligibilityKeyRecord,
+                ApplicationReceiptEligibilityRecord,
+                VirtualMemory<DefaultMemoryImpl>,
+            >,
+        ) -> R,
+    ) -> R {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| f(&state.0))
+    }
+
+    #[must_use]
     pub(crate) fn get_placement_acknowledgement(
         operation_id: OperationId,
     ) -> Option<PlacementAcknowledgementEntryRecord> {
@@ -810,6 +968,20 @@ impl ReceiptBackedIntentStore {
     ) -> R {
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow(|index| f(index))
     }
+}
+
+pub(super) fn application_eligibility_required_pages(record_count: u64) -> Option<u64> {
+    // ic-stable-structures 0.7.2 uses minimum degree six, so every non-root
+    // node owns at least five entries. The 2,362-byte node allocation has a
+    // 16-byte allocator header; 116 bytes cover the map, allocator, and spare
+    // chunk headers. The explicit 100,000-row probe locks these pinned values.
+    let maximum_nodes = record_count
+        .checked_add(APPLICATION_RECEIPT_ELIGIBILITY_MIN_NODE_ENTRIES - 1)?
+        / APPLICATION_RECEIPT_ELIGIBILITY_MIN_NODE_ENTRIES;
+    let required_bytes = APPLICATION_RECEIPT_ELIGIBILITY_FIXED_BYTES
+        .checked_add(maximum_nodes.checked_mul(APPLICATION_RECEIPT_ELIGIBILITY_CHUNK_BYTES)?)?
+        .checked_add(WASM_PAGE_BYTES - 1)?;
+    Some(required_bytes / WASM_PAGE_BYTES)
 }
 
 //
@@ -974,6 +1146,31 @@ impl ReceiptBackedIntentStore {
         }
     }
 
+    #[must_use]
+    pub(crate) fn export_application_eligibility() -> ApplicationReceiptEligibilityData {
+        ApplicationReceiptEligibilityData {
+            entries: APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
+                state
+                    .0
+                    .iter()
+                    .map(|entry| ApplicationReceiptEligibilityEntryRecord {
+                        key: *entry.key(),
+                        record: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    pub(crate) fn import_application_eligibility(data: ApplicationReceiptEligibilityData) {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| {
+            state.0.clear_new();
+            for entry in data.entries {
+                state.0.insert(entry.key, entry.record);
+            }
+        });
+    }
+
     pub(crate) fn import_application_replay(data: ApplicationReceiptReplayData) {
         APPLICATION_RECEIPT_REPLAY.with_borrow_mut(|records| {
             records.clear_new();
@@ -1010,7 +1207,13 @@ impl ReceiptBackedIntentStore {
     pub(crate) fn reset_for_tests() {
         RECEIPT_BACKED_INTENT_RECORDS.with_borrow_mut(StableBtreeMap::clear_new);
         APPLICATION_RECEIPT_REPLAY.with_borrow_mut(StableBtreeMap::clear_new);
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow_mut(|state| state.0.clear_new());
         PLACEMENT_ACKNOWLEDGEMENT_INDEX.with_borrow_mut(StableBtreeMap::clear_new);
+    }
+
+    #[must_use]
+    pub(crate) fn application_eligibility_reserved_pages_for_tests() -> u64 {
+        APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| state.1.size())
     }
 }
 
@@ -1034,6 +1237,23 @@ mod tests {
     #[should_panic(expected = "stable OperationId is 31 bytes; expected 32")]
     fn malformed_stable_operation_id_fails_closed() {
         let _ = <OperationId as Storable>::from_bytes(Cow::Owned(vec![0; 31]));
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "stable ApplicationReceiptEligibilityKeyRecord is 39 bytes; expected 40"
+    )]
+    fn malformed_stable_application_eligibility_key_fails_closed() {
+        let _ = ApplicationReceiptEligibilityKeyRecord::from_bytes(Cow::Owned(vec![0; 39]));
+    }
+
+    #[test]
+    fn application_eligibility_capacity_reservation_is_conservative_and_bounded() {
+        assert_eq!(application_eligibility_required_pages(0), Some(1));
+        assert_eq!(application_eligibility_required_pages(1), Some(1));
+        assert_eq!(application_eligibility_required_pages(100_000), Some(726));
+        assert_eq!(application_eligibility_required_pages(u64::MAX), None);
+        assert!(!ReceiptBackedIntentStore::reserve_application_eligibility_capacity(u64::MAX));
     }
 
     #[test]
@@ -1171,6 +1391,19 @@ mod tests {
             operation_id: application_operation_id,
             replay_deadline_ns: 23,
         });
+        let eligibility_key = ApplicationReceiptEligibilityKeyRecord {
+            eligible_at_ns: 17 + crate::model::intent::RECEIPT_TERMINAL_OBSERVATION_GRACE_NS,
+            operation_id: application_operation_id,
+        };
+        ReceiptBackedIntentStore::insert_application_eligibility(
+            eligibility_key,
+            ApplicationReceiptEligibilityRecord {
+                schema_version: APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION,
+                operation_id: application_operation_id,
+                payload_binding: PayloadBinding::new([9; 32]),
+                terminal_revision: 2,
+            },
+        );
         ReceiptBackedIntentStore::insert_placement_acknowledgement(
             PlacementAcknowledgementEntryRecord {
                 operation_id: placement_operation_id,
@@ -1178,6 +1411,7 @@ mod tests {
         );
         let records_data = ReceiptBackedIntentStore::export_records();
         let replay_data = ReceiptBackedIntentStore::export_application_replay();
+        let eligibility_data = ReceiptBackedIntentStore::export_application_eligibility();
         let acknowledgement_data =
             ReceiptBackedIntentStore::export_placement_acknowledgement_index();
 
@@ -1191,12 +1425,17 @@ mod tests {
             ApplicationReceiptReplayData::default()
         );
         assert_eq!(
+            ReceiptBackedIntentStore::export_application_eligibility(),
+            ApplicationReceiptEligibilityData::default()
+        );
+        assert_eq!(
             ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
             PlacementAcknowledgementIndexData::default()
         );
 
         ReceiptBackedIntentStore::import_records(records_data.clone());
         ReceiptBackedIntentStore::import_application_replay(replay_data.clone());
+        ReceiptBackedIntentStore::import_application_eligibility(eligibility_data.clone());
         ReceiptBackedIntentStore::import_placement_acknowledgement_index(
             acknowledgement_data.clone(),
         );
@@ -1205,6 +1444,10 @@ mod tests {
         assert_eq!(
             ReceiptBackedIntentStore::export_application_replay(),
             replay_data
+        );
+        assert_eq!(
+            ReceiptBackedIntentStore::export_application_eligibility(),
+            eligibility_data
         );
         assert_eq!(
             ReceiptBackedIntentStore::export_placement_acknowledgement_index(),
