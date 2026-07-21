@@ -14,3 +14,6 @@ pub mod replay;
 pub mod scaling;
 pub mod sharding;
 pub mod state;
+
+#[cfg(test)]
+mod receipt_capacity_tests;

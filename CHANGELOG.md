@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
 
+- `0.96.1` measures the exact receipt stable-memory envelope, corrects the
+  totals-record bound, and removes empty resource-accounting rows without
+  changing the receipt API or guessing downstream policy.
+
 - `0.96.0` closes 0.95 at its immutable release anchor and freezes the
   complete Canic-side receipt authority and consumer inventory without
   guessing the downstream replay contract or changing product behavior.

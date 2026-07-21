@@ -306,7 +306,7 @@ pub struct IntentResourceTotalsRecord {
 
 impl IntentResourceTotalsRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "IntentResourceTotalsRecord";
-    pub const STORABLE_MAX_SIZE: u32 = 64;
+    pub const STORABLE_MAX_SIZE: u32 = 69;
 }
 
 impl_storable_bounded!(
@@ -590,6 +590,10 @@ impl IntentStore {
         totals: IntentResourceTotalsRecord,
     ) -> Option<IntentResourceTotalsRecord> {
         INTENT_TOTALS.with_borrow_mut(|map| map.insert(key, totals))
+    }
+
+    pub(crate) fn remove_totals(key: &IntentResourceKey) -> Option<IntentResourceTotalsRecord> {
+        INTENT_TOTALS.with_borrow_mut(|map| map.remove(key))
     }
 
     // -------------------------------------------------------------

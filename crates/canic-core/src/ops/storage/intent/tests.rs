@@ -246,6 +246,7 @@ fn expired_intents_remain_reserved_until_cleanup() {
 
     assert!(IntentStoreOps::abort_intent_if_pending(intent_id).expect("cleanup abort"));
     assert_eq!(totals(&resource_key), IntentResourceTotalsRecord::default());
+    assert!(IntentStore::get_totals(&resource_key).is_none());
     assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
 }
 
@@ -876,6 +877,7 @@ fn receipt_backed_rollback_and_revision_conflict_preserve_exact_totals() {
         totals(&input.resource_key),
         IntentResourceTotalsRecord::default()
     );
+    assert!(IntentStore::get_totals(&input.resource_key).is_none());
 
     let loaded = ReceiptBackedIntentOps::load(input.operation_id)
         .expect("load")

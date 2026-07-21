@@ -306,7 +306,7 @@ impl IntentStoreOps {
                 "validated intent expiry index insertion replaced an entry"
             );
         }
-        IntentStore::set_totals(resource_key, new_totals);
+        persist_resource_totals(resource_key, new_totals);
         IntentStore::set_meta(meta);
 
         Ok(record)
@@ -724,7 +724,7 @@ fn settle_pair_at(
         IntentStore::insert_record(record);
     }
     for (resource_key, totals) in totals_by_resource {
-        IntentStore::set_totals(resource_key, totals);
+        persist_resource_totals(resource_key, totals);
     }
     IntentStore::set_meta(meta);
     Ok(())
@@ -808,7 +808,7 @@ impl ReceiptBackedIntentOps {
         if ReceiptBackedIntentStore::insert(record).is_some() {
             return Err(IntentStoreOpsError::ReceiptBackedConflict(input.operation_id).into());
         }
-        IntentStore::set_totals(input.resource_key.clone(), new_totals);
+        persist_resource_totals(input.resource_key.clone(), new_totals);
 
         Ok(BeginReceiptBackedIntentResult::Created { revision })
     }
@@ -895,7 +895,7 @@ impl ReceiptBackedIntentOps {
             ..record
         };
 
-        IntentStore::set_totals(updated.resource_key.clone(), new_totals);
+        persist_resource_totals(updated.resource_key.clone(), new_totals);
         ReceiptBackedIntentStore::insert(updated.clone());
         if is_placement_resource_key(&updated.resource_key) {
             let acknowledgement = PlacementAcknowledgementEntryRecord {
@@ -1227,7 +1227,7 @@ fn remove_pending_and_apply(
     record: IntentRecord,
 ) {
     remove_pending_indexes(&record);
-    IntentStore::set_totals(resource_key, totals);
+    persist_resource_totals(resource_key, totals);
     IntentStore::set_meta(meta);
     IntentStore::insert_record(record);
 }
@@ -1249,6 +1249,18 @@ fn remove_pending_indexes(record: &IntentRecord) {
             }),
             "validated intent expiry index changed before removal"
         );
+    }
+}
+
+fn persist_resource_totals(resource_key: IntentResourceKey, totals: IntentResourceTotalsRecord) {
+    if totals == IntentResourceTotalsRecord::default() {
+        let removed = IntentStore::remove_totals(&resource_key);
+        assert!(
+            removed.is_some(),
+            "validated zero resource totals lost their stored authority before removal"
+        );
+    } else {
+        IntentStore::set_totals(resource_key, totals);
     }
 }
 
