@@ -448,9 +448,6 @@ pub struct IcpRefillPolicy {
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 
-    #[serde(deserialize_with = "Cycles::from_config")]
-    pub min_hub_cycles_before_refill: Cycles,
-
     pub max_refill_e8s_per_call: u64,
 
     #[serde(default)]

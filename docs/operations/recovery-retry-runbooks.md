@@ -31,7 +31,7 @@ generated artifacts.
 
 ## Related Evidence
 
-- [0.61 replay-protection design](../design/0.61-replay-protection/0.61-design.md)
+- [0.61 replay-protection design](../design/archive/0.61-replay-protection/0.61-design.md)
   records the replay, receipt, operation-ID, and cost-guard model.
 - [Release validation matrix](release-validation-matrix.md) records the
   validation gates used for slice close-out, RC promotion, and final release.

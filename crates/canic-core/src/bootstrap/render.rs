@@ -630,7 +630,6 @@ fn render_topup(policy: &TopupPolicy) -> TokenStream {
 // Render the optional ICP-to-cycles refill policy.
 fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
     let enabled = policy.enabled;
-    let min_hub_cycles_before_refill = render_cycles(policy.min_hub_cycles_before_refill.to_u128());
     let max_refill_e8s_per_call = policy.max_refill_e8s_per_call;
     let min_xdr_permyriad_per_icp =
         render_option(policy.min_xdr_permyriad_per_icp.as_ref(), |value| {
@@ -643,7 +642,6 @@ fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
     quote! {
         ::canic::__internal::core::bootstrap::compiled::IcpRefillPolicy {
             enabled: #enabled,
-            min_hub_cycles_before_refill: #min_hub_cycles_before_refill,
             max_refill_e8s_per_call: #max_refill_e8s_per_call,
             min_xdr_permyriad_per_icp: #min_xdr_permyriad_per_icp,
             ledger_canister_id: #ledger_canister_id,
@@ -827,7 +825,6 @@ fn render_directory_pool(pool: &DirectoryPool) -> TokenStream {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cdk::types::{Cycles, TC};
 
     fn principal(byte: u8) -> Principal {
         Principal::from_slice(&[byte; 29])
@@ -837,7 +834,6 @@ mod tests {
     fn render_icp_refill_policy_preserves_system_canister_overrides() {
         let rendered = render_icp_refill_policy(&IcpRefillPolicy {
             enabled: true,
-            min_hub_cycles_before_refill: Cycles::new(2 * TC),
             max_refill_e8s_per_call: 100_000_000,
             min_xdr_permyriad_per_icp: Some(40_000),
             ledger_canister_id: Some(principal(11)),

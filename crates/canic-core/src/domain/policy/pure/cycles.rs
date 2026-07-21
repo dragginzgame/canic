@@ -4,7 +4,7 @@
 
 pub const CYCLE_TRACKER_RETENTION_SECS: u64 = 60 * 60 * 24 * 7; // ~7 days
 pub const CYCLE_TOPUP_MIN_CHECK_SECS: u64 = 60;
-pub const CYCLE_TOPUP_MAX_CHECK_SECS: u64 = 60 * 60 * 6;
+pub const CYCLE_TOPUP_MAX_CHECK_SECS: u64 = 60 * 60;
 pub const CYCLE_TOPUP_OBSERVATION_MAX_AGE_SECS: u64 = 60 * 60 * 12;
 pub const CYCLE_TOPUP_FUNDING_ALLOWANCE_SECS: u64 = 60 * 5;
 pub const CYCLE_TOPUP_SAFETY_MARGIN_SECS: u64 = 60 * 5;
@@ -95,6 +95,11 @@ mod tests {
     use super::*;
 
     const TC: u128 = 1_000_000_000_000;
+
+    #[test]
+    fn safety_observation_window_is_one_hour() {
+        assert_eq!(CYCLE_TOPUP_MAX_CHECK_SECS, 60 * 60);
+    }
 
     #[test]
     fn topup_is_due_at_or_below_the_threshold() {

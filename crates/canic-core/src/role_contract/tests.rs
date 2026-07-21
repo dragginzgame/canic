@@ -6,7 +6,6 @@ use super::{
     derive_role_capabilities, resolve_effective_features, resolve_role_contract,
 };
 use crate::{
-    cdk::types::Cycles,
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, IcpRefillPolicy,
         ScalingConfig, ShardingConfig, TopupPolicy,
@@ -215,7 +214,6 @@ fn icp_refill_config_requires_its_feature_and_selects_its_state() {
     app.topup = Some(TopupPolicy {
         icp_refill: Some(IcpRefillPolicy {
             enabled: true,
-            min_hub_cycles_before_refill: Cycles::from(2_000_000_000_000_u128),
             max_refill_e8s_per_call: 100_000_000,
             min_xdr_permyriad_per_icp: Some(40_000),
             ledger_canister_id: None,

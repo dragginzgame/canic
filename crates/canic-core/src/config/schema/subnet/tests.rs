@@ -120,7 +120,6 @@ threshold = "10T"
 amount = "5T"
 
 [topup.icp_refill]
-min_hub_cycles_before_refill = "2T"
 max_refill_e8s_per_call = 100000000
 min_xdr_permyriad_per_icp = 40000
 "#,
@@ -133,7 +132,6 @@ min_xdr_permyriad_per_icp = 40000
         .expect("icp refill policy should be present");
 
     assert!(icp_refill.enabled);
-    assert_eq!(icp_refill.min_hub_cycles_before_refill.to_u128(), 2 * TC);
     assert_eq!(icp_refill.max_refill_e8s_per_call, 100_000_000);
     assert_eq!(icp_refill.min_xdr_permyriad_per_icp, Some(40_000));
     assert_eq!(icp_refill.ledger_canister_id, None);
@@ -152,7 +150,6 @@ threshold = "10T"
 amount = "5T"
 
 [topup.icp_refill]
-min_hub_cycles_before_refill = "2T"
 max_refill_e8s_per_call = 100000000
 ledger_canister_id = "ryjl3-tyaaa-aaaaa-aaaba-cai"
 cmc_canister_id = "rkp4c-7iaaa-aaaaa-aaaca-cai"
@@ -188,7 +185,6 @@ threshold = "10T"
 amount = "5T"
 
 [topup.icp_refill]
-min_hub_cycles_before_refill = "2T"
 max_refill_e8s_per_call = 100000000
 max_refill_e8s_per_day = 1000000000
 "#,
@@ -1010,39 +1006,6 @@ fn cycles_funding_request_limit_cannot_exceed_child_budget() {
 }
 
 #[test]
-fn topup_icp_refill_zero_hub_threshold_fails() {
-    let mut canisters = BTreeMap::new();
-
-    let cfg = CanisterConfig {
-        topup: Some(TopupPolicy {
-            threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(5 * TC),
-            icp_refill: Some(IcpRefillPolicy {
-                enabled: true,
-                min_hub_cycles_before_refill: Cycles::new(0),
-                max_refill_e8s_per_call: 100_000_000,
-                min_xdr_permyriad_per_icp: None,
-                ledger_canister_id: None,
-                cmc_canister_id: None,
-                allow_ic_system_canister_overrides: false,
-            }),
-        }),
-        ..base_canister_config(CanisterKind::Root)
-    };
-
-    canisters.insert(CanisterRole::ROOT, cfg);
-
-    let subnet = SubnetConfig {
-        canisters,
-        ..Default::default()
-    };
-
-    subnet
-        .validate()
-        .expect_err("expected zero icp refill hub threshold to fail");
-}
-
-#[test]
 fn topup_icp_refill_zero_max_refill_fails() {
     let mut canisters = BTreeMap::new();
 
@@ -1052,7 +1015,6 @@ fn topup_icp_refill_zero_max_refill_fails() {
             amount: Cycles::new(5 * TC),
             icp_refill: Some(IcpRefillPolicy {
                 enabled: true,
-                min_hub_cycles_before_refill: Cycles::new(2 * TC),
                 max_refill_e8s_per_call: 0,
                 min_xdr_permyriad_per_icp: None,
                 ledger_canister_id: None,
@@ -1085,7 +1047,6 @@ fn topup_icp_refill_zero_rate_gate_fails() {
             amount: Cycles::new(5 * TC),
             icp_refill: Some(IcpRefillPolicy {
                 enabled: true,
-                min_hub_cycles_before_refill: Cycles::new(2 * TC),
                 max_refill_e8s_per_call: 100_000_000,
                 min_xdr_permyriad_per_icp: Some(0),
                 ledger_canister_id: None,

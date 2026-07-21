@@ -1,7 +1,7 @@
 # Root Proof Provisioning Runbook
 
 This runbook is the compact developer handoff for delegated-auth root proof
-provisioning. It documents the active 0.76 chain-key path, not the historical
+provisioning. It documents the maintained chain-key path, not the historical
 bridge-backed canister-signature flow.
 
 ## Source Map
@@ -19,7 +19,7 @@ bridge-backed canister-signature flow.
 | Issuer active proof verification | `crates/canic-core/src/ops/auth/delegated/active_proof.rs` |
 | Issuer-local canister-signature proof support | `crates/canic-core/src/ops/auth/issuer_canister_sig.rs` |
 | Operator renewal CLI | `crates/canic-cli/src/auth/` |
-| PocketIC hard-cut coverage | `crates/canic-tests/tests/root_cases/auth_076.rs` |
+| PocketIC hard-cut coverage | `crates/canic-tests/tests/root_cases/delegated_auth_chain_key.rs` |
 | Active architecture contract | `docs/architecture/authentication.md` |
 | Wire/protocol contract | `docs/contracts/AUTH_DELEGATED_SIGNATURES.md` |
 

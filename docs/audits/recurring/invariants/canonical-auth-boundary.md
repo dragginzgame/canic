@@ -186,7 +186,7 @@ git log --name-only -n 20 -- crates/
 | `crates/canic-core/src/access/expr/mod.rs` | `AccessContext`, `eval_access` | central auth dispatch boundary | High |
 | `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | routes authenticated predicates into delegated-token verification | High |
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | endpoint auth ordering owner | High |
-| `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token` | token-material verification | High |
+| `crates/canic-core/src/ops/auth/token/mod.rs` | `AuthOps::verify_token` | token-material verification | High |
 | `crates/canic-core/src/api/auth/mod.rs` | `verify_token_material` | private partial verifier for delegated-session bootstrap only | Medium |
 | `crates/canic-core/src/api/auth/mod.rs` | `verify_role_attestation` | explicit signed role-attestation verification helper | Medium |
 

@@ -10,11 +10,7 @@ use crate::{
     InternalError, InternalErrorClass,
     cdk::types::Cycles,
     config::schema::TopupPolicy,
-    domain::{
-        icp_refill::{IcpRefillStatus, icp_refill_outcome_is_resumable},
-        policy::pure as policy,
-        runtime::TimerExecutionOutcome,
-    },
+    domain::{policy::pure as policy, runtime::TimerExecutionOutcome},
     dto::error::ErrorCode,
     log,
     log::Topic,
@@ -25,64 +21,24 @@ use crate::{
         runtime::{env::EnvOps, metrics::cycles_topup::CyclesTopupMetrics},
         storage::cycles::{CycleTopupEventOps, CycleTrackerOps},
     },
-    workflow::{
-        ic::icp_refill::IcpRefillWorkflow,
-        runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
-    },
+    workflow::runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
 };
 use std::time::Duration;
-use thiserror::Error as ThisError;
 
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 const RETENTION_BATCH_SIZE: usize = 128;
 const RETRY_INITIAL: Duration = Duration::from_mins(1);
 const RETRY_MAX: Duration = Duration::from_mins(30);
 
-#[derive(Clone)]
-enum AutomaticTopupKind {
-    Parent { amount: Cycles },
-    RootIcp,
-}
-
-#[derive(Clone)]
 struct AutomaticTopupConfig {
     threshold: u128,
-    kind: AutomaticTopupKind,
+    amount: Cycles,
+    minimum_funding_spacing_secs: u64,
 }
 
 struct CycleBalanceSample {
     timestamp_secs: u64,
     cycles: Cycles,
-}
-
-#[derive(Debug, ThisError)]
-enum AutomaticTopupError {
-    #[error(transparent)]
-    Internal(#[from] InternalError),
-
-    #[error(
-        "hub ICP self-refill operation_id={operation_id:?} status={status:?} error={error_code:?}"
-    )]
-    RootOutcome {
-        operation_id: [u8; 32],
-        status: IcpRefillStatus,
-        error_code: Option<crate::domain::icp_refill::IcpRefillErrorCode>,
-        ledger_block_recorded: bool,
-    },
-}
-
-impl AutomaticTopupError {
-    fn is_retryable(&self) -> bool {
-        match self {
-            Self::Internal(err) => is_retryable_funding_error(err),
-            Self::RootOutcome {
-                status,
-                error_code,
-                ledger_block_recorded,
-                ..
-            } => icp_refill_outcome_is_resumable(*status, *error_code, *ledger_block_recorded),
-        }
-    }
 }
 
 /// Runtime owner for cycle observations and configured automatic funding.
@@ -96,7 +52,7 @@ impl CycleWorkflow {
         let sample = Self::read_sample();
         Self::record_observation(&sample);
 
-        if config.is_none() {
+        if config.is_none() && !EnvOps::is_root() {
             CyclesTopupMetrics::record_policy_missing();
         }
         let deadline = config.as_ref().map(|config| {
@@ -141,10 +97,7 @@ impl CycleWorkflow {
             return TimerRunResult::no_work(Self::directive(IcOps::now_nanos(), timing));
         }
 
-        let result = match &config.kind {
-            AutomaticTopupKind::Parent { amount } => Self::request_parent_funding(amount).await,
-            AutomaticTopupKind::RootIcp => Self::request_root_refill(&sample.cycles).await,
-        };
+        let result = Self::request_parent_funding(&config.amount).await;
         let after = Self::read_sample();
         Self::record_observation(&after);
 
@@ -159,9 +112,20 @@ impl CycleWorkflow {
                         balance: sample.cycles.to_u128(),
                     }),
                 );
-                TimerRunResult::success(1, Self::directive(IcOps::now_nanos(), timing))
+                let directive = if matches!(timing, policy::cycles::CycleTopupTiming::Due) {
+                    TimerDirective::ScheduleAt(
+                        IcOps::now_nanos().saturating_add(
+                            config
+                                .minimum_funding_spacing_secs
+                                .saturating_mul(NANOS_PER_SECOND),
+                        ),
+                    )
+                } else {
+                    Self::directive(IcOps::now_nanos(), timing)
+                };
+                TimerRunResult::success(1, directive)
             }
-            Err(failure) if failure.is_retryable() => {
+            Err(failure) if is_retryable_funding_error(&failure) => {
                 log!(
                     Topic::Cycles,
                     Warn,
@@ -187,7 +151,7 @@ impl CycleWorkflow {
         }
     }
 
-    async fn request_parent_funding(amount: &Cycles) -> Result<(), AutomaticTopupError> {
+    async fn request_parent_funding(amount: &Cycles) -> Result<(), InternalError> {
         CyclesTopupMetrics::record_request_scheduled();
         CycleTopupEventOps::record_scheduled(IcOps::now_secs(), amount.clone());
         match RequestOps::request_cycles(amount.to_u128()).await {
@@ -210,37 +174,7 @@ impl CycleWorkflow {
             Err(err) => {
                 CyclesTopupMetrics::record_request_err();
                 CycleTopupEventOps::record_err(IcOps::now_secs(), amount.clone(), err.to_string());
-                Err(err.into())
-            }
-        }
-    }
-
-    async fn request_root_refill(hub_cycles: &Cycles) -> Result<(), AutomaticTopupError> {
-        CyclesTopupMetrics::record_request_scheduled();
-        match IcpRefillWorkflow::execute_hub_self_refill(hub_cycles.clone()).await {
-            Ok(response) if response.status == IcpRefillStatus::Completed => {
-                CyclesTopupMetrics::record_request_ok();
-                log!(
-                    Topic::Cycles,
-                    Ok,
-                    "hub ICP self-refill completed operation_id={:?} cycles_sent={:?}",
-                    response.operation_id,
-                    response.cycles_sent
-                );
-                Ok(())
-            }
-            Ok(response) => {
-                CyclesTopupMetrics::record_request_err();
-                Err(AutomaticTopupError::RootOutcome {
-                    operation_id: response.operation_id,
-                    status: response.status,
-                    error_code: response.error_code,
-                    ledger_block_recorded: response.ledger_block_index.is_some(),
-                })
-            }
-            Err(err) => {
-                CyclesTopupMetrics::record_request_err();
-                Err(err.into())
+                Err(err)
             }
         }
     }
@@ -250,6 +184,7 @@ impl CycleWorkflow {
         Ok(select_automatic_topup_config(
             EnvOps::is_root(),
             canister.topup,
+            canister.cycles_funding.cooldown_secs,
         ))
     }
 
@@ -313,24 +248,18 @@ impl CycleWorkflow {
 fn select_automatic_topup_config(
     is_root: bool,
     topup: Option<TopupPolicy>,
+    funding_cooldown_secs: u64,
 ) -> Option<AutomaticTopupConfig> {
-    let topup = topup?;
     if is_root {
-        let icp_refill = topup.icp_refill?;
-        if !icp_refill.enabled {
-            return None;
-        }
-        return Some(AutomaticTopupConfig {
-            threshold: icp_refill.min_hub_cycles_before_refill.to_u128(),
-            kind: AutomaticTopupKind::RootIcp,
-        });
+        return None;
     }
 
+    let topup = topup?;
     Some(AutomaticTopupConfig {
         threshold: topup.threshold.to_u128(),
-        kind: AutomaticTopupKind::Parent {
-            amount: topup.amount,
-        },
+        amount: topup.amount,
+        minimum_funding_spacing_secs: funding_cooldown_secs
+            .max(policy::cycles::CYCLE_TOPUP_MIN_CHECK_SECS),
     })
 }
 
@@ -340,7 +269,7 @@ fn is_retryable_funding_error(err: &InternalError) -> bool {
         InternalErrorClass::Infra | InternalErrorClass::Ops
     ) || err
         .public_error()
-        .is_some_and(|err| matches!(err.code, ErrorCode::Conflict | ErrorCode::ResourceExhausted))
+        .is_some_and(|err| err.code == ErrorCode::Conflict)
 }
 
 fn retry_delay(streak: u64) -> Duration {
@@ -355,9 +284,7 @@ fn retry_delay(streak: u64) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        InternalErrorOrigin, config::schema::IcpRefillPolicy, dto::error::Error as PublicError,
-    };
+    use crate::{InternalErrorOrigin, dto::error::Error as PublicError};
 
     #[test]
     fn automatic_topup_retry_backoff_is_bounded_and_deterministic() {
@@ -369,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn only_transport_and_recoverable_public_funding_failures_retry() {
+    fn only_transport_and_in_flight_funding_failures_retry() {
         assert!(is_retryable_funding_error(&InternalError::ops(
             InternalErrorOrigin::Ops,
             "transport"
@@ -377,7 +304,7 @@ mod tests {
         assert!(is_retryable_funding_error(&InternalError::public(
             PublicError::conflict("in flight")
         )));
-        assert!(is_retryable_funding_error(&InternalError::public(
+        assert!(!is_retryable_funding_error(&InternalError::public(
             PublicError::exhausted("cooldown")
         )));
         assert!(!is_retryable_funding_error(&InternalError::public(
@@ -387,56 +314,34 @@ mod tests {
             InternalErrorOrigin::Workflow,
             "contradiction"
         )));
-
-        assert!(
-            AutomaticTopupError::RootOutcome {
-                operation_id: [1; 32],
-                status: IcpRefillStatus::Transferred,
-                error_code: None,
-                ledger_block_recorded: true,
-            }
-            .is_retryable()
-        );
-        assert!(
-            !AutomaticTopupError::RootOutcome {
-                operation_id: [2; 32],
-                status: IcpRefillStatus::Failed,
-                error_code: Some(crate::domain::icp_refill::IcpRefillErrorCode::NotifyMaxAttempts),
-                ledger_block_recorded: true,
-            }
-            .is_retryable()
-        );
     }
 
     #[test]
-    fn configured_root_and_nonroot_select_their_single_funding_paths() {
+    fn automatic_topup_is_parent_funded_for_nonroot_only() {
         let topup = TopupPolicy {
             threshold: Cycles::new(10),
             amount: Cycles::new(5),
-            icp_refill: Some(IcpRefillPolicy {
-                enabled: true,
-                min_hub_cycles_before_refill: Cycles::new(2),
-                max_refill_e8s_per_call: 100,
-                min_xdr_permyriad_per_icp: None,
-                ledger_canister_id: None,
-                cmc_canister_id: None,
-                allow_ic_system_canister_overrides: false,
-            }),
+            icp_refill: None,
         };
 
-        let root = select_automatic_topup_config(true, Some(topup.clone()))
-            .expect("configured root policy");
-        assert_eq!(root.threshold, 2);
-        assert!(matches!(root.kind, AutomaticTopupKind::RootIcp));
+        assert!(select_automatic_topup_config(true, Some(topup.clone()), 60).is_none());
 
-        let nonroot =
-            select_automatic_topup_config(false, Some(topup)).expect("configured parent policy");
+        let nonroot = select_automatic_topup_config(false, Some(topup), 300)
+            .expect("configured parent policy");
         assert_eq!(nonroot.threshold, 10);
-        assert!(matches!(
-            nonroot.kind,
-            AutomaticTopupKind::Parent { amount } if amount == Cycles::new(5)
-        ));
-        assert!(select_automatic_topup_config(true, Some(TopupPolicy::default())).is_none());
-        assert!(select_automatic_topup_config(false, None).is_none());
+        assert_eq!(nonroot.amount, Cycles::new(5));
+        assert_eq!(nonroot.minimum_funding_spacing_secs, 300);
+        assert!(select_automatic_topup_config(false, None, 60).is_none());
+    }
+
+    #[test]
+    fn automatic_topup_spacing_never_undercuts_the_observation_floor() {
+        let nonroot = select_automatic_topup_config(false, Some(TopupPolicy::default()), 0)
+            .expect("configured parent policy");
+
+        assert_eq!(
+            nonroot.minimum_funding_spacing_secs,
+            policy::cycles::CYCLE_TOPUP_MIN_CHECK_SECS
+        );
     }
 }

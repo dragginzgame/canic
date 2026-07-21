@@ -22,13 +22,13 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | Audit ID | Version | SHA-256 | Definition |
 | --- | --- | --- | --- |
 | `CANIC-AUTH-AUDIENCE-001` | `2` | `bfe780a3e93f0511f9c7bbbbf7cf84dee40b23d1456ab68fe12122a671b30a5c` | `docs/audits/recurring/invariants/audience-target-binding.md` |
-| `CANIC-AUTH-EQUIVALENCE-001` | `1` | `3339c221ec11706c00b4dbe2d9d4be116441b1f0572b5e7060a23a74199f89d6` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` |
-| `CANIC-AUTH-BOUNDARY-001` | `1` | `f5383b05617c0f5c3df5f9a2e230e200925c4aa0a16586787d32ac6bab427b98` | `docs/audits/recurring/invariants/canonical-auth-boundary.md` |
+| `CANIC-AUTH-EQUIVALENCE-001` | `1` | `7784678597a51e59b521aaefc15806f20e2c03bc2ac49ba91b8c824f88d2461b` | `docs/audits/recurring/invariants/auth-abstraction-equivalence.md` |
+| `CANIC-AUTH-BOUNDARY-001` | `1` | `3fdc297ab141ff1bddd26981a4a25aaf7e727ff63146054b626e0e054500d822` | `docs/audits/recurring/invariants/canonical-auth-boundary.md` |
 | `CANIC-AUTH-CAPABILITY-001` | `1` | `4dd5127b43716dc8a89bef6148b76856794f7c5e158f536a7737ddceee0f1c55` | `docs/audits/recurring/invariants/capability-scope-enforcement.md` |
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
-| `CANIC-AUTH-TRUST-001` | `1` | `003c9acabef3a5646b67983ff76dc94eb07a3c45db34512d4c37a26718e3530e` | `docs/audits/recurring/invariants/token-trust-chain.md` |
-| `CANIC-LIFECYCLE-001` | `1` | `c3b99716e67d6fc83bd33a9875ef93bb5eb7e9d9756fcfbce92c5030046c48cd` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
+| `CANIC-AUTH-TRUST-001` | `1` | `5cb6143aee5fec2e4ff5f7c8649fc70e120f5233be19b913e90cff9ae38341d6` | `docs/audits/recurring/invariants/token-trust-chain.md` |
+| `CANIC-LIFECYCLE-001` | `1` | `df4fd68b78e1fab92bf17f85ac6adec235e978c52783f5151b2c57411b0e4913` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |
 | `CANIC-CHANGE-FRICTION-001` | `2` | `5f4377f00907f36f59388f797f210bdfed9398832f983529cdccd4bd747d2ab6` | `docs/audits/recurring/system/change-friction.md` |

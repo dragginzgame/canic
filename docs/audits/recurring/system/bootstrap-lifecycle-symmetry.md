@@ -200,7 +200,7 @@ Run and record outputs or output references for these scans.
 #### Lifecycle wiring and timer scheduling
 
 ```bash
-rg -n 'init\(|post_upgrade\(|LifecycleApi::|TimerApi::set_lifecycle_timer|Duration::ZERO' \
+rg -n 'init\(|post_upgrade\(|LifecycleApi::|TimerApi::defer_lifecycle|Duration::ZERO' \
   crates/canic/src/macros/start.rs crates/canic/src/macros/timer.rs
 ```
 
@@ -221,7 +221,7 @@ rg -n 'pub fn init_|pub fn post_upgrade_|lifecycle::' \
 #### Init/post-upgrade structure
 
 ```bash
-rg -n 'init_root_canister|init_nonroot_canister|post_upgrade_root_canister|post_upgrade_nonroot_canister|TimerWorkflow::set|TimerOps::set|Duration::ZERO' \
+rg -n 'init_root_canister|init_nonroot_canister|post_upgrade_root_canister|post_upgrade_nonroot_canister|TimerWorkflow::set_application_once|TimerApi::defer_lifecycle|TimerOps::set|Duration::ZERO' \
   crates/canic-core/src/lifecycle crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
 
@@ -234,7 +234,7 @@ rg -n '\.await|async fn|spawn\(' crates/canic-core/src/lifecycle -g '*.rs'
 #### Restore-before-bootstrap ordering
 
 ```bash
-rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::init_|post_upgrade_.*after_memory_init|TimerOps::set|TimerWorkflow::set|TimerApi::set_lifecycle_timer' \
+rg -n 'EnvOps::restore_|init_memory_registry_post_upgrade|workflow::runtime::init_|post_upgrade_.*after_memory_init|TimerOps::set|TimerWorkflow::set_application_once|TimerApi::defer_lifecycle' \
   crates/canic-core/src/lifecycle crates/canic-core/src/workflow/runtime \
   crates/canic-control-plane/src/api/lifecycle.rs -g '*.rs'
 ```
@@ -270,8 +270,11 @@ Expected:
 
 * runtime environment restoration through `ops::runtime::env::EnvOps` is
   allowed inside post-upgrade lifecycle adapters
-* timer scheduling through `TimerOps`, `TimerWorkflow`, and
-  `TimerApi::set_lifecycle_timer` is allowed at lifecycle scheduling boundaries
+* core lifecycle adapters may schedule application hooks through
+  `TimerWorkflow::set_application_once`, while facade and control-plane
+  lifecycle boundaries use `TimerApi::defer_lifecycle`
+* direct `TimerOps::set` calls remain inside the common timer workflow rather
+  than lifecycle adapters
 * direct stable-storage mutation, storage-schema imports, and domain policy
   imports are not allowed in lifecycle adapters
 * `workflow::bootstrap` may appear only inside scheduled timer closures, not as
