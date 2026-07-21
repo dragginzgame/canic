@@ -1010,26 +1010,76 @@ impl ReceiptBackedIntentOps {
         .map_err(InternalError::from)
     }
 
-    /// Rebuild the placement-only derived index from canonical terminal intent state.
-    pub fn rebuild_placement_acknowledgement_index() -> Result<(), InternalError> {
+    /// Validate receipt adjunct ownership and rebuild the placement acknowledgement index.
+    pub fn reconcile_receipt_indexes() -> Result<(), InternalError> {
         let operation_ids = ReceiptBackedIntentStore::with_records(|records| {
-            let mut operation_ids = Vec::new();
-            for entry in records.iter() {
-                let record = entry.value();
-                ensure_receipt_backed_record_schema(&record)?;
-                validate_application_replay_for_record(&record)?;
-                if receipt_requires_placement_acknowledgement(&record) {
-                    operation_ids.push(record.operation_id);
-                }
-            }
-            Ok::<Vec<OperationId>, IntentStoreOpsError>(operation_ids)
-        })?;
+            ReceiptBackedIntentStore::with_application_replay(|replay_records| {
+                let mut operation_ids = Vec::new();
+                let mut replay_entries = replay_records.iter().peekable();
 
-        ReceiptBackedIntentStore::with_application_replay(|entries| {
-            for entry in entries.iter() {
-                validate_application_replay_entry(*entry.key(), entry.value())?;
-            }
-            Ok::<(), IntentStoreOpsError>(())
+                for entry in records.iter() {
+                    let record = entry.value();
+                    ensure_receipt_backed_record_schema(&record)?;
+
+                    let next_replay_id = replay_entries.peek().map(|entry| *entry.key());
+                    if next_replay_id.is_some_and(|operation_id| operation_id < record.operation_id)
+                    {
+                        let replay_entry = replay_entries
+                            .next()
+                            .expect("peeked application replay entry must remain available");
+                        validate_application_replay_identity(
+                            *replay_entry.key(),
+                            replay_entry.value(),
+                        )?;
+                        return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
+                            *replay_entry.key(),
+                        ));
+                    }
+
+                    if is_canic_owned_intent_resource_key(&record.resource_key) {
+                        if next_replay_id == Some(record.operation_id) {
+                            let replay_entry = replay_entries
+                                .next()
+                                .expect("matched application replay entry must remain available");
+                            validate_application_replay_identity(
+                                record.operation_id,
+                                replay_entry.value(),
+                            )?;
+                            return Err(IntentStoreOpsError::ApplicationReceiptReplayUnexpected(
+                                record.operation_id,
+                            ));
+                        }
+                    } else if next_replay_id == Some(record.operation_id) {
+                        let replay_entry = replay_entries
+                            .next()
+                            .expect("matched application replay entry must remain available");
+                        validate_application_replay_identity(
+                            record.operation_id,
+                            replay_entry.value(),
+                        )?;
+                    } else {
+                        return Err(IntentStoreOpsError::ApplicationReceiptReplayMissing(
+                            record.operation_id,
+                        ));
+                    }
+
+                    if receipt_requires_placement_acknowledgement(&record) {
+                        operation_ids.push(record.operation_id);
+                    }
+                }
+
+                if let Some(replay_entry) = replay_entries.next() {
+                    validate_application_replay_identity(
+                        *replay_entry.key(),
+                        replay_entry.value(),
+                    )?;
+                    return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
+                        *replay_entry.key(),
+                    ));
+                }
+
+                Ok::<Vec<OperationId>, IntentStoreOpsError>(operation_ids)
+            })
         })?;
 
         ReceiptBackedIntentStore::clear_placement_acknowledgement_index();
@@ -1327,23 +1377,6 @@ fn validate_application_replay_identity(
                 found: replay.schema_version,
             },
         );
-    }
-    Ok(())
-}
-
-fn validate_application_replay_entry(
-    operation_id: OperationId,
-    replay: ApplicationReceiptReplayRecord,
-) -> Result<(), IntentStoreOpsError> {
-    validate_application_replay_identity(operation_id, replay)?;
-    let primary = ReceiptBackedIntentStore::get(operation_id).ok_or(
-        IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(operation_id),
-    )?;
-    ensure_receipt_backed_record_schema(&primary)?;
-    if is_canic_owned_intent_resource_key(&primary.resource_key) {
-        return Err(IntentStoreOpsError::ApplicationReceiptReplayUnexpected(
-            operation_id,
-        ));
     }
     Ok(())
 }

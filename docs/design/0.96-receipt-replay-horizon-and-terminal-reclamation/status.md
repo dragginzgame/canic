@@ -9,9 +9,11 @@ Canic-side receipt consumer and authority inventory is frozen. Released
 `v0.96.1` measures the existing stable-capacity envelope and fixes two
 independent totals-store defects without changing the public receipt contract,
 replay behavior, timer ownership, configuration, dependencies, or Cargo
-package versions. Open `0.96.2` hard-cuts application admission to one
+package versions. Released `v0.96.2` hard-cuts application admission to one
 immutable absolute replay deadline while leaving placement and terminal
-cleanup on their existing owners.
+cleanup on their existing owners. Open `0.96.3` corrects the resulting
+lifecycle reconciliation to one ordered linear pass without changing those
+contracts.
 
 The reviewed Toko signed-token ceiling now fixes Canic's maximum remaining
 application replay window at 24 hours. Toko still has no receipt consumer,
@@ -22,15 +24,15 @@ those missing policies.
 
 ## Immutable Baseline
 
-- Release anchor: `v0.96.1`.
-- Source commit: `ba3368e5b090d72c38cb55b918f4bf3fefee6383`.
-- Source tree: `dc2ba444b7670c140b63b8afb58cb0bb59fabd94`.
+- Release anchor: `v0.96.2`.
+- Source commit: `4b2531bdc969eda7d08fef9604bcd9f3c60328aa`.
+- Source tree: `107598da66d77a6937ae031bd396fa41de43078b`.
 - Product-tree hash:
-  `2ccba78c807cce74e3d281b710d865374c9032b34ee2c97b44696a483a8539ab`.
+  `086ae4a16716bd444ae0ac63ba6022f44e2510b51d03ec0c61fda8864271c52a`.
 - Cargo.lock SHA-256:
-  `fae17e29869b4828230ec5933bdadb55aa4af22362be9fb6d929f3d5d6781062`.
+  `c5bcde1c54e99a8d49664742b5ebb4d544d12f7409b4cf86d2ba2dc6d067df99`.
 - Rust toolchain: `rustc 1.97.0 (2d8144b78 2026-07-07)`.
-- Workspace package version at anchor: `0.96.1`.
+- Workspace package version at anchor: `0.96.2`.
 - Read-only downstream snapshot: Toko
   `485f586184651d67739b8e9c0ec489fea6a16b3a`, tree
   `e3c5a9317b6d2017119ab88ee7009663b3f1a1c8`, clean worktree.
@@ -88,7 +90,7 @@ The canonical report is
   maximum durable resource cardinality is therefore a required downstream
   capacity input.
 
-## Open Slice C Replay Admission
+## Released Slice C Replay Admission
 
 The canonical report is
 [0.96 replay deadline Slice C](../../audits/reports/2026-07/2026-07-21/0.96-replay-deadline-slice-c.md).
@@ -115,16 +117,38 @@ The canonical report is
 - Settlement, terminal observation grace, eligibility, reclamation, timers,
   and resource accounting are unchanged in this slice.
 
+## Open 0.96.3 Reconciliation Correction
+
+The canonical report is
+[0.96.3 receipt reconciliation correction](../../audits/reports/2026-07/2026-07-21/0.96-receipt-reconciliation-0.96.3.md).
+
+- The released 0.96.2 lifecycle path scanned both canonical maps but also
+  performed one cross-map stable-tree point lookup for every primary and every
+  application metadata row. At the 100,000-row all-application limit, that was
+  up to 200,000 point lookups in addition to the two scans.
+- `reconcile_receipt_indexes` now merge-validates the ordered primary and
+  application-adjunct maps in one pass over each. It detects missing, orphaned,
+  wrong-schema, wrong-identity, and Canic-owned metadata without lookup
+  amplification.
+- The placement acknowledgement index is cleared and rebuilt only after the
+  complete canonical pass succeeds. Any application contradiction preserves
+  the prior derived index and returns the typed ops cause under an accurate
+  receipt-index lifecycle diagnostic.
+- The old placement-only method name is removed rather than retained as an
+  alias. Public APIs, stable data, timers, settlement, accounting, and
+  downstream policy remain unchanged.
+
 ## Finding Index
 
 | Finding | Severity | State | Owner |
 | --- | --- | --- | --- |
 | `CANIC-096-RECEIPT-001` terminal application rows eventually exhaust new-operation admission | P1 | accepted for 0.96; not fixed | Canic receipt workflow/storage |
-| `CANIC-096-RECEIPT-002` current rows contain no proof that deletion is replay-safe | P1 | deadline proof fixed in open 0.96.2; deletion remains disabled pending grace/conformance | Canic contract plus downstream immutable authorization |
+| `CANIC-096-RECEIPT-002` current rows contain no proof that deletion is replay-safe | P1 | deadline proof fixed in v0.96.2; deletion remains disabled pending grace/conformance | Canic contract plus downstream immutable authorization |
 | `CANIC-096-GATE-003` downstream mint action identity, recovery, bypass disposition, and numeric envelope are absent | gate | blocked outside Canic | Toko owner |
 | `CANIC-096-CAPACITY-004` totals record declares 64 bytes but can validly encode to 69 | P1 | fixed in v0.96.1 | Canic stable intent storage |
 | `CANIC-096-CAPACITY-005` abort and rollback retain empty totals rows | P2 | fixed in v0.96.1 | Canic intent storage ops |
 | `CANIC-096-GATE-006` committed resource-total cardinality has no finite downstream bound | gate | blocked outside Canic | Toko owner plus Canic admission |
+| `CANIC-096-RECONCILE-007` lifecycle receipt reconciliation amplifies ordered scans with per-row cross-map point lookups | P2 | fixed in open 0.96.3 | Canic receipt storage ops/lifecycle |
 
 No other product finding is admitted without a design amendment and direct
 receipt-path evidence.
@@ -156,6 +180,12 @@ receipt-path evidence.
   admission, settlement, upgrade, and retained terminal replay.
 - Broad workspace, release, general PocketIC, and downstream Toko suites were
   not run for this focused admission batch.
+- Open 0.96.3 reconciliation matrix: 24 receipt storage-op tests and 68 runtime
+  workflow tests passed; five application-adjunct contradiction classes
+  preserve the placement index on failure.
+- Focused 0.96.3 PocketIC lifecycle proof: 1 passed through real Wasm install,
+  application receipt persistence, post-upgrade reconciliation, and retained
+  terminal replay.
 
 ## Accepted Canic-Side Decisions
 

@@ -7,10 +7,10 @@ receipt-backed intent API. It is intentionally narrower than the 0.90 design:
 it describes how one trusted domain adapter binds an external receipt to one
 Canic reservation without adding a generic receipt or recovery framework.
 
-Canic owns reservation identity, capacity accounting, durable pending state,
-and compare-and-set settlement. A downstream adapter owns request identity,
-authorization, the external call, receipt storage, receipt validation, and
-domain responses.
+Canic owns durable reservation state, exact identity-binding enforcement,
+capacity accounting, and compare-and-set settlement. A downstream adapter
+owns request and identity derivation, authorization, the external call,
+receipt storage, receipt validation, and domain responses.
 
 ## Required Flow
 

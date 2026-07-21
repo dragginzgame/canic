@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.96.1`.
-- The latest published release is `v0.96.1` at
-  `ba3368e5b090d72c38cb55b918f4bf3fefee6383`.
-- The `v0.96.1` source tree is
-  `dc2ba444b7670c140b63b8afb58cb0bb59fabd94`; its product-tree hash is
-  `2ccba78c807cce74e3d281b710d865374c9032b34ee2c97b44696a483a8539ab` and
+- The workspace package version is `0.96.2`.
+- The latest published release is `v0.96.2` at
+  `4b2531bdc969eda7d08fef9604bcd9f3c60328aa`.
+- The `v0.96.2` source tree is
+  `107598da66d77a6937ae031bd396fa41de43078b`; its product-tree hash is
+  `086ae4a16716bd444ae0ac63ba6022f44e2510b51d03ec0c61fda8864271c52a` and
   its Cargo.lock SHA-256 is
-  `fae17e29869b4828230ec5933bdadb55aa4af22362be9fb6d929f3d5d6781062`.
+  `c5bcde1c54e99a8d49664742b5ebb4d544d12f7409b4cf86d2ba2dc6d067df99`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -340,8 +340,9 @@ Historical detail is archived at:
   stable-capacity envelope, corrects the totals record's undersized stable
   bound, and removes exact zero-total rows. Terminal reclamation remains blocked
   on Toko's per-action identity, recovery/rate/resource-cardinality policy, and
-  the final eligibility-allocation envelope. Open `0.96.2` implements only the
-  independently safe replay-deadline admission hard cut.
+  the final eligibility-allocation envelope. Released `v0.96.2` implements the
+  independently safe replay-deadline admission hard cut. Open `0.96.3`
+  corrects its lifecycle reconciliation to one ordered linear pass.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -391,17 +392,19 @@ removed.
 receipt authority is inventoried and guarded. Released `v0.96.1` records the
 existing 100,000-row stable footprint: the primary, placement acknowledgement,
 and resource totals allocations have a 3,969-page, 248.0625-MiB physical
-subtotal in the measured ascending high-water case through base MemoryManager. It also
-corrects the valid totals encoding bound from 64 to 69 bytes and removes exact
-zero totals after abort or rollback. Application rows still have no replay
-deadline or cleanup owner in the immutable release. Open `.2` requires an
+subtotal in the measured ascending high-water case through base MemoryManager.
+It also corrects the valid totals encoding bound from 64 to 69 bytes and
+removes exact zero totals after abort or rollback. Released `.2` requires an
 absolute application deadline, closes absent operations at equality, enforces
 the source-backed 24-hour maximum, and stores one exact adjunct at allocation
-46. Production placement keeps its separate acknowledgement-owned removal and
-stores no application deadline. The read-only Toko snapshot uses Canic 0.71.3
-and contains no receipt consumer, so adoption needs no old-state reader or
-migration. It still needs a per-mint action identity, recovery path, explicit
-batch/rate/resource-cardinality bound, and removal or integration of its
+46. Open `.3` replaces the resulting lookup-amplified lifecycle validation
+with one ordered pass over each canonical map, then rebuilds placement
+acknowledgement only after complete validation. Production placement keeps its
+separate acknowledgement-owned removal and stores no application deadline.
+The read-only Toko snapshot uses Canic 0.71.3 and contains no receipt consumer,
+so adoption needs no old-state reader or migration. It still needs a per-mint
+action identity, recovery path, explicit batch/rate/resource-cardinality
+bound, and removal or integration of its
 parent-only stack mint before terminal eligibility and reclamation can be
 enabled. General cleanup, dependency work, backup/restore changes, and
 compatibility layers remain excluded.
