@@ -24,7 +24,6 @@ pub enum CyclesTopupMetricKey {
     ConfigError,
     PolicyMissing,
     RequestErr,
-    RequestInFlight,
     RequestOk,
     RequestScheduled,
 }
@@ -37,7 +36,6 @@ impl CyclesTopupMetricKey {
             Self::ConfigError => "config_error",
             Self::PolicyMissing => "policy_missing",
             Self::RequestErr => "request_err",
-            Self::RequestInFlight => "request_in_flight",
             Self::RequestOk => "request_ok",
             Self::RequestScheduled => "request_scheduled",
         }
@@ -74,11 +72,6 @@ impl CyclesTopupMetrics {
     /// Record that balance is still above the configured threshold.
     pub fn record_above_threshold() {
         Self::increment(CyclesTopupMetricKey::AboveThreshold);
-    }
-
-    /// Record that a request was skipped because one is already running.
-    pub fn record_request_in_flight() {
-        Self::increment(CyclesTopupMetricKey::RequestInFlight);
     }
 
     /// Record that a top-up request was scheduled.

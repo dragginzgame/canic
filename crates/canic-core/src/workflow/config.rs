@@ -14,9 +14,6 @@ use std::time::Duration;
 /// Shared initial delay for background workflow timers to allow init work to settle.
 pub const WORKFLOW_INIT_DELAY: Duration = Duration::from_secs(30);
 
-/// Shared cadence for cycle tracking (60 minutes).
-pub const WORKFLOW_CYCLE_TRACK_INTERVAL: Duration = Duration::from_hours(1);
-
 /// Root delegated-proof renewal sweep cadence (1 minute).
 pub const WORKFLOW_AUTH_RENEWAL_INTERVAL: Duration = Duration::from_mins(1);
 

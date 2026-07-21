@@ -351,8 +351,8 @@ impl CycleTopupEvents {
     }
 
     #[must_use]
-    pub(crate) fn purge_before(cutoff: u64) -> usize {
-        CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| events.purge_inner(cutoff))
+    pub(crate) fn purge_before(cutoff: u64, limit: usize) -> usize {
+        CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| events.purge_inner(cutoff, limit))
     }
 
     #[must_use]
@@ -388,10 +388,12 @@ impl CycleTopupEvents {
         CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| events.map.clear_new());
     }
 
-    fn purge_inner(&mut self, cutoff: u64) -> usize {
+    fn purge_inner(&mut self, cutoff: u64, limit: usize) -> usize {
         let mut purged = 0;
 
-        while let Some((first_key, _)) = self.map.first_key_value() {
+        while purged < limit
+            && let Some((first_key, _)) = self.map.first_key_value()
+        {
             if first_key.timestamp_secs < cutoff {
                 self.map.remove(&first_key);
                 purged += 1;
@@ -424,8 +426,13 @@ impl CycleTracker {
 
     /// Purge entries older than the provided cutoff timestamp.
     #[must_use]
-    pub(crate) fn purge_before(cutoff: u64) -> usize {
-        CYCLE_TRACKER.with_borrow_mut(|t| t.purge_inner(cutoff))
+    pub(crate) fn purge_before(cutoff: u64, limit: usize) -> usize {
+        CYCLE_TRACKER.with_borrow_mut(|t| t.purge_inner(cutoff, limit))
+    }
+
+    #[must_use]
+    pub(crate) fn latest() -> Option<(u64, Cycles)> {
+        CYCLE_TRACKER.with_borrow(|tracker| tracker.map.last_key_value())
     }
 
     #[must_use]
@@ -440,10 +447,12 @@ impl CycleTracker {
         })
     }
 
-    fn purge_inner(&mut self, cutoff: u64) -> usize {
+    fn purge_inner(&mut self, cutoff: u64, limit: usize) -> usize {
         let mut purged = 0;
 
-        while let Some((first_ts, _)) = self.map.first_key_value() {
+        while purged < limit
+            && let Some((first_ts, _)) = self.map.first_key_value()
+        {
             if first_ts < cutoff {
                 self.map.remove(&first_ts);
                 purged += 1;
@@ -497,5 +506,25 @@ mod tests {
 
         CycleTopupEvents::clear_for_tests();
         CyclesFundingLedger::clear_for_tests();
+    }
+
+    #[test]
+    fn cycle_tracker_latest_and_retention_are_ordered_and_bounded() {
+        let _guard = seams::lock();
+        let _ = CycleTracker::purge_before(u64::MAX, usize::MAX);
+        for timestamp in 1..=4 {
+            CycleTracker::record(timestamp, Cycles::new(u128::from(timestamp)));
+        }
+
+        assert_eq!(CycleTracker::latest(), Some((4, Cycles::new(4))));
+        assert_eq!(CycleTracker::purge_before(4, 2), 2);
+        assert_eq!(
+            CycleTracker::entries(0, usize::MAX),
+            vec![(3, Cycles::new(3)), (4, Cycles::new(4))]
+        );
+        assert_eq!(CycleTracker::purge_before(4, 2), 1);
+        assert_eq!(CycleTracker::latest(), Some((4, Cycles::new(4))));
+
+        let _ = CycleTracker::purge_before(u64::MAX, usize::MAX);
     }
 }

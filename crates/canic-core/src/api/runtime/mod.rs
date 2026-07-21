@@ -640,11 +640,11 @@ mod tests {
 
     #[test]
     fn runtime_status_projects_live_registration_and_process_condition() {
-        let statuses = timer_statuses_from(vec![timer_snapshot("cycles:tracking")]);
+        let statuses = timer_statuses_from(vec![timer_snapshot("cycles:topup")]);
 
         assert_eq!(statuses.len(), 1);
         assert_eq!(statuses[0].subsystem, "cycles");
-        assert_eq!(statuses[0].name, "tracking");
+        assert_eq!(statuses[0].name, "topup");
         assert_eq!(statuses[0].registration, TimerRegistrationStatus::Scheduled);
         assert_eq!(statuses[0].condition, TimerProcessCondition::Active);
         assert_eq!(

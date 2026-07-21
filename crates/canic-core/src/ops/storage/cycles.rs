@@ -55,8 +55,13 @@ impl CycleTrackerOps {
     }
 
     #[must_use]
-    pub fn purge_before(cutoff: u64) -> usize {
-        CycleTracker::purge_before(cutoff)
+    pub fn purge_before(cutoff: u64, limit: usize) -> usize {
+        CycleTracker::purge_before(cutoff, limit)
+    }
+
+    #[must_use]
+    pub fn latest() -> Option<(u64, Cycles)> {
+        CycleTracker::latest()
     }
 
     #[must_use]
@@ -175,8 +180,8 @@ impl CycleTopupEventOps {
     }
 
     #[must_use]
-    pub fn purge_before(cutoff: u64) -> usize {
-        CycleTopupEvents::purge_before(cutoff)
+    pub fn purge_before(cutoff: u64, limit: usize) -> usize {
+        CycleTopupEvents::purge_before(cutoff, limit)
     }
 
     #[must_use]

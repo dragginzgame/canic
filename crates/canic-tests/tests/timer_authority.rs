@@ -75,6 +75,18 @@ fn application_timers_cancel_and_recur_only_after_completion() {
     assert_eq!(log_retention.condition, TimerProcessCondition::Idle);
     assert_eq!(log_retention.next_due_at_ns, None);
     assert_eq!(log_retention.executions_since_runtime_start, 0);
+    let cycle_topup = status
+        .timers
+        .iter()
+        .find(|timer| timer.subsystem == "cycles" && timer.name == "topup")
+        .expect("cycle top-up runtime status");
+    assert_eq!(
+        cycle_topup.registration,
+        TimerRegistrationStatus::Unregistered
+    );
+    assert_eq!(cycle_topup.condition, TimerProcessCondition::Idle);
+    assert_eq!(cycle_topup.next_due_at_ns, None);
+    assert_eq!(cycle_topup.executions_since_runtime_start, 0);
 }
 
 #[test]
