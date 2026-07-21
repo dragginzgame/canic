@@ -26,9 +26,11 @@ corrects intent invariant failure to stop rather than self-retry. Released
 `v0.95.4` gives placement acknowledgement a durable terminal-only index and
 pending-only bounded recovery. Released `v0.95.5` completes Slice C with
 append-owned count enforcement and exact deadline-driven log age retention.
-The open `0.95.6` batch begins Slice D by separating event-owned cycle history
-from one configuration-gated automatic-funding safety owner and making
-configured root ICP self-refill reachable.
+Released `v0.95.6` begins Slice D by separating event-owned cycle history from
+one configuration-gated automatic-funding safety owner. The open `0.95.7`
+correction makes that owner nonroot-only, hard-cuts automatic root ICP
+conversion, reduces the maximum observation gap to one hour, and binds
+successful child requests to parent funding cooldown.
 
 The accepted design now includes a maintainer-approved duration amendment.
 Cadences are no longer retained merely because the audit recorded them.
@@ -156,24 +158,31 @@ The canonical report is
 
 ## Slice D Cycle Evidence
 
-- The open `0.95.6` batch replaces `cycles:tracking` with one independent
+- Released `v0.95.6` replaces `cycles:tracking` with one independent
   `cycles:topup` owner. Disabled roles record their lifecycle observation and
   remain `unregistered + idle`; no history-only callback remains.
-- Configured nonroot roles await the existing parent-funding request, while an
-  enabled root `topup.icp_refill` policy now reaches the existing hub
-  self-refill workflow. The common timer's running state replaces both heap
-  in-flight flags and the detached funding task.
+- The open `0.95.7` correction limits the owner to configured nonroot roles,
+  which await the existing parent-funding request. Root ICP conversion remains
+  an explicit operator action through the maintained guarded endpoint and CLI.
+  The automatic hub workflow, threshold field, resumable lookup, and operation
+  identity are removed as a hard cut.
 - Above threshold, the next check derives from headroom and the greater of
   twice observed burn or a threshold-per-day floor. The accepted safety window
-  is one minute to six hours after reserving five minutes for funding and five
+  is one minute to one hour after reserving five minutes for funding and five
   minutes of margin; observations older than 12 hours use the floor.
-- Work is due at or below threshold. Retryable transport, conflict, cooldown,
-  capacity, and resumable root-refill outcomes use the 1/2/4/8/16/30-minute
-  progression. Other public/configuration contradictions and terminal refill
-  outcomes stop failed.
+- Work is due at or below threshold. A completed grant cannot be followed by
+  another request before the configured parent cooldown or the one-minute
+  observation floor. Transport/ops failure and in-progress conflict use the
+  1/2/4/8/16/30-minute progression; cooldown, cumulative-budget, capacity,
+  authorization, and configuration rejection stop instead of polling.
+- The parent remains the single abuse-control authority for direct-child
+  admission, kill switch, replay exclusion, cost guard, request clamping,
+  cumulative child budget, cooldown, and available balance. The child timer
+  cannot bypass those controls or trigger unbounded ICP conversion.
 - History is written at lifecycle and funding boundaries. Each observation
   purges at most 128 expired balance rows and 128 top-up-event rows under the
-  unchanged seven-day window. Public and stable shapes are unchanged.
+  unchanged seven-day window. Candid and stable shapes are unchanged; the
+  automatic-only `min_hub_cycles_before_refill` config key is removed.
 
 ## Finding Index
 
@@ -182,10 +191,10 @@ The canonical report is
 | `CANIC-095-TIMER-001` async interval overlap | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-002` stale guarded slot/lost reschedule | P1 | fixed in released 0.95.1 | common timer workflow |
 | `CANIC-095-TIMER-003` false live timer status | P2 | fixed in released 0.95.1 | common timer workflow/runtime projection |
-| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in released 0.95.4; log fixed in released 0.95.5; cycle history fixed in open 0.95.6 | log, pool, intent, placement, and cycle workflows |
+| `CANIC-095-TIMER-004` unnecessary idle wakes | P2 | intent fixed in released 0.95.2; pool fixed in released 0.95.3; placement fixed in released 0.95.4; log fixed in released 0.95.5; cycle history fixed in released 0.95.6; root top-up fixed in open 0.95.7 | log, pool, intent, placement, and cycle workflows |
 | `CANIC-095-TIMER-005` unrelated full scans | P2 | intent fixed in released 0.95.2; placement fixed in released 0.95.4 | intent and placement ops/workflows |
 | `CANIC-095-TIMER-006` competing mechanics/lifecycle paths | P2 | fixed in released 0.95.1 | timer workflow and lifecycle facade |
-| `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | fixed in open 0.95.6 | cycle/top-up workflow |
+| `CANIC-095-TIMER-007` unreachable configured root self-refill | P1 | audit assumption corrected in open 0.95.7: automatic root refill was obsolete, so the flow and its config surface are hard-cut; manual ICP conversion remains | cycle/top-up and ICP-refill workflows |
 | `CANIC-095-TIMER-008` log count authority contradicts disposition | P2 | fixed in released 0.95.5 | log storage/ops/workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
@@ -198,15 +207,15 @@ reproducible timer-owner evidence.
    lifecycle facade, and public hard cuts.
 2. Slice C: log age deadlines, pool events/retries, intent expiry index, and
    placement acknowledgement queue/index.
-3. Slice D: independent cycle sample/top-up owners, reachable configured root
-   self-refill, exact delegated-proof renewal deadline, comparative costs, and
-   cumulative closeout.
+3. Slice D: independent cycle sample/nonroot-top-up owners, manual-only root
+   ICP conversion, exact delegated-proof renewal deadline, comparative costs,
+   and cumulative closeout.
 
 Receipt replay/reclamation, Toko integration, dependency work, backup/restore,
 and general cleanup remain out of scope.
 
 ## Next Action
 
-Complete and release the open `0.95.6` cycle-observation and automatic-top-up
-batch, then freeze the delegated-proof renewal deadline and retry decision for
-the remaining Slice D owner.
+Complete and release the open `0.95.7` manual-root/nonroot-top-up correction,
+then freeze the delegated-proof renewal deadline and retry decision for the
+remaining Slice D owner.

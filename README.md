@@ -8,12 +8,12 @@
 [![Docs.rs](https://docs.rs/canic/badge.svg)](https://docs.rs/canic)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
-[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.96.0-orange.svg)](rust-toolchain.toml)
+[![Internal Rust](https://img.shields.io/badge/internal%20rust-1.97.0-orange.svg)](rust-toolchain.toml)
 
 Canic is a Rust toolkit and operator CLI for Internet Computer canister fleets.
 It gives canister crates metadata-driven lifecycle macros, validated topology
 config, stable-memory helpers, endpoint guards, thin-root artifact builds,
-local fleet install, snapshot, backup, and restore workflows.
+local fleet install, and topology-aware backup and restore workflows.
 
 Install the published operator binary:
 
@@ -40,9 +40,13 @@ walkthrough.
 
 ## Highlights
 
-* **Lifecycle and build macros:** `canic::start!()` and `canic::build!` wire IC
-  hooks, endpoint bundles, and compile-time config validation from
+* **Lifecycle and build macros:** `canic::start!()` and `canic::build!(...)`
+  wire IC hooks, endpoint bundles, and compile-time config validation from
   `[package.metadata.canic] fleet = "..."` and `role = "..."`.
+* **Application timers:** `timer!` schedules one asynchronous invocation, while
+  `timer_interval!` rearms only after the current future completes. Both return
+  opaque handles consumed by cancellation. See the
+  [facade timer contract](crates/canic/README.md#application-timers).
 * **Role lifecycle:** ordinary managed canisters can be declared before
   topology placement, then explicitly attached before artifact builds or
   deployment truth.
@@ -71,8 +75,9 @@ walkthrough.
   to read and refresh cached public IC subnet metadata without requiring the
   standalone NNS inspection CLI.
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
-  fleet configs and replica status, installs fleets, captures topology-aware
-  snapshots, validates backup manifests, and drives guarded restore planning.
+  fleet configs and replica status, installs fleets, creates topology-aware
+  backups, validates their manifests, and drives journaled, resumable restore
+  execution.
 
 ## Quick Start
 
@@ -184,7 +189,7 @@ make test-cli
 make test-runtime-fast
 ```
 
-[rust-toolchain.toml](rust-toolchain.toml) pins the internal toolchain so CI and
+[rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.97.0` so CI and
 local builds stay in sync. Published crates declare MSRV `1.91.0` in
 [Cargo.toml](Cargo.toml).
 

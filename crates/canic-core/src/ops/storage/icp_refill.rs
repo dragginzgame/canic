@@ -10,9 +10,7 @@ use crate::{
         candid::Nat,
         types::{Cycles, Principal, Subaccount},
     },
-    domain::icp_refill::{
-        IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus, icp_refill_outcome_is_resumable,
-    },
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, icp_refill_outcome_is_resumable},
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ops::storage::StorageOpsError,
     storage::stable::icp_refill::{
@@ -415,12 +413,6 @@ impl IcpRefillStoreOps {
         )?)
     }
 
-    pub fn find_resumable_hub_self_refill(
-        self_pid: Principal,
-    ) -> Result<Option<IcpRefillOperation>, InternalError> {
-        Ok(IcpRefillRecordOps::find_resumable_hub_self_refill(self_pid)?.map(record_to_operation))
-    }
-
     #[must_use]
     pub const fn is_resumable(operation: &IcpRefillOperation) -> bool {
         icp_refill_outcome_is_resumable(
@@ -597,19 +589,6 @@ impl IcpRefillStoreOps {
     ) -> Result<IcpRefillOperation, InternalError> {
         IcpRefillRecordOps::mark_notify_max_attempts(id, error_message, now_ns)
             .map(record_to_operation)
-    }
-
-    #[must_use]
-    pub const fn to_request(operation: &IcpRefillOperation) -> IcpRefillRequest {
-        IcpRefillRequest {
-            operation_id: operation.operation_id,
-            source_canister: operation.source_canister,
-            source_subaccount: operation.source_subaccount,
-            target_canister: operation.target_canister,
-            amount_e8s: operation.amount_e8s,
-            dry_run: false,
-            mode: IcpRefillMode::Canister,
-        }
     }
 
     #[must_use]
@@ -872,12 +851,6 @@ impl IcpRefillRecordOps {
             Some(except_operation_id),
         )?
         .is_some())
-    }
-
-    pub fn find_resumable_hub_self_refill(
-        self_pid: Principal,
-    ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
-        Self::find_active_for_key(self_pid, None, self_pid, None)
     }
 
     #[must_use]

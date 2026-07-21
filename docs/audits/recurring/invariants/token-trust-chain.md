@@ -248,7 +248,7 @@ git log --name-only -n 20 -- crates/canic-core/src/ops/auth crates/canic-core/sr
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `crates/canic-core/src/ops/auth/token.rs` | `AuthOps::verify_token`, `auth_proof_verifier_config_from`, `verify_with_embedded_proofs` | runtime config, root key, root proof, and issuer proof orchestration | High |
+| `crates/canic-core/src/ops/auth/token/mod.rs` | `AuthOps::verify_token`, `auth_proof_verifier_config_from`, `verify_with_embedded_proofs` | runtime config, root key, root proof, and issuer proof orchestration | High |
 | `crates/canic-core/src/ops/auth/delegated/verify.rs` | `verify_delegated_token`, `verify_claims` | pure cert/claims/root/issuer verification ordering | High |
 | `crates/canic-core/src/ops/auth/delegated/chain_key.rs` | `verify_chain_key_batch_root_proof` | delegated root proof policy, chain-key public key, signature, Merkle witness, and certificate equality | High |
 | `crates/canic-core/src/ops/auth/root_canister_sig.rs` | `verify_root_canister_signature_proof` | role-attestation root proof canister id, seed/domain, message, and IC root-key verification | Medium |

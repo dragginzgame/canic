@@ -6,7 +6,6 @@
 
 mod cost_guard;
 mod execution;
-mod hub;
 mod manual;
 mod replay;
 
@@ -16,7 +15,7 @@ use crate::{
         candid::Nat,
         types::{Cycles, Principal},
     },
-    config::schema::{IcpRefillPolicy, TopupPolicy},
+    config::schema::IcpRefillPolicy,
     domain::policy::pure::cycles_funding::cooldown_retry_after_secs,
     domain::policy::pure::icp_refill::{
         IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
@@ -82,7 +81,7 @@ impl From<IcpRefillWorkflowError> for InternalError {
 ///
 /// IcpRefillWorkflow
 ///
-/// Workflow entrypoint for manual and automatic ICP refill orchestration.
+/// Workflow entrypoint for explicit ICP refill orchestration.
 /// Owned by workflow and called after endpoints authenticate input.
 ///
 
@@ -122,7 +121,6 @@ impl ManualRefillPreflight {
         request: &IcpRefillRequest,
     ) -> Result<Self, InternalError> {
         let input = policy_input(
-            0,
             request,
             None,
             active_for_request(request)?,
@@ -147,7 +145,6 @@ impl ManualRefillPreflight {
                 ..self.input
             },
         )
-        .map(|_decision| ())
         .map_err(policy_denied)
     }
 }
@@ -235,10 +232,9 @@ fn refill_canister_overrides(policy: Option<&IcpRefillPolicy>) -> IcpRefillCanis
     }
 }
 
-fn icp_refill_policy_rules(policy: &IcpRefillPolicy) -> IcpRefillPolicyRules {
+const fn icp_refill_policy_rules(policy: &IcpRefillPolicy) -> IcpRefillPolicyRules {
     IcpRefillPolicyRules {
         enabled: policy.enabled,
-        min_hub_cycles_before_refill: policy.min_hub_cycles_before_refill.clone(),
         max_refill_e8s_per_call: policy.max_refill_e8s_per_call,
         min_xdr_permyriad_per_icp: policy.min_xdr_permyriad_per_icp,
     }
@@ -262,12 +258,7 @@ fn current_icp_refill_policy() -> Result<Option<IcpRefillPolicy>, InternalError>
         .and_then(|topup| topup.icp_refill))
 }
 
-fn current_topup_policy() -> Result<Option<TopupPolicy>, InternalError> {
-    Ok(ConfigOps::current_canister()?.topup)
-}
-
 const fn policy_input(
-    hub_cycles: u128,
     request: &IcpRefillRequest,
     observed_xdr_permyriad_per_icp: Option<u64>,
     active_for_key: bool,
@@ -275,7 +266,6 @@ const fn policy_input(
     funding_cooldown_retry_after_secs: Option<u64>,
 ) -> IcpRefillPolicyInput {
     IcpRefillPolicyInput {
-        hub_cycles,
         requested_amount_e8s: request.amount_e8s,
         observed_xdr_permyriad_per_icp,
         active_for_key,

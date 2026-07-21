@@ -2,11 +2,19 @@
 
 Date of audit: 2026-06-30
 
+> [!NOTE]
+> This is frozen historical evidence from the `0.76.6` baseline. It is not a
+> current repository status or audit-method authority. Use the
+> [current status](docs/status/current.md) for the active handoff and the
+> [audit catalog](docs/audits/README.md) for maintained definitions and newer
+> reports. Historical tool versions and findings below are preserved as
+> observed on the audit date.
+
 ## Executive Summary
 
-This is a running repo-wide correctness and cleanup audit for the Canic
+This is a frozen repo-wide correctness and cleanup audit for the Canic
 workspace. The audit started from a clean working tree at `0.76.6` after the
-delegated-auth hard-cut cleanup. The current priority is correctness,
+delegated-auth hard-cut cleanup. The priority at the time was correctness,
 maintainability, stale-code removal, consistency, and confidence-building, not
 new product features or broad optimization.
 

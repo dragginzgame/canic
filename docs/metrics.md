@@ -128,15 +128,15 @@ use the existing family-specific dimensions:
 | `replay` | `[operation, outcome, reason]` | `None` | `Count` |
 | `root_capability` | `[capability, event_type, outcome, proof_mode]` | `None` | `Count` |
 | `scaling` | `[operation, outcome, reason]` | `None` | `Count` |
+| `sharding` | `[operation, outcome, reason]` | `None` | `Count` |
+| `timer` | `[mode, label]` | `None` | `CountAndU64` |
+| `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
 
 Delegated-auth renewal rows use the existing `delegated_auth` family with
 the bounded operation label `renewal_sweep`. Outcomes are
 `started`/`completed`/`failed`; reasons reuse bounded auth reasons such as
 `ok`, `invalid_state`, `cert_expired`, `issuer_proof_unavailable`,
 `cert_hash_mismatch`, `disabled`, and `root_proof_prepare_failed`.
-| `sharding` | `[operation, outcome, reason]` | `None` | `Count` |
-| `timer` | `[mode, label]` | `None` | `CountAndU64` |
-| `wasm_store` | `[operation, source, outcome, reason]` | `None` | `Count` |
 
 For `timer`, `count` is the execution count and `value_u64` is the latest
 armed delay in milliseconds. Delay is deliberately a value rather than a key,

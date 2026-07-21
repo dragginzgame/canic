@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.5`.
-- The latest published release is `v0.95.5` at
-  `72bbd7bdb72033a37aab5ab3fbf71239b2150e19`.
-- The `v0.95.5` source tree is
-  `f4d35ccfc9796bf1b8d8be8ecd8ceb60c451f894`; its Cargo.lock SHA-256 is
-  `f3f0d607d8ff4270d5033eb4991fe68adac63456222805e807748323e39924ad`.
+- The workspace package version is `0.95.6`.
+- The latest published release is `v0.95.6` at
+  `9e297e65a47e783bfa2f58d8930f20fe9245fb26`.
+- The `v0.95.6` source tree is
+  `cd864dd8c5ebae2e9d749be1f3b63b13120f121d`; its Cargo.lock SHA-256 is
+  `983bceb853196999b1d8d93e75ceed80df425619e851234fa3b48c4ad7a2cdd5`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -309,12 +309,15 @@ Historical detail is archived at:
   no-age policy executes zero callbacks. Append-only allocations 31 and 32 are
   hard-cut in favor of the modeled `runtime_log` domain at allocation 35, with
   no migration or compatibility reader for non-authoritative old log history.
-- The open `0.95.6` batch begins Slice D. It replaces coupled hourly cycle
+- Released `v0.95.6` begins Slice D. It replaces coupled hourly cycle
   tracking/top-up with event-owned balance history and one configuration-gated
-  `cycles:topup` safety owner. Disabled roles execute zero callbacks;
-  configured root ICP self-refill is reachable and funding is awaited under
-  common non-overlap. Headroom, conservative burn, and bounded retry now own
-  every cycle-timer duration.
+  `cycles:topup` safety owner. The open `0.95.7` correction makes automatic
+  funding nonroot-only, keeps root ICP conversion manual, removes its obsolete
+  threshold and automatic workflow, bounds unattended balance observation to
+  one hour, and prevents successful child requests from undercutting the
+  configured parent cooldown. Parent admission, replay, cost, request,
+  cumulative child-budget, cooldown, kill-switch, and balance controls remain
+  authoritative.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -345,9 +348,12 @@ consuming cancellation, truthful live status, and one lifecycle facade.
 Released `.2` completes the first Slice C owner: finite local-intent expiry.
 Released `.3` removes idle pool polling and corrects intent invariant failure.
 Released `.4` owns placement acknowledgement through one terminal-only
-derived index and pending-only scheduler. The open `.5` batch gives log count,
-byte, and age retention one ordered mutation authority and removes the final
-Slice C polling interval.
+derived index and pending-only scheduler. Released `.5` gives log count, byte,
+and age retention one ordered mutation authority and removes the final Slice C
+polling interval. Released `.6` separates diagnostic cycle observations from
+automatic funding. Open `.7` restricts that funding owner to nonroot parent
+requests, keeps root ICP conversion manual, and tightens its observation and
+abuse bounds.
 Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
 backup/restore changes, and compatibility layers remain excluded.
 
@@ -870,9 +876,9 @@ First primary results:
 
 ## Next Action
 
-Complete and release the open `0.95.6` cycle-observation and automatic-top-up
-batch. Then freeze and implement the delegated-proof renewal deadline and
-retry policy as the remaining Slice D owner.
+Complete and release the open `0.95.7` manual-root/nonroot-top-up correction.
+Then freeze and implement the delegated-proof renewal deadline and retry policy
+as the remaining Slice D owner.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

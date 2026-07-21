@@ -109,14 +109,6 @@ fn validate_icp_refill(
         return Ok(());
     }
 
-    let min_hub_cycles = icp_refill.min_hub_cycles_before_refill.to_u128();
-
-    if min_hub_cycles == 0 {
-        return Err(ConfigSchemaError::ValidationError(format!(
-            "canister '{canister}' topup.icp_refill.min_hub_cycles_before_refill must be > 0",
-        )));
-    }
-
     if icp_refill.max_refill_e8s_per_call == 0 {
         return Err(ConfigSchemaError::ValidationError(format!(
             "canister '{canister}' topup.icp_refill.max_refill_e8s_per_call must be > 0",

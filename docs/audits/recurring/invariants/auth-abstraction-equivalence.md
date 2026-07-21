@@ -239,7 +239,7 @@ rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates 
 rg -l 'canic_emit_root_auth_attestation_endpoints|canic_emit_nonroot_auth_attestation_endpoints|canic_emit_blob_storage_endpoints|canic_emit_blob_storage_billing_endpoints' crates canisters fleets -g '*.rs'
 rg -n 'DelegationAudience::Canister|DelegationAudience::CanicSubnet|DelegationAudience::Project|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters fleets docs -g '*.rs' -g '*.md'
 rg -n 'SignedRoleAttestation|verify_role_attestation' crates canisters fleets docs -g '*.rs' -g '*.md'
-git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-core/src/dto/auth.rs
+git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-core/src/dto/auth
 ```
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
@@ -251,7 +251,7 @@ git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access cr
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | canonical verifier behavior baseline | High |
 | `crates/canic-core/src/api/auth/session/mod.rs` | delegated session bootstrap | convenience path that must not replace endpoint auth semantics | Medium |
 | `crates/canic-core/src/ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | canister/subnet/project audience validation and local-role grant binding | High |
-| `crates/canic-core/src/dto/auth.rs` | `DelegationAudience`, `DelegatedRoleGrant`, `DelegatedToken`, `DelegationProof` | passive DTO shape; must remain behavior-free and grant-authorized | Medium |
+| `crates/canic-core/src/dto/auth/mod.rs` | `DelegationAudience`, `DelegatedRoleGrant`, `DelegatedToken`, `DelegationProof` | passive DTO shape; must remain behavior-free and grant-authorized | Medium |
 | `crates/canic/src/macros/endpoints/root.rs` | `canic_emit_root_auth_attestation_endpoints!` | root proof provisioning and attestation generated endpoint guards | High |
 | `crates/canic/src/macros/endpoints/nonroot.rs` | `canic_emit_nonroot_auth_attestation_endpoints!` | issuer-local delegated-token prepare/get and active-proof install generated endpoints | High |
 | `crates/canic/src/macros/endpoints/blob_storage.rs` | `canic_emit_blob_storage_endpoints!` | generated endpoint guard for certificate creation plus protocol-owned gateway checks | Medium |

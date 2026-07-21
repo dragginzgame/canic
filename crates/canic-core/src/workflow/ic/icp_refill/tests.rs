@@ -1,10 +1,7 @@
-use super::{cost_guard::*, execution::*, hub::*, manual::*, replay::*, *};
+use super::{cost_guard::*, execution::*, manual::*, replay::*, *};
 use crate::{
     InternalErrorClass,
-    cdk::{
-        candid::Nat,
-        types::{Principal, TC},
-    },
+    cdk::{candid::Nat, types::Principal},
     config::schema::CanisterKind,
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
     dto::error::ErrorCode,
@@ -240,7 +237,6 @@ fn refill_canister_overrides_follow_config_resolution_fields() {
 
     let policy = IcpRefillPolicy {
         enabled: true,
-        min_hub_cycles_before_refill: Cycles::new(2 * TC),
         max_refill_e8s_per_call: 100_000_000,
         min_xdr_permyriad_per_icp: None,
         ledger_canister_id: Some(p(11)),
@@ -320,7 +316,7 @@ fn notify_retry_only_allows_notify_failed_with_block_index() {
 }
 
 #[test]
-fn hub_self_refill_resumes_in_flight_and_retryable_records() {
+fn refill_recovery_resumes_in_flight_and_retryable_records() {
     assert!(IcpRefillRecordOps::is_resumable(&sample_record(
         IcpRefillStatus::Requested
     )));
@@ -396,20 +392,6 @@ fn retry_request_must_match_stored_operation_identity() {
         &operation_from_record(&record),
     )
     .expect_err("changed amount must fail");
-}
-
-#[test]
-fn hub_self_refill_operation_id_binds_identity_amount_and_time() {
-    let source = p(1);
-    let target = p(3);
-    let first = hub_self_refill_operation_id(source, None, target, 100, 1_000);
-    let same = hub_self_refill_operation_id(source, None, target, 100, 1_000);
-    let different_amount = hub_self_refill_operation_id(source, None, target, 101, 1_000);
-    let different_time = hub_self_refill_operation_id(source, None, target, 100, 1_001);
-
-    assert_eq!(first, same);
-    assert_ne!(first, different_amount);
-    assert_ne!(first, different_time);
 }
 
 #[test]
