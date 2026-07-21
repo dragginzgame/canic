@@ -1292,17 +1292,26 @@ fn application_terminal_eligibility_is_exact_and_overflow_is_non_mutating() {
 }
 
 #[test]
-fn application_capacity_uses_maintained_counts_and_first_eligibility_key() {
+fn receipt_capacity_uses_maintained_counts_and_first_eligibility_key() {
     reset();
     let input = receipt_input(49);
     begin_receipt(&input, 100).expect("create application receipt");
 
-    let pending = ReceiptBackedIntentOps::application_capacity().expect("pending capacity");
+    let pending = ReceiptBackedIntentOps::receipt_capacity().expect("pending capacity");
     assert_eq!(pending.total_records, 1);
     assert_eq!(pending.application_records, 1);
     assert_eq!(pending.canic_owned_records, 0);
     assert_eq!(pending.pending_records, 1);
     assert_eq!(pending.terminal_records, 0);
+    assert_eq!(pending.resource_total_records, 1);
+    assert_eq!(
+        pending.resource_total_record_limit,
+        INTENT_RESOURCE_TOTAL_RECORD_LIMIT
+    );
+    assert_eq!(
+        pending.remaining_resource_total_headroom,
+        INTENT_RESOURCE_TOTAL_RECORD_LIMIT - 1
+    );
     assert_eq!(
         pending.remaining_record_headroom,
         RECEIPT_BACKED_INTENT_RECORD_LIMIT - 1
@@ -1322,7 +1331,7 @@ fn application_capacity_uses_maintained_counts_and_first_eligibility_key() {
     )
     .expect("settle application receipt");
 
-    let terminal = ReceiptBackedIntentOps::application_capacity().expect("terminal capacity");
+    let terminal = ReceiptBackedIntentOps::receipt_capacity().expect("terminal capacity");
     assert_eq!(terminal.total_records, 1);
     assert_eq!(terminal.application_records, 1);
     assert_eq!(terminal.canic_owned_records, 0);
@@ -1337,7 +1346,7 @@ fn application_capacity_uses_maintained_counts_and_first_eligibility_key() {
 }
 
 #[test]
-fn application_capacity_includes_canic_owned_rows_in_shared_record_headroom() {
+fn receipt_capacity_includes_canic_owned_rows_in_shared_record_headroom() {
     reset();
     let placement = placement_receipt_input(49);
     ReceiptBackedIntentOps::begin_placement_or_load(&placement, 100)
@@ -1345,12 +1354,13 @@ fn application_capacity_includes_canic_owned_rows_in_shared_record_headroom() {
     let application = receipt_input(50);
     begin_receipt(&application, 100).expect("create application receipt");
 
-    let capacity = ReceiptBackedIntentOps::application_capacity().expect("project capacity");
+    let capacity = ReceiptBackedIntentOps::receipt_capacity().expect("project capacity");
     assert_eq!(capacity.total_records, 2);
     assert_eq!(capacity.application_records, 1);
     assert_eq!(capacity.canic_owned_records, 1);
     assert_eq!(capacity.pending_records, 1);
     assert_eq!(capacity.terminal_records, 0);
+    assert_eq!(capacity.resource_total_records, 2);
     assert_eq!(
         capacity.remaining_record_headroom,
         RECEIPT_BACKED_INTENT_RECORD_LIMIT - 2
@@ -1368,9 +1378,14 @@ fn compiled_receipt_limit_admits_exactly_one_thousand_distinct_records() {
         );
     }
 
-    let capacity = ReceiptBackedIntentOps::application_capacity().expect("capacity at limit");
+    let capacity = ReceiptBackedIntentOps::receipt_capacity().expect("capacity at limit");
     assert_eq!(capacity.total_records, RECEIPT_BACKED_INTENT_RECORD_LIMIT);
     assert_eq!(capacity.remaining_record_headroom, 0);
+    assert_eq!(
+        capacity.resource_total_records,
+        INTENT_RESOURCE_TOTAL_RECORD_LIMIT
+    );
+    assert_eq!(capacity.remaining_resource_total_headroom, 0);
     assert_eq!(capacity.reserved_terminal_pages, 8);
     assert_eq!(
         begin_receipt(&receipt_input_u64(RECEIPT_BACKED_INTENT_RECORD_LIMIT), 100,)
@@ -1380,6 +1395,123 @@ fn compiled_receipt_limit_admits_exactly_one_thousand_distinct_records() {
             limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
         }
     );
+}
+
+#[test]
+fn resource_total_limit_rejects_only_new_resource_identities_and_reopens_exactly() {
+    reset();
+    for value in 0..INTENT_RESOURCE_TOTAL_RECORD_LIMIT {
+        IntentStoreOps::try_reserve(
+            IntentId(value + 1),
+            IntentResourceKey::new(format!("resource-total:{value}")),
+            1,
+            CREATED_AT,
+            None,
+            NOW,
+        )
+        .expect("fill resource-total capacity");
+    }
+
+    let capacity = ReceiptBackedIntentOps::receipt_capacity().expect("capacity at total limit");
+    assert_eq!(capacity.total_records, 0);
+    assert_eq!(
+        capacity.resource_total_records,
+        INTENT_RESOURCE_TOTAL_RECORD_LIMIT
+    );
+    assert_eq!(capacity.remaining_resource_total_headroom, 0);
+
+    IntentStoreOps::try_reserve(
+        IntentId(INTENT_RESOURCE_TOTAL_RECORD_LIMIT + 1),
+        IntentResourceKey::new("resource-total:0"),
+        1,
+        CREATED_AT,
+        None,
+        NOW,
+    )
+    .expect("existing resource remains admissible at saturation");
+
+    let rejected_id = IntentId(INTENT_RESOURCE_TOTAL_RECORD_LIMIT + 2);
+    let error = IntentStoreOps::try_reserve(
+        rejected_id,
+        IntentResourceKey::new("resource-total:new"),
+        1,
+        CREATED_AT,
+        None,
+        NOW,
+    )
+    .expect_err("new local resource must reject at saturation");
+    assert!(error.is_public_resource_exhausted());
+    assert!(
+        IntentStoreOps::load(rejected_id)
+            .expect("load rejected local intent")
+            .is_none()
+    );
+
+    let blocked_receipt = receipt_input_u64(INTENT_RESOURCE_TOTAL_RECORD_LIMIT + 10);
+    assert_eq!(
+        begin_receipt(&blocked_receipt, 100).expect("new receipt resource rejects"),
+        BeginReceiptBackedIntentResult::StoreCapacityReached {
+            current_records: INTENT_RESOURCE_TOTAL_RECORD_LIMIT,
+            limit: INTENT_RESOURCE_TOTAL_RECORD_LIMIT,
+        }
+    );
+    assert!(
+        ReceiptBackedIntentOps::load(blocked_receipt.operation_id)
+            .expect("load rejected receipt")
+            .is_none()
+    );
+
+    IntentStoreOps::abort(IntentId(1)).expect("abort first resource intent");
+    IntentStoreOps::abort(IntentId(INTENT_RESOURCE_TOTAL_RECORD_LIMIT + 1))
+        .expect("abort second intent sharing first resource");
+    assert_eq!(
+        IntentStore::totals_len(),
+        INTENT_RESOURCE_TOTAL_RECORD_LIMIT - 1
+    );
+
+    assert_eq!(
+        begin_receipt(&blocked_receipt, 100).expect("reopened total slot admits receipt"),
+        BeginReceiptBackedIntentResult::Created { revision: 1 }
+    );
+    assert_eq!(
+        IntentStore::totals_len(),
+        INTENT_RESOURCE_TOTAL_RECORD_LIMIT
+    );
+}
+
+#[test]
+fn resource_total_limit_rejects_preexisting_state_above_the_hard_cut() {
+    reset();
+    for value in 0..=INTENT_RESOURCE_TOTAL_RECORD_LIMIT {
+        IntentStore::set_totals(
+            IntentResourceKey::new(format!("over-limit:{value}")),
+            IntentResourceTotalsRecord {
+                reserved_qty: 0,
+                committed_qty: 1,
+                pending_count: 0,
+            },
+        );
+    }
+
+    let rebuild_error = IntentStoreOps::rebuild_expiry_index()
+        .expect_err("lifecycle must reject resource totals above the hard cut");
+    assert_eq!(
+        rebuild_error.log_fields(),
+        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+    );
+    let projection_error = ReceiptBackedIntentOps::receipt_capacity()
+        .expect_err("capacity projection must reject the same over-limit state");
+    assert_eq!(
+        projection_error.log_fields(),
+        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+    );
+    let receipt_error = begin_receipt(&receipt_input_u64(9_999), 100)
+        .expect_err("receipt admission must preserve the over-limit invariant cause");
+    assert_eq!(
+        receipt_error.log_fields(),
+        (InternalErrorClass::Ops, InternalErrorOrigin::Ops)
+    );
+    assert_eq!(ReceiptBackedIntentStore::len(), 0);
 }
 
 #[test]

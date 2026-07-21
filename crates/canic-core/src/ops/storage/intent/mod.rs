@@ -36,15 +36,16 @@ use crate::{
         ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
     view::intent::{
-        ApplicationReceiptCapacityView, ApplicationReceiptReclamationBatch,
-        PlacementAcknowledgementPage,
+        ApplicationReceiptReclamationBatch, PlacementAcknowledgementPage, ReceiptCapacityView,
     },
 };
 use std::collections::BTreeMap;
 use std::ops::Bound;
 use thiserror::Error as ThisError;
 
+pub const INTENT_RESOURCE_TOTAL_RECORD_LIMIT: u64 = 1_000;
 pub const RECEIPT_BACKED_INTENT_RECORD_LIMIT: u64 = 1_000;
+pub const RECEIPT_CAPACITY_WARNING_HEADROOM_THRESHOLD: u64 = 100;
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
 // -----------------------------------------------------------------------------
@@ -109,6 +110,12 @@ pub enum IntentStoreOpsError {
 
     #[error("intent pending total mismatch: metadata={metadata}, index={index}")]
     PendingTotalMismatch { metadata: u64, index: u64 },
+
+    #[error("intent resource-total record capacity reached: records={records}, limit={limit}")]
+    ResourceTotalRecordCapacityReached { records: u64, limit: u64 },
+
+    #[error("intent resource-total record limit exceeded: records={records}, limit={limit}")]
+    ResourceTotalRecordLimitExceeded { records: u64, limit: u64 },
 
     #[error("intent {id} finite expiry overflows: created_at={created_at}, ttl_secs={ttl_secs}")]
     ExpiryDeadlineOverflow {
@@ -285,6 +292,12 @@ pub enum IntentStoreOpsError {
 
 impl From<IntentStoreOpsError> for InternalError {
     fn from(err: IntentStoreOpsError) -> Self {
+        if matches!(
+            err,
+            IntentStoreOpsError::ResourceTotalRecordCapacityReached { .. }
+        ) {
+            return Self::resource_exhausted(err.to_string());
+        }
         StorageOpsError::from(err).into()
     }
 }
@@ -363,6 +376,8 @@ impl IntentStoreOps {
             }
             .into());
         }
+
+        ensure_resource_total_admission(&resource_key)?;
 
         let totals = IntentStore::get_totals(&resource_key).unwrap_or_default();
         let new_totals = IntentResourceTotalsRecord {
@@ -638,6 +653,7 @@ impl IntentStoreOps {
     /// Rebuild the derived finite-expiry index from canonical pending intent state.
     pub fn rebuild_expiry_index() -> Result<(), InternalError> {
         let meta = ensure_schema()?;
+        validate_resource_total_record_limit()?;
         let entries = IntentStore::with_pending_entries(|pending| {
             let index_total = pending.len();
             if index_total != meta.pending_total {
@@ -944,8 +960,8 @@ impl ReceiptBackedIntentOps {
         Ok(Some(record.into_intent()))
     }
 
-    /// Return the maintained application receipt capacity and retention projection.
-    pub(crate) fn application_capacity() -> Result<ApplicationReceiptCapacityView, InternalError> {
+    /// Return the maintained receipt and resource-total capacity projection.
+    pub(crate) fn receipt_capacity() -> Result<ReceiptCapacityView, InternalError> {
         let total_records = ReceiptBackedIntentStore::len();
         let application_records = ReceiptBackedIntentStore::application_replay_len();
         let canic_owned_records = checked_sub(
@@ -968,8 +984,15 @@ impl ReceiptBackedIntentOps {
                 records: total_records,
                 limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
             })?;
+        let resource_total_records = validate_resource_total_record_limit()?;
+        let remaining_resource_total_headroom = INTENT_RESOURCE_TOTAL_RECORD_LIMIT
+            .checked_sub(resource_total_records)
+            .ok_or(IntentStoreOpsError::ResourceTotalRecordLimitExceeded {
+                records: resource_total_records,
+                limit: INTENT_RESOURCE_TOTAL_RECORD_LIMIT,
+            })?;
 
-        Ok(ApplicationReceiptCapacityView {
+        Ok(ReceiptCapacityView {
             total_records,
             application_records,
             canic_owned_records,
@@ -977,6 +1000,9 @@ impl ReceiptBackedIntentOps {
             terminal_records,
             record_limit: RECEIPT_BACKED_INTENT_RECORD_LIMIT,
             remaining_record_headroom,
+            resource_total_records,
+            resource_total_record_limit: INTENT_RESOURCE_TOTAL_RECORD_LIMIT,
+            remaining_resource_total_headroom,
             reserved_terminal_slots: application_records,
             reserved_terminal_pages:
                 ReceiptBackedIntentStore::application_eligibility_reserved_pages(),
@@ -1584,6 +1610,7 @@ fn create_receipt(
     now_ns: u64,
     record_limit: u64,
 ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+    let resource_total_records = validate_resource_total_record_limit()?;
     let record_count = ReceiptBackedIntentStore::len();
     if record_count >= record_limit {
         return Ok(BeginReceiptBackedIntentResult::StoreCapacityReached {
@@ -1592,7 +1619,14 @@ fn create_receipt(
         });
     }
 
-    let totals = IntentStore::get_totals(input.resource_key).unwrap_or_default();
+    let existing_totals = IntentStore::get_totals(input.resource_key);
+    if existing_totals.is_none() && resource_total_records >= INTENT_RESOURCE_TOTAL_RECORD_LIMIT {
+        return Ok(BeginReceiptBackedIntentResult::StoreCapacityReached {
+            current_records: resource_total_records,
+            limit: INTENT_RESOURCE_TOTAL_RECORD_LIMIT,
+        });
+    }
+    let totals = existing_totals.unwrap_or_default();
     let current_quantity = checked_add(totals.reserved_qty, totals.committed_qty, "accounted_qty")?;
     let next_quantity = checked_add(current_quantity, input.quantity, "accounted_qty")?;
     if next_quantity > input.reservation_limit {
@@ -1693,6 +1727,32 @@ fn validate_receipt_admission_owner(
             })
         }
     }
+}
+
+fn ensure_resource_total_admission(
+    resource_key: &IntentResourceKey,
+) -> Result<(), IntentStoreOpsError> {
+    let records = validate_resource_total_record_limit()?;
+    if IntentStore::get_totals(resource_key).is_none()
+        && records >= INTENT_RESOURCE_TOTAL_RECORD_LIMIT
+    {
+        return Err(IntentStoreOpsError::ResourceTotalRecordCapacityReached {
+            records,
+            limit: INTENT_RESOURCE_TOTAL_RECORD_LIMIT,
+        });
+    }
+    Ok(())
+}
+
+fn validate_resource_total_record_limit() -> Result<u64, IntentStoreOpsError> {
+    let records = IntentStore::totals_len();
+    if records <= INTENT_RESOURCE_TOTAL_RECORD_LIMIT {
+        return Ok(records);
+    }
+    Err(IntentStoreOpsError::ResourceTotalRecordLimitExceeded {
+        records,
+        limit: INTENT_RESOURCE_TOTAL_RECORD_LIMIT,
+    })
 }
 
 fn validate_application_replay_for_record(

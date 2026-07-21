@@ -27,6 +27,7 @@ fn receipt_backed_authority_and_consumer_inventory_is_explicit() {
     assert_eq!(
         source_paths_containing(&root, "ReceiptBackedIntentOps::"),
         BTreeSet::from([
+            "crates/canic-core/src/api/runtime/mod.rs".to_string(),
             "crates/canic-core/src/ops/storage/intent/tests.rs".to_string(),
             "crates/canic-core/src/workflow/placement/acknowledgement.rs".to_string(),
             "crates/canic-core/src/workflow/placement/allocation.rs".to_string(),

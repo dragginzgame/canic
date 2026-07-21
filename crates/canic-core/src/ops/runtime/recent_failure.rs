@@ -48,32 +48,23 @@ impl RecentFailureOps {
     /// This is intentionally heap-only and best-effort. It does not write
     /// stable state and is cleared by upgrade/reinstall.
     pub fn record(input: RecentFailureInput) {
-        let (subsystem, subsystem_redacted) = bounded_text(&input.subsystem, MAX_SUBSYSTEM_BYTES);
-        let (code, code_redacted) = bounded_text(&input.code, MAX_CODE_BYTES);
-        let (summary, summary_redacted) = bounded_text(&input.summary, MAX_SUMMARY_BYTES);
-        let (correlation_id, correlation_redacted) = input
-            .correlation_id
-            .as_deref()
-            .map(|value| bounded_text(value, MAX_CORRELATION_ID_BYTES))
-            .map_or((None, false), |(value, redacted)| (Some(value), redacted));
+        let failure = project(input);
 
         RECENT_FAILURES.with_borrow_mut(|failures| {
-            failures.push_front(RecentFailure {
-                occurred_at_ns: input.occurred_at_ns,
-                subsystem,
-                code,
-                severity: input.severity,
-                summary,
-                correlation_id,
-                redacted: subsystem_redacted
-                    || code_redacted
-                    || summary_redacted
-                    || correlation_redacted,
-            });
+            failures.push_front(failure);
             while failures.len() > MAX_RECENT_FAILURES {
                 let _ = failures.pop_back();
             }
         });
+    }
+
+    /// Project one current failure ahead of the retained snapshot without mutation.
+    #[must_use]
+    pub fn snapshot_with(input: RecentFailureInput) -> Vec<RecentFailure> {
+        let mut failures = Vec::with_capacity(MAX_RECENT_FAILURES);
+        failures.push(project(input));
+        failures.extend(Self::snapshot().into_iter().take(MAX_RECENT_FAILURES - 1));
+        failures
     }
 
     #[must_use]
@@ -84,6 +75,27 @@ impl RecentFailureOps {
     #[cfg(test)]
     pub fn reset() {
         RECENT_FAILURES.with_borrow_mut(VecDeque::clear);
+    }
+}
+
+fn project(input: RecentFailureInput) -> RecentFailure {
+    let (subsystem, subsystem_redacted) = bounded_text(&input.subsystem, MAX_SUBSYSTEM_BYTES);
+    let (code, code_redacted) = bounded_text(&input.code, MAX_CODE_BYTES);
+    let (summary, summary_redacted) = bounded_text(&input.summary, MAX_SUMMARY_BYTES);
+    let (correlation_id, correlation_redacted) = input
+        .correlation_id
+        .as_deref()
+        .map(|value| bounded_text(value, MAX_CORRELATION_ID_BYTES))
+        .map_or((None, false), |(value, redacted)| (Some(value), redacted));
+
+    RecentFailure {
+        occurred_at_ns: input.occurred_at_ns,
+        subsystem,
+        code,
+        severity: input.severity,
+        summary,
+        correlation_id,
+        redacted: subsystem_redacted || code_redacted || summary_redacted || correlation_redacted,
     }
 }
 
@@ -169,6 +181,20 @@ mod tests {
                 .is_some_and(|value| value.len() <= MAX_CORRELATION_ID_BYTES)
         );
 
+        RecentFailureOps::reset();
+    }
+
+    #[test]
+    fn current_failure_projection_is_bounded_without_mutating_the_ring() {
+        RecentFailureOps::reset();
+        RecentFailureOps::record(input(1));
+
+        let projected = RecentFailureOps::snapshot_with(input(2));
+
+        assert_eq!(projected.len(), 2);
+        assert_eq!(projected[0].occurred_at_ns, 2);
+        assert_eq!(projected[1].occurred_at_ns, 1);
+        assert_eq!(RecentFailureOps::snapshot().len(), 1);
         RecentFailureOps::reset();
     }
 }

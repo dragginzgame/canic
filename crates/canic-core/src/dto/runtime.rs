@@ -55,6 +55,7 @@ pub struct CanicRuntimeStatus {
     pub state: Option<RuntimeStateSummary>,
     pub auth: Option<RuntimeAuthStatusSummary>,
     pub blob_storage: Option<RuntimeBlobStorageStatusSummary>,
+    pub receipt_capacity: Option<RuntimeReceiptCapacityStatus>,
     pub recent_failures: Vec<RecentFailure>,
     pub visibility: Vec<RuntimeVisibilityEntry>,
     pub readiness: CanicReadinessStatus,
@@ -194,6 +195,30 @@ pub struct RuntimeAuthStatusSummary {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RuntimeBlobStorageStatusSummary {
     pub blob_storage_features: Vec<RuntimeFeatureStatus>,
+}
+
+//
+// RuntimeReceiptCapacityStatus
+//
+
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RuntimeReceiptCapacityStatus {
+    pub status: RuntimeCheckStatus,
+    pub receipt_records: u64,
+    pub application_receipt_records: u64,
+    pub canic_owned_receipt_records: u64,
+    pub pending_application_receipt_records: u64,
+    pub terminal_application_receipt_records: u64,
+    pub receipt_record_limit: u64,
+    pub remaining_receipt_record_headroom: u64,
+    pub resource_total_records: u64,
+    pub resource_total_record_limit: u64,
+    pub remaining_resource_total_headroom: u64,
+    pub warning_headroom_threshold: u64,
+    pub reserved_terminal_slots: u64,
+    pub reserved_terminal_pages: u64,
+    pub next_terminal_eligibility_at_ns: Option<u64>,
+    pub source: String,
 }
 
 //

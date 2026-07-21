@@ -499,7 +499,7 @@ impl IntentCleanupWorkflow {
         let local = IntentStoreOps::next_expiry_at_secs()?
             .map(Self::deadline_ns)
             .transpose()?;
-        let application = ReceiptBackedIntentOps::application_capacity()?.next_eligibility_at_ns;
+        let application = ReceiptBackedIntentOps::receipt_capacity()?.next_eligibility_at_ns;
         Ok(match (local, application) {
             (Some(local), Some(application)) => Some(local.min(application)),
             (Some(deadline), None) | (None, Some(deadline)) => Some(deadline),
@@ -808,7 +808,7 @@ mod tests {
             TimerDirective::Stop
         ));
         assert_eq!(
-            ReceiptBackedIntentOps::application_capacity()
+            ReceiptBackedIntentOps::receipt_capacity()
                 .expect("empty application capacity")
                 .application_records,
             0

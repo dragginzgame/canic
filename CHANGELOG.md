@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
 
+- `0.96.7` caps shared durable resource totals at 1,000 identities and exposes
+  exact receipt/resource headroom through guarded runtime status and inspect.
+
 - `0.96.6` hard-cuts the receipt ceiling from 100,000 to 1,000 records and
   gives eligible terminal application receipts one exact, bounded cleanup
   owner through the existing intent timer without changing resource totals.
