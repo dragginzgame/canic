@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.96.2`.
-- The latest published release is `v0.96.2` at
-  `4b2531bdc969eda7d08fef9604bcd9f3c60328aa`.
-- The `v0.96.2` source tree is
-  `107598da66d77a6937ae031bd396fa41de43078b`; its product-tree hash is
-  `086ae4a16716bd444ae0ac63ba6022f44e2510b51d03ec0c61fda8864271c52a` and
+- The workspace package version is `0.96.3`.
+- The latest published release is `v0.96.3` at
+  `e5c3b7be7014b67fbb1ad18a30aae7843b2ae83d`.
+- The `v0.96.3` source tree is
+  `09974e599161d8275939812980a2728b025c1f25`; its product-tree hash is
+  `b105dbf33206f6b694f62247fb74e610446e2bd1b08a219e518f272e56421cc2` and
   its Cargo.lock SHA-256 is
-  `c5bcde1c54e99a8d49664742b5ebb4d544d12f7409b4cf86d2ba2dc6d067df99`.
+  `b8d15e2dbdacfb218b6126dcea33e5781eda5470ac4ba9e867d171a6ba482cd4`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -341,8 +341,11 @@ Historical detail is archived at:
   bound, and removes exact zero-total rows. Terminal reclamation remains blocked
   on Toko's per-action identity, recovery/rate/resource-cardinality policy, and
   the final eligibility-allocation envelope. Released `v0.96.2` implements the
-  independently safe replay-deadline admission hard cut. Open `0.96.3`
-  corrects its lifecycle reconciliation to one ordered linear pass.
+  independently safe replay-deadline admission hard cut. Released `v0.96.3`
+  corrects its lifecycle reconciliation to one ordered linear pass. Open
+  `0.96.4` freezes a 24-hour terminal observation grace, provisions exact
+  settlement-index capacity at admission, and persists ordered terminal
+  eligibility without enabling deletion.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -397,16 +400,21 @@ It also corrects the valid totals encoding bound from 64 to 69 bytes and
 removes exact zero totals after abort or rollback. Released `.2` requires an
 absolute application deadline, closes absent operations at equality, enforces
 the source-backed 24-hour maximum, and stores one exact adjunct at allocation
-46. Open `.3` replaces the resulting lookup-amplified lifecycle validation
-with one ordered pass over each canonical map, then rebuilds placement
-acknowledgement only after complete validation. Production placement keeps its
+46. Released `.3` replaces the resulting lookup-amplified lifecycle validation
+with one ordered pass over each canonical map. Open `.4` adds the sole ordered
+terminal-eligibility authority at allocation 47, a fixed 24-hour observation
+grace, and admission-time reservation of the measured 726-page high-water
+envelope. Settlement now persists exact eligibility before its primary and
+aggregate transition; no cleanup timer or deletion is enabled. The complete
+application receipt high-water subtotal is 4,737 physical pages, or 296.0625
+MiB, through the pinned base `MemoryManager`. Production placement keeps its
 separate acknowledgement-owned removal and stores no application deadline.
 The read-only Toko snapshot uses Canic 0.71.3 and contains no receipt consumer,
 so adoption needs no old-state reader or migration. It still needs a per-mint
 action identity, recovery path, explicit batch/rate/resource-cardinality
 bound, and removal or integration of its
-parent-only stack mint before terminal eligibility and reclamation can be
-enabled. General cleanup, dependency work, backup/restore changes, and
+parent-only stack mint before reclamation can be enabled. General cleanup,
+dependency work, backup/restore changes, and
 compatibility layers remain excluded.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
@@ -929,12 +937,12 @@ First primary results:
 ## Next Action
 
 Freeze Toko's per-mint action identity, recovery flow, stack-mint disposition,
-terminal observation grace, and batch/rate/resource-cardinality envelope. The
+and batch/rate/resource-cardinality envelope. The
 read-only downstream tree remains unchanged at the recorded snapshot and still
-supplies none of those missing contracts. Use the accepted values to measure
-the final eligibility shape and smallest physical reservation mechanism before
-changing settlement or timers. Do not invent durations or extend 0.96 into
-unrelated cleanup.
+supplies none of those missing contracts. Eligibility shape, observation grace,
+and physical settlement reservation are now fixed in open `0.96.4`; use the
+accepted downstream values before enabling bounded deletion or timer work. Do
+not extend 0.96 into unrelated cleanup.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

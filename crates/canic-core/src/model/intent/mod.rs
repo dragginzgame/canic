@@ -12,6 +12,7 @@ pub const RECEIPT_BACKED_INTENT_SCHEMA_VERSION: u32 = 1;
 pub const TERMINAL_EVIDENCE_SCHEMA_VERSION: u32 = 1;
 pub const CANIC_INTENT_RESOURCE_PREFIX: &str = "canic:";
 pub const MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS: u64 = 24 * 60 * 60 * 1_000_000_000;
+pub const RECEIPT_TERMINAL_OBSERVATION_GRACE_NS: u64 = MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS;
 
 /// Pure temporal admission decision supplied by the workflow policy boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,6 +20,24 @@ pub enum ReceiptReplayWindowDecision {
     Open,
     Closed,
     TooLong { remaining_ns: u64 },
+}
+
+/// Derive the exact safe deletion deadline for one terminal application receipt.
+#[must_use]
+pub const fn receipt_terminal_eligible_at(
+    replay_deadline_ns: u64,
+    terminal_timestamp_ns: u64,
+) -> Option<u64> {
+    let Some(observation_deadline_ns) =
+        terminal_timestamp_ns.checked_add(RECEIPT_TERMINAL_OBSERVATION_GRACE_NS)
+    else {
+        return None;
+    };
+    Some(if replay_deadline_ns > observation_deadline_ns {
+        replay_deadline_ns
+    } else {
+        observation_deadline_ns
+    })
 }
 
 #[must_use]
@@ -206,4 +225,22 @@ pub enum RemoveTerminalReceiptBackedIntentResult {
     NotTerminal,
     RevisionConflict { actual_revision: u64 },
     BindingConflict,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_eligibility_preserves_both_retention_deadlines() {
+        assert_eq!(
+            receipt_terminal_eligible_at(100, 50),
+            Some(50 + RECEIPT_TERMINAL_OBSERVATION_GRACE_NS)
+        );
+        assert_eq!(
+            receipt_terminal_eligible_at(u64::MAX - 1, 50),
+            Some(u64::MAX - 1)
+        );
+        assert_eq!(receipt_terminal_eligible_at(u64::MAX, u64::MAX), None);
+    }
 }

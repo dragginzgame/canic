@@ -73,9 +73,17 @@ fn receipt_backed_stable_allocations_remain_single_owner() {
         1,
         "application replay deadlines must have one exact adjunct allocation",
     );
+    assert_eq!(
+        storage
+            .matches("canic.core.application_receipt_eligibility.v1")
+            .count(),
+        1,
+        "application terminal eligibility must have one ordered allocation",
+    );
     assert!(allocations.contains("pub const RECEIPT_BACKED_INTENT_RECORDS_ID: u8 = 43;"));
     assert!(allocations.contains("pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 45;"));
     assert!(allocations.contains("pub const APPLICATION_RECEIPT_REPLAY_ID: u8 = 46;"));
+    assert!(allocations.contains("pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 47;"));
 }
 
 fn source_paths_containing(root: &Path, needle: &str) -> BTreeSet<String> {

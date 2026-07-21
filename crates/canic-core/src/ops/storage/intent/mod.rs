@@ -17,20 +17,22 @@ use crate::{
             BeginPlacementReceiptBackedIntentInput, BeginReceiptBackedIntentInput,
             BeginReceiptBackedIntentResult, MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS,
             PAYLOAD_BINDING_SCHEMA_VERSION, PayloadBinding, RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
-            ReceiptBackedIntent, ReceiptBackedIntentState, ReceiptReplayWindowDecision,
-            RemoveTerminalReceiptBackedIntentInput, RemoveTerminalReceiptBackedIntentResult,
-            SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult,
-            TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence, is_canic_owned_intent_resource_key,
+            RECEIPT_TERMINAL_OBSERVATION_GRACE_NS, ReceiptBackedIntent, ReceiptBackedIntentState,
+            ReceiptReplayWindowDecision, RemoveTerminalReceiptBackedIntentInput,
+            RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
+            SettleReceiptBackedIntentResult, TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence,
+            is_canic_owned_intent_resource_key, receipt_terminal_eligible_at,
         },
         placement::allocation::is_placement_resource_key,
         replay::OperationId,
     },
     ops::storage::StorageOpsError,
     storage::stable::intent::{
-        APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION, ApplicationReceiptReplayRecord,
-        INTENT_STORE_SCHEMA_VERSION, IntentExpiryEntryRecord, IntentExpiryKeyRecord,
-        IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord, IntentState,
-        IntentStore, IntentStoreMetaRecord, PlacementAcknowledgementEntryRecord,
+        APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+        ApplicationReceiptEligibilityKeyRecord, ApplicationReceiptEligibilityRecord,
+        ApplicationReceiptReplayRecord, INTENT_STORE_SCHEMA_VERSION, IntentExpiryEntryRecord,
+        IntentExpiryKeyRecord, IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord,
+        IntentState, IntentStore, IntentStoreMetaRecord, PlacementAcknowledgementEntryRecord,
         ReceiptBackedIntentRecord, ReceiptBackedIntentStore,
     },
     view::intent::PlacementAcknowledgementPage,
@@ -196,6 +198,59 @@ pub enum IntentStoreOpsError {
         expected: u32,
         found: u32,
     },
+
+    #[error("application receipt terminal eligibility missing for {0}")]
+    ApplicationReceiptEligibilityMissing(OperationId),
+
+    #[error("application receipt terminal eligibility already exists for {0}")]
+    ApplicationReceiptEligibilityExists(OperationId),
+
+    #[error("application receipt terminal eligibility exists without a terminal primary {0}")]
+    ApplicationReceiptEligibilityPrimaryMismatch(OperationId),
+
+    #[error("application receipt terminal eligibility key {key} contains operation {value}")]
+    ApplicationReceiptEligibilityIdentityMismatch {
+        key: OperationId,
+        value: OperationId,
+    },
+
+    #[error(
+        "application receipt terminal eligibility schema mismatch for {operation_id} (expected {expected}, found {found})"
+    )]
+    ApplicationReceiptEligibilitySchemaMismatch {
+        operation_id: OperationId,
+        expected: u32,
+        found: u32,
+    },
+
+    #[error("application receipt terminal eligibility binding mismatch for {0}")]
+    ApplicationReceiptEligibilityBindingMismatch(OperationId),
+
+    #[error(
+        "application receipt terminal eligibility revision mismatch for {operation_id} (expected {expected}, found {found})"
+    )]
+    ApplicationReceiptEligibilityRevisionMismatch {
+        operation_id: OperationId,
+        expected: u64,
+        found: u64,
+    },
+
+    #[error(
+        "application receipt terminal eligibility overflows for {operation_id}: terminal_timestamp_ns={terminal_timestamp_ns}, observation_grace_ns={observation_grace_ns}"
+    )]
+    ApplicationReceiptEligibilityOverflow {
+        operation_id: OperationId,
+        terminal_timestamp_ns: u64,
+        observation_grace_ns: u64,
+    },
+
+    #[error("application receipt terminal-capacity reservation count overflow")]
+    ApplicationReceiptEligibilityReservationOverflow,
+
+    #[error(
+        "application receipt terminal-capacity reservation unavailable for {required_records} records"
+    )]
+    ApplicationReceiptEligibilityCapacityUnavailable { required_records: u64 },
 
     #[error("receipt-backed intent {operation_id} has incompatible {owner} resource ownership")]
     ReceiptBackedOwnershipMismatch {
@@ -896,7 +951,7 @@ impl ReceiptBackedIntentOps {
             return Ok(SettleReceiptBackedIntentResult::NotFound);
         };
         ensure_receipt_backed_record_schema(&record)?;
-        validate_application_replay_for_record(&record)?;
+        let replay = validate_application_replay_for_record(&record)?;
         validate_placement_acknowledgement_index_for_record(&record)?;
 
         if record.payload_binding != input.expected_payload_binding {
@@ -953,6 +1008,26 @@ impl ReceiptBackedIntentOps {
             updated_at_ns: now_ns,
             ..record
         };
+
+        if let Some(replay) = replay {
+            let (key, eligibility) = expected_application_eligibility(&updated, replay)?.ok_or(
+                IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(
+                    updated.operation_id,
+                ),
+            )?;
+            if ReceiptBackedIntentStore::get_application_eligibility(key).is_some() {
+                return Err(IntentStoreOpsError::ApplicationReceiptEligibilityExists(
+                    updated.operation_id,
+                )
+                .into());
+            }
+            let previous =
+                ReceiptBackedIntentStore::insert_application_eligibility(key, eligibility);
+            assert!(
+                previous.is_none(),
+                "prevalidated application eligibility insertion replaced an existing row"
+            );
+        }
 
         persist_resource_totals(updated.resource_key.clone(), new_totals);
         ReceiptBackedIntentStore::insert(updated.clone());
@@ -1012,75 +1087,8 @@ impl ReceiptBackedIntentOps {
 
     /// Validate receipt adjunct ownership and rebuild the placement acknowledgement index.
     pub fn reconcile_receipt_indexes() -> Result<(), InternalError> {
-        let operation_ids = ReceiptBackedIntentStore::with_records(|records| {
-            ReceiptBackedIntentStore::with_application_replay(|replay_records| {
-                let mut operation_ids = Vec::new();
-                let mut replay_entries = replay_records.iter().peekable();
-
-                for entry in records.iter() {
-                    let record = entry.value();
-                    ensure_receipt_backed_record_schema(&record)?;
-
-                    let next_replay_id = replay_entries.peek().map(|entry| *entry.key());
-                    if next_replay_id.is_some_and(|operation_id| operation_id < record.operation_id)
-                    {
-                        let replay_entry = replay_entries
-                            .next()
-                            .expect("peeked application replay entry must remain available");
-                        validate_application_replay_identity(
-                            *replay_entry.key(),
-                            replay_entry.value(),
-                        )?;
-                        return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
-                            *replay_entry.key(),
-                        ));
-                    }
-
-                    if is_canic_owned_intent_resource_key(&record.resource_key) {
-                        if next_replay_id == Some(record.operation_id) {
-                            let replay_entry = replay_entries
-                                .next()
-                                .expect("matched application replay entry must remain available");
-                            validate_application_replay_identity(
-                                record.operation_id,
-                                replay_entry.value(),
-                            )?;
-                            return Err(IntentStoreOpsError::ApplicationReceiptReplayUnexpected(
-                                record.operation_id,
-                            ));
-                        }
-                    } else if next_replay_id == Some(record.operation_id) {
-                        let replay_entry = replay_entries
-                            .next()
-                            .expect("matched application replay entry must remain available");
-                        validate_application_replay_identity(
-                            record.operation_id,
-                            replay_entry.value(),
-                        )?;
-                    } else {
-                        return Err(IntentStoreOpsError::ApplicationReceiptReplayMissing(
-                            record.operation_id,
-                        ));
-                    }
-
-                    if receipt_requires_placement_acknowledgement(&record) {
-                        operation_ids.push(record.operation_id);
-                    }
-                }
-
-                if let Some(replay_entry) = replay_entries.next() {
-                    validate_application_replay_identity(
-                        *replay_entry.key(),
-                        replay_entry.value(),
-                    )?;
-                    return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
-                        *replay_entry.key(),
-                    ));
-                }
-
-                Ok::<Vec<OperationId>, IntentStoreOpsError>(operation_ids)
-            })
-        })?;
+        let (operation_ids, expected_eligibility) = collect_expected_receipt_indexes()?;
+        validate_application_eligibility_index(expected_eligibility)?;
 
         ReceiptBackedIntentStore::clear_placement_acknowledgement_index();
         for operation_id in operation_ids {
@@ -1158,6 +1166,156 @@ impl ReceiptBackedIntentOps {
 // -----------------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------------
+
+type ExpectedApplicationEligibility = (
+    ApplicationReceiptEligibilityKeyRecord,
+    ApplicationReceiptEligibilityRecord,
+);
+
+fn collect_expected_receipt_indexes()
+-> Result<(Vec<OperationId>, Vec<ExpectedApplicationEligibility>), IntentStoreOpsError> {
+    ReceiptBackedIntentStore::with_records(|records| {
+        ReceiptBackedIntentStore::with_application_replay(|replay_records| {
+            let mut placement = Vec::new();
+            let mut eligibility = Vec::new();
+            let mut replay_entries = replay_records.iter().peekable();
+
+            for entry in records.iter() {
+                let record = entry.value();
+                ensure_receipt_backed_record_schema(&record)?;
+                let next_replay_id = replay_entries.peek().map(|entry| *entry.key());
+                if next_replay_id.is_some_and(|operation_id| operation_id < record.operation_id) {
+                    let orphan = replay_entries
+                        .next()
+                        .expect("peeked application replay entry must remain available");
+                    validate_application_replay_identity(*orphan.key(), orphan.value())?;
+                    return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
+                        *orphan.key(),
+                    ));
+                }
+
+                let replay =
+                    replay_for_reconciliation(&record, next_replay_id, &mut replay_entries)?;
+                if let Some(replay) = replay
+                    && let Some(entry) = expected_application_eligibility(&record, replay)?
+                {
+                    eligibility.push(entry);
+                }
+                if receipt_requires_placement_acknowledgement(&record) {
+                    placement.push(record.operation_id);
+                }
+            }
+
+            if let Some(orphan) = replay_entries.next() {
+                validate_application_replay_identity(*orphan.key(), orphan.value())?;
+                return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
+                    *orphan.key(),
+                ));
+            }
+            Ok((placement, eligibility))
+        })
+    })
+}
+
+fn replay_for_reconciliation<M: crate::cdk::structures::Memory>(
+    record: &ReceiptBackedIntentRecord,
+    next_replay_id: Option<OperationId>,
+    replay_entries: &mut std::iter::Peekable<
+        crate::cdk::structures::btreemap::Iter<'_, OperationId, ApplicationReceiptReplayRecord, M>,
+    >,
+) -> Result<Option<ApplicationReceiptReplayRecord>, IntentStoreOpsError> {
+    if is_canic_owned_intent_resource_key(&record.resource_key) {
+        if next_replay_id == Some(record.operation_id) {
+            let replay = replay_entries
+                .next()
+                .expect("matched application replay entry must remain available");
+            validate_application_replay_identity(record.operation_id, replay.value())?;
+            return Err(IntentStoreOpsError::ApplicationReceiptReplayUnexpected(
+                record.operation_id,
+            ));
+        }
+        return Ok(None);
+    }
+    if next_replay_id != Some(record.operation_id) {
+        return Err(IntentStoreOpsError::ApplicationReceiptReplayMissing(
+            record.operation_id,
+        ));
+    }
+    let replay = replay_entries
+        .next()
+        .expect("matched application replay entry must remain available")
+        .value();
+    validate_application_replay_identity(record.operation_id, replay)?;
+    Ok(Some(replay))
+}
+
+fn validate_application_eligibility_index(
+    mut expected: Vec<ExpectedApplicationEligibility>,
+) -> Result<(), IntentStoreOpsError> {
+    expected.sort_unstable_by_key(|(key, _)| *key);
+    ReceiptBackedIntentStore::with_application_eligibility(|eligibility| {
+        let mut actual = eligibility.iter();
+        for (expected_key, expected_record) in expected {
+            let Some(actual_entry) = actual.next() else {
+                return Err(IntentStoreOpsError::ApplicationReceiptEligibilityMissing(
+                    expected_key.operation_id,
+                ));
+            };
+            validate_expected_application_eligibility(
+                expected_key,
+                expected_record,
+                *actual_entry.key(),
+                actual_entry.value(),
+            )?;
+        }
+        if let Some(actual_entry) = actual.next() {
+            return Err(
+                IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(
+                    actual_entry.key().operation_id,
+                ),
+            );
+        }
+        Ok(())
+    })
+}
+
+fn validate_expected_application_eligibility(
+    expected_key: ApplicationReceiptEligibilityKeyRecord,
+    expected: ApplicationReceiptEligibilityRecord,
+    actual_key: ApplicationReceiptEligibilityKeyRecord,
+    actual: ApplicationReceiptEligibilityRecord,
+) -> Result<(), IntentStoreOpsError> {
+    if actual_key < expected_key {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityPrimaryMismatch(
+                actual_key.operation_id,
+            ),
+        );
+    }
+    if actual_key > expected_key {
+        return Err(IntentStoreOpsError::ApplicationReceiptEligibilityMissing(
+            expected_key.operation_id,
+        ));
+    }
+    validate_application_eligibility_identity(expected_key.operation_id, actual)?;
+    if actual.payload_binding != expected.payload_binding {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityBindingMismatch(
+                expected_key.operation_id,
+            ),
+        );
+    }
+    if actual.terminal_revision != expected.terminal_revision {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityRevisionMismatch {
+                operation_id: expected_key.operation_id,
+                expected: expected.terminal_revision,
+                found: actual.terminal_revision,
+            },
+        );
+    }
+    Ok(())
+}
 
 fn retained_begin_result(
     input: &ReceiptAdmission<'_>,
@@ -1285,6 +1443,20 @@ fn create_receipt(
         ReceiptAdmissionOwner::Placement => None,
     };
 
+    if replay.is_some() {
+        let required_records = ReceiptBackedIntentStore::application_replay_len()
+            .checked_add(1)
+            .ok_or(IntentStoreOpsError::ApplicationReceiptEligibilityReservationOverflow)?;
+        if !ReceiptBackedIntentStore::reserve_application_eligibility_capacity(required_records) {
+            return Err(
+                IntentStoreOpsError::ApplicationReceiptEligibilityCapacityUnavailable {
+                    required_records,
+                }
+                .into(),
+            );
+        }
+    }
+
     assert!(
         ReceiptBackedIntentStore::insert(record).is_none(),
         "validated receipt-backed intent insertion replaced an entry"
@@ -1352,9 +1524,97 @@ fn validate_application_replay_for_record(
         )),
         (false, Some(replay)) => {
             validate_application_replay_identity(record.operation_id, replay)?;
+            validate_application_eligibility_for_record(record, replay)?;
             Ok(Some(replay))
         }
     }
+}
+
+fn expected_application_eligibility(
+    record: &ReceiptBackedIntentRecord,
+    replay: ApplicationReceiptReplayRecord,
+) -> Result<
+    Option<(
+        ApplicationReceiptEligibilityKeyRecord,
+        ApplicationReceiptEligibilityRecord,
+    )>,
+    IntentStoreOpsError,
+> {
+    if matches!(record.state, ReceiptBackedIntentState::Pending) {
+        return Ok(None);
+    }
+    let eligible_at_ns =
+        receipt_terminal_eligible_at(replay.replay_deadline_ns, record.updated_at_ns).ok_or(
+            IntentStoreOpsError::ApplicationReceiptEligibilityOverflow {
+                operation_id: record.operation_id,
+                terminal_timestamp_ns: record.updated_at_ns,
+                observation_grace_ns: RECEIPT_TERMINAL_OBSERVATION_GRACE_NS,
+            },
+        )?;
+    Ok(Some((
+        ApplicationReceiptEligibilityKeyRecord {
+            eligible_at_ns,
+            operation_id: record.operation_id,
+        },
+        ApplicationReceiptEligibilityRecord {
+            schema_version: APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION,
+            operation_id: record.operation_id,
+            payload_binding: record.payload_binding,
+            terminal_revision: record.revision,
+        },
+    )))
+}
+
+fn validate_application_eligibility_for_record(
+    record: &ReceiptBackedIntentRecord,
+    replay: ApplicationReceiptReplayRecord,
+) -> Result<(), IntentStoreOpsError> {
+    let Some((key, expected)) = expected_application_eligibility(record, replay)? else {
+        return Ok(());
+    };
+    let actual = ReceiptBackedIntentStore::get_application_eligibility(key).ok_or(
+        IntentStoreOpsError::ApplicationReceiptEligibilityMissing(record.operation_id),
+    )?;
+    validate_application_eligibility_identity(record.operation_id, actual)?;
+    if actual.payload_binding != expected.payload_binding {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityBindingMismatch(record.operation_id),
+        );
+    }
+    if actual.terminal_revision != expected.terminal_revision {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityRevisionMismatch {
+                operation_id: record.operation_id,
+                expected: expected.terminal_revision,
+                found: actual.terminal_revision,
+            },
+        );
+    }
+    Ok(())
+}
+
+fn validate_application_eligibility_identity(
+    operation_id: OperationId,
+    eligibility: ApplicationReceiptEligibilityRecord,
+) -> Result<(), IntentStoreOpsError> {
+    if eligibility.operation_id != operation_id {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilityIdentityMismatch {
+                key: operation_id,
+                value: eligibility.operation_id,
+            },
+        );
+    }
+    if eligibility.schema_version != APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptEligibilitySchemaMismatch {
+                operation_id,
+                expected: APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION,
+                found: eligibility.schema_version,
+            },
+        );
+    }
+    Ok(())
 }
 
 fn validate_application_replay_identity(

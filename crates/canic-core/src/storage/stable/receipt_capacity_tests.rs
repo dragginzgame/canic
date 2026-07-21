@@ -22,12 +22,14 @@ use crate::{
         replay::OperationId,
     },
     role_contract::allocation::memory::intent::{
-        APPLICATION_RECEIPT_REPLAY_ID, INTENT_TOTALS_ID, PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID,
-        RECEIPT_BACKED_INTENT_RECORDS_ID,
+        APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_TOTALS_ID,
+        PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID, RECEIPT_BACKED_INTENT_RECORDS_ID,
     },
     storage::stable::intent::{
-        APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION, ApplicationReceiptReplayRecord,
-        IntentResourceTotalsRecord, PlacementAcknowledgementEntryRecord, ReceiptBackedIntentRecord,
+        APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION, APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+        ApplicationReceiptEligibilityKeyRecord, ApplicationReceiptEligibilityRecord,
+        ApplicationReceiptReplayRecord, IntentResourceTotalsRecord,
+        PlacementAcknowledgementEntryRecord, ReceiptBackedIntentRecord,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -126,6 +128,8 @@ fn receipt_backed_stable_capacity_envelope_is_measured_at_the_admission_limit() 
         let record = application_replay_record(seed);
         (record.operation_id, record)
     }));
+    let eligibility_ascending = measure_map(ascending().map(application_eligibility_entry));
+    let eligibility_permuted = measure_map(permuted().map(application_eligibility_entry));
     let totals_ascending = measure_map(ascending().map(|seed| (resource_key(seed), max_totals())));
     let totals_permuted = measure_map(permuted().map(|seed| (resource_key(seed), max_totals())));
 
@@ -142,9 +146,16 @@ fn receipt_backed_stable_capacity_envelope_is_measured_at_the_admission_limit() 
     assert_eq!(replay_ascending, (1_430, 442));
     assert_eq!(replay_permuted, (1_430, 381));
     assert_eq!(
-        managed_application_ascending_pages(),
-        (2_707, 442, 545, 3_969)
+        application_eligibility_entry(u64::MAX).1.to_bytes().len(),
+        ApplicationReceiptEligibilityRecord::STORABLE_MAX_SIZE as usize
     );
+    assert_eq!(eligibility_ascending, (2_362, 726));
+    assert_eq!(eligibility_permuted, (2_362, 626));
+    assert_eq!(
+        managed_application_ascending_pages(),
+        (2_707, 442, 726, 545, 4_737)
+    );
+    assert_eq!(managed_reserved_application_ascending_pages(), (726, 4_737));
     assert_eq!(
         managed_placement_ascending_pages(),
         (2_707, 452, 545, 3_969)
@@ -193,26 +204,49 @@ fn managed_placement_ascending_pages() -> (u64, u64, u64, u64) {
     )
 }
 
-fn managed_application_ascending_pages() -> (u64, u64, u64, u64) {
+fn managed_application_ascending_pages() -> (u64, u64, u64, u64, u64) {
+    managed_application_ascending_pages_with_reservation(false)
+}
+
+fn managed_reserved_application_ascending_pages() -> (u64, u64) {
+    let measured = managed_application_ascending_pages_with_reservation(true);
+    (measured.2, measured.4)
+}
+
+fn managed_application_ascending_pages_with_reservation(
+    reserve_eligibility: bool,
+) -> (u64, u64, u64, u64, u64) {
     let physical = VectorMemory::default();
     let manager = MemoryManager::init(physical.clone());
     let primary_memory = manager.get(MemoryId::new(RECEIPT_BACKED_INTENT_RECORDS_ID));
     let replay_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_REPLAY_ID));
+    let eligibility_memory = manager.get(MemoryId::new(APPLICATION_RECEIPT_ELIGIBILITY_ID));
     let totals_memory = manager.get(MemoryId::new(INTENT_TOTALS_ID));
     let mut primary = StableBtreeMap::init(primary_memory.clone());
     let mut replay = StableBtreeMap::init(replay_memory.clone());
+    let mut eligibility = StableBtreeMap::init(eligibility_memory.clone());
     let mut totals = StableBtreeMap::init(totals_memory.clone());
+
+    if reserve_eligibility {
+        let required_pages = super::intent::application_eligibility_required_pages(RECORDS)
+            .expect("100,000-row eligibility reservation must be representable");
+        let current_pages = eligibility_memory.size();
+        assert!(eligibility_memory.grow(required_pages - current_pages) >= 0);
+    }
 
     for seed in ascending() {
         let record = receipt_record(seed, terminal_state());
         let operation_id = record.operation_id;
         primary.insert(operation_id, record);
         replay.insert(operation_id, application_replay_record(seed));
+        let (eligibility_key, eligibility_record) = application_eligibility_entry(seed);
+        eligibility.insert(eligibility_key, eligibility_record);
         totals.insert(resource_key(seed), max_totals());
     }
     (
         primary_memory.size(),
         replay_memory.size(),
+        eligibility_memory.size(),
         totals_memory.size(),
         physical.size(),
     )
@@ -284,4 +318,25 @@ fn application_replay_record(seed: u64) -> ApplicationReceiptReplayRecord {
         operation_id: operation_id(seed),
         replay_deadline_ns: u64::MAX,
     }
+}
+
+fn application_eligibility_entry(
+    seed: u64,
+) -> (
+    ApplicationReceiptEligibilityKeyRecord,
+    ApplicationReceiptEligibilityRecord,
+) {
+    let operation_id = operation_id(seed);
+    (
+        ApplicationReceiptEligibilityKeyRecord {
+            eligible_at_ns: seed,
+            operation_id,
+        },
+        ApplicationReceiptEligibilityRecord {
+            schema_version: APPLICATION_RECEIPT_ELIGIBILITY_SCHEMA_VERSION,
+            operation_id,
+            payload_binding: PayloadBinding::new([u8::MAX; 32]),
+            terminal_revision: u64::MAX,
+        },
+    )
 }
