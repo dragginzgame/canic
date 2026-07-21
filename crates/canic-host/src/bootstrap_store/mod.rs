@@ -280,16 +280,17 @@ publish = false\n\n\
 [package.metadata.canic]\n\
 fleet = \"wasm_store\"\n\
 role = \"wasm_store\"\n\n\
-[workspace]\n\n\
+[workspace]\n\
+resolver = \"2\"\n\n\
 [lib]\n\
 name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
 crate-type = [\"cdylib\", \"rlib\"]\n\n\
 [dependencies]\n\
-canic = {{ path = \"{}\", features = [\"wasm-store-canister\"] }}\n\
+canic = {{ path = \"{}\", default-features = false, features = [\"metrics\", \"wasm-store-canister\"] }}\n\
 ic-cdk = \"0.20.0\"\n\
 candid = {{ version = \"0.10\", default-features = false }}\n\n\
 [build-dependencies]\n\
-canic = {{ path = \"{}\" }}\n",
+canic = {{ path = \"{}\", default-features = false, features = [] }}\n",
         canic_root.display(),
         canic_root.display()
     );

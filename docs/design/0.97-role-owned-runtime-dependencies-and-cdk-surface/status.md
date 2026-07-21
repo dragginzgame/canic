@@ -89,13 +89,15 @@ refill baseline/deletion set.
 
 ## Slice B Validation
 
-- 30 host role-contract tests pass, including three real isolated Cargo
+- 31 host role-contract tests pass, including three real isolated Cargo
   workspaces, resolver/default/feature/build-edge hard cuts, target filtering,
   deterministic protected paths, bounded parsing/traversal, the repository
   protected closure, the built-in Wasm store, and internal PocketIC packages.
-- 51 CLI Medic role/config tests, 14 core role-contract tests, the exact
-  built-in state-manifest regression, seven workspace-manifest tests, and
-  changelog governance pass.
+- The generated Wasm-store wrapper contract and exact blob-role state-manifest
+  regressions pass against the canonical feature/declaration evidence.
+- 51 CLI Medic role/config tests, 14 core role-contract tests, all 21 host
+  state-manifest tests, three generated-bootstrap-store tests, seven
+  workspace-manifest tests, and changelog governance pass.
 - Strict all-target Clippy passes for `canic-core`, `canic-host`, and
   `canic-cli`; the delegation-root and built-in Wasm-store packages check with
   their semantic facade and canonical feature declarations.
