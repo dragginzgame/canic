@@ -1,7 +1,6 @@
 fn main() {
     // The exported endpoint macros use these cfg names when optional endpoint
     // groups are compiled out for a role-specific canister build.
-    println!("cargo:rustc-check-cfg=cfg(canic_role_attestation_refresh)");
     println!("cargo:rustc-check-cfg=cfg(canic_delegated_tokens_enabled)");
     println!("cargo:rustc-check-cfg=cfg(canic_delegated_token_issuer)");
     println!("cargo:rustc-check-cfg=cfg(canic_icrc21_enabled)");

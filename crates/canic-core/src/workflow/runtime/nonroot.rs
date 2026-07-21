@@ -35,7 +35,6 @@ use crate::{
 pub fn init_nonroot_canister(
     canister_role: CanisterRole,
     payload: CanisterInitPayload,
-    with_role_attestation_refresh: bool,
 ) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::bootstrap_registry().map_err(|err| {
@@ -95,11 +94,7 @@ pub fn init_nonroot_canister(
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
 
     // --- Phase 3: Service startup ---
-    if with_role_attestation_refresh {
-        RuntimeWorkflow::start_all_with_role_attestation_refresh()?;
-    } else {
-        RuntimeWorkflow::start_all()?;
-    }
+    RuntimeWorkflow::start_all()?;
 
     Ok(())
 }
@@ -112,7 +107,6 @@ pub fn init_nonroot_canister(
 
 pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
-    with_role_attestation_refresh: bool,
 ) -> Result<(), InternalError> {
     rebuild_derived_storage_indexes()?;
     crate::log::set_ready();
@@ -134,11 +128,7 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
 
     // --- Phase 3: Service startup ---
-    if with_role_attestation_refresh {
-        RuntimeWorkflow::start_all_with_role_attestation_refresh()?;
-    } else {
-        RuntimeWorkflow::start_all()?;
-    }
+    RuntimeWorkflow::start_all()?;
 
     Ok(())
 }

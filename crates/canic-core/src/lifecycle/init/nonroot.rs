@@ -20,7 +20,6 @@ pub fn init_nonroot_canister_before_bootstrap(
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
-    with_role_attestation_refresh: bool,
 ) {
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::Init,
@@ -40,9 +39,7 @@ pub fn init_nonroot_canister_before_bootstrap(
         );
     }
 
-    if let Err(err) =
-        workflow::runtime::init_nonroot_canister(role, payload, with_role_attestation_refresh)
-    {
+    if let Err(err) = workflow::runtime::init_nonroot_canister(role, payload) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::Init,
             LifecycleMetricRole::Nonroot,

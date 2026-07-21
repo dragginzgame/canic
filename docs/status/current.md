@@ -14,12 +14,12 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.95.7`.
-- The latest published release is `v0.95.7` at
-  `2066b2aec0debc4e6f525ceeaf0bda8eca4bc5d5`.
-- The `v0.95.7` source tree is
-  `fe810a00835fc248d5d62a91b3c8ac13a83d80d7`; its Cargo.lock SHA-256 is
-  `b5ae36a61c3d1f71c67c8fb08864daed5b5d43c6151882eacd5545fcb23093fa`.
+- The workspace package version is `0.95.8`.
+- The latest published release is `v0.95.8` at
+  `29488d01f2b7a7afb5c61fbcd5ff9e4ba17f6740`.
+- The `v0.95.8` source tree is
+  `683a02d61c9decd7bdb96b4f6b1713e45552cd69`; its Cargo.lock SHA-256 is
+  `ec187e281879f26fff11c2eaf673c5948c3beba077cb9513c6f6d863ad22486c`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -318,11 +318,15 @@ Historical detail is archived at:
   configured parent cooldown. Parent admission, replay, cost, request,
   cumulative child-budget, cooldown, kill-switch, and balance controls remain
   authoritative.
-- Open `0.95.8` hard-cuts the one-minute delegated-proof recurrence and its
+- Released `v0.95.8` hard-cuts the one-minute delegated-proof recurrence and its
   duplicate start-soon flow. One auth renewal owner reconstructs exact
   registry-bound batch and issuer refresh deadlines, preserves typed failure
   outcomes, retries only bounded external causes, and reconciles disabled
   templates to idle. Runtime-log age deadline overflow now fails closed.
+- Open `0.95.9` closes the timer line by reconciling configured child funding
+  when authoritative topology arrives, checking every cycle deadline, and
+  hard-cutting the behaviorless role-attestation timer route. Authorization
+  remains fail-closed and no polling or second funding timer is introduced.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -358,8 +362,11 @@ and age retention one ordered mutation authority and removes the final Slice C
 polling interval. Released `.6` separates diagnostic cycle observations from
 automatic funding. Released `.7` restricts that funding owner to nonroot parent
 requests, keeps root ICP conversion manual, and tightens its observation and
-abuse bounds. Open `.8` replaces the last fixed built-in recurrence with exact
-delegated-proof refresh, durable batch, and typed retry deadlines.
+abuse bounds. Released `.8` replaces the last fixed built-in recurrence with
+exact delegated-proof refresh, durable batch, and typed retry deadlines. Open
+`.9` repairs the topology/funding initialization race and completes the
+hard-cut closeout residue without changing Candid, configuration, or stable
+contracts. The obsolete `canic-core` lifecycle-helper boolean is removed.
 Receipt reclamation remains 0.96 scope; general cleanup, dependency work,
 backup/restore changes, and compatibility layers remain excluded.
 
@@ -882,9 +889,9 @@ First primary results:
 
 ## Next Action
 
-Complete and release open `0.95.8`, then run the cumulative 0.95 closeout gate
-against the frozen owner inventory and Slice A baseline. Do not extend the
-line into unrelated cleanup.
+Complete open `0.95.9`, including the real topology/funding PocketIC regression
+and cumulative 0.95 closeout gate against the frozen owner inventory and Slice
+A baseline. Do not extend the line into unrelated cleanup.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

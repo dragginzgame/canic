@@ -23,12 +23,15 @@ use crate::{
         },
         storage::children::CanisterChildrenOps,
     },
-    workflow::cascade::{
-        snapshot::{
-            TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
-            adapter::TopologySnapshotAdapter,
+    workflow::{
+        cascade::{
+            snapshot::{
+                TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
+                adapter::TopologySnapshotAdapter,
+            },
+            warn_if_large,
         },
-        warn_if_large,
+        runtime::cycles::CycleWorkflow,
     },
 };
 use std::collections::HashMap;
@@ -202,6 +205,9 @@ impl TopologyCascadeWorkflow {
             MetricOutcome::Completed,
             MetricReason::Ok,
         );
+
+        CycleWorkflow::reconcile_after_topology_change()
+            .map_err(|err| err.with_diagnostic_context("reconcile cycle top-up after topology"))?;
 
         if let Some(next_pid) = next {
             let next_snapshot = match Self::slice_snapshot_for_child(next_pid, &snapshot) {

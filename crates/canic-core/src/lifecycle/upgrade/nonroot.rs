@@ -21,7 +21,6 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
-    with_role_attestation_refresh: bool,
 ) {
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
@@ -64,10 +63,7 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
             format!("env restore failed (nonroot upgrade): {err}"),
         );
     }
-    if let Err(err) = workflow::runtime::post_upgrade_nonroot_canister_after_memory_init(
-        role,
-        with_role_attestation_refresh,
-    ) {
+    if let Err(err) = workflow::runtime::post_upgrade_nonroot_canister_after_memory_init(role) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::PostUpgrade,
             LifecycleMetricRole::Nonroot,

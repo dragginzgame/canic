@@ -43,6 +43,7 @@ const TEST_PROVISION_CHAIN_KEY_DELEGATION_PROOF: &str =
 const TEST_FLEET_CHAIN_KEY_PUBLIC_KEY_HEX: &str =
     "02f1a0a900c4b9d53ff5ec024c0e37e7a54174c6ae1d0a77312aebea349adc0b7a";
 const SECOND_NS: u64 = 1_000_000_000;
+const TC: u128 = 1_000_000_000_000;
 
 #[test]
 fn delegated_auth_chain_key_management_public_key_matches_test_fleet_trust_anchor() {
@@ -496,7 +497,15 @@ fn delegated_auth_timer_batches_multiple_issuers_with_one_signature() {
     let setup = setup_root(RootSetupProfile::Sharding);
     let verifier_pid = sharding_profile_pid(&setup, &canister::TEST, "test verifier");
     let user_hub_pid = sharding_profile_pid(&setup, &canister::USER_HUB, "user_hub");
+    setup.pic.add_cycles(user_hub_pid, 20 * TC);
     let issuers = create_distinct_user_shard_issuers(&setup, user_hub_pid, 2);
+
+    for (_, issuer_pid) in &issuers {
+        let timer = wait_for_cycle_topup_success(&setup, *issuer_pid);
+        assert_eq!(timer.registration, TimerRegistrationStatus::Scheduled);
+        assert_eq!(timer.condition, TimerProcessCondition::Active);
+        assert!(timer.next_due_at_ns.is_some());
+    }
 
     for (_, issuer_pid) in &issuers {
         assert_eq!(
@@ -602,16 +611,43 @@ fn set_root_issuer_renewal_template(setup: &RootSetup, issuer_pid: Principal, en
 }
 
 fn root_auth_renewal_timer(setup: &RootSetup) -> canic::dto::runtime::CanicTimerStatus {
+    runtime_timer(setup, setup.root_id, "auth_renewal", "run")
+}
+
+fn wait_for_cycle_topup_success(
+    setup: &RootSetup,
+    canister_id: Principal,
+) -> canic::dto::runtime::CanicTimerStatus {
+    for _ in 0..20 {
+        let timer = runtime_timer(setup, canister_id, "cycles", "topup");
+        if timer.successes_since_runtime_start > 0 {
+            return timer;
+        }
+        setup.pic.tick();
+    }
+
+    panic!(
+        "topology-ready child did not complete automatic top-up: {:?}",
+        runtime_timer(setup, canister_id, "cycles", "topup")
+    );
+}
+
+fn runtime_timer(
+    setup: &RootSetup,
+    canister_id: Principal,
+    subsystem: &str,
+    name: &str,
+) -> canic::dto::runtime::CanicTimerStatus {
     let status: Result<CanicRuntimeStatus, Error> =
         setup
             .pic
-            .query_call_or_panic(setup.root_id, protocol::CANIC_RUNTIME_STATUS, ());
+            .query_call_or_panic(canister_id, protocol::CANIC_RUNTIME_STATUS, ());
     status
-        .expect("root runtime status application failed")
+        .expect("runtime status application failed")
         .timers
         .into_iter()
-        .find(|timer| timer.subsystem == "auth_renewal" && timer.name == "run")
-        .expect("root runtime status must expose auth renewal ownership")
+        .find(|timer| timer.subsystem == subsystem && timer.name == name)
+        .unwrap_or_else(|| panic!("runtime status must expose {subsystem}:{name} ownership"))
 }
 
 fn root_issuer_renewal_status(

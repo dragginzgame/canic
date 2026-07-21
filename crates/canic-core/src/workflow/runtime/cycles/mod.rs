@@ -7,7 +7,7 @@
 pub mod query;
 
 use crate::{
-    InternalError, InternalErrorClass,
+    InternalError, InternalErrorClass, InternalErrorOrigin,
     cdk::types::Cycles,
     config::schema::TopupPolicy,
     domain::{policy::pure as policy, runtime::TimerExecutionOutcome},
@@ -23,12 +23,16 @@ use crate::{
     },
     workflow::runtime::timer::{TimerDirective, TimerKey, TimerRunResult, TimerWorkflow},
 };
-use std::time::Duration;
+use std::{cell::Cell, time::Duration};
 
 const NANOS_PER_SECOND: u64 = 1_000_000_000;
 const RETENTION_BATCH_SIZE: usize = 128;
 const RETRY_INITIAL: Duration = Duration::from_mins(1);
 const RETRY_MAX: Duration = Duration::from_mins(30);
+
+thread_local! {
+    static INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED: Cell<bool> = const { Cell::new(false) };
+}
 
 struct AutomaticTopupConfig {
     threshold: u128,
@@ -55,17 +59,42 @@ impl CycleWorkflow {
         if config.is_none() && !EnvOps::is_root() {
             CyclesTopupMetrics::record_policy_missing();
         }
-        let deadline = config.as_ref().map(|config| {
-            Self::deadline_ns(
-                IcOps::now_nanos(),
-                policy::cycles::cycle_topup_timing(
-                    sample.timestamp_secs,
-                    sample.cycles.to_u128(),
-                    config.threshold,
-                    previous,
-                ),
-            )
+        Self::reconcile_from_sample(config.as_ref(), &sample, previous)
+    }
+
+    /// Reconcile automatic funding after authoritative topology reaches this canister.
+    pub(crate) fn reconcile_after_topology_change() -> Result<(), InternalError> {
+        let should_reconcile = INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED.with(|consumed| {
+            !consumed.replace(true) && TimerWorkflow::is_failed(TimerKey::CycleTopup)
         });
+        if !should_reconcile {
+            return Ok(());
+        }
+
+        let config = Self::automatic_topup_config()?;
+        let previous = Self::latest_observation();
+        let sample = Self::read_sample();
+        Self::reconcile_from_sample(config.as_ref(), &sample, previous)
+    }
+
+    fn reconcile_from_sample(
+        config: Option<&AutomaticTopupConfig>,
+        sample: &CycleBalanceSample,
+        previous: Option<policy::cycles::CycleBalanceObservation>,
+    ) -> Result<(), InternalError> {
+        let deadline = config
+            .map(|config| {
+                Self::deadline_ns(
+                    IcOps::now_nanos(),
+                    policy::cycles::cycle_topup_timing(
+                        sample.timestamp_secs,
+                        sample.cycles.to_u128(),
+                        config.threshold,
+                        previous,
+                    ),
+                )
+            })
+            .transpose()?;
         TimerWorkflow::reconcile_at(TimerKey::CycleTopup, deadline, || async {
             Self::run_topup().await
         });
@@ -94,7 +123,13 @@ impl CycleWorkflow {
 
         if !matches!(timing, policy::cycles::CycleTopupTiming::Due) {
             CyclesTopupMetrics::record_above_threshold();
-            return TimerRunResult::no_work(Self::directive(IcOps::now_nanos(), timing));
+            return match Self::directive(IcOps::now_nanos(), timing) {
+                Ok(directive) => TimerRunResult::no_work(directive),
+                Err(err) => {
+                    log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
+                    TimerRunResult::invariant_failure()
+                }
+            };
         }
 
         let result = Self::request_parent_funding(&config.amount).await;
@@ -113,17 +148,21 @@ impl CycleWorkflow {
                     }),
                 );
                 let directive = if matches!(timing, policy::cycles::CycleTopupTiming::Due) {
-                    TimerDirective::ScheduleAt(
-                        IcOps::now_nanos().saturating_add(
-                            config
-                                .minimum_funding_spacing_secs
-                                .saturating_mul(NANOS_PER_SECOND),
-                        ),
+                    Self::deadline_after_secs(
+                        IcOps::now_nanos(),
+                        config.minimum_funding_spacing_secs,
                     )
+                    .map(TimerDirective::ScheduleAt)
                 } else {
                     Self::directive(IcOps::now_nanos(), timing)
                 };
-                TimerRunResult::success(1, directive)
+                match directive {
+                    Ok(directive) => TimerRunResult::success(1, directive),
+                    Err(err) => {
+                        log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
+                        TimerRunResult::invariant_failure()
+                    }
+                }
             }
             Err(failure) if is_retryable_funding_error(&failure) => {
                 log!(
@@ -222,26 +261,46 @@ impl CycleWorkflow {
         }
     }
 
-    const fn deadline_ns(now_ns: u64, timing: policy::cycles::CycleTopupTiming) -> u64 {
+    fn deadline_ns(
+        now_ns: u64,
+        timing: policy::cycles::CycleTopupTiming,
+    ) -> Result<u64, InternalError> {
         match timing {
-            policy::cycles::CycleTopupTiming::Due => now_ns,
+            policy::cycles::CycleTopupTiming::Due => Ok(now_ns),
             policy::cycles::CycleTopupTiming::CheckAfter { delay_secs } => {
-                now_ns.saturating_add(delay_secs.saturating_mul(NANOS_PER_SECOND))
+                Self::deadline_after_secs(now_ns, delay_secs)
             }
         }
     }
 
-    const fn directive(now_ns: u64, timing: policy::cycles::CycleTopupTiming) -> TimerDirective {
+    fn directive(
+        now_ns: u64,
+        timing: policy::cycles::CycleTopupTiming,
+    ) -> Result<TimerDirective, InternalError> {
         match timing {
             policy::cycles::CycleTopupTiming::Due => {
-                TimerDirective::ScheduleAt(now_ns.saturating_add(
-                    policy::cycles::CYCLE_TOPUP_MIN_CHECK_SECS.saturating_mul(NANOS_PER_SECOND),
-                ))
+                Self::deadline_after_secs(now_ns, policy::cycles::CYCLE_TOPUP_MIN_CHECK_SECS)
+                    .map(TimerDirective::ScheduleAt)
             }
             policy::cycles::CycleTopupTiming::CheckAfter { .. } => {
-                TimerDirective::ScheduleAt(Self::deadline_ns(now_ns, timing))
+                Self::deadline_ns(now_ns, timing).map(TimerDirective::ScheduleAt)
             }
         }
+    }
+
+    fn deadline_after_secs(now_ns: u64, delay_secs: u64) -> Result<u64, InternalError> {
+        let delay_ns = delay_secs.checked_mul(NANOS_PER_SECOND).ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "cycle top-up deadline duration overflow",
+            )
+        })?;
+        now_ns.checked_add(delay_ns).ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "cycle top-up deadline overflow",
+            )
+        })
     }
 }
 
@@ -284,7 +343,7 @@ fn retry_delay(streak: u64) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InternalErrorOrigin, dto::error::Error as PublicError};
+    use crate::dto::error::Error as PublicError;
 
     #[test]
     fn automatic_topup_retry_backoff_is_bounded_and_deterministic() {
@@ -343,5 +402,11 @@ mod tests {
             nonroot.minimum_funding_spacing_secs,
             policy::cycles::CYCLE_TOPUP_MIN_CHECK_SECS
         );
+    }
+
+    #[test]
+    fn automatic_topup_deadline_overflow_fails_closed() {
+        assert!(CycleWorkflow::deadline_after_secs(u64::MAX, 1).is_err());
+        assert!(CycleWorkflow::deadline_after_secs(0, u64::MAX).is_err());
     }
 }

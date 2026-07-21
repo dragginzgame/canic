@@ -43,11 +43,6 @@ impl RuntimeWorkflow {
         Ok(())
     }
 
-    /// Start timers that should run on role-attestation-refreshing non-root canisters.
-    pub fn start_all_with_role_attestation_refresh() -> Result<(), InternalError> {
-        Self::start_all()
-    }
-
     /// Start timers that should run only on root canisters.
     pub fn start_all_root() -> Result<(), InternalError> {
         EnvOps::require_root().map_err(|err| {
