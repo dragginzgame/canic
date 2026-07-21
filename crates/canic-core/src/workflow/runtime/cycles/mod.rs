@@ -32,6 +32,7 @@ const RETRY_MAX: Duration = Duration::from_mins(30);
 
 thread_local! {
     static INITIAL_TOPOLOGY_RECONCILIATION_CONSUMED: Cell<bool> = const { Cell::new(false) };
+    static RESOURCE_EXHAUSTION_RECOVERY_CONSUMED: Cell<bool> = const { Cell::new(false) };
 }
 
 struct AutomaticTopupConfig {
@@ -138,6 +139,7 @@ impl CycleWorkflow {
 
         match result {
             Ok(()) => {
+                reset_resource_exhaustion_recovery();
                 let timing = policy::cycles::cycle_topup_timing(
                     after.timestamp_secs,
                     after.cycles.to_u128(),
@@ -176,6 +178,19 @@ impl CycleWorkflow {
                     outcome: TimerExecutionOutcome::RetryableFailure,
                     work_count: 0,
                     directive: TimerDirective::RetryAfter(retry_delay(streak)),
+                }
+            }
+            Err(failure) if claim_resource_exhaustion_recovery(&failure) => {
+                log!(
+                    Topic::Cycles,
+                    Warn,
+                    "automatic top-up will make one resource-exhaustion recovery attempt: {}",
+                    failure
+                );
+                TimerRunResult {
+                    outcome: TimerExecutionOutcome::RetryableFailure,
+                    work_count: 0,
+                    directive: TimerDirective::RetryAfter(RETRY_INITIAL),
                 }
             }
             Err(failure) => {
@@ -331,6 +346,15 @@ fn is_retryable_funding_error(err: &InternalError) -> bool {
         .is_some_and(|err| err.code == ErrorCode::Conflict)
 }
 
+fn claim_resource_exhaustion_recovery(err: &InternalError) -> bool {
+    err.is_public_resource_exhausted()
+        && RESOURCE_EXHAUSTION_RECOVERY_CONSUMED.with(|consumed| !consumed.replace(true))
+}
+
+fn reset_resource_exhaustion_recovery() {
+    RESOURCE_EXHAUSTION_RECOVERY_CONSUMED.with(|consumed| consumed.set(false));
+}
+
 fn retry_delay(streak: u64) -> Duration {
     let exponent = u32::try_from(streak.min(5)).unwrap_or(5);
     let multiplier = 1u32 << exponent;
@@ -373,6 +397,21 @@ mod tests {
             InternalErrorOrigin::Workflow,
             "contradiction"
         )));
+    }
+
+    #[test]
+    fn resource_exhaustion_gets_one_recovery_attempt_between_successes() {
+        let exhausted = InternalError::public(PublicError::exhausted("parent capacity"));
+        let forbidden = InternalError::public(PublicError::forbidden("disabled"));
+
+        reset_resource_exhaustion_recovery();
+        assert!(claim_resource_exhaustion_recovery(&exhausted));
+        assert!(!claim_resource_exhaustion_recovery(&exhausted));
+        assert!(!claim_resource_exhaustion_recovery(&forbidden));
+
+        reset_resource_exhaustion_recovery();
+        assert!(claim_resource_exhaustion_recovery(&exhausted));
+        reset_resource_exhaustion_recovery();
     }
 
     #[test]
