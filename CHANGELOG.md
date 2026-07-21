@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.96.x] - 2026-07-21 - Receipt Replay Horizon And Terminal Reclamation
+
+Detailed patch breakdown: [docs/changelog/0.96.md](docs/changelog/0.96.md)
+
+- `0.96.0` closes 0.95 at its immutable release anchor and freezes the
+  complete Canic-side receipt authority and consumer inventory without
+  guessing the downstream replay contract or changing product behavior.
+
 ## [0.95.x] - 2026-07-20 - Timer Authority And Scheduling Consolidation
 
 Detailed patch breakdown: [docs/changelog/0.95.md](docs/changelog/0.95.md)

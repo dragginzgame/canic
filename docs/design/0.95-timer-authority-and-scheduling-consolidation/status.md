@@ -4,8 +4,8 @@ Last updated: 2026-07-21
 
 ## Current State
 
-0.95 is active. Slice A is released as `v0.95.0` against the exact
-`v0.94.14` anchor: every
+0.95 is closed at `v0.95.10`. Slice A was released as `v0.95.0` against the
+exact `v0.94.14` anchor: every
 production timer, lifecycle deferral, retry scheduler, public timer form, and
 bounded host wait is inventoried and dispositioned. The public hard-cut
 surface, scheduler arbitration rules, owner trigger model, service bounds, and
@@ -34,11 +34,11 @@ successful child requests to parent funding cooldown. Released `v0.95.8`
 replaces the remaining fixed auth recurrence with exact durable refresh,
 in-flight, expiry, and typed retry deadlines. Released `v0.95.9` addresses the
 closeout audit's topology/funding race, checked cycle-deadline requirement, and
-obsolete role-attestation timer route. Open `0.95.10` fixes the final measured
-same-round hierarchy ordering defect and records the cumulative owner/cost
-evidence.
+obsolete role-attestation timer route. Released `v0.95.10` fixes the final
+measured same-round hierarchy ordering defect and records the cumulative
+owner/cost evidence.
 
-The candidate closeout evidence is
+The immutable closeout evidence is
 [0.95 release-line closeout](../../audits/release-lines/0.95-closeout.md).
 
 The accepted design now includes a maintainer-approved duration amendment.
@@ -197,7 +197,7 @@ The canonical report is
   The initial topology recovery event is consumed once per runtime start so
   unrelated later topology changes cannot restart terminal capacity or policy
   rejection repeatedly.
-- Open `0.95.10` preserves insufficient parent capacity as the public typed
+- Released `v0.95.10` preserves insufficient parent capacity as the public typed
   `ResourceExhausted` cause and permits one one-minute recovery attempt between
   successful grants. The measured nested shard then succeeds after its parent
   refills in the same timer round. A second exhaustion stops failed, so no
@@ -247,7 +247,7 @@ The canonical report is
 | `CANIC-095-TIMER-010` child funding can stop before parent topology admission | P1 | fixed in released 0.95.9 | topology and cycle workflows |
 | `CANIC-095-TIMER-011` cycle deadlines saturate instead of failing closed | P2 | fixed in released 0.95.9 | cycle workflow |
 | `CANIC-095-TIMER-012` obsolete role-attestation timer routing survives without an owner | P2 | fixed in released 0.95.9 | build, lifecycle, and runtime startup |
-| `CANIC-095-TIMER-013` nested child capacity rejection can become terminal before its parent refills in the same timer round | P1 | fixed in open 0.95.10 | RPC typed-cause mapping and cycle workflow |
+| `CANIC-095-TIMER-013` nested child capacity rejection can become terminal before its parent refills in the same timer round | P1 | fixed in released 0.95.10 | RPC typed-cause mapping and cycle workflow |
 
 No other product finding is admitted to 0.95 without a design amendment and
 reproducible timer-owner evidence.
@@ -268,6 +268,6 @@ and general cleanup remain out of scope.
 
 ## Next Action
 
-Complete open `0.95.10`, retain the nested-funding and 24-hour idle regression
-proofs in the maintained test driver, and close against the final owner/cost
-report. Do not extend the line into unrelated cleanup.
+0.95 is closed at immutable `v0.95.10`; its nested-funding and 24-hour idle
+regressions remain in the maintained test driver. Continue through the bounded
+0.96 receipt contract without reopening this line for unrelated cleanup.
