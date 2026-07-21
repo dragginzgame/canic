@@ -6,13 +6,15 @@
 
 use crate::{
     InternalError, InternalErrorOrigin,
+    domain::policy::pure::intent::decide_receipt_replay_window,
     ids::IntentId,
     log,
     log::Topic,
     model::intent::{
-        BeginLocalIntentInput, BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
-        ReceiptBackedIntent, SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult,
-        TerminalEvidenceDecision, is_canic_owned_intent_resource_key,
+        BeginLocalIntentInput, BeginPlacementReceiptBackedIntentInput,
+        BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult, ReceiptBackedIntent,
+        SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult, TerminalEvidenceDecision,
+        is_canic_owned_intent_resource_key,
     },
     ops::{
         ic::IcOps,
@@ -155,28 +157,36 @@ impl ReceiptBackedIntentWorkflow {
         input: &BeginReceiptBackedIntentInput,
     ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
         ensure_consumer_resource_key(&input.resource_key)?;
-        Self::begin_or_load_authorized(input)
+        let now_ns = IcOps::now_nanos();
+        let replay_window = decide_receipt_replay_window(now_ns, input.replay_deadline_ns);
+        Self::record_begin_result(ReceiptBackedIntentOps::begin_or_load(
+            input,
+            now_ns,
+            replay_window,
+        ))
     }
 
-    pub(crate) fn begin_canic_owned_or_load(
-        input: &BeginReceiptBackedIntentInput,
+    pub(crate) fn begin_placement_or_load(
+        input: &BeginPlacementReceiptBackedIntentInput,
     ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
         ensure_canic_owned_resource_key(&input.resource_key)?;
-        Self::begin_or_load_authorized(input)
+        Self::record_begin_result(ReceiptBackedIntentOps::begin_placement_or_load(
+            input,
+            IcOps::now_nanos(),
+        ))
     }
 
-    fn begin_or_load_authorized(
-        input: &BeginReceiptBackedIntentInput,
+    fn record_begin_result(
+        result: Result<BeginReceiptBackedIntentResult, InternalError>,
     ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
-        let result =
-            ReceiptBackedIntentOps::begin_or_load(input, IcOps::now_nanos()).inspect_err(|_| {
-                record_intent(
-                    IntentMetricSurface::ReceiptBacked,
-                    IntentMetricOperation::Reserve,
-                    IntentMetricOutcome::Failed,
-                    IntentMetricReason::StorageFailed,
-                );
-            })?;
+        let result = result.inspect_err(|_| {
+            record_intent(
+                IntentMetricSurface::ReceiptBacked,
+                IntentMetricOperation::Reserve,
+                IntentMetricOutcome::Failed,
+                IntentMetricReason::StorageFailed,
+            );
+        })?;
         if matches!(result, BeginReceiptBackedIntentResult::Created { .. }) {
             record_intent(
                 IntentMetricSurface::ReceiptBacked,
@@ -474,6 +484,18 @@ mod tests {
             resource_key: IntentResourceKey::new(format!("canic:placement:{}", "a".repeat(64))),
             quantity: 1,
             reservation_limit: 1,
+            replay_deadline_ns: u64::MAX,
+        }
+    }
+
+    fn placement_receipt_input() -> BeginPlacementReceiptBackedIntentInput {
+        let input = canic_receipt_input();
+        BeginPlacementReceiptBackedIntentInput {
+            operation_id: input.operation_id,
+            payload_binding: input.payload_binding,
+            resource_key: input.resource_key,
+            quantity: input.quantity,
+            reservation_limit: input.reservation_limit,
         }
     }
 
@@ -539,10 +561,10 @@ mod tests {
     fn consumer_receipt_operations_cannot_observe_or_settle_canic_owned_intent() {
         let _guard = seams::lock();
         IntentStoreOps::reset_for_tests();
-        let input = canic_receipt_input();
+        let input = placement_receipt_input();
 
         assert!(matches!(
-            ReceiptBackedIntentWorkflow::begin_canic_owned_or_load(&input)
+            ReceiptBackedIntentWorkflow::begin_placement_or_load(&input)
                 .expect("Canic-owned begin succeeds"),
             BeginReceiptBackedIntentResult::Created { revision: 1 }
         ));
@@ -577,6 +599,7 @@ mod tests {
         IntentStoreOps::reset_for_tests();
         let mut input = canic_receipt_input();
         input.resource_key = IntentResourceKey::new("app:placement");
+        input.replay_deadline_ns = IcOps::now_nanos().saturating_add(NANOS_PER_SECOND);
 
         assert!(matches!(
             ReceiptBackedIntentWorkflow::begin_or_load(&input)

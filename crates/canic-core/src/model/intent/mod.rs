@@ -11,6 +11,15 @@ pub const PAYLOAD_BINDING_SCHEMA_VERSION: u32 = 1;
 pub const RECEIPT_BACKED_INTENT_SCHEMA_VERSION: u32 = 1;
 pub const TERMINAL_EVIDENCE_SCHEMA_VERSION: u32 = 1;
 pub const CANIC_INTENT_RESOURCE_PREFIX: &str = "canic:";
+pub const MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS: u64 = 24 * 60 * 60 * 1_000_000_000;
+
+/// Pure temporal admission decision supplied by the workflow policy boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ReceiptReplayWindowDecision {
+    Open,
+    Closed,
+    TooLong { remaining_ns: u64 },
+}
 
 #[must_use]
 pub fn is_canic_owned_intent_resource_key(resource_key: &IntentResourceKey) -> bool {
@@ -105,6 +114,17 @@ pub struct BeginReceiptBackedIntentInput {
     pub resource_key: IntentResourceKey,
     pub quantity: u64,
     pub reservation_limit: u64,
+    pub replay_deadline_ns: u64,
+}
+
+/// Internal placement admission that deliberately has no application replay deadline.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BeginPlacementReceiptBackedIntentInput {
+    pub operation_id: OperationId,
+    pub payload_binding: PayloadBinding,
+    pub resource_key: IntentResourceKey,
+    pub quantity: u64,
+    pub reservation_limit: u64,
 }
 
 /// Idempotent outcome of receipt-backed begin-or-load.
@@ -125,6 +145,13 @@ pub enum BeginReceiptBackedIntentResult {
         evidence: TerminalEvidence,
     },
     BindingConflict,
+    ReplayWindowClosed {
+        replay_deadline_ns: u64,
+    },
+    ReplayWindowTooLong {
+        remaining_ns: u64,
+        maximum_ns: u64,
+    },
     CapacityExceeded {
         current_quantity: u64,
         requested_quantity: u64,

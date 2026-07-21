@@ -7,6 +7,9 @@
 //! - `start!` for `lib.rs` (wire lifecycle hooks and export endpoints)
 //!
 //! For lower-level access, use the `api`, `cdk`, and `memory` modules.
+//! These surfaces are for configured canister role packages. Shared runtime
+//! libraries should remain independent of Canic and use upstream crates such
+//! as `candid` or `ic-cdk` directly when they need generic IC types or APIs.
 //! Direct access to internal core modules is intentionally unsupported.
 
 pub mod access;

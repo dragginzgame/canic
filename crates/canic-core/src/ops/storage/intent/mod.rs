@@ -14,17 +14,20 @@ use crate::{
     ids::{IntentId, IntentResourceKey},
     model::{
         intent::{
-            BeginReceiptBackedIntentInput, BeginReceiptBackedIntentResult,
+            BeginPlacementReceiptBackedIntentInput, BeginReceiptBackedIntentInput,
+            BeginReceiptBackedIntentResult, MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS,
             PAYLOAD_BINDING_SCHEMA_VERSION, PayloadBinding, RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
-            ReceiptBackedIntent, ReceiptBackedIntentState, RemoveTerminalReceiptBackedIntentInput,
-            RemoveTerminalReceiptBackedIntentResult, SettleReceiptBackedIntentInput,
-            SettleReceiptBackedIntentResult, TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence,
+            ReceiptBackedIntent, ReceiptBackedIntentState, ReceiptReplayWindowDecision,
+            RemoveTerminalReceiptBackedIntentInput, RemoveTerminalReceiptBackedIntentResult,
+            SettleReceiptBackedIntentInput, SettleReceiptBackedIntentResult,
+            TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence, is_canic_owned_intent_resource_key,
         },
         placement::allocation::is_placement_resource_key,
         replay::OperationId,
     },
     ops::storage::StorageOpsError,
     storage::stable::intent::{
+        APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION, ApplicationReceiptReplayRecord,
         INTENT_STORE_SCHEMA_VERSION, IntentExpiryEntryRecord, IntentExpiryKeyRecord,
         IntentPendingEntryRecord, IntentRecord, IntentResourceTotalsRecord, IntentState,
         IntentStore, IntentStoreMetaRecord, PlacementAcknowledgementEntryRecord,
@@ -169,6 +172,36 @@ pub enum IntentStoreOpsError {
 
     #[error("receipt-backed intent {0} has contradictory terminal evidence")]
     ReceiptBackedEvidenceConflict(OperationId),
+
+    #[error("application receipt replay metadata missing for {0}")]
+    ApplicationReceiptReplayMissing(OperationId),
+
+    #[error("application receipt replay metadata exists without primary receipt {0}")]
+    ApplicationReceiptReplayPrimaryMissing(OperationId),
+
+    #[error("application receipt replay metadata is not permitted for Canic-owned receipt {0}")]
+    ApplicationReceiptReplayUnexpected(OperationId),
+
+    #[error("application receipt replay metadata key {key} contains operation {value}")]
+    ApplicationReceiptReplayIdentityMismatch {
+        key: OperationId,
+        value: OperationId,
+    },
+
+    #[error(
+        "application receipt replay schema mismatch for {operation_id} (expected {expected}, found {found})"
+    )]
+    ApplicationReceiptReplaySchemaMismatch {
+        operation_id: OperationId,
+        expected: u32,
+        found: u32,
+    },
+
+    #[error("receipt-backed intent {operation_id} has incompatible {owner} resource ownership")]
+    ReceiptBackedOwnershipMismatch {
+        operation_id: OperationId,
+        owner: &'static str,
+    },
 
     #[error(
         "receipt-backed intent record schema mismatch for {operation_id} (expected {expected}, found {found})"
@@ -733,88 +766,106 @@ fn settle_pair_at(
 /// Exact-key receipt-backed reservation and settlement operations.
 pub struct ReceiptBackedIntentOps;
 
+#[derive(Clone, Copy)]
+enum ReceiptAdmissionOwner {
+    Application {
+        replay_deadline_ns: u64,
+        replay_window: ReceiptReplayWindowDecision,
+    },
+    Placement,
+}
+
+struct ReceiptAdmission<'a> {
+    operation_id: OperationId,
+    payload_binding: PayloadBinding,
+    resource_key: &'a IntentResourceKey,
+    quantity: u64,
+    reservation_limit: u64,
+    owner: ReceiptAdmissionOwner,
+}
+
 impl ReceiptBackedIntentOps {
     pub fn begin_or_load(
         input: &BeginReceiptBackedIntentInput,
         now_ns: u64,
+        replay_window: ReceiptReplayWindowDecision,
     ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
-        Self::begin_or_load_with_limit(input, now_ns, RECEIPT_BACKED_INTENT_RECORD_LIMIT)
+        Self::begin_or_load_with_limit(
+            input,
+            now_ns,
+            replay_window,
+            RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+        )
+    }
+
+    pub(crate) fn begin_placement_or_load(
+        input: &BeginPlacementReceiptBackedIntentInput,
+        now_ns: u64,
+    ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+        Self::begin_or_load_authorized(
+            ReceiptAdmission {
+                operation_id: input.operation_id,
+                payload_binding: input.payload_binding,
+                resource_key: &input.resource_key,
+                quantity: input.quantity,
+                reservation_limit: input.reservation_limit,
+                owner: ReceiptAdmissionOwner::Placement,
+            },
+            now_ns,
+            RECEIPT_BACKED_INTENT_RECORD_LIMIT,
+        )
     }
 
     fn begin_or_load_with_limit(
         input: &BeginReceiptBackedIntentInput,
         now_ns: u64,
+        replay_window: ReceiptReplayWindowDecision,
+        record_limit: u64,
+    ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+        Self::begin_or_load_authorized(
+            ReceiptAdmission {
+                operation_id: input.operation_id,
+                payload_binding: input.payload_binding,
+                resource_key: &input.resource_key,
+                quantity: input.quantity,
+                reservation_limit: input.reservation_limit,
+                owner: ReceiptAdmissionOwner::Application {
+                    replay_deadline_ns: input.replay_deadline_ns,
+                    replay_window,
+                },
+            },
+            now_ns,
+            record_limit,
+        )
+    }
+
+    fn begin_or_load_authorized(
+        input: ReceiptAdmission<'_>,
+        now_ns: u64,
         record_limit: u64,
     ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
         validate_payload_binding(input.payload_binding)?;
+        validate_receipt_admission_owner(&input)?;
 
-        if let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) {
-            ensure_receipt_backed_record_schema(&record)?;
-            validate_placement_acknowledgement_index_for_record(&record)?;
-            if record.payload_binding != input.payload_binding
-                || record.resource_key != input.resource_key
-                || record.quantity != input.quantity
-            {
-                return Ok(BeginReceiptBackedIntentResult::BindingConflict);
-            }
-            return Ok(begin_result_for_existing(&record));
+        if let Some(result) = retained_begin_result(&input)? {
+            return Ok(result);
         }
 
-        let record_count = ReceiptBackedIntentStore::len();
-        if record_count >= record_limit {
-            return Ok(BeginReceiptBackedIntentResult::StoreCapacityReached {
-                current_records: record_count,
-                limit: record_limit,
-            });
+        validate_absent_receipt_indexes(input.operation_id)?;
+        if let Some(result) = replay_window_rejection(input.owner) {
+            return Ok(result);
         }
-
-        if ReceiptBackedIntentStore::get_placement_acknowledgement(input.operation_id).is_some() {
-            return Err(
-                IntentStoreOpsError::PlacementAcknowledgementUnexpectedIndex(input.operation_id)
-                    .into(),
-            );
-        }
-
-        let totals = IntentStore::get_totals(&input.resource_key).unwrap_or_default();
-        let current_quantity =
-            checked_add(totals.reserved_qty, totals.committed_qty, "accounted_qty")?;
-        let next_quantity = checked_add(current_quantity, input.quantity, "accounted_qty")?;
-        if next_quantity > input.reservation_limit {
-            return Ok(BeginReceiptBackedIntentResult::CapacityExceeded {
-                current_quantity,
-                requested_quantity: input.quantity,
-                limit: input.reservation_limit,
-            });
-        }
-
-        let new_totals = IntentResourceTotalsRecord {
-            reserved_qty: checked_add(totals.reserved_qty, input.quantity, "reserved_qty")?,
-            committed_qty: totals.committed_qty,
-            pending_count: checked_add(totals.pending_count, 1, "pending_count")?,
-        };
-        let revision = 1;
-        let record = ReceiptBackedIntentRecord {
-            schema_version: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
-            operation_id: input.operation_id,
-            payload_binding: input.payload_binding,
-            resource_key: input.resource_key.clone(),
-            quantity: input.quantity,
-            state: ReceiptBackedIntentState::Pending,
-            revision,
-            created_at_ns: now_ns,
-            updated_at_ns: now_ns,
-        };
-
-        if ReceiptBackedIntentStore::insert(record).is_some() {
-            return Err(IntentStoreOpsError::ReceiptBackedConflict(input.operation_id).into());
-        }
-        persist_resource_totals(input.resource_key.clone(), new_totals);
-
-        Ok(BeginReceiptBackedIntentResult::Created { revision })
+        create_receipt(input, now_ns, record_limit)
     }
 
     pub fn load(operation_id: OperationId) -> Result<Option<ReceiptBackedIntent>, InternalError> {
         let Some(record) = ReceiptBackedIntentStore::get(operation_id) else {
+            if ReceiptBackedIntentStore::get_application_replay(operation_id).is_some() {
+                return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
+                    operation_id,
+                )
+                .into());
+            }
             if ReceiptBackedIntentStore::get_placement_acknowledgement(operation_id).is_some() {
                 return Err(IntentStoreOpsError::PlacementAcknowledgementPrimaryMissing(
                     operation_id,
@@ -824,6 +875,7 @@ impl ReceiptBackedIntentOps {
             return Ok(None);
         };
         ensure_receipt_backed_record_schema(&record)?;
+        validate_application_replay_for_record(&record)?;
         validate_placement_acknowledgement_index_for_record(&record)?;
         Ok(Some(record.into_intent()))
     }
@@ -835,9 +887,16 @@ impl ReceiptBackedIntentOps {
         validate_payload_binding(input.expected_payload_binding)?;
         validate_terminal_evidence(input.evidence.schema_version)?;
         let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) else {
+            if ReceiptBackedIntentStore::get_application_replay(input.operation_id).is_some() {
+                return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
+                    input.operation_id,
+                )
+                .into());
+            }
             return Ok(SettleReceiptBackedIntentResult::NotFound);
         };
         ensure_receipt_backed_record_schema(&record)?;
+        validate_application_replay_for_record(&record)?;
         validate_placement_acknowledgement_index_for_record(&record)?;
 
         if record.payload_binding != input.expected_payload_binding {
@@ -958,11 +1017,19 @@ impl ReceiptBackedIntentOps {
             for entry in records.iter() {
                 let record = entry.value();
                 ensure_receipt_backed_record_schema(&record)?;
+                validate_application_replay_for_record(&record)?;
                 if receipt_requires_placement_acknowledgement(&record) {
                     operation_ids.push(record.operation_id);
                 }
             }
             Ok::<Vec<OperationId>, IntentStoreOpsError>(operation_ids)
+        })?;
+
+        ReceiptBackedIntentStore::with_application_replay(|entries| {
+            for entry in entries.iter() {
+                validate_application_replay_entry(*entry.key(), entry.value())?;
+            }
+            Ok::<(), IntentStoreOpsError>(())
         })?;
 
         ReceiptBackedIntentStore::clear_placement_acknowledgement_index();
@@ -983,10 +1050,25 @@ impl ReceiptBackedIntentOps {
     ) -> Result<RemoveTerminalReceiptBackedIntentResult, InternalError> {
         validate_payload_binding(input.expected_payload_binding)?;
         let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) else {
+            if ReceiptBackedIntentStore::get_application_replay(input.operation_id).is_some() {
+                return Err(IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(
+                    input.operation_id,
+                )
+                .into());
+            }
             return Ok(RemoveTerminalReceiptBackedIntentResult::NotFound);
         };
         ensure_receipt_backed_record_schema(&record)?;
+        validate_application_replay_for_record(&record)?;
         validate_placement_acknowledgement_index_for_record(&record)?;
+
+        if !is_placement_resource_key(&record.resource_key) {
+            return Err(IntentStoreOpsError::ReceiptBackedOwnershipMismatch {
+                operation_id: record.operation_id,
+                owner: "placement cleanup",
+            }
+            .into());
+        }
 
         if record.payload_binding != input.expected_payload_binding {
             return Ok(RemoveTerminalReceiptBackedIntentResult::BindingConflict);
@@ -1000,26 +1082,23 @@ impl ReceiptBackedIntentOps {
             return Ok(RemoveTerminalReceiptBackedIntentResult::NotTerminal);
         }
 
-        let remove_acknowledgement = is_placement_resource_key(&record.resource_key);
         let removed = ReceiptBackedIntentStore::remove(input.operation_id).ok_or(
             IntentStoreOpsError::ReceiptBackedConflict(input.operation_id),
         )?;
         if removed != record {
             return Err(IntentStoreOpsError::ReceiptBackedConflict(input.operation_id).into());
         }
-        if remove_acknowledgement {
-            let removed =
-                ReceiptBackedIntentStore::remove_placement_acknowledgement(input.operation_id);
-            if removed
-                != Some(PlacementAcknowledgementEntryRecord {
-                    operation_id: input.operation_id,
-                })
-            {
-                return Err(IntentStoreOpsError::PlacementAcknowledgementIndexMissing(
-                    input.operation_id,
-                )
-                .into());
-            }
+        let removed =
+            ReceiptBackedIntentStore::remove_placement_acknowledgement(input.operation_id);
+        if removed
+            != Some(PlacementAcknowledgementEntryRecord {
+                operation_id: input.operation_id,
+            })
+        {
+            return Err(IntentStoreOpsError::PlacementAcknowledgementIndexMissing(
+                input.operation_id,
+            )
+            .into());
         }
 
         Ok(RemoveTerminalReceiptBackedIntentResult::Removed)
@@ -1030,6 +1109,147 @@ impl ReceiptBackedIntentOps {
 // Internal helpers
 // -----------------------------------------------------------------------------
 
+fn retained_begin_result(
+    input: &ReceiptAdmission<'_>,
+) -> Result<Option<BeginReceiptBackedIntentResult>, InternalError> {
+    let Some(record) = ReceiptBackedIntentStore::get(input.operation_id) else {
+        return Ok(None);
+    };
+
+    ensure_receipt_backed_record_schema(&record)?;
+    validate_placement_acknowledgement_index_for_record(&record)?;
+    let replay = validate_application_replay_for_record(&record)?;
+    if record.payload_binding != input.payload_binding
+        || record.resource_key != *input.resource_key
+        || record.quantity != input.quantity
+    {
+        return Ok(Some(BeginReceiptBackedIntentResult::BindingConflict));
+    }
+
+    match (input.owner, replay) {
+        (
+            ReceiptAdmissionOwner::Application {
+                replay_deadline_ns, ..
+            },
+            Some(replay),
+        ) if replay.replay_deadline_ns != replay_deadline_ns => {
+            return Ok(Some(BeginReceiptBackedIntentResult::BindingConflict));
+        }
+        (ReceiptAdmissionOwner::Application { .. }, Some(_))
+        | (ReceiptAdmissionOwner::Placement, None) => {}
+        (ReceiptAdmissionOwner::Application { .. }, None)
+        | (ReceiptAdmissionOwner::Placement, Some(_)) => {
+            return Ok(Some(BeginReceiptBackedIntentResult::BindingConflict));
+        }
+    }
+    Ok(Some(begin_result_for_existing(&record)))
+}
+
+fn validate_absent_receipt_indexes(operation_id: OperationId) -> Result<(), InternalError> {
+    if ReceiptBackedIntentStore::get_application_replay(operation_id).is_some() {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(operation_id).into(),
+        );
+    }
+    if ReceiptBackedIntentStore::get_placement_acknowledgement(operation_id).is_some() {
+        return Err(
+            IntentStoreOpsError::PlacementAcknowledgementPrimaryMissing(operation_id).into(),
+        );
+    }
+    Ok(())
+}
+
+const fn replay_window_rejection(
+    owner: ReceiptAdmissionOwner,
+) -> Option<BeginReceiptBackedIntentResult> {
+    let ReceiptAdmissionOwner::Application {
+        replay_deadline_ns,
+        replay_window,
+    } = owner
+    else {
+        return None;
+    };
+    match replay_window {
+        ReceiptReplayWindowDecision::Open => None,
+        ReceiptReplayWindowDecision::Closed => {
+            Some(BeginReceiptBackedIntentResult::ReplayWindowClosed { replay_deadline_ns })
+        }
+        ReceiptReplayWindowDecision::TooLong { remaining_ns } => {
+            Some(BeginReceiptBackedIntentResult::ReplayWindowTooLong {
+                remaining_ns,
+                maximum_ns: MAX_RECEIPT_BACKED_INTENT_REPLAY_WINDOW_NS,
+            })
+        }
+    }
+}
+
+fn create_receipt(
+    input: ReceiptAdmission<'_>,
+    now_ns: u64,
+    record_limit: u64,
+) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+    let record_count = ReceiptBackedIntentStore::len();
+    if record_count >= record_limit {
+        return Ok(BeginReceiptBackedIntentResult::StoreCapacityReached {
+            current_records: record_count,
+            limit: record_limit,
+        });
+    }
+
+    let totals = IntentStore::get_totals(input.resource_key).unwrap_or_default();
+    let current_quantity = checked_add(totals.reserved_qty, totals.committed_qty, "accounted_qty")?;
+    let next_quantity = checked_add(current_quantity, input.quantity, "accounted_qty")?;
+    if next_quantity > input.reservation_limit {
+        return Ok(BeginReceiptBackedIntentResult::CapacityExceeded {
+            current_quantity,
+            requested_quantity: input.quantity,
+            limit: input.reservation_limit,
+        });
+    }
+
+    let new_totals = IntentResourceTotalsRecord {
+        reserved_qty: checked_add(totals.reserved_qty, input.quantity, "reserved_qty")?,
+        committed_qty: totals.committed_qty,
+        pending_count: checked_add(totals.pending_count, 1, "pending_count")?,
+    };
+    let revision = 1;
+    let record = ReceiptBackedIntentRecord {
+        schema_version: RECEIPT_BACKED_INTENT_SCHEMA_VERSION,
+        operation_id: input.operation_id,
+        payload_binding: input.payload_binding,
+        resource_key: input.resource_key.clone(),
+        quantity: input.quantity,
+        state: ReceiptBackedIntentState::Pending,
+        revision,
+        created_at_ns: now_ns,
+        updated_at_ns: now_ns,
+    };
+    let replay = match input.owner {
+        ReceiptAdmissionOwner::Application {
+            replay_deadline_ns, ..
+        } => Some(ApplicationReceiptReplayRecord {
+            schema_version: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+            operation_id: input.operation_id,
+            replay_deadline_ns,
+        }),
+        ReceiptAdmissionOwner::Placement => None,
+    };
+
+    assert!(
+        ReceiptBackedIntentStore::insert(record).is_none(),
+        "validated receipt-backed intent insertion replaced an entry"
+    );
+    if let Some(replay) = replay {
+        assert!(
+            ReceiptBackedIntentStore::insert_application_replay(replay).is_none(),
+            "validated application receipt replay insertion replaced an entry"
+        );
+    }
+    persist_resource_totals(input.resource_key.clone(), new_totals);
+
+    Ok(BeginReceiptBackedIntentResult::Created { revision })
+}
+
 fn ensure_schema() -> Result<IntentStoreMetaRecord, IntentStoreOpsError> {
     let meta = IntentStore::meta();
     if meta.schema_version != INTENT_STORE_SCHEMA_VERSION {
@@ -1039,6 +1259,93 @@ fn ensure_schema() -> Result<IntentStoreMetaRecord, IntentStoreOpsError> {
         });
     }
     Ok(meta)
+}
+
+fn validate_receipt_admission_owner(
+    input: &ReceiptAdmission<'_>,
+) -> Result<(), IntentStoreOpsError> {
+    match (
+        input.owner,
+        is_canic_owned_intent_resource_key(input.resource_key),
+    ) {
+        (ReceiptAdmissionOwner::Application { .. }, false)
+        | (ReceiptAdmissionOwner::Placement, true) => Ok(()),
+        (ReceiptAdmissionOwner::Application { .. }, true) => {
+            Err(IntentStoreOpsError::ReceiptBackedOwnershipMismatch {
+                operation_id: input.operation_id,
+                owner: "application",
+            })
+        }
+        (ReceiptAdmissionOwner::Placement, false) => {
+            Err(IntentStoreOpsError::ReceiptBackedOwnershipMismatch {
+                operation_id: input.operation_id,
+                owner: "placement",
+            })
+        }
+    }
+}
+
+fn validate_application_replay_for_record(
+    record: &ReceiptBackedIntentRecord,
+) -> Result<Option<ApplicationReceiptReplayRecord>, IntentStoreOpsError> {
+    let replay = ReceiptBackedIntentStore::get_application_replay(record.operation_id);
+    match (
+        is_canic_owned_intent_resource_key(&record.resource_key),
+        replay,
+    ) {
+        (true, Some(_)) => Err(IntentStoreOpsError::ApplicationReceiptReplayUnexpected(
+            record.operation_id,
+        )),
+        (true, None) => Ok(None),
+        (false, None) => Err(IntentStoreOpsError::ApplicationReceiptReplayMissing(
+            record.operation_id,
+        )),
+        (false, Some(replay)) => {
+            validate_application_replay_identity(record.operation_id, replay)?;
+            Ok(Some(replay))
+        }
+    }
+}
+
+fn validate_application_replay_identity(
+    operation_id: OperationId,
+    replay: ApplicationReceiptReplayRecord,
+) -> Result<(), IntentStoreOpsError> {
+    if replay.operation_id != operation_id {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptReplayIdentityMismatch {
+                key: operation_id,
+                value: replay.operation_id,
+            },
+        );
+    }
+    if replay.schema_version != APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION {
+        return Err(
+            IntentStoreOpsError::ApplicationReceiptReplaySchemaMismatch {
+                operation_id,
+                expected: APPLICATION_RECEIPT_REPLAY_SCHEMA_VERSION,
+                found: replay.schema_version,
+            },
+        );
+    }
+    Ok(())
+}
+
+fn validate_application_replay_entry(
+    operation_id: OperationId,
+    replay: ApplicationReceiptReplayRecord,
+) -> Result<(), IntentStoreOpsError> {
+    validate_application_replay_identity(operation_id, replay)?;
+    let primary = ReceiptBackedIntentStore::get(operation_id).ok_or(
+        IntentStoreOpsError::ApplicationReceiptReplayPrimaryMissing(operation_id),
+    )?;
+    ensure_receipt_backed_record_schema(&primary)?;
+    if is_canic_owned_intent_resource_key(&primary.resource_key) {
+        return Err(IntentStoreOpsError::ApplicationReceiptReplayUnexpected(
+            operation_id,
+        ));
+    }
+    Ok(())
 }
 
 const fn ensure_receipt_backed_record_schema(

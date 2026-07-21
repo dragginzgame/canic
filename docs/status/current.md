@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.96.0`.
-- The latest published release is `v0.96.0` at
-  `ea80087951835d7f808847d9c6b9f37e92c2e7a1`.
-- The `v0.96.0` source tree is
-  `d025bd9e58444447ba21eac162d35c38fb2bb78d`; its product-tree hash is
-  `83b19bc26ca5f20454fbe00b5520cd0d06eca81970d9bbacb767c315acd17b5a` and
+- The workspace package version is `0.96.1`.
+- The latest published release is `v0.96.1` at
+  `ba3368e5b090d72c38cb55b918f4bf3fefee6383`.
+- The `v0.96.1` source tree is
+  `dc2ba444b7670c140b63b8afb58cb0bb59fabd94`; its product-tree hash is
+  `2ccba78c807cce74e3d281b710d865374c9032b34ee2c97b44696a483a8539ab` and
   its Cargo.lock SHA-256 is
-  `a0aeda74ecafd0d936989dab832f715306f647df5546a61f299198dee66bb4c4`.
+  `fae17e29869b4828230ec5933bdadb55aa4af22362be9fb6d929f3d5d6781062`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -336,11 +336,12 @@ Historical detail is archived at:
 - Released `v0.96.0` anchors Slice A to `v0.95.10`, freezes the complete
   in-repository receipt consumer and authority inventory, and traces the
   sibling Toko mint flow read-only. Toko has not adopted the API and has no old
-  receipt rows. Open `0.96.1` measures the current 100,000-row stable-capacity
-  envelope, corrects the totals record's undersized stable bound, and removes
-  exact zero-total rows. Product implementation remains blocked on Toko's
-  per-action identity, recovery/rate/resource-cardinality policy, and the final
-  eligibility-allocation envelope.
+  receipt rows. Released `v0.96.1` measures the current 100,000-row
+  stable-capacity envelope, corrects the totals record's undersized stable
+  bound, and removes exact zero-total rows. Terminal reclamation remains blocked
+  on Toko's per-action identity, recovery/rate/resource-cardinality policy, and
+  the final eligibility-allocation envelope. Open `0.96.2` implements only the
+  independently safe replay-deadline admission hard cut.
 - The completed 0.92 line design is
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The active line design is
@@ -387,19 +388,22 @@ child-before-parent funding order with one bounded retry and records the final
 removed.
 
 0.96 is active. Audit-only Slice A is released as `v0.96.0`; the Canic-side
-receipt authority is inventoried and guarded. Open `.1` records the existing
-100,000-row stable footprint: the primary, placement acknowledgement, and
-resource totals allocations have a 3,969-page, 248.0625-MiB physical subtotal
-in the measured ascending high-water case through base MemoryManager. It also
+receipt authority is inventoried and guarded. Released `v0.96.1` records the
+existing 100,000-row stable footprint: the primary, placement acknowledgement,
+and resource totals allocations have a 3,969-page, 248.0625-MiB physical
+subtotal in the measured ascending high-water case through base MemoryManager. It also
 corrects the valid totals encoding bound from 64 to 69 bytes and removes exact
 zero totals after abort or rollback. Application rows still have no replay
-deadline or cleanup owner; production placement keeps its separate
-acknowledgement-owned removal. The read-only Toko snapshot uses Canic 0.71.3
+deadline or cleanup owner in the immutable release. Open `.2` requires an
+absolute application deadline, closes absent operations at equality, enforces
+the source-backed 24-hour maximum, and stores one exact adjunct at allocation
+46. Production placement keeps its separate acknowledgement-owned removal and
+stores no application deadline. The read-only Toko snapshot uses Canic 0.71.3
 and contains no receipt consumer, so adoption needs no old-state reader or
-migration. It does need a per-mint action identity, recovery path, explicit
+migration. It still needs a per-mint action identity, recovery path, explicit
 batch/rate/resource-cardinality bound, and removal or integration of its
-parent-only stack mint before the final eligibility capacity mechanism can be
-frozen. General cleanup, dependency work, backup/restore changes, and
+parent-only stack mint before terminal eligibility and reclamation can be
+enabled. General cleanup, dependency work, backup/restore changes, and
 compatibility layers remain excluded.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
@@ -921,11 +925,12 @@ First primary results:
 
 ## Next Action
 
-Complete open `0.96.1` focused validation. Then freeze Toko's per-mint action
-identity, signed-expiry deadline rule, recovery flow, stack-mint disposition,
-and batch/rate/resource-cardinality envelope. Use those values to measure the
-final eligibility shape and smallest physical reservation mechanism before
-changing the receipt API or timer. Do not invent durations or extend 0.96 into
+Freeze Toko's per-mint action identity, recovery flow, stack-mint disposition,
+terminal observation grace, and batch/rate/resource-cardinality envelope. The
+read-only downstream tree remains unchanged at the recorded snapshot and still
+supplies none of those missing contracts. Use the accepted values to measure
+the final eligibility shape and smallest physical reservation mechanism before
+changing settlement or timers. Do not invent durations or extend 0.96 into
 unrelated cleanup.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is

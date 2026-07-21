@@ -15,6 +15,7 @@ use std::{
 const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 const INSTALL_CODE_RETRY_LIMIT: usize = 3;
+const MAX_REPLAY_WINDOW: Duration = Duration::from_hours(24);
 const CANISTERS: [&str; 3] = ["intent_authority", "intent_external", "intent_client"];
 static BUILD_ONCE: Once = Once::new();
 
@@ -46,6 +47,13 @@ enum ReceiptBeginStatus {
     ExistingCommitted,
     ExistingRolledBack,
     BindingConflict,
+    ReplayWindowClosed {
+        replay_deadline_ns: u64,
+    },
+    ReplayWindowTooLong {
+        remaining_ns: u64,
+        maximum_ns: u64,
+    },
     CapacityExceeded {
         current_quantity: u64,
         requested_quantity: u64,
@@ -180,19 +188,34 @@ fn assert_receipt_backed_adapter_conformance(
     evidence_source: Principal,
     authority_wasm: &[u8],
 ) {
-    let pending = assert_pending_begin_decisions(pic, authority_id);
+    let replay_deadline_ns = pic.current_time_nanos() + Duration::from_hours(1).as_nanos() as u64;
+    let pending = assert_pending_begin_decisions(pic, authority_id, replay_deadline_ns);
     assert_pending_settlement_decisions(pic, authority_id, evidence_source, &pending);
     upgrade_authority(pic, authority_id, authority_wasm);
     assert_eq!(load_receipt(pic, authority_id, 11), Some(pending.clone()));
-    assert_committed_decisions(pic, authority_id, evidence_source, pending);
+    assert_committed_decisions(
+        pic,
+        authority_id,
+        evidence_source,
+        pending,
+        replay_deadline_ns,
+    );
 
-    let rollback_pending = assert_rollback_capacity_decisions(pic, authority_id);
-    assert_rolled_back_decisions(pic, authority_id, evidence_source, rollback_pending);
+    let rollback_pending =
+        assert_rollback_capacity_decisions(pic, authority_id, replay_deadline_ns);
+    assert_rolled_back_decisions(
+        pic,
+        authority_id,
+        evidence_source,
+        rollback_pending,
+        replay_deadline_ns,
+    );
 }
 
 fn assert_pending_begin_decisions(
     pic: &ic_testkit::pic::Pic,
     authority_id: Principal,
+    replay_deadline_ns: u64,
 ) -> ReceiptIntentView {
     let pending = ReceiptIntentView {
         payload_digest: [12; 32],
@@ -202,35 +225,71 @@ fn assert_pending_begin_decisions(
     };
 
     assert_eq!(
-        begin_receipt(pic, authority_id, 11, 12, 1, 1),
+        begin_receipt(pic, authority_id, 11, 12, 1, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::Created,
             intent: Some(pending.clone()),
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 11, 12, 1, 1),
+        begin_receipt(pic, authority_id, 11, 12, 1, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::ExistingPending,
             intent: Some(pending.clone()),
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 11, 99, 1, 1),
+        begin_receipt(pic, authority_id, 11, 99, 1, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::BindingConflict,
             intent: None,
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 11, 12, 2, 1),
+        begin_receipt(pic, authority_id, 11, 12, 2, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::BindingConflict,
             intent: None,
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 21, 22, 1, 1),
+        begin_receipt(pic, authority_id, 11, 12, 1, 1, replay_deadline_ns + 1),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::BindingConflict,
+            intent: None,
+        }
+    );
+
+    let now_ns = pic.current_time_nanos();
+    assert_eq!(
+        begin_receipt(pic, authority_id, 51, 52, 1, 1, now_ns),
+        ReceiptBeginView {
+            status: ReceiptBeginStatus::ReplayWindowClosed {
+                replay_deadline_ns: now_ns,
+            },
+            intent: None,
+        }
+    );
+    assert_eq!(load_receipt(pic, authority_id, 51), None);
+
+    let maximum_ns = MAX_REPLAY_WINDOW.as_nanos() as u64;
+    let overlong_deadline_ns =
+        pic.current_time_nanos() + maximum_ns + Duration::from_hours(1).as_nanos() as u64;
+    let overlong = begin_receipt(pic, authority_id, 53, 54, 1, 1, overlong_deadline_ns);
+    let ReceiptBeginStatus::ReplayWindowTooLong {
+        remaining_ns,
+        maximum_ns: observed_maximum_ns,
+    } = overlong.status
+    else {
+        panic!("overlong receipt window should reject before capacity");
+    };
+    assert!(overlong.intent.is_none());
+    assert!(remaining_ns > maximum_ns);
+    assert_eq!(observed_maximum_ns, maximum_ns);
+    assert_eq!(load_receipt(pic, authority_id, 53), None);
+
+    assert_eq!(
+        begin_receipt(pic, authority_id, 21, 22, 1, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::CapacityExceeded {
                 current_quantity: 1,
@@ -323,6 +382,7 @@ fn assert_committed_decisions(
     authority_id: Principal,
     evidence_source: Principal,
     pending: ReceiptIntentView,
+    replay_deadline_ns: u64,
 ) {
     let committed = ReceiptIntentView {
         revision: 2,
@@ -367,7 +427,7 @@ fn assert_committed_decisions(
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 11, 12, 1, 1),
+        begin_receipt(pic, authority_id, 11, 12, 1, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::ExistingCommitted,
             intent: Some(committed.clone()),
@@ -391,6 +451,7 @@ fn assert_committed_decisions(
 fn assert_rollback_capacity_decisions(
     pic: &ic_testkit::pic::Pic,
     authority_id: Principal,
+    replay_deadline_ns: u64,
 ) -> ReceiptIntentView {
     let rollback_pending = ReceiptIntentView {
         payload_digest: [32; 32],
@@ -399,14 +460,14 @@ fn assert_rollback_capacity_decisions(
         state: ReceiptStateView::Pending,
     };
     assert_eq!(
-        begin_receipt(pic, authority_id, 31, 32, 2, 1),
+        begin_receipt(pic, authority_id, 31, 32, 2, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::Created,
             intent: Some(rollback_pending.clone()),
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 41, 42, 2, 1),
+        begin_receipt(pic, authority_id, 41, 42, 2, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::CapacityExceeded {
                 current_quantity: 1,
@@ -425,6 +486,7 @@ fn assert_rolled_back_decisions(
     authority_id: Principal,
     evidence_source: Principal,
     rollback_pending: ReceiptIntentView,
+    replay_deadline_ns: u64,
 ) {
     let rolled_back = ReceiptIntentView {
         revision: 2,
@@ -469,14 +531,14 @@ fn assert_rolled_back_decisions(
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 31, 32, 2, 1),
+        begin_receipt(pic, authority_id, 31, 32, 2, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::ExistingRolledBack,
             intent: Some(rolled_back),
         }
     );
     assert_eq!(
-        begin_receipt(pic, authority_id, 41, 42, 2, 1),
+        begin_receipt(pic, authority_id, 41, 42, 2, 1, replay_deadline_ns),
         ReceiptBeginView {
             status: ReceiptBeginStatus::Created,
             intent: Some(ReceiptIntentView {
@@ -496,11 +558,18 @@ fn begin_receipt(
     payload_seed: u8,
     resource_seed: u8,
     quantity: u64,
+    replay_deadline_ns: u64,
 ) -> ReceiptBeginView {
     pic.update_call::<Result<ReceiptBeginView, String>, _>(
         authority_id,
         "begin_receipt",
-        (operation_seed, payload_seed, resource_seed, quantity),
+        (
+            operation_seed,
+            payload_seed,
+            resource_seed,
+            quantity,
+            replay_deadline_ns,
+        ),
     )
     .expect("begin receipt transport")
     .expect("begin receipt application")
