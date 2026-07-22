@@ -31,7 +31,7 @@ use crate::{
             children::CanisterChildrenOps,
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             registry::subnet::SubnetRegistryOps,
-            state::{app::AppStateOps, subnet::SubnetStateOps},
+            state::app::AppStateOps,
         },
     },
     workflow::cascade::{
@@ -276,10 +276,6 @@ impl StateCascadeWorkflow {
 
         if let Some(app) = snapshot.app_state {
             AppStateOps::import_input(app);
-        }
-
-        if let Some(subnet) = snapshot.subnet_state.clone() {
-            SubnetStateOps::import_input(subnet);
         }
 
         if let Some(index) = &snapshot.app_index {

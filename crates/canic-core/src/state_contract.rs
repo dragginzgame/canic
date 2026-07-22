@@ -15,7 +15,7 @@ use crate::role_contract::allocation::memory::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
     },
-    env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
+    env::{APP_STATE_ID, ENV_ID},
     intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
         INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
@@ -466,10 +466,7 @@ fn root_app_registry_domains() -> Vec<StateDomainManifest> {
 fn runtime_env_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::{
         env::{EnvData, EnvRecord},
-        state::{
-            app::{AppStateData, AppStateRecord},
-            subnet::{SubnetStateData, SubnetStateRecord},
-        },
+        state::app::{AppStateData, AppStateRecord},
     };
 
     vec![
@@ -488,14 +485,6 @@ fn runtime_env_domains() -> Vec<StateDomainManifest> {
             AppStateData::STATE_CONTRACT_NAME,
             50,
             "app_state_mode_is_restored_before_hooks",
-        ),
-        state_domain(
-            "subnet_state",
-            SUBNET_STATE_ID,
-            SubnetStateRecord::STATE_CONTRACT_NAME,
-            SubnetStateData::STATE_CONTRACT_NAME,
-            55,
-            "subnet_state_restores_auth_state",
         ),
     ]
 }
@@ -755,7 +744,6 @@ mod tests {
             APP_REGISTRY_ID,
             SUBNET_REGISTRY_ID,
             ENV_ID,
-            SUBNET_STATE_ID,
             APP_STATE_ID,
             AUTH_STATE_ID,
             REPLAY_RECEIPTS_ID,
@@ -869,10 +857,7 @@ mod tests {
     fn runtime_env_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             env::{EnvData, EnvRecord},
-            state::{
-                app::{AppStateData, AppStateRecord},
-                subnet::{SubnetStateData, SubnetStateRecord},
-            },
+            state::app::{AppStateData, AppStateRecord},
         };
 
         let descriptors = canic_state_descriptors();
@@ -891,11 +876,6 @@ mod tests {
                 "app_state",
                 AppStateRecord::STATE_CONTRACT_NAME,
                 AppStateData::STATE_CONTRACT_NAME,
-            ),
-            (
-                "subnet_state",
-                SubnetStateRecord::STATE_CONTRACT_NAME,
-                SubnetStateData::STATE_CONTRACT_NAME,
             ),
         ] {
             let declaration = runtime_env

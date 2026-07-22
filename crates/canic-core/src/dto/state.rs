@@ -54,31 +54,6 @@ pub struct AppStateResponse {
 }
 
 //
-// SubnetAuthStateInput
-//
-
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct SubnetAuthStateInput {}
-
-//
-// SubnetStateInput
-//
-
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct SubnetStateInput {
-    pub auth: SubnetAuthStateInput,
-}
-
-//
-// SubnetStateResponse
-//
-
-#[derive(CandidType, Clone, Debug, Default, Deserialize, Eq, PartialEq)]
-pub struct SubnetStateResponse {
-    pub auth: SubnetAuthStateInput,
-}
-
-//
 // BootstrapStatusResponse
 //
 

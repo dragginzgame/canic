@@ -54,7 +54,6 @@ impl PropagationWorkflow {
         // state propagation must refresh all root children, not only the target branch.
         let snapshot = ProvisionWorkflow::rebuild_indexes_from_registry(Some(role))?
             .with_app_state()
-            .with_subnet_state()
             .build();
 
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;

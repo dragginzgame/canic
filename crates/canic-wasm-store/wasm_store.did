@@ -102,12 +102,10 @@ type Result_7 = variant { Ok : TemplateChunkSetInfoResponse; Err : Error };
 type Result_8 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
 type StateSnapshotInput = record {
-  subnet_state : opt SubnetStateInput;
   app_state : opt AppStateInput;
   subnet_index : opt vec IndexEntryInput;
   app_index : opt vec IndexEntryInput;
 };
-type SubnetStateInput = record { auth : record {} };
 type TemplateChunkInput = record {
   chunk_index : nat32;
   template_id : text;

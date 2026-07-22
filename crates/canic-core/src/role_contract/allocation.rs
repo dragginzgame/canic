@@ -26,7 +26,7 @@ pub mod memory {
 
     pub mod env {
         pub const ENV_ID: u8 = 16;
-        pub const SUBNET_STATE_ID: u8 = 17;
+        pub const RETIRED_SUBNET_STATE_ID: u8 = 17;
         pub const APP_STATE_ID: u8 = 18;
     }
 
@@ -90,7 +90,7 @@ use memory::{
         BLOB_DELETION_PENDING_ID, BLOB_STORAGE_BILLING_ID, STORAGE_GATEWAY_PRINCIPALS_ID,
         STORED_BLOBS_ID,
     },
-    env::{APP_STATE_ID, ENV_ID, SUBNET_STATE_ID},
+    env::{APP_STATE_ID, ENV_ID, RETIRED_SUBNET_STATE_ID},
     intent::{
         APPLICATION_RECEIPT_ELIGIBILITY_ID, APPLICATION_RECEIPT_REPLAY_ID, INTENT_EXPIRY_INDEX_ID,
         INTENT_META_ID, INTENT_PENDING_ID, INTENT_RECORDS_ID, INTENT_TOTALS_ID,
@@ -121,11 +121,9 @@ const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
     MemoryId::new(SUBNET_REGISTRY_ID),
 ];
 const CORE_ROOT_APP_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(APP_REGISTRY_ID)];
-const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] = &[
-    MemoryId::new(ENV_ID),
-    MemoryId::new(SUBNET_STATE_ID),
-    MemoryId::new(APP_STATE_ID),
-];
+const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =
+    &[MemoryId::new(ENV_ID), MemoryId::new(APP_STATE_ID)];
+const RETIRED_MEMORY_IDS: &[MemoryId] = &[MemoryId::new(RETIRED_SUBNET_STATE_ID)];
 const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
 const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
 const CORE_RUNTIME_OBSERVABILITY_IDS: &[MemoryId] = &[
@@ -303,6 +301,12 @@ pub const fn allocation_definitions() -> &'static [AllocationDefinition] {
     ALLOCATION_DEFINITIONS
 }
 
+/// Stable-memory IDs permanently excluded from active allocation.
+#[must_use]
+pub const fn retired_memory_ids() -> &'static [MemoryId] {
+    RETIRED_MEMORY_IDS
+}
+
 #[must_use]
 pub fn allocation_definition(key: StateAllocationKey) -> Option<&'static AllocationDefinition> {
     ALLOCATION_DEFINITIONS
@@ -329,6 +333,15 @@ pub fn validate_allocation_definitions(
         }
 
         for memory_id in definition.memory_ids {
+            if RETIRED_MEMORY_IDS.contains(memory_id) {
+                return Err(RoleContractFinding::CatalogInvalid {
+                    reason: format!(
+                        "allocation {:?} reuses retired memory ID {}",
+                        definition.key,
+                        memory_id.get(),
+                    ),
+                });
+            }
             let (owner_min_id, owner_max_id) = match definition.owner {
                 AllocationOwner::CanicCore => (CANIC_CORE_MIN_ID, CANIC_CORE_MAX_ID),
                 AllocationOwner::CanicControlPlane => {

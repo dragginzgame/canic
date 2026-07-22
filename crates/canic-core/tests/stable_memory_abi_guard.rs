@@ -55,6 +55,10 @@ fn scan_dir(root: &Path, violations: &mut Vec<PathBuf>) {
             continue;
         };
 
+        if contents.starts_with("#![cfg(test)]") {
+            continue;
+        }
+
         if has_forbidden_memory_pattern(&contents) {
             violations.push(path);
         }

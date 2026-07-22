@@ -43,7 +43,6 @@ pub const CANIC_LOG: &str = "canic_log";
 pub const CANIC_METRICS: &str = "canic_metrics";
 pub const CANIC_READY: &str = "canic_ready";
 pub const CANIC_APP_STATE: &str = "canic_app_state";
-pub const CANIC_SUBNET_STATE: &str = "canic_subnet_state";
 pub const CANIC_APP_INDEX: &str = "canic_app_index";
 pub const CANIC_SUBNET_INDEX: &str = "canic_subnet_index";
 pub const CANIC_CANISTER_CHILDREN: &str = "canic_canister_children";

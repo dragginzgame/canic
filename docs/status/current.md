@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## Purpose
 
@@ -14,21 +14,21 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.8`.
-- The latest published release is `v0.98.8` at
-  `38397c7f32b25cd7a4d9ffe0a9ba84bde5fb570d`.
-- The `v0.98.8` source tree is
-  `80b9864ce9d73977fe59abbb2148a30fe387f595`; its product-tree hash is
-  `f6aafbbecb31c4a7549faa9e44bbcf26ea3d45b7a19ed4d574f35bf77d1b86ce` and
+- The workspace package version is `0.98.9`.
+- The latest published release is `v0.98.9` at
+  `82e68535c16656eb9d58eea1e740296ea609602b`.
+- The `v0.98.9` source tree is
+  `a147f4c33f7a070c6054ffa86c13c598fb64369f`; its product-tree hash is
+  `c25771d4e6ba55f18996a60c5c5049bef36a9eaca06819d24587e64c62502ea0` and
   its Cargo.lock SHA-256 is
-  `e57a9249693ec79ff7e2758b9df975b9de5938b1eebce246fc7328551287ea43`.
-- Released `0.98.8` makes auth-renewal Candid validation express its sole query
-  requirement directly, without a one-variant internal mode taxonomy or
-  unreachable comparison.
-- Open `0.98.9` removes duplicate transient metadata for the fixed chain-key
-  curve and artifact-transform role, tool, and mode. Their required Candid,
-  build-request, execution-tool, and versioned provenance representations
-  remain the canonical boundaries.
+  `362b2ef98ee863a8faf06c6e9f92363e4ca9f24feedf03dcb813094420e5510c`.
+- Released `0.98.9` removes duplicate transient metadata for the fixed chain-
+  key curve and artifact-transform role, tool, and mode while retaining their
+  canonical boundary representations.
+- Open `0.98.10` implements post-closeout Slice D: the empty core subnet-state
+  authority is removed across stable storage, DTOs, cascade, Candid, facade,
+  probes, and tests. Memory ID 17 is permanently retired; the independent
+  control-plane subnet state remains active at ID 84.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1052,16 +1052,17 @@ First primary results:
 
 ## Next Action
 
-The open `0.98.9` fixed-contract consolidation has passed its focused chain-key,
-artifact-transform, provenance, canister-build, and bootstrap-store tests,
-strict core/host Clippy, formatting, layering, changelog, stale-symbol, and
-diff-hygiene checks. It is ready for
-maintainer-owned full release and deployment validation. The 0.98 architectural-
-sediment scope remains closed; further cleanup must stay bounded to newly proven
-residue rather than reopening retained candidates. Do not inspect or edit the
-stale local Toko repository, change Cargo package versions outside the
-maintainer-owned release flow, or commit, tag, publish, or push shared-worktree
-changes without maintainer action.
+The open `0.98.10` core subnet-state hard cut has passed focused allocation,
+state-contract, host-manifest, cascade, protocol, package-check, and rebuilt
+PocketIC hierarchy validation. The stable-memory ABI guard and its explicitly
+test-only capacity fixture also pass. The complete empty core state authority
+is absent, ID 17 is permanently rejected by the active-allocation validator,
+and control-plane ID 84 remains intact. Six accepted post-closeout slices
+remain; Slice E is next and must remain a separate delegated-auth trust-format
+and reprovisioning batch. Do not inspect or edit the stale local Toko
+repository, change Cargo package versions outside the maintainer-owned release
+flow, or commit, tag, publish, or push shared-worktree changes without
+maintainer action.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

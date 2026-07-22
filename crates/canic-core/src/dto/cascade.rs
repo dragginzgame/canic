@@ -1,6 +1,6 @@
 use crate::dto::{
     prelude::*,
-    state::{AppStateInput, SubnetStateInput},
+    state::AppStateInput,
     topology::{AppIndexArgs, SubnetIndexArgs},
 };
 
@@ -13,7 +13,6 @@ use crate::dto::{
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct StateSnapshotInput {
     pub app_state: Option<AppStateInput>,
-    pub subnet_state: Option<SubnetStateInput>,
     pub app_index: Option<AppIndexArgs>,
     pub subnet_index: Option<SubnetIndexArgs>,
 }
