@@ -1,10 +1,8 @@
 use std::path::Path;
 
-use crate::evidence_envelope::file_input_fingerprint;
+use crate::{artifact_io::IC_WASM_TOOL, evidence_envelope::file_input_fingerprint};
 
-use crate::canister_build::{
-    ArtifactTransformKind, ArtifactTransformMode, ArtifactTransformOutcome,
-};
+use crate::canister_build::{ArtifactTransformKind, ArtifactTransformOutcome};
 
 use super::model::{
     ArtifactProvenanceKindV1, ArtifactProvenanceV1, ArtifactTransformKindV1,
@@ -45,12 +43,6 @@ pub(super) fn artifact_transform_provenance(
         .transforms
         .iter()
         .map(|transform| {
-            if transform.role.trim().is_empty() {
-                return Err("artifact transform role must not be empty".into());
-            }
-            if transform.tool.trim().is_empty() {
-                return Err("artifact transform tool must not be empty".into());
-            }
             match transform.outcome {
                 ArtifactTransformOutcome::Applied
                     if transform
@@ -71,17 +63,15 @@ pub(super) fn artifact_transform_provenance(
                 _ => {}
             }
             Ok(ArtifactTransformProvenanceV1 {
-                role: transform.role.clone(),
+                role: request.role.clone(),
                 transform: match transform.transform {
                     ArtifactTransformKind::Shrink => ArtifactTransformKindV1::Shrink,
                     ArtifactTransformKind::CandidMetadata => {
                         ArtifactTransformKindV1::CandidMetadata
                     }
                 },
-                mode: match transform.mode {
-                    ArtifactTransformMode::Optional => ArtifactTransformModeV1::Optional,
-                },
-                tool: transform.tool.clone(),
+                mode: ArtifactTransformModeV1::Optional,
+                tool: IC_WASM_TOOL.to_string(),
                 tool_version: transform.tool_version.clone(),
                 outcome: match transform.outcome {
                     ArtifactTransformOutcome::Applied => ArtifactTransformOutcomeV1::Applied,

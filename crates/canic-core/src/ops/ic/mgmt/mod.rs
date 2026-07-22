@@ -40,10 +40,9 @@ use std::future::Future;
 )]
 pub use types::UpgradeFlags;
 pub use types::{
-    CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterStatus, EcdsaCurve,
-    EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable,
-    MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult,
-    UpdateSettingsArgs,
+    CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterStatus, EcdsaKeyId,
+    EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable, MemoryMetricsSnapshot,
+    QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult, UpdateSettingsArgs,
 };
 #[expect(
     unused_imports,

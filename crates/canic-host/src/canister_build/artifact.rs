@@ -101,7 +101,7 @@ pub fn build_workspace_canister_artifact_from_spec(
         require_embedded_release_artifacts,
     )?;
     write_wasm_artifact(&release_wasm_path, &spec.wasm_path)?;
-    transforms.push(maybe_shrink_wasm_artifact(canister_name, &spec.wasm_path)?);
+    transforms.push(maybe_shrink_wasm_artifact(&spec.wasm_path)?);
 
     if should_export_candid_artifacts(context.build_network) {
         let debug_context = context.with_profile(CanisterBuildProfile::Debug);
@@ -112,15 +112,10 @@ pub fn build_workspace_canister_artifact_from_spec(
             require_embedded_release_artifacts,
         )?;
         extract_candid(&debug_wasm_path, &spec.did_path)?;
-        transforms.push(embed_candid_metadata(
-            canister_name,
-            &spec.wasm_path,
-            &spec.did_path,
-        )?);
+        transforms.push(embed_candid_metadata(&spec.wasm_path, &spec.did_path)?);
     } else {
         remove_optional_file(&spec.did_path)?;
         transforms.push(ArtifactTransformOutput::not_requested(
-            canister_name,
             ArtifactTransformKind::CandidMetadata,
         ));
     }

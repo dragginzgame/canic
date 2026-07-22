@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.9` removes duplicate internal chain-key and artifact-transform
+  metadata, deriving fixed curve, role, tool, and mode values only from their
+  canonical Candid, build-request, and provenance authorities.
+
 - `0.98.8` makes auth-renewal Candid validation express its sole query
   contract directly, removing a one-variant mode taxonomy and its unreachable
   comparison path without changing command behavior or output.

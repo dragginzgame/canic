@@ -20,8 +20,8 @@ use crate::{
     ops::{
         auth::AuthValidationError,
         ic::mgmt::{
-            EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult, MgmtOps,
-            SignWithEcdsaArgs, SignWithEcdsaResult,
+            EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult, MgmtOps, SignWithEcdsaArgs,
+            SignWithEcdsaResult,
         },
     },
 };
@@ -201,7 +201,6 @@ where
     validate_signing_policy(input.header, input.policy)?;
 
     let key_id = EcdsaKeyId {
-        curve: EcdsaCurve::Secp256k1,
         name: input.policy.key_id.name.clone(),
     };
     let derivation_path = input.policy.derivation_path.clone();

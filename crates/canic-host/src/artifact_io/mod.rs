@@ -1,8 +1,5 @@
 use crate::{
-    canister_build::{
-        ArtifactTransformKind, ArtifactTransformMode, ArtifactTransformOutcome,
-        ArtifactTransformOutput,
-    },
+    canister_build::{ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput},
     durable_io::write_bytes,
 };
 use std::{
@@ -14,23 +11,22 @@ use std::{
 
 use flate2::{Compression, GzBuilder};
 
+pub const IC_WASM_TOOL: &str = "ic-wasm";
+
 // Apply `ic-wasm shrink` when available; absence of the optional tool is not
 // fatal, but execution failures are surfaced because they usually mean bad IO.
 pub fn maybe_shrink_wasm_artifact(
-    role: &str,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    maybe_shrink_wasm_artifact_with_command("ic-wasm", role, wasm_path)
+    maybe_shrink_wasm_artifact_with_command(IC_WASM_TOOL, wasm_path)
 }
 
 fn maybe_shrink_wasm_artifact_with_command(
     command_name: &str,
-    role: &str,
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
     let Some(tool_version) = optional_ic_wasm_version(command_name)? else {
         return Ok(transform_output(
-            role,
             ArtifactTransformKind::Shrink,
             None,
             ArtifactTransformOutcome::ToolUnavailable,
@@ -47,7 +43,6 @@ fn maybe_shrink_wasm_artifact_with_command(
         Ok(output) if output.status.success() => {
             fs::rename(shrunk_path, wasm_path)?;
             Ok(transform_output(
-                role,
                 ArtifactTransformKind::Shrink,
                 Some(tool_version),
                 ArtifactTransformOutcome::Applied,
@@ -101,22 +96,19 @@ pub fn write_gzip_artifact(
 // `icp canister metadata <canister> candid:service` introspection works during
 // development. Production `ic` builds skip this path.
 pub fn embed_candid_metadata(
-    role: &str,
     wasm_path: &Path,
     did_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    embed_candid_metadata_with_command("ic-wasm", role, wasm_path, did_path)
+    embed_candid_metadata_with_command(IC_WASM_TOOL, wasm_path, did_path)
 }
 
 fn embed_candid_metadata_with_command(
     command_name: &str,
-    role: &str,
     wasm_path: &Path,
     did_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
     let Some(tool_version) = optional_ic_wasm_version(command_name)? else {
         return Ok(transform_output(
-            role,
             ArtifactTransformKind::CandidMetadata,
             None,
             ArtifactTransformOutcome::ToolUnavailable,
@@ -148,7 +140,6 @@ fn embed_candid_metadata_with_command(
     }
 
     Ok(transform_output(
-        role,
         ArtifactTransformKind::CandidMetadata,
         Some(tool_version),
         ArtifactTransformOutcome::Applied,
@@ -184,17 +175,13 @@ fn optional_ic_wasm_version(
     Ok(Some(version.to_string()))
 }
 
-fn transform_output(
-    role: &str,
+const fn transform_output(
     transform: ArtifactTransformKind,
     tool_version: Option<String>,
     outcome: ArtifactTransformOutcome,
 ) -> ArtifactTransformOutput {
     ArtifactTransformOutput {
-        role: role.to_string(),
         transform,
-        mode: ArtifactTransformMode::Optional,
-        tool: "ic-wasm".to_string(),
         tool_version,
         outcome,
     }
