@@ -4,9 +4,11 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 
 At a high level the file describes:
 
-- Global cluster settings (`controllers`, `app_index`, `standards`, `app`).
+- Fleet identity and package-backed roles (`fleet`, `roles`).
+- Global cluster settings (`controllers`, `app_index`, `standards`, `app`, `auth`, `log`).
 - Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
-- Per-canister policies inside each subnet, with optional scaling and sharding pools.
+- Per-canister policies inside each subnet, with optional scaling, sharding,
+  and directory pools.
 - The implicit wasm-store behavior used by chunk-store-backed installs.
 
 All fields are validated when `canic::build!` runs, so configuration drift fails
@@ -43,6 +45,25 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 
 ## Global Keys
 
+### `[fleet]`
+
+Required operator-facing identity for the configured fleet.
+
+- `name: string` – required; used in role evidence and host install-state paths.
+
+### `[roles.<role>]`
+
+Required package declaration for every role attached through `subnets`. The
+`root` declaration is also required whenever topology is present.
+
+- `kind = "root" | "canister"` – package role class. Only `[roles.root]` may
+  use `root`.
+- `package: string` – non-empty path to the role package, relative to this
+  `canic.toml`.
+
+Role declarations own package identity. The matching
+`subnets.<name>.canisters.<role>` entry owns topology and placement policy.
+
 ### `controllers = ["aaaaa-aa", ...]`
 
 Optional list of controller principals appended to every provisioned canister.
@@ -62,7 +83,8 @@ Initial application mode applied at canister install.
 Optional allow-list for privileged operations.
 
 - `principals = ["aaaaa-aa", ...]` – principal text strings authorised for whitelist checks.
-  - If omitted, whitelist checks allow all principals.
+  - If `[app.whitelist]` or `principals` is omitted, whitelist checks deny all
+    principals. An empty table is also deny-all.
 
 ### `[subnets.<name>.pool]`
 
@@ -152,8 +174,8 @@ array.
 
 Configured `kind = "service"` roles are derived as the stable subnet services.
 Root ensures those service roles exist during bootstrap and exposes them through
-`canic_subnet_index()`. Singletons, shards, replicas, and tenants are created by
-their placement managers instead.
+`canic_subnet_index()`. Singletons, shards, replicas, and instances are created
+through their explicit placement flows instead.
 
 ### Implicit `wasm_store`
 
@@ -182,29 +204,62 @@ Each child table configures a logical canister role within the subnet. The role 
 from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `type`, or
 `sharding.role` fields.
 
-- `kind = "root" | "singleton" | "replica" | "shard" | "tenant"` – required; declares how this role attaches in the topology.
-  - `root` cannot define scaling/sharding.
+- `kind = "root" | "service" | "singleton" | "replica" | "shard" | "instance"` – required; declares how this role attaches in the topology.
+  - `root` cannot define placement pools, canister-local authentication roles,
+    or canister-local standards.
   - `root` must be unique across all subnets.
   - `subnets.prime.canisters.root` must exist and set `kind = "root"`.
-  - `singleton` may define scaling or sharding pools for hub-style roles.
-  - `replica`, `shard`, and `tenant` cannot define scaling or sharding.
+  - `service` is root-created, appears in the subnet index, and may own
+    scaling, sharding, or directory pools.
+  - `singleton`, `replica`, `shard`, and `instance` cannot own placement pools.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
-- `topup.threshold = "10T"` – minimum cycles before requesting a top-up (set both fields if enabling top-ups).
-- `topup.amount = "5T"` – cycles to request when topping up (set both fields if enabling top-ups).
+- `topup.threshold = "10T"` – minimum cycles before requesting a top-up
+  (default `10T` when the `topup` table is present).
+- `topup.amount = "5T"` – cycles to request when topping up (default `5T`
+  when the `topup` table is present; it cannot exceed half the threshold).
   Omit `topup` entirely to disable auto top-ups.
 
 Cycle amount fields use exact decimal `K`, `M`, `B`, `T`, or `Q` shorthand.
 They must resolve to a whole number of cycles within `u128`; Canic does not
 round, truncate, or saturate them.
-- `randomness.enabled = true` – enable PRNG seeding (set `false` to disable).
-- `randomness.reseed_interval_secs = 3600` – reseed interval in seconds (default `3600`, must be > 0 when enabled).
-- `randomness.source = "ic"` – seeding source (`ic` or `time`, default `ic`).
-  - `time` uses `ic_cdk::api::time()` and is deterministic/low-entropy; use for non-sensitive randomness only.
 - `scaling` – optional table that defines stateless replica pools.
 - `sharding` – optional table that defines stateful shard pools.
 - `auth.delegated_token_issuer = true` – mark this role as a delegated-token issuer; Canic requires local issuer canister-signature support for token issuance.
+- `auth.delegated_token_verifier = true` – mark this role as a delegated-token
+  verifier; the role contract requires the matching verifier feature and the
+  global delegated-token trust policy.
 - `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and `auth.delegated_tokens`, not this flag.
+- `standards.icrc21 = true` – enable the canister-local ICRC-21 endpoint. This
+  is separate from the global `[standards]` setting.
 - `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
+- `metrics.profile = "leaf" | "hub" | "storage" | "root" | "full"` – override
+  the role-derived metrics profile.
+
+#### Parent cycles funding
+
+`cycles_funding` limits cycle requests made by this role to its parent. It is
+always active as policy; omitted values use finite defaults.
+
+- `max_per_request = "5T"` – maximum granted by one request.
+- `max_per_child = "100T"` – cumulative parent budget for one child.
+- `cooldown_secs = 60` – minimum time between grants for the child.
+
+`max_per_request` must not exceed `max_per_child`, and all three values must be
+positive.
+
+#### Manual root ICP refill
+
+Only the root role may define `icp_refill`. It enables an operator-triggered
+conversion of ICP held by root into cycles. It is manual and has no timer or
+automatic threshold.
+
+- `max_refill_e8s_per_call: u64` – required positive per-call spending cap.
+- `min_xdr_permyriad_per_icp: u64` – optional positive minimum conversion-rate
+  gate.
+- `ledger_canister_id` and `cmc_canister_id` – optional system-canister
+  overrides for local/test environments.
+- `allow_ic_system_canister_overrides: bool` – required opt-in before those
+  overrides may be used on the IC (default `false`).
 
 The `wasm_store` role is reserved and implicit.
 Do not add it under `canisters.*`.
@@ -213,7 +268,7 @@ Do not add it under `canisters.*`.
 
 Scaling pools model interchangeable replicas with simple bounds on how many to keep alive.
 
-```
+```toml
 [subnets.<name>.canisters.<role>.scaling.pools.<pool>]
 canister_role = "replica_role"
 policy.initial_workers = 1
@@ -228,11 +283,25 @@ Fields:
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
 - `policy.max_workers` – hard cap on workers (default `32`, set to `0` for no max).
 
+#### Directory Pools
+
+Directory pools place keyed stateful instances.
+
+```toml
+[subnets.<name>.canisters.<role>.directory.pools.<pool>]
+canister_role = "instance_role"
+key_name = "project"
+```
+
+- `canister_role` – same-subnet role implementing the instance; it must have
+  `kind = "instance"`.
+- `key_name` – non-empty logical key name used by directory admission.
+
 #### Sharding Pools
 
-Sharding pools manage stateful shards that own tenant partitions.
+Sharding pools manage stateful shards that own capacity-bounded partitions.
 
-```
+```toml
 [subnets.<name>.canisters.<role>.sharding.pools.<pool>]
 canister_role = "shard_role"
 policy.capacity = 1000
@@ -243,30 +312,49 @@ Fields:
 
 - `canister_role` – canister role that implements the shard (must exist in the same subnet).
 - `policy.capacity` – per-shard capacity (default `1000`, must be > 0).
+- `policy.initial_shards` – shards created by initial warmup (default `1`; may
+  be `0`, but cannot exceed `max_shards`).
 - `policy.max_shards` – maximum shard count (default `4`, must be > 0).
-
-### Randomness (Per-Canister)
-
-```
-[subnets.<name>.canisters.<role>.randomness]
-enabled = true
-reseed_interval_secs = 3600
-source = "ic" # or "time"
-```
-
-Fields:
-
-- `enabled` – enable PRNG seeding (default `true`).
-- `reseed_interval_secs` – reseed interval in seconds (default `3600`, must be > 0 when enabled).
-- `source` – `ic` for management canister `raw_rand`, `time` for `ic_cdk::api::time()`.
 
 ---
 
 ## Example
 
 ```toml
+# CANIC_CONFIG_EXAMPLE_START
 controllers = ["aaaaa-aa"]
 app_index = ["user_hub", "scale_hub"]
+
+[fleet]
+name = "example"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[roles.app]
+kind = "canister"
+package = "app"
+
+[roles.user_hub]
+kind = "canister"
+package = "user_hub"
+
+[roles.user_shard]
+kind = "canister"
+package = "user_shard"
+
+[roles.scale_hub]
+kind = "canister"
+package = "scale_hub"
+
+[roles.scale]
+kind = "canister"
+package = "scale"
+
+[roles.minimal]
+kind = "canister"
+package = "minimal"
 
 [auth.delegated_tokens]
 enabled = false
@@ -312,6 +400,7 @@ topup.amount = "5T"
 [subnets.prime.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
+policy.initial_shards = 1
 policy.max_shards = 4
 
 [subnets.prime.canisters.scale_hub]
@@ -330,14 +419,12 @@ kind = "replica"
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 
-[subnets.prime.canisters.user_tenant]
-kind = "tenant"
-
 [subnets.general]
 
 [subnets.general.canisters.minimal]
 kind = "replica"
 initial_cycles = "3T"
+# CANIC_CONFIG_EXAMPLE_END
 ```
 
 This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures sharding on `user_hub` plus scaling on `scale_hub`. Each subnet also gets one implicit `wasm_store` automatically.

@@ -7,14 +7,12 @@
 mod cycles;
 mod lifecycle;
 mod signing;
-mod snapshots;
 mod status_settings;
 mod types;
 
 use crate::{
     InternalError,
     domain::metrics::{
-        CanisterOpsMetricOperation, CanisterOpsMetricOutcome, CanisterOpsMetricReason,
         ManagementCallMetricOperation, ManagementCallMetricOutcome, ManagementCallMetricReason,
         PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
         PlatformCallMetricSurface,
@@ -29,8 +27,8 @@ use crate::{
         ic::IcOpsError,
         prelude::*,
         runtime::metrics::{
-            canister_ops::CanisterOpsMetrics, management_call::ManagementCallMetrics,
-            platform_call::PlatformCallMetrics, system::SystemMetrics,
+            management_call::ManagementCallMetrics, platform_call::PlatformCallMetrics,
+            system::SystemMetrics,
         },
     },
 };
@@ -42,10 +40,10 @@ use std::future::Future;
 )]
 pub use types::UpgradeFlags;
 pub use types::{
-    CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterSnapshot,
-    CanisterStatus, EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult,
-    EnvironmentVariable, MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs,
-    SignWithEcdsaResult, UpdateSettingsArgs,
+    CanisterInstallMode, CanisterSettings, CanisterSettingsSnapshot, CanisterStatus, EcdsaCurve,
+    EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult, EnvironmentVariable,
+    MemoryMetricsSnapshot, QueryStatsSnapshot, SignWithEcdsaArgs, SignWithEcdsaResult,
+    UpdateSettingsArgs,
 };
 #[expect(
     unused_imports,
@@ -54,9 +52,9 @@ pub use types::{
 pub use types::{CanisterStatusType, LogVisibility};
 
 use types::{
-    canister_snapshot_from_infra, canister_status_from_infra, ecdsa_public_key_args_to_infra,
-    ecdsa_public_key_from_infra, install_mode_to_infra, sign_with_ecdsa_args_to_infra,
-    sign_with_ecdsa_from_infra, update_settings_to_infra,
+    canister_status_from_infra, ecdsa_public_key_args_to_infra, ecdsa_public_key_from_infra,
+    install_mode_to_infra, sign_with_ecdsa_args_to_infra, sign_with_ecdsa_from_infra,
+    update_settings_to_infra,
 };
 
 ///
@@ -119,12 +117,4 @@ fn record_management_call(
         platform_reason,
     );
     ManagementCallMetrics::record(operation, management_outcome, management_reason);
-}
-
-fn record_unscoped_canister_op(
-    operation: CanisterOpsMetricOperation,
-    outcome: CanisterOpsMetricOutcome,
-    reason: CanisterOpsMetricReason,
-) {
-    CanisterOpsMetrics::record_unscoped(operation, outcome, reason);
 }

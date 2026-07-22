@@ -64,40 +64,6 @@ pub(super) struct InfraCanisterIdRecordExtended {
 }
 
 //
-// InfraCanisterSnapshot
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct InfraCanisterSnapshot {
-    pub id: Vec<u8>,
-    pub taken_at_timestamp: u64,
-    pub total_size: u64,
-}
-
-//
-// InfraTakeCanisterSnapshotArgs
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraTakeCanisterSnapshotArgs {
-    pub(super) canister_id: Principal,
-    pub(super) replace_snapshot: Option<Vec<u8>>,
-    pub(super) uninstall_code: Option<bool>,
-    pub(super) sender_canister_version: Option<u64>,
-}
-
-//
-// InfraLoadCanisterSnapshotArgs
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraLoadCanisterSnapshotArgs {
-    pub(super) canister_id: Principal,
-    pub(super) snapshot_id: Vec<u8>,
-    pub(super) sender_canister_version: Option<u64>,
-}
-
-//
 // InfraCanisterInstallMode
 //
 

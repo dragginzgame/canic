@@ -5,8 +5,7 @@
 //! Boundary: auth ops facade for role-attestation workflows and root proof helpers.
 
 use super::{
-    AuthOps, PrepareRootRoleAttestationInput, PreparedRootRoleAttestation, crypto,
-    root_canister_sig::RootPayloadKind, verify,
+    AuthOps, PrepareRootRoleAttestationInput, PreparedRootRoleAttestation, crypto, verify,
 };
 use crate::{
     InternalError,
@@ -62,7 +61,6 @@ impl AuthOps {
         };
         let payload_hash = crypto::role_attestation_hash(&payload)?;
         let prepared_root_proof = Self::prepare_root_canister_signature(
-            RootPayloadKind::RoleAttestation,
             input.operation_id,
             payload_hash,
             input.subject,
@@ -95,7 +93,6 @@ impl AuthOps {
             )
         })?;
         let root_proof = Self::get_root_canister_signature_proof(
-            RootPayloadKind::RoleAttestation,
             payload_hash,
             caller,
             IcOps::canister_self(),
@@ -121,7 +118,6 @@ impl AuthOps {
         let verifier_cfg = Self::auth_proof_verifier_config()
             .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
         Self::verify_root_canister_signature_proof(
-            RootPayloadKind::RoleAttestation,
             payload_hash,
             &attestation.root_proof,
             verifier_cfg.root_canister_id,

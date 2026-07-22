@@ -1,7 +1,7 @@
 //! Core Canic library used inside canisters.
 //!
-//! Most users should depend on the `canic` facade crate, which re-exports this crate
-//! under `canic::core` and exposes the common entrypoint macros:
+//! Canister roles should depend on the `canic` facade crate, which exposes the
+//! supported API/DTO/ID surfaces and the common entrypoint macros:
 //! - `canic::build!` (in `build.rs`) to validate/embed `canic.toml`
 //! - `canic::start!` (in `lib.rs`) to wire lifecycle hooks and export endpoints
 //!
@@ -24,6 +24,7 @@ pub mod access;
 pub mod api;
 #[doc(hidden)]
 pub mod bootstrap;
+#[doc(hidden)]
 pub mod cdk;
 #[doc(hidden)]
 pub mod control_plane_support;

@@ -10,7 +10,7 @@ use crate::{
     ids::CanisterRole,
     ops::auth::{
         delegated::canonical::chain_key_delegation_cert_hash,
-        issuer_canister_sig::{IssuerPayloadKind, issuer_canister_sig_seed_hash},
+        issuer_canister_sig::issuer_canister_sig_seed_hash,
     },
 };
 
@@ -19,7 +19,7 @@ pub fn chain_key_root_proof(byte: u8) -> RootProof {
     let issuer_canister_id = principal(byte.saturating_add(1));
     let issuer_proof_algorithm = IssuerProofAlgorithm::IcCanisterSignatureV1;
     let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
-        seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+        seed_hash: issuer_canister_sig_seed_hash(),
     };
     let delegation_cert = ChainKeyDelegationCertV1 {
         root_canister_id,

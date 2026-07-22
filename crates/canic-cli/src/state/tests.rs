@@ -127,13 +127,13 @@ fn audit_json_uses_schema_version_two() {
     assert_eq!(json["command"], "canic state audit");
     assert_eq!(json["scope"], "role");
     assert_eq!(json["role"], "root");
-    assert_eq!(json["status"], "warn");
+    assert_eq!(json["status"], "pass");
     assert!(
         json["checks"]
             .as_array()
             .expect("checks")
             .iter()
-            .any(|check| check["code"] == "reserved_memory_id_declared")
+            .all(|check| check["code"] != "reserved_memory_id_declared")
     );
     assert!(
         json["checks"]
@@ -169,12 +169,13 @@ fn text_renderers_include_stable_fields() {
 
     assert!(audit.contains("schema_version: 2"));
     assert!(audit.contains("scope: role"));
-    assert!(audit.contains("memory_id [warn] reserved_memory_id_declared"));
+    assert!(audit.contains("memory_id [pass] memory_id_unique"));
     assert!(audit.contains("source: state_manifest"));
     assert!(manifest.contains("canic state manifest"));
     assert!(manifest.contains("migration_policy: new_domain"));
     assert!(manifest.contains("template_manifests"));
-    assert!(manifest.contains("reserved_memory"));
+    assert!(!manifest.contains("reserved_memory"));
+    assert!(manifest.contains("cycle_tracker"));
     assert!(manifest.contains("runtime_log"));
 }
 

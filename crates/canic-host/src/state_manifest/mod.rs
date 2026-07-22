@@ -241,8 +241,8 @@ mod tests {
             allocation::allocation_definition,
         },
         state_contract::{
-            MigrationPolicy, StateDomainManifest, StateMigrationManifest, StateRoleManifest,
-            StateStorage,
+            MigrationPolicy, ReservedMemoryManifest, StateDomainManifest, StateMigrationManifest,
+            StateRoleManifest, StateStorage,
         },
     };
     use std::{collections::BTreeSet, path::PathBuf};
@@ -338,10 +338,10 @@ mod tests {
     }
 
     #[test]
-    fn builtin_report_is_warning_only_for_reserved_memory() {
+    fn builtin_report_passes_when_every_active_memory_id_is_modeled() {
         let report = build_state_audit_report(Some("root"));
 
-        assert_eq!(report.status, StateAuditStatus::Warn);
+        assert_eq!(report.status, StateAuditStatus::Pass);
         assert!(report.checks.iter().any(|check| {
             check.code == "state_manifest_schema_version_supported"
                 && check.status == StateAuditStatus::Pass
@@ -350,7 +350,7 @@ mod tests {
             report
                 .checks
                 .iter()
-                .any(|check| check.code == "reserved_memory_id_declared")
+                .all(|check| check.code != "reserved_memory_id_declared")
         );
         assert!(
             report
@@ -519,8 +519,8 @@ mod tests {
         assert_eq!(
             ids,
             vec![
-                11, 12, 13, 15, 16, 17, 18, 20, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 80,
-                81, 82, 83, 85,
+                11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                80, 81, 82, 83, 85,
             ]
         );
         assert_eq!(
@@ -529,7 +529,7 @@ mod tests {
                 .iter()
                 .map(|entry| entry.memory_id)
                 .collect::<Vec<_>>(),
-            vec![29]
+            Vec::<u8>::new()
         );
     }
 
@@ -606,23 +606,28 @@ mod tests {
     }
 
     #[test]
-    fn reserved_memory_ids_warn_until_modeled() {
+    fn active_cycle_tracker_memory_is_not_reported_as_reserved() {
         let report = build_state_audit_report(Some("root"));
 
-        assert!(report.checks.iter().any(|check| {
-            check.code == "reserved_memory_id_declared" && check.status == StateAuditStatus::Warn
-        }));
+        assert!(
+            report
+                .checks
+                .iter()
+                .all(|check| check.code != "reserved_memory_id_declared")
+        );
     }
 
     #[test]
     fn active_domain_reclaiming_reserved_memory_id_fails() {
         let mut manifest = test_state_manifest(Some("root"));
         let role = manifest.roles.first_mut().expect("root role");
-        let reserved_id = role
-            .reserved_memory
-            .first()
-            .map(|entry| entry.memory_id)
-            .expect("reserved memory id");
+        let reserved_id = 250;
+        role.reserved_memory.push(ReservedMemoryManifest {
+            label: "future_state".to_string(),
+            memory_id: reserved_id,
+            owner: "canic-core".to_string(),
+            reason: "synthetic collision fixture".to_string(),
+        });
         role.state[0].memory_id = Some(reserved_id);
 
         let checks = audit_checks(&manifest, Some("root"));

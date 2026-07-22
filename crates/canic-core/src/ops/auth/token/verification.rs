@@ -152,7 +152,6 @@ pub(super) fn verify_with_embedded_proofs<'a>(
         },
         |claims_hash, issuer_proof, issuer_pid| {
             AuthOps::verify_issuer_canister_signature_proof(
-                IssuerPayloadKind::DelegatedTokenClaims,
                 claims_hash,
                 issuer_proof,
                 issuer_pid,

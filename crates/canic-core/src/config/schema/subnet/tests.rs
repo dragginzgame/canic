@@ -17,7 +17,6 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         topup: None,
         icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
-        randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
         directory: None,
@@ -26,24 +25,6 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         diagnostics: DiagnosticsCanisterConfig::default(),
         metrics: MetricsCanisterConfig::default(),
     }
-}
-
-#[test]
-fn randomness_defaults_to_ic() {
-    let cfg = RandomnessConfig::default();
-
-    assert!(cfg.enabled);
-    assert_eq!(cfg.reseed_interval_secs, 3600);
-    assert_eq!(cfg.source, RandomnessSource::Ic);
-}
-
-#[test]
-fn randomness_source_parses_ic_and_time() {
-    let cfg: RandomnessConfig = toml::from_str("source = \"ic\"").unwrap();
-    assert_eq!(cfg.source, RandomnessSource::Ic);
-
-    let cfg: RandomnessConfig = toml::from_str("source = \"time\"").unwrap();
-    assert_eq!(cfg.source, RandomnessSource::Time);
 }
 
 #[test]
@@ -787,31 +768,6 @@ fn singleton_kind_cannot_own_manager_pools() {
     subnet
         .validate()
         .expect_err("singleton manager pools should be rejected");
-}
-
-#[test]
-fn randomness_interval_requires_positive_value() {
-    let mut canisters = BTreeMap::new();
-
-    let cfg = CanisterConfig {
-        randomness: RandomnessConfig {
-            enabled: true,
-            reseed_interval_secs: 0,
-            ..Default::default()
-        },
-        ..base_canister_config(CanisterKind::Singleton)
-    };
-
-    canisters.insert(CanisterRole::from("app"), cfg);
-
-    let subnet = SubnetConfig {
-        canisters,
-        ..Default::default()
-    };
-
-    subnet
-        .validate()
-        .expect_err("expected invalid randomness interval to fail");
 }
 
 #[test]

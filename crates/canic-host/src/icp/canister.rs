@@ -8,17 +8,6 @@ use super::{
 };
 
 impl IcpCli {
-    /// Call one canister method with an explicit Candid argument and optional JSON output.
-    pub fn canister_call_arg_output(
-        &self,
-        canister: &str,
-        method: &str,
-        arg: &str,
-        output: Option<&str>,
-    ) -> Result<String, IcpCommandError> {
-        self.canister_call_arg_output_with_candid(canister, method, arg, output, None)
-    }
-
     /// Call one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
     pub fn canister_call_arg_output_with_candid(
         &self,
@@ -142,24 +131,6 @@ impl IcpCli {
         run_status(&mut command)
     }
 
-    /// Render a dry-run stop command.
-    #[must_use]
-    pub fn stop_canister_display(&self, canister: &str) -> String {
-        let mut command = self.canister_command();
-        command.args(["stop", canister]);
-        self.add_target_args(&mut command);
-        command_display(&command)
-    }
-
-    /// Render a dry-run start command.
-    #[must_use]
-    pub fn start_canister_display(&self, canister: &str) -> String {
-        let mut command = self.canister_command();
-        command.args(["start", canister]);
-        self.add_target_args(&mut command);
-        command_display(&command)
-    }
-
     /// Render a dry-run top-up command.
     #[must_use]
     pub fn canister_top_up_display(&self, canister: &str, amount_cycles: u128) -> String {
@@ -191,18 +162,6 @@ impl IcpCli {
         }
         self.add_target_args(&mut command);
         command_display(&command)
-    }
-
-    /// Render a dry-run update call with an explicit Candid argument.
-    #[must_use]
-    pub fn canister_call_arg_output_display(
-        &self,
-        canister: &str,
-        method: &str,
-        arg: &str,
-        output: Option<&str>,
-    ) -> String {
-        self.canister_call_arg_output_display_with_candid(canister, method, arg, output, None)
     }
 
     /// Render a dry-run update call with an explicit Candid argument and optional local Candid.

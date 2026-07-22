@@ -1,5 +1,5 @@
-use super::super::model::{DEFAULT_INITIAL_CYCLES, DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS};
-use super::labels::{metrics_profile_label, metrics_profile_tiers_label, randomness_source_label};
+use super::super::model::DEFAULT_INITIAL_CYCLES;
+use super::labels::{metrics_profile_label, metrics_profile_tiers_label};
 use super::parse_projection_config;
 use crate::release_set::config::FleetConfigError;
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,18 +47,6 @@ pub(in crate::release_set) fn configured_role_details_from_source(
             ));
             if canister.initial_cycles.to_u128() != DEFAULT_INITIAL_CYCLES {
                 role_details.insert(format!("initial_cycles={}", canister.initial_cycles));
-            }
-            if !canister.randomness.enabled {
-                role_details.insert("randomness=off".to_string());
-            } else if randomness_source_label(canister.randomness.source) != "ic"
-                || canister.randomness.reseed_interval_secs
-                    != DEFAULT_RANDOMNESS_RESEED_INTERVAL_SECS
-            {
-                role_details.insert(format!(
-                    "randomness={} reseed={}s",
-                    randomness_source_label(canister.randomness.source),
-                    canister.randomness.reseed_interval_secs
-                ));
             }
             if canister.auth.delegated_token_issuer {
                 role_details.insert("auth delegated-token-issuer".to_string());

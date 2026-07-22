@@ -18,7 +18,7 @@ pub fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
     run_output_unchecked(command)
 }
 
-pub(super) fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError> {
+fn run_output_unchecked(command: &mut Command) -> Result<String, IcpCommandError> {
     let display = command_display(command);
     let output = command.output()?;
     if output.status.success() {
@@ -49,7 +49,7 @@ pub fn run_output_with_stderr(command: &mut Command) -> Result<String, IcpComman
 }
 
 /// Execute a command and parse successful stdout as JSON.
-pub fn run_json<T>(command: &mut Command) -> Result<T, IcpCommandError>
+pub(super) fn run_json<T>(command: &mut Command) -> Result<T, IcpCommandError>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -87,7 +87,7 @@ pub fn run_status(command: &mut Command) -> Result<(), IcpCommandError> {
 }
 
 /// Execute a command with inherited terminal I/O and require a successful status.
-pub fn run_status_inherit(command: &mut Command) -> Result<(), IcpCommandError> {
+pub(super) fn run_status_inherit(command: &mut Command) -> Result<(), IcpCommandError> {
     ensure_command_compatible(command)?;
     let display = command_display(command);
     let mut child = command

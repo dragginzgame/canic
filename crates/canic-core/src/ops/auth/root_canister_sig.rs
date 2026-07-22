@@ -23,16 +23,18 @@ use std::{cell::RefCell, collections::BTreeMap};
 #[cfg(feature = "auth-root-canister-sig-create")]
 pub const ROOT_PROOF_RETRIEVAL_TTL_NS: u64 = 60_000_000_000;
 
-///
-/// RootPayloadKind
-///
-/// Root canister-signature payload family used for domain-separated proofs.
-///
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum RootPayloadKind {
-    RoleAttestation,
-}
+#[cfg(any(
+    feature = "auth-root-canister-sig-create",
+    feature = "auth-root-canister-sig-verify",
+    test
+))]
+const ROOT_CANISTER_SIG_SEED: &[u8] = b"canic-root-role-attestation";
+#[cfg(any(
+    feature = "auth-root-canister-sig-create",
+    feature = "auth-root-canister-sig-verify",
+    test
+))]
+const ROOT_CANISTER_SIG_DOMAIN: &[u8] = b"canic-root-role-attestation";
 
 ///
 /// PreparedRootCanisterSignature
@@ -55,63 +57,34 @@ struct PendingRootProof {
 #[cfg(feature = "auth-root-canister-sig-create")]
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct PendingRootProofKey {
-    kind: RootPayloadKind,
     payload_hash: [u8; 32],
     prepared_by: Vec<u8>,
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
 impl PendingRootProofKey {
-    fn new(kind: RootPayloadKind, payload_hash: [u8; 32], prepared_by: Principal) -> Self {
+    fn new(payload_hash: [u8; 32], prepared_by: Principal) -> Self {
         Self {
-            kind,
             payload_hash,
             prepared_by: prepared_by.as_slice().to_vec(),
         }
     }
 }
 
-#[cfg(any(
-    feature = "auth-root-canister-sig-create",
-    feature = "auth-root-canister-sig-verify",
-    test
-))]
-pub const fn root_canister_sig_seed(kind: RootPayloadKind) -> &'static [u8] {
-    match kind {
-        RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
-    }
-}
-
-#[cfg(any(
-    feature = "auth-root-canister-sig-create",
-    feature = "auth-root-canister-sig-verify",
-    test
-))]
-pub const fn root_canister_sig_domain(kind: RootPayloadKind) -> &'static [u8] {
-    match kind {
-        RootPayloadKind::RoleAttestation => b"canic-root-role-attestation",
-    }
-}
-
 #[cfg(any(feature = "auth-root-canister-sig-verify", test))]
-pub fn root_canister_sig_verification_message(
-    kind: RootPayloadKind,
-    payload_hash: [u8; 32],
-) -> Vec<u8> {
-    let domain = root_canister_sig_domain(kind);
-    let domain_len =
-        u8::try_from(domain.len()).expect("root canister signature domain exceeds 255 bytes");
+pub fn root_canister_sig_verification_message(payload_hash: [u8; 32]) -> Vec<u8> {
+    let domain_len = u8::try_from(ROOT_CANISTER_SIG_DOMAIN.len())
+        .expect("root canister signature domain exceeds 255 bytes");
 
-    let mut msg = Vec::with_capacity(1 + domain.len() + payload_hash.len());
+    let mut msg = Vec::with_capacity(1 + ROOT_CANISTER_SIG_DOMAIN.len() + payload_hash.len());
     msg.push(domain_len);
-    msg.extend_from_slice(domain);
+    msg.extend_from_slice(ROOT_CANISTER_SIG_DOMAIN);
     msg.extend_from_slice(&payload_hash);
     msg
 }
 
 impl AuthOps {
     pub(crate) fn prepare_root_canister_signature(
-        kind: RootPayloadKind,
         operation_id: [u8; 32],
         payload_hash: [u8; 32],
         prepared_by: Principal,
@@ -119,9 +92,8 @@ impl AuthOps {
     ) -> Result<PreparedRootCanisterSignature, InternalError> {
         #[cfg(feature = "auth-root-canister-sig-create")]
         {
-            validate_root_canister_sig_domain_len(kind)?;
+            validate_root_canister_sig_domain_len()?;
             Ok(prepare_root_canister_signature(
-                kind,
                 operation_id,
                 payload_hash,
                 prepared_by,
@@ -130,29 +102,26 @@ impl AuthOps {
         }
         #[cfg(not(feature = "auth-root-canister-sig-create"))]
         {
-            prepare_root_canister_signature(kind, operation_id, payload_hash, prepared_by, now_ns)
+            prepare_root_canister_signature(operation_id, payload_hash, prepared_by, now_ns)
         }
     }
 
     pub(crate) fn get_root_canister_signature_proof(
-        kind: RootPayloadKind,
         payload_hash: [u8; 32],
         prepared_by: Principal,
         root_pid: Principal,
         now_ns: u64,
     ) -> Result<RoleAttestationRootProof, InternalError> {
-        get_root_canister_signature_proof(kind, payload_hash, prepared_by, root_pid, now_ns)
+        get_root_canister_signature_proof(payload_hash, prepared_by, root_pid, now_ns)
     }
 
     pub(crate) fn verify_root_canister_signature_proof(
-        kind: RootPayloadKind,
         payload_hash: [u8; 32],
         proof: &RoleAttestationRootProof,
         expected_root_pid: Principal,
         ic_root_public_key_raw: &[u8],
     ) -> Result<(), InternalError> {
         verify_root_canister_signature_proof(
-            kind,
             payload_hash,
             proof,
             expected_root_pid,
@@ -170,8 +139,8 @@ impl AuthOps {
 }
 
 #[cfg(feature = "auth-root-canister-sig-create")]
-fn validate_root_canister_sig_domain_len(kind: RootPayloadKind) -> Result<(), InternalError> {
-    u8::try_from(root_canister_sig_domain(kind).len())
+fn validate_root_canister_sig_domain_len() -> Result<(), InternalError> {
+    u8::try_from(ROOT_CANISTER_SIG_DOMAIN.len())
         .map(|_| ())
         .map_err(|_| {
             AuthSignatureError::ProofInvalid(
@@ -191,7 +160,6 @@ thread_local! {
 
 #[cfg(feature = "auth-root-canister-sig-create")]
 fn prepare_root_canister_signature(
-    kind: RootPayloadKind,
     operation_id: [u8; 32],
     payload_hash: [u8; 32],
     prepared_by: Principal,
@@ -202,8 +170,8 @@ fn prepare_root_canister_signature(
     crate::ops::runtime::metrics::delegated_auth::DelegatedAuthMetrics::record_root_proof_prepare_started();
 
     let inputs = CanisterSigInputs {
-        domain: root_canister_sig_domain(kind),
-        seed: root_canister_sig_seed(kind),
+        domain: ROOT_CANISTER_SIG_DOMAIN,
+        seed: ROOT_CANISTER_SIG_SEED,
         message: &payload_hash,
     };
     ROOT_CANISTER_SIGNATURES.with(|signatures| {
@@ -215,7 +183,7 @@ fn prepare_root_canister_signature(
     let retrieval_expires_at_ns = now_ns.saturating_add(ROOT_PROOF_RETRIEVAL_TTL_NS);
     PENDING_ROOT_PROOFS.with(|pending| {
         pending.borrow_mut().insert(
-            PendingRootProofKey::new(kind, payload_hash, prepared_by),
+            PendingRootProofKey::new(payload_hash, prepared_by),
             PendingRootProof {
                 operation_id,
                 retrieval_expires_at_ns,
@@ -239,7 +207,6 @@ fn refresh_root_canister_sig_certified_data(signature_root_hash: &[u8; 32]) {
 
 #[cfg(not(feature = "auth-root-canister-sig-create"))]
 fn prepare_root_canister_signature(
-    _kind: RootPayloadKind,
     _operation_id: [u8; 32],
     _payload_hash: [u8; 32],
     _prepared_by: Principal,
@@ -251,7 +218,6 @@ fn prepare_root_canister_signature(
 
 #[cfg(feature = "auth-root-canister-sig-create")]
 fn get_root_canister_signature_proof(
-    kind: RootPayloadKind,
     payload_hash: [u8; 32],
     prepared_by: Principal,
     root_pid: Principal,
@@ -259,7 +225,7 @@ fn get_root_canister_signature_proof(
 ) -> Result<RoleAttestationRootProof, InternalError> {
     use ic_canister_sig_creation::{CanisterSigPublicKey, signature_map::CanisterSigInputs};
 
-    let key = PendingRootProofKey::new(kind, payload_hash, prepared_by);
+    let key = PendingRootProofKey::new(payload_hash, prepared_by);
     let pending = PENDING_ROOT_PROOFS.with(|pending| pending.borrow().get(&key).cloned());
     let pending = pending.ok_or_else(|| {
         AuthValidationError::Auth("root proof was not prepared or has been pruned".to_string())
@@ -272,8 +238,8 @@ fn get_root_canister_signature_proof(
         .into());
     }
     let inputs = CanisterSigInputs {
-        domain: root_canister_sig_domain(kind),
-        seed: root_canister_sig_seed(kind),
+        domain: ROOT_CANISTER_SIG_DOMAIN,
+        seed: ROOT_CANISTER_SIG_SEED,
         message: &payload_hash,
     };
     let signature_cbor = ROOT_CANISTER_SIGNATURES.with(|signatures| {
@@ -283,7 +249,7 @@ fn get_root_canister_signature_proof(
             .map_err(root_canister_signature_cbor_error)
     })?;
     let public_key_der =
-        CanisterSigPublicKey::new(root_pid, root_canister_sig_seed(kind).to_vec()).to_der();
+        CanisterSigPublicKey::new(root_pid, ROOT_CANISTER_SIG_SEED.to_vec()).to_der();
 
     Ok(RoleAttestationRootProof::IcCanisterSignatureV1(
         IcCanisterSignatureProofV1 {
@@ -309,7 +275,6 @@ fn root_canister_signature_cbor_error(
 
 #[cfg(not(feature = "auth-root-canister-sig-create"))]
 fn get_root_canister_signature_proof(
-    _kind: RootPayloadKind,
     _payload_hash: [u8; 32],
     _prepared_by: Principal,
     _root_pid: Principal,
@@ -320,7 +285,6 @@ fn get_root_canister_signature_proof(
 
 #[cfg(feature = "auth-root-canister-sig-verify")]
 fn verify_root_canister_signature_proof(
-    kind: RootPayloadKind,
     payload_hash: [u8; 32],
     proof: &RoleAttestationRootProof,
     expected_root_pid: Principal,
@@ -335,14 +299,14 @@ fn verify_root_canister_signature_proof(
         )
         .into());
     }
-    if seed != root_canister_sig_seed(kind) {
+    if seed != ROOT_CANISTER_SIG_SEED {
         return Err(AuthSignatureError::ProofInvalid(
             "root canister signature seed mismatch".to_string(),
         )
         .into());
     }
 
-    let message = root_canister_sig_verification_message(kind, payload_hash);
+    let message = root_canister_sig_verification_message(payload_hash);
     ic_signature_verification::verify_canister_sig(
         &message,
         &proof.signature_cbor,
@@ -356,7 +320,6 @@ fn verify_root_canister_signature_proof(
 
 #[cfg(not(feature = "auth-root-canister-sig-verify"))]
 fn verify_root_canister_signature_proof(
-    _kind: RootPayloadKind,
     _payload_hash: [u8; 32],
     _proof: &RoleAttestationRootProof,
     _expected_root_pid: Principal,
@@ -371,27 +334,20 @@ mod tests {
 
     #[test]
     fn verification_message_prefixes_domain_length_and_domain() {
-        let msg = root_canister_sig_verification_message(RootPayloadKind::RoleAttestation, [7; 32]);
-        let domain = root_canister_sig_domain(RootPayloadKind::RoleAttestation);
-        let domain_len = u8::try_from(domain.len()).unwrap();
+        let msg = root_canister_sig_verification_message([7; 32]);
+        let domain_len = u8::try_from(ROOT_CANISTER_SIG_DOMAIN.len()).unwrap();
         let domain_start = 1;
-        let domain_end = domain_start + domain.len();
+        let domain_end = domain_start + ROOT_CANISTER_SIG_DOMAIN.len();
 
         assert_eq!(msg[0], domain_len);
-        assert_eq!(&msg[domain_start..domain_end], domain);
+        assert_eq!(&msg[domain_start..domain_end], ROOT_CANISTER_SIG_DOMAIN);
         assert_eq!(&msg[domain_end..], &[7; 32]);
     }
 
     #[test]
     fn role_attestation_uses_expected_seed_and_domain() {
-        assert_eq!(
-            root_canister_sig_seed(RootPayloadKind::RoleAttestation),
-            b"canic-root-role-attestation"
-        );
-        assert_eq!(
-            root_canister_sig_domain(RootPayloadKind::RoleAttestation),
-            b"canic-root-role-attestation"
-        );
+        assert_eq!(ROOT_CANISTER_SIG_SEED, b"canic-root-role-attestation");
+        assert_eq!(ROOT_CANISTER_SIG_DOMAIN, b"canic-root-role-attestation");
     }
 
     #[test]

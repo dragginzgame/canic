@@ -4,7 +4,7 @@ use crate::{
     config::schema::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
         DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool, MetricsCanisterConfig,
-        RandomnessConfig, StandardsCanisterConfig,
+        StandardsCanisterConfig,
     },
     ids::{CanisterRole, SubnetRole},
     ops::{
@@ -43,7 +43,6 @@ fn directory_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
         topup: None,
         icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
-        randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
         directory: Some(directory),

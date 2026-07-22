@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.0`.
-- The latest published release is `v0.98.0` at
-  `f6aef15ffd03d0b6cb573330ac0cc7a348ee3caf`.
-- The `v0.98.0` source tree is
-  `fd1ef47e7b3a6e4cd3ad7f9e88262a2a1a2335d4`; its product-tree hash is
-  `902883e318cf6fdb88cabb9f4195cfbdda13d18c80094ad622f45d0eb2a70524` and
+- The workspace package version is `0.98.1`.
+- The latest published release is `v0.98.1` at
+  `e0dcd0cbb8f550e4c0366d9e1007ca32dceb2aa7`.
+- The `v0.98.1` source tree is
+  `ae154b0deb862702d48fed4dd235caf76089f7a2`; its product-tree hash is
+  `b190d1f163cf8f2099290fb429a7e9f84c693cd15ae1b446e72165214622a042` and
   its Cargo.lock SHA-256 is
-  `f7d26cf21ea029a4a76fbb7cbd2ba402e9b46d221c78a1af56a81968bf7d9550`.
+  `801ad42f9b2a733e925d3c4b0b66cae1922b60b3b7b2cc0166a9a52cfd2092e2`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -453,11 +453,18 @@ corrections, and validation are in the
 
 0.98 is active. Published `v0.98.0` is the corrected immutable predecessor and
 completes Slice A by deleting the consumerless project-protocol test package
-and the explicit legacy-refill anti-resurrection test. Open `0.98.1` completes
-Slice B: the obsolete externally uncertain LocalIntent race fixture and its two
-auxiliary packages are hard-cut, while one receipt-backed PocketIC authority
-retains every frozen final-`v0.96.8` assertion. The accepted but unexecuted
-randomness configuration/runtime scaffolding remains the separate Slice C.
+and the explicit legacy-refill anti-resurrection test. Published `v0.98.1`
+completes Slice B: the obsolete externally uncertain LocalIntent race fixture
+and its two auxiliary packages are hard-cut, while one receipt-backed PocketIC
+authority retains every frozen final-`v0.96.8` assertion. Open `0.98.2`
+completes Slice C by deleting the accepted-but-unexecuted randomness contract
+and unreachable raw-randomness adapter/metrics. Explicit retired input is a
+typed strict-schema failure; no replacement or compatibility path remains.
+The maintainer also approved the bounded consolidation amendment in the same
+open patch: all 42 candidates across 37 packages are resolved, with one fixed
+P1, 11 fixed P2 findings, and 30 proved notes. The complete candidate is ready
+for release against immutable `v0.98.1`; closeout waits only for the exact
+`v0.98.2` anchor.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -1012,20 +1019,40 @@ First primary results:
   PocketIC suite pass; the Rust-library-only upstream API break is outside
   Canic's CLI-only integration. The deterministic cumulative `root_suite`
   passes all 28 cases with the upgraded binary.
-- Open `0.98.1` Slice B validation passes the one-canister receipt-backed
+- Released `0.98.1` Slice B validation passes the one-canister receipt-backed
   intent PocketIC conformance, all three lifecycle-boundary PocketIC cases,
   seven focused LocalIntent workflow tests, both receipt-reclamation inventory
   guards, retained `runtime_probe` compilation, strict Clippy for all changed
   Rust targets, the layering guard, and locked metadata resolution for 37
   packages. The deleted `intent_client` and `intent_external` packages have no
   workspace or lockfile entry.
+- Open `0.98.2` combines the original Slice C randomness hard cut with the
+  maintainer-approved consolidation amendment. Active source retains no
+  randomness schema, projection, adapter, or metric path; retired input fails
+  through typed strict-schema evidence. The repository-wide authority map
+  covers all 37 workspace packages and resolves all 42 consolidation
+  candidates: one P1 and 11 P2 findings are fixed, 30 notes are proved, and no
+  deferred or unresolved item remains. Dead core snapshot and host
+  ICP/duration surfaces are removed, capability/auth intermediates are
+  simplified, and build/config/state truth is consolidated without a
+  compatibility path.
+- Focused independent validation passes the changed config/bootstrap,
+  role-contract, state-manifest, state-contract, capability, auth, host ICP,
+  CLI state, protocol, and reference surfaces. The recorded cumulative unit
+  and CI-built Wasm/PocketIC selection, strict workspace Clippy, formatting,
+  layering, feature, dependency, protocol, audit-catalog, release-policy, and
+  stale-path gates pass. The combined candidate verdict is `READY FOR
+  v0.98.2`; immutable closure waits only for the maintainer-owned release
+  anchor.
 
 ## Next Action
 
-Review and release the open `0.98.1` receipt-fixture hard cut, then begin the
-independent Slice C randomness-contract deletion. Do not inspect or edit the
-stale local Toko repository, change Cargo package versions outside the
-maintainer-owned release flow, or add an old compatibility path.
+Review and release the combined open `0.98.2` patch, then record its exact
+commit, tree, product-tree hash, Cargo.lock hash, and workspace version in the
+0.98 closeout/status evidence. Do not open another release line for this work.
+Do not inspect or edit the stale local Toko repository, change Cargo package
+versions outside the maintainer-owned release flow, or commit, tag, publish,
+or push these shared-worktree changes without maintainer action.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

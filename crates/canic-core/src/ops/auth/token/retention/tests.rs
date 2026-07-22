@@ -9,7 +9,7 @@ use crate::{
     ids::CanisterRole,
     ops::auth::{
         delegated::prepare::{PrepareDelegatedTokenInput, prepare_delegated_token},
-        issuer_canister_sig::{IssuerPayloadKind, issuer_canister_sig_seed_hash},
+        issuer_canister_sig::issuer_canister_sig_seed_hash,
         test_fixtures::chain_key_root_proof,
     },
 };
@@ -30,7 +30,7 @@ fn prepared_token(prepared_by: Principal, operation: u8) -> PreparedDelegatedTok
             issuer_proof_alg: IssuerProofAlgorithm::IcCanisterSignatureV1,
             issuer_proof_binding_hash: [3; 32],
             issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 {
-                seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+                seed_hash: issuer_canister_sig_seed_hash(),
             },
             issued_at_ns: 10,
             not_before_ns: 10,

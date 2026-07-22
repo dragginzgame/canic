@@ -227,7 +227,6 @@ impl ConfigModel {
                 topup: None,
                 icp_refill: None,
                 cycles_funding: CyclesFundingPolicyConfig::default(),
-                randomness: RandomnessConfig::default(),
                 scaling: None,
                 sharding: None,
                 directory: None,

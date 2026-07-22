@@ -10,8 +10,8 @@
 use crate::role_contract::{
     PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
     materialize_state_manifest, resolve_built_in_wasm_store_contract,
-    resolve_declared_role_package_contract, validate_built_in_wasm_store_package,
-    validate_declared_role_package,
+    resolve_declared_role_package_contract_from_config, validate_built_in_wasm_store_package,
+    validate_declared_role_package_from_config,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -67,14 +67,17 @@ pub fn resolve_project_state_manifest(
                     continue;
                 }
                 matched_declared_role = true;
-                match validate_declared_role_package(
+                match validate_declared_role_package_from_config(
                     config_path,
+                    &config,
                     role,
                     PackageValidationMode::Passive,
                 ) {
                     RolePackageValidation::Supported(package_evidence) => {
-                        let resolution =
-                            resolve_declared_role_package_contract(config_path, &package_evidence);
+                        let resolution = resolve_declared_role_package_contract_from_config(
+                            &config,
+                            &package_evidence,
+                        );
                         evidence.push(package_evidence);
                         collect_contract(role, resolution, &mut contracts, &mut errors);
                     }

@@ -1,0 +1,162 @@
+# 0.98.2 Consolidation Disposition Ledger
+
+Date: 2026-07-22
+
+Status: all investigated candidates resolved; validation evidence is recorded
+in the supporting consolidation report and canonical 0.98 closeout audit.
+
+## Counting rules
+
+The disposition totals count the 42 unique `CANIC-098-CLOSE-*` candidate rows below.
+Package and subsystem coverage tables map those candidates to the complete
+workspace and are not counted again.
+
+| Severity | Count |
+| --- | ---: |
+| P0 | 0 |
+| P1 | 1 |
+| P2 | 11 |
+| Note | 30 |
+| Total | 42 |
+
+| Disposition | Count |
+| --- | ---: |
+| REMOVE | 4 |
+| CONSOLIDATE | 3 |
+| REHOME | 0 |
+| SIMPLIFY | 5 |
+| RETAIN | 23 |
+| REJECTED | 7 |
+| DEFERRED | 0 |
+| UNRESOLVED | 0 |
+| Total | 42 |
+
+## Candidate dispositions
+
+| ID | Severity | Candidate and authority evidence | Disposition |
+| --- | --- | --- | --- |
+| CANIC-098-CLOSE-BASE-001 | Note | Suspected consolidation ownership of randomness/raw_rand, project-protocol-stub, or LocalIntent race fixtures. The immutable baseline assigns the first to original Slice C and the others to released v0.98.0/v0.98.1 work. | REJECTED — no duplicate finding attribution inside the combined 0.98 line |
+| CANIC-098-CLOSE-PKG-001 | Note | A workspace package might have no surviving purpose. Locked metadata finds 37 packages; reverse build/test/config/deployment consumers are recorded below. | RETAIN |
+| CANIC-098-CLOSE-BUILD-001 | P2 | Line matching for `canic::build!` rejected valid multiline syntax and could count inert text. Role contract is the owner. | SIMPLIFY — parse and visit Rust syntax |
+| CANIC-098-CLOSE-CONFIG-001 | P2 | State-manifest passive validation repeatedly reparsed the same selected config. The first `ConfigModel` is canonical. | CONSOLIDATE — pass one model through validation |
+| CANIC-098-CLOSE-CONFIG-002 | P1 | Root configuration guidance described superseded fields/semantics and could direct operators to an invalid or unsafe contract. Strict `ConfigModel` is canonical. | CONSOLIDATE — current guide plus executable example |
+| CANIC-098-CLOSE-DOC-001 | P2 | TESTING retained a compatibility breadcrumb for a removed annotation form. Current PocketIC helpers own the contract. | REMOVE |
+| CANIC-098-CLOSE-HOST-001 | P2 | `canic-host::duration` had only its own tests after command parsing moved to CLI-specific owners. | REMOVE |
+| CANIC-098-CLOSE-FACADE-001 | Note | Suspected removable `canic-core::cdk`. Macros, facade internals, control plane, role packages, and test canisters still require it. | RETAIN — hidden plumbing, not documented facade |
+| CANIC-098-CLOSE-CP-001 | P2 | Control-plane `runtime` and `schema` modules were public without external or macro consumers. | SIMPLIFY — `pub(crate)`; semantic DTO/ID/state contracts stay public |
+| CANIC-098-CLOSE-STATE-001 | P2 | Active CycleTracker memory 29 was declared reserved, producing duplicate/inaccurate state authority. | CONSOLIDATE — active record/data descriptor and snapshot conversion |
+| CANIC-098-CLOSE-CAP-001 | P2 | Internal root-proof kind/mode/router/async verifier modeled multiple implementations beside one structural wire proof. | SIMPLIFY — direct structural verifier; wire proof retained |
+| CANIC-098-CLOSE-MGMT-001 | P2 | Core take/load snapshot infra/ops/types/metrics had no production, macro, wasm, CLI, test, or script caller. Host backup owns snapshots. | REMOVE |
+| CANIC-098-CLOSE-AUTH-001 | P2 | Root and issuer payload-kind enums had one variant after earlier auth paths disappeared. Fixed seed/domain bytes own the payload family. | SIMPLIFY — remove kind taxonomies and arguments; advance the corrected trust-chain inventory to fingerprinted v2 |
+| CANIC-098-CLOSE-ICP-001 | P2 | Host call/start/stop/snapshot/version/display convenience methods were definition-only or test-only remnants of removed operator flows. | REMOVE |
+| CANIC-098-CLOSE-ICP-002 | P2 | ICP parsing/run helpers were publicly re-exported despite only same-crate consumers. CLI/backup imports identify the true public boundary. | SIMPLIFY — private modules with exact crate/parent re-exports |
+| CANIC-098-CLOSE-DEPS-001 | Note | Cargo Machete flagged three role-fixture normal `canic` edges. Those edges intentionally carry role features separately from featureless build dependencies. | RETAIN — exact fixture-local Machete metadata |
+| CANIC-098-CLOSE-DEPS-002 | Note | Direct host Syn might add a compiled version. The lock already contains Syn 3.0.3 through active dependencies; inverse tree shows the host selects it. | RETAIN — no added version |
+| CANIC-098-CLOSE-ABI-001 | Note | Suspected `repr(u16)` enums reducible to `u8`. There is no `repr(u16)`; the sole `repr(u8)` is a cryptographic canonical-domain byte. | REJECTED |
+| CANIC-098-CLOSE-CONFIG-003 | Note | Suspected accepted-but-ignored current config. Schema-to-render/runtime/host searches cover every field; removed randomness is strict 0.98 rejection input only. | RETAIN |
+| CANIC-098-CLOSE-FEAT-001 | Note | Suspected stale Cargo features. All non-metrics features gate code/dependencies; empty `metrics` is an intentional role build-selection marker consumed by build support/contracts. | RETAIN |
+| CANIC-098-CLOSE-DEPS-003 | Note | Suspected workspace dependency inversion. Metadata shows core/macro bottoms, control-plane -> core, facade -> product internals, host/CLI above runtime, and backup independent. | RETAIN |
+| CANIC-098-CLOSE-AUTH-002 | Note | Suspected competing auth models. Role attestation and delegated chain-key/issuer-token flows have distinct current duties and one endpoint authorization boundary. | RETAIN |
+| CANIC-098-CLOSE-REPLAY-001 | Note | Suspected competing LocalIntent/replay/receipt authorities. Local intents and receipt-backed intents serve distinct current contracts; Canic-owned namespaces are isolated in the one receipt store. | RETAIN |
+| CANIC-098-CLOSE-REPLAY-002 | Note | Suspected defect because no raw exact-receipt dump endpoint exists. Same-ID replay, typed responses/errors, workflow records, capacity, and controller logs are the supported observation contract. | REJECTED — a dump endpoint would be new security-sensitive surface, not sediment removal |
+| CANIC-098-CLOSE-BACKUP-001 | Note | Suspected alternate backup/restore machinery. Plans, journals, receipts, artifact publication, and reconciliation all converge on `canic-backup` plus one host executor. | RETAIN |
+| CANIC-098-CLOSE-POOL-001 | Note | Suspected retired `pending reset` shortcut. The only current form is generation-bound pool recycling with durable exclusion and bounded recovery. | RETAIN |
+| CANIC-098-CLOSE-RECOVERY-001 | Note | Terms rollback/staging/unknown-outcome suggested old compatibility paths. Tracing finds transactional config rollback, private checksum-bound artifact staging, and fail-closed unknown-effect containment. | REJECTED — current safety invariants, not superseded architecture |
+| CANIC-098-CLOSE-TIMER-001 | Note | Suspected parallel timer authorities. All CDK scheduling routes through `TimerWorkflow`; subsystem schedulers provide work/deadlines only. | RETAIN |
+| CANIC-098-CLOSE-TIMER-002 | Note | Suspected timed ICP refill. No refill timer key/callback exists; conversion is controller-triggered root-only manual workflow. | REJECTED |
+| CANIC-098-CLOSE-ICP-003 | Note | No funded live-IC refill journey ran in this audit. Source/Candid/CLI/state/replay/metrics inventories still prove one current workflow. | RETAIN with explicit external-validation limitation |
+| CANIC-098-CLOSE-TOPO-001 | Note | Suspected duplicate topology/registry/pool owners. Records live in storage/model; ops project/mutate; placement is the shared creation authority; host registry is operator evidence only. | RETAIN |
+| CANIC-098-CLOSE-STABLE-001 | Note | Suspected abandoned stable fields/variants. State contracts, record conversions, capacity/index tests, and lifecycle rebuilds justify current shapes; no ID is renumbered. | RETAIN |
+| CANIC-098-CLOSE-VERSION-001 | Note | `V1` names suggested compatibility sediment. Remaining names identify current persisted JSON/Candid/evidence schemas with strict version-1 validation and no fallback reader. | RETAIN |
+| CANIC-098-CLOSE-GEN-001 | Note | Suspected stale generated bindings/descriptors. Only canonical Wasm-store DID and two external blob fixtures are tracked; protocol tests consume them; `.icp` output is generated. | RETAIN |
+| CANIC-098-CLOSE-FIXTURE-001 | Note | Suspected obsolete test canisters. Each test canister maps to a current PocketIC behavior or build contract; the 0.98 race auxiliaries are already absent. | RETAIN |
+| CANIC-098-CLOSE-PROBE-001 | Note | Suspected dead audit/sandbox packages. Minimal, metrics, root, leaf, scaling probes measure role/wasm contracts; blank sandbox is documented manual compile-drift support. | RETAIN |
+| CANIC-098-CLOSE-CLI-001 | Note | Suspected dead CLI commands/operational tools. Top-level dispatch, help, tests, and host/backup consumers cover each command family; no snapshot command survives. | RETAIN |
+| CANIC-098-CLOSE-ERROR-001 | Note | Suspected obsolete wrapper taxonomies/string loss. Current layers preserve typed config, host process, backup/restore, auth, replay, and platform causes until text/JSON rendering boundaries. | RETAIN |
+| CANIC-098-CLOSE-MGMT-002 | Note | Suspected unreachable remaining production adapters. After snapshot removal, lifecycle/settings/install/delete/status/cycles/HTTP/chain-key calls all have workflow or feature-gated consumers. | RETAIN |
+| CANIC-098-CLOSE-TOOL-001 | Note | Suspected CI/build/deployment tooling for removed structures. All current scripts map to Make/CI/docs/release guards or intentional maintainer helpers; stale 0.98 symbols are absent. | RETAIN |
+| CANIC-098-CLOSE-HISTORY-001 | Note | Historical reports mention removed snapshot/randomness/auth models. Their dates/snapshot preambles or explicit superseded labels make them evidence, not current instructions. | REJECTED — do not rewrite immutable history |
+| CANIC-098-CLOSE-VIS-001 | Note | `unreachable_pub` reported roughly 1,700 existing items across deliberate cross-crate/facade/test surfaces. Raw lint volume does not prove obsolete responsibility. Exact consumer tracing produced C009/C015 instead. | REJECTED |
+
+## Package coverage
+
+All workspace members from locked Cargo metadata are listed exactly once.
+
+| Package | Current responsibility / consumer proof | Result |
+| --- | --- | --- |
+| `canic` | Public facade, build/start/api macros; every role package and protocol tests | RETAIN; C005 documentation corrected |
+| `canic-core` | Runtime layers, DTO/model/state, platform ops, auth/replay/timers; facade/control-plane/host consumers | RETAIN after C010-C013/CANIC-098-CLOSE-MGMT-001 remediation |
+| `canic-macros` | Procedural endpoint parsing/expansion; direct facade dependency and macro tests | RETAIN |
+| `canic-control-plane` | Root/Wasm-store policy, storage, workflows, state contract; facade feature consumers | RETAIN after C009 narrowing |
+| `canic-wasm-store` | Built-in store canister, canonical DID, packaging/build probes | RETAIN |
+| `canic-host` | Config/build/install/deployment truth/ICP adapters; CLI and testing consumers | RETAIN after C003/C004/C007/C014/C015 |
+| `canic-cli` | Operator binary and rendering; top-level dispatch plus command tests | RETAIN |
+| `canic-backup` | Sole backup/restore durable recovery library; CLI executor consumer | RETAIN |
+| `canic-testing-internal` | Shared PocketIC build/install/query harness; `canic-tests` consumer | RETAIN |
+| `canic-tests` | Cross-canister, lifecycle, replay, auth, topology, payload, blob suites | RETAIN |
+| `blob_storage_cashier_mock` | Cashier boundary for `pic_blob_storage` | RETAIN |
+| `blob_storage_probe` | Blob billing/gateway behavior for `pic_blob_storage`; state-manifest fixture | RETAIN |
+| `delegation_issuer_stub` | Issuer proof/token canister embedded by delegation root and attestation harness | RETAIN |
+| `delegation_root_stub` | Root auth/attestation integration canister and embedded project roles | RETAIN |
+| `intent_authority` | Sole receipt-backed intent PocketIC authority after 0.98 fixture deletion | RETAIN |
+| `payload_limit_probe` | Ingress payload-limit PocketIC contract | RETAIN |
+| `project_hub_stub` | Delegated project-hub audience/topology integration role | RETAIN |
+| `project_instance_stub` | Delegated project-instance audience integration role | RETAIN |
+| `runtime_probe` | Lifecycle/runtime status/timer integration canister | RETAIN |
+| `sharding_root_stub` | Root side of sharding bootstrap PocketIC proof | RETAIN |
+| `leaf_probe` | Standalone leaf role/wasm audit profile | RETAIN |
+| `root_probe` | Standalone root/control-plane audit and shared test-config root | RETAIN |
+| `scaling_probe` | Standalone scaling role/wasm audit profile | RETAIN |
+| `canister_minimal` | No-default-feature wasm floor | RETAIN |
+| `canister_minimal_metrics` | Metrics-enabled wasm delta floor | RETAIN |
+| `canister_sandbox_blank` | Documented manual compile-drift sandbox outside production tests | RETAIN |
+| `demo_fleet_app` | Demo application leaf role and deploy/build documentation | RETAIN |
+| `demo_fleet_root` | Demo root/control-plane role | RETAIN |
+| `demo_fleet_user_hub` | Demo sharding hub role | RETAIN |
+| `demo_fleet_user_shard` | Demo user shard role | RETAIN |
+| `canister_app` | Test-fleet application role used by root/PocketIC suites | RETAIN |
+| `canister_root` | Full test-fleet root used by cumulative root/PocketIC suites | RETAIN |
+| `canister_scale` | Test-fleet scale child role | RETAIN |
+| `canister_scale_hub` | Test-fleet scaling hub role | RETAIN |
+| `canister_test` | General test-fleet role for runtime/root integration | RETAIN |
+| `canister_user_hub` | Test-fleet sharding hub and sharding bootstrap consumer | RETAIN |
+| `canister_user_shard` | Test-fleet sharding leaf and backup/restore journey role | RETAIN |
+
+## Major subsystem coverage
+
+| Subsystem | Canonical owner and evidence | Candidate links / result |
+| --- | --- | --- |
+| Public facade/macros | `canic`, `canic-macros`, hidden core plumbing; protocol/reference/macro tests | FACADE-001 RETAIN |
+| Config ownership/projection | strict core schema -> one parsed host model -> build/runtime projection | CONFIG-001/002 fixed; CONFIG-003 RETAIN |
+| Role/package graph | metadata plus exact normal/build dependency contract and syntax-aware build macro validation | BUILD-001 fixed; DEPS-001 RETAIN |
+| Authentication/authorization | endpoint auth; attestation and delegated chain-key/token authorities | AUTH-001 fixed; AUTH-002 RETAIN |
+| Intent/replay/receipts | one durable receipt store, reserved namespace, pure decision + ops mutation + workflow effects | REPLAY-001/002 resolved |
+| ICP refill | root config, stable record/index, manual endpoint/CLI, receipt workflow, no timer | TIMER-002 REJECTED; ICP-003 limitation |
+| Backup/restore | `canic-backup` durable model plus host executor and CLI commands | BACKUP-001 RETAIN; RECOVERY-001 REJECTED |
+| Management/platform calls | infra raw calls -> ops single effects -> workflows | MGMT-001 removed; MGMT-002 RETAIN |
+| Timers/lifecycle | one `TimerWorkflow`; synchronous restore and deferred hooks | TIMER-001 RETAIN |
+| Topology/registry/placement | storage/model authority, ops projections, shared placement workflow | TOPO-001 RETAIN |
+| Pool reset/recovery | generation-bound pending reset and bounded scheduler | POOL-001 RETAIN |
+| Wasm-store/template lifecycle | root binding state plus store-local one-way GC | TOPO-001 RETAIN |
+| DTO/domain/view/record boundaries | passive DTO, authoritative model, record persistence, internal views, `*Data` snapshots | STABLE-001 RETAIN |
+| Stable memory/state manifests | core/control-plane descriptors plus host role applicability | STATE-001 fixed; STABLE-001 RETAIN |
+| Candid/generated clients | canonical checked-in DID/fixtures plus build-generated `.icp` artifacts | GEN-001 RETAIN |
+| JSON/evidence versions | strict current version-1 backup/restore/deployment/provenance contracts | VERSION-001 RETAIN |
+| Host/operator adapters | typed ICP CLI, deployment truth, status/medic/inspect/state evidence | ICP-001/002 fixed; CLI-001 RETAIN |
+| Errors/diagnostics | typed causes through boundary renderers | ERROR-001 RETAIN |
+| PocketIC/test canisters | testing-internal harness plus one current fixture per behavior | FIXTURE-001 RETAIN |
+| Audit probes/sandbox | current wasm/role measurements and documented manual sandbox | PROBE-001 RETAIN |
+| CI/release/deployment scripts | Make/Actions/guard reverse consumers and maintainer helper policy | TOOL-001 RETAIN |
+
+## Contract and persistence impact
+
+| Surface | 0.98.2 result |
+| --- | --- |
+| Stable memory | no ID, record encoding, or migration change; CycleTracker metadata corrected only |
+| Candid | no method or type change |
+| JSON | no maintained key/version/output change |
+| CLI | no command, flag, or output change |
+| Config TOML | breaking hard cut: explicit per-role randomness input is rejected; guide corrected to the surviving strict schema |
+| Public Rust | randomness shapes and unconsumed core snapshot/host helper surfaces hard-cut; control-plane/core plumbing hidden/narrowed |
+| Dependencies | host-only `serde_path_to_error 0.1.20` plus one direct host edge to existing Syn 3.0.3; no added Syn version; Machete clean |
+| Package versions | unchanged by policy |

@@ -181,12 +181,6 @@ pub(super) fn add_local_network_target(command: &mut Command) {
     command.arg(LOCAL_ICP_TARGET);
 }
 
-/// Build a base `icp` command with the default executable.
-#[must_use]
-pub fn default_command() -> Command {
-    IcpCli::new("icp", None).command()
-}
-
 /// Build a base `icp` command rooted at one workspace directory.
 #[must_use]
 pub fn default_command_in(cwd: &Path) -> Command {
@@ -225,7 +219,7 @@ pub fn add_output_arg(command: &mut Command, output: &str) {
 }
 
 /// Add an ICP CLI local Candid interface path when one is available.
-pub fn add_candid_arg(command: &mut Command, candid_path: Option<&Path>) {
+pub(super) fn add_candid_arg(command: &mut Command, candid_path: Option<&Path>) {
     if let Some(candid_path) = candid_path {
         command.arg("--candid").arg(candid_path);
     }
@@ -255,7 +249,7 @@ pub fn existing_local_canister_candid_path(
 }
 
 /// Add ICP CLI debug logging when requested.
-pub fn add_debug_arg(command: &mut Command, debug: bool) {
+pub(super) fn add_debug_arg(command: &mut Command, debug: bool) {
     if debug {
         command.arg("--debug");
     }

@@ -1,5 +1,5 @@
 use super::*;
-use canic_core::bootstrap::ConfigError;
+use canic_core::bootstrap::{ConfigError, ConfigTomlIssue};
 use std::{
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
@@ -71,12 +71,43 @@ fn public_projection_preserves_config_path_and_core_parse_source() {
                 *source,
                 FleetConfigError::CoreConfig {
                     operation: FleetConfigOperation::Project,
-                    source: ConfigError::CannotParseToml(_),
+                    source: ConfigError::CannotParseToml { .. },
                 }
             ));
         }
         other => panic!("expected typed config parse error, got {other:?}"),
     }
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn public_projection_preserves_typed_nested_unknown_field() {
+    let root = temp_root("typed-unknown-field");
+    fs::create_dir_all(&root).expect("create temp root");
+    let config_path = root.join("canic.toml");
+    let source = format!("{CONFIG}\n[subnets.prime.canisters.root.randomness]\nenabled = true\n");
+    fs::write(&config_path, source).expect("write invalid config");
+
+    let error = configured_controllers(&config_path).expect_err("unknown field must fail");
+    let FleetConfigError::ConfigInvalid { path, source } = error else {
+        panic!("expected config-path boundary");
+    };
+    assert_eq!(path, config_path);
+    let FleetConfigError::CoreConfig { operation, source } = *source else {
+        panic!("expected core-config boundary");
+    };
+    assert_eq!(operation, FleetConfigOperation::Project);
+    let ConfigError::CannotParseToml { issue, .. } = source else {
+        panic!("expected TOML parse boundary");
+    };
+    assert_eq!(
+        issue,
+        ConfigTomlIssue::UnknownField {
+            logical_path: "subnets.prime.canisters.root.randomness".to_string(),
+            unknown_field: "randomness".to_string(),
+        }
+    );
 
     fs::remove_dir_all(root).expect("remove temp root");
 }

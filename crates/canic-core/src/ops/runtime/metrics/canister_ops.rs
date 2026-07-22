@@ -163,12 +163,12 @@ mod tests {
             CanisterOpsMetricReason::Topology,
         );
         CanisterOpsMetrics::record_unscoped(
-            CanisterOpsMetricOperation::Snapshot,
+            CanisterOpsMetricOperation::Delete,
             CanisterOpsMetricOutcome::Completed,
             CanisterOpsMetricReason::Ok,
         );
         CanisterOpsMetrics::record_unscoped(
-            CanisterOpsMetricOperation::Restore,
+            CanisterOpsMetricOperation::Install,
             CanisterOpsMetricOutcome::Failed,
             CanisterOpsMetricReason::ManagementCall,
         );
@@ -195,7 +195,7 @@ mod tests {
         );
         assert_eq!(
             map.get(&CanisterOpsMetricKey {
-                operation: CanisterOpsMetricOperation::Snapshot,
+                operation: CanisterOpsMetricOperation::Delete,
                 role: "unscoped".to_string(),
                 outcome: CanisterOpsMetricOutcome::Completed,
                 reason: CanisterOpsMetricReason::Ok,
@@ -204,7 +204,7 @@ mod tests {
         );
         assert_eq!(
             map.get(&CanisterOpsMetricKey {
-                operation: CanisterOpsMetricOperation::Restore,
+                operation: CanisterOpsMetricOperation::Install,
                 role: "unscoped".to_string(),
                 outcome: CanisterOpsMetricOutcome::Failed,
                 reason: CanisterOpsMetricReason::ManagementCall,

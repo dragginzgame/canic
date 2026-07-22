@@ -9,6 +9,9 @@ build = "build.rs"
 fleet = "fixture_supported"
 role = "app"
 
+[package.metadata.cargo-machete]
+ignored = ["canic"]
+
 [lib]
 crate-type = ["cdylib"]
 path = "src/lib.rs"
@@ -19,4 +22,3 @@ fixture_supported_domain = { path = "../domain" }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
-

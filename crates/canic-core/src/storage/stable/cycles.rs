@@ -57,6 +57,37 @@ pub struct CycleTracker {
 }
 
 ///
+/// CycleTrackerEntryRecord
+///
+/// One logical cycle-balance sample preserving its stable timestamp key.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CycleTrackerEntryRecord {
+    pub timestamp_secs: u64,
+    pub cycles: Cycles,
+}
+
+impl CycleTrackerEntryRecord {
+    pub const STATE_CONTRACT_NAME: &'static str = "CycleTrackerEntryRecord";
+}
+
+///
+/// CycleTrackerData
+///
+/// Canonical cycle-tracker allocation snapshot.
+///
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CycleTrackerData {
+    pub entries: Vec<CycleTrackerEntryRecord>,
+}
+
+impl CycleTrackerData {
+    pub const STATE_CONTRACT_NAME: &'static str = "CycleTrackerData";
+}
+
+///
 /// CyclesFundingLedgerRecord
 ///
 /// Stable record for per-child funding budget and cooldown state.
@@ -447,6 +478,32 @@ impl CycleTracker {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn export() -> CycleTrackerData {
+        CycleTrackerData {
+            entries: CYCLE_TRACKER.with_borrow(|tracker| {
+                tracker
+                    .map
+                    .iter()
+                    .map(|entry| CycleTrackerEntryRecord {
+                        timestamp_secs: *entry.key(),
+                        cycles: entry.value(),
+                    })
+                    .collect()
+            }),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn import(data: CycleTrackerData) {
+        CYCLE_TRACKER.with_borrow_mut(|tracker| {
+            tracker.map.clear_new();
+            for entry in data.entries {
+                tracker.map.insert(entry.timestamp_secs, entry.cycles);
+            }
+        });
+    }
+
     fn purge_inner(&mut self, cutoff: u64, limit: usize) -> usize {
         let mut purged = 0;
 
@@ -515,6 +572,10 @@ mod tests {
         for timestamp in 1..=4 {
             CycleTracker::record(timestamp, Cycles::new(u128::from(timestamp)));
         }
+
+        let data = CycleTracker::export();
+        CycleTracker::import(data.clone());
+        assert_eq!(CycleTracker::export(), data);
 
         assert_eq!(CycleTracker::latest(), Some((4, Cycles::new(4))));
         assert_eq!(CycleTracker::purge_before(4, 2), 2);

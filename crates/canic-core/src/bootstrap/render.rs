@@ -11,9 +11,9 @@ use crate::{
         CanisterPool, ChainKeyRootProofConfig, ConfigModel, CyclesFundingPolicyConfig,
         DelegatedTokenConfig, DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool,
         FleetConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-        RandomnessConfig, RandomnessSource, RoleAttestationConfig, RoleDeclaration,
-        RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy,
-        ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
+        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
     ids::{BuildNetwork, CanisterRole, SubnetRole},
 };
@@ -452,7 +452,6 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let topup = render_option(config.topup.as_ref(), render_topup);
     let icp_refill = render_option(config.icp_refill.as_ref(), render_icp_refill_policy);
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
-    let randomness = render_randomness_config(&config.randomness);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
     let directory = render_option(config.directory.as_ref(), render_directory_config);
@@ -468,7 +467,6 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             topup: #topup,
             icp_refill: #icp_refill,
             cycles_funding: #cycles_funding,
-            randomness: #randomness,
             scaling: #scaling,
             sharding: #sharding,
             directory: #directory,
@@ -645,33 +643,6 @@ fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
             ledger_canister_id: #ledger_canister_id,
             cmc_canister_id: #cmc_canister_id,
             allow_ic_system_canister_overrides: #allow_ic_system_canister_overrides,
-        }
-    }
-}
-
-// Render the randomness config subtree.
-fn render_randomness_config(config: &RandomnessConfig) -> TokenStream {
-    let enabled = config.enabled;
-    let reseed_interval_secs = config.reseed_interval_secs;
-    let source = render_randomness_source(config.source);
-
-    quote! {
-        ::canic::__internal::core::bootstrap::compiled::RandomnessConfig {
-            enabled: #enabled,
-            reseed_interval_secs: #reseed_interval_secs,
-            source: #source,
-        }
-    }
-}
-
-// Render the randomness source enum.
-fn render_randomness_source(source: RandomnessSource) -> TokenStream {
-    match source {
-        RandomnessSource::Ic => {
-            quote!(::canic::__internal::core::bootstrap::compiled::RandomnessSource::Ic)
-        }
-        RandomnessSource::Time => {
-            quote!(::canic::__internal::core::bootstrap::compiled::RandomnessSource::Time)
         }
     }
 }

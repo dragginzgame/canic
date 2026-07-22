@@ -9,6 +9,9 @@ build = "build.rs"
 fleet = "fixture_renamed_canic"
 role = "app"
 
+[package.metadata.cargo-machete]
+ignored = ["framework"]
+
 [lib]
 crate-type = ["cdylib"]
 path = "src/lib.rs"

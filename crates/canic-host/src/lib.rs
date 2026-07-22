@@ -16,7 +16,6 @@ pub mod cycle_balance;
 pub mod deployment_catalog;
 pub mod deployment_truth;
 pub mod durable_io;
-pub mod duration;
 pub mod evidence_envelope;
 pub mod format;
 pub mod icp;

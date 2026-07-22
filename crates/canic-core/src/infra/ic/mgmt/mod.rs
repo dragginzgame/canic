@@ -6,18 +6,16 @@
 
 mod cycles;
 mod lifecycle;
-mod randomness;
 mod signing;
-mod snapshots;
 mod status_settings;
 mod types;
 
 pub use types::{
-    InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterSnapshot,
-    InfraCanisterStatusResult, InfraCanisterStatusType, InfraDefiniteCanisterSettings,
-    InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult,
-    InfraEnvironmentVariable, InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats,
-    InfraSignWithEcdsaArgs, InfraSignWithEcdsaResult, InfraUpdateSettingsArgs, InfraUpgradeFlags,
+    InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterStatusResult,
+    InfraCanisterStatusType, InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId,
+    InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult, InfraEnvironmentVariable,
+    InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats, InfraSignWithEcdsaArgs,
+    InfraSignWithEcdsaResult, InfraUpdateSettingsArgs, InfraUpgradeFlags,
     InfraWasmMemoryPersistence,
 };
 
@@ -37,9 +35,6 @@ pub enum MgmtInfraError {
         canister_pid: crate::cdk::types::Principal,
         value: crate::cdk::candid::Nat,
     },
-
-    #[error("raw_rand returned {len} bytes")]
-    RawRandInvalidLength { len: usize },
 
     #[error(transparent)]
     SignCost(#[from] crate::cdk::api::SignCostError),

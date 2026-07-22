@@ -27,6 +27,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use syn::visit::Visit;
 
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
 const CANIC_PACKAGE: &str = "canic";
@@ -914,17 +915,39 @@ fn validate_build_script_purpose(
     };
     let source = fs::read_to_string(&build_target.src_path)
         .map_err(|_| unsupported_finding("unable to read Canic role build script"))?;
-    let build_macro_calls = source
-        .lines()
-        .map(str::trim)
-        .filter(|line| line.starts_with("canic::build!(") && line.ends_with(");"))
-        .count();
-    if build_macro_calls != 1 {
+    let syntax = syn::parse_file(&source)
+        .map_err(|_| unsupported_finding("unable to parse Canic role build script"))?;
+    let mut visitor = BuildMacroVisitor::default();
+    visitor.visit_file(&syntax);
+    if visitor.invocations != 1 {
         return Err(unsupported_finding(
             "the Canic build dependency requires exactly one `canic::build!` invocation",
         ));
     }
     Ok(())
+}
+
+#[derive(Default)]
+struct BuildMacroVisitor {
+    invocations: usize,
+}
+
+impl<'ast> Visit<'ast> for BuildMacroVisitor {
+    fn visit_macro(&mut self, invocation: &'ast syn::Macro) {
+        let mut segments = invocation.path.segments.iter();
+        if invocation.path.leading_colon.is_none()
+            && segments
+                .next()
+                .is_some_and(|segment| segment.ident == "canic")
+            && segments
+                .next()
+                .is_some_and(|segment| segment.ident == "build")
+            && segments.next().is_none()
+        {
+            self.invocations += 1;
+        }
+        syn::visit::visit_macro(self, invocation);
+    }
 }
 
 fn validate_runtime_graph(
