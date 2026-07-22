@@ -63,7 +63,7 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
         AccessPlan::DefaultApp(guard) => {
             let guard_expr = guard_tokens(*guard);
             quote! {
-                let #caller = ::canic::cdk::api::msg_caller();
+                let #caller = ::canic::__internal::cdk::api::msg_caller();
                 let #ctx = ::canic::__internal::core::access::expr::AccessContext {
                     caller: #caller,
                     authenticated_caller: #caller,
@@ -81,7 +81,7 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
         AccessPlan::Expr(expr) => {
             let expr_ident = format_ident!("__canic_access_expr");
             quote! {
-                let #caller = ::canic::cdk::api::msg_caller();
+                let #caller = ::canic::__internal::cdk::api::msg_caller();
                 let #authenticated_identity =
                     ::canic::__internal::core::access::auth::resolve_authenticated_identity(#caller);
                 let #ctx = ::canic::__internal::core::access::expr::AccessContext {

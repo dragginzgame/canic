@@ -1,6 +1,7 @@
 #![expect(clippy::unused_async)]
 
 use canic::{Error, prelude::*};
+use ic_cdk::api::{canister_self, msg_caller};
 
 canic::start!();
 

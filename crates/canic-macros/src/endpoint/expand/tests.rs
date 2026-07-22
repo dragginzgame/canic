@@ -48,6 +48,7 @@ fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
     let compact = expanded.split_whitespace().collect::<String>();
 
     assert!(compact.contains("query(composite=true)"));
+    assert!(compact.contains("::canic::__internal::cdk::query"));
     assert!(compact.contains("EndpointCallKind::QueryComposite"));
 }
 
@@ -105,6 +106,7 @@ fn access_stage_expr_builds_context_from_resolved_identity() {
     let compact = stage.split_whitespace().collect::<String>();
 
     assert!(compact.contains("resolve_authenticated_identity("));
+    assert!(compact.contains("::canic::__internal::cdk::api::msg_caller"));
     assert!(compact.contains("caller:__canic_authenticated_identity.transport_caller"));
     assert!(
         compact

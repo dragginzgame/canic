@@ -157,6 +157,7 @@ fn repository_canic_runtime_closure_matches_the_protected_catalog() {
     let metadata = crate::cargo_metadata::cargo_metadata_catalog_for_manifest(
         &workspace.join("crates/canic/Cargo.toml"),
         true,
+        true,
     )
     .expect("workspace Cargo catalog");
     let canic = metadata
@@ -488,9 +489,17 @@ fn build_only_canic_path_does_not_enter_the_runtime_graph() {
 #[test]
 fn internal_pocketic_packages_are_validated_before_the_marker_is_granted() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let lockfile = workspace.join("Cargo.lock");
+    let lockfile_before = fs::read(&lockfile).expect("read workspace lockfile");
 
     validate_internal_test_wasm_packages(&workspace, &["sharding_root_stub", "canister_user_hub"])
         .expect("internal PocketIC package validation");
+
+    assert_eq!(
+        fs::read(lockfile).expect("reread workspace lockfile"),
+        lockfile_before,
+        "locked internal build validation must not refresh the workspace lockfile"
+    );
 }
 
 #[test]
@@ -498,7 +507,7 @@ fn built_in_wasm_store_uses_the_canonical_role_graph_contract() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let validation = validate_built_in_wasm_store_package(
         &workspace.join("crates/canic-wasm-store/Cargo.toml"),
-        PackageValidationMode::Build,
+        PackageValidationMode::LockedBuild,
     );
     let RolePackageValidation::Supported(evidence) = validation else {
         panic!("unexpected built-in validation: {validation:?}");

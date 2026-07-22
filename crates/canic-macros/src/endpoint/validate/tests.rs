@@ -53,7 +53,7 @@ fn authenticated_accepts_delegated_token_first_arg() {
 #[test]
 fn authenticated_rejects_wrong_first_arg_type() {
     let sig: Signature = syn::parse_quote!(
-        async fn hello(user: ::canic::cdk::candid::Principal) -> Result<(), ::canic::Error>
+        async fn hello(user: ::candid::Principal) -> Result<(), ::canic::Error>
     );
     let err = validate(EndpointKind::Update, parsed_authenticated(), &sig, true).unwrap_err();
     assert!(

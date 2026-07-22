@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.96.8`.
-- The latest published release is `v0.96.8` at
-  `1314a1d11081264996aa06ffd6d9fc20f7f4bff1`.
-- The `v0.96.8` source tree is
-  `d615181a2b4dcc36d62ce1215cb170af6f3e5f2a`; its product-tree hash is
-  `5da8e2b3a58f41b61da9b8250db502e0cf66f118b4e0c3913e253ee803087dae` and
+- The workspace package version is `0.97.0`.
+- The latest published release is `v0.97.0` at
+  `38f7222a2c5b08d4ac4ea9927a5278a278eaf72b`.
+- The `v0.97.0` source tree is
+  `b5bb5b571ed791c926da600a93643d138287f4a0`; its product-tree hash is
+  `29703e576173be5a16e0418555a06544d7eb8d6bf7f3f5de8e74ac6fc771121f` and
   its Cargo.lock SHA-256 is
-  `ae549fab4669cd8ee2c0c5143ea55fa8ae76eb57b153af8b36a7726b66cb6acb`.
+  `180ffd2472b7eabbcfee40b136582e47487ab7f2ee222bd81d8516f9f1b42d46`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -441,7 +441,7 @@ General cleanup, dependency work, backup/restore changes, and compatibility
 layers remain excluded.
 
 0.97 is active after completing audit-only Slice A against immutable
-`v0.96.8` and implementing bounded Slice B in the open `0.97.0` batch. The
+`v0.96.8` and releasing bounded Slice B as `v0.97.0`. The
 frozen inventory classifies every public `canic::cdk` export and active
 consumer, all 26 role-shaped dependency/build declarations, the exact
 protected Canic closure, every Cargo evidence caller, deterministic path
@@ -451,7 +451,11 @@ producer that intersects complete package identity, target-filtered metadata
 edges, and exact-role Cargo tree activation. It also hard-cuts implicit
 defaults, missing feature ownership, renamed Canic, unreviewed resolvers,
 feature-bearing build edges, and sibling protected-package paths. No package
-version changed.
+version changed. Open `0.97.1` Slice C moves all compiler-required CDK
+plumbing behind one exact hidden boundary and removes generic IC/CDK imports
+from the public prelude. Public facade removal remains the next bounded slice.
+Locked internal PocketIC builds now receive matching locked online role
+evidence and cannot silently refresh the repository lockfile.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -969,7 +973,7 @@ First primary results:
   production CLI/config/package comparisons, a `v0.91.6`-to-`v0.92.11`
   PocketIC state upgrade, 52 current stable-record tests, 19 protocol tests, 7
   manifest tests, 15 provenance/policy tests, and 195 backup/restore tests.
-- Open `0.97.0` Slice B validation passes 31 host role-contract tests, 51 CLI
+- Released `0.97.0` Slice B validation passes 31 host role-contract tests, 51 CLI
   Medic tests, 14 core role-contract tests, all 21 host state-manifest tests,
   three generated-bootstrap-store tests, seven workspace-manifest checks,
   changelog governance, semantic facade checks for the built-in Wasm store and
@@ -978,13 +982,19 @@ First primary results:
   repository-root project Medic remains non-passing only on the separately
   existing cross-fleet role-name ambiguity in state-manifest discovery; no
   role dependency-shape finding is reported.
+- Open `0.97.1` Slice C validation passes 36 procedural-macro tests, 25
+  focused facade/protocol/reference tests, and 22 role-package tests. Strict
+  all-target Clippy passes for `canic`, `canic-macros`, and `canic-host`;
+  representative root, blob, demo, and Wasm-store packages compile; and the
+  lockfile remains byte-for-byte unchanged.
 
 ## Next Action
 
-Finish and push the open `0.97.0` Slice B graph-evidence batch. Then begin
-Slice C at the frozen hidden macro-plumbing and public `canic::cdk` boundary.
-Do not inspect the stale local Toko repository, start the refill hard cut,
-change package versions, or reopen 0.96 in the graph batch.
+Publish the open `0.97.1` hidden macro-boundary batch. Then migrate remaining
+human `canic::cdk` consumers and maintained documentation to canonical owners
+and remove the public facade once. Do not inspect the stale local Toko
+repository, start the refill hard cut, change package versions, or reopen 0.96
+in the CDK batch.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

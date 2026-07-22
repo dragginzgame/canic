@@ -1063,7 +1063,7 @@ fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
         .expect("memory ledger endpoint should have an attribute");
 
     assert!(
-        preceding_attribute.contains("$crate::cdk::query"),
+        preceding_attribute.contains("$crate::__internal::cdk::query"),
         "memory ledger diagnostic must use a raw query attribute in {}",
         macro_path.display()
     );
@@ -1073,7 +1073,7 @@ fn memory_ledger_diagnostic_bypasses_normal_dispatch() {
         macro_path.display()
     );
     assert!(
-        endpoint.contains("$crate::cdk::api::is_controller")
+        endpoint.contains("$crate::__internal::cdk::api::is_controller")
             && endpoint.contains("MemoryQuery::ledger()"),
         "memory ledger diagnostic must be controller-gated and read the restricted ledger path"
     );

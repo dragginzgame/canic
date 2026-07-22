@@ -286,16 +286,16 @@ fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
     match kind {
         EndpointKind::Query => {
             if forwarded.is_empty() {
-                quote!(#[::canic::cdk::query])
+                quote!(#[::canic::__internal::cdk::query])
             } else {
-                quote!(#[::canic::cdk::query(#(#forwarded),*)])
+                quote!(#[::canic::__internal::cdk::query(#(#forwarded),*)])
             }
         }
         EndpointKind::Update => {
             if forwarded.is_empty() {
-                quote!(#[::canic::cdk::update])
+                quote!(#[::canic::__internal::cdk::update])
             } else {
-                quote!(#[::canic::cdk::update(#(#forwarded),*)])
+                quote!(#[::canic::__internal::cdk::update(#(#forwarded),*)])
             }
         }
     }
