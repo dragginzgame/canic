@@ -107,14 +107,9 @@ pub enum AuthCommandError {
     MethodUnavailable { path: PathBuf, method: String },
 
     #[error(
-        "local Candid sidecar {path} declares auth renewal method {method} as {actual}, expected {expected}"
+        "local Candid sidecar {path} declares auth renewal method {method} as update, expected query"
     )]
-    MethodModeMismatch {
-        path: PathBuf,
-        method: String,
-        expected: &'static str,
-        actual: &'static str,
-    },
+    MethodModeMismatch { path: PathBuf, method: String },
 
     #[error("failed to parse auth renewal response: {0}")]
     ResponseParse(#[from] IcpJsonResponseError),
@@ -317,7 +312,6 @@ trait AuthRenewalRuntime {
         options: &CommonOptions,
         deployment: &str,
         method: &str,
-        expected_mode: AuthRenewalMethodMode,
     ) -> Result<AuthRootCallTarget, AuthCommandError>;
 
     fn query_output(
@@ -335,7 +329,6 @@ trait AuthRenewalRuntime {
         root_target: &AuthRootCallTarget,
         issuer_pid: &str,
         method: &str,
-        expected_mode: AuthRenewalMethodMode,
     ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError>;
 
     fn query_issuer_output(
@@ -356,7 +349,6 @@ fn renewal_status_result_with_runtime(
         &options.common,
         &options.deployment,
         CANIC_ROOT_ISSUER_RENEWAL_STATUS,
-        AuthRenewalMethodMode::Query,
     )?;
     let output = runtime.query_output(
         &options.common,
@@ -390,9 +382,8 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         options: &CommonOptions,
         deployment: &str,
         method: &str,
-        expected_mode: AuthRenewalMethodMode,
     ) -> Result<AuthRootCallTarget, AuthCommandError> {
-        resolve_auth_root_call_target(options, deployment, method, expected_mode)
+        resolve_auth_root_call_target(options, deployment, method)
     }
 
     fn query_output(
@@ -412,9 +403,8 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         root_target: &AuthRootCallTarget,
         issuer_pid: &str,
         method: &str,
-        expected_mode: AuthRenewalMethodMode,
     ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
-        resolve_auth_issuer_call_target(options, root_target, issuer_pid, method, expected_mode)
+        resolve_auth_issuer_call_target(options, root_target, issuer_pid, method)
     }
 
     fn query_issuer_output(
@@ -425,19 +415,6 @@ impl AuthRenewalRuntime for LiveAuthRenewalRuntime {
         output: Option<&str>,
     ) -> Result<String, AuthCommandError> {
         live_query_issuer_output(options, target, method, output)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AuthRenewalMethodMode {
-    Query,
-}
-
-impl AuthRenewalMethodMode {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Query => "query",
-        }
     }
 }
 
@@ -651,7 +628,6 @@ fn resolve_auth_root_call_target(
     options: &CommonOptions,
     deployment: &str,
     method: &str,
-    expected_mode: AuthRenewalMethodMode,
 ) -> Result<AuthRootCallTarget, AuthCommandError> {
     let icp_root = resolve_current_canic_icp_root().map_err(AuthCommandError::IcpRoot)?;
     let installed = resolve_installed_deployment_from_root(
@@ -673,7 +649,7 @@ fn resolve_auth_root_call_target(
             path: candid_path.clone(),
             source,
         })?;
-    validate_auth_method_mode(&candid_path, &candid, method, expected_mode)?;
+    validate_auth_query_method(&candid_path, &candid, method)?;
 
     Ok(AuthRootCallTarget {
         target: AuthRootTarget {
@@ -693,7 +669,6 @@ fn resolve_auth_issuer_call_target(
     root_target: &AuthRootCallTarget,
     issuer_pid: &str,
     method: &str,
-    expected_mode: AuthRenewalMethodMode,
 ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
     let Some(entry) = root_target
         .registry_entries
@@ -715,7 +690,7 @@ fn resolve_auth_issuer_call_target(
             path: candid_path.clone(),
             source,
         })?;
-    validate_auth_method_mode(&candid_path, &candid, method, expected_mode)?;
+    validate_auth_query_method(&candid_path, &candid, method)?;
 
     Ok(Some(AuthIssuerCallTarget {
         target: AuthIssuerTarget {
@@ -729,11 +704,10 @@ fn resolve_auth_issuer_call_target(
     }))
 }
 
-fn validate_auth_method_mode(
+fn validate_auth_query_method(
     path: &Path,
     candid: &str,
     method: &str,
-    expected_mode: AuthRenewalMethodMode,
 ) -> Result<(), AuthCommandError> {
     let endpoints =
         parse_candid_service_endpoints(candid).map_err(|source| AuthCommandError::CandidParse {
@@ -747,26 +721,14 @@ fn validate_auth_method_mode(
             path: path.to_path_buf(),
             method: method.to_string(),
         })?;
-    let actual_mode = if endpoint
+    if !endpoint
         .modes
         .iter()
         .any(|mode| matches!(mode, EndpointMode::Query | EndpointMode::CompositeQuery))
     {
-        AuthRenewalMethodMode::Query
-    } else {
         return Err(AuthCommandError::MethodModeMismatch {
             path: path.to_path_buf(),
             method: method.to_string(),
-            expected: expected_mode.label(),
-            actual: "update",
-        });
-    };
-    if actual_mode != expected_mode {
-        return Err(AuthCommandError::MethodModeMismatch {
-            path: path.to_path_buf(),
-            method: method.to_string(),
-            expected: expected_mode.label(),
-            actual: actual_mode.label(),
         });
     }
     Ok(())
@@ -831,7 +793,6 @@ fn issuer_observation_with_runtime(
         root_target,
         issuer_pid,
         CANIC_ACTIVE_DELEGATION_PROOF_STATUS,
-        AuthRenewalMethodMode::Query,
     ) {
         Ok(Some(target)) => target,
         Ok(None) => return unavailable_issuer_observation(ISSUER_NOT_IN_SUBNET_REGISTRY_REASON),
