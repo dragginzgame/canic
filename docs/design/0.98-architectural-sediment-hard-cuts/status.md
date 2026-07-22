@@ -4,7 +4,7 @@ Last updated: 2026-07-22
 
 ## Current State
 
-0.98 is accepted and active. The original implementation inventory remains
+0.98 is closed at immutable `v0.98.2`. The original implementation inventory remains
 anchored to immutable `v0.97.3`, which is not retroactively treated as a
 passing 0.97 closeout. Its post-0.97 deletion/reachability inventory and
 final-0.96 receipt assertion manifest remain valid and are frozen in the
@@ -13,13 +13,14 @@ Published `v0.98.0` supplies the corrected immutable predecessor and completes
 Slice A. Published `v0.98.1` completes Slice B: the obsolete external race
 fixture and its two auxiliary packages are removed, while one focused
 receipt-backed PocketIC authority retains every frozen final-0.96 assertion.
-Slice C is implementation-complete in the open `0.98.2` batch. The false
+Slice C is published in `v0.98.2`. The false
 randomness schema, render, projection, adapter, metrics, tests, and active docs
 are removed without a replacement or compatibility path. Before publication,
 the maintainer approved adding the bounded consolidation amendment to the same
-open patch. Its 42-candidate repository audit fixes one P1 and 11 P2 findings,
+release. Its 42-candidate repository audit fixes one P1 and 11 P2 findings,
 proves 30 notes, and leaves no deferred or unresolved item. No package-version
-or downstream repository change is part of the current batch.
+change beyond the maintainer-owned release synchronization, and no downstream
+repository change, is part of the batch.
 
 The original line removes three findings proven by the repository-wide
 architectural sediment audit:
@@ -33,7 +34,7 @@ architectural sediment audit:
    conformance in intent_authority.
 
 The accepted [consolidation design amendment](consolidation-design-amendment.md)
-extends only the still-open 0.98.2 patch. Its
+extends only the released 0.98.2 patch. Its
 [implementation tracker](consolidation-implementation-tracker.md),
 [disposition ledger](consolidation-ledger.md), and
 [validation evidence](consolidation-validation-evidence.md) support the one
@@ -64,12 +65,19 @@ targets, or compatibility modes are permitted.
   `b190d1f163cf8f2099290fb429a7e9f84c693cd15ae1b446e72165214622a042`,
   and Cargo.lock SHA-256
   `801ad42f9b2a733e925d3c4b0b66cae1922b60b3b7b2cc0166a9a52cfd2092e2`.
+- Released Slice C, consolidation amendment, and immutable closeout:
+  `v0.98.2` at commit
+  `73973fc24c407b1732de1a142d4990b5cb6becf6`, source tree
+  `a53cc20e4533f7c7277e2fda3c594ecba8eb99ac`, product-tree hash
+  `961b30a138f55e4644b34372b51bd595abbca933234ed39b07b598113d90c0d3`,
+  and Cargo.lock SHA-256
+  `dc6355881a2dc3856cb8a991b03b5b368e73dc5398a9da599fcb68be63721458`.
 - Final receipt contract: released `v0.96.8`.
 - Preceding line: released 0.97 role-owned runtime dependencies and CDK
   surface at `v0.97.3`; its rigorous closeout corrections are published in
   `v0.98.0` without changing the frozen 0.98 deletion inventory.
 - Canonical 0.98 design: [0.98-design.md](0.98-design.md).
-- Release-candidate closeout evidence:
+- Canonical closeout evidence:
   [0.98-closeout-audit.md](0.98-closeout-audit.md).
 - Canonical evidence: the
   [architectural sediment audit](../../audits/reports/2026-07-21/architectural-sediment.md).
@@ -95,7 +103,7 @@ targets, or compatibility modes are permitted.
 | F — authentication consolidation | completed | Fixed seed/domain families remain without singleton kind taxonomies |
 | G — host/operator and dependency surface | completed | Orphan helpers removed, visibility narrowed, intentional fixture edges recorded |
 | H — repository closure | completed | All 42 candidates resolved and cumulative validation recorded |
-| Closeout — contract accounting | pending tag | Complete 0.98.2 impact recorded; immutable identity waits for release |
+| Closeout — contract accounting | completed | Complete impact and immutable `v0.98.2` identity recorded |
 
 ## Implementation Prerequisite
 
@@ -122,9 +130,9 @@ have the validated immutable `v0.98.0` anchor.
 
 ## Next Action
 
-Review and release the combined open `0.98.2` hard cut, then record its
-immutable tag identity in the closeout evidence. Do not change versions
-outside the maintainer release flow or extend 0.98 into unrelated cleanup.
+Do not extend the closed 0.98 scope. Exercise `v0.98.2` in real deployments;
+future work requires a reproduced defect or separately accepted focused
+objective.
 
 ## Slice A Validation
 

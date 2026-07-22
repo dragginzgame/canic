@@ -2,12 +2,11 @@
 
 Date: 2026-07-22
 
-Status: accepted and implementation-complete; immutable closeout waits for
-the maintainer-owned `v0.98.2` release anchor
+Status: closed at immutable `v0.98.2`
 
 ## 1. Objective
 
-This amendment expands the still-open 0.98.2 patch before publication. It
+This amendment records the scope added to 0.98.2 before publication. It
 reconstructs the current Canic architecture from source and removes bounded
 remnants of superseded designs. Readiness means that each current
 responsibility has one named authority, every investigated candidate has a
@@ -29,12 +28,12 @@ The immutable repository baseline is:
   `801ad42f9b2a733e925d3c4b0b66cae1922b60b3b7b2cc0166a9a52cfd2092e2`.
 
 The maintainer explicitly approved combining the original Slice C randomness
-hard cut and this consolidation work in one open 0.98.2 patch. The immutable
+hard cut and this consolidation work in one 0.98.2 patch. The immutable
 comparison baseline for the complete patch is therefore `v0.98.1`; an
 intermediate dirty-worktree fingerprint is not a release authority.
 
 The published 0.98.0 and 0.98.1 work remains immutable and is not counted
-again. The open 0.98.2 batch owns:
+again. The released 0.98.2 batch owns:
 
 1. deletion of the unused per-role randomness configuration and unreachable
    `raw_rand` adapter; and
@@ -278,7 +277,7 @@ For every implemented finding:
 
 ### Slice A — Baseline and authority reconstruction
 
-Freeze the immutable `v0.98.1` baseline and the complete open 0.98.2 scope,
+Freeze the immutable `v0.98.1` baseline and the complete 0.98.2 scope,
 enumerate all 37 workspace
 packages, derive dependency direction, inventory features/build scripts/
 generated descriptors, and build this authority map.

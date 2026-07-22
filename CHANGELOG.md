@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.3` makes bootstrap Wasm-store builds select one exact resolved Canic
+  package family, derives generated CDK dependencies and build profiles from
+  canonical authorities, upgrades `ic-cdk` to 0.20.2, and repairs the packaged
+  downstream release proof.
+
 - `0.98.2` completes the architectural-sediment hard cut by deleting the false
   randomness contract and unreachable runtime/host helpers, consolidating the
   surviving authorities, and resolving the 42-candidate repository audit

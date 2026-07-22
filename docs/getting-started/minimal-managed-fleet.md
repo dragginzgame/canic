@@ -59,7 +59,7 @@ incremental = false
 inherits = "release"
 lto = false
 codegen-units = 16
-incremental = true
+incremental = false
 ```
 
 ## ICP Project Config
