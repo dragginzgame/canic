@@ -8,7 +8,7 @@ use crate::{
     plan::{BackupExecutionPreflightReceipts, BackupPlan},
 };
 use serde::Serialize;
-use std::{error::Error as StdError, fmt, path::Path, path::PathBuf};
+use std::{path::Path, path::PathBuf};
 use thiserror::Error as ThisError;
 
 use crate::persistence::JournalLockError;
@@ -122,7 +122,8 @@ pub struct BackupRunnerSnapshot {
 /// BackupRunnerCommandError
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
+#[error("{status}: {message}")]
 pub struct BackupRunnerCommandError {
     pub status: String,
     pub message: String,
@@ -137,14 +138,6 @@ impl BackupRunnerCommandError {
         }
     }
 }
-
-impl fmt::Display for BackupRunnerCommandError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}: {}", self.status, self.message)
-    }
-}
-
-impl StdError for BackupRunnerCommandError {}
 
 ///
 /// BackupRunnerError

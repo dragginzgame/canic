@@ -8,7 +8,8 @@ use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_response},
     replica_query::{self, ReplicaQueryError},
 };
-use std::{error::Error, fmt, path::Path};
+use std::path::Path;
+use thiserror::Error as ThisError;
 
 const CANIC_READY_METHOD: &str = "canic_ready";
 const ICP_JSON_OUTPUT: &str = "json";
@@ -17,49 +18,16 @@ const ICP_JSON_OUTPUT: &str = "json";
 /// CanisterReadyQueryError
 ///
 
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
 pub enum CanisterReadyQueryError {
-    Icp(IcpCommandError),
-    Replica(ReplicaQueryError),
-    Response(IcpJsonResponseError),
-}
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
-impl fmt::Display for CanisterReadyQueryError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Icp(err) => write!(formatter, "{err}"),
-            Self::Replica(err) => write!(formatter, "{err}"),
-            Self::Response(err) => write!(formatter, "{err}"),
-        }
-    }
-}
+    #[error(transparent)]
+    Replica(#[from] ReplicaQueryError),
 
-impl Error for CanisterReadyQueryError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Icp(err) => Some(err),
-            Self::Replica(err) => Some(err),
-            Self::Response(err) => Some(err),
-        }
-    }
-}
-
-impl From<IcpCommandError> for CanisterReadyQueryError {
-    fn from(err: IcpCommandError) -> Self {
-        Self::Icp(err)
-    }
-}
-
-impl From<ReplicaQueryError> for CanisterReadyQueryError {
-    fn from(err: ReplicaQueryError) -> Self {
-        Self::Replica(err)
-    }
-}
-
-impl From<IcpJsonResponseError> for CanisterReadyQueryError {
-    fn from(err: IcpJsonResponseError) -> Self {
-        Self::Response(err)
-    }
+    #[error(transparent)]
+    Response(#[from] IcpJsonResponseError),
 }
 
 /// Query `canic_ready`, using the local replica API for local environment targets.

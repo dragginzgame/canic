@@ -3,7 +3,7 @@ use std::{
     process::Command,
 };
 
-use crate::evidence_envelope::sha256_hex;
+use canic_core::cdk::utils::hash::sha256_hex;
 
 use super::model::{DIRTY_SUMMARY_ALGORITHM, SourceDirtyPolicyV1, SourceProvenanceV1, SourceVcsV1};
 

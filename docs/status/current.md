@@ -14,24 +14,22 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.3`.
-- The latest published release is `v0.98.3` at
-  `672db5bbde1b2f6b7ec822161f134c77c58e4c29`.
-- The `v0.98.3` source tree is
-  `e9e2ecbea9d9ab6c9aa4a6144f36e33610739e03`; its product-tree hash is
-  `1ac9861e5ed5d73832679917d972ca8c9ef74a2f2215617c0d80ef507d257bb3` and
+- The workspace package version is `0.98.4`.
+- The latest published release is `v0.98.4` at
+  `0cafac488300b139b42441c8e5a844f106dec572`.
+- The `v0.98.4` source tree is
+  `1be04531509e7e0bc00bd11bd135cde87dbb2f0e`; its product-tree hash is
+  `a0165cd6fd059a711e224dd8c7919796a75d59ff9a29d0d8671725815a64f350` and
   its Cargo.lock SHA-256 is
-  `59404683fecb63eb444dce4d4a163ac69d2449bd29a018b7ea31c7eacdce6b99`.
-- Released `0.98.3` is a bounded post-closeout bootstrap-build correction. It
-  makes implicit Wasm-store package selection deterministic, repairs the
-  packaged-downstream proof, centralizes generated dependency/profile
-  authority, and declares `ic-cdk 0.20.2` without changing package versions.
-- Open `0.98.4` is a separately accepted code-size and authority cleanup. One
-  immutable `FleetConfigSnapshot` now owns host/CLI config projections and
-  role-contract input, direct local-replica queries share one optional-root
-  transport, and unused implicit-root and schema-getter APIs are removed as a
-  pre-1.0 hard cut. Package versions remain at `0.98.3` until maintainer-owned
-  release preparation.
+  `e9fdab176bd8461643260dc5ebef20192259838b74378a9022582d3c175bb3f8`.
+- Released `0.98.4` gives host and CLI config inspection one immutable parsed
+  snapshot, collapses direct local-replica queries to one optional-root
+  transport, and hard-cuts unused implicit-root and projection APIs.
+- Open `0.98.5` removes duplicate hash and typed-error implementations, carries
+  the immutable fleet-config snapshot through remaining operational build
+  paths, and narrows unused low-level host query/hash surfaces. The reviewed
+  Candid error derives all remain required wire contracts. Package versions
+  remain at `0.98.4` until maintainer-owned release preparation.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded

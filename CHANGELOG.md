@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.5` removes duplicate host hashing and typed-error boilerplate, extends
+  immutable fleet-config snapshots through operational build paths, and
+  hard-cuts unused low-level replica and hash helpers without changing CLI,
+  Candid, JSON, stable-state, or runtime behavior.
+
 - `0.98.4` gives host and CLI config inspection one immutable parsed snapshot,
   collapses direct local-replica queries to one optional-root transport, and
   hard-cuts unused implicit-root and projection APIs without changing runtime,

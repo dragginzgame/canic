@@ -4,19 +4,14 @@
 //! Does not own: HTTP transport, Candid reply payloads, or replica targeting.
 //! Boundary: codec-specific values and errors do not escape this module.
 
+use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
 
 /// Codec-neutral CBOR boundary failure.
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
+#[error("{0}")]
 pub(super) struct CborError(String);
-
-impl std::fmt::Display for CborError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for CborError {}
 
 /// Decoded outcome of one replica query response.
 pub(super) enum QueryOutcome {
@@ -95,15 +90,6 @@ fn root_key_from_value(value: &ciborium::Value) -> Option<String> {
 fn nonempty_text(text: &str) -> Option<String> {
     let trimmed = text.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
-fn hex_bytes(bytes: &[u8]) -> String {
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(encoded, "{byte:02x}");
-    }
-    encoded
 }
 
 fn cbor_error(error: impl std::fmt::Display) -> CborError {

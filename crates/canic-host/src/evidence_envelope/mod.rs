@@ -1,7 +1,7 @@
 //! Stable evidence envelopes for CI/GitOps automation.
 
+use canic_core::cdk::utils::hash::sha256_hex;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::{
     fs, io,
     path::{Component, Path},
@@ -324,11 +324,6 @@ pub fn project_evidence_gate_report_schema() -> PayloadSchemaRefV1 {
     PayloadSchemaRefV1::stable(PROJECT_EVIDENCE_GATE_REPORT_SCHEMA_ID, "1")
 }
 
-#[must_use]
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    hex_bytes(Sha256::digest(bytes))
-}
-
 pub fn json_payload_sha256<T>(payload: &T) -> Result<String, serde_json::Error>
 where
     T: Serialize,
@@ -429,17 +424,6 @@ fn path_to_display(path: &Path) -> String {
     } else {
         components.join("/")
     }
-}
-
-fn hex_bytes(bytes: impl AsRef<[u8]>) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let bytes = bytes.as_ref();
-    let mut output = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        output.push(HEX[(byte >> 4) as usize] as char);
-        output.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    output
 }
 
 #[cfg(test)]

@@ -9,7 +9,7 @@ use crate::{
     },
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command,
-    release_set::artifact_root_path,
+    release_set::{FleetConfigSnapshot, artifact_root_path},
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
@@ -36,9 +36,8 @@ pub fn build_workspace_canister_artifact(
         return build_hidden_wasm_store_artifact(context);
     }
 
-    let config_source = fs::read_to_string(&context.config_path)?;
-    let config = canic_core::bootstrap::parse_config_model(&config_source)?;
-    let spec = resolve_canister_artifact_build_spec(context, &config)?;
+    let config = FleetConfigSnapshot::load(&context.config_path)?;
+    let spec = resolve_canister_artifact_build_spec(context, config.model())?;
     build_workspace_canister_artifact_from_spec(context, &spec)
 }
 

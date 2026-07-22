@@ -9,7 +9,8 @@ use crate::{
     registry::{RegistryEntry, RegistryParseError, parse_registry_entries},
     replica_query::{self, ReplicaQueryError},
 };
-use std::{error::Error, fmt, path::Path};
+use std::path::Path;
+use thiserror::Error as ThisError;
 
 const CANIC_SUBNET_REGISTRY_METHOD: &str = "canic_subnet_registry";
 const ICP_JSON_OUTPUT: &str = "json";
@@ -38,49 +39,16 @@ pub(crate) enum SubnetRegistryQuerySource {
 /// SubnetRegistryQueryError
 ///
 
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
 pub enum SubnetRegistryQueryError {
-    Icp(IcpCommandError),
-    Registry(RegistryParseError),
-    Replica(ReplicaQueryError),
-}
+    #[error(transparent)]
+    Icp(#[from] IcpCommandError),
 
-impl fmt::Display for SubnetRegistryQueryError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Icp(err) => write!(formatter, "{err}"),
-            Self::Registry(err) => write!(formatter, "{err}"),
-            Self::Replica(err) => write!(formatter, "{err}"),
-        }
-    }
-}
+    #[error(transparent)]
+    Registry(#[from] RegistryParseError),
 
-impl Error for SubnetRegistryQueryError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Icp(err) => Some(err),
-            Self::Registry(err) => Some(err),
-            Self::Replica(err) => Some(err),
-        }
-    }
-}
-
-impl From<IcpCommandError> for SubnetRegistryQueryError {
-    fn from(err: IcpCommandError) -> Self {
-        Self::Icp(err)
-    }
-}
-
-impl From<RegistryParseError> for SubnetRegistryQueryError {
-    fn from(err: RegistryParseError) -> Self {
-        Self::Registry(err)
-    }
-}
-
-impl From<ReplicaQueryError> for SubnetRegistryQueryError {
-    fn from(err: ReplicaQueryError) -> Self {
-        Self::Replica(err)
-    }
+    #[error(transparent)]
+    Replica(#[from] ReplicaQueryError),
 }
 
 /// Query `canic_subnet_registry`, using the local replica API for local targets.

@@ -6,7 +6,7 @@ use crate::deployment_truth::{
     DeploymentRootVerificationStateTransitionV1, DeploymentRootVerificationStateV1,
     deployment_root_verification_receipt_digest, validate_deployment_root_verification_receipt,
 };
-use sha2::{Digest, Sha256};
+use canic_core::cdk::utils::hash::sha256_hex;
 use std::{fs, path::Path};
 
 pub(super) struct RootVerificationReceiptInput {
@@ -115,15 +115,5 @@ pub(super) fn write_verified_root_state_if_unchanged(
 }
 
 pub(super) fn file_sha256_hex(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(bytes_sha256_hex(&fs::read(path)?))
-}
-
-fn bytes_sha256_hex(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        use std::fmt::Write as _;
-        let _ = write!(&mut hex, "{byte:02x}");
-    }
-    hex
+    Ok(sha256_hex(&fs::read(path)?))
 }
