@@ -14,22 +14,23 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.4`.
-- The latest published release is `v0.98.4` at
-  `0cafac488300b139b42441c8e5a844f106dec572`.
-- The `v0.98.4` source tree is
-  `1be04531509e7e0bc00bd11bd135cde87dbb2f0e`; its product-tree hash is
-  `a0165cd6fd059a711e224dd8c7919796a75d59ff9a29d0d8671725815a64f350` and
+- The workspace package version is `0.98.5`.
+- The latest published release is `v0.98.5` at
+  `866a1d0363945fdafd2d1bdf462ff45a3b45f7f3`.
+- The `v0.98.5` source tree is
+  `04350044c9e7aa8a25bde7a9606b87929da08d6c`; its product-tree hash is
+  `af530230478d9a2023962ec667524a7cbe99d183f2e090af4ad74d43b586bf58` and
   its Cargo.lock SHA-256 is
-  `e9fdab176bd8461643260dc5ebef20192259838b74378a9022582d3c175bb3f8`.
-- Released `0.98.4` gives host and CLI config inspection one immutable parsed
-  snapshot, collapses direct local-replica queries to one optional-root
-  transport, and hard-cuts unused implicit-root and projection APIs.
-- Open `0.98.5` removes duplicate hash and typed-error implementations, carries
-  the immutable fleet-config snapshot through remaining operational build
-  paths, and narrows unused low-level host query/hash surfaces. The reviewed
-  Candid error derives all remain required wire contracts. Package versions
-  remain at `0.98.4` until maintainer-owned release preparation.
+  `64b9bdbb72a1a9b7ba6142e8a42b91d5c4daa188160a2f8fc244b380fff30a54`.
+- Released `0.98.5` removes duplicate hash and typed-error implementations,
+  carries the immutable fleet-config snapshot through remaining operational
+  build paths, and narrows unused low-level host query/hash surfaces. Every
+  reviewed Candid error derive remains a required wire contract.
+- Open `0.98.6` replaces the remaining handwritten core blob-storage and CLI
+  pending-operation error plumbing with typed declarations. It preserves the
+  maintained variants and operator text, exposes nested Rust error causes
+  consistently, and changes no Candid, JSON, configuration, stable-state, CLI,
+  dependency, runtime, or package-version surface.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded

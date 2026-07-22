@@ -5,7 +5,7 @@
 //! Boundary: provides pure hashing and hex conversion utilities.
 
 use sha2::{Digest, Sha256};
-use std::{error::Error, fmt};
+use thiserror::Error as ThisError;
 
 /// Compute SHA-256 bytes from an in-memory byte slice.
 #[must_use]
@@ -87,29 +87,16 @@ fn decode_nibble(byte: u8, index: usize) -> Result<u8, DecodeHexError> {
 /// Typed failure returned while decoding hexadecimal input.
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 pub enum DecodeHexError {
     /// The input had an odd number of characters.
+    #[error("hex string must have even length, got {0}")]
     OddLength(usize),
 
     /// The input contained a non-hexadecimal character at `index`.
+    #[error("invalid hex digit {byte:?} at index {index}")]
     InvalidDigit { index: usize, byte: char },
 }
-
-impl fmt::Display for DecodeHexError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::OddLength(length) => {
-                write!(formatter, "hex string must have even length, got {length}")
-            }
-            Self::InvalidDigit { index, byte } => {
-                write!(formatter, "invalid hex digit {byte:?} at index {index}")
-            }
-        }
-    }
-}
-
-impl Error for DecodeHexError {}
 
 #[cfg(test)]
 mod tests {

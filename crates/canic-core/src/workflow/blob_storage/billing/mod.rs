@@ -4,8 +4,6 @@
 //! Does not own: endpoint authorization, pure billing decisions, or stable records.
 //! Boundary: API delegates here; workflow sequences policy and single-step ops.
 
-use std::{error::Error as StdError, fmt};
-
 use crate::{
     InternalError,
     cdk::types::Principal,
@@ -39,6 +37,7 @@ use crate::{
     },
     view::blob_storage::BlobStorageBillingConfigView,
 };
+use thiserror::Error as ThisError;
 
 /// Canonical blob-storage billing workflow.
 pub struct BlobStorageBillingWorkflow;
@@ -51,8 +50,7 @@ impl BlobStorageBillingWorkflow {
         validate_blob_storage_billing_config_header(
             config.cashier_canister_id,
             config.gateway_principal_limit,
-        )
-        .map_err(BlobStorageBillingWorkflowError::BillingPolicy)?;
+        )?;
         let _gateway_principal_limit = BlobStorageConversionOps::gateway_principal_limit_to_usize(
             config.gateway_principal_limit,
         )?;
@@ -72,8 +70,7 @@ impl BlobStorageBillingWorkflow {
             project_cycles_reserve,
             min_upload_balance,
             target_upload_balance,
-        )
-        .map_err(BlobStorageBillingWorkflowError::BillingPolicy)?;
+        )?;
 
         BlobStorageLifecycleOps::set_billing_config(
             config.cashier_canister_id,
@@ -173,8 +170,7 @@ impl BlobStorageBillingWorkflow {
         requested_cycles: u128,
     ) -> Result<BlobProjectCyclesTopUpReport, BlobStorageBillingWorkflowError> {
         let config = Self::require_billing_config()?;
-        validate_blob_storage_funding_request(requested_cycles)
-            .map_err(BlobStorageBillingWorkflowError::BillingPolicy)?;
+        validate_blob_storage_funding_request(requested_cycles)?;
         let _funding_guard = BlobStorageFundingOps::try_acquire()?;
 
         let attachment = decide_blob_storage_funding_attachment(
@@ -390,57 +386,29 @@ impl BlobStorageBillingWorkflow {
 }
 
 /// Typed workflow failure retained until API projection.
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
 pub enum BlobStorageBillingWorkflowError {
+    #[error("blob-storage billing config is not set")]
     BillingConfigMissing,
-    BillingPolicy(BlobStorageBillingPolicyError),
-    BoundaryConversion(BlobStorageConversionError),
-    CashierDecode(CashierDecodeError),
+
+    #[error(transparent)]
+    BillingPolicy(#[from] BlobStorageBillingPolicyError),
+
+    #[error(transparent)]
+    BoundaryConversion(#[from] BlobStorageConversionError),
+
+    #[error(transparent)]
+    CashierDecode(#[from] CashierDecodeError),
+
+    #[error("{0}")]
     CashierBalanceInternal(String),
+
+    #[error("Cashier top-up rejected")]
     CashierTopUp(BlobStorageCashierAccountTopUpError),
-    FundingInProgress(BlobStorageFundingInProgress),
-    Internal(InternalError),
-}
 
-impl fmt::Display for BlobStorageBillingWorkflowError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::BillingConfigMissing => {
-                formatter.write_str("blob-storage billing config is not set")
-            }
-            Self::BillingPolicy(err) => write!(formatter, "{err}"),
-            Self::BoundaryConversion(err) => write!(formatter, "{err}"),
-            Self::CashierDecode(err) => write!(formatter, "{err}"),
-            Self::CashierBalanceInternal(message) => formatter.write_str(message),
-            Self::CashierTopUp(_) => formatter.write_str("Cashier top-up rejected"),
-            Self::FundingInProgress(err) => write!(formatter, "{err}"),
-            Self::Internal(err) => write!(formatter, "{err}"),
-        }
-    }
-}
+    #[error(transparent)]
+    FundingInProgress(#[from] BlobStorageFundingInProgress),
 
-impl StdError for BlobStorageBillingWorkflowError {}
-
-impl From<BlobStorageConversionError> for BlobStorageBillingWorkflowError {
-    fn from(err: BlobStorageConversionError) -> Self {
-        Self::BoundaryConversion(err)
-    }
-}
-
-impl From<CashierDecodeError> for BlobStorageBillingWorkflowError {
-    fn from(err: CashierDecodeError) -> Self {
-        Self::CashierDecode(err)
-    }
-}
-
-impl From<BlobStorageFundingInProgress> for BlobStorageBillingWorkflowError {
-    fn from(err: BlobStorageFundingInProgress) -> Self {
-        Self::FundingInProgress(err)
-    }
-}
-
-impl From<InternalError> for BlobStorageBillingWorkflowError {
-    fn from(err: InternalError) -> Self {
-        Self::Internal(err)
-    }
+    #[error(transparent)]
+    Internal(#[from] InternalError),
 }

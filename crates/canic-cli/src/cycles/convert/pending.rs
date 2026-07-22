@@ -2,11 +2,12 @@ use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, sha256_bytes};
 use rustix::fs::{FlockOperation, flock};
 use serde::{Deserialize, Serialize};
 use std::{
-    fmt, fs, io,
+    fs, io,
     io::Write,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
+use thiserror::Error as ThisError;
 
 const PENDING_OPERATION_LOG_SCHEMA_VERSION: u32 = 1;
 const PENDING_OPERATION_ENTRY_SCHEMA_VERSION: u32 = 1;
@@ -47,7 +48,8 @@ pub(super) struct PendingOperationReserveResult {
 /// PendingOperationLogError
 ///
 
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
+#[error("{message} ({path})", path = .path.display())]
 pub(super) struct PendingOperationLogError {
     path: PathBuf,
     message: String,
@@ -61,14 +63,6 @@ impl PendingOperationLogError {
         }
     }
 }
-
-impl fmt::Display for PendingOperationLogError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{} ({})", self.message, self.path.display())
-    }
-}
-
-impl std::error::Error for PendingOperationLogError {}
 
 ///
 /// PendingOperationLog
