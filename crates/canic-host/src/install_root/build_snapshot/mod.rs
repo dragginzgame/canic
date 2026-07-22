@@ -9,12 +9,11 @@ use crate::{
         CanisterArtifactBuildSpec, WorkspaceBuildContext, resolve_canister_artifact_build_spec,
     },
     release_set::{
-        RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget, artifact_root_path,
-        configured_release_roles_from_config, load_root_package_version,
+        FleetConfigSnapshot, RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
+        artifact_root_path, configured_release_roles_from_config, load_root_package_version,
         root_release_set_manifest_path, workspace_manifest_path,
     },
 };
-use std::fs;
 
 /// One target whose package and output paths were admitted from the install snapshot.
 #[derive(Clone, Debug)]
@@ -42,12 +41,8 @@ pub(super) fn resolve_install_snapshot(
     root_build_target: &str,
     uses_deployment_plan: bool,
 ) -> Result<ValidatedInstallSnapshot, Box<dyn std::error::Error>> {
-    let config_source = fs::read_to_string(&context.config_path)?;
-    let config = canic_core::bootstrap::parse_config_model(&config_source)?;
-    let fleet_name = config
-        .fleet_name()
-        .ok_or_else(|| format!("missing [fleet].name in {}", context.config_path.display()))?
-        .to_string();
+    let config = FleetConfigSnapshot::load(&context.config_path)?;
+    let fleet_name = config.fleet_name().to_string();
 
     if uses_deployment_plan {
         return Ok(ValidatedInstallSnapshot {
@@ -56,7 +51,7 @@ pub(super) fn resolve_install_snapshot(
         });
     }
 
-    let release_roles = configured_release_roles_from_config(&config);
+    let release_roles = configured_release_roles_from_config(config.model());
     let mut roles = Vec::with_capacity(release_roles.len() + 1);
     roles.push(root_build_target.to_string());
     roles.extend(release_roles.iter().cloned());
@@ -64,7 +59,7 @@ pub(super) fn resolve_install_snapshot(
     let mut targets = Vec::with_capacity(roles.len());
     for role in roles {
         let target_context = context.with_role(&role);
-        let spec = resolve_canister_artifact_build_spec(&target_context, &config)?;
+        let spec = resolve_canister_artifact_build_spec(&target_context, config.model())?;
         targets.push(InstallBuildTarget { role, spec });
     }
 

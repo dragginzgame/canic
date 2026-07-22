@@ -1,10 +1,10 @@
 //! Passive deployment-truth model types for host-side planning and safety checks.
 
-use canic_core::bootstrap::parse_config_model;
+use crate::release_set::FleetConfigSnapshot;
+use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
-    fmt::Write as _,
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -284,31 +284,16 @@ fn file_sha256_hex(path: &Path) -> std::io::Result<String> {
         }
         hasher.update(&buffer[..read]);
     }
-    let digest = hasher.finalize();
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        write!(&mut hex, "{byte:02x}").expect("writing to a String cannot fail");
-    }
-    Ok(hex)
+    Ok(hex_bytes(hasher.finalize()))
 }
 
 fn canonical_runtime_config_sha256_hex(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let source = fs::read_to_string(path)?;
-    let config = parse_config_model(&source).map_err(|err| err.to_string())?;
-    Ok(bytes_sha256_hex(&serde_json::to_vec(&config)?))
-}
-
-fn bytes_sha256_hex(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        write!(&mut hex, "{byte:02x}").expect("writing to a String cannot fail");
-    }
-    hex
+    let config = FleetConfigSnapshot::load(path)?;
+    Ok(sha256_hex(&serde_json::to_vec(config.model())?))
 }
 
 fn stable_json_sha256_hex<T: Serialize>(value: &T) -> String {
-    bytes_sha256_hex(
+    sha256_hex(
         &serde_json::to_vec(value)
             .expect("deployment truth identity inputs must JSON-encode deterministically"),
     )

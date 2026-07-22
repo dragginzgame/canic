@@ -7,6 +7,8 @@
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod render;
 
+#[cfg(any(target_arch = "wasm32", test))]
+use crate::cdk::utils::hash::hex_bytes;
 use crate::config::{Config, schema::ConfigModel};
 #[cfg(any(target_arch = "wasm32", test))]
 use crate::domain::auth::{
@@ -14,8 +16,6 @@ use crate::domain::auth::{
 };
 #[cfg(any(target_arch = "wasm32", test))]
 use crate::ids::BuildNetwork;
-#[cfg(any(target_arch = "wasm32", test))]
-use std::fmt::Write as _;
 use std::sync::Arc;
 
 #[doc(hidden)]
@@ -158,15 +158,6 @@ fn should_inject_runtime_ic_root_public_key(config: &ConfigModel) -> bool {
     config.auth.delegated_tokens.build_network == BuildNetwork::Local
 }
 
-#[cfg(any(target_arch = "wasm32", test))]
-fn hex_bytes(bytes: &[u8]) -> String {
-    let mut hex = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        let _ = write!(&mut hex, "{byte:02x}");
-    }
-    hex
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -221,7 +212,7 @@ kind = "root"
         inject_runtime_ic_root_public_key_from(&mut config, &[9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH])
             .expect("local runtime root key should inject");
 
-        let expected = hex_bytes(&[9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]);
+        let expected = hex_bytes([9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]);
         assert_eq!(
             config
                 .auth
@@ -237,12 +228,12 @@ kind = "root"
         let mut config = ConfigModel::test_default();
         config.auth.delegated_tokens.build_network = BuildNetwork::Local;
         config.auth.delegated_tokens.ic_root_public_key_raw_hex =
-            Some(hex_bytes(&[8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]));
+            Some(hex_bytes([8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]));
 
         inject_runtime_ic_root_public_key_from(&mut config, &[9; IC_ROOT_PUBLIC_KEY_RAW_LENGTH])
             .expect("explicit local runtime root key should be preserved");
 
-        let expected = hex_bytes(&[8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]);
+        let expected = hex_bytes([8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]);
         assert_eq!(
             config
                 .auth

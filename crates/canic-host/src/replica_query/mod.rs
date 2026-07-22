@@ -17,80 +17,49 @@ use self::{
     },
 };
 use crate::registry::{RegistryEntry, RegistryParseError, registry_entries_from_response};
-use std::{error::Error, fmt, path::Path};
+use std::path::Path;
 
 use candid::Decode;
 use canic_core::dto::{error::Error as CanicError, state::BootstrapStatusResponse};
+use thiserror::Error as ThisError;
 
-pub use self::{
-    status::{local_replica_root_key_from_root, local_replica_status_reachable_from_root},
-    transport::local_replica_endpoint_from_root,
+pub use self::status::local_replica_status_reachable_from_root;
+pub(crate) use self::{
+    status::local_replica_root_key_from_root, transport::local_replica_endpoint_from_root,
 };
 
 ///
 /// ReplicaQueryError
 ///
 
-#[derive(Debug)]
+#[derive(Debug, ThisError)]
 pub enum ReplicaQueryError {
+    #[error(transparent)]
     Candid(candid::Error),
+
+    #[error("{0}")]
     Canister(CanicError),
+
+    #[error("{0}")]
     Cbor(String),
-    Io(std::io::Error),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error("{0}")]
     Query(String),
-    Registry(RegistryParseError),
+
+    #[error(transparent)]
+    Registry(#[from] RegistryParseError),
+
+    #[error("local replica rejected query: code={code} message={message}")]
     Rejected { code: u64, message: String },
-}
-
-impl fmt::Display for ReplicaQueryError {
-    // Render local replica query failures as compact operator diagnostics.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Candid(err) => write!(formatter, "{err}"),
-            Self::Canister(err) => write!(formatter, "{err}"),
-            Self::Cbor(err) => formatter.write_str(err),
-            Self::Io(err) => write!(formatter, "{err}"),
-            Self::Query(message) => write!(formatter, "{message}"),
-            Self::Registry(err) => write!(formatter, "{err}"),
-            Self::Rejected { code, message } => {
-                write!(
-                    formatter,
-                    "local replica rejected query: code={code} message={message}"
-                )
-            }
-        }
-    }
-}
-
-impl Error for ReplicaQueryError {
-    // Preserve structured source errors for I/O and serialization failures.
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Candid(err) => Some(err),
-            Self::Io(err) => Some(err),
-            Self::Registry(err) => Some(err),
-            Self::Canister(_) | Self::Cbor(_) | Self::Query(_) | Self::Rejected { .. } => None,
-        }
-    }
-}
-
-impl From<std::io::Error> for ReplicaQueryError {
-    // Convert local socket and process I/O failures.
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
 }
 
 impl From<cbor::CborError> for ReplicaQueryError {
     // Convert CBOR encode/decode failures.
     fn from(err: cbor::CborError) -> Self {
         Self::Cbor(err.to_string())
-    }
-}
-
-impl From<RegistryParseError> for ReplicaQueryError {
-    fn from(err: RegistryParseError) -> Self {
-        Self::Registry(err)
     }
 }
 
@@ -102,7 +71,7 @@ pub fn should_use_local_replica_query(environment: Option<&str>) -> bool {
 }
 
 /// Query `canic_ready` directly through the local replica HTTP API.
-pub fn query_ready(
+pub(crate) fn query_ready(
     environment: Option<&str>,
     canister: &str,
     icp_root: Option<&Path>,
@@ -112,7 +81,7 @@ pub fn query_ready(
 }
 
 /// Query `canic_bootstrap_status` using the configured port from one ICP root.
-pub fn query_bootstrap_status_from_root(
+pub(crate) fn query_bootstrap_status_from_root(
     environment: Option<&str>,
     canister: &str,
     icp_root: &Path,
@@ -137,7 +106,7 @@ pub(crate) fn query_cycle_balance(
 }
 
 /// Query `canic_subnet_registry` and return validated host entries.
-pub fn query_subnet_registry_entries(
+pub(crate) fn query_subnet_registry_entries(
     environment: Option<&str>,
     root: &str,
     icp_root: Option<&Path>,
@@ -148,7 +117,7 @@ pub fn query_subnet_registry_entries(
 }
 
 /// Query `canic_subnet_registry` using the configured port from one ICP root and return roles.
-pub fn query_subnet_registry_roles_from_root(
+pub(crate) fn query_subnet_registry_roles_from_root(
     environment: Option<&str>,
     root: &str,
     icp_root: &Path,

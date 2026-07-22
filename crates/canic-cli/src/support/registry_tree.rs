@@ -1,9 +1,6 @@
 use canic_host::registry::RegistryEntry;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    error::Error,
-    fmt,
-};
+use std::collections::{BTreeMap, BTreeSet};
+use thiserror::Error as ThisError;
 
 const TREE_BRANCH: &str = "├─ ";
 const TREE_LAST: &str = "└─ ";
@@ -14,34 +11,20 @@ const TREE_SPACE: &str = "   ";
 /// RegistryTreeError
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 pub enum RegistryTreeError {
+    #[error("registry JSON did not contain the requested canister or role {0}")]
     CanisterNotInRegistry(String),
+
+    #[error(
+        "registry role {role} has multiple canisters; pass one canister principal: {}",
+        canisters.join(", ")
+    )]
     AmbiguousRole {
         role: String,
         canisters: Vec<String>,
     },
 }
-
-impl fmt::Display for RegistryTreeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::CanisterNotInRegistry(canister) => {
-                write!(
-                    f,
-                    "registry JSON did not contain the requested canister or role {canister}"
-                )
-            }
-            Self::AmbiguousRole { role, canisters } => write!(
-                f,
-                "registry role {role} has multiple canisters; pass one canister principal: {}",
-                canisters.join(", ")
-            ),
-        }
-    }
-}
-
-impl Error for RegistryTreeError {}
 
 ///
 /// RegistryRow

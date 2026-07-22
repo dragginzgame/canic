@@ -2,10 +2,9 @@ use std::{env, fs, path::Path, process::Command};
 
 use toml::Value as TomlValue;
 
-use crate::{
-    cargo_command,
-    evidence_envelope::{file_input_fingerprint, sha256_hex},
-};
+use canic_core::cdk::utils::hash::sha256_hex;
+
+use crate::{cargo_command, evidence_envelope::file_input_fingerprint};
 
 use super::{
     inputs::cargo_config_fingerprints,
