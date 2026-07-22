@@ -1,6 +1,6 @@
 // Category C - Artifact test (built wasm; no runtime config).
 
-use candid::{CandidType, Deserialize, Principal, decode_one, encode_one};
+use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
 use ic_testkit::{
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
@@ -17,7 +17,7 @@ const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 const INSTALL_CODE_RETRY_LIMIT: usize = 3;
 const NANOS_PER_HOUR: u64 = 60 * 60 * 1_000_000_000;
 const MAX_REPLAY_WINDOW_NS: u64 = NANOS_PER_HOUR;
-const CANISTERS: [&str; 3] = ["intent_authority", "intent_external", "intent_client"];
+const CANISTERS: [&str; 1] = ["intent_authority"];
 static BUILD_ONCE: Once = Once::new();
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -94,93 +94,37 @@ enum ReceiptDecisionView {
 }
 
 #[test]
-fn intent_race_capacity_one() {
+fn receipt_backed_intent_conformance() {
     let workspace_root = workspace_root();
     let target_dir = test_target_dir(&workspace_root, "pic-wasm");
-    println!("intent_race: workspace_root={}", workspace_root.display());
+    println!(
+        "receipt_backed_intent: workspace_root={}",
+        workspace_root.display()
+    );
     build_canisters(&workspace_root);
 
     let profile_dir = CanicWasmBuildProfile::Fast.target_dir_name();
     let authority_wasm = read_wasm(&target_dir, "intent_authority", profile_dir);
-    let external_wasm = read_wasm(&target_dir, "intent_external", profile_dir);
-    let client_wasm = read_wasm(&target_dir, "intent_client", profile_dir);
     println!(
-        "intent_race: wasm sizes authority={} external={} client={}",
-        authority_wasm.len(),
-        external_wasm.len(),
-        client_wasm.len()
+        "receipt_backed_intent: wasm size authority={}",
+        authority_wasm.len()
     );
 
     let _serial_guard = acquire_pic_serial_guard();
     let pic = pic();
-    println!("intent_race: PocketIC ready");
-
-    let external_id = pic.create_and_install(
-        InstallSpec::new(external_wasm, encode_one(()).unwrap(), INSTALL_CYCLES)
-            .label("intent_external"),
-    );
-    println!("intent_race: installed external={external_id}");
+    println!("receipt_backed_intent: PocketIC ready");
 
     let authority_id = pic.create_and_install(
         InstallSpec::new(
             authority_wasm.clone(),
-            encode_one(external_id).unwrap(),
+            encode_one(()).unwrap(),
             INSTALL_CYCLES,
         )
         .label("intent_authority"),
     );
-    println!("intent_race: installed authority={authority_id}");
+    println!("receipt_backed_intent: installed authority={authority_id}");
 
-    let client_a = pic.create_and_install(
-        InstallSpec::new(client_wasm.clone(), encode_one(()).unwrap(), INSTALL_CYCLES)
-            .label("intent_client_a"),
-    );
-    println!("intent_race: installed client_a={client_a}");
-
-    let client_b = pic.create_and_install(
-        InstallSpec::new(client_wasm, encode_one(()).unwrap(), INSTALL_CYCLES)
-            .label("intent_client_b"),
-    );
-    println!("intent_race: installed client_b={client_b}");
-
-    let msg_a = pic
-        .submit_call(
-            client_a,
-            Principal::anonymous(),
-            "call_buy",
-            encode_one(authority_id).unwrap(),
-        )
-        .expect("submit call A");
-    let msg_b = pic
-        .submit_call(
-            client_b,
-            Principal::anonymous(),
-            "call_buy",
-            encode_one(authority_id).unwrap(),
-        )
-        .expect("submit call B");
-    println!("intent_race: submitted msg_a={msg_a:?} msg_b={msg_b:?}");
-
-    pic.tick();
-    pic.tick();
-    println!("intent_race: ticked");
-
-    let res_a = pic.await_call(msg_a).expect("await call A");
-    let res_b = pic.await_call(msg_b).expect("await call B");
-    println!("intent_race: awaited msg_a msg_b");
-
-    let out_a: Result<(), String> = decode_one(&res_a).expect("decode call A");
-    let out_b: Result<(), String> = decode_one(&res_b).expect("decode call B");
-    println!("intent_race: results out_a={out_a:?} out_b={out_b:?}");
-
-    let success_count = [out_a.is_ok(), out_b.is_ok()]
-        .into_iter()
-        .filter(|ok| *ok)
-        .count();
-    assert_eq!(success_count, 1, "expected exactly one success");
-    println!("intent_race: success_count={success_count}");
-
-    assert_receipt_backed_adapter_conformance(&pic, authority_id, external_id, &authority_wasm);
+    assert_receipt_backed_adapter_conformance(&pic, authority_id, authority_id, &authority_wasm);
 }
 
 fn assert_receipt_backed_adapter_conformance(

@@ -62,7 +62,7 @@ impl LifecycleBoundaryFixture {
         self.pic.install_canister(
             canister_id,
             self.authority_wasm.clone(),
-            encode_one(Principal::anonymous()).expect("encode authority init"),
+            encode_one(()).expect("encode authority init"),
             None,
         );
         canister_id

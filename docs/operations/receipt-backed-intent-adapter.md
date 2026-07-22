@@ -84,10 +84,10 @@ different settlement attempt.
 
 ## Focused Conformance Fixture
 
-`crates/canic-tests/tests/pic_intent_race.rs` exercises the public Canic facade
-through the `intent_authority` test canister. The fixture exposes explicit
-begin and settlement decisions instead of collapsing them into an optional
-record. Its focused PocketIC proof covers:
+`crates/canic-tests/tests/pic_receipt_backed_intent.rs` exercises the public
+Canic facade through the sole `intent_authority` test canister. The fixture
+exposes explicit begin and settlement decisions instead of collapsing them
+into an optional record. Its focused PocketIC proof covers:
 
 - creation and exact pending replay;
 - changed payload, resource, or deadline rejection;

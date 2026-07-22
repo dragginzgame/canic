@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.97.3`.
-- The latest published release is `v0.97.3` at
-  `4f4397cd58b648759307b51d98033c7c21538345`.
-- The `v0.97.3` source tree is
-  `0efda05cd46e94c1c45d6a37f6a0270fa8b7bd0c`; its product-tree hash is
-  `e540970e5aad935a2f4c5aff5ff43c790beb1958d6e33fb5f801ba6c050cc03d` and
+- The workspace package version is `0.98.0`.
+- The latest published release is `v0.98.0` at
+  `f6aef15ffd03d0b6cb573330ac0cc7a348ee3caf`.
+- The `v0.98.0` source tree is
+  `fd1ef47e7b3a6e4cd3ad7f9e88262a2a1a2335d4`; its product-tree hash is
+  `902883e318cf6fdb88cabb9f4195cfbdda13d18c80094ad622f45d0eb2a70524` and
   its Cargo.lock SHA-256 is
-  `bcf041e99d7ead0f1d4419251f4fe5cd24d11604dbb15002330562e37dc547bd`.
+  `f7d26cf21ea029a4a76fbb7cbd2ba402e9b46d221c78a1af56a81968bf7d9550`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -444,25 +444,20 @@ General cleanup, dependency work, backup/restore changes, and compatibility
 layers remain excluded.
 
 Published `v0.97.3` contains the intended Cargo graph, hidden macro boundary,
-public-CDK hard cut, and root-owned manual ICP conversion slices, but 0.97 is
-**not ready to close** at that immutable anchor. A rigorous baseline-to-tag
-audit supersedes the previous pass claim after finding five P1 defects. Their
-smallest corrections are present in the current working tree; no corrected
-immutable anchor exists yet. Exact findings, corrections, and validation are
-in the
+public-CDK hard cut, and root-owned manual ICP conversion slices, but is not
+retroactively described as a passing closeout anchor. A rigorous
+baseline-to-tag audit found five P1 defects. Their bounded corrections and
+cumulative validation are published in `v0.98.0`. Exact findings,
+corrections, and validation are in the
 [0.97 closeout audit](../design/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-closeout-audit.md).
 
-0.98 is active against immutable `v0.97.3`. The shared working tree also
-contains the bounded 0.97 closeout corrections, which must be released and
-validated before either line treats `v0.97.3` as a passing predecessor. The
-post-0.97 inventory reconfirms
-three bounded hard cuts: the consumerless project-protocol test package, the
-obsolete externally uncertain LocalIntent race fixture, and accepted but
-unexecuted randomness configuration/runtime scaffolding. Open `0.98.0` Slice A
-deletes only the dead project package/member/lock row and removes one explicit
-legacy-refill anti-resurrection test found during 0.97 closeout. The intent and
-randomness findings remain separate review batches. The final `v0.96.8`
-receipt assertion manifest is frozen before the obsolete fixture is narrowed.
+0.98 is active. Published `v0.98.0` is the corrected immutable predecessor and
+completes Slice A by deleting the consumerless project-protocol test package
+and the explicit legacy-refill anti-resurrection test. Open `0.98.1` completes
+Slice B: the obsolete externally uncertain LocalIntent race fixture and its two
+auxiliary packages are hard-cut, while one receipt-backed PocketIC authority
+retains every frozen final-`v0.96.8` assertion. The accepted but unexecuted
+randomness configuration/runtime scaffolding remains the separate Slice C.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -1009,23 +1004,28 @@ First primary results:
   affected packages, targeted formatting, layering, changelog governance, and
   diff hygiene pass.
 - The rigorous 0.97 closeout audit subsequently found five P1 gaps not covered
-  by that slice evidence. The corrected working tree passes 841 host tests,
-  980 core tests with one ignored, 16 Canic tests, and the four-case
-  role-attestation PocketIC suite. The repository now checksum-pins
+  by that slice evidence. The corrections published in `v0.98.0` pass 841
+  host tests, 980 core tests with one ignored, 16 Canic tests, and the
+  four-case role-attestation PocketIC suite. The repository now checksum-pins
   `ic-wasm 0.10.0` from DFINITY's official platform release archives. Its
   installer, exact-version gate, artifact-I/O tests, and role-attestation
   PocketIC suite pass; the Rust-library-only upstream API break is outside
   Canic's CLI-only integration. The deterministic cumulative `root_suite`
   passes all 28 cases with the upgraded binary.
+- Open `0.98.1` Slice B validation passes the one-canister receipt-backed
+  intent PocketIC conformance, all three lifecycle-boundary PocketIC cases,
+  seven focused LocalIntent workflow tests, both receipt-reclamation inventory
+  guards, retained `runtime_probe` compilation, strict Clippy for all changed
+  Rust targets, the layering guard, and locked metadata resolution for 37
+  packages. The deleted `intent_client` and `intent_external` packages have no
+  workspace or lockfile entry.
 
 ## Next Action
 
-Review and release the bounded 0.97 closeout corrections and repeat the
-passing cumulative gate at the new immutable anchor before declaring 0.97
-closed. Keep the open `0.98.0` Slice A dead-package hard cut distinct, then
-begin the independent receipt-fixture Slice B. Do not inspect
-or edit the stale local Toko repository, change Cargo package versions outside
-the maintainer-owned release flow, or add an old refill compatibility path.
+Review and release the open `0.98.1` receipt-fixture hard cut, then begin the
+independent Slice C randomness-contract deletion. Do not inspect or edit the
+stale local Toko repository, change Cargo package versions outside the
+maintainer-owned release flow, or add an old compatibility path.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with
