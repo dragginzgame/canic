@@ -28,18 +28,6 @@ pub(super) fn configured_root_canister_id(
     })
 }
 
-pub(super) fn configured_root_proof_mode(
-    cfg: &DelegatedTokenConfig,
-) -> Result<RootProofMode, InternalError> {
-    match cfg.root_proof_mode.trim() {
-        "chain_key_batch" => Ok(RootProofMode::ChainKeyBatch),
-        _ => Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.root_proof_mode must be chain_key_batch".to_string(),
-        )
-        .into()),
-    }
-}
-
 pub(super) fn configured_chain_key_root_verifier(
     cfg: &DelegatedTokenConfig,
     root_canister_id: Principal,
@@ -114,7 +102,6 @@ pub(super) fn configured_chain_key_root_verifier(
     Ok(Some(AuthChainKeyRootVerifierConfig {
         policy: RootKeyPolicyV1 {
             root_canister_id,
-            proof_mode: RootProofMode::ChainKeyBatch,
             algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
             key_id: ChainKeyKeyId {
                 name: key_id.to_string(),
@@ -140,7 +127,7 @@ fn required_chain_key_field<'a>(
 ) -> Result<&'a str, InternalError> {
     let Some(value) = value else {
         return Err(AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required when root_proof_mode=\"chain_key_batch\""
+            "auth.delegated_tokens.chain_key_root_proof.{field} is required for delegated-token verification"
         ))
         .into());
     };
@@ -157,7 +144,7 @@ fn required_chain_key_field<'a>(
 fn required_chain_key_u64(value: Option<u64>, field: &'static str) -> Result<u64, InternalError> {
     value.ok_or_else(|| {
         AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required when root_proof_mode=\"chain_key_batch\""
+            "auth.delegated_tokens.chain_key_root_proof.{field} is required for delegated-token verification"
         ))
         .into()
     })

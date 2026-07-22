@@ -254,7 +254,6 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
         render_option(config.ic_root_public_key_raw_hex.as_ref(), |value| {
             render_owned_string(value)
         });
-    let root_proof_mode = render_owned_string(&config.root_proof_mode);
     let chain_key_root_proof = render_chain_key_root_proof_config(&config.chain_key_root_proof);
     let build_network = match config.build_network {
         BuildNetwork::Ic => {
@@ -273,7 +272,6 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
             enabled: #enabled,
             root_canister_id: #root_canister_id,
             ic_root_public_key_raw_hex: #ic_root_public_key_raw_hex,
-            root_proof_mode: #root_proof_mode,
             chain_key_root_proof: #chain_key_root_proof,
             build_network: #build_network,
             max_ttl_secs: #max_ttl_secs,

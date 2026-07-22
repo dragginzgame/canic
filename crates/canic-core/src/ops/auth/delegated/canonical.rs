@@ -12,7 +12,6 @@ use crate::{
         DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant, DelegatedTokenClaims,
         DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
         IssuerProof, IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1, RootProof,
-        RootProofMode,
     },
     ids::{BuildNetwork, CanisterRole},
 };
@@ -373,7 +372,6 @@ fn encode_chain_key_key_id(out: &mut Vec<u8>, key_id: &ChainKeyKeyId) {
 fn root_key_policy_bytes(policy: &RootKeyPolicyV1) -> Vec<u8> {
     let mut out = Vec::with_capacity(256);
     encode_principal(&mut out, policy.root_canister_id);
-    encode_root_proof_mode(&mut out, policy.proof_mode);
     encode_chain_key_algorithm(&mut out, policy.algorithm);
     encode_chain_key_key_id(&mut out, &policy.key_id);
     encode_fixed_32(&mut out, policy.derivation_path_hash);
@@ -396,7 +394,6 @@ fn delegated_auth_registry_snapshot_bytes(
     encode_u16(&mut out, snapshot.schema_version);
     encode_principal(&mut out, snapshot.root_canister_id);
     encode_u64(&mut out, snapshot.registry_epoch);
-    encode_root_proof_mode(&mut out, snapshot.proof_mode);
     encode_fixed_32(&mut out, snapshot.root_key_policy_hash);
     encode_registry_issuer_policies(&mut out, &snapshot.issuer_policies)?;
     Ok(out)
@@ -417,7 +414,6 @@ fn encode_registry_issuer_policies(
 
         encode_principal(out, policy.issuer_canister_id);
         encode_bool(out, policy.enabled);
-        encode_root_proof_mode(out, policy.preferred_proof_mode);
         encode_audiences(out, &policy.allowed_audiences)?;
         encode_role_grants(out, &policy.allowed_grants)?;
         encode_u64(out, policy.max_root_proof_ttl_ns);
@@ -453,10 +449,6 @@ fn audience_bytes(audience: &DelegationAudience) -> Result<Vec<u8>, CanonicalAut
     let mut out = Vec::with_capacity(64);
     encode_audience(&mut out, audience)?;
     Ok(out)
-}
-
-fn encode_root_proof_mode(out: &mut Vec<u8>, _mode: RootProofMode) {
-    out.push(2);
 }
 
 fn encode_build_network(out: &mut Vec<u8>, build_network: BuildNetwork) {
@@ -707,7 +699,6 @@ mod tests {
     fn root_key_policy() -> RootKeyPolicyV1 {
         RootKeyPolicyV1 {
             root_canister_id: p(1),
-            proof_mode: RootProofMode::ChainKeyBatch,
             algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
             key_id: ChainKeyKeyId {
                 name: "test_key_1".to_string(),
@@ -737,7 +728,6 @@ mod tests {
         crate::dto::auth::DelegatedAuthIssuerPolicySnapshotV1 {
             issuer_canister_id,
             enabled: true,
-            preferred_proof_mode: RootProofMode::ChainKeyBatch,
             allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
             allowed_grants: vec![grant("project_instance", &["read", "write"])],
             max_root_proof_ttl_ns: 600,
@@ -757,7 +747,6 @@ mod tests {
             schema_version: 1,
             root_canister_id: p(1),
             registry_epoch: 3,
-            proof_mode: RootProofMode::ChainKeyBatch,
             root_key_policy_hash: root_key_policy_hash(&root_key_policy()),
             issuer_policies: vec![registry_issuer_policy(p(3)), registry_issuer_policy(p(4))],
         }
@@ -881,15 +870,15 @@ mod tests {
         assert_eq!(
             root_key_policy_hash(&root_key_policy()),
             [
-                245, 123, 186, 75, 47, 9, 17, 164, 83, 153, 204, 101, 211, 12, 234, 140, 44, 179,
-                104, 246, 15, 193, 33, 167, 24, 245, 177, 235, 49, 20, 183, 105,
+                2, 0, 107, 199, 176, 230, 166, 202, 46, 83, 56, 58, 11, 135, 50, 198, 84, 127, 41,
+                247, 16, 170, 144, 233, 71, 115, 247, 80, 245, 70, 45, 130,
             ]
         );
         assert_eq!(
             delegated_auth_registry_hash(&registry_snapshot()).unwrap(),
             [
-                29, 228, 231, 71, 61, 149, 51, 92, 136, 55, 56, 134, 127, 136, 134, 175, 166, 149,
-                242, 239, 235, 219, 5, 69, 113, 47, 55, 251, 255, 83, 171, 2,
+                72, 31, 253, 127, 58, 158, 80, 36, 116, 136, 245, 81, 34, 232, 181, 103, 56, 209,
+                126, 205, 6, 229, 11, 132, 160, 225, 169, 9, 150, 238, 35, 58,
             ]
         );
         assert_eq!(
@@ -903,6 +892,24 @@ mod tests {
                 240, 50, 93, 113, 3, 31, 183, 207, 161, 217, 74, 90, 254, 172,
             ]
         );
+    }
+
+    #[test]
+    fn chain_key_v1_domains_and_registry_schema_remain_fixed() {
+        assert_eq!(ROOT_KEY_POLICY_DOMAIN, b"CANIC_ROOT_KEY_POLICY_V1");
+        assert_eq!(
+            DELEGATED_AUTH_REGISTRY_DOMAIN,
+            b"CANIC_DELEGATED_AUTH_REGISTRY_SNAPSHOT_V1"
+        );
+        assert_eq!(
+            CHAIN_KEY_BATCH_HEADER_DOMAIN,
+            b"CANIC_ROOT_DELEGATION_CHAIN_KEY_BATCH_V1"
+        );
+        assert_eq!(
+            CHAIN_KEY_DELEGATION_CERT_DOMAIN,
+            b"CANIC_ROOT_DELEGATION_CHAIN_KEY_ISSUER_LEAF_V1"
+        );
+        assert_eq!(registry_snapshot().schema_version, 1);
     }
 
     #[test]

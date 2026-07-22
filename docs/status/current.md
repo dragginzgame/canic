@@ -14,21 +14,22 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.9`.
-- The latest published release is `v0.98.9` at
-  `82e68535c16656eb9d58eea1e740296ea609602b`.
-- The `v0.98.9` source tree is
-  `a147f4c33f7a070c6054ffa86c13c598fb64369f`; its product-tree hash is
-  `c25771d4e6ba55f18996a60c5c5049bef36a9eaca06819d24587e64c62502ea0` and
+- The workspace package version is `0.98.10`.
+- The latest published release is `v0.98.10` at
+  `efa3f8c7214737fbee88721dc04989e1995a1440`.
+- The `v0.98.10` source tree is
+  `a6f6c8d1a155a1b93b1fb7fe3a8db4183332d747`; its product-tree hash is
+  `46ee58548c9406b772f19a64db29fbd9ba1901cc9631f9e2e18c95d2a86f230f` and
   its Cargo.lock SHA-256 is
-  `362b2ef98ee863a8faf06c6e9f92363e4ca9f24feedf03dcb813094420e5510c`.
-- Released `0.98.9` removes duplicate transient metadata for the fixed chain-
-  key curve and artifact-transform role, tool, and mode while retaining their
-  canonical boundary representations.
-- Open `0.98.10` implements post-closeout Slice D: the empty core subnet-state
-  authority is removed across stable storage, DTOs, cascade, Candid, facade,
-  probes, and tests. Memory ID 17 is permanently retired; the independent
-  control-plane subnet state remains active at ID 84.
+  `438f794f6c0e35f77f9ebf9dfb7d467fff5f37b2bc82da9f747b7e5a9ea45ab0`.
+- Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
+  state authority is removed across stable storage, DTOs, cascade, Candid,
+  facade, probes, and tests. Memory ID 17 is permanently retired; the
+  independent control-plane subnet state remains active at ID 84.
+- Open `0.98.11` implements Slice E: the delegated root-proof selector and
+  three constant canonical bytes are removed from the sole V1 trust format.
+  Configured proof/registry floors advance root counters and make restored
+  pre-cut issuer proofs typed stale; no V2 or compatibility verifier exists.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1052,14 +1053,14 @@ First primary results:
 
 ## Next Action
 
-The open `0.98.10` core subnet-state hard cut has passed focused allocation,
-state-contract, host-manifest, cascade, protocol, package-check, and rebuilt
-PocketIC hierarchy validation. The stable-memory ABI guard and its explicitly
-test-only capacity fixture also pass. The complete empty core state authority
-is absent, ID 17 is permanently rejected by the active-allocation validator,
-and control-plane ID 84 remains intact. Six accepted post-closeout slices
-remain; Slice E is next and must remain a separate delegated-auth trust-format
-and reprovisioning batch. Do not inspect or edit the stale local Toko
+Open `0.98.11` Slice E passes focused config, canonical-hash, epoch-floor,
+active-proof, token, renewal, provisioning, and two PocketIC delegated-auth
+journeys. Maintained source/config guidance contains no delegated root-proof
+selector or canonical mode encoder, the four V1 domains and registry schema
+remain unchanged, and no V2 or compatibility verifier exists. Five accepted
+post-closeout slices remain: Slice I stays separate because it changes JSON;
+Slices F, G, H, and J may form the next internal cleanup batch if the combined
+diff remains focused. Do not inspect or edit the stale local Toko
 repository, change Cargo package versions outside the maintainer-owned release
 flow, or commit, tag, publish, or push shared-worktree changes without
 maintainer action.

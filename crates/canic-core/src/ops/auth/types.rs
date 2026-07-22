@@ -8,7 +8,6 @@ use crate::{
     cdk::types::Principal,
     dto::auth::{
         DelegatedRoleGrant, DelegatedToken, DelegationAudience, RoleAttestation, RootKeyPolicyV1,
-        RootProofMode,
     },
     ids::BuildNetwork,
     ids::CanisterRole,
@@ -139,7 +138,6 @@ pub struct AuthProofVerifierConfig {
     pub build_network: BuildNetwork,
     pub root_canister_id: Principal,
     pub ic_root_public_key_raw: Vec<u8>,
-    pub root_proof_mode: RootProofMode,
     pub chain_key_root: Option<AuthChainKeyRootVerifierConfig>,
 }
 

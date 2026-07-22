@@ -242,7 +242,6 @@ impl ConfigModel {
         });
         cfg.auth.delegated_tokens.enabled = true;
         cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
-        cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
         cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("key_1".to_string());
         cfg.auth
             .delegated_tokens
@@ -397,7 +396,6 @@ pub struct AuthConfig {
 ///   this build verifies delegated tokens or role attestations
 /// - max_ttl_secs = None => use the runtime default TTL ceiling
 /// - max_ttl_secs = Some => hard upper bound on token lifetime
-/// - root_proof_mode = "chain_key_batch" => current chain-key root proof contract
 ///
 /// Owned by config schema and validated before delegated auth is enabled.
 ///
@@ -413,9 +411,6 @@ pub struct DelegatedTokenConfig {
 
     #[serde(default)]
     pub ic_root_public_key_raw_hex: Option<String>,
-
-    #[serde(default = "default_delegated_tokens_root_proof_mode")]
-    pub root_proof_mode: String,
 
     #[serde(default)]
     pub chain_key_root_proof: ChainKeyRootProofConfig,
@@ -481,10 +476,6 @@ const fn default_delegated_tokens_enabled() -> bool {
     false
 }
 
-fn default_delegated_tokens_root_proof_mode() -> String {
-    "chain_key_batch".to_string()
-}
-
 const fn default_delegated_tokens_build_network() -> BuildNetwork {
     BuildNetwork::Ic
 }
@@ -519,7 +510,6 @@ impl Default for DelegatedTokenConfig {
             enabled: default_delegated_tokens_enabled(),
             root_canister_id: None,
             ic_root_public_key_raw_hex: None,
-            root_proof_mode: default_delegated_tokens_root_proof_mode(),
             chain_key_root_proof: ChainKeyRootProofConfig::default(),
             build_network: default_delegated_tokens_build_network(),
             max_ttl_secs: None,

@@ -186,7 +186,7 @@ fn complete_config_validation_rejects_unadmitted_role_declarations() {
 }
 
 #[test]
-fn checked_in_delegated_auth_configs_validate_with_chain_key_batch_policy() {
+fn checked_in_delegated_auth_configs_validate_with_current_chain_key_policy() {
     let root = workspace_root();
     for rel_path in [
         "fleets/test/canic.toml",
@@ -205,10 +205,6 @@ fn checked_in_delegated_auth_configs_validate_with_chain_key_batch_policy() {
         let cfg = crate::bootstrap::parse_config_model(&source)
             .unwrap_or_else(|err| panic!("{rel_path} should parse and validate: {err}"));
 
-        assert_eq!(
-            cfg.auth.delegated_tokens.root_proof_mode, "chain_key_batch",
-            "{rel_path} should use the current hard-cut root proof mode",
-        );
         assert_eq!(
             cfg.auth.delegated_tokens.build_network,
             BuildNetwork::Local,
@@ -229,6 +225,22 @@ fn checked_in_delegated_auth_configs_validate_with_chain_key_batch_policy() {
                 .chain_key_root_proof
                 .allow_test_key,
             "{rel_path} should not require the test-key exemption",
+        );
+        assert_eq!(
+            cfg.auth
+                .delegated_tokens
+                .chain_key_root_proof
+                .min_accepted_proof_epoch,
+            Some(2),
+            "{rel_path} should use the current proof-epoch floor",
+        );
+        assert_eq!(
+            cfg.auth
+                .delegated_tokens
+                .chain_key_root_proof
+                .min_accepted_registry_epoch,
+            Some(2),
+            "{rel_path} should use the current registry-epoch floor",
         );
     }
 }
@@ -552,18 +564,8 @@ build_network = "mars"
 }
 
 #[test]
-fn delegated_tokens_root_proof_mode_must_be_chain_key_batch() {
-    let mut cfg = ConfigModel::test_default();
-    cfg.auth.delegated_tokens.root_proof_mode = "canister_signature".to_string();
-
-    cfg.validate()
-        .expect_err("expected non-chain-key root proof mode to fail");
-}
-
-#[test]
 fn delegated_tokens_chain_key_batch_requires_key_policy() {
     let mut cfg = ConfigModel::test_default();
-    cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
     cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
     cfg.auth.delegated_tokens.chain_key_root_proof = ChainKeyRootProofConfig::default();
 
@@ -622,7 +624,6 @@ fn delegated_tokens_chain_key_public_key_must_be_sec1_secp256k1() {
 #[test]
 fn delegated_tokens_chain_key_ic_rejects_test_key() {
     let mut cfg = ConfigModel::test_default();
-    cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
     cfg.auth.delegated_tokens.build_network = BuildNetwork::Ic;
     cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("test_key_1".to_string());
     cfg.auth

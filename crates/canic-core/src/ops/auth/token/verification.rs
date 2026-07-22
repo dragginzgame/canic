@@ -183,12 +183,6 @@ impl AuthOps {
             ));
         }
 
-        if verifier_cfg.root_proof_mode != RootProofMode::ChainKeyBatch {
-            return Err(InternalError::invariant(
-                crate::InternalErrorOrigin::Ops,
-                "delegated auth requires chain_key_batch root proofs",
-            ));
-        }
         let Some(chain_key_root) = verifier_cfg.chain_key_root.as_ref() else {
             return Err(InternalError::auth_material_stale(
                 "chain-key root verifier policy is not configured",

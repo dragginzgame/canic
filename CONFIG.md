@@ -115,7 +115,6 @@ Root/issuer delegated token authentication
 - `enabled: bool` – enable delegated token auth (default `false`).
 - `root_canister_id: string` – optional root canister trust anchor. If omitted, runtime verification uses the initialized Canic root env.
 - `ic_root_public_key_raw_hex: string` – optional raw 96-byte IC BLS root public key encoded as hex. If omitted, runtime verification uses the IC/test root-key provider for issuer canister-signature proof verification.
-- `root_proof_mode: "chain_key_batch"` – required active delegated root proof mode. Other values are rejected.
 - `build_network: "ic" | "local"` – network class bound into delegated-auth proofs and verifier policy (default `"ic"`).
 - `max_ttl_secs: u64` – optional upper bound on delegated cert/token/session TTL in seconds (default `null` = runtime default cap; must be > 0 when set).
 
@@ -136,8 +135,8 @@ These fields are required when delegated tokens are enabled:
 - `public_key_hex: string` – SEC1 secp256k1 public key for the configured root canister, key id, and derivation path.
 - `key_version: u64` – configured signing key version expected in root proof headers.
 - `min_accepted_key_version: u64` – verifier floor for accepted key versions.
-- `min_accepted_proof_epoch: u64` – verifier floor for root proof epochs.
-- `min_accepted_registry_epoch: u64` – verifier floor for delegated-auth registry epochs.
+- `min_accepted_proof_epoch: u64` – verifier floor for root proof epochs. For the byte-free V1 hard cut, deployments must set this strictly above their highest previously accepted proof epoch before issuing new material.
+- `min_accepted_registry_epoch: u64` – verifier floor for delegated-auth registry epochs. For the byte-free V1 hard cut, deployments must set this strictly above their highest previously accepted registry epoch before issuing new material.
 - `valid_from_ns: u64` – first accepted proof-policy time in nanoseconds.
 - `accept_until_ns: u64` – last accepted proof-policy time in nanoseconds; must be greater than `valid_from_ns`.
 - `max_revocation_latency_ns: u64` – maximum accepted policy revocation lag; must be greater than zero.
@@ -359,7 +358,6 @@ enabled = false
 # root_canister_id = "..."
 # ic_root_public_key_raw_hex = "..."
 build_network = "local"
-# root_proof_mode = "chain_key_batch"
 #
 # [auth.delegated_tokens.chain_key_root_proof]
 # key_id = "key_1"
@@ -368,8 +366,8 @@ build_network = "local"
 # public_key_hex = "..."
 # key_version = 1
 # min_accepted_key_version = 1
-# min_accepted_proof_epoch = 1
-# min_accepted_registry_epoch = 1
+# min_accepted_proof_epoch = 2
+# min_accepted_registry_epoch = 2
 # valid_from_ns = 1
 # accept_until_ns = 4102444800000000000
 # max_revocation_latency_ns = 60000000000

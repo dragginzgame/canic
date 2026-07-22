@@ -361,8 +361,8 @@ install failure is retried, and unknown signing outcomes are retryable without
 treating a reject as proof that no signature exists.
 
 The old bridge-backed canister-signature root proof provisioning surfaces are
-not part of the active protocol. In `root_proof_mode = "chain_key_batch"`,
-delegated-token liveness comes from root timer renewal, issuer lazy repair, and
+not part of the active protocol. Delegated-token liveness comes from root
+timer renewal, issuer lazy repair, and
 root-triggered issuer readiness provisioning through the same chain-key batch
 authority. The readiness helper does not accept caller-supplied proof material
 and is intended for an application root's install/reinstall workflow, not
@@ -446,7 +446,6 @@ Verifier steps:
    - parsed `auth.delegated_tokens.build_network`
    - `build_network = "ic"` requires the configured known mainnet raw IC root key
    - `build_network = "local"` requires a configured non-mainnet raw IC root key
-   - `auth.delegated_tokens.root_proof_mode = "chain_key_batch"`
    - complete `auth.delegated_tokens.chain_key_root_proof` policy
    - issuer canister-signature proof embedded in the token
 3. Verify certificate policy:
@@ -612,7 +611,6 @@ root_canister_id = "..."
 ic_root_public_key_raw_hex = "..."
 build_network = "ic"
 max_ttl_secs = 3600
-root_proof_mode = "chain_key_batch"
 
 [auth.delegated_tokens.chain_key_root_proof]
 key_id = "key_1"
@@ -621,8 +619,8 @@ derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
 public_key_hex = "..."
 key_version = 1
 min_accepted_key_version = 1
-min_accepted_proof_epoch = 1
-min_accepted_registry_epoch = 1
+min_accepted_proof_epoch = 2
+min_accepted_registry_epoch = 2
 valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
@@ -657,7 +655,6 @@ Security boundaries:
   paired: `ic` requires the known mainnet raw key, while `local` verification
   requires a non-mainnet root key configured as
   `ic_root_public_key_raw_hex`.
-- `auth.delegated_tokens.root_proof_mode` must be `chain_key_batch`.
 - `auth.delegated_tokens.chain_key_root_proof` is the delegated-token root
   proof trust boundary. Its public key, key id, derivation path hash, key
   version, minimum accepted epochs, and policy window are verifier authority.
@@ -665,6 +662,10 @@ Security boundaries:
   secp256k1 SEC1 public key for the configured root canister id, key id, and
   derivation path. The proof-supplied public key is accepted only if it matches
   this configured value.
+- The proof and registry epoch floors are monotonic revocation boundaries.
+  Deployments crossing the byte-free V1 hard cut must configure each floor
+  strictly above the highest epoch accepted before the cut. The root raises
+  its durable counters to those floors before issuing replacement material.
 - token issuers must set `delegated_token_issuer = true`; only those canisters
   expose delegated-token prepare/get/install provisioning endpoints.
 - public delegated-token prepare self-issues only login/session material
