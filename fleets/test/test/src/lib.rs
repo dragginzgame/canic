@@ -1,9 +1,7 @@
 #![expect(clippy::unused_async)]
 
-use canic::{
-    Error, api::auth::AuthApi, cdk::types::Principal, dto::auth::DelegatedToken, ids::cap,
-    prelude::*,
-};
+use candid::Principal;
+use canic::{Error, api::auth::AuthApi, dto::auth::DelegatedToken, ids::cap, prelude::*};
 
 canic::start!();
 

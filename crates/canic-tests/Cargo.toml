@@ -9,12 +9,12 @@ readme = false
 publish = false
 
 [dependencies]
+candid = { workspace = true }
 canic = { workspace = true, features = ["blob-storage-billing", "metrics"] }
 canic-testing-internal = { workspace = true }
 ic-testkit = { workspace = true }
 
 [dev-dependencies]
-candid = { workspace = true }
 canic-control-plane = { workspace = true, features = [
     "root-control-plane",
     "wasm-store-canister",

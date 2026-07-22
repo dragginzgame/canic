@@ -13,6 +13,7 @@ use canic::{
     },
     prelude::*,
 };
+use ic_cdk::api::time;
 
 canic::start!();
 
@@ -27,7 +28,7 @@ async fn canic_upgrade() {}
 
 #[canic_query(requires(env::build_local_only()))]
 async fn audit_time_probe() -> Result<QueryPerfSample<u64>, Error> {
-    Ok(MetricsQuery::sample_query(canic::cdk::api::time()))
+    Ok(MetricsQuery::sample_query(time()))
 }
 
 #[canic_query(requires(env::build_local_only()))]

@@ -2,18 +2,16 @@
 //! Minimal root stub for PocketIC sharding tests.
 //!
 
+use candid::{CandidType, Deserialize, Nat, Principal};
 use canic::{
-    Error, cdk,
-    cdk::{
-        call::Call,
-        candid::{CandidType, Deserialize, Nat, Principal},
-    },
+    Error,
     dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
     dto::rpc::{
         AcknowledgePlacementReceiptResponse, CreateCanisterResponse, CyclesResponse,
         RecycleCanisterResponse, Request, Response, UpgradeCanisterResponse,
     },
 };
+use ic_cdk::call::Call;
 
 const CREATE_CANISTER_CYCLES: u128 = 1_000_000_000_000;
 
@@ -58,10 +56,10 @@ struct StubCreateCanisterResult {
     canister_id: Principal,
 }
 
-#[cdk::init]
+#[ic_cdk::init]
 fn init() {}
 
-#[cdk::update]
+#[ic_cdk::update]
 async fn canic_response_capability_v1(
     envelope: RootCapabilityEnvelopeV1,
 ) -> Result<RootCapabilityResponseV1, Error> {
@@ -91,7 +89,7 @@ async fn handle_request(request: Request) -> Result<Response, Error> {
 async fn create_canister() -> Result<Principal, Error> {
     let args = StubCreateCanisterArgs {
         settings: None,
-        sender_canister_version: Some(cdk::api::canister_version()),
+        sender_canister_version: Some(ic_cdk::api::canister_version()),
     };
 
     let response = Call::bounded_wait(Principal::management_canister(), "create_canister")

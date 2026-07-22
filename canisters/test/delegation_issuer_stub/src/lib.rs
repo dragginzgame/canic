@@ -2,10 +2,10 @@
 
 #![expect(clippy::unused_async)]
 
+use candid::Principal;
 use canic::{
     Error,
     api::auth::AuthApi,
-    cdk::candid::Principal,
     dto::auth::{DelegatedToken, SignedRoleAttestation},
     ids::cap,
     prelude::*,

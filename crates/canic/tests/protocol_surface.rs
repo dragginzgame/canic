@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use candid::types::internal::TypeContainer;
-use candid::{decode_one, encode_one};
+use candid::{Principal, decode_one, encode_one};
 use candid_parser::utils::CandidSource;
 #[cfg(feature = "blob-storage-billing")]
 use canic::dto::blob_storage::{
@@ -17,7 +17,6 @@ use canic::dto::blob_storage::{
     BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
 };
 use canic::{
-    cdk::types::Principal,
     dto::auth::{
         ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, ChainKeyAlgorithm,
         ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
@@ -31,6 +30,10 @@ use canic::{
         RootIssuerRenewalTemplateView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
+    dto::cycles::Cycles,
+    dto::icrc21::{
+        ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec, DisplayMessageType,
+    },
     dto::memory::MemoryLedgerResponse,
     dto::runtime::{
         CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
@@ -68,6 +71,24 @@ fn candid_type_env<T: candid::CandidType>() -> String {
     let mut types = TypeContainer::new();
     types.add::<T>();
     types.env.to_string()
+}
+
+#[test]
+fn semantic_protocol_and_cycle_types_are_public() {
+    assert_candid_roundtrip(ConsentMessageRequest {
+        method: "transfer".to_string(),
+        arg: vec![1, 2, 3],
+        user_preferences: ConsentMessageSpec {
+            metadata: ConsentMessageMetadata {
+                language: "en".to_string(),
+                utc_offset_minutes: Some(60),
+            },
+            device_spec: Some(DisplayMessageType::GenericDisplay),
+        },
+    });
+
+    let cycles = Cycles::new(42);
+    assert_eq!(cycles.to_u128(), 42);
 }
 
 fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {

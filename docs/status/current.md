@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.97.0`.
-- The latest published release is `v0.97.0` at
-  `38f7222a2c5b08d4ac4ea9927a5278a278eaf72b`.
-- The `v0.97.0` source tree is
-  `b5bb5b571ed791c926da600a93643d138287f4a0`; its product-tree hash is
-  `29703e576173be5a16e0418555a06544d7eb8d6bf7f3f5de8e74ac6fc771121f` and
+- The workspace package version is `0.97.1`.
+- The latest published release is `v0.97.1` at
+  `10de15fc14a6c8ff78a5ba07da45536391bc14c8`.
+- The `v0.97.1` source tree is
+  `f6ff3a6d3e9e6524a831a1101321f0d7ac0bfbec`; its product-tree hash is
+  `a58564c7cc8d3a12f67385a1ed51732efee37d1a3875f2c4c64d6752d7d56d5d` and
   its Cargo.lock SHA-256 is
-  `180ffd2472b7eabbcfee40b136582e47487ab7f2ee222bd81d8516f9f1b42d46`.
+  `32aa996739cdca2994d621f54311cf368a690735398b0974224a359f3213d54e`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -440,22 +440,16 @@ recoverable, while old terminal timing is rejected without a migration shim.
 General cleanup, dependency work, backup/restore changes, and compatibility
 layers remain excluded.
 
-0.97 is active after completing audit-only Slice A against immutable
-`v0.96.8` and releasing bounded Slice B as `v0.97.0`. The
-frozen inventory classifies every public `canic::cdk` export and active
-consumer, all 26 role-shaped dependency/build declarations, the exact
-protected Canic closure, every Cargo evidence caller, deterministic path
-normalization, the isolated fixture matrix, and the full generic ICP-refill
-deletion set. Slice B gives every authoritative caller one canonical graph
-producer that intersects complete package identity, target-filtered metadata
-edges, and exact-role Cargo tree activation. It also hard-cuts implicit
-defaults, missing feature ownership, renamed Canic, unreviewed resolvers,
-feature-bearing build edges, and sibling protected-package paths. No package
-version changed. Open `0.97.1` Slice C moves all compiler-required CDK
-plumbing behind one exact hidden boundary and removes generic IC/CDK imports
-from the public prelude. Public facade removal remains the next bounded slice.
-Locked internal PocketIC builds now receive matching locked online role
-evidence and cannot silently refresh the repository lockfile.
+0.97 is active after releasing Cargo graph Slice B as `v0.97.0` and hidden
+macro-boundary Slice C as `v0.97.1`. Slice C moves compiler-required CDK
+plumbing behind one exact hidden boundary, removes generic IC/CDK imports from
+the public prelude, and gives locked internal PocketIC builds matching locked
+online role evidence. Open `0.97.2` Slice D hard-cuts the public `canic::cdk`
+facade, moves public ICRC-21 and cycle values to semantic DTO owners, and
+migrates maintained application/test consumers to direct upstream crates.
+Direct source inspection corrected grouped imports missed by the published
+Slice A lexical inventory; no compatibility path is retained. The same open
+patch carries the independently compatible Syn 3 procedural-parser update.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -982,19 +976,24 @@ First primary results:
   repository-root project Medic remains non-passing only on the separately
   existing cross-fleet role-name ambiguity in state-manifest discovery; no
   role dependency-shape finding is reported.
-- Open `0.97.1` Slice C validation passes 36 procedural-macro tests, 25
+- Released `0.97.1` Slice C validation passes 36 procedural-macro tests, 25
   focused facade/protocol/reference tests, and 22 role-package tests. Strict
   all-target Clippy passes for `canic`, `canic-macros`, and `canic-host`;
   representative root, blob, demo, and Wasm-store packages compile; and the
   lockfile remains byte-for-byte unchanged.
+- Open `0.97.2` Slice D validation compiles every affected role, facade,
+  runtime, macro, internal-support, and integration-test target. Strict
+  all-target Clippy passes for the same set; 26 focused facade/protocol tests
+  plus all 36 procedural-macro tests and the cycle DTO test pass; focused Cargo
+  Machete reports no unused dependency. Fresh isolated rustdoc exposes
+  semantic ICRC-21/cycle modules and no public `canic::cdk` module.
 
 ## Next Action
 
-Publish the open `0.97.1` hidden macro-boundary batch. Then migrate remaining
-human `canic::cdk` consumers and maintained documentation to canonical owners
-and remove the public facade once. Do not inspect the stale local Toko
-repository, start the refill hard cut, change package versions, or reopen 0.96
-in the CDK batch.
+Publish the open `0.97.2` public-CDK hard cut and Syn 3 maintenance batch.
+Then begin Slice E at the already frozen root-owned manual ICP-refill contract.
+Do not inspect the stale local Toko repository, change package versions, or
+reopen 0.96 in the CDK batch.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

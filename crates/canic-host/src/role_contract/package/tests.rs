@@ -111,7 +111,7 @@ canic = { path = "canic", default-features = false, features = ["metrics"] }
 
 #[test]
 fn isolated_role_workspace_rejects_omitted_role_features() {
-    let fixture = FixtureWorkspace::materialize("supported");
+    let fixture = FixtureWorkspace::materialize("protected_sibling");
     fixture.rewrite(
         "role/Cargo.toml",
         "canic = { workspace = true, features = [\"metrics\"] }",
@@ -120,7 +120,10 @@ fn isolated_role_workspace_rejects_omitted_role_features() {
 
     let reason = fixture.rejection_reason();
 
-    assert!(reason.contains("must declare an explicit features array"));
+    assert!(
+        reason.contains("must declare an explicit features array"),
+        "unexpected reason: {reason}"
+    );
 }
 
 #[test]

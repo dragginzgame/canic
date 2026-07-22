@@ -1,8 +1,8 @@
 use std::time::Duration;
 
+use candid::Principal;
 use canic::{
     Error,
-    cdk::types::Principal,
     dto::{
         placement::sharding::ShardingRegistryResponse,
         runtime::{

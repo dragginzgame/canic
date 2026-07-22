@@ -6,7 +6,7 @@
 //! - `build!` for configured canisters and generated local sandbox/probe config
 //! - `start!` for `lib.rs` (wire lifecycle hooks and export endpoints)
 //!
-//! For lower-level access, use the `api`, `cdk`, and `memory` modules.
+//! For lower-level access, use the `api`, `dto`, and `memory` modules.
 //! These surfaces are for configured canister role packages. Shared runtime
 //! libraries should remain independent of Canic and use upstream crates such
 //! as `candid` or `ic-cdk` directly when they need generic IC types or APIs.
@@ -67,7 +67,6 @@ pub mod __build {
 // -----------------------------------------------------------------------------
 // Sub-crates
 // -----------------------------------------------------------------------------
-pub use canic_core::cdk;
 pub use canic_core::memory;
 
 // -----------------------------------------------------------------------------

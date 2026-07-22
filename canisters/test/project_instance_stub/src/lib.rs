@@ -2,7 +2,9 @@
 
 #![expect(clippy::unused_async)]
 
-use canic::{Error, cdk::types::Principal, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use candid::Principal;
+use canic::{Error, dto::auth::DelegatedToken, ids::cap, prelude::*};
+use ic_cdk::api::canister_self;
 
 canic::start!();
 
@@ -18,7 +20,7 @@ async fn canic_upgrade() {}
 /// Return this canister's own id so tests can confirm the instance is live.
 #[canic_query(public)]
 async fn instance_id() -> Result<Principal, Error> {
-    Ok(canic::cdk::api::canister_self())
+    Ok(canister_self())
 }
 
 /// Verify one self-contained delegated token.

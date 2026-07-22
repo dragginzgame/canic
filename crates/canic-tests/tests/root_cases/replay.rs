@@ -1,6 +1,6 @@
+use candid::Principal;
 use canic::{
     Error,
-    cdk::types::Principal,
     dto::{
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,

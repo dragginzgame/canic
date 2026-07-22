@@ -2,11 +2,11 @@
 
 #![expect(clippy::unused_async)]
 
+use candid::Principal;
 use canic::{
     Error,
     api::auth::AuthApi,
     api::canister::placement::DirectoryApi,
-    cdk::candid::Principal,
     dto::{
         auth::{DelegatedToken, SignedRoleAttestation},
         placement::directory::{DirectoryEntryStatusResponse, DirectoryRecoveryResponse},

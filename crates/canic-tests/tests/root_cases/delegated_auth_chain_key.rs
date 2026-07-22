@@ -3,10 +3,9 @@
 //! These tests keep the first production implementation driven by executable
 //! acceptance criteria, not only by the design doc.
 
-use candid::{decode_one, encode_args};
+use candid::{Principal, decode_one, encode_args};
 use canic::{
     Error,
-    cdk::types::Principal,
     dto::{
         auth::{
             ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, AuthRequestMetadata,

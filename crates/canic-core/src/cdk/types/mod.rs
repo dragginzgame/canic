@@ -1,9 +1,8 @@
 //! Module: cdk::types
 //!
-//! Responsibility: common IC-facing value types re-exported through Canic CDK.
+//! Responsibility: common IC-facing value types used by Canic runtime code.
 //! Does not own: CDK API wrappers, stable structures, or serialization policy.
-//! Boundary: centralizes named value types and wrappers used by Canic-facing
-//! code.
+//! Boundary: centralizes internal named value types and semantic DTO inputs.
 
 pub mod cycles;
 pub mod string;

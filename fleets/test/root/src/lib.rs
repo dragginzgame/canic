@@ -1,14 +1,8 @@
 #![expect(clippy::unused_async)]
 
-use canic::{
-    Error,
-    api::auth::AuthApi,
-    cdk::{
-        call::Call,
-        candid::{CandidType, Deserialize, Principal},
-    },
-    prelude::*,
-};
+use candid::{CandidType, Deserialize, Principal};
+use canic::{Error, api::auth::AuthApi, prelude::*};
+use ic_cdk::call::Call;
 
 canic::start!();
 

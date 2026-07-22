@@ -1,4 +1,4 @@
-//! Module: cdk::spec::standards::icrc::icrc21
+//! Module: dto::icrc21
 //!
 //! Responsibility: ICRC-21 Canister Call Consent Message Candid DTOs.
 //! Does not own: consent policy, wallet UX, or application authorization.
@@ -12,7 +12,7 @@ mod errors;
 
 pub use errors::*;
 
-use crate::cdk::spec::prelude::*;
+use crate::dto::prelude::*;
 
 //
 // ConsentInfo

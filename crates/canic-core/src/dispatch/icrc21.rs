@@ -1,5 +1,5 @@
 use crate::{
-    cdk::spec::standards::icrc::icrc21::{
+    dto::icrc21::{
         ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
         ConsentMessageResponse, ErrorInfo, Icrc21Error,
     },

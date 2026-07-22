@@ -37,6 +37,7 @@ pub mod env;
 pub mod error;
 pub mod http;
 pub mod icp_refill;
+pub mod icrc21;
 pub mod log;
 pub mod memory;
 pub mod metadata;

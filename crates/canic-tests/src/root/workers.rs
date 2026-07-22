@@ -3,9 +3,9 @@
 
 use std::time::Duration;
 
+use candid::Principal;
 use canic::{
     Error,
-    cdk::types::Principal,
     dto::{
         canister::CanisterInfo,
         page::{Page, PageRequest},
