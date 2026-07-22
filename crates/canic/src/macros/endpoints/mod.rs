@@ -8,7 +8,6 @@ mod blob_storage;
 mod blob_storage_billing;
 mod bundles;
 mod cycles;
-mod icp_refill;
 mod nonroot;
 mod root;
 mod shared;

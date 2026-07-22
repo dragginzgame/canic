@@ -25,7 +25,6 @@ control-plane = [
     "canic-control-plane/wasm-store-canister",
 ]
 wasm-store-canister = ["dep:canic-control-plane", "canic-control-plane/wasm-store-canister"]
-icp-refill = []
 blob-storage = ["canic-core/blob-storage"]
 blob-storage-billing = ["blob-storage", "canic-core/blob-storage-billing"]
 sharding = ["canic-core/sharding"]

@@ -8,16 +8,18 @@ use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::candid::Nat,
     cdk::structures::{DefaultMemoryImpl, memory::VirtualMemory},
-    eager_static, impl_storable_bounded,
+    impl_storable_bounded,
     role_contract::allocation::memory::observability::ICP_REFILL_RECORDS_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
 
-eager_static! {
+thread_local! {
     //
     // ICP_REFILL_RECORDS
     //
+    // Root lifecycle restoration initializes this root-owned state explicitly.
+    // Keeping it lazy prevents non-root canisters from opening memory ID 33.
     static ICP_REFILL_RECORDS: RefCell<IcpRefillRecords> =
         RefCell::new(IcpRefillRecords::new(StableBtreeMap::init(
             crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.icp_refill_records.v1", ty = IcpRefillRecords, id = ICP_REFILL_RECORDS_ID),
@@ -69,16 +71,13 @@ pub enum IcpRefillRecordErrorCode {
     BadFee,
     CyclesSentOverflow,
     Duplicate,
-    FabricationUnavailable,
     InvalidLedgerBlockIndex,
     InvalidTransaction,
     LedgerTransferFailed,
     NotifyFailed,
     NotifyMaxAttempts,
     Processing,
-    RateGateDenied,
     Refunded,
-    RequestDenied,
     TransactionTooOld,
     TransferWindowStale,
 }

@@ -99,7 +99,7 @@ Usage: canic cycles <command> [OPTIONS]
 
 Commands:
   balance   Display the selected identity cycles balance
-  convert   Convert ICP held by a Canic canister to cycles
+  convert   Convert ICP held by an installed deployment root to cycles for that root
   mint      Convert ICP to cycles
   transfer  Transfer cycles to a principal or Canic deployment target
   topup     Top up an installed deployment canister
@@ -110,8 +110,7 @@ Examples:
   canic cycles transfer 4T aaaaa-aa
   canic cycles transfer 4T demo/root
   canic cycles transfer 4T demo/app
-  canic cycles convert demo root --source root --icp-e8s 100000000 --dry-run
-  canic cycles convert demo app --fabricate --cycles 4T --dry-run
+  canic cycles convert demo --icp-e8s 100000000 --dry-run
   canic cycles topup demo app 4T";
 
 ///

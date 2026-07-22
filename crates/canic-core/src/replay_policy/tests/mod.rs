@@ -122,7 +122,6 @@ fn emitted_update_endpoint_names() -> BTreeSet<&'static str> {
         include_str!("../../../../canic/src/macros/endpoints/shared.rs"),
         include_str!("../../../../canic/src/macros/endpoints/wasm_store.rs"),
         include_str!("../../../../canic/src/macros/endpoints/nonroot.rs"),
-        include_str!("../../../../canic/src/macros/endpoints/icp_refill.rs"),
     ]
     .into_iter()
     .flat_map(update_endpoint_names_from_source)

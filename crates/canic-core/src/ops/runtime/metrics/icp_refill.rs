@@ -123,9 +123,6 @@ const fn record_phase(
 
 const fn error_phase(error: IcpRefillRecordErrorCode) -> &'static str {
     match error {
-        IcpRefillRecordErrorCode::RateGateDenied | IcpRefillRecordErrorCode::RequestDenied => {
-            "preflight"
-        }
         IcpRefillRecordErrorCode::BadFee
         | IcpRefillRecordErrorCode::Duplicate
         | IcpRefillRecordErrorCode::InvalidLedgerBlockIndex
@@ -138,7 +135,6 @@ const fn error_phase(error: IcpRefillRecordErrorCode) -> &'static str {
         | IcpRefillRecordErrorCode::Processing
         | IcpRefillRecordErrorCode::Refunded
         | IcpRefillRecordErrorCode::TransactionTooOld => "notify",
-        IcpRefillRecordErrorCode::FabricationUnavailable => "fabricate",
     }
 }
 
@@ -160,16 +156,13 @@ const fn error_label(error: IcpRefillRecordErrorCode) -> &'static str {
         IcpRefillRecordErrorCode::BadFee => "bad_fee",
         IcpRefillRecordErrorCode::CyclesSentOverflow => "cycles_sent_overflow",
         IcpRefillRecordErrorCode::Duplicate => "duplicate",
-        IcpRefillRecordErrorCode::FabricationUnavailable => "fabrication_unavailable",
         IcpRefillRecordErrorCode::InvalidLedgerBlockIndex => "invalid_ledger_block_index",
         IcpRefillRecordErrorCode::InvalidTransaction => "invalid_transaction",
         IcpRefillRecordErrorCode::LedgerTransferFailed => "ledger_transfer_failed",
         IcpRefillRecordErrorCode::NotifyFailed => "notify_failed",
         IcpRefillRecordErrorCode::NotifyMaxAttempts => "notify_max_attempts",
         IcpRefillRecordErrorCode::Processing => "processing",
-        IcpRefillRecordErrorCode::RateGateDenied => "rate_gate_denied",
         IcpRefillRecordErrorCode::Refunded => "refunded",
-        IcpRefillRecordErrorCode::RequestDenied => "request_denied",
         IcpRefillRecordErrorCode::TransactionTooOld => "transaction_too_old",
         IcpRefillRecordErrorCode::TransferWindowStale => "transfer_window_stale",
     }

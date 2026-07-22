@@ -16,25 +16,21 @@ use crate::{
         types::{Cycles, Principal},
     },
     config::schema::IcpRefillPolicy,
-    domain::policy::pure::cycles_funding::cooldown_retry_after_secs,
     domain::policy::pure::icp_refill::{
         IcpRefillPolicyInput, IcpRefillPolicyRules, IcpRefillPolicyViolation,
         evaluate_manual_refill,
     },
     dto::icp_refill::IcpRefillRequest,
-    ids::{BuildNetwork, CanisterRole},
+    ids::BuildNetwork,
     infra::ic::icp_refill::IcpRefillCanisterOverrides,
     ops::{
         config::ConfigOps,
         ic::{IcOps, icp_refill::IcpRefillOps},
-        runtime::cycles_funding::CyclesFundingLedgerOps,
         storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
     },
     workflow::ic::build_network::BuildNetworkWorkflow,
 };
 use thiserror::Error as ThisError;
-
-use self::execution::direct_child_refill_role;
 
 const TX_WINDOW_NANOS: u64 = 24 * 60 * 60 * 1_000_000_000;
 const MAX_NOTIFY_ATTEMPTS: u32 = 5;
@@ -59,17 +55,8 @@ pub enum IcpRefillWorkflowError {
     #[error("ICP refill policy denied request: {0:?}")]
     PolicyDenied(IcpRefillPolicyViolation),
 
-    #[error("ICP refill source canister {source_canister} must be this canister {self_pid}")]
-    SourceCanisterMismatch {
-        source_canister: Principal,
-        self_pid: Principal,
-    },
-
     #[error("ICP refill expected ICP ledger decimals=8, found {0}")]
     UnexpectedLedgerDecimals(u8),
-
-    #[error("ICP refill only supports canister mode in this workflow")]
-    UnsupportedMode,
 }
 
 impl From<IcpRefillWorkflowError> for InternalError {
@@ -119,13 +106,13 @@ impl ManualRefillPreflight {
     fn new(
         policy: Option<&IcpRefillPolicy>,
         request: &IcpRefillRequest,
+        root_canister: Principal,
     ) -> Result<Self, InternalError> {
         let input = policy_input(
             request,
             None,
-            active_for_request(request)?,
+            active_for_request(request, root_canister)?,
             AppStateOps::cycles_funding_enabled(),
-            funding_cooldown_retry_after_secs(request, IcOps::now_secs())?,
         );
         let rate_gate_configured = policy_requires_rate(policy);
         let policy = policy.map(icp_refill_policy_rules);
@@ -164,10 +151,11 @@ enum RateQueryMode {
 
 async fn prepare_context(
     request: &IcpRefillRequest,
+    root_canister: Principal,
     rate_query_mode: RateQueryMode,
 ) -> Result<IcpRefillExecutionContext, InternalError> {
     let policy = current_icp_refill_policy()?;
-    let preflight = ManualRefillPreflight::new(policy.as_ref(), request)?;
+    let preflight = ManualRefillPreflight::new(policy.as_ref(), request, root_canister)?;
     if !preflight.rate_gate_configured {
         preflight.evaluate(None)?;
     }
@@ -182,7 +170,8 @@ async fn prepare_context(
     let xdr_permyriad_per_icp =
         configured_rate(policy.as_ref(), canisters.cmc_canister_id, rate_query_mode).await?;
 
-    ManualRefillPreflight::new(policy.as_ref(), request)?.evaluate(xdr_permyriad_per_icp)?;
+    ManualRefillPreflight::new(policy.as_ref(), request, root_canister)?
+        .evaluate(xdr_permyriad_per_icp)?;
 
     Ok(IcpRefillExecutionContext {
         ledger_canister_id: canisters.ledger_canister_id,
@@ -234,7 +223,6 @@ fn refill_canister_overrides(policy: Option<&IcpRefillPolicy>) -> IcpRefillCanis
 
 const fn icp_refill_policy_rules(policy: &IcpRefillPolicy) -> IcpRefillPolicyRules {
     IcpRefillPolicyRules {
-        enabled: policy.enabled,
         max_refill_e8s_per_call: policy.max_refill_e8s_per_call,
         min_xdr_permyriad_per_icp: policy.min_xdr_permyriad_per_icp,
     }
@@ -253,9 +241,20 @@ fn estimate_cycles(amount_e8s: u64, xdr_permyriad_per_icp: u64) -> Cycles {
 }
 
 fn current_icp_refill_policy() -> Result<Option<IcpRefillPolicy>, InternalError> {
-    Ok(ConfigOps::current_canister()?
-        .topup
-        .and_then(|topup| topup.icp_refill))
+    Ok(ConfigOps::current_canister()?.icp_refill)
+}
+
+fn require_icp_refill_configured() -> Result<(), InternalError> {
+    let policy = current_icp_refill_policy()?;
+    validate_icp_refill_configured(policy.as_ref())
+}
+
+fn validate_icp_refill_configured(policy: Option<&IcpRefillPolicy>) -> Result<(), InternalError> {
+    if policy.is_some() {
+        Ok(())
+    } else {
+        Err(policy_denied(IcpRefillPolicyViolation::NotConfigured))
+    }
 }
 
 const fn policy_input(
@@ -263,50 +262,38 @@ const fn policy_input(
     observed_xdr_permyriad_per_icp: Option<u64>,
     active_for_key: bool,
     cycles_funding_enabled: bool,
-    funding_cooldown_retry_after_secs: Option<u64>,
 ) -> IcpRefillPolicyInput {
     IcpRefillPolicyInput {
         requested_amount_e8s: request.amount_e8s,
         observed_xdr_permyriad_per_icp,
         active_for_key,
         cycles_funding_enabled,
-        funding_cooldown_retry_after_secs,
     }
 }
 
-fn funding_cooldown_retry_after_secs(
-    request: &IcpRefillRequest,
-    now_secs: u64,
-) -> Result<Option<u64>, InternalError> {
-    let Some(role) = direct_child_refill_role(request.target_canister, request.source_canister)
-    else {
-        return Ok(None);
-    };
-
-    configured_funding_cooldown_retry_after_secs(&role, request.target_canister, now_secs)
-}
-
-fn configured_funding_cooldown_retry_after_secs(
-    role: &CanisterRole,
-    target_canister: Principal,
-    now_secs: u64,
-) -> Result<Option<u64>, InternalError> {
-    Ok(cooldown_retry_after_secs(
-        ConfigOps::cycles_funding_limits_for_child_role(role)?,
-        CyclesFundingLedgerOps::snapshot(target_canister),
-        now_secs,
-    ))
-}
-
 fn policy_denied(violation: IcpRefillPolicyViolation) -> InternalError {
-    IcpRefillWorkflowError::PolicyDenied(violation).into()
+    let message = IcpRefillWorkflowError::PolicyDenied(violation).to_string();
+    match violation {
+        IcpRefillPolicyViolation::AmountZero
+        | IcpRefillPolicyViolation::MaxRefillPerCall { .. } => {
+            InternalError::invalid_input(message)
+        }
+        IcpRefillPolicyViolation::ConcurrentRefill => InternalError::conflict(message),
+        IcpRefillPolicyViolation::CyclesFundingDisabled
+        | IcpRefillPolicyViolation::NotConfigured
+        | IcpRefillPolicyViolation::RateGateDenied { .. }
+        | IcpRefillPolicyViolation::RateUnavailable { .. } => InternalError::unavailable(message),
+    }
 }
 
-fn active_for_request(request: &IcpRefillRequest) -> Result<bool, InternalError> {
+fn active_for_request(
+    request: &IcpRefillRequest,
+    root_canister: Principal,
+) -> Result<bool, InternalError> {
     IcpRefillStoreOps::has_active_for_key(
-        request.source_canister,
+        root_canister,
         request.source_subaccount,
-        request.target_canister,
+        root_canister,
         request.operation_id,
     )
 }

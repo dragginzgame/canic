@@ -39,21 +39,16 @@ impl OperationIdSource {
 pub(super) fn pending_operation_input<'a>(
     root: &'a Path,
     options: &'a ConvertOptions,
-    source: &'a ResolvedCanisterTarget,
-    target: &'a ResolvedCanisterTarget,
-    amount_e8s: u64,
+    root_target: &'a ResolvedCanisterTarget,
     now_nanos: u128,
 ) -> PendingIcpRefillOperationInput<'a> {
     PendingIcpRefillOperationInput {
         icp_root: root,
         environment: &options.target.environment,
         deployment: &options.deployment,
-        source: source.role.as_deref(),
-        source_canister_id: &source.canister_id,
+        root_canister_id: &root_target.canister_id,
         source_subaccount: options.source_subaccount,
-        target: target.role.as_deref(),
-        target_canister_id: &target.canister_id,
-        amount_e8s,
+        amount_e8s: options.amount_e8s,
         created_at_unix_nanos: now_nanos,
     }
 }
@@ -86,8 +81,7 @@ pub(super) fn resolve_operation_id(
     }
     let generated = generated_operation_id(
         pending_input.deployment,
-        pending_input.source_canister_id,
-        pending_input.target_canister_id,
+        pending_input.root_canister_id,
         pending_input.amount_e8s,
         now_nanos,
     );
@@ -125,16 +119,14 @@ pub(super) fn current_unix_nanos() -> u128 {
 
 fn generated_operation_id(
     deployment: &str,
-    source_canister: &str,
-    target_canister: &str,
+    root_canister: &str,
     amount_e8s: u64,
     now_nanos: u128,
 ) -> [u8; 32] {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(b"canic:cycles-convert:icp-refill:v1");
     extend_operation_id_part(&mut bytes, deployment.as_bytes());
-    extend_operation_id_part(&mut bytes, source_canister.as_bytes());
-    extend_operation_id_part(&mut bytes, target_canister.as_bytes());
+    extend_operation_id_part(&mut bytes, root_canister.as_bytes());
     extend_operation_id_part(&mut bytes, &amount_e8s.to_be_bytes());
     extend_operation_id_part(&mut bytes, &now_nanos.to_be_bytes());
     let digest = sha256_bytes(&bytes);
@@ -176,9 +168,9 @@ mod tests {
 
     #[test]
     fn generated_operation_id_binds_input() {
-        let left = generated_operation_id("demo", "source", "target", 1, 10);
-        let right = generated_operation_id("demo", "source", "target", 2, 10);
-        let next_time = generated_operation_id("demo", "source", "target", 1, 11);
+        let left = generated_operation_id("demo", "root", 1, 10);
+        let right = generated_operation_id("demo", "root", 2, 10);
+        let next_time = generated_operation_id("demo", "root", 1, 11);
 
         assert_ne!(left, right);
         assert_ne!(left, next_time);
@@ -253,11 +245,8 @@ mod tests {
             icp_root: root,
             environment: "ic",
             deployment: "demo",
-            source: Some("funding_hub"),
-            source_canister_id: "source",
+            root_canister_id: "root",
             source_subaccount: None,
-            target: Some("app"),
-            target_canister_id: "target",
             amount_e8s: 1,
             created_at_unix_nanos: 10,
         }

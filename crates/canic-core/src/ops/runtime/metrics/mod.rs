@@ -34,6 +34,7 @@ pub mod wasm_store;
 use crate::{
     domain::{metrics::MetricsKind, runtime::TimerMode},
     dto::metrics::{MetricEntry, MetricValue},
+    ops::runtime::env::EnvOps,
     perf::{self, PerfKey},
 };
 use {
@@ -509,7 +510,9 @@ fn cycles_funding_entries() -> Vec<MetricEntry> {
             value: MetricValue::U128(cycles),
         })
         .collect::<Vec<_>>();
-    entries.extend(icp_refill_entries());
+    if EnvOps::is_root() {
+        entries.extend(icp_refill_entries());
+    }
     entries
 }
 

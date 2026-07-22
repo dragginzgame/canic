@@ -30,6 +30,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         kind,
         initial_cycles: Cycles::new(0),
         topup: None,
+        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         randomness: RandomnessConfig::default(),
         scaling: None,

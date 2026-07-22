@@ -137,14 +137,6 @@ pub fn derive_role_capabilities(
         if canister.directory.is_some() {
             capabilities.insert(RoleCapabilityKey::Directory);
         }
-        if canister
-            .topup
-            .as_ref()
-            .and_then(|topup| topup.icp_refill.as_ref())
-            .is_some_and(|icp_refill| icp_refill.enabled)
-        {
-            capabilities.insert(RoleCapabilityKey::IcpRefill);
-        }
         if canister.standards.icrc21 {
             capabilities.insert(RoleCapabilityKey::Icrc21);
         }

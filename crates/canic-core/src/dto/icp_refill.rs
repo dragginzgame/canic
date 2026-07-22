@@ -1,6 +1,6 @@
 use crate::{cdk::types::Cycles, dto::prelude::*};
 
-pub use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus};
+pub use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus};
 
 ///
 /// IcpRefillRequest
@@ -9,12 +9,9 @@ pub use crate::domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefill
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct IcpRefillRequest {
     pub operation_id: [u8; 32],
-    pub source_canister: Principal,
     pub source_subaccount: Option<[u8; 32]>,
-    pub target_canister: Principal,
     pub amount_e8s: u64,
     pub dry_run: bool,
-    pub mode: IcpRefillMode,
 }
 
 ///
@@ -38,12 +35,10 @@ pub struct IcpRefillResponse {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct IcpRefillDryRun {
     pub operation_id: [u8; 32],
-    pub mode: IcpRefillMode,
     pub amount_e8s: u64,
     pub fee_e8s: u64,
     pub xdr_permyriad_per_icp: Option<u64>,
     pub estimated_cycles: Option<Cycles>,
-    pub message: Option<String>,
 }
 
 ///
@@ -92,28 +87,21 @@ mod tests {
     }
 
     #[test]
-    fn reexported_mode_roundtrips_through_candid() {
+    fn narrowed_root_request_roundtrips_through_candid() {
         let request = IcpRefillRequest {
             operation_id: [9; 32],
-            source_canister: Principal::from_slice(&[1; 29]),
             source_subaccount: None,
-            target_canister: Principal::from_slice(&[2; 29]),
             amount_e8s: 10_000,
             dry_run: true,
-            mode: crate::domain::icp_refill::IcpRefillMode::Fabricate,
         };
 
         let bytes = candid::encode_one(&request).expect("encode ICP refill request");
         let decoded: IcpRefillRequest =
             candid::decode_one(&bytes).expect("decode ICP refill request");
 
-        let dto_mode: IcpRefillMode = crate::domain::icp_refill::IcpRefillMode::Fabricate;
-
         assert_eq!(decoded.operation_id, [9; 32]);
-        assert_eq!(decoded.source_canister, Principal::from_slice(&[1; 29]));
-        assert_eq!(decoded.target_canister, Principal::from_slice(&[2; 29]));
+        assert_eq!(decoded.source_subaccount, None);
         assert_eq!(decoded.amount_e8s, 10_000);
         assert!(decoded.dry_run);
-        assert_eq!(decoded.mode, dto_mode);
     }
 }

@@ -6,8 +6,8 @@
 
 use crate::{
     config::schema::{
-        CanisterConfig, CanisterKind, ConfigSchemaError, CyclesFundingPolicyConfig, NAME_MAX_BYTES,
-        SubnetConfig, TopupPolicy, Validate,
+        CanisterConfig, CanisterKind, ConfigSchemaError, CyclesFundingPolicyConfig,
+        IcpRefillPolicy, NAME_MAX_BYTES, SubnetConfig, Validate,
     },
     config::validation::validate_canister_role,
     ids::CanisterRole,
@@ -35,6 +35,7 @@ impl Validate for SubnetConfig {
             validate_kind(cfg, role)?;
             validate_cycles_funding(&cfg.cycles_funding, role)?;
             validate_topup(cfg, role)?;
+            validate_icp_refill(cfg.icp_refill.as_ref(), role)?;
             validate_scaling(cfg, role, &self.canisters)?;
             validate_sharding(cfg, role, &self.canisters)?;
             validate_directory(cfg, role, &self.canisters)?;
@@ -92,32 +93,32 @@ fn validate_topup(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), C
         )));
     }
 
-    validate_icp_refill(topup, canister)?;
-
     Ok(())
 }
 
 fn validate_icp_refill(
-    topup: &TopupPolicy,
+    icp_refill: Option<&IcpRefillPolicy>,
     canister: &CanisterRole,
 ) -> Result<(), ConfigSchemaError> {
-    let Some(icp_refill) = &topup.icp_refill else {
+    let Some(icp_refill) = icp_refill else {
         return Ok(());
     };
 
-    if !icp_refill.enabled {
-        return Ok(());
+    if !canister.is_root() {
+        return Err(ConfigSchemaError::ValidationError(format!(
+            "canister '{canister}' icp_refill is root-only",
+        )));
     }
 
     if icp_refill.max_refill_e8s_per_call == 0 {
         return Err(ConfigSchemaError::ValidationError(format!(
-            "canister '{canister}' topup.icp_refill.max_refill_e8s_per_call must be > 0",
+            "canister '{canister}' icp_refill.max_refill_e8s_per_call must be > 0",
         )));
     }
 
     if icp_refill.min_xdr_permyriad_per_icp == Some(0) {
         return Err(ConfigSchemaError::ValidationError(format!(
-            "canister '{canister}' topup.icp_refill.min_xdr_permyriad_per_icp must be > 0 when set",
+            "canister '{canister}' icp_refill.min_xdr_permyriad_per_icp must be > 0 when set",
         )));
     }
 
