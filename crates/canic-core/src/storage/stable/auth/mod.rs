@@ -262,6 +262,17 @@ impl AuthState {
         })
     }
 
+    // Raise the delegated-auth registry epoch to a configured revocation floor.
+    pub(crate) fn advance_delegated_auth_registry_epoch_at_least(min_epoch: u64) -> u64 {
+        AUTH_STATE.with_borrow_mut(|cell| {
+            let mut data = cell.get().clone();
+            data.delegated_auth_registry_epoch = data.delegated_auth_registry_epoch.max(min_epoch);
+            let epoch = data.delegated_auth_registry_epoch;
+            cell.set(data);
+            epoch
+        })
+    }
+
     // Return the current delegated-auth proof epoch.
     #[must_use]
     #[cfg(test)]

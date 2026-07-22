@@ -59,8 +59,6 @@ impl RootIssuerRenewalWorkflow {
             Self::reconcile_deadline(None);
             return Ok(());
         }
-        require_chain_key_root_proof_mode(&config)?;
-
         let timing = AuthOps::root_issuer_renewal_timing(IcOps::now_nanos())?;
         Self::reconcile_deadline(timing.next_deadline_ns);
 
@@ -94,7 +92,6 @@ impl RootIssuerRenewalWorkflow {
         if !config.enabled {
             return Ok(0);
         }
-        require_chain_key_root_proof_mode(&config).map_err(RenewalSweepFailure::new)?;
         let build_network = config.build_network;
         let min_accepted_proof_epoch =
             chain_key_min_accepted_proof_epoch(&config).map_err(RenewalSweepFailure::new)?;
@@ -394,16 +391,6 @@ const fn internal_error_origin_code(origin: InternalErrorOrigin) -> &'static str
         InternalErrorOrigin::Storage => "storage",
         InternalErrorOrigin::Workflow => "workflow",
     }
-}
-
-fn require_chain_key_root_proof_mode(config: &DelegatedTokenConfig) -> Result<(), InternalError> {
-    if config.root_proof_mode.trim() == "chain_key_batch" {
-        return Ok(());
-    }
-    Err(InternalError::invariant(
-        InternalErrorOrigin::Workflow,
-        "delegated-auth renewal requires root_proof_mode=\"chain_key_batch\"",
-    ))
 }
 
 fn chain_key_min_accepted_proof_epoch(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {

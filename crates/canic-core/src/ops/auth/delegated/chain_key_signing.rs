@@ -140,13 +140,6 @@ pub(in crate::ops::auth) fn chain_key_signing_policy_from_config(
     root_canister_id: Principal,
     build_network: BuildNetwork,
 ) -> Result<ChainKeySigningPolicy, InternalError> {
-    if config.root_proof_mode.trim() != "chain_key_batch" {
-        return Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.root_proof_mode must be chain_key_batch".to_string(),
-        )
-        .into());
-    }
-
     let chain_key = &config.chain_key_root_proof;
     let key_id = required_chain_key_field(chain_key.key_id.as_deref(), "key_id")?;
     let derivation_path =
@@ -320,7 +313,7 @@ fn required_chain_key_field<'a>(
 ) -> Result<&'a str, InternalError> {
     let Some(value) = value else {
         return Err(AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required when root_proof_mode=\"chain_key_batch\""
+            "auth.delegated_tokens.chain_key_root_proof.{field} is required for chain-key signing"
         ))
         .into());
     };
@@ -339,7 +332,7 @@ fn required_chain_key_derivation_path(
 ) -> Result<Vec<Vec<u8>>, InternalError> {
     let Some(path) = value else {
         return Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.chain_key_root_proof.derivation_path_hex is required when root_proof_mode=\"chain_key_batch\""
+            "auth.delegated_tokens.chain_key_root_proof.derivation_path_hex is required for chain-key signing"
                 .to_string(),
         )
         .into());
@@ -379,7 +372,7 @@ fn required_fixed_32_chain_key_hex(
 fn required_chain_key_u64(value: Option<u64>, field: &'static str) -> Result<u64, InternalError> {
     value.ok_or_else(|| {
         AuthValidationError::Auth(format!(
-            "auth.delegated_tokens.chain_key_root_proof.{field} is required when root_proof_mode=\"chain_key_batch\""
+            "auth.delegated_tokens.chain_key_root_proof.{field} is required for chain-key signing"
         ))
         .into()
     })
@@ -442,10 +435,7 @@ mod tests {
         let derivation_path = derivation_path();
         let derivation_path_hash = chain_key_derivation_path_hash(&derivation_path);
 
-        let mut config = DelegatedTokenConfig {
-            root_proof_mode: "chain_key_batch".to_string(),
-            ..Default::default()
-        };
+        let mut config = DelegatedTokenConfig::default();
         config.chain_key_root_proof.key_id = Some("test_key_1".to_string());
         config.chain_key_root_proof.derivation_path_hex = Some(vec![
             "63616e6963".to_string(),

@@ -27,7 +27,6 @@ fn cfg(build_network: BuildNetwork, root_key: Option<Vec<u8>>) -> DelegatedToken
         enabled: true,
         root_canister_id: Some(root_pid().to_string()),
         ic_root_public_key_raw_hex: root_key.map(hex),
-        root_proof_mode: "chain_key_batch".to_string(),
         chain_key_root_proof: ChainKeyRootProofConfig::default(),
         build_network,
         max_ttl_secs: None,
@@ -47,7 +46,6 @@ fn chain_key_cfg(
 }
 
 fn install_chain_key_policy(cfg: &mut DelegatedTokenConfig, key_id: &str) {
-    cfg.root_proof_mode = "chain_key_batch".to_string();
     cfg.chain_key_root_proof.key_id = Some(key_id.to_string());
     cfg.chain_key_root_proof.derivation_path_hash_hex =
         Some("fe51a87b988d221227b134c48f36787e891a902dcb5d48ea5f94cff8bfed5a16".to_string());
@@ -124,9 +122,7 @@ fn chain_key_ecdsa_signature_verifier_rejects_altered_signature() {
 
 #[test]
 fn active_delegation_proof_unavailable_maps_to_auth_material_stale() {
-    crate::ops::storage::auth::AuthStateOps::clear_active_delegation_proof();
-
-    let err = active_delegation_proof_unavailable_error(20);
+    let err = active_delegation_proof_unavailable_error(ActiveDelegationProofStatus::Missing);
     let public = err
         .public_error()
         .expect("missing active proof must be public");
@@ -243,17 +239,7 @@ fn auth_proof_verifier_config_accepts_ic_with_known_mainnet_root_key() {
     assert_eq!(verifier.build_network, BuildNetwork::Ic);
     assert_eq!(verifier.root_canister_id, root_pid());
     assert_eq!(verifier.ic_root_public_key_raw, mainnet_key());
-    assert_eq!(verifier.root_proof_mode, RootProofMode::ChainKeyBatch);
     assert!(verifier.chain_key_root.is_some());
-}
-
-#[test]
-fn auth_proof_verifier_config_rejects_non_chain_key_root_proof_mode() {
-    let mut cfg = cfg(BuildNetwork::Ic, Some(mainnet_key()));
-    cfg.root_proof_mode = "canister_signature".to_string();
-
-    AuthOps::auth_proof_verifier_config_from(&cfg)
-        .expect_err("must reject non-chain-key root proof mode");
 }
 
 #[test]
@@ -308,7 +294,6 @@ fn auth_proof_verifier_config_chain_key_local_accepts_test_key_when_allowed() {
         .as_ref()
         .expect("chain-key policy should be configured");
 
-    assert_eq!(verifier.root_proof_mode, RootProofMode::ChainKeyBatch);
     assert_eq!(chain_key_root.policy.root_canister_id, root_pid());
     assert_eq!(chain_key_root.policy.key_id.name, "test_key_1");
     assert_eq!(
@@ -410,7 +395,6 @@ fn install_verifier_test_config(
         .with_prime_canister("project_instance", canister_cfg)
         .build();
     cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
-    cfg.auth.delegated_tokens.root_proof_mode = "chain_key_batch".to_string();
     cfg.auth.delegated_tokens.root_canister_id = Some(root_pid().to_string());
     cfg.auth.delegated_tokens.ic_root_public_key_raw_hex = Some(hex(local_key()));
     cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("key_1".to_string());

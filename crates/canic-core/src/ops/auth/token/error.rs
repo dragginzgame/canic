@@ -6,8 +6,9 @@
 
 use super::*;
 
-pub(super) fn active_delegation_proof_unavailable_error(now_ns: u64) -> InternalError {
-    let status = AuthOps::active_delegation_proof_status(now_ns).status;
+pub(super) fn active_delegation_proof_unavailable_error(
+    status: ActiveDelegationProofStatus,
+) -> InternalError {
     match status {
         ActiveDelegationProofStatus::Expired => InternalError::auth_proof_expired(
             "active delegation proof expired; reprovision auth proof",

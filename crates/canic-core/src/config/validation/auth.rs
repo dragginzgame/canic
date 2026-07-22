@@ -53,7 +53,6 @@ impl Validate for DelegatedTokenConfig {
         }
 
         let build_network = self.build_network;
-        validate_root_proof_mode(self.root_proof_mode.trim())?;
 
         if let Some(root_key_hex) = self.ic_root_public_key_raw_hex.as_deref() {
             if root_key_hex.trim().is_empty() {
@@ -91,16 +90,6 @@ impl Validate for DelegatedTokenConfig {
         validate_chain_key_root_proof_config(self, build_network)?;
 
         Ok(())
-    }
-}
-
-fn validate_root_proof_mode(mode: &str) -> Result<(), ConfigSchemaError> {
-    if mode == "chain_key_batch" {
-        Ok(())
-    } else {
-        Err(ConfigSchemaError::ValidationError(
-            "auth.delegated_tokens.root_proof_mode must be chain_key_batch".into(),
-        ))
     }
 }
 
@@ -198,7 +187,7 @@ fn required_chain_key_string<'a>(
 ) -> Result<&'a str, ConfigSchemaError> {
     let Some(value) = value else {
         return Err(ConfigSchemaError::ValidationError(format!(
-            "{field} is required when auth.delegated_tokens.root_proof_mode=\"chain_key_batch\""
+            "{field} is required for delegated-token chain-key root proofs"
         )));
     };
     let value = value.trim();
@@ -264,7 +253,7 @@ fn validate_chain_key_derivation_path_hex(
 ) -> Result<Vec<Vec<u8>>, ConfigSchemaError> {
     let Some(path) = value else {
         return Err(ConfigSchemaError::ValidationError(format!(
-            "{field} is required when auth.delegated_tokens.root_proof_mode=\"chain_key_batch\""
+            "{field} is required for delegated-token chain-key root proofs"
         )));
     };
     path.iter()
@@ -285,7 +274,7 @@ fn validate_required_u64(
 ) -> Result<u64, ConfigSchemaError> {
     value.ok_or_else(|| {
         ConfigSchemaError::ValidationError(format!(
-            "{field} is required when auth.delegated_tokens.root_proof_mode=\"chain_key_batch\""
+            "{field} is required for delegated-token chain-key root proofs"
         ))
     })
 }

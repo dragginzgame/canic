@@ -53,6 +53,6 @@ impl AuthApi {
     /// Report non-secret issuer-local active proof lifecycle status for operators.
     pub fn active_delegation_proof_status() -> Result<ActiveDelegationProofStatusResponse, Error> {
         Self::require_delegated_token_issuer_enabled()?;
-        Ok(AuthOps::active_delegation_proof_status(IcOps::now_nanos()))
+        AuthOps::active_delegation_proof_status(IcOps::now_nanos()).map_err(Self::map_auth_error)
     }
 }

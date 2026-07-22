@@ -60,7 +60,6 @@ impl RuntimeAuthWorkflow {
     ) -> Result<RootDelegationProofBatchProof, InternalError> {
         EnvOps::require_root()?;
         let config = crate::ops::config::ConfigOps::delegated_tokens_config()?;
-        require_chain_key_root_proof_mode(&config)?;
         let build_network = config.build_network;
         let max_cert_ttl_ns = delegated_token_max_ttl_ns(&config)?;
         let min_accepted_proof_epoch = chain_key_min_accepted_proof_epoch(&config)?;
@@ -283,16 +282,6 @@ impl IssuerProofInstallError {
             Self::RejectedByIssuer(err) => InternalError::public(err),
         }
     }
-}
-
-fn require_chain_key_root_proof_mode(config: &DelegatedTokenConfig) -> Result<(), InternalError> {
-    if config.root_proof_mode.trim() == "chain_key_batch" {
-        return Ok(());
-    }
-    Err(InternalError::invariant(
-        InternalErrorOrigin::Workflow,
-        "delegated-auth lazy repair requires root_proof_mode=\"chain_key_batch\"",
-    ))
 }
 
 fn delegated_token_max_ttl_ns(config: &DelegatedTokenConfig) -> Result<u64, InternalError> {

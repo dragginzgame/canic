@@ -238,6 +238,10 @@ impl AuthStateOps {
         AuthState::advance_delegated_auth_registry_epoch()
     }
 
+    pub fn advance_delegated_auth_registry_epoch_at_least(min_epoch: u64) -> u64 {
+        AuthState::advance_delegated_auth_registry_epoch_at_least(min_epoch)
+    }
+
     #[must_use]
     #[cfg(test)]
     pub fn delegated_auth_proof_epoch() -> u64 {
@@ -499,6 +503,19 @@ mod tests {
         assert_eq!(first, minimum);
         assert_eq!(second, first.saturating_add(1));
         assert_eq!(AuthStateOps::delegated_auth_proof_epoch(), second);
+    }
+
+    #[test]
+    fn delegated_auth_registry_epoch_advances_monotonically_to_floor() {
+        let before = AuthStateOps::delegated_auth_registry_epoch();
+        let minimum = before.saturating_add(5);
+
+        let first = AuthStateOps::advance_delegated_auth_registry_epoch_at_least(minimum);
+        let second = AuthStateOps::advance_delegated_auth_registry_epoch_at_least(1);
+
+        assert_eq!(first, minimum);
+        assert_eq!(second, first);
+        assert_eq!(AuthStateOps::delegated_auth_registry_epoch(), second);
     }
 
     #[test]

@@ -44,7 +44,7 @@ use crate::{
     model::auth::{
         ChainKeyRootDelegationInstallFailure, RootIssuerPolicy, RootIssuerRenewalTemplate,
     },
-    ops::{config::ConfigOps, ic::IcOps},
+    ops::{config::ConfigOps, ic::IcOps, storage::auth::AuthStateOps},
 };
 
 // -----------------------------------------------------------------------------
@@ -59,14 +59,15 @@ impl AuthOps {
         active::install_active_delegation_proof(proof, installed_by)
     }
 
-    #[must_use]
-    pub(crate) fn active_delegation_proof(now_ns: u64) -> Option<ActiveDelegationProof> {
+    pub(crate) fn active_delegation_proof(
+        now_ns: u64,
+    ) -> Result<Option<ActiveDelegationProof>, InternalError> {
         active::active_delegation_proof(now_ns)
     }
 
     pub(crate) fn active_delegation_proof_status(
         now_ns: u64,
-    ) -> ActiveDelegationProofStatusResponse {
+    ) -> Result<ActiveDelegationProofStatusResponse, InternalError> {
         active::active_delegation_proof_status(now_ns)
     }
 
@@ -173,11 +174,14 @@ impl AuthOps {
             .chain_key_root
             .ok_or_else(|| {
                 AuthValidationError::Auth(
-                    "auth.delegated_tokens.chain_key_root_proof is required when root_proof_mode=\"chain_key_batch\""
+                    "auth.delegated_tokens.chain_key_root_proof is required for delegated auth"
                         .to_string(),
                 )
             })?
             .policy;
+        AuthStateOps::advance_delegated_auth_registry_epoch_at_least(
+            root_key_policy.min_accepted_registry_epoch,
+        );
         let registry =
             chain_key_registry::current_chain_key_delegated_auth_registry(&root_key_policy)?;
         let max_revocation_latency_ns = required_chain_key_max_revocation_latency_ns(&config)?;
@@ -265,7 +269,7 @@ impl AuthOps {
             .chain_key_root
             .ok_or_else(|| {
                 AuthValidationError::Auth(
-                    "auth.delegated_tokens.chain_key_root_proof is required when root_proof_mode=\"chain_key_batch\""
+                    "auth.delegated_tokens.chain_key_root_proof is required for delegated auth"
                         .to_string(),
                 )
             })?
@@ -318,7 +322,7 @@ fn current_chain_key_registry_identity() -> Result<(u64, [u8; 32]), InternalErro
         .chain_key_root
         .ok_or_else(|| {
             AuthValidationError::Auth(
-                "auth.delegated_tokens.chain_key_root_proof is required when root_proof_mode=\"chain_key_batch\""
+                "auth.delegated_tokens.chain_key_root_proof is required for delegated auth"
                     .to_string(),
             )
         })?
@@ -344,7 +348,7 @@ fn required_chain_key_max_revocation_latency_ns(
     let Some(max_revocation_latency_ns) = config.chain_key_root_proof.max_revocation_latency_ns
     else {
         return Err(AuthValidationError::Auth(
-            "auth.delegated_tokens.chain_key_root_proof.max_revocation_latency_ns is required when root_proof_mode=\"chain_key_batch\""
+            "auth.delegated_tokens.chain_key_root_proof.max_revocation_latency_ns is required for delegated auth"
                 .to_string(),
         )
         .into());

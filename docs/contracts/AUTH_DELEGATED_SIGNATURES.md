@@ -403,7 +403,6 @@ root_canister_id = "..."
 ic_root_public_key_raw_hex = "..."
 build_network = "ic"
 max_ttl_secs = 3600
-root_proof_mode = "chain_key_batch"
 
 [auth.delegated_tokens.chain_key_root_proof]
 key_id = "key_1"
@@ -412,8 +411,8 @@ derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
 public_key_hex = "..."
 key_version = 1
 min_accepted_key_version = 1
-min_accepted_proof_epoch = 1
-min_accepted_registry_epoch = 1
+min_accepted_proof_epoch = 2
+min_accepted_registry_epoch = 2
 valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
@@ -425,12 +424,17 @@ key is paired with `build_network` for issuer canister-signature verification:
 requires a non-mainnet raw root key from
 `ic_root_public_key_raw_hex` and rejects the mainnet key.
 
-Delegated-token auth requires `root_proof_mode = "chain_key_batch"`.
 `chain_key_root_proof` is the root delegation proof trust anchor. Its
 `public_key_hex` must be a secp256k1 SEC1 public key for the configured root
 canister id, `key_id`, and `derivation_path_hex`; `derivation_path_hash_hex`
 must match the canonical hash of `derivation_path_hex`. The `ic` build network
 rejects `test_key_1`; local use requires `allow_test_key = true`.
+
+The proof and registry epoch floors are the hard-cut invalidation boundary.
+Before issuing byte-free V1 material, a deployment must set both floors
+strictly above its highest previously accepted epochs. The root advances its
+durable counters to the configured floors; old proofs, registries, and tokens
+then fail the existing typed stale-epoch checks without a compatibility path.
 
 If delegated-token verification is enabled, startup must have chain-key root
 proof verification support, issuer canister-signature verification support, an

@@ -41,7 +41,7 @@ use crate::{
     domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, is_mainnet_ic_root_public_key_raw},
     dto::auth::{
         ActiveDelegationProofStatus, ChainKeyAlgorithm, ChainKeyKeyId, DelegatedToken,
-        DelegationCert, RootKeyPolicyV1, RootProof, RootProofMode,
+        DelegationCert, RootKeyPolicyV1, RootProof,
     },
     ids::{BuildNetwork, CanisterRole},
     ops::{
@@ -68,7 +68,7 @@ use verification::{
 };
 use verifier_config::{
     configured_chain_key_root_verifier, configured_ic_root_public_key_raw,
-    configured_root_canister_id, configured_root_proof_mode,
+    configured_root_canister_id,
 };
 
 impl AuthOps {
@@ -93,8 +93,11 @@ impl AuthOps {
         let local = IcOps::canister_self();
         let now_ns = IcOps::now_nanos();
         retention::prune_and_admit(prepared_by, now_ns)?;
-        let active_proof = Self::active_delegation_proof(now_ns)
-            .ok_or_else(|| active_delegation_proof_unavailable_error(now_ns))?;
+        let active_proof = Self::active_delegation_proof(now_ns)?;
+        let Some(active_proof) = active_proof else {
+            let status = Self::active_delegation_proof_status(now_ns)?.status;
+            return Err(active_delegation_proof_unavailable_error(status));
+        };
 
         if active_proof.proof.cert.issuer_pid != local {
             return Err(AuthScopeError::IssuerPidMismatch {
@@ -201,14 +204,12 @@ impl AuthOps {
     ) -> Result<AuthProofVerifierConfig, InternalError> {
         let build_network = cfg.build_network;
         let root_canister_id = configured_root_canister_id(cfg)?;
-        let root_proof_mode = configured_root_proof_mode(cfg)?;
         let chain_key_root =
             configured_chain_key_root_verifier(cfg, root_canister_id, build_network)?;
         Ok(AuthProofVerifierConfig {
             build_network,
             root_canister_id,
             ic_root_public_key_raw: configured_ic_root_public_key_raw(cfg, build_network)?,
-            root_proof_mode,
             chain_key_root,
         })
     }

@@ -13,7 +13,6 @@ use crate::{
     dto::auth::{
         DelegatedAuthIssuerPolicySnapshotV1, DelegatedAuthRegistrySnapshotV1, DelegatedRoleGrant,
         DelegationAudience, IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1,
-        RootProofMode,
     },
     ops::{
         auth::{
@@ -80,7 +79,6 @@ fn current_chain_key_delegated_auth_registry_snapshot(
             DelegatedAuthIssuerPolicySnapshotV1 {
                 issuer_canister_id: policy.issuer_pid,
                 enabled: policy.enabled,
-                preferred_proof_mode: RootProofMode::ChainKeyBatch,
                 allowed_audiences,
                 allowed_grants,
                 max_root_proof_ttl_ns: policy.max_cert_ttl_ns,
@@ -105,7 +103,6 @@ fn current_chain_key_delegated_auth_registry_snapshot(
         schema_version: DELEGATED_AUTH_REGISTRY_SCHEMA_VERSION_V1,
         root_canister_id: root_key_policy.root_canister_id,
         registry_epoch: AuthStateOps::delegated_auth_registry_epoch(),
-        proof_mode: RootProofMode::ChainKeyBatch,
         root_key_policy_hash,
         issuer_policies,
     }
@@ -187,7 +184,6 @@ mod tests {
     fn root_key_policy() -> RootKeyPolicyV1 {
         RootKeyPolicyV1 {
             root_canister_id: p(1),
-            proof_mode: RootProofMode::ChainKeyBatch,
             algorithm: ChainKeyAlgorithm::EcdsaSecp256k1,
             key_id: ChainKeyKeyId {
                 name: "test_key_1".to_string(),
