@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.12` removes unused delegated-auth call-kind forwarding, internal
+  non-root bootstrap arguments, cost-permit ballast, the private auth CLI
+  dispatch wrapper, and the permanently empty top-level adoption-report
+  warning array. Finding-local warning evidence remains intact.
+
 - `0.98.11` hard-cuts the obsolete delegated root-proof selector and its
   canonical tag, using raised proof and registry epoch floors to invalidate
   pre-cut material without a second format or compatibility verifier.

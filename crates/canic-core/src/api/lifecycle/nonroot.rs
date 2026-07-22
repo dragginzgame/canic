@@ -25,8 +25,8 @@ impl LifecycleApi {
         );
     }
 
-    pub fn schedule_init_nonroot_bootstrap(args: Option<Vec<u8>>) {
-        lifecycle::init::nonroot::schedule_init_nonroot_bootstrap(args);
+    pub fn schedule_init_nonroot_bootstrap() {
+        lifecycle::init::nonroot::schedule_init_nonroot_bootstrap();
     }
 
     pub fn post_upgrade_nonroot_canister_before_bootstrap(

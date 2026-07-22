@@ -14,7 +14,6 @@ use crate::{
         types::Principal,
     },
     dto::{auth::DelegatedToken, error::ErrorCode},
-    ids::EndpointCallKind,
     ops::{
         auth::{AuthOps, VerifyDelegatedTokenRuntimeInput},
         config::ConfigOps,
@@ -30,19 +29,12 @@ const NS_PER_SEC: u64 = 1_000_000_000;
 pub(super) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
-    call_kind: EndpointCallKind,
 ) -> Result<Principal, AccessError> {
     let token = delegated_token_from_args()?;
 
     let now_ns = IcOps::now_nanos();
 
-    verify_token(
-        token,
-        authenticated_subject,
-        now_ns,
-        required_scope,
-        call_kind,
-    )
+    verify_token(token, authenticated_subject, now_ns, required_scope)
 }
 
 // Verify a delegated token; endpoint-local binding and scope checks still run
@@ -52,7 +44,6 @@ fn verify_token(
     caller: Principal,
     now_ns: u64,
     required_scope: Option<&str>,
-    _call_kind: EndpointCallKind,
 ) -> Result<Principal, AccessError> {
     let max_ttl_ns = delegated_token_max_ttl_ns()?;
     let required_scopes = required_scope

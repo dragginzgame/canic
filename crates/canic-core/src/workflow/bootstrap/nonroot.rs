@@ -31,12 +31,9 @@ use crate::{
 /// - Errors are propagated to the lifecycle adapter.
 /// - The adapter logs failures but does not abort canister initialization.
 ///
-/// `_args` are opaque, user-provided bootstrap arguments forwarded from init.
-/// They are currently unused.
-///
 /// This function is safe to retry and safe to run multiple times.
 ///
-pub async fn bootstrap_init_nonroot_canister(_args: Option<Vec<u8>>) -> Result<(), InternalError> {
+pub async fn bootstrap_init_nonroot_canister() -> Result<(), InternalError> {
     log!(Topic::Init, Info, "bootstrap (nonroot): init start");
 
     PlacementAcknowledgementWorkflow::start()?;

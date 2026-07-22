@@ -55,7 +55,7 @@ pub fn init_nonroot_canister_before_bootstrap(
     );
 }
 
-pub fn schedule_init_nonroot_bootstrap(args: Option<Vec<u8>>) {
+pub fn schedule_init_nonroot_bootstrap() {
     LifecycleMetricsApi::record_bootstrap(
         LifecycleMetricPhase::Init,
         LifecycleMetricRole::Nonroot,
@@ -66,15 +66,14 @@ pub fn schedule_init_nonroot_bootstrap(args: Option<Vec<u8>>) {
     TimerWorkflow::set_application_once(
         Duration::ZERO,
         "canic:bootstrap:init_nonroot_canister",
-        async move {
+        async {
             BootstrapStatusOps::set_phase(BootstrapPhaseLabel::NONROOT_INIT);
             LifecycleMetricsApi::record_bootstrap(
                 LifecycleMetricPhase::Init,
                 LifecycleMetricRole::Nonroot,
                 LifecycleMetricOutcome::Started,
             );
-            if let Err(err) =
-                workflow::bootstrap::nonroot::bootstrap_init_nonroot_canister(args).await
+            if let Err(err) = workflow::bootstrap::nonroot::bootstrap_init_nonroot_canister().await
             {
                 LifecycleMetricsApi::record_bootstrap(
                     LifecycleMetricPhase::Init,

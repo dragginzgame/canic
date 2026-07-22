@@ -53,6 +53,22 @@ fn async_lifecycle_bootstrap_stays_in_zero_delay_schedule_helpers() {
     );
 }
 
+#[test]
+fn nonroot_init_arguments_reach_only_the_application_hook() {
+    let source = read_source("crates/canic/src/macros/start.rs");
+
+    assert_eq!(
+        source.matches("schedule_init_nonroot_bootstrap();").count(),
+        2,
+        "both non-root start paths must schedule argument-free internal bootstrap"
+    );
+    assert_eq!(
+        source.matches("canic_install(args).await;").count(),
+        2,
+        "both non-root start paths must preserve application init arguments"
+    );
+}
+
 struct FunctionRef {
     path: &'static str,
     function: &'static str,
@@ -111,7 +127,7 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
             "Duration::ZERO",
             "TimerWorkflow::set_application_once",
             "canic:bootstrap:init_nonroot_canister",
-            "bootstrap_init_nonroot_canister(args).await",
+            "bootstrap_init_nonroot_canister().await",
         ],
     },
     ScheduleHelper {

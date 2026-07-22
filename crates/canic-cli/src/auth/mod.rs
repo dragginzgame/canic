@@ -147,15 +147,6 @@ impl AuthCommandError {
 }
 
 ///
-/// AuthCommand
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum AuthCommand {
-    RenewalStatus(RenewalStatusOptions),
-}
-
-///
 /// CommonOptions
 ///
 
@@ -184,7 +175,7 @@ struct RenewalStatusOptions {
 struct AuthOptions;
 
 impl AuthOptions {
-    fn parse<I>(args: I) -> Result<AuthCommand, AuthCommandError>
+    fn parse<I>(args: I) -> Result<RenewalStatusOptions, AuthCommandError>
     where
         I: IntoIterator<Item = OsString>,
     {
@@ -192,14 +183,12 @@ impl AuthOptions {
             parse_matches(auth_command(), args).map_err(|_| AuthCommandError::Usage(usage()))?;
         match matches.subcommand() {
             Some((RENEWAL_COMMAND, matches)) => match matches.subcommand() {
-                Some((STATUS_COMMAND, matches)) => {
-                    Ok(AuthCommand::RenewalStatus(RenewalStatusOptions {
-                        deployment: required_string(matches, DEPLOYMENT_ARG),
-                        issuer: required_string(matches, ISSUER_ARG),
-                        json: matches.get_flag(JSON_ARG),
-                        common: common_options(matches),
-                    }))
-                }
+                Some((STATUS_COMMAND, matches)) => Ok(RenewalStatusOptions {
+                    deployment: required_string(matches, DEPLOYMENT_ARG),
+                    issuer: required_string(matches, ISSUER_ARG),
+                    json: matches.get_flag(JSON_ARG),
+                    common: common_options(matches),
+                }),
                 _ => Err(AuthCommandError::Usage(usage())),
             },
             _ => Err(AuthCommandError::Usage(usage())),
@@ -217,8 +206,8 @@ where
         return Ok(());
     }
 
-    let command = AuthOptions::parse(args)?;
-    run_command(command)
+    let options = AuthOptions::parse(args)?;
+    run_renewal_status(&options)
 }
 
 fn usage() -> String {
@@ -270,12 +259,6 @@ fn status_command() -> ClapCommand {
         .arg(flag_arg(JSON_ARG).long(JSON_ARG).help("Print JSON output"))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
-}
-
-fn run_command(command: AuthCommand) -> Result<(), AuthCommandError> {
-    match command {
-        AuthCommand::RenewalStatus(options) => run_renewal_status(&options),
-    }
 }
 
 fn run_renewal_status(options: &RenewalStatusOptions) -> Result<(), AuthCommandError> {

@@ -29,12 +29,8 @@ const INTENT_TTL_SECONDS: u64 = 60 * 60;
 
 #[derive(Debug)]
 pub struct CostGuardPermit {
-    _cost_class: CostClass,
-    _quota_key: IntentResourceKey,
     pub reservation_id: IntentId,
-    _payer: Principal,
     quota_intent_id: IntentId,
-    _private: (),
 }
 
 impl CostGuardPermit {
@@ -186,7 +182,7 @@ impl CostGuardOps {
         let quota_intent_id = IntentStoreOps::allocate_intent_id()?;
         let quota_record = IntentStoreOps::try_reserve(
             quota_intent_id,
-            quota_key.clone(),
+            quota_key,
             1,
             request.now_secs,
             Some(INTENT_TTL_SECONDS),
@@ -216,12 +212,8 @@ impl CostGuardOps {
         };
 
         Ok(CostGuardPermit {
-            _cost_class: request.cost_class,
-            _quota_key: quota_key,
             reservation_id,
-            _payer: request.payer,
             quota_intent_id,
-            _private: (),
         })
     }
 

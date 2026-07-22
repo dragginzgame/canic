@@ -11,7 +11,6 @@ mod token;
 use crate::{
     access::AccessError,
     cdk::types::Principal,
-    ids::EndpointCallKind,
     ops::{runtime::env::EnvOps, storage::registry::subnet::SubnetRegistryOps},
 };
 use std::fmt;
@@ -108,9 +107,8 @@ pub fn validate_delegated_session_subject(
 pub(crate) fn delegated_token_verified(
     authenticated_subject: Principal,
     required_scope: Option<&str>,
-    call_kind: EndpointCallKind,
 ) -> Result<Principal, AccessError> {
-    token::delegated_token_verified(authenticated_subject, required_scope, call_kind)
+    token::delegated_token_verified(authenticated_subject, required_scope)
 }
 
 #[cfg(test)]
