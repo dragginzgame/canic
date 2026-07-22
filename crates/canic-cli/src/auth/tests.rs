@@ -53,6 +53,18 @@ fn renewal_help_names_chain_key_status_surface() {
 }
 
 #[test]
+fn auth_renewal_candid_method_must_be_a_query() {
+    let path = Path::new("root.did");
+    validate_auth_query_method(path, "service : { status : () -> () query; }", "status")
+        .expect("query method should be accepted");
+
+    let error = validate_auth_query_method(path, "service : { status : () -> (); }", "status")
+        .expect_err("update method should be rejected");
+
+    assert!(matches!(error, AuthCommandError::MethodModeMismatch { .. }));
+}
+
+#[test]
 fn top_level_forwards_auth_global_icp_and_environment() {
     let err = run([
         OsString::from("--icp"),
@@ -449,7 +461,6 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
         _options: &CommonOptions,
         _deployment: &str,
         _method: &str,
-        _expected_mode: AuthRenewalMethodMode,
     ) -> Result<AuthRootCallTarget, AuthCommandError> {
         Ok(AuthRootCallTarget {
             target: AuthRootTarget {
@@ -490,7 +501,6 @@ impl AuthRenewalRuntime for ScriptedAuthRenewalRuntime {
         root_target: &AuthRootCallTarget,
         issuer_pid: &str,
         _method: &str,
-        _expected_mode: AuthRenewalMethodMode,
     ) -> Result<Option<AuthIssuerCallTarget>, AuthCommandError> {
         if root_target
             .registry_entries

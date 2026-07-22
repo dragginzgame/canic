@@ -14,22 +14,21 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.6`.
-- The latest published release is `v0.98.6` at
-  `1704315592c413a0af65ec2378ddf12a5a2b865e`.
-- The `v0.98.6` source tree is
-  `40a6ba75d9408516d0d12415a0008a1a29ad1e7e`; its product-tree hash is
-  `37bacd22cc92fc7f3722410abedeb2bcebd2fdbec9511da66c208b51fb88436b` and
+- The workspace package version is `0.98.7`.
+- The latest published release is `v0.98.7` at
+  `28905ae964c3fda31271ac87367cd329731f464c`.
+- The `v0.98.7` source tree is
+  `dc6cecf36a08468c0292fcc4927af7e05343feee`; its product-tree hash is
+  `8932c79adc98e20e0a42d953ade85aa48a455d6cbc85ea0535c6d37676b36e88` and
   its Cargo.lock SHA-256 is
-  `66a6031218b9bcd6b54158cf251029a86a26899c3271bdbe3a0cc9292452332b`.
-- Released `0.98.6` replaces the remaining handwritten core blob-storage and
-  CLI pending-operation error plumbing with typed declarations. It preserves
-  the maintained variants and operator text while exposing nested Rust error
-  causes consistently.
-- Open `0.98.7` hard-cuts the unproduced generic branches from `canic inspect`.
-  Its successful JSON report has one mandatory runtime-status payload and no
-  always-null health/readiness or always-empty fallback diagnostic fields; the
-  existing meaningful values, text behavior, and exit behavior remain intact.
+  `4293421d8a24e62be2db71909a19cbc2500ccd4051576cd5e7dd957852541672`.
+- Released `0.98.7` hard-cuts the unproduced generic branches from
+  `canic inspect`. Its successful JSON report has one mandatory runtime-status
+  payload and no always-null health/readiness or always-empty fallback fields.
+- Open `0.98.8` makes auth-renewal Candid validation express its sole query
+  requirement directly. The one-variant internal mode taxonomy and its
+  unreachable comparison are removed while typed rejection, CLI output, and
+  JSON remain intact.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1053,14 +1052,14 @@ First primary results:
 
 ## Next Action
 
-The separately accepted open `0.98.4` host/config consolidation has passed its
-targeted tests, strict affected-crate Clippy, formatting, layering, changelog,
-stale-symbol, and diff-hygiene checks. It is ready for maintainer-owned full
-release and deployment validation. Do not extend it into ICP-refill or another
-general cleanup audit. The 0.98 architectural-sediment scope remains closed.
-Do not inspect or edit the stale local Toko repository, change Cargo package
-versions outside the maintainer-owned release flow, or commit, tag, publish,
-or push these shared-worktree changes without maintainer action.
+The open `0.98.8` auth-renewal query-contract simplification has passed its
+focused tests, strict CLI Clippy, formatting, layering, changelog, stale-symbol,
+and diff-hygiene checks. It is ready for maintainer-owned full release and
+deployment validation. The 0.98 architectural-sediment scope remains closed;
+further cleanup must stay bounded to newly proven residue rather than reopening
+retained candidates. Do not inspect or edit the stale local Toko repository,
+change Cargo package versions outside the maintainer-owned release flow, or
+commit, tag, publish, or push shared-worktree changes without maintainer action.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with
