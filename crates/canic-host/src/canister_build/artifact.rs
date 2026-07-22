@@ -13,8 +13,7 @@ use crate::{
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
-        resolve_declared_role_package_contract_from_config,
-        validate_declared_role_package_from_config,
+        resolve_declared_role_package_contract, validate_declared_role_package,
     },
     should_export_candid_artifacts,
 };
@@ -144,7 +143,7 @@ pub fn resolve_canister_artifact_build_spec(
     let canister_name = context.role.as_str();
     let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
     validate_artifact_role_attached(config, canister_name)?;
-    let evidence = match validate_declared_role_package_from_config(
+    let evidence = match validate_declared_role_package(
         &context.config_path,
         config,
         &role,
@@ -173,7 +172,7 @@ fn require_declared_role_contract(
     config: &canic_core::bootstrap::compiled::ConfigModel,
     evidence: &RoleCargoGraphEvidence,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match resolve_declared_role_package_contract_from_config(config, evidence) {
+    match resolve_declared_role_package_contract(config, evidence) {
         canic_core::role_contract::RoleContractResolution::Resolved { .. } => Ok(()),
         canic_core::role_contract::RoleContractResolution::Rejected { errors } => Err(errors
             .iter()

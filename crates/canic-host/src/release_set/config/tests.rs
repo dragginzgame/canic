@@ -63,7 +63,7 @@ fn public_projection_preserves_config_path_and_core_parse_source() {
     let config_path = root.join("canic.toml");
     fs::write(&config_path, "controllers = [").expect("write invalid config");
 
-    let error = configured_controllers(&config_path).expect_err("invalid config must fail");
+    let error = FleetConfigSnapshot::load(&config_path).expect_err("invalid config must fail");
     match error {
         FleetConfigError::ConfigInvalid { path, source } => {
             assert_eq!(path, config_path);
@@ -89,7 +89,7 @@ fn public_projection_preserves_typed_nested_unknown_field() {
     let source = format!("{CONFIG}\n[subnets.prime.canisters.root.randomness]\nenabled = true\n");
     fs::write(&config_path, source).expect("write invalid config");
 
-    let error = configured_controllers(&config_path).expect_err("unknown field must fail");
+    let error = FleetConfigSnapshot::load(&config_path).expect_err("unknown field must fail");
     let FleetConfigError::ConfigInvalid { path, source } = error else {
         panic!("expected config-path boundary");
     };
@@ -116,7 +116,7 @@ fn public_projection_preserves_typed_nested_unknown_field() {
 fn public_projection_preserves_read_operation_path_and_io_source() {
     let config_path = temp_root("missing-config").join("canic.toml");
 
-    let error = configured_fleet_name(&config_path).expect_err("missing config must fail");
+    let error = FleetConfigSnapshot::load(&config_path).expect_err("missing config must fail");
 
     assert_io_error(
         &error,
@@ -124,6 +124,29 @@ fn public_projection_preserves_read_operation_path_and_io_source() {
         &config_path,
         io::ErrorKind::NotFound,
     );
+}
+
+#[test]
+fn loaded_snapshot_keeps_one_validated_file_state_across_projections() {
+    let root = temp_root("immutable-snapshot");
+    fs::create_dir_all(&root).expect("create temp root");
+    let config_path = root.join("canic.toml");
+    fs::write(&config_path, CONFIG).expect("write initial config");
+    let snapshot = FleetConfigSnapshot::load(&config_path).expect("load config snapshot");
+
+    fs::write(&config_path, CONFIG.replace("demo", "changed"))
+        .expect("replace config after snapshot load");
+
+    assert_eq!(snapshot.fleet_name(), "demo");
+    assert_eq!(snapshot.deployable_roles(), vec!["root".to_string()]);
+    assert_eq!(
+        FleetConfigSnapshot::load(&config_path)
+            .expect("load replacement snapshot")
+            .fleet_name(),
+        "changed"
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 #[test]

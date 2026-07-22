@@ -130,9 +130,12 @@ have the validated immutable `v0.98.0` anchor.
 
 ## Next Action
 
-Do not extend the closed 0.98 scope. Exercise `v0.98.2` in real deployments;
-future work requires a reproduced defect or separately accepted focused
-objective.
+The architectural-sediment line remains closed. The maintainer separately
+accepted an open `0.98.4` host/config authority cleanup: one parsed config
+snapshot, one optional-root replica query path, and removal of unused host
+surfaces. It does not reopen the 0.98 finding ledger or its excluded
+ICP-refill state machine. After targeted validation, exercise the resulting
+release in real deployments.
 
 ## Slice A Validation
 

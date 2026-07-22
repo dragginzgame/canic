@@ -29,10 +29,7 @@ use canic_host::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
         select_discovered_fleet_config_path,
     },
-    release_set::{
-        FleetConfigError, WorkspaceDiscoveryError, configured_fleet_name,
-        configured_role_lifecycle, workspace_root,
-    },
+    release_set::{FleetConfigError, FleetConfigSnapshot, WorkspaceDiscoveryError, workspace_root},
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -215,7 +212,7 @@ fn validate_attached_role(
     options: &BuildOptions,
     config_path: &Path,
 ) -> Result<(), BuildCommandError> {
-    let roles = configured_role_lifecycle(config_path)?;
+    let roles = FleetConfigSnapshot::load(config_path)?.role_lifecycle();
     let Some(row) = roles.iter().find(|row| row.role == options.role) else {
         return Err(BuildCommandError::Usage(format!(
             "role {}.{} is not declared in {}",
@@ -338,7 +335,9 @@ fn validate_config_fleet(
     config_path: &Path,
     expected_fleet: &str,
 ) -> Result<(), BuildCommandError> {
-    let actual_fleet = configured_fleet_name(config_path)?;
+    let actual_fleet = FleetConfigSnapshot::load(config_path)?
+        .fleet_name()
+        .to_string();
     if actual_fleet != expected_fleet {
         return Err(BuildCommandError::Usage(format!(
             "selected config declares fleet {actual_fleet:?}, not {expected_fleet:?}"

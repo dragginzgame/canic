@@ -26,10 +26,7 @@ use canic_host::{
         read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
-    release_set::{
-        configured_bootstrap_roles, configured_deployable_roles, configured_fleet_name,
-        display_workspace_path,
-    },
+    release_set::{FleetConfigSnapshot, display_workspace_path},
     replica_query,
     table::{ColumnAlign, render_table},
 };
@@ -222,7 +219,7 @@ fn status_deployment_row(
     options: &StatusOptions,
     verify_local_root: bool,
 ) -> StatusDeploymentRow {
-    let Ok(deployment) = configured_fleet_name(path) else {
+    let Ok(config) = FleetConfigSnapshot::load(path) else {
         return StatusDeploymentRow {
             deployment: "invalid config".to_string(),
             deployed: "error".to_string(),
@@ -231,10 +228,11 @@ fn status_deployment_row(
             root: "-".to_string(),
         };
     };
+    let deployment = config.fleet_name().to_string();
     let install_state =
         read_installed_deployment_state_from_root(&options.environment, &deployment, icp_root);
-    let configured_roles = configured_deployable_roles(path);
-    let bootstrap_roles = configured_bootstrap_roles(path);
+    let configured_roles = config.deployable_roles();
+    let bootstrap_roles = config.bootstrap_roles();
     let (deployed, root) = match install_state {
         Ok(state) => (
             deployed_label(
@@ -244,7 +242,7 @@ fn status_deployment_row(
                 icp_root,
                 &state.root_canister_id,
                 verify_local_root,
-                bootstrap_roles.as_deref().unwrap_or(&[]),
+                &bootstrap_roles,
             ),
             state.root_canister_id,
         ),
@@ -255,8 +253,7 @@ fn status_deployment_row(
     };
 
     StatusDeploymentRow {
-        canisters: configured_roles
-            .map_or_else(|_| "invalid".to_string(), |roles| roles.len().to_string()),
+        canisters: configured_roles.len().to_string(),
         config: display_workspace_path(workspace_root, path),
         deployed,
         deployment,

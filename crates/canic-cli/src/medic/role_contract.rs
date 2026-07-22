@@ -13,12 +13,11 @@ use crate::medic::{
 };
 use std::{
     collections::BTreeMap,
-    fs,
     path::{Path, PathBuf},
 };
 
 use canic_core::{
-    bootstrap::parse_config_model,
+    bootstrap::compiled::ConfigModel,
     ids::CanisterRole,
     role_contract::{
         ResolvedRoleContract, RoleContractFinding, RoleContractResolution, RoleFeatureRequirement,
@@ -26,7 +25,7 @@ use canic_core::{
     },
 };
 use canic_host::{
-    release_set::{ConfiguredRoleLifecycle, configured_fleet_name, configured_role_lifecycle},
+    release_set::{ConfiguredRoleLifecycle, FleetConfigSnapshot},
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
         materialize_state_manifest, resolve_declared_role_package_contract,
@@ -43,8 +42,8 @@ pub(super) fn project_config_quality_checks(root: &Path, configs: &[PathBuf]) ->
 
 fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
     let config_display = display_medic_path(root, config);
-    let fleet = match configured_fleet_name(config) {
-        Ok(fleet) => fleet,
+    let snapshot = match FleetConfigSnapshot::load(config) {
+        Ok(snapshot) => snapshot,
         Err(err) => {
             return vec![MedicCheck::fail(
                 MedicCategory::ProjectConfig,
@@ -56,30 +55,24 @@ fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
             )];
         }
     };
-    let roles = match configured_role_lifecycle(config) {
-        Ok(roles) => roles,
-        Err(err) => {
-            return vec![MedicCheck::fail(
-                MedicCategory::ProjectConfig,
-                "fleet_config_missing",
-                config_display,
-                err.to_string(),
-                "repair the fleet config before running deployment checks",
-                MedicSource::FleetConfig,
-            )];
-        }
-    };
-    let required_features_by_role = required_canic_features_by_role(config, &roles);
+    let fleet = snapshot.fleet_name().to_string();
+    let roles = snapshot.role_lifecycle();
+    let required_features_by_role = required_canic_features_by_role(snapshot.model(), &roles);
     roles
         .iter()
         .flat_map(|role| {
             let mut checks = vec![check_role_package_metadata(root, config, role, &fleet)];
             let role_id = CanisterRole::owned(role.role.clone());
-            match validate_declared_role_package(config, &role_id, PackageValidationMode::Passive) {
+            match validate_declared_role_package(
+                config,
+                snapshot.model(),
+                &role_id,
+                PackageValidationMode::Passive,
+            ) {
                 RolePackageValidation::Supported(evidence) => {
                     checks.extend(check_role_contract_resolution(
                         root,
-                        config,
+                        snapshot.model(),
                         role,
                         &evidence,
                         required_features_by_role
@@ -103,23 +96,16 @@ fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
 }
 
 fn required_canic_features_by_role(
-    config: &Path,
+    config: &ConfigModel,
     roles: &[ConfiguredRoleLifecycle],
 ) -> BTreeMap<String, Vec<RoleFeatureRequirement>> {
-    let Ok(config_source) = fs::read_to_string(config) else {
-        return BTreeMap::new();
-    };
-    let Ok(config_model) = parse_config_model(&config_source) else {
-        return BTreeMap::new();
-    };
-
     roles
         .iter()
         .map(|role| {
             let role_id = CanisterRole::owned(role.role.clone());
             (
                 role.role.clone(),
-                required_features_for_role(&config_model, &role_id).unwrap_or_else(|finding| {
+                required_features_for_role(config, &role_id).unwrap_or_else(|finding| {
                     panic!("configured role contract rejected: {finding:?}")
                 }),
             )
@@ -177,7 +163,7 @@ fn check_role_package_metadata(
 
 fn check_role_contract_resolution(
     root: &Path,
-    config: &Path,
+    config: &ConfigModel,
     role: &ConfiguredRoleLifecycle,
     evidence: &RoleCargoGraphEvidence,
     requirements: &[RoleFeatureRequirement],

@@ -20,7 +20,7 @@ use canic_host::{
         project_fleet_roots, select_discovered_fleet_config_path,
     },
     release_set::{
-        FleetConfigError, attach_fleet_role, configured_role_lifecycle, declare_fleet_role,
+        FleetConfigError, FleetConfigSnapshot, attach_fleet_role, declare_fleet_role,
         display_workspace_path, plan_attach_fleet_role, plan_declare_fleet_role,
         plan_rename_fleet_role, rename_fleet_role,
     },
@@ -326,7 +326,7 @@ where
 
     let options = RoleListOptions::parse(args)?;
     let config_path = selected_fleet_config_path(&options.fleet)?;
-    let rows = configured_role_lifecycle(&config_path)?;
+    let rows = FleetConfigSnapshot::load(&config_path)?.role_lifecycle();
     println!("{}", render_role_lifecycle_rows(&rows));
     Ok(())
 }
@@ -342,7 +342,7 @@ where
 
     let options = RoleInspectOptions::parse(args)?;
     let config_path = selected_fleet_config_path(&options.fleet)?;
-    let rows = configured_role_lifecycle(&config_path)?;
+    let rows = FleetConfigSnapshot::load(&config_path)?.role_lifecycle();
     let row = rows
         .iter()
         .find(|row| row.role == options.role)

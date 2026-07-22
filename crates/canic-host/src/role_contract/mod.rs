@@ -11,7 +11,6 @@ pub use descriptor::{
     StateDescriptorRegistry, materialize_state_manifest, validate_state_descriptor_registry,
 };
 
-pub(crate) use package::validate_declared_role_package_from_config;
 pub use package::{
     PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation,
     declared_role_manifest_path, validate_built_in_wasm_store_package,
@@ -19,23 +18,24 @@ pub use package::{
 };
 
 use canic_core::{
-    bootstrap::parse_config_model,
+    bootstrap::compiled::ConfigModel,
     role_contract::{
         BuiltInRoleKind, RoleContractFinding, RoleContractInput, RoleContractResolution,
         RoleContractSource, resolve_role_contract,
     },
 };
-use std::{fs, path::Path};
+use std::path::Path;
 
 #[must_use]
-pub fn resolve_declared_role_contract(
+pub(crate) fn resolve_declared_role_contract(
     config_path: &Path,
+    config: &ConfigModel,
     role: &canic_core::ids::CanisterRole,
     mode: PackageValidationMode,
 ) -> RoleContractResolution {
-    match validate_declared_role_package(config_path, role, mode) {
+    match validate_declared_role_package(config_path, config, role, mode) {
         RolePackageValidation::Supported(evidence) => {
-            resolve_declared_role_package_contract(config_path, &evidence)
+            resolve_declared_role_package_contract(config, &evidence)
         }
         RolePackageValidation::Unsupported(finding) => RoleContractResolution::Rejected {
             errors: vec![finding],
@@ -45,30 +45,7 @@ pub fn resolve_declared_role_contract(
 
 #[must_use]
 pub fn resolve_declared_role_package_contract(
-    config_path: &Path,
-    evidence: &RoleCargoGraphEvidence,
-) -> RoleContractResolution {
-    let Ok(config_source) = fs::read_to_string(config_path) else {
-        return RoleContractResolution::Rejected {
-            errors: vec![RoleContractFinding::DependencyShapeUnsupported {
-                reason: "failed to read role configuration".to_string(),
-            }],
-        };
-    };
-    let Ok(config) = parse_config_model(&config_source) else {
-        return RoleContractResolution::Rejected {
-            errors: vec![RoleContractFinding::DependencyShapeUnsupported {
-                reason: "invalid role configuration".to_string(),
-            }],
-        };
-    };
-
-    resolve_declared_role_package_contract_from_config(&config, evidence)
-}
-
-#[must_use]
-pub(crate) fn resolve_declared_role_package_contract_from_config(
-    config: &canic_core::bootstrap::compiled::ConfigModel,
+    config: &ConfigModel,
     evidence: &RoleCargoGraphEvidence,
 ) -> RoleContractResolution {
     resolve_role_contract(RoleContractInput {

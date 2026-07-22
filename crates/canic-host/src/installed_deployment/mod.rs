@@ -1,8 +1,7 @@
 use crate::{
     icp::{IcpCli, IcpCommandError, existing_local_canister_candid_path},
     install_root::{
-        InstallState, InstallStateError, read_named_deployment_install_state,
-        read_named_deployment_install_state_from_root,
+        InstallState, InstallStateError, read_named_deployment_install_state_from_root,
     },
     registry::{RegistryEntry, RegistryParseError},
     replica_query::ReplicaQueryError,
@@ -105,14 +104,6 @@ pub enum InstalledDeploymentError {
     Io(#[from] std::io::Error),
 }
 
-pub fn resolve_installed_deployment(
-    request: &InstalledDeploymentRequest,
-) -> Result<InstalledDeploymentResolution, InstalledDeploymentError> {
-    let state = read_installed_deployment_state(&request.environment, &request.deployment)?;
-    let (source, entries) = query_registry(request, &state.root_canister_id)?;
-    Ok(installed_deployment_resolution(state, source, entries))
-}
-
 pub fn resolve_installed_deployment_from_root(
     request: &InstalledDeploymentRequest,
     icp_root: &Path,
@@ -142,18 +133,6 @@ fn installed_deployment_resolution(
         registry,
         topology,
     }
-}
-
-pub fn read_installed_deployment_state(
-    environment: &str,
-    deployment: &str,
-) -> Result<InstallState, InstalledDeploymentError> {
-    read_named_deployment_install_state(environment, deployment)
-        .map_err(InstalledDeploymentError::InstallState)?
-        .ok_or_else(|| InstalledDeploymentError::NoInstalledDeployment {
-            environment: environment.to_string(),
-            deployment: deployment.to_string(),
-        })
 }
 
 pub fn read_installed_deployment_state_from_root(
@@ -191,16 +170,6 @@ impl ResolvedDeploymentTopology {
             roles_by_canister,
         }
     }
-}
-
-fn query_registry(
-    request: &InstalledDeploymentRequest,
-    root: &str,
-) -> Result<(InstalledDeploymentSource, Vec<RegistryEntry>), InstalledDeploymentError> {
-    let icp = IcpCli::new(&request.icp, Some(request.environment.clone()));
-    let query = query_subnet_registry(&icp, root, &request.environment, None, None)
-        .map_err(|err| installed_deployment_registry_error(request, root, err))?;
-    Ok((installed_deployment_source(query.source), query.entries))
 }
 
 fn query_registry_from_root(

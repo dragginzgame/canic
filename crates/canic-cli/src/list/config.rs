@@ -6,11 +6,7 @@ use super::{
 use canic_host::{
     install_root::{discover_current_canic_config_choices, select_discovered_fleet_config_path},
     registry::RegistryEntry,
-    release_set::{
-        configured_deployable_roles, configured_role_auto_create, configured_role_capabilities,
-        configured_role_details, configured_role_kinds, configured_role_metrics_profiles,
-        configured_role_topups,
-    },
+    release_set::FleetConfigSnapshot,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -21,14 +17,15 @@ pub(super) fn load_config_role_rows(
     options: &ListOptions,
 ) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
     let config_path = selected_config_path(options)?;
-    let roles = configured_deployable_roles(&config_path)?;
-    let kinds = configured_role_kinds(&config_path)?;
-    let capabilities = configured_role_capabilities(&config_path)?;
-    let auto_create = configured_role_auto_create(&config_path)?;
-    let topups = configured_role_topups(&config_path)?;
-    let metrics = configured_role_metrics_profiles(&config_path)?;
+    let config = FleetConfigSnapshot::load(&config_path)?;
+    let roles = config.deployable_roles();
+    let kinds = config.role_kinds();
+    let capabilities = config.role_capabilities()?;
+    let auto_create = config.role_auto_create();
+    let topups = config.role_topups();
+    let metrics = config.role_metrics_profiles();
     let details = if options.verbose {
-        configured_role_details(&config_path)?
+        config.role_details()
     } else {
         BTreeMap::new()
     };
@@ -79,9 +76,10 @@ pub(super) fn missing_config_roles(
     let Ok(config_path) = selected_config_path(options) else {
         return Vec::new();
     };
-    let Ok(expected) = configured_deployable_roles(&config_path) else {
+    let Ok(config) = FleetConfigSnapshot::load(&config_path) else {
         return Vec::new();
     };
+    let expected = config.deployable_roles();
     let deployed = registry
         .iter()
         .filter_map(|entry| entry.role.as_deref())

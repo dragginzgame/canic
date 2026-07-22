@@ -1,5 +1,5 @@
 use crate::release_set::{
-    WorkspaceDiscoveryError, configured_deployable_roles, configured_fleet_name,
+    FleetConfigSnapshot, WorkspaceDiscoveryError, read_fleet_config_identity,
 };
 use crate::table::{ColumnAlign, render_table};
 use crate::workspace_discovery::normalize_workspace_path;
@@ -181,7 +181,7 @@ fn unique_configs_by_fleet(
 ) -> Result<BTreeMap<String, PathBuf>, ConfigDiscoveryError> {
     let mut by_fleet = BTreeMap::<String, Vec<&PathBuf>>::new();
     for path in choices {
-        if let Ok(fleet) = configured_fleet_name(path) {
+        if let Ok(fleet) = read_fleet_config_identity(path) {
             by_fleet.entry(fleet).or_default().push(path);
         }
     }
@@ -347,11 +347,11 @@ fn config_choice_table(workspace_root: &Path, choices: &[PathBuf]) -> Vec<String
 // Summarize the root-subnet deployable roles for one install config choice.
 fn config_choice_row(workspace_root: &Path, option: usize, path: &Path) -> ConfigChoiceRow {
     let config = display_workspace_path(workspace_root, path);
-    match configured_deployable_roles(path) {
-        Ok(roles) => ConfigChoiceRow {
+    match FleetConfigSnapshot::load(path) {
+        Ok(snapshot) => ConfigChoiceRow {
             option: option.to_string(),
             config,
-            canisters: format_canister_summary(&roles),
+            canisters: format_canister_summary(&snapshot.deployable_roles()),
         },
         Err(_) => ConfigChoiceRow {
             option: option.to_string(),

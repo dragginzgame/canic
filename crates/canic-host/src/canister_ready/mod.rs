@@ -83,10 +83,7 @@ pub fn query_local_canister_ready(
     canister_id: &str,
     icp_root: Option<&Path>,
 ) -> Result<bool, ReplicaQueryError> {
-    icp_root.map_or_else(
-        || replica_query::query_ready(Some(environment), canister_id),
-        |root| replica_query::query_ready_from_root(Some(environment), canister_id, root),
-    )
+    replica_query::query_ready(Some(environment), canister_id, icp_root)
 }
 
 fn query_canister_ready_with_icp(

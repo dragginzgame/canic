@@ -12,13 +12,9 @@ pub use config::{
     AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
     FleetConfigDeclaration, FleetConfigError, FleetConfigIoOperation, FleetConfigMutationConflict,
     FleetConfigNameField, FleetConfigNameIssue, FleetConfigOperation, FleetConfigPackageIssue,
-    FleetConfigTomlOperation, LOCAL_ROOT_MIN_READY_CYCLES, RenamedFleetRole, attach_fleet_role,
-    configured_bootstrap_roles, configured_controllers, configured_deployable_roles,
-    configured_fleet_name, configured_local_root_create_cycles, configured_pool_expectations,
-    configured_role_auto_create, configured_role_capabilities, configured_role_details,
-    configured_role_kinds, configured_role_lifecycle, configured_role_metrics_profiles,
-    configured_role_topups, declare_fleet_role, plan_attach_fleet_role, plan_declare_fleet_role,
-    plan_rename_fleet_role, rename_fleet_role,
+    FleetConfigSnapshot, FleetConfigTomlOperation, LOCAL_ROOT_MIN_READY_CYCLES, RenamedFleetRole,
+    attach_fleet_role, declare_fleet_role, plan_attach_fleet_role, plan_declare_fleet_role,
+    plan_rename_fleet_role, read_fleet_config_identity, rename_fleet_role,
 };
 pub use manifest::{ReleaseSetEntry, RootReleaseSetManifest, load_root_release_set_manifest};
 pub(crate) use manifest::{

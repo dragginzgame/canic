@@ -5,7 +5,6 @@ use toml::Value as TomlValue;
 use crate::{
     cargo_command,
     evidence_envelope::{file_input_fingerprint, sha256_hex},
-    role_contract::{declared_role_manifest_path, finding_detail},
 };
 
 use super::{
@@ -15,22 +14,20 @@ use super::{
 
 pub(super) fn cargo_provenance(
     request: &BuildProvenanceRequest,
+    package_manifest: &Path,
 ) -> Result<CargoProvenanceV1, Box<dyn std::error::Error>> {
-    let role = canic_core::ids::CanisterRole::owned(request.role.clone());
-    let package_manifest = declared_role_manifest_path(&request.config_path, &role)
-        .map_err(|finding| finding_detail(&finding))?;
-    let manifest_source = fs::read_to_string(&package_manifest)?;
+    let manifest_source = fs::read_to_string(package_manifest)?;
     let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
     let cargo_lock_path = request.workspace_root.join("Cargo.lock");
     let package_metadata_fleet = required_manifest_str(
         &manifest,
         &["package", "metadata", "canic", "fleet"],
-        &package_manifest,
+        package_manifest,
     )?;
     let package_metadata_role = required_manifest_str(
         &manifest,
         &["package", "metadata", "canic", "role"],
-        &package_manifest,
+        package_manifest,
     )?;
     if package_metadata_fleet != request.fleet || package_metadata_role != request.role {
         return Err(format!(
@@ -47,8 +44,8 @@ pub(super) fn cargo_provenance(
     Ok(CargoProvenanceV1 {
         cargo_lock_sha256: optional_file_sha256(&cargo_lock_path)?,
         package_manifest_sha256: Some(sha256_hex(manifest_source.as_bytes())),
-        package_name: required_manifest_str(&manifest, &["package", "name"], &package_manifest)?,
-        package_manifest: display_path(&package_manifest, &request.workspace_root),
+        package_name: required_manifest_str(&manifest, &["package", "name"], package_manifest)?,
+        package_manifest: display_path(package_manifest, &request.workspace_root),
         package_metadata_fleet,
         package_metadata_role,
         rustc_version: command_version("rustc", ["--version"]),

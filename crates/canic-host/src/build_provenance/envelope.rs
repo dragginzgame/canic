@@ -3,6 +3,11 @@ use crate::evidence_envelope::{
     EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, PayloadSchemaRefV1,
     evidence_envelope_schema, file_input_fingerprint, json_payload_sha256,
 };
+use crate::{
+    release_set::FleetConfigSnapshot,
+    role_contract::{declared_role_manifest_path, finding_detail},
+};
+use std::path::Path;
 
 use super::{
     artifacts::{artifact_provenance, artifact_transform_provenance},
@@ -23,7 +28,11 @@ pub fn build_provenance_schema() -> PayloadSchemaRefV1 {
 pub fn build_provenance_envelope(
     request: &BuildProvenanceRequest,
 ) -> Result<EvidenceEnvelopeV1, Box<dyn std::error::Error>> {
-    let payload = build_provenance_payload(request)?;
+    let config = FleetConfigSnapshot::load(&request.config_path)?;
+    let role = canic_core::ids::CanisterRole::owned(request.role.clone());
+    let package_manifest = declared_role_manifest_path(&request.config_path, config.model(), &role)
+        .map_err(|finding| finding_detail(&finding))?;
+    let payload = build_provenance_payload(request, &package_manifest)?;
     let payload_sha256 = Some(json_payload_sha256(&payload)?);
     let payload_value = serde_json::to_value(&payload)?;
     let summary = EvidenceSummaryV1 {
@@ -59,7 +68,7 @@ pub fn build_provenance_envelope(
             Some(PayloadSchemaRefV1::internal("canic.config.toml", "1")),
             None,
         )?),
-        inputs: build_input_fingerprints(request)?,
+        inputs: build_input_fingerprints(request, &package_manifest)?,
         payload_schema: build_provenance_schema(),
         payload_sha256,
         payload: payload_value,
@@ -70,6 +79,7 @@ pub fn build_provenance_envelope(
 
 fn build_provenance_payload(
     request: &BuildProvenanceRequest,
+    package_manifest: &Path,
 ) -> Result<BuildProvenanceV1, Box<dyn std::error::Error>> {
     let mut warnings = Vec::new();
     let source = source_provenance(&request.workspace_root);
@@ -95,7 +105,7 @@ fn build_provenance_payload(
         command: request.command.clone(),
         build_status: BuildProvenanceStatusV1::Success,
         source,
-        cargo: cargo_provenance(request)?,
+        cargo: cargo_provenance(request, package_manifest)?,
         artifacts: artifact_provenance(request)?,
         transforms: artifact_transform_provenance(request)?,
         warnings,

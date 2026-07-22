@@ -26,7 +26,7 @@ kind = "root"
     assert!(updated.source.contains("kind = \"canister\""));
     assert!(updated.source.contains("package = \"store\""));
 
-    let lifecycle = configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+    let lifecycle = configured_role_lifecycle_from_config(&parsed_config(&updated.source));
     let store = lifecycle
         .iter()
         .find(|role| role.role == "store")
@@ -120,7 +120,7 @@ kind = "root"
     );
     assert!(updated.source.contains("kind = \"singleton\""));
 
-    let lifecycle = configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+    let lifecycle = configured_role_lifecycle_from_config(&parsed_config(&updated.source));
     let store = lifecycle
         .iter()
         .find(|role| role.role == "store")
@@ -300,7 +300,7 @@ kind = "shard"
         Some("router")
     );
 
-    let lifecycle = configured_role_lifecycle_from_source(&updated.source).expect("role lifecycle");
+    let lifecycle = configured_role_lifecycle_from_config(&parsed_config(&updated.source));
     assert!(lifecycle.iter().any(|role| role.role == "router"));
     assert!(!lifecycle.iter().any(|role| role.role == "hub"));
 }

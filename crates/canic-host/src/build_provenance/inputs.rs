@@ -1,23 +1,18 @@
 use std::path::Path;
 
-use crate::{
-    evidence_envelope::{
-        InputFingerprintV1, InputPathDisplayV1, PayloadSchemaRefV1, file_input_fingerprint,
-    },
-    role_contract::{declared_role_manifest_path, finding_detail},
+use crate::evidence_envelope::{
+    InputFingerprintV1, InputPathDisplayV1, PayloadSchemaRefV1, file_input_fingerprint,
 };
 
 use super::model::BuildProvenanceRequest;
 
 pub(super) fn build_input_fingerprints(
     request: &BuildProvenanceRequest,
+    package_manifest: &Path,
 ) -> Result<Vec<InputFingerprintV1>, Box<dyn std::error::Error>> {
-    let role = canic_core::ids::CanisterRole::owned(request.role.clone());
-    let package_manifest = declared_role_manifest_path(&request.config_path, &role)
-        .map_err(|finding| finding_detail(&finding))?;
     let mut inputs = vec![file_input_fingerprint(
         "cargo_package_manifest",
-        &package_manifest,
+        package_manifest,
         &request.workspace_root,
         Some(PayloadSchemaRefV1::internal(
             "cargo.package_manifest.toml",

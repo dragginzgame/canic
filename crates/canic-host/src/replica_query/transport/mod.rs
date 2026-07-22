@@ -16,21 +16,13 @@ pub(super) fn local_query(
     environment: Option<&str>,
     canister: &str,
     method: &str,
+    icp_root: Option<&Path>,
 ) -> Result<Vec<u8>, ReplicaQueryError> {
-    local_query_with_endpoint(canister, method, local_replica_endpoint(environment))
-}
-
-pub(super) fn local_query_from_root(
-    environment: Option<&str>,
-    canister: &str,
-    method: &str,
-    icp_root: &Path,
-) -> Result<Vec<u8>, ReplicaQueryError> {
-    local_query_with_endpoint(
-        canister,
-        method,
-        local_replica_endpoint_from_root(environment, icp_root),
-    )
+    let endpoint = icp_root.map_or_else(
+        || local_replica_endpoint(environment),
+        |root| local_replica_endpoint_from_root(environment, root),
+    );
+    local_query_with_endpoint(canister, method, endpoint)
 }
 
 #[must_use]
