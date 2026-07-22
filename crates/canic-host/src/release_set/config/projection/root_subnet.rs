@@ -1,8 +1,6 @@
 use super::super::model::{
     ConfiguredPoolExpectation, DEFAULT_INITIAL_CYCLES, LOCAL_ROOT_MIN_READY_CYCLES,
 };
-use super::parse_projection_config;
-use crate::release_set::config::FleetConfigError;
 use canic_core::{
     bootstrap::compiled::{ConfigModel, SubnetConfig},
     ids::CanisterRole,
@@ -25,11 +23,10 @@ impl RootSubnetRoleScope {
 }
 
 // Estimate local root create funding from the root subnet bootstrap obligations.
-pub(in crate::release_set) fn configured_local_root_create_cycles_from_source(
-    config_source: &str,
-) -> Result<u128, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
-    let subnet = root_subnet(&config);
+pub(in crate::release_set) fn configured_local_root_create_cycles_from_config(
+    config: &ConfigModel,
+) -> u128 {
+    let subnet = root_subnet(config);
 
     let mut cycles = subnet
         .get_canister(&CanisterRole::WASM_STORE)
@@ -43,15 +40,14 @@ pub(in crate::release_set) fn configured_local_root_create_cycles_from_source(
         u128::from(subnet.pool.minimum_size).saturating_mul(DEFAULT_INITIAL_CYCLES),
     );
 
-    Ok(cycles.saturating_add(LOCAL_ROOT_MIN_READY_CYCLES))
+    cycles.saturating_add(LOCAL_ROOT_MIN_READY_CYCLES)
 }
 
 // Enumerate configured pool identities for the single subnet that owns `root`.
-pub(in crate::release_set) fn configured_pool_expectations_from_source(
-    config_source: &str,
-) -> Result<Vec<ConfiguredPoolExpectation>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
-    let subnet = root_subnet(&config);
+pub(in crate::release_set) fn configured_pool_expectations_from_config(
+    config: &ConfigModel,
+) -> Vec<ConfiguredPoolExpectation> {
+    let subnet = root_subnet(config);
     let mut pools = BTreeMap::<String, ConfiguredPoolExpectation>::new();
 
     for canister in subnet.canisters.values() {
@@ -90,7 +86,7 @@ pub(in crate::release_set) fn configured_pool_expectations_from_source(
         }
     }
 
-    Ok(pools.into_values().collect())
+    pools.into_values().collect()
 }
 
 // Project ordinary release members from one already-validated configuration snapshot.
@@ -100,18 +96,17 @@ pub fn configured_release_roles_from_config(config: &ConfigModel) -> Vec<String>
 
 // Enumerate deployable roles for the single subnet that owns `root`, except the
 // implicit `wasm_store` bootstrap canister.
-pub(in crate::release_set) fn configured_deployable_roles_from_source(
-    config_source: &str,
-) -> Result<Vec<String>, FleetConfigError> {
-    configured_root_subnet_roles_from_source(config_source, RootSubnetRoleScope::Deployable)
+pub(in crate::release_set) fn configured_deployable_roles_from_config(
+    config: &ConfigModel,
+) -> Vec<String> {
+    configured_root_subnet_roles(config, RootSubnetRoleScope::Deployable)
 }
 
 // Enumerate roles expected to be present once root bootstrap has completed.
-pub(in crate::release_set) fn configured_bootstrap_roles_from_source(
-    config_source: &str,
-) -> Result<Vec<String>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
-    let subnet = root_subnet(&config);
+pub(in crate::release_set) fn configured_bootstrap_roles_from_config(
+    config: &ConfigModel,
+) -> Vec<String> {
+    let subnet = root_subnet(config);
 
     let mut roles = BTreeSet::<String>::new();
     roles.insert(CanisterRole::ROOT.as_str().to_string());
@@ -144,16 +139,7 @@ pub(in crate::release_set) fn configured_bootstrap_roles_from_source(
         }
     }
 
-    Ok(sort_root_subnet_roles(roles.into_iter().collect()))
-}
-
-// Enumerate roles for the single configured subnet that owns `root`.
-fn configured_root_subnet_roles_from_source(
-    config_source: &str,
-    scope: RootSubnetRoleScope,
-) -> Result<Vec<String>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
-    Ok(configured_root_subnet_roles(&config, scope))
+    sort_root_subnet_roles(roles.into_iter().collect())
 }
 
 fn configured_root_subnet_roles(config: &ConfigModel, scope: RootSubnetRoleScope) -> Vec<String> {

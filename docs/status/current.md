@@ -14,18 +14,24 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.2`.
-- The latest published release is `v0.98.2` at
-  `73973fc24c407b1732de1a142d4990b5cb6becf6`.
-- The `v0.98.2` source tree is
-  `a53cc20e4533f7c7277e2fda3c594ecba8eb99ac`; its product-tree hash is
-  `961b30a138f55e4644b34372b51bd595abbca933234ed39b07b598113d90c0d3` and
+- The workspace package version is `0.98.3`.
+- The latest published release is `v0.98.3` at
+  `672db5bbde1b2f6b7ec822161f134c77c58e4c29`.
+- The `v0.98.3` source tree is
+  `e9e2ecbea9d9ab6c9aa4a6144f36e33610739e03`; its product-tree hash is
+  `1ac9861e5ed5d73832679917d972ca8c9ef74a2f2215617c0d80ef507d257bb3` and
   its Cargo.lock SHA-256 is
-  `dc6355881a2dc3856cb8a991b03b5b368e73dc5398a9da599fcb68be63721458`.
-- Open `0.98.3` is a bounded post-closeout bootstrap-build correction. It
+  `59404683fecb63eb444dce4d4a163ac69d2449bd29a018b7ea31c7eacdce6b99`.
+- Released `0.98.3` is a bounded post-closeout bootstrap-build correction. It
   makes implicit Wasm-store package selection deterministic, repairs the
   packaged-downstream proof, centralizes generated dependency/profile
   authority, and declares `ic-cdk 0.20.2` without changing package versions.
+- Open `0.98.4` is a separately accepted code-size and authority cleanup. One
+  immutable `FleetConfigSnapshot` now owns host/CLI config projections and
+  role-contract input, direct local-replica queries share one optional-root
+  transport, and unused implicit-root and schema-getter APIs are removed as a
+  pre-1.0 hard cut. Package versions remain at `0.98.3` until maintainer-owned
+  release preparation.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1049,9 +1055,11 @@ First primary results:
 
 ## Next Action
 
-Complete targeted validation of the bounded open `0.98.3` bootstrap-build
-correction, then hand the patch to the maintainer-owned release flow. This
-does not reopen the closed 0.98 architectural-sediment scope.
+The separately accepted open `0.98.4` host/config consolidation has passed its
+targeted tests, strict affected-crate Clippy, formatting, layering, changelog,
+stale-symbol, and diff-hygiene checks. It is ready for maintainer-owned full
+release and deployment validation. Do not extend it into ICP-refill or another
+general cleanup audit. The 0.98 architectural-sediment scope remains closed.
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish,
 or push these shared-worktree changes without maintainer action.

@@ -30,8 +30,10 @@ fn configured_role_capabilities_resolves_exact_role_package_contracts() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let config = workspace.join("canisters/audit/root_probe/canic.toml");
 
-    let capabilities =
-        crate::release_set::configured_role_capabilities(&config).expect("resolved capabilities");
+    let capabilities = crate::release_set::FleetConfigSnapshot::load(&config)
+        .expect("load config")
+        .role_capabilities()
+        .expect("resolved capabilities");
     assert!(capabilities.is_empty());
 }
 
@@ -94,7 +96,7 @@ kind = "replica"
 [subnets.prime.canisters.scale_replica.metrics]
 profile = "full"
 "#;
-    let profiles = configured_role_metrics_profiles_from_source(config).expect("metrics profiles");
+    let profiles = configured_role_metrics_profiles_from_config(&parsed_config(config));
 
     assert_eq!(profiles.get("root").map(String::as_str), Some("root"));
     assert_eq!(profiles.get("user_hub").map(String::as_str), Some("hub"));
@@ -158,7 +160,7 @@ kind = "service"
 topup.threshold = "10T"
 topup.amount = "4T"
 "#;
-    let topups = configured_role_topups_from_source(config).expect("role topups");
+    let topups = configured_role_topups_from_config(&parsed_config(config));
 
     assert_eq!(
         topups.get("scale_hub").map(String::as_str),

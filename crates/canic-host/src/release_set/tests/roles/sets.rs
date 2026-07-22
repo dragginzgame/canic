@@ -70,7 +70,7 @@ kind = "root"
 kind = "service"
 "#;
 
-    let deployable = configured_deployable_roles_from_source(config).expect("deployable roles");
+    let deployable = configured_deployable_roles_from_config(&parsed_config(config));
     let config = parse_config_model(config).expect("valid config");
     let release = configured_release_roles_from_config(&config);
 
@@ -82,7 +82,7 @@ kind = "service"
 
 #[test]
 fn configured_deployable_roles_include_root_first() {
-    let roles = configured_deployable_roles_from_source(REAL_CONFIG).expect("deployable roles");
+    let roles = configured_deployable_roles_from_config(&parsed_config(REAL_CONFIG));
 
     assert_eq!(roles.first().map(String::as_str), Some("root"));
     assert!(roles.contains(&"user_hub".to_string()));

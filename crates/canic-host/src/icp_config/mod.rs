@@ -3,10 +3,7 @@ use crate::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
         project_fleet_roots,
     },
-    release_set::{
-        FleetConfigError, WorkspaceDiscoveryError, configured_deployable_roles,
-        configured_fleet_name, icp_root,
-    },
+    release_set::{FleetConfigError, FleetConfigSnapshot, WorkspaceDiscoveryError, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
 use canic_core::ids::BuildNetwork;
@@ -240,7 +237,8 @@ fn discover_project_spec(
     let mut matched_filter = fleet_filter.is_none();
 
     for config_path in choices {
-        let fleet = configured_fleet_name(&config_path)?;
+        let config = FleetConfigSnapshot::load(&config_path)?;
+        let fleet = config.fleet_name().to_string();
         if let Some(filter) = fleet_filter {
             if filter != fleet {
                 continue;
@@ -248,7 +246,7 @@ fn discover_project_spec(
             matched_filter = true;
         }
 
-        let roles = configured_deployable_roles(&config_path)?;
+        let roles = config.deployable_roles();
         for role in &roles {
             if seen_canisters.insert(role.clone()) {
                 canisters.push(role.clone());

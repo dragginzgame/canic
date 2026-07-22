@@ -6,10 +6,11 @@ mod projection;
 mod tests;
 
 use crate::durable_io::write_bytes;
+use canic_core::bootstrap::{compiled::ConfigModel, parse_config_model};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 pub use error::{
@@ -26,13 +27,147 @@ pub(super) use mutation::{
 };
 pub use projection::configured_release_roles_from_config;
 pub(super) use projection::{
-    configured_bootstrap_roles_from_source, configured_controllers_from_source,
-    configured_deployable_roles_from_source, configured_fleet_name_from_source,
-    configured_local_root_create_cycles_from_source, configured_pool_expectations_from_source,
-    configured_role_auto_create_from_source, configured_role_details_from_source,
-    configured_role_kinds_from_source, configured_role_lifecycle_from_source,
-    configured_role_metrics_profiles_from_source, configured_role_topups_from_source,
+    configured_bootstrap_roles_from_config, configured_controllers_from_config,
+    configured_deployable_roles_from_config, configured_local_root_create_cycles_from_config,
+    configured_pool_expectations_from_config, configured_role_auto_create_from_config,
+    configured_role_details_from_config, configured_role_kinds_from_config,
+    configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
+    configured_role_topups_from_config, fleet_identity_from_source,
 };
+
+/// One immutable, validated view of a fleet configuration file.
+///
+/// Commands that need several projections should load this once so every
+/// decision is derived from the same bytes on disk.
+#[derive(Debug)]
+pub struct FleetConfigSnapshot {
+    path: PathBuf,
+    config: ConfigModel,
+    fleet_name: String,
+}
+
+impl FleetConfigSnapshot {
+    pub fn load(path: &Path) -> Result<Self, FleetConfigError> {
+        let source = read_config_source(path)?;
+        let config = parse_config_model(&source)
+            .map_err(|source| FleetConfigError::CoreConfig {
+                operation: FleetConfigOperation::Project,
+                source,
+            })
+            .map_err(|error| error.at_config_path(path))?;
+        let fleet_name = config
+            .fleet_name()
+            .ok_or(FleetConfigError::DeclarationMissing {
+                declaration: FleetConfigDeclaration::FleetName,
+            })
+            .map_err(|error| error.at_config_path(path))?
+            .to_string();
+        Ok(Self {
+            path: path.to_path_buf(),
+            config,
+            fleet_name,
+        })
+    }
+
+    #[must_use]
+    pub const fn model(&self) -> &ConfigModel {
+        &self.config
+    }
+
+    #[must_use]
+    pub const fn fleet_name(&self) -> &str {
+        self.fleet_name.as_str()
+    }
+
+    #[must_use]
+    pub fn deployable_roles(&self) -> Vec<String> {
+        configured_deployable_roles_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn bootstrap_roles(&self) -> Vec<String> {
+        configured_bootstrap_roles_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn local_root_create_cycles(&self) -> u128 {
+        configured_local_root_create_cycles_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn controllers(&self) -> Vec<String> {
+        configured_controllers_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn pool_expectations(&self) -> Vec<ConfiguredPoolExpectation> {
+        configured_pool_expectations_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn role_lifecycle(&self) -> Vec<ConfiguredRoleLifecycle> {
+        configured_role_lifecycle_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn role_kinds(&self) -> BTreeMap<String, String> {
+        configured_role_kinds_from_config(&self.config)
+    }
+
+    pub fn role_capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, FleetConfigError> {
+        let mut projected = BTreeMap::new();
+
+        for role in self.config.attached_roles() {
+            let contract = match crate::role_contract::resolve_declared_role_contract(
+                &self.path,
+                &self.config,
+                &role,
+                crate::role_contract::PackageValidationMode::Passive,
+            ) {
+                canic_core::role_contract::RoleContractResolution::Resolved { contract } => {
+                    contract
+                }
+                canic_core::role_contract::RoleContractResolution::Rejected { errors } => {
+                    return Err(FleetConfigError::RoleContractRejected { errors });
+                }
+            };
+            let labels = project_role_capabilities(&contract.capabilities);
+            if !labels.is_empty() {
+                projected.insert(role.as_str().to_string(), labels);
+            }
+        }
+
+        Ok(projected)
+    }
+
+    #[must_use]
+    pub fn role_auto_create(&self) -> BTreeSet<String> {
+        configured_role_auto_create_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn role_topups(&self) -> BTreeMap<String, String> {
+        configured_role_topups_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn role_metrics_profiles(&self) -> BTreeMap<String, String> {
+        configured_role_metrics_profiles_from_config(&self.config)
+    }
+
+    #[must_use]
+    pub fn role_details(&self) -> BTreeMap<String, Vec<String>> {
+        configured_role_details_from_config(&self.config)
+    }
+}
+
+/// Read only `[fleet].name` for candidate discovery and malformed-config diagnostics.
+///
+/// Operational projections must use [`FleetConfigSnapshot`].
+pub fn read_fleet_config_identity(path: &Path) -> Result<String, FleetConfigError> {
+    let source = read_config_source(path)?;
+    fleet_identity_from_source(&source).map_err(|error| error.at_config_path(path))
+}
 
 // Validate a package-backed role declaration without writing `canic.toml`.
 pub fn plan_declare_fleet_role(
@@ -73,59 +208,6 @@ pub fn plan_rename_fleet_role(
         rename_fleet_role_source(&source, config_path, expected_fleet, old_role, new_role)
             .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
-}
-
-// Enumerate deployable roles in the single subnet that owns `root`.
-pub fn configured_deployable_roles(config_path: &Path) -> Result<Vec<String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_deployable_roles_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate roles expected to exist after root bootstrap for status checks.
-pub fn configured_bootstrap_roles(config_path: &Path) -> Result<Vec<String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_bootstrap_roles_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Estimate local root cycles needed to create bootstrap-owned canisters.
-pub fn configured_local_root_create_cycles(config_path: &Path) -> Result<u128, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_local_root_create_cycles_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Read the required operator fleet name from an install config.
-pub fn configured_fleet_name(config_path: &Path) -> Result<String, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_fleet_name_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate configured top-level deployment controllers from an install config.
-pub fn configured_controllers(config_path: &Path) -> Result<Vec<String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_controllers_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate configured pool identities for the single subnet that owns `root`.
-pub fn configured_pool_expectations(
-    config_path: &Path,
-) -> Result<Vec<ConfiguredPoolExpectation>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_pool_expectations_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate declared role lifecycle state for one fleet config.
-pub fn configured_role_lifecycle(
-    config_path: &Path,
-) -> Result<Vec<ConfiguredRoleLifecycle>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_role_lifecycle_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
 }
 
 // Declare a package-backed role without attaching it to topology.
@@ -233,48 +315,6 @@ fn commit_role_rename_sources_with_writer(
     Ok(())
 }
 
-// Enumerate configured role kinds across all subnets for operator-facing tables.
-pub fn configured_role_kinds(
-    config_path: &Path,
-) -> Result<BTreeMap<String, String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_role_kinds_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate enabled config capabilities across all configured roles.
-pub fn configured_role_capabilities(
-    config_path: &Path,
-) -> Result<BTreeMap<String, Vec<String>>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    let config = canic_core::bootstrap::parse_config_model(&config_source)
-        .map_err(|source| FleetConfigError::CoreConfig {
-            operation: FleetConfigOperation::Project,
-            source,
-        })
-        .map_err(|error| error.at_config_path(config_path))?;
-    let mut projected = BTreeMap::new();
-
-    for role in config.attached_roles() {
-        let contract = match crate::role_contract::resolve_declared_role_contract(
-            config_path,
-            &role,
-            crate::role_contract::PackageValidationMode::Passive,
-        ) {
-            canic_core::role_contract::RoleContractResolution::Resolved { contract } => contract,
-            canic_core::role_contract::RoleContractResolution::Rejected { errors } => {
-                return Err(FleetConfigError::RoleContractRejected { errors });
-            }
-        };
-        let labels = project_role_capabilities(&contract.capabilities);
-        if !labels.is_empty() {
-            projected.insert(role.as_str().to_string(), labels);
-        }
-    }
-
-    Ok(projected)
-}
-
 pub(in crate::release_set) fn project_role_capabilities(
     capabilities: &BTreeSet<canic_core::role_contract::RoleCapabilityKey>,
 ) -> Vec<String> {
@@ -308,42 +348,6 @@ pub(in crate::release_set) fn project_role_capabilities(
         }
     }
     labels.into_iter().map(str::to_string).collect()
-}
-
-// Enumerate roles derived for root auto-create.
-pub fn configured_role_auto_create(
-    config_path: &Path,
-) -> Result<BTreeSet<String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_role_auto_create_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate configured top-up policy summaries across all configured roles.
-pub fn configured_role_topups(
-    config_path: &Path,
-) -> Result<BTreeMap<String, String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_role_topups_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate resolved metrics profiles across all configured roles.
-pub fn configured_role_metrics_profiles(
-    config_path: &Path,
-) -> Result<BTreeMap<String, String>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_role_metrics_profiles_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
-}
-
-// Enumerate verbose configured details across all configured roles.
-pub fn configured_role_details(
-    config_path: &Path,
-) -> Result<BTreeMap<String, Vec<String>>, FleetConfigError> {
-    let config_source = read_config_source(config_path)?;
-    configured_role_details_from_source(&config_source)
-        .map_err(|error| error.at_config_path(config_path))
 }
 
 fn read_config_source(config_path: &Path) -> Result<String, FleetConfigError> {

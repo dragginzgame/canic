@@ -1,16 +1,14 @@
 use super::super::model::ConfiguredRoleLifecycle;
 use super::labels::metrics_profile_label;
-use super::parse_projection_config;
 use crate::format::cycles_tc;
-use crate::release_set::config::{FleetConfigDeclaration, FleetConfigError};
+use canic_core::bootstrap::compiled::ConfigModel;
 use canic_core::ids::CanisterRole;
 use std::collections::{BTreeMap, BTreeSet};
 
-// Enumerate configured role kinds from raw config source.
-pub(in crate::release_set) fn configured_role_kinds_from_source(
-    config_source: &str,
-) -> Result<BTreeMap<String, String>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
+// Enumerate configured role kinds from one validated snapshot.
+pub(in crate::release_set) fn configured_role_kinds_from_config(
+    config: &ConfigModel,
+) -> BTreeMap<String, String> {
     let mut kinds = BTreeMap::<String, String>::new();
 
     for subnet in config.subnets.values() {
@@ -29,19 +27,16 @@ pub(in crate::release_set) fn configured_role_kinds_from_source(
         }
     }
 
-    Ok(kinds)
+    kinds
 }
 
-// Enumerate declared role lifecycle state from raw config source.
-pub(in crate::release_set) fn configured_role_lifecycle_from_source(
-    config_source: &str,
-) -> Result<Vec<ConfiguredRoleLifecycle>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
+// Enumerate declared role lifecycle state from one validated snapshot.
+pub(in crate::release_set) fn configured_role_lifecycle_from_config(
+    config: &ConfigModel,
+) -> Vec<ConfiguredRoleLifecycle> {
     let fleet = config
         .fleet_name()
-        .ok_or(FleetConfigError::DeclarationMissing {
-            declaration: FleetConfigDeclaration::FleetName,
-        })?
+        .expect("validated config must declare [fleet].name")
         .to_string();
     let attached_roles = config.attached_roles();
     let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
@@ -82,7 +77,7 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_source(
         }
     }
 
-    Ok(config
+    config
         .roles
         .iter()
         .map(|(role, declaration)| {
@@ -99,14 +94,13 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_source(
                 topology: topology.get(role).map(|labels| labels.join(",")),
             }
         })
-        .collect())
+        .collect()
 }
 
-// Enumerate derived auto-created service roles from raw config source.
-pub(in crate::release_set) fn configured_role_auto_create_from_source(
-    config_source: &str,
-) -> Result<BTreeSet<String>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
+// Enumerate derived auto-created service roles from one validated snapshot.
+pub(in crate::release_set) fn configured_role_auto_create_from_config(
+    config: &ConfigModel,
+) -> BTreeSet<String> {
     let mut auto_create = BTreeSet::<String>::new();
 
     for subnet in config.subnets.values() {
@@ -118,14 +112,13 @@ pub(in crate::release_set) fn configured_role_auto_create_from_source(
         );
     }
 
-    Ok(auto_create)
+    auto_create
 }
 
-// Enumerate configured top-up policy summaries from raw config source.
-pub(in crate::release_set) fn configured_role_topups_from_source(
-    config_source: &str,
-) -> Result<BTreeMap<String, String>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
+// Enumerate configured top-up policy summaries from one validated snapshot.
+pub(in crate::release_set) fn configured_role_topups_from_config(
+    config: &ConfigModel,
+) -> BTreeMap<String, String> {
     let mut topups = BTreeMap::<String, String>::new();
 
     for subnet in config.subnets.values() {
@@ -143,14 +136,13 @@ pub(in crate::release_set) fn configured_role_topups_from_source(
         }
     }
 
-    Ok(topups)
+    topups
 }
 
-// Enumerate resolved metrics profiles from raw config source.
-pub(in crate::release_set) fn configured_role_metrics_profiles_from_source(
-    config_source: &str,
-) -> Result<BTreeMap<String, String>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
+// Enumerate resolved metrics profiles from one validated snapshot.
+pub(in crate::release_set) fn configured_role_metrics_profiles_from_config(
+    config: &ConfigModel,
+) -> BTreeMap<String, String> {
     let mut profiles = BTreeMap::<String, String>::new();
 
     for subnet in config.subnets.values() {
@@ -169,5 +161,5 @@ pub(in crate::release_set) fn configured_role_metrics_profiles_from_source(
         }
     }
 
-    Ok(profiles)
+    profiles
 }

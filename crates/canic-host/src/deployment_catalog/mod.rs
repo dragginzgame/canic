@@ -84,11 +84,6 @@ pub enum DeploymentCatalogError {
     StateDirectory { path: PathBuf, source: io::Error },
 }
 
-#[must_use]
-pub const fn deployment_catalog_report_schema_id() -> &'static str {
-    DEPLOYMENT_CATALOG_REPORT_SCHEMA_ID
-}
-
 pub fn build_deployment_catalog_report(
     request: &DeploymentCatalogRequest,
 ) -> Result<DeploymentCatalogReportV1, DeploymentCatalogError> {

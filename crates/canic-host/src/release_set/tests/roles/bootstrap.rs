@@ -75,7 +75,7 @@ canister_role = "scale_replica"
 [subnets.prime.canisters.scale_replica]
 kind = "replica"
 "#;
-    let pools = configured_pool_expectations_from_source(config).expect("pool expectations");
+    let pools = configured_pool_expectations_from_config(&parsed_config(config));
 
     assert_eq!(pools.len(), 3);
     assert!(
@@ -150,7 +150,7 @@ initial_cycles = "7T"
 kind = "service"
 "#;
 
-    let cycles = configured_local_root_create_cycles_from_source(config).expect("cycles");
+    let cycles = configured_local_root_create_cycles_from_config(&parsed_config(config));
 
     assert_eq!(cycles, 127_000_000_000_000);
 }
@@ -209,7 +209,7 @@ kind = "service"
 [subnets.prime.canisters.user_hub]
 kind = "service"
 "#;
-    let auto_create = configured_role_auto_create_from_source(config).expect("auto create roles");
+    let auto_create = configured_role_auto_create_from_config(&parsed_config(config));
 
     assert!(auto_create.contains("app"));
     assert!(auto_create.contains("user_hub"));
@@ -282,7 +282,7 @@ kind = "shard"
 [subnets.prime.canisters.role_baseline]
 kind = "replica"
 "#;
-    let roles = configured_bootstrap_roles_from_source(config).expect("bootstrap roles");
+    let roles = configured_bootstrap_roles_from_config(&parsed_config(config));
 
     assert_eq!(
         roles,

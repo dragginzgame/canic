@@ -1,14 +1,12 @@
 use super::super::model::DEFAULT_INITIAL_CYCLES;
 use super::labels::{metrics_profile_label, metrics_profile_tiers_label};
-use super::parse_projection_config;
-use crate::release_set::config::FleetConfigError;
+use canic_core::bootstrap::compiled::ConfigModel;
 use std::collections::{BTreeMap, BTreeSet};
 
-// Enumerate verbose configured details from raw config source.
-pub(in crate::release_set) fn configured_role_details_from_source(
-    config_source: &str,
-) -> Result<BTreeMap<String, Vec<String>>, FleetConfigError> {
-    let config = parse_projection_config(config_source)?;
+// Enumerate verbose configured details from one validated snapshot.
+pub(in crate::release_set) fn configured_role_details_from_config(
+    config: &ConfigModel,
+) -> BTreeMap<String, Vec<String>> {
     let mut details = BTreeMap::<String, BTreeSet<String>>::new();
 
     for role in &config.app_index {
@@ -94,9 +92,9 @@ pub(in crate::release_set) fn configured_role_details_from_source(
         }
     }
 
-    Ok(details
+    details
         .into_iter()
         .filter(|(_, details)| !details.is_empty())
         .map(|(role, details)| (role, details.into_iter().collect()))
-        .collect())
+        .collect()
 }

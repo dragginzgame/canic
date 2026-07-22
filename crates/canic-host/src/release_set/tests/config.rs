@@ -1,16 +1,17 @@
 use super::*;
-use crate::release_set::{FleetConfigDeclaration, FleetConfigError};
+use canic_core::bootstrap::ConfigError;
 
 #[test]
 fn configured_fleet_name_reads_required_config_identity() {
-    let name = configured_fleet_name_from_source(REAL_CONFIG).expect("fleet name");
+    let config = parsed_config(REAL_CONFIG);
+    let name = config.fleet_name().expect("fleet name");
 
     assert_eq!(name, "demo");
 }
 
 #[test]
 fn configured_fleet_name_rejects_missing_config_identity() {
-    let error = configured_fleet_name_from_source(
+    let error = canic_core::bootstrap::parse_config_model(
         r#"
 controllers = []
 app_index = []
@@ -25,17 +26,12 @@ kind = "root"
     )
     .expect_err("missing fleet name must reject");
 
-    assert!(matches!(
-        error,
-        FleetConfigError::DeclarationMissing {
-            declaration: FleetConfigDeclaration::FleetName,
-        }
-    ));
+    assert!(matches!(error, ConfigError::ConfigSchema(_)));
 }
 
 #[test]
 fn configured_controllers_reads_top_level_authority() {
-    let controllers = configured_controllers_from_source(
+    let config = parsed_config(
         r#"
 controllers = [
   "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
@@ -86,8 +82,8 @@ init_mode = "enabled"
 [subnets.prime.canisters.root]
 kind = "root"
 "#,
-    )
-    .expect("configured controllers");
+    );
+    let controllers = configured_controllers_from_config(&config);
 
     assert_eq!(
         controllers,

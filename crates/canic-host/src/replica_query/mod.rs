@@ -10,7 +10,7 @@ mod transport;
 mod wire;
 
 use self::{
-    transport::{local_query, local_query_from_root},
+    transport::local_query,
     wire::{
         decode_bootstrap_status_response, decode_cycle_balance_response,
         decode_subnet_registry_response,
@@ -20,9 +20,7 @@ use crate::registry::{RegistryEntry, RegistryParseError, registry_entries_from_r
 use std::{error::Error, fmt, path::Path};
 
 use candid::Decode;
-use canic_core::dto::{
-    error::Error as CanicError, state::BootstrapStatusResponse, topology::SubnetRegistryResponse,
-};
+use canic_core::dto::{error::Error as CanicError, state::BootstrapStatusResponse};
 
 pub use self::{
     status::{local_replica_root_key_from_root, local_replica_status_reachable_from_root},
@@ -104,18 +102,12 @@ pub fn should_use_local_replica_query(environment: Option<&str>) -> bool {
 }
 
 /// Query `canic_ready` directly through the local replica HTTP API.
-pub fn query_ready(environment: Option<&str>, canister: &str) -> Result<bool, ReplicaQueryError> {
-    let bytes = local_query(environment, canister, "canic_ready")?;
-    Decode!(&bytes, bool).map_err(ReplicaQueryError::Candid)
-}
-
-/// Query `canic_ready` using the configured port from one ICP root.
-pub fn query_ready_from_root(
+pub fn query_ready(
     environment: Option<&str>,
     canister: &str,
-    icp_root: &Path,
+    icp_root: Option<&Path>,
 ) -> Result<bool, ReplicaQueryError> {
-    let bytes = local_query_from_root(environment, canister, "canic_ready", icp_root)?;
+    let bytes = local_query(environment, canister, "canic_ready", icp_root)?;
     Decode!(&bytes, bool).map_err(ReplicaQueryError::Candid)
 }
 
@@ -125,7 +117,12 @@ pub fn query_bootstrap_status_from_root(
     canister: &str,
     icp_root: &Path,
 ) -> Result<BootstrapStatusResponse, ReplicaQueryError> {
-    let bytes = local_query_from_root(environment, canister, "canic_bootstrap_status", icp_root)?;
+    let bytes = local_query(
+        environment,
+        canister,
+        "canic_bootstrap_status",
+        Some(icp_root),
+    )?;
     decode_bootstrap_status_response(&bytes)
 }
 
@@ -133,18 +130,9 @@ pub fn query_bootstrap_status_from_root(
 pub(crate) fn query_cycle_balance(
     environment: Option<&str>,
     canister: &str,
+    icp_root: Option<&Path>,
 ) -> Result<u128, ReplicaQueryError> {
-    let bytes = local_query(environment, canister, "canic_cycle_balance")?;
-    decode_cycle_balance_response(&bytes)
-}
-
-/// Query `canic_cycle_balance` using the configured port from one ICP root.
-pub fn query_cycle_balance_from_root(
-    environment: Option<&str>,
-    canister: &str,
-    icp_root: &Path,
-) -> Result<u128, ReplicaQueryError> {
-    let bytes = local_query_from_root(environment, canister, "canic_cycle_balance", icp_root)?;
+    let bytes = local_query(environment, canister, "canic_cycle_balance", icp_root)?;
     decode_cycle_balance_response(&bytes)
 }
 
@@ -152,18 +140,10 @@ pub fn query_cycle_balance_from_root(
 pub fn query_subnet_registry_entries(
     environment: Option<&str>,
     root: &str,
+    icp_root: Option<&Path>,
 ) -> Result<Vec<RegistryEntry>, ReplicaQueryError> {
-    let response = query_subnet_registry_response(environment, root)?;
-    registry_entries_from_response(response).map_err(Into::into)
-}
-
-/// Query `canic_subnet_registry` from one ICP root and return validated host entries.
-pub fn query_subnet_registry_entries_from_root(
-    environment: Option<&str>,
-    root: &str,
-    icp_root: &Path,
-) -> Result<Vec<RegistryEntry>, ReplicaQueryError> {
-    let response = query_subnet_registry_response_from_root(environment, root, icp_root)?;
+    let bytes = local_query(environment, root, "canic_subnet_registry", icp_root)?;
+    let response = decode_subnet_registry_response(&bytes)?;
     registry_entries_from_response(response).map_err(Into::into)
 }
 
@@ -174,26 +154,9 @@ pub fn query_subnet_registry_roles_from_root(
     icp_root: &Path,
 ) -> Result<Vec<String>, ReplicaQueryError> {
     Ok(
-        query_subnet_registry_entries_from_root(environment, root, icp_root)?
+        query_subnet_registry_entries(environment, root, Some(icp_root))?
             .into_iter()
             .filter_map(|entry| entry.role)
             .collect(),
     )
-}
-
-fn query_subnet_registry_response(
-    environment: Option<&str>,
-    root: &str,
-) -> Result<SubnetRegistryResponse, ReplicaQueryError> {
-    let bytes = local_query(environment, root, "canic_subnet_registry")?;
-    decode_subnet_registry_response(&bytes)
-}
-
-fn query_subnet_registry_response_from_root(
-    environment: Option<&str>,
-    root: &str,
-    icp_root: &Path,
-) -> Result<SubnetRegistryResponse, ReplicaQueryError> {
-    let bytes = local_query_from_root(environment, root, "canic_subnet_registry", icp_root)?;
-    decode_subnet_registry_response(&bytes)
 }

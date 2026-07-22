@@ -2,7 +2,7 @@ use super::super::*;
 
 #[test]
 fn configured_role_kinds_lists_configured_roles() {
-    let kinds = configured_role_kinds_from_source(REAL_CONFIG).expect("role kinds");
+    let kinds = configured_role_kinds_from_config(&parsed_config(REAL_CONFIG));
 
     assert_eq!(kinds.get("root").map(String::as_str), Some("root"));
     assert_eq!(kinds.get("user_hub").map(String::as_str), Some("service"));
@@ -46,7 +46,7 @@ canister_role = "user_shard"
 [subnets.prime.canisters.user_shard]
 kind = "shard"
 "#;
-    let lifecycle = configured_role_lifecycle_from_source(config).expect("role lifecycle");
+    let lifecycle = configured_role_lifecycle_from_config(&parsed_config(config));
 
     let root = lifecycle
         .iter()
@@ -154,7 +154,7 @@ kind = "replica"
 [subnets.prime.canisters.scale_replica.metrics]
 profile = "full"
 "#;
-    let details = configured_role_details_from_source(config).expect("role details");
+    let details = configured_role_details_from_config(&parsed_config(config));
 
     assert!(
         details

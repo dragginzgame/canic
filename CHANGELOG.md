@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.4` gives host and CLI config inspection one immutable parsed snapshot,
+  collapses direct local-replica queries to one optional-root transport, and
+  hard-cuts unused implicit-root and projection APIs without changing runtime,
+  CLI, Candid, JSON, or stable-state behavior.
+
 - `0.98.3` makes bootstrap Wasm-store builds select one exact resolved Canic
   package family, derives generated CDK dependencies and build profiles from
   canonical authorities, upgrades `ic-cdk` to 0.20.2, and repairs the packaged

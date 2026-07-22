@@ -1,7 +1,4 @@
-use crate::{
-    durable_io::write_bytes,
-    release_set::{WorkspaceDiscoveryError, icp_root},
-};
+use crate::durable_io::write_bytes;
 use std::{fs, io, path::Path, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -40,13 +37,6 @@ pub enum InstallStateError {
     SchemaVersionMismatch {
         state_version: u32,
         supported_version: u32,
-    },
-
-    #[error("failed to resolve ICP root from {}: {source}", path.display())]
-    ResolveIcpRoot {
-        path: PathBuf,
-        #[source]
-        source: WorkspaceDiscoveryError,
     },
 
     #[error("failed to read deployment state {}: {source}", path.display())]
@@ -146,19 +136,6 @@ pub fn decode_install_state(
     })?;
     validate_loaded_install_state(&state, environment, deployment)?;
     Ok(state)
-}
-
-/// Read deployment-target install state for the discovered current project.
-pub fn read_named_deployment_install_state(
-    environment: &str,
-    deployment: &str,
-) -> Result<Option<InstallState>, InstallStateError> {
-    let start = PathBuf::from(".");
-    let icp_root = icp_root().map_err(|source| InstallStateError::ResolveIcpRoot {
-        path: start,
-        source,
-    })?;
-    read_deployment_install_state(&icp_root, environment, deployment)
 }
 
 /// Read deployment-target install state for an explicit ICP project root.

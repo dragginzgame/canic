@@ -33,7 +33,7 @@ use canic_host::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         InstalledDeploymentSource, resolve_installed_deployment_from_root,
     },
-    release_set::{configured_fleet_name, configured_role_lifecycle},
+    release_set::FleetConfigSnapshot,
 };
 
 ///
@@ -136,9 +136,11 @@ pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -
 
     let mut checks = Vec::new();
     for config in configs {
-        if let Ok(fleet) = configured_fleet_name(&config)
-            && fleet == deployment
-        {
+        let Ok(snapshot) = FleetConfigSnapshot::load(&config) else {
+            continue;
+        };
+        let fleet = snapshot.fleet_name();
+        if fleet == deployment {
             checks.push(MedicCheck::warn(
                 MedicCategory::ProjectConfig,
                 "fleet_name_deployment_name_conflated",
@@ -158,24 +160,22 @@ pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -
             ));
         }
 
-        if let Ok(roles) = configured_role_lifecycle(&config) {
-            checks.extend(roles.into_iter().filter_map(|role| {
-                (role.role == deployment).then(|| {
-                    MedicCheck::warn(
-                        MedicCategory::ProjectConfig,
-                        "role_name_deployment_name_conflated",
-                        deployment,
-                        format!(
-                            "selected deployment target matches role {} in {}",
-                            role.display,
-                            display_medic_path(root, &config)
-                        ),
-                        "pass an installed deployment target, not a role name",
-                        MedicSource::FleetConfig,
-                    )
-                })
-            }));
-        }
+        checks.extend(snapshot.role_lifecycle().into_iter().filter_map(|role| {
+            (role.role == deployment).then(|| {
+                MedicCheck::warn(
+                    MedicCategory::ProjectConfig,
+                    "role_name_deployment_name_conflated",
+                    deployment,
+                    format!(
+                        "selected deployment target matches role {} in {}",
+                        role.display,
+                        display_medic_path(root, &config)
+                    ),
+                    "pass an installed deployment target, not a role name",
+                    MedicSource::FleetConfig,
+                )
+            })
+        }));
     }
 
     checks

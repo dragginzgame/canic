@@ -5,11 +5,27 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static FIXTURE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+fn validate_test_role_package(
+    config_path: &Path,
+    role: &CanisterRole,
+    mode: PackageValidationMode,
+) -> RolePackageValidation {
+    let Ok(source) = fs::read_to_string(config_path) else {
+        return RolePackageValidation::Unsupported(RoleContractFinding::PackageMissing {
+            role: role.clone(),
+        });
+    };
+    let Ok(config) = parse_config_model(&source) else {
+        return unsupported_shape("invalid role configuration".to_string());
+    };
+    validate_declared_role_package(config_path, &config, role, mode)
+}
+
 #[test]
 fn isolated_supported_role_workspace_is_accepted() {
     let fixture = FixtureWorkspace::materialize("supported");
 
-    let validation = validate_declared_role_package(
+    let validation = validate_test_role_package(
         &fixture.root.join("canic.toml"),
         &CanisterRole::owned("app".to_string()),
         PackageValidationMode::Build,
@@ -25,7 +41,7 @@ fn isolated_renamed_canic_workspace_is_rejected() {
     let fixture = FixtureWorkspace::materialize("renamed_canic");
 
     assert!(matches!(
-        validate_declared_role_package(
+        validate_test_role_package(
             &fixture.root.join("canic.toml"),
             &CanisterRole::owned("app".to_string()),
             PackageValidationMode::Build,
@@ -40,7 +56,7 @@ fn isolated_protected_sibling_workspace_reports_the_exact_path() {
 
     let RolePackageValidation::Unsupported(RoleContractFinding::DependencyShapeUnsupported {
         reason,
-    }) = validate_declared_role_package(
+    }) = validate_test_role_package(
         &fixture.root.join("canic.toml"),
         &CanisterRole::owned("app".to_string()),
         PackageValidationMode::Build,
@@ -77,7 +93,7 @@ fn role_contract_rejection_does_not_expose_local_or_source_data() {
 
     let RolePackageValidation::Unsupported(RoleContractFinding::DependencyShapeUnsupported {
         reason,
-    }) = validate_declared_role_package(
+    }) = validate_test_role_package(
         &config_path,
         &CanisterRole::owned("app".to_string()),
         PackageValidationMode::Build,
@@ -204,7 +220,7 @@ fn isolated_role_workspace_accepts_a_multiline_build_macro_invocation() {
         "    canic::build!(\n        \"../canic.toml\"\n    );\n",
     );
 
-    let validation = validate_declared_role_package(
+    let validation = validate_test_role_package(
         &fixture.root.join("canic.toml"),
         &CanisterRole::owned("app".to_string()),
         PackageValidationMode::Build,
@@ -758,7 +774,7 @@ impl FixtureWorkspace {
     }
 
     fn rejection_reason(&self) -> String {
-        let validation = validate_declared_role_package(
+        let validation = validate_test_role_package(
             &self.root.join("canic.toml"),
             &CanisterRole::owned("app".to_string()),
             PackageValidationMode::Build,

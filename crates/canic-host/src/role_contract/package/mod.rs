@@ -117,15 +117,9 @@ pub enum RolePackageValidation {
 
 pub fn declared_role_manifest_path(
     config_path: &Path,
+    config: &canic_core::bootstrap::compiled::ConfigModel,
     role: &CanisterRole,
 ) -> Result<PathBuf, RoleContractFinding> {
-    let config_source = fs::read_to_string(config_path)
-        .map_err(|_| RoleContractFinding::PackageMissing { role: role.clone() })?;
-    let config = parse_config_model(&config_source).map_err(|_| {
-        RoleContractFinding::DependencyShapeUnsupported {
-            reason: "invalid role configuration".to_string(),
-        }
-    })?;
     let declaration = config
         .roles
         .get(role)
@@ -139,23 +133,6 @@ pub fn declared_role_manifest_path(
 
 #[must_use]
 pub fn validate_declared_role_package(
-    config_path: &Path,
-    role: &CanisterRole,
-    mode: PackageValidationMode,
-) -> RolePackageValidation {
-    let Ok(config_source) = fs::read_to_string(config_path) else {
-        return RolePackageValidation::Unsupported(RoleContractFinding::PackageMissing {
-            role: role.clone(),
-        });
-    };
-    let Ok(config) = parse_config_model(&config_source) else {
-        return unsupported_shape("invalid role configuration".to_string());
-    };
-    validate_declared_role_package_from_config(config_path, &config, role, mode)
-}
-
-#[must_use]
-pub fn validate_declared_role_package_from_config(
     config_path: &Path,
     config: &canic_core::bootstrap::compiled::ConfigModel,
     role: &CanisterRole,
@@ -232,8 +209,13 @@ pub fn validate_internal_test_wasm_packages(
                 "internal test package `{package_name}` has no matching ancestor canic.toml"
             ))
         })?;
+        let config_source = fs::read_to_string(&config_path)
+            .map_err(|_| unsupported_finding("unable to read role configuration"))?;
+        let config = parse_config_model(&config_source)
+            .map_err(|_| unsupported_finding("invalid role configuration"))?;
         let evidence = match validate_declared_role_package(
             &config_path,
+            &config,
             &role,
             PackageValidationMode::LockedBuild,
         ) {
@@ -248,7 +230,7 @@ pub fn validate_internal_test_wasm_packages(
                 "internal test package `{package_name}` does not match the package selected by its role configuration"
             )));
         }
-        match super::resolve_declared_role_package_contract(&config_path, &evidence) {
+        match super::resolve_declared_role_package_contract(&config, &evidence) {
             canic_core::role_contract::RoleContractResolution::Resolved { .. } => {}
             canic_core::role_contract::RoleContractResolution::Rejected { errors } => {
                 return Err(errors

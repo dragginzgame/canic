@@ -60,8 +60,5 @@ fn query_local_cycle_balance(
     canister_id: &str,
     icp_root: Option<&Path>,
 ) -> Result<u128, ReplicaQueryError> {
-    icp_root.map_or_else(
-        || replica_query::query_cycle_balance(Some(environment), canister_id),
-        |root| replica_query::query_cycle_balance_from_root(Some(environment), canister_id, root),
-    )
+    replica_query::query_cycle_balance(Some(environment), canister_id, icp_root)
 }

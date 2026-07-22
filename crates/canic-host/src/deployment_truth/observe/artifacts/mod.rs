@@ -1,8 +1,8 @@
 use super::super::*;
 use super::shared::observation_gap;
 use crate::release_set::{
-    ROOT_RELEASE_SET_MANIFEST_FILE, artifact_root_path, configured_deployable_roles,
-    configured_fleet_name, load_root_release_set_manifest, resolve_artifact_root,
+    FleetConfigSnapshot, ROOT_RELEASE_SET_MANIFEST_FILE, artifact_root_path,
+    load_root_release_set_manifest, resolve_artifact_root,
 };
 use std::{
     collections::BTreeMap,
@@ -23,34 +23,33 @@ pub struct LocalArtifactManifestRequest {
 }
 
 /// Collect a read-only manifest of locally materialized role artifacts.
+#[must_use]
 pub fn collect_local_role_artifact_manifest(
     request: &LocalArtifactManifestRequest,
 ) -> RoleArtifactManifestV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_artifacts = Vec::new();
-    let fleet_name = configured_fleet_name(&config).unwrap_or_else(|err| {
-        unresolved_artifacts.push(observation_gap(
-            "local_config.fleet_name",
-            format!(
-                "could not resolve fleet name from {}: {err}",
-                config.display()
-            ),
-        ));
-        "unknown".to_string()
-    });
-    let roles = configured_deployable_roles(&config).map_or_else(
-        |err| {
-            unresolved_artifacts.push(observation_gap(
-                "local_config.roles",
-                format!(
-                    "could not resolve configured roles from {}: {err}",
-                    config.display()
-                ),
-            ));
-            Vec::new()
-        },
-        deployment_truth_roles_with_implicit_wasm_store,
-    );
+    let (fleet_name, roles) = match FleetConfigSnapshot::load(&config) {
+        Ok(snapshot) => (
+            snapshot.fleet_name().to_string(),
+            deployment_truth_roles_with_implicit_wasm_store(snapshot.deployable_roles()),
+        ),
+        Err(err) => {
+            for (code, subject) in [
+                ("local_config.fleet_name", "fleet name"),
+                ("local_config.roles", "configured roles"),
+            ] {
+                unresolved_artifacts.push(observation_gap(
+                    code,
+                    format!(
+                        "could not resolve {subject} from {}: {err}",
+                        config.display()
+                    ),
+                ));
+            }
+            ("unknown".to_string(), Vec::new())
+        }
+    };
     let projected_artifact_root =
         artifact_root_path(&request.icp_root, &request.artifact_environment);
     let artifact_root =

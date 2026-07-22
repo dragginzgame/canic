@@ -3,10 +3,7 @@ use crate::{
     install_root::{
         InstallStateError, RootVerificationStatus, read_named_deployment_install_state_from_root,
     },
-    release_set::{
-        ConfiguredPoolExpectation, configured_bootstrap_roles, configured_controllers,
-        configured_fleet_name, configured_pool_expectations,
-    },
+    release_set::{ConfiguredPoolExpectation, FleetConfigSnapshot},
 };
 use std::path::PathBuf;
 
@@ -31,52 +28,37 @@ pub struct LocalDeploymentPlanRequest {
 pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> DeploymentPlanV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_assumptions = Vec::new();
-    let fleet_template = configured_fleet_name(&config).unwrap_or_else(|err| {
-        unresolved_assumptions.push(assumption(
-            "local_config.fleet_name",
-            format!(
-                "could not resolve fleet template name from {}: {err}",
-                config.display()
+    let (fleet_template, roles, expected_controllers, expected_pool) =
+        match FleetConfigSnapshot::load(&config) {
+            Ok(snapshot) => (
+                snapshot.fleet_name().to_string(),
+                deployment_truth_roles_with_implicit_wasm_store(snapshot.bootstrap_roles()),
+                snapshot.controllers(),
+                local_expected_pool(snapshot.pool_expectations()),
             ),
-        ));
-        request.deployment_name.clone()
-    });
-    let roles = configured_bootstrap_roles(&config).map_or_else(
-        |err| {
-            unresolved_assumptions.push(assumption(
-                "local_config.roles",
-                format!(
-                    "could not resolve configured roles from {}: {err}",
-                    config.display()
-                ),
-            ));
-            Vec::new()
-        },
-        deployment_truth_roles_with_implicit_wasm_store,
-    );
-    let expected_controllers = configured_controllers(&config).unwrap_or_else(|err| {
-        unresolved_assumptions.push(assumption(
-            "local_config.controllers",
-            format!(
-                "could not resolve configured controllers from {}: {err}",
-                config.display()
-            ),
-        ));
-        Vec::new()
-    });
-    let expected_pool = configured_pool_expectations(&config).map_or_else(
-        |err| {
-            unresolved_assumptions.push(assumption(
-                "local_config.pools",
-                format!(
-                    "could not resolve configured pool expectations from {}: {err}",
-                    config.display()
-                ),
-            ));
-            Vec::new()
-        },
-        local_expected_pool,
-    );
+            Err(err) => {
+                for (code, subject) in [
+                    ("local_config.fleet_name", "fleet template name"),
+                    ("local_config.roles", "configured roles"),
+                    ("local_config.controllers", "configured controllers"),
+                    ("local_config.pools", "configured pool expectations"),
+                ] {
+                    unresolved_assumptions.push(assumption(
+                        code,
+                        format!(
+                            "could not resolve {subject} from {}: {err}",
+                            config.display()
+                        ),
+                    ));
+                }
+                (
+                    request.deployment_name.clone(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                )
+            }
+        };
     let root_canister_id = local_root_canister_id(request, &mut unresolved_assumptions);
     let raw_config_sha256 = config_sha256_assumption(&config, &mut unresolved_assumptions);
     let canonical_runtime_config_digest =

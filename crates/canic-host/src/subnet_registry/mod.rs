@@ -112,16 +112,7 @@ fn query_local_subnet_registry(
     environment: &str,
     icp_root: Option<&Path>,
 ) -> Result<SubnetRegistryQuery, SubnetRegistryQueryError> {
-    let entries = icp_root.map_or_else(
-        || replica_query::query_subnet_registry_entries(Some(environment), root),
-        |root_path| {
-            replica_query::query_subnet_registry_entries_from_root(
-                Some(environment),
-                root,
-                root_path,
-            )
-        },
-    )?;
+    let entries = replica_query::query_subnet_registry_entries(Some(environment), root, icp_root)?;
     Ok(SubnetRegistryQuery {
         source: SubnetRegistryQuerySource::LocalReplica,
         entries,

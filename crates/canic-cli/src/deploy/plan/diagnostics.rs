@@ -21,7 +21,7 @@ use std::path::Path;
 
 use canic_host::{
     deployment_truth::{DeploymentAssumptionKindV1, DeploymentAssumptionV1, DeploymentPlanV1},
-    release_set::configured_fleet_name,
+    release_set::read_fleet_config_identity,
 };
 
 pub(super) fn target_resolution_blockers(
@@ -40,7 +40,7 @@ pub(super) fn target_resolution_blockers(
         }];
     }
 
-    match configured_fleet_name(config_path) {
+    match read_fleet_config_identity(config_path) {
         Ok(_) => Vec::new(),
         Err(err) => vec![PlanDiagnostic {
             category: CATEGORY_CONFIG,
