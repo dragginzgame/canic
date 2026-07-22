@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.7` hard-cuts stale generic inspect-report branches so the maintained
+  command projects its one mandatory runtime-status result without dead
+  endpoint modes, fallback diagnostics, or duplicate encoding helpers.
+
 - `0.98.6` replaces remaining handwritten core blob-storage and CLI pending-
   operation error plumbing with typed declarations, preserving current errors
   while exposing nested causes consistently and reducing maintained code.

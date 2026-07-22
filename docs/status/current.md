@@ -14,23 +14,22 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.5`.
-- The latest published release is `v0.98.5` at
-  `866a1d0363945fdafd2d1bdf462ff45a3b45f7f3`.
-- The `v0.98.5` source tree is
-  `04350044c9e7aa8a25bde7a9606b87929da08d6c`; its product-tree hash is
-  `af530230478d9a2023962ec667524a7cbe99d183f2e090af4ad74d43b586bf58` and
+- The workspace package version is `0.98.6`.
+- The latest published release is `v0.98.6` at
+  `1704315592c413a0af65ec2378ddf12a5a2b865e`.
+- The `v0.98.6` source tree is
+  `40a6ba75d9408516d0d12415a0008a1a29ad1e7e`; its product-tree hash is
+  `37bacd22cc92fc7f3722410abedeb2bcebd2fdbec9511da66c208b51fb88436b` and
   its Cargo.lock SHA-256 is
-  `64b9bdbb72a1a9b7ba6142e8a42b91d5c4daa188160a2f8fc244b380fff30a54`.
-- Released `0.98.5` removes duplicate hash and typed-error implementations,
-  carries the immutable fleet-config snapshot through remaining operational
-  build paths, and narrows unused low-level host query/hash surfaces. Every
-  reviewed Candid error derive remains a required wire contract.
-- Open `0.98.6` replaces the remaining handwritten core blob-storage and CLI
-  pending-operation error plumbing with typed declarations. It preserves the
-  maintained variants and operator text, exposes nested Rust error causes
-  consistently, and changes no Candid, JSON, configuration, stable-state, CLI,
-  dependency, runtime, or package-version surface.
+  `66a6031218b9bcd6b54158cf251029a86a26899c3271bdbe3a0cc9292452332b`.
+- Released `0.98.6` replaces the remaining handwritten core blob-storage and
+  CLI pending-operation error plumbing with typed declarations. It preserves
+  the maintained variants and operator text while exposing nested Rust error
+  causes consistently.
+- Open `0.98.7` hard-cuts the unproduced generic branches from `canic inspect`.
+  Its successful JSON report has one mandatory runtime-status payload and no
+  always-null health/readiness or always-empty fallback diagnostic fields; the
+  existing meaningful values, text behavior, and exit behavior remain intact.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
