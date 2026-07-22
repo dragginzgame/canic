@@ -6,7 +6,7 @@ use crate::{
         cache::{canister_build_target_root, configure_canister_cargo_command},
     },
     cargo_command,
-    cargo_metadata::{CargoMetadata, cargo_metadata},
+    cargo_metadata::{CargoMetadata, CargoMetadataPackage, cargo_metadata},
     release_set::artifact_root_path,
     remove_optional_file,
     role_contract::{
@@ -24,38 +24,25 @@ use std::{
 
 const WASM_STORE_ROLE: &str = "wasm_store";
 const GENERATED_WRAPPER_RELATIVE: &str = ".icp/local/generated/canic-wasm-store";
-const CANONICAL_WASM_STORE_MANIFEST_RELATIVE: &str = "crates/canic-wasm-store/Cargo.toml";
 const CANONICAL_WASM_STORE_DID_FILE: &str = "wasm_store.did";
 const CANONICAL_WASM_STORE_CRATE_NAME: &str = "canister_wasm_store";
 const GENERATED_WRAPPER_PACKAGE_NAME: &str = "canic-generated-wasm-store";
 const CANIC_FAMILY_CRATES: &[&str] = &["canic-control-plane", "canic-core", "canic-macros"];
-const WASM_STORE_RELEASE_PROFILE_CONFIG_ARGS: &[&str] = &[
-    "--config",
-    "profile.release.opt-level=\"z\"",
-    "--config",
-    "profile.release.lto=true",
-    "--config",
-    "profile.release.codegen-units=1",
-    "--config",
-    "profile.release.strip=\"symbols\"",
-    "--config",
-    "profile.release.debug=false",
-    "--config",
-    "profile.release.panic=\"abort\"",
-    "--config",
-    "profile.release.overflow-checks=false",
-    "--config",
-    "profile.release.incremental=false",
+const WASM_STORE_RELEASE_PROFILE: &[(&str, &str)] = &[
+    ("opt-level", "\"z\""),
+    ("lto", "true"),
+    ("codegen-units", "1"),
+    ("strip", "\"symbols\""),
+    ("debug", "false"),
+    ("panic", "\"abort\""),
+    ("overflow-checks", "false"),
+    ("incremental", "false"),
 ];
-const WASM_STORE_FAST_PROFILE_CONFIG_ARGS: &[&str] = &[
-    "--config",
-    "profile.fast.inherits=\"release\"",
-    "--config",
-    "profile.fast.lto=false",
-    "--config",
-    "profile.fast.codegen-units=16",
-    "--config",
-    "profile.fast.incremental=false",
+const WASM_STORE_FAST_PROFILE: &[(&str, &str)] = &[
+    ("inherits", "\"release\""),
+    ("lto", "false"),
+    ("codegen-units", "16"),
+    ("incremental", "false"),
 ];
 
 ///
@@ -75,6 +62,13 @@ pub struct BootstrapWasmStoreBuildOutput {
 struct BootstrapWasmStoreSource {
     manifest_path: PathBuf,
     source_root: PathBuf,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct GeneratedWrapperDependencies {
+    canic_version: String,
+    candid_version: String,
+    ic_cdk_version: String,
 }
 
 // Build the implicit bootstrap `wasm_store` artifact and populate the canonical
@@ -155,107 +149,161 @@ fn resolve_bootstrap_wasm_store_source(
     icp_root: &Path,
 ) -> Result<BootstrapWasmStoreSource, Box<dyn std::error::Error>> {
     let metadata = cargo_metadata(workspace_root, true)?;
-    let canic_manifest_path = metadata
-        .packages
-        .iter()
-        .find(|package| package.name == "canic")
-        .map(|package| package.manifest_path.clone())
-        .ok_or_else(|| {
-            "unable to locate resolved 'canic' package in cargo metadata; downstreams that build the implicit wasm_store must depend on 'canic'."
-                .to_string()
-        })?;
+    let canic_package = resolved_canic_package(&metadata)?;
 
-    if let Some(source) = resolve_canonical_bootstrap_wasm_store_source(
-        workspace_root,
-        &metadata,
-        &canic_manifest_path,
-    ) {
+    if let Some(source) = resolve_canonical_bootstrap_wasm_store_source(&metadata, canic_package)? {
         return Ok(source);
     }
 
-    let wrapper_root =
-        ensure_generated_wasm_store_wrapper(icp_root, workspace_root, &canic_manifest_path)?;
+    let dependencies = resolved_wrapper_dependencies(&metadata, canic_package)?;
+    let wrapper_root = ensure_generated_wasm_store_wrapper(
+        icp_root,
+        workspace_root,
+        &canic_package.manifest_path,
+        &dependencies,
+    )?;
     Ok(BootstrapWasmStoreSource {
         manifest_path: wrapper_root.join("Cargo.toml"),
         source_root: wrapper_root.clone(),
     })
 }
 
-// Prefer the local workspace `canic-wasm-store` crate, then a direct metadata
-// hit, then a sibling registry checkout next to the resolved `canic` source.
-fn resolve_canonical_bootstrap_wasm_store_source(
-    workspace_root: &Path,
+fn resolved_canic_package(
     metadata: &CargoMetadata,
-    canic_manifest_path: &Path,
-) -> Option<BootstrapWasmStoreSource> {
-    let workspace_manifest = workspace_root.join(CANONICAL_WASM_STORE_MANIFEST_RELATIVE);
-    if workspace_manifest.is_file() {
-        let source_root = workspace_manifest
-            .parent()
-            .expect("manifest path must have parent")
-            .to_path_buf();
-        return Some(BootstrapWasmStoreSource {
-            manifest_path: workspace_manifest,
-            source_root,
-        });
-    }
-
-    if let Some(package) = metadata
+) -> Result<&CargoMetadataPackage, Box<dyn std::error::Error>> {
+    let matches = metadata
         .packages
         .iter()
-        .find(|package| package.name == "canic-wasm-store")
-    {
+        .filter(|package| package.name == "canic")
+        .collect::<Vec<_>>();
+    let [package] = matches.as_slice() else {
+        return Err(format!(
+            "bootstrap wasm_store requires exactly one resolved 'canic' package; found {}",
+            matches.len()
+        )
+        .into());
+    };
+    Ok(package)
+}
+
+// Prefer the exact resolved `canic-wasm-store` package, then the exact sibling
+// source belonging to the selected Canic package.
+fn resolve_canonical_bootstrap_wasm_store_source(
+    metadata: &CargoMetadata,
+    canic_package: &CargoMetadataPackage,
+) -> Result<Option<BootstrapWasmStoreSource>, Box<dyn std::error::Error>> {
+    let matches = metadata
+        .packages
+        .iter()
+        .filter(|package| {
+            package.name == "canic-wasm-store"
+                && package.version == canic_package.version
+                && package.source == canic_package.source
+        })
+        .collect::<Vec<_>>();
+    if matches.len() > 1 {
+        return Err(
+            "bootstrap wasm_store source resolved more than once for the selected Canic package"
+                .into(),
+        );
+    }
+    if let [package] = matches.as_slice() {
         let source_root = package
             .manifest_path
             .parent()
             .expect("manifest path must have parent")
             .to_path_buf();
-        return Some(BootstrapWasmStoreSource {
+        return Ok(Some(BootstrapWasmStoreSource {
             manifest_path: package.manifest_path.clone(),
             source_root,
-        });
+        }));
     }
 
-    let canic_root = canic_manifest_path
+    let canic_root = canic_package
+        .manifest_path
         .parent()
         .expect("canic manifest path must have parent");
     let sibling_root = canic_root.parent().expect("canic root must have parent");
-    let canic_version = metadata
-        .packages
-        .iter()
-        .find(|package| package.name == "canic")
-        .map(|package| package.version.clone())
-        .unwrap_or_default();
-
-    let local_sibling = sibling_root.join("canic-wasm-store").join("Cargo.toml");
-    if local_sibling.is_file() {
-        let source_root = local_sibling
+    let registry_version = registry_package_version_suffix(&canic_package.manifest_path, "canic")
+        .filter(|version| *version == canic_package.version);
+    let sibling_dir = registry_version.map_or_else(
+        || "canic-wasm-store".to_string(),
+        |version| format!("canic-wasm-store-{version}"),
+    );
+    let sibling_manifest = sibling_root.join(sibling_dir).join("Cargo.toml");
+    if sibling_manifest.is_file() {
+        require_package_manifest_identity(
+            &sibling_manifest,
+            "canic-wasm-store",
+            &canic_package.version,
+        )?;
+        let source_root = sibling_manifest
             .parent()
             .expect("manifest path must have parent")
             .to_path_buf();
-        return Some(BootstrapWasmStoreSource {
-            manifest_path: local_sibling,
+        return Ok(Some(BootstrapWasmStoreSource {
+            manifest_path: sibling_manifest,
             source_root,
-        });
+        }));
     }
 
-    if !canic_version.is_empty() {
-        let registry_sibling = sibling_root
-            .join(format!("canic-wasm-store-{canic_version}"))
-            .join("Cargo.toml");
-        if registry_sibling.is_file() {
-            let source_root = registry_sibling
-                .parent()
-                .expect("manifest path must have parent")
-                .to_path_buf();
-            return Some(BootstrapWasmStoreSource {
-                manifest_path: registry_sibling,
-                source_root,
-            });
-        }
-    }
+    Ok(None)
+}
 
-    None
+fn resolved_wrapper_dependencies(
+    metadata: &CargoMetadata,
+    canic_package: &CargoMetadataPackage,
+) -> Result<GeneratedWrapperDependencies, Box<dyn std::error::Error>> {
+    let canic_core = resolved_normal_dependency(metadata, canic_package, "canic-core")?;
+    let candid = resolved_normal_dependency(metadata, canic_core, "candid")?;
+    let ic_cdk = resolved_normal_dependency(metadata, canic_core, "ic-cdk")?;
+    Ok(GeneratedWrapperDependencies {
+        canic_version: canic_package.version.clone(),
+        candid_version: candid.version.clone(),
+        ic_cdk_version: ic_cdk.version.clone(),
+    })
+}
+
+fn resolved_normal_dependency<'a>(
+    metadata: &'a CargoMetadata,
+    parent: &CargoMetadataPackage,
+    dependency_name: &str,
+) -> Result<&'a CargoMetadataPackage, Box<dyn std::error::Error>> {
+    let resolve = metadata
+        .resolve
+        .as_ref()
+        .ok_or("bootstrap wasm_store cargo metadata omitted the resolved dependency graph")?;
+    let node = resolve
+        .nodes
+        .iter()
+        .find(|node| node.id == parent.id)
+        .ok_or_else(|| {
+            format!(
+                "bootstrap wasm_store cargo metadata omitted the graph node for {}",
+                parent.name
+            )
+        })?;
+    let matches = node
+        .deps
+        .iter()
+        .filter(|dependency| dependency.dep_kinds.iter().any(|kind| kind.kind.is_none()))
+        .filter_map(|dependency| {
+            metadata
+                .packages
+                .iter()
+                .find(|package| package.id == dependency.pkg)
+        })
+        .filter(|package| package.name == dependency_name)
+        .collect::<Vec<_>>();
+    let [package] = matches.as_slice() else {
+        return Err(format!(
+            "bootstrap wasm_store requires exactly one resolved normal {dependency_name} dependency from {}; found {}",
+            parent.name,
+            matches.len()
+        )
+        .into());
+    };
+    Ok(package)
 }
 
 // Render the generated wrapper under `.icp/local/generated/canic-wasm-store`.
@@ -263,6 +311,7 @@ fn ensure_generated_wasm_store_wrapper(
     icp_root: &Path,
     workspace_root: &Path,
     canic_manifest_path: &Path,
+    dependencies: &GeneratedWrapperDependencies,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let wrapper_root = icp_root.join(GENERATED_WRAPPER_RELATIVE);
     fs::create_dir_all(wrapper_root.join("src"))?;
@@ -270,7 +319,8 @@ fn ensure_generated_wasm_store_wrapper(
     let canic_root = canic_manifest_path
         .parent()
         .expect("canic manifest path must have parent");
-    let patch_table = generated_wasm_store_wrapper_patch_table(canic_manifest_path);
+    let patch_table =
+        generated_wasm_store_wrapper_patch_table(canic_manifest_path, &dependencies.canic_version)?;
     let mut cargo_toml = format!(
         "[package]\n\
 name = \"{GENERATED_WRAPPER_PACKAGE_NAME}\"\n\
@@ -287,31 +337,18 @@ name = \"{CANONICAL_WASM_STORE_CRATE_NAME}\"\n\
 crate-type = [\"cdylib\", \"rlib\"]\n\n\
 [dependencies]\n\
 canic = {{ path = \"{}\", default-features = false, features = [\"metrics\", \"wasm-store-canister\"] }}\n\
-ic-cdk = \"0.20.0\"\n\
-candid = {{ version = \"0.10\", default-features = false }}\n\n\
+ic-cdk = \"={}\"\n\
+candid = {{ version = \"={}\", default-features = false }}\n\n\
 [build-dependencies]\n\
 canic = {{ path = \"{}\", default-features = false, features = [] }}\n",
         canic_root.display(),
+        dependencies.ic_cdk_version,
+        dependencies.candid_version,
         canic_root.display()
     );
 
-    cargo_toml.push_str(
-        "\n[profile.release]\n\
-opt-level = \"z\"\n\
-lto = true\n\
-codegen-units = 1\n\
-strip = \"symbols\"\n\
-debug = false\n\
-panic = \"abort\"\n\
-overflow-checks = false\n\
-incremental = false\n\
-\n\
-[profile.fast]\n\
-inherits = \"release\"\n\
-lto = false\n\
-codegen-units = 16\n\
-incremental = true\n",
-    );
+    render_profile(&mut cargo_toml, "release", WASM_STORE_RELEASE_PROFILE);
+    render_profile(&mut cargo_toml, "fast", WASM_STORE_FAST_PROFILE);
 
     if !patch_table.is_empty() {
         cargo_toml.push('\n');
@@ -341,26 +378,29 @@ incremental = true\n",
 }
 
 // Generate the `[patch.crates-io]` table for sibling packaged Canic crates.
-fn generated_wasm_store_wrapper_patch_table(canic_manifest_path: &Path) -> String {
+fn generated_wasm_store_wrapper_patch_table(
+    canic_manifest_path: &Path,
+    canic_version: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
     let canic_root = canic_manifest_path
         .parent()
         .expect("canic manifest path must have parent");
     let sibling_root = canic_root.parent().expect("canic root must have parent");
-    let registry_version = registry_package_version_suffix(canic_manifest_path, "canic");
+    let registry_version = registry_package_version_suffix(canic_manifest_path, "canic")
+        .filter(|version| *version == canic_version);
     let mut rendered = String::new();
 
     for crate_name in CANIC_FAMILY_CRATES {
-        let mut manifest_path = sibling_root.join(crate_name).join("Cargo.toml");
-
-        if !manifest_path.is_file() {
-            manifest_path =
-                find_versioned_sibling_manifest(sibling_root, crate_name, registry_version)
-                    .unwrap_or_default();
-        }
+        let sibling_dir = registry_version.map_or_else(
+            || (*crate_name).to_string(),
+            |version| format!("{crate_name}-{version}"),
+        );
+        let manifest_path = sibling_root.join(sibling_dir).join("Cargo.toml");
 
         if !manifest_path.is_file() {
             continue;
         }
+        require_package_manifest_identity(&manifest_path, crate_name, canic_version)?;
 
         let crate_root = manifest_path
             .parent()
@@ -373,10 +413,47 @@ fn generated_wasm_store_wrapper_patch_table(canic_manifest_path: &Path) -> Strin
     }
 
     if rendered.is_empty() {
-        String::new()
+        Ok(String::new())
     } else {
-        format!("[patch.crates-io]\n{rendered}")
+        Ok(format!("[patch.crates-io]\n{rendered}"))
     }
+}
+
+fn require_package_manifest_identity(
+    manifest_path: &Path,
+    expected_name: &str,
+    expected_version: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = fs::read_to_string(manifest_path)?;
+    let manifest = toml::from_str::<toml::Value>(&source)?;
+    let package = manifest
+        .get("package")
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| format!("package table missing from {}", manifest_path.display()))?;
+    let name = package
+        .get("name")
+        .and_then(toml::Value::as_str)
+        .unwrap_or_default();
+    let version = package.get("version");
+    let version_matches = version
+        .and_then(toml::Value::as_str)
+        .is_some_and(|version| version == expected_version)
+        || version
+            .and_then(toml::Value::as_table)
+            .and_then(|version| version.get("workspace"))
+            .and_then(toml::Value::as_bool)
+            == Some(true);
+    if name != expected_name || !version_matches {
+        let observed_version = version
+            .and_then(toml::Value::as_str)
+            .unwrap_or("<not an exact or workspace version>");
+        return Err(format!(
+            "bootstrap Wasm-store sibling {} must be package {expected_name} {expected_version}; found {name} {observed_version}",
+            manifest_path.display()
+        )
+        .into());
+    }
+    Ok(())
 }
 
 fn registry_package_version_suffix<'a>(
@@ -387,36 +464,11 @@ fn registry_package_version_suffix<'a>(
     parent_name.strip_prefix(&format!("{crate_name}-"))
 }
 
-// Locate a versioned sibling packaged crate under the same registry source root.
-fn find_versioned_sibling_manifest(
-    sibling_root: &Path,
-    crate_name: &str,
-    version_hint: Option<&str>,
-) -> Option<PathBuf> {
-    if let Some(version) = version_hint {
-        let preferred = sibling_root
-            .join(format!("{crate_name}-{version}"))
-            .join("Cargo.toml");
-        if preferred.is_file() {
-            return Some(preferred);
-        }
+fn render_profile(output: &mut String, profile: &str, settings: &[(&str, &str)]) {
+    let _ = writeln!(output, "\n[profile.{profile}]");
+    for (key, value) in settings {
+        let _ = writeln!(output, "{key} = {value}");
     }
-
-    let mut candidates = fs::read_dir(sibling_root).ok()?;
-    while let Some(Ok(entry)) = candidates.next() {
-        let file_name = entry.file_name();
-        let file_name = file_name.to_string_lossy();
-        if !file_name.starts_with(&format!("{crate_name}-")) {
-            continue;
-        }
-
-        let manifest_path = entry.path().join("Cargo.toml");
-        if manifest_path.is_file() {
-            return Some(manifest_path);
-        }
-    }
-
-    None
 }
 
 // Build the chosen `canic-wasm-store` source/wrapper for one target profile.
@@ -459,13 +511,20 @@ fn append_wasm_store_profile_config_args(command: &mut Command, profile: Caniste
     match profile {
         CanisterBuildProfile::Debug => {}
         CanisterBuildProfile::Fast => {
-            command
-                .args(WASM_STORE_RELEASE_PROFILE_CONFIG_ARGS)
-                .args(WASM_STORE_FAST_PROFILE_CONFIG_ARGS);
+            append_profile_config_args(command, "release", WASM_STORE_RELEASE_PROFILE);
+            append_profile_config_args(command, "fast", WASM_STORE_FAST_PROFILE);
         }
         CanisterBuildProfile::Release => {
-            command.args(WASM_STORE_RELEASE_PROFILE_CONFIG_ARGS);
+            append_profile_config_args(command, "release", WASM_STORE_RELEASE_PROFILE);
         }
+    }
+}
+
+fn append_profile_config_args(command: &mut Command, profile: &str, settings: &[(&str, &str)]) {
+    for (key, value) in settings {
+        command
+            .arg("--config")
+            .arg(format!("profile.{profile}.{key}={value}"));
     }
 }
 

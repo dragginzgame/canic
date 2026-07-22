@@ -14,14 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.1`.
-- The latest published release is `v0.98.1` at
-  `e0dcd0cbb8f550e4c0366d9e1007ca32dceb2aa7`.
-- The `v0.98.1` source tree is
-  `ae154b0deb862702d48fed4dd235caf76089f7a2`; its product-tree hash is
-  `b190d1f163cf8f2099290fb429a7e9f84c693cd15ae1b446e72165214622a042` and
+- The workspace package version is `0.98.2`.
+- The latest published release is `v0.98.2` at
+  `73973fc24c407b1732de1a142d4990b5cb6becf6`.
+- The `v0.98.2` source tree is
+  `a53cc20e4533f7c7277e2fda3c594ecba8eb99ac`; its product-tree hash is
+  `961b30a138f55e4644b34372b51bd595abbca933234ed39b07b598113d90c0d3` and
   its Cargo.lock SHA-256 is
-  `801ad42f9b2a733e925d3c4b0b66cae1922b60b3b7b2cc0166a9a52cfd2092e2`.
+  `dc6355881a2dc3856cb8a991b03b5b368e73dc5398a9da599fcb68be63721458`.
+- Open `0.98.3` is a bounded post-closeout bootstrap-build correction. It
+  makes implicit Wasm-store package selection deterministic, repairs the
+  packaged-downstream proof, centralizes generated dependency/profile
+  authority, and declares `ic-cdk 0.20.2` without changing package versions.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -451,20 +455,19 @@ cumulative validation are published in `v0.98.0`. Exact findings,
 corrections, and validation are in the
 [0.97 closeout audit](../design/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-closeout-audit.md).
 
-0.98 is active. Published `v0.98.0` is the corrected immutable predecessor and
+0.98 is closed. Published `v0.98.0` is the corrected immutable predecessor and
 completes Slice A by deleting the consumerless project-protocol test package
 and the explicit legacy-refill anti-resurrection test. Published `v0.98.1`
 completes Slice B: the obsolete externally uncertain LocalIntent race fixture
 and its two auxiliary packages are hard-cut, while one receipt-backed PocketIC
-authority retains every frozen final-`v0.96.8` assertion. Open `0.98.2`
+authority retains every frozen final-`v0.96.8` assertion. Published `v0.98.2`
 completes Slice C by deleting the accepted-but-unexecuted randomness contract
 and unreachable raw-randomness adapter/metrics. Explicit retired input is a
 typed strict-schema failure; no replacement or compatibility path remains.
 The maintainer also approved the bounded consolidation amendment in the same
-open patch: all 42 candidates across 37 packages are resolved, with one fixed
-P1, 11 fixed P2 findings, and 30 proved notes. The complete candidate is ready
-for release against immutable `v0.98.1`; closeout waits only for the exact
-`v0.98.2` anchor.
+release: all 42 candidates across 37 packages are resolved, with one fixed
+P1, 11 fixed P2 findings, and 30 proved notes. The complete release is
+immutably closed at `v0.98.2` with no unresolved finding.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -1026,7 +1029,7 @@ First primary results:
   Rust targets, the layering guard, and locked metadata resolution for 37
   packages. The deleted `intent_client` and `intent_external` packages have no
   workspace or lockfile entry.
-- Open `0.98.2` combines the original Slice C randomness hard cut with the
+- Released `0.98.2` combines the original Slice C randomness hard cut with the
   maintainer-approved consolidation amendment. Active source retains no
   randomness schema, projection, adapter, or metric path; retired input fails
   through typed strict-schema evidence. The repository-wide authority map
@@ -1041,15 +1044,14 @@ First primary results:
   CLI state, protocol, and reference surfaces. The recorded cumulative unit
   and CI-built Wasm/PocketIC selection, strict workspace Clippy, formatting,
   layering, feature, dependency, protocol, audit-catalog, release-policy, and
-  stale-path gates pass. The combined candidate verdict is `READY FOR
-  v0.98.2`; immutable closure waits only for the maintainer-owned release
-  anchor.
+  stale-path gates pass. The combined closeout verdict is `CLOSED` at the
+  immutable `v0.98.2` anchor.
 
 ## Next Action
 
-Review and release the combined open `0.98.2` patch, then record its exact
-commit, tree, product-tree hash, Cargo.lock hash, and workspace version in the
-0.98 closeout/status evidence. Do not open another release line for this work.
+Complete targeted validation of the bounded open `0.98.3` bootstrap-build
+correction, then hand the patch to the maintainer-owned release flow. This
+does not reopen the closed 0.98 architectural-sediment scope.
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish,
 or push these shared-worktree changes without maintainer action.

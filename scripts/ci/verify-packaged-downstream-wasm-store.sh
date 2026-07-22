@@ -235,14 +235,20 @@ assert_generated_probe_outputs() {
         echo "expected generated wrapper to patch sibling packaged Canic crates" >&2
         exit 1
     }
-    grep -Fq 'features = ["wasm-store-canister"]' "$wrapper_manifest" || {
-        echo "expected generated wrapper to use the wasm-store-canister feature" >&2
+    cargo metadata --no-deps --format-version=1 --manifest-path "$wrapper_manifest" |
+        jq -e '
+            any(
+                .packages[]
+                | select(.name == "canic-generated-wasm-store")
+                | .dependencies[];
+                .name == "canic"
+                    and .kind == null
+                    and (.features | sort) == ["metrics", "wasm-store-canister"]
+            )
+        ' >/dev/null || {
+        echo "expected generated wrapper to enable exactly the maintained Canic runtime features" >&2
         exit 1
     }
-    if grep -Fq 'features = ["control-plane"]' "$wrapper_manifest"; then
-        echo "generated wrapper must not use the root control-plane feature" >&2
-        exit 1
-    fi
     grep -Fq '[profile.fast]' "$wrapper_manifest" || {
         echo "expected generated wrapper to define the Canic fast profile" >&2
         exit 1

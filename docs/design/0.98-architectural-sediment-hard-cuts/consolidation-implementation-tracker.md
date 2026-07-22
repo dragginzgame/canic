@@ -2,17 +2,17 @@
 
 Date: 2026-07-22
 
-Overall status: implementation-complete; immutable closeout waits for
-`v0.98.2`
+Overall status: closed at immutable `v0.98.2`
 
 ## Baseline guard
 
 | Item | Status | Evidence |
 | --- | --- | --- |
 | Immutable source | complete | commit `e0dcd0cbb8f550e4c0366d9e1007ca32dceb2aa7`, tree `ae154b0deb862702d48fed4dd235caf76089f7a2` |
-| Open patch scope | complete | original Slice C randomness hard cut plus the maintainer-approved consolidation amendment |
+| Immutable release | complete | `v0.98.2` at commit `73973fc24c407b1732de1a142d4990b5cb6becf6`, tree `a53cc20e4533f7c7277e2fda3c594ecba8eb99ac` |
+| Release scope | complete | original Slice C randomness hard cut plus the maintainer-approved consolidation amendment |
 | Prior 0.98 ownership | complete | project-protocol and LocalIntent fixture cuts remain published in v0.98.0/v0.98.1 and are not counted again |
-| Version guard | complete | no package, install URL, release-script default, tag, or lock package version changed |
+| Version guard | complete | Product work did not change release-owned version surfaces; the maintainer release flow performed only the required 0.98.2 synchronization |
 
 ## Slice tracker
 

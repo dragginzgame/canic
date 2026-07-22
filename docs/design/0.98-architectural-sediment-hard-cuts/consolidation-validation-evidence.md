@@ -2,23 +2,23 @@
 
 Date: 2026-07-22
 
-Status: implementation-complete
+Status: finalized at immutable `v0.98.2`
 
-Verdict: `READY FOR v0.98.2`
+Verdict: `PASS`
 
 ## 1. Baseline and scope
 
 This supporting report covers the complete Canic repository at immutable commit
 `e0dcd0cbb8f550e4c0366d9e1007ca32dceb2aa7`, tree
-`ae154b0deb862702d48fed4dd235caf76089f7a2`, plus the complete open 0.98.2
-working tree. It inspected all 37 workspace packages, their modules,
-features, build scripts, macro paths, role packages, generated/deployment
-surfaces, current and historical documentation, test canisters, fixtures,
-scripts, durable contracts, and operator paths.
+`ae154b0deb862702d48fed4dd235caf76089f7a2`, plus the complete 0.98.2 release
+candidate that became immutable `v0.98.2`. It inspected all 37 workspace
+packages, their modules, features, build scripts, macro paths, role packages,
+generated/deployment surfaces, current and historical documentation, test
+canisters, fixtures, scripts, durable contracts, and operator paths.
 
 The committed `Cargo.lock` baseline hash was
 `801ad42f9b2a733e925d3c4b0b66cae1922b60b3b7b2cc0166a9a52cfd2092e2`.
-The validated open-patch lock hash is
+The validated release-candidate lock hash is
 `7c952ab09618af9f936837205918c4092ad066ed0a943a6e1b663c5649966046`.
 Its new rows both belong to the combined 0.98.2 patch:
 
@@ -133,7 +133,7 @@ path was disproved. No difficult candidate was defaulted to either category.
 
 ### Slice A — Baseline and authority reconstruction
 
-Frozen the immutable `v0.98.1` baseline and complete open-patch scope;
+Frozen the immutable `v0.98.1` baseline and complete release scope;
 enumerated all packages, target kinds,
 features, normal/build dependencies, role configs, build scripts, checked-in
 DIDs, generated artifact paths, test fixtures, and production entry points.
@@ -324,7 +324,7 @@ evidence is not represented as a real mainnet conversion.
 
 ## 10. Final verdict
 
-`READY FOR v0.98.2`.
+`PASS`.
 
 Closure is based on repository-wide authority and reachability evidence, not
 test success alone: every package and major subsystem is covered, every
@@ -333,8 +333,6 @@ remediated, removed concepts are unreachable through code/features/macros/
 tests/scripts, no alternate auth/intent/recovery authority survives, and the
 practical completion matrix passes.
 
-The combined 0.98.2 change set is ready for maintainer review and release.
-Immutable closure requires the resulting tag identity to be recorded in the
-canonical 0.98 closeout audit and status documents. Package versions remain
-intentionally unchanged here because the maintainer-owned release flow owns
-the version bump.
+The combined change set is published at immutable `v0.98.2`. Its exact
+release identity and final `CLOSED` verdict are recorded in the canonical
+0.98 closeout audit and status documents.
