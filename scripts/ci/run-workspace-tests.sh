@@ -130,7 +130,7 @@ run_test "canic workspace_manifest" -p canic --test workspace_manifest
 run_test "canic-core trap_guard" -p canic-core --test trap_guard
 
 # PocketIC-backed integration suites.
-run_pic_test "canic-tests pic_intent_race" -p canic-tests --test pic_intent_race
+run_pic_test "canic-tests pic_receipt_backed_intent" -p canic-tests --test pic_receipt_backed_intent
 run_pic_test "canic-tests pic_sharding_bootstrap" -p canic-tests --test pic_sharding_bootstrap
 run_pic_test "canic-tests pic_role_attestation" -p canic-tests --test pic_role_attestation
 run_pic_test "canic-tests timer_authority" -p canic-tests --test timer_authority

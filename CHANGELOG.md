@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.1` hard-cuts the obsolete LocalIntent external-call race fixture and
+  its two auxiliary test packages, leaving one focused receipt-backed
+  PocketIC authority for the frozen replay, settlement, upgrade, capacity,
+  and reclamation contract.
+
 - `0.98.0` corrects five rigorous 0.97 closeout findings, freezes the three
   architectural-sediment deletion inventories, removes the consumerless
   project-protocol test package, and checksum-pins `ic-wasm 0.10.0` from its
