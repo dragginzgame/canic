@@ -32,21 +32,15 @@ pub struct CanisterArtifactBuildOutput {
 /// One optional artifact-changing tool invocation owned by the host builder.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArtifactTransformOutput {
-    pub role: String,
     pub transform: ArtifactTransformKind,
-    pub mode: ArtifactTransformMode,
-    pub tool: String,
     pub tool_version: Option<String>,
     pub outcome: ArtifactTransformOutcome,
 }
 
 impl ArtifactTransformOutput {
-    pub(crate) fn not_requested(role: &str, transform: ArtifactTransformKind) -> Self {
+    pub(crate) const fn not_requested(transform: ArtifactTransformKind) -> Self {
         Self {
-            role: role.to_string(),
             transform,
-            mode: ArtifactTransformMode::Optional,
-            tool: "ic-wasm".to_string(),
             tool_version: None,
             outcome: ArtifactTransformOutcome::NotRequested,
         }
@@ -58,12 +52,6 @@ impl ArtifactTransformOutput {
 pub enum ArtifactTransformKind {
     Shrink,
     CandidMetadata,
-}
-
-/// Admission mode for an artifact transform.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ArtifactTransformMode {
-    Optional,
 }
 
 /// Result of one optional artifact transform decision.

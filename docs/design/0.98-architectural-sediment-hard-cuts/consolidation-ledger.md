@@ -5,6 +5,12 @@ Date: 2026-07-22
 Status: all investigated candidates resolved; validation evidence is recorded
 in the supporting consolidation report and canonical 0.98 closeout audit.
 
+Post-closeout note: the resolved status and totals below apply to the original
+42 candidates published in `v0.98.2`. Seven later findings are recorded in the
+[post-closeout supplement](#post-closeout-supplement). They are accepted design
+scope with implementation pending and are not included in the immutable
+0.98.2 totals.
+
 ## Counting rules
 
 The disposition totals count the 42 unique `CANIC-098-CLOSE-*` candidate rows below.
@@ -77,6 +83,26 @@ workspace and are not counted again.
 | CANIC-098-CLOSE-TOOL-001 | Note | Suspected CI/build/deployment tooling for removed structures. All current scripts map to Make/CI/docs/release guards or intentional maintainer helpers; stale 0.98 symbols are absent. | RETAIN |
 | CANIC-098-CLOSE-HISTORY-001 | Note | Historical reports mention removed snapshot/randomness/auth models. Their dates/snapshot preambles or explicit superseded labels make them evidence, not current instructions. | REJECTED — do not rewrite immutable history |
 | CANIC-098-CLOSE-VIS-001 | Note | `unreachable_pub` reported roughly 1,700 existing items across deliberate cross-crate/facade/test surfaces. Raw lint volume does not prove obsolete responsibility. Exact consumer tracing produced C009/C015 instead. | REJECTED |
+
+## Post-closeout supplement
+
+Date: 2026-07-22
+
+These rows record findings from a later source-and-history pass. They narrow
+specific original retention claims without rewriting the evidence or totals
+for the published 42-candidate audit. `STABLE-001`, `CONFIG-003`, and
+`CLI-001` remain accurate for the shapes examined at the original closeout but
+were not exhaustive proofs against these newly traced tails.
+
+| ID | Severity | Candidate and authority evidence | Disposition |
+| --- | --- | --- | --- |
+| CANIC-098-POST-STATE-001 | P2 | The final core subnet-auth field was removed in `0.65.17`, but an empty stable record/cell, DTO, mapper, query, root endpoint, cascade slot, Candid shape, probe, and false restore invariant remain. The control-plane subnet state is separate and meaningful. | ACCEPT — delete the complete active core surface and permanently retire memory ID 17; implementation pending |
+| CANIC-098-POST-AUTH-001 | P2 | `root_proof_mode` accepts only `chain_key_batch`; `RootProofMode` has one variant; verification rejects an impossible alternative; canonical encoding ignores the value and emits tag 2. The removed alternative disappeared in `0.76.6`. | ACCEPT — remove selector/config/field taxonomy while preserving canonical byte 2 and all derived hashes; implementation pending |
+| CANIC-098-POST-AUTH-002 | P2 | Delegated-token access still forwards endpoint call kind after update-token consumption was removed in `0.61.0`; the terminal verifier parameter is unused. Metrics and performance still consume the shared call-kind type. | ACCEPT — remove only the delegated-auth argument chain; implementation pending |
+| CANIC-098-POST-LIFECYCLE-001 | P2 | Non-root init bytes are cloned through API/lifecycle/timer/workflow layers although internal bootstrap documents them as unused; the application hook independently consumes the original args. | ACCEPT — make internal bootstrap argument-free and retain user-hook args; implementation pending |
+| CANIC-098-POST-COST-001 | Note | `CostGuardPermit` stores cost class, quota key, payer, and a private sentinel that no settlement or capability path reads; only the quota and reservation intent IDs are authoritative. | ACCEPT — remove dead fields while retaining the permit proof boundary; implementation pending |
+| CANIC-098-POST-ADOPTION-001 | P2 | The top-level adoption-report warnings vector has been empty at its sole production constructor since introduction, yet remains in JSON and evidence-summary projection. Finding-local warning producers are distinct and active. | ACCEPT — remove the unproduced JSON field and mapping while retaining meaningful warnings; implementation pending |
+| CANIC-098-POST-CLI-001 | Note | Private auth CLI parsing wraps its sole renewal-status options in a one-variant enum and immediately unwraps it through one match arm. | ACCEPT — return the options directly without changing CLI behavior; implementation pending |
 
 ## Package coverage
 

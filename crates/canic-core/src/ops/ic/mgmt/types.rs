@@ -90,18 +90,6 @@ pub struct UpdateSettingsArgs {
 }
 
 ///
-/// EcdsaCurve
-///
-/// Operations-layer ECDSA curve selector for management-canister chain-key calls.
-///
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum EcdsaCurve {
-    #[default]
-    Secp256k1,
-}
-
-///
 /// EcdsaKeyId
 ///
 /// Operations-layer ECDSA key id for management-canister chain-key calls.
@@ -109,7 +97,6 @@ pub enum EcdsaCurve {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EcdsaKeyId {
-    pub curve: EcdsaCurve,
     pub name: String,
 }
 
@@ -403,13 +390,22 @@ pub(super) fn sign_with_ecdsa_from_infra(result: InfraSignWithEcdsaResult) -> Si
 
 fn ecdsa_key_id_to_infra(key_id: &EcdsaKeyId) -> InfraEcdsaKeyId {
     InfraEcdsaKeyId {
-        curve: ecdsa_curve_to_infra(key_id.curve),
+        curve: InfraEcdsaCurve::Secp256k1,
         name: key_id.name.clone(),
     }
 }
 
-const fn ecdsa_curve_to_infra(curve: EcdsaCurve) -> InfraEcdsaCurve {
-    match curve {
-        EcdsaCurve::Secp256k1 => InfraEcdsaCurve::Secp256k1,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chain_key_id_uses_the_supported_management_curve() {
+        let key_id = ecdsa_key_id_to_infra(&EcdsaKeyId {
+            name: "key_1".to_string(),
+        });
+
+        assert_eq!(key_id.curve, InfraEcdsaCurve::Secp256k1);
+        assert_eq!(key_id.name, "key_1");
     }
 }

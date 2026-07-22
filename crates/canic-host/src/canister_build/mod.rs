@@ -15,8 +15,8 @@ pub use context::{
     WorkspaceBuildContext, print_workspace_build_context_once, workspace_build_context_once,
 };
 pub use model::{
-    ArtifactTransformKind, ArtifactTransformMode, ArtifactTransformOutcome,
-    ArtifactTransformOutput, CanisterArtifactBuildOutput,
+    ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
+    CanisterArtifactBuildOutput,
 };
 pub(crate) use model::{CanisterArtifactBuildSpec, CurrentCanisterArtifactBuildOutput};
 

@@ -7,8 +7,8 @@ use std::{
 
 use crate::{
     canister_build::{
-        ArtifactTransformKind, ArtifactTransformMode, ArtifactTransformOutcome,
-        ArtifactTransformOutput, CanisterArtifactBuildOutput, CanisterBuildProfile,
+        ArtifactTransformKind, ArtifactTransformOutcome, ArtifactTransformOutput,
+        CanisterArtifactBuildOutput, CanisterBuildProfile,
     },
     evidence_envelope::{CommandProvenanceV1, EvidenceTargetKindV1, PayloadSchemaRefV1},
     test_support::temp_dir,
@@ -120,6 +120,9 @@ fn build_provenance_envelope_wraps_stable_payload() {
     assert!(payload.cargo.cargo_lock_sha256.is_some());
     assert_eq!(payload.artifacts.len(), 2);
     assert_eq!(payload.transforms.len(), 2);
+    assert!(payload.transforms.iter().all(|transform| transform.mode
+        == ArtifactTransformModeV1::Optional
+        && transform.tool == "ic-wasm"));
     assert_eq!(payload.transforms[0].role, "app");
     assert_eq!(
         payload.transforms[0].transform,
@@ -250,14 +253,11 @@ fn write_sample_artifacts(root: &Path, role: &str) -> CanisterArtifactBuildOutpu
         did_path,
         transforms: vec![
             ArtifactTransformOutput {
-                role: role.to_string(),
                 transform: ArtifactTransformKind::Shrink,
-                mode: ArtifactTransformMode::Optional,
-                tool: "ic-wasm".to_string(),
                 tool_version: Some("ic-wasm 0.test".to_string()),
                 outcome: ArtifactTransformOutcome::Applied,
             },
-            ArtifactTransformOutput::not_requested(role, ArtifactTransformKind::CandidMetadata),
+            ArtifactTransformOutput::not_requested(ArtifactTransformKind::CandidMetadata),
         ],
     }
 }
