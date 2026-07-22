@@ -1,6 +1,7 @@
 #![expect(clippy::unused_async)]
 
-use canic::{Error, api::canister::placement::ScalingApi, cdk::types::Principal, prelude::*};
+use candid::Principal;
+use canic::{Error, api::canister::placement::ScalingApi, prelude::*};
 
 const POOL_NAME: &str = "scales";
 

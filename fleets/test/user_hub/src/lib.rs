@@ -1,7 +1,8 @@
 #![expect(clippy::unused_async)]
 
+use candid::Principal;
 use canic::api::canister::placement::ShardingApi;
-use canic::{Error, cdk::types::Principal, prelude::*};
+use canic::{Error, prelude::*};
 use std::cell::RefCell;
 
 const POOL_NAME: &str = "user_shards";

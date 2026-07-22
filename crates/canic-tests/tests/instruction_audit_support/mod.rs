@@ -1,6 +1,6 @@
+use candid::Principal;
 use canic::{
     Error,
-    cdk::{types::Principal, utils::hash::wasm_hash},
     dto::{
         auth::{
             AuthRequestMetadata, DelegatedToken, DelegatedTokenPrepareRequest,
@@ -28,6 +28,7 @@ use canic_control_plane::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
 };
+use canic_core::cdk::utils::hash::wasm_hash;
 use canic_testing_internal::canister::{APP, SCALE_HUB, TEST, USER_HUB};
 use canic_testing_internal::pic::{
     create_user_shard, issue_delegated_token_from_active_proof, role_grant,

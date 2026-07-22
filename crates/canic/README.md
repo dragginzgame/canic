@@ -4,7 +4,6 @@ Facade crate that re-exports the main Canic stack for canister projects:
 
 - endpoint and lifecycle macros
 - core runtime/types
-- curated IC CDK helpers
 - stable-memory helpers under `canic::memory`
 
 Most downstream canister projects should start here instead of reaching for
@@ -13,19 +12,19 @@ lower-level crates directly.
 Use the explicit module paths for the larger bundled surfaces:
 
 - `canic::api::*` for runtime APIs
-- `canic::cdk::*` for curated IC CDK helpers
+- `canic::dto::*` for public wire and value types
 - `canic::memory::*` for stable-memory helpers and macros
 
 ## Crate Boundary
 
-Use `canic`, including `canic::cdk`, only from configured canister role
-packages. Each role package must declare its own direct, normal runtime
-dependency on `canic`.
+Use `canic` only from configured canister role packages. Each role package
+must declare its own direct, normal runtime dependency on `canic`.
 
-Shared runtime libraries must not depend on `canic` or use `canic::cdk`.
-Keep their domain logic framework-independent; when they need generic IC types
-or APIs, depend on upstream crates such as `candid` or `ic-cdk` directly. This
-keeps every role package's runtime graph to one direct path to Canic.
+Shared runtime libraries must not depend on `canic`. Keep their domain logic
+framework-independent; role packages and IC adapters depend directly on
+upstream crates such as `candid`, `ic-cdk`, or `ic-stable-structures` for
+generic IC types and APIs. This keeps every role package's runtime graph to
+one direct path to Canic.
 
 ## Feature Contract
 

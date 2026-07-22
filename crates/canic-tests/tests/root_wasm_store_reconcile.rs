@@ -2,9 +2,7 @@
 // This test relies on embedded production config by design.
 
 use candid::encode_one;
-use canic::{
-    CANIC_WASM_CHUNK_BYTES, Error, cdk::utils::hash::wasm_hash, dto::error::ErrorCode, protocol,
-};
+use canic::{CANIC_WASM_CHUNK_BYTES, Error, dto::error::ErrorCode, protocol};
 use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
@@ -17,6 +15,7 @@ use canic_control_plane::{
         WasmStoreBinding, WasmStoreGcMode,
     },
 };
+use canic_core::cdk::utils::hash::wasm_hash;
 use canic_testing_internal::canister::APP;
 use canic_testing_internal::pic::CanicPicExt;
 use canic_tests::root::{

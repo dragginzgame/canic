@@ -77,8 +77,8 @@ macro_rules! canic_emit_icrc_standards_endpoints {
         #[cfg(canic_icrc21_enabled)]
         #[$crate::canic_query(internal, public)]
         async fn icrc21_canister_call_consent_message(
-            req: ::canic::__internal::core::cdk::spec::standards::icrc::icrc21::ConsentMessageRequest,
-        ) -> ::canic::__internal::core::cdk::spec::standards::icrc::icrc21::ConsentMessageResponse {
+            req: ::canic::dto::icrc21::ConsentMessageRequest,
+        ) -> ::canic::dto::icrc21::ConsentMessageResponse {
             $crate::__internal::core::api::icrc::Icrc21Query::consent_message(req)
         }
     };

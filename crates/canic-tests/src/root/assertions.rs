@@ -1,9 +1,9 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
+use candid::Principal;
 use canic::{
     __internal::core::state_contract::STATE_MANIFEST_SCHEMA_VERSION,
-    cdk::types::Principal,
     dto::{
         canister::CanisterInfo,
         env::EnvSnapshotResponse,

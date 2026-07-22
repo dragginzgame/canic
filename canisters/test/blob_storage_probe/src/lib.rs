@@ -1,14 +1,15 @@
 #![expect(clippy::unused_async)]
 
+use candid::Principal;
 use canic::{
     Error,
-    cdk::types::Principal,
     dto::blob_storage::{
         BlobStorageBillingConfig, BlobStorageCashierAccountTopUpRequest,
         BlobStorageCashierAccountTopUpResult, BlobStorageLocalCounters,
     },
     prelude::*,
 };
+use ic_cdk::api::time;
 
 canic::start!();
 
@@ -31,10 +32,7 @@ canic::canic_emit_blob_storage_billing_endpoints!(
 /// Register one authorized immutable object storage gateway principal.
 #[canic_update(requires(caller::is_controller()))]
 async fn blob_storage_probe_add_gateway(principal: Principal) -> Result<(), Error> {
-    canic::api::blob_storage::BlobStorageApi::upsert_gateway_principal(
-        principal,
-        canic::cdk::utils::time::now_nanos(),
-    );
+    canic::api::blob_storage::BlobStorageApi::upsert_gateway_principal(principal, time());
     Ok(())
 }
 
@@ -115,10 +113,7 @@ fn blob_storage_probe_counts() -> Result<BlobStorageLocalCounters, Error> {
 /// Mark a live blob as pending object storage gateway deletion.
 #[canic_update(requires(caller::is_controller()))]
 async fn blob_storage_probe_mark_pending_delete(root_hash: String) -> Result<bool, Error> {
-    canic::api::blob_storage::BlobStorageApi::mark_pending_delete(
-        &root_hash,
-        canic::cdk::utils::time::now_nanos(),
-    )
+    canic::api::blob_storage::BlobStorageApi::mark_pending_delete(&root_hash, time())
 }
 
 /// Return whether a blob is live and not pending deletion.

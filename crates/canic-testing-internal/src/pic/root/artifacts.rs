@@ -1,4 +1,5 @@
-use canic::{Error, cdk::types::Principal, ids::CanisterRole, protocol};
+use candid::Principal;
+use canic::{Error, ids::CanisterRole, protocol};
 use canic_control_plane::{
     dto::template::{
         TemplateChunkInput, TemplateChunkSetInfoResponse, TemplateChunkSetPrepareInput,
@@ -8,6 +9,7 @@ use canic_control_plane::{
         TemplateChunkingMode, TemplateId, TemplateManifestState, TemplateVersion, WasmStoreBinding,
     },
 };
+use canic_core::cdk::utils::hash::wasm_hash;
 use ic_testkit::{artifacts::WatchedInputSnapshot, pic::Pic};
 use std::{fs, io};
 
@@ -83,7 +85,7 @@ pub(super) fn stage_managed_release_set(
         );
         let wasm_module = load_release_wasm_gz(spec, &role_name);
         let template_id = TemplateId::owned(format!("embedded:{role}"));
-        let payload_hash = canic::cdk::utils::hash::wasm_hash(&wasm_module);
+        let payload_hash = wasm_hash(&wasm_module);
         let payload_size_bytes = wasm_module.len() as u64;
         let chunks = wasm_module
             .chunks(spec.root_release_chunk_bytes)
@@ -109,10 +111,7 @@ pub(super) fn stage_managed_release_set(
             version: version.clone(),
             payload_hash: payload_hash.clone(),
             payload_size_bytes,
-            chunk_hashes: chunks
-                .iter()
-                .map(|chunk| canic::cdk::utils::hash::wasm_hash(chunk))
-                .collect(),
+            chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
         };
         prepare_chunk_set(pic, root_id, prepare);
 

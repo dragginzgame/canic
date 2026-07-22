@@ -5,10 +5,10 @@
 //! Boundary: workflow query facade over ICRC registry and dispatcher services.
 
 use crate::{
-    cdk::spec::standards::icrc::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
     config::Config,
     dispatch::icrc21::Icrc21Dispatcher,
     domain::icrc::icrc10::Icrc10Registry,
+    dto::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
     ops::runtime::env::EnvOps,
 };
 

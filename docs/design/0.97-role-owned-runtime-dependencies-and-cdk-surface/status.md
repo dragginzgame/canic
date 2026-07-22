@@ -5,15 +5,16 @@ Last updated: 2026-07-22
 ## Current State
 
 0.97 is accepted and active after completing audit-only Slice A against
-released `v0.96.8` and releasing bounded Slice B as `v0.97.0`. Slice C is
-implemented in the open `0.97.1` batch: macro expansion now uses one exact
-hidden CDK boundary, while human-facing facade removal remains the bounded
-next slice. The required inventories and relocation decisions are frozen in the
+released `v0.96.8`, releasing bounded Slice B as `v0.97.0`, and releasing
+hidden macro-boundary Slice C as `v0.97.1`. Slice D is implemented in the open
+`0.97.2` batch: every maintained consumer uses its semantic Canic or direct
+upstream owner and the human-facing CDK facade is deleted. The required
+relocation decisions are frozen in the
 [Slice A report](../../audits/reports/2026-07/2026-07-22/0.97-slice-a-surface-and-graph-inventory.md).
 Slice B gives every authoritative role-contract caller one canonical Cargo
 evidence producer and hard-cuts the declaration and protected-graph
 contradictions identified by Slice A. No package-version change, downstream
-edit, public CDK removal, or refill hard cut is part of the current slice.
+edit, or refill hard cut is part of the current slice.
 
 The proposal gives each configured role package sole external authority over
 Canic-owned framework packages and directly selected Canic capability
@@ -44,8 +45,9 @@ instructions; it cannot retain the facade.
   the source-level crate name `canic`.
 - Cargo metadata must be filtered and feature-selected to match the exact role
   build; otherwise callers can validate different graphs.
-- The current public `canic::cdk` facade mixes upstream conveniences,
-  Canic-owned helpers and types, and macro-expansion plumbing.
+- The former public `canic::cdk` facade mixed upstream conveniences,
+  Canic-owned helpers and types, and macro-expansion plumbing; Slice D deletes
+  it after separating those owners.
 - Canic already has a hidden `canic::__internal` macro boundary.
 - The standalone `canic-cdk` package was removed in 0.43.3 and is not restored
   by this proposal.
@@ -71,10 +73,14 @@ instructions; it cannot retain the facade.
   rejection, protected sibling-path rejection, resolver hard cut, explicit
   feature requirements, and purpose-bound build edge. The source fixtures do
   not retain generated lockfiles.
-- Active `canic::cdk` consumers require only direct upstream IC imports or
-  existing Canic-internal helpers. The only justified semantic relocations are
-  Canic cycle values under `dto::cycles` and public ICRC-21 protocol DTOs under
-  `dto::icrc21`.
+- The published Slice A lexical inventory missed grouped imports such as
+  `use canic::{cdk::...}` in maintained test fleets, stubs, and integration
+  support. Direct Slice D inspection corrected that evidence before deletion;
+  all grouped and fully qualified consumers now use direct upstream IC imports
+  or existing Canic-internal helpers.
+- Canic cycle values now live publicly under `dto::cycles`, and public ICRC-21
+  protocol DTOs live under `dto::icrc21`. The former internal ICRC-21 path is
+  removed rather than retained as an alias.
 - ICP refill has no current dedicated timer and no in-repository role enables
   its generic feature. Its remaining generic feature/config/API/emitter,
   arbitrary target/CLI fabrication, unconditional lifecycle/metrics access,
@@ -129,10 +135,23 @@ refill baseline/deletion set.
 - Formatting and diff hygiene pass. Candid, stable records, CLI output, and
   runtime behavior are unchanged.
 
+## Slice D Validation
+
+- Every migrated role, facade, runtime, macro, internal-support, and
+  integration-test target checks successfully. Strict all-target Clippy passes
+  for the same affected package set.
+- All 36 procedural-macro tests, 26 focused endpoint/protocol/reference tests,
+  and the cycle DTO test pass. The semantic ICRC-21 and cycle public imports
+  compile and Candid-roundtrip without changing the generated wire contract.
+- Focused Cargo Machete reports no unused dependency across all migrated
+  packages. Obsolete direct-dependency exceptions are removed where imports
+  are now visible.
+- Fresh isolated rustdoc contains public `dto::icrc21` and `dto::cycles`
+  modules and no public `canic::cdk` module. The doc-hidden compiler module is
+  not listed on the public crate index.
+
 ## Next Action
 
-Publish the open `0.97.1` Slice C boundary. Then migrate the remaining active
-human consumers and maintained documentation to their canonical upstream or
-Canic semantic owners and delete the public `canic::cdk` facade once. Do not
-start the refill hard cut, change Cargo package versions, or edit Toko in the
-CDK batch.
+Publish the open `0.97.2` Slice D boundary. Then begin Slice E at the frozen
+root-owned manual ICP-refill contract. Do not change Cargo package versions or
+edit Toko in the CDK batch.

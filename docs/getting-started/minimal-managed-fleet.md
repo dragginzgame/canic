@@ -202,6 +202,7 @@ canic = "<same-version-as-canic-cli>"
 
 use candid::Principal;
 use canic::{Error, prelude::*};
+use ic_cdk::api::msg_caller;
 
 canic::start!();
 
@@ -211,12 +212,12 @@ async fn canic_upgrade() {}
 
 #[canic_query]
 fn whoami_query() -> Result<Principal, Error> {
-    Ok(canic::cdk::api::msg_caller())
+    Ok(msg_caller())
 }
 
 #[canic_update]
 fn whoami_update() -> Result<Principal, Error> {
-    Ok(canic::cdk::api::msg_caller())
+    Ok(msg_caller())
 }
 
 canic::finish!();

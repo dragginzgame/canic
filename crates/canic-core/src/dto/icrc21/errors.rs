@@ -1,4 +1,4 @@
-//! Module: cdk::spec::standards::icrc::icrc21::errors
+//! Module: dto::icrc21::errors
 //!
 //! Responsibility: ICRC-21 consent error DTOs.
 //! Does not own: consent evaluation or wallet display behavior.

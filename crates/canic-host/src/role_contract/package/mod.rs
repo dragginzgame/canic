@@ -55,6 +55,12 @@ const PROTECTED_CANIC_PACKAGES: &[ProtectedCanicPackage] = &[
     },
 ];
 
+struct ValidatedRoleDeclaration<'a> {
+    package: &'a CargoMetadataPackage,
+    direct_dependency: &'a CargoMetadataDependency,
+    dependency_key: String,
+}
+
 ///
 /// PackageValidationMode
 ///
@@ -360,6 +366,14 @@ fn validate_package_manifest(
         Ok(selected) => selected,
         Err(finding) => return RolePackageValidation::Unsupported(finding),
     };
+    let declaration =
+        match validate_role_declaration(&metadata, selected, expected_fleet, expected_role) {
+            Ok(declaration) => declaration,
+            Err(finding) => return RolePackageValidation::Unsupported(finding),
+        };
+    if let Err(finding) = validate_catalog() {
+        return RolePackageValidation::Unsupported(finding);
+    }
     let catalog =
         match cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline()) {
             Ok(catalog) => catalog,
@@ -372,7 +386,7 @@ fn validate_package_manifest(
         };
     let tree = match cargo_tree_for_package(
         manifest_path,
-        &selected.id,
+        &declaration.package.id,
         WASM_TARGET,
         mode.locked(),
         mode.offline(),
@@ -386,15 +400,15 @@ fn validate_package_manifest(
             ));
         }
     };
-    let graph = match correlate_package_tree(&catalog, &metadata, selected, &tree) {
+    let graph = match correlate_package_tree(&catalog, &metadata, declaration.package, &tree) {
         Ok(graph) => graph,
         Err(reason) => return unsupported_shape(reason),
     };
 
-    match validate_metadata_package(
+    match validate_resolved_package(
         &metadata,
         &graph,
-        manifest_path,
+        &declaration,
         expected_fleet,
         expected_role,
     ) {
@@ -403,25 +417,40 @@ fn validate_package_manifest(
     }
 }
 
-fn validate_metadata_package(
+fn validate_role_declaration<'a>(
     metadata: &CargoMetadata,
-    graph: &CargoGraphEvidence,
-    manifest_path: &Path,
+    package: &'a CargoMetadataPackage,
     expected_fleet: &str,
     expected_role: &CanisterRole,
-) -> Result<RoleCargoGraphEvidence, RoleContractFinding> {
-    validate_catalog()?;
-    let selected = exact_manifest_package(metadata, manifest_path, expected_role)?;
-    validate_package_metadata(selected, expected_fleet, expected_role)?;
+) -> Result<ValidatedRoleDeclaration<'a>, RoleContractFinding> {
+    validate_package_metadata(package, expected_fleet, expected_role)?;
 
-    let direct_dependency = direct_canic_dependency(selected, expected_role)?;
+    let direct_dependency = direct_canic_dependency(package, expected_role)?;
     let dependency_key = direct_dependency
         .rename
         .as_deref()
         .unwrap_or(CANIC_PACKAGE)
         .to_string();
-    reject_package_feature_forwarding(selected, &dependency_key)?;
-    validate_cargo_declarations(metadata, selected, direct_dependency)?;
+    reject_package_feature_forwarding(package, &dependency_key)?;
+    validate_cargo_declarations(metadata, package, direct_dependency)?;
+
+    Ok(ValidatedRoleDeclaration {
+        package,
+        direct_dependency,
+        dependency_key,
+    })
+}
+
+fn validate_resolved_package(
+    metadata: &CargoMetadata,
+    graph: &CargoGraphEvidence,
+    declaration: &ValidatedRoleDeclaration<'_>,
+    expected_fleet: &str,
+    expected_role: &CanisterRole,
+) -> Result<RoleCargoGraphEvidence, RoleContractFinding> {
+    let selected = declaration.package;
+    let direct_dependency = declaration.direct_dependency;
+    let dependency_key = &declaration.dependency_key;
 
     let package_by_id = metadata
         .packages
@@ -436,7 +465,7 @@ fn validate_metadata_package(
         .iter()
         .map(|node| (node.id.as_str(), node))
         .collect::<BTreeMap<_, _>>();
-    let dependency_edge_name = cargo_dependency_edge_name(&dependency_key);
+    let dependency_edge_name = cargo_dependency_edge_name(dependency_key);
     let direct_edges = graph
         .edges
         .get(&selected.id)

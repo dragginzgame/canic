@@ -86,7 +86,7 @@ macro_rules! canic_emit_topology_placement_endpoints {
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_sharding_partition_keys(
             pool: String,
-            shard_pid: ::canic::__internal::core::cdk::types::Principal,
+            shard_pid: ::canic::__internal::cdk::Principal,
         ) -> Result<::canic::dto::placement::sharding::ShardingPartitionKeysResponse, ::canic::Error> {
             Ok($crate::__internal::core::api::placement::sharding::ShardingApi::partition_keys(&pool, shard_pid))
         }

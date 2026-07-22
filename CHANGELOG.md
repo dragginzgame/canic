@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.97.md](docs/changelog/0.97.md)
 
+- `0.97.2` hard-cuts the public `canic::cdk` facade in favor of semantic Canic
+  DTOs and direct upstream owners, and moves the procedural macro parser onto
+  the existing Syn 3 dependency line without changing runtime behavior. Role
+  manifest contract failures are now reported before Cargo graph inspection.
+
 - `0.97.1` moves all Canic macro-required CDK plumbing behind one exact hidden
   boundary and preserves locked PocketIC dependency evidence without changing
   Candid or runtime behavior.

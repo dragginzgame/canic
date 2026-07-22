@@ -1,7 +1,8 @@
 use super::{
     InitializedRootTopology, RootBaselineMetadata, RootBaselineSpec, progress, progress_elapsed,
 };
-use canic::{cdk::types::Principal, dto::topology::SubnetRegistryResponse, ids::CanisterRole};
+use candid::Principal;
+use canic::{dto::topology::SubnetRegistryResponse, ids::CanisterRole};
 use canic_control_plane::dto::template::WasmStoreOverviewResponse;
 use ic_testkit::pic::{Pic, PicBuilder, PicStartError};
 use std::{

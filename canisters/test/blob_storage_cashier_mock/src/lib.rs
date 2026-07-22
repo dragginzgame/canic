@@ -1,13 +1,8 @@
 #![expect(clippy::unused_async)]
 
+use candid::{Int, Nat, Principal};
 use canic::{
     Error,
-    cdk::{
-        api::{msg_caller, msg_cycles_accept, msg_cycles_available},
-        candid::{Int, Nat},
-        trap,
-        types::Principal,
-    },
     dto::blob_storage::{
         BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetOk,
         BlobStorageCashierAccountBalanceGetRequest, BlobStorageCashierAccountBalanceGetResult,
@@ -16,6 +11,10 @@ use canic::{
         BlobStorageCashierAccountTopUpResult, BlobStorageCashierDebtTarget,
     },
     prelude::*,
+};
+use ic_cdk::{
+    api::{msg_caller, msg_cycles_accept, msg_cycles_available},
+    trap,
 };
 use std::{cell::RefCell, collections::BTreeMap};
 

@@ -1,5 +1,5 @@
 use crate::canister::{APP, SCALE_HUB};
-use canic::cdk::types::Principal;
+use candid::Principal;
 use ic_testkit::{
     artifacts::{build_wasm_canisters, read_wasm, test_target_dir, workspace_root_for},
     pic::{Pic, PicSerialGuard, StandaloneCanisterFixture, acquire_pic_serial_guard, pic},
