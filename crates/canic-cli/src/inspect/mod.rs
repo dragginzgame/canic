@@ -15,9 +15,9 @@ use crate::{
     version_text,
 };
 use candid::{Principal, types::principal::PrincipalError};
-use canic_core::dto::runtime::{
-    CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RuntimeFeatureStatus,
-    RuntimeStatus,
+use canic_core::{
+    dto::runtime::{CanicRuntimeStatus, RuntimeFeatureStatus, RuntimeStatus},
+    protocol::CANIC_RUNTIME_STATUS,
 };
 use canic_host::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
@@ -33,6 +33,8 @@ use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const INSPECT_SCHEMA_VERSION: u32 = 1;
+const RUNTIME_OBSERVED_SOURCE: &str = "runtime_observed";
+const CANDID_RESPONSE_FORMAT: &str = "candid";
 const INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic inspect canister aaaaa-aa
@@ -148,25 +150,10 @@ impl InspectCommandKind {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-enum InspectEndpoint {
-    #[serde(rename = "canic_runtime_status")]
-    RuntimeStatus,
-}
-
-impl InspectEndpoint {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::RuntimeStatus => canic_core::protocol::CANIC_RUNTIME_STATUS,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum InspectSource {
     CliArg,
     DeploymentRecord,
-    RuntimeObserved,
 }
 
 impl InspectSource {
@@ -174,21 +161,6 @@ impl InspectSource {
         match self {
             Self::CliArg => "cli_arg",
             Self::DeploymentRecord => "deployment_record",
-            Self::RuntimeObserved => "runtime_observed",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum InspectResponseFormat {
-    Candid,
-}
-
-impl InspectResponseFormat {
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Candid => "candid",
         }
     }
 }
@@ -198,13 +170,9 @@ struct InspectReport {
     schema_version: u32,
     command: InspectCommandKind,
     target_resolution: TargetResolution,
-    endpoint: InspectEndpoint,
+    endpoint: &'static str,
     status: RuntimeStatus,
-    health_status: Option<CanicHealthStatus>,
-    readiness_status: Option<CanicReadinessStatus>,
-    runtime_status: Option<RuntimeStatusPayload>,
-    warnings: Vec<String>,
-    next_actions: Vec<String>,
+    runtime_status: RuntimeStatusPayload,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -218,9 +186,9 @@ struct TargetResolution {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct RuntimeStatusPayload {
-    source: InspectSource,
+    source: &'static str,
     status: CanicRuntimeStatus,
-    response_format: InspectResponseFormat,
+    response_format: &'static str,
 }
 
 pub fn run<I>(args: I) -> Result<(), InspectCommandError>
@@ -367,12 +335,12 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
     }
     let output = icp.canister_query_output_with_candid(
         &target.canister_id,
-        canic_core::protocol::CANIC_RUNTIME_STATUS,
+        CANIC_RUNTIME_STATUS,
         Some("json"),
         target.candid_path.as_deref(),
     )?;
     let runtime_status = runtime_response_payload(&output)?;
-    let status = inspect_status(&runtime_status);
+    let status = runtime_status.status.status;
 
     Ok(InspectReport {
         schema_version: INSPECT_SCHEMA_VERSION,
@@ -384,13 +352,9 @@ fn inspect_report(target: &ResolvedInspectTarget) -> Result<InspectReport, Inspe
             environment: target.environment.clone(),
             source: target.source,
         },
-        endpoint: InspectEndpoint::RuntimeStatus,
+        endpoint: CANIC_RUNTIME_STATUS,
         status,
-        health_status: None,
-        readiness_status: None,
-        runtime_status: Some(runtime_status),
-        warnings: Vec::new(),
-        next_actions: Vec::new(),
+        runtime_status,
     })
 }
 
@@ -399,9 +363,9 @@ fn runtime_response_payload(output: &str) -> Result<RuntimeStatusPayload, Inspec
         .map_err(InspectCommandError::InvalidResponse)?;
 
     Ok(RuntimeStatusPayload {
-        source: InspectSource::RuntimeObserved,
+        source: RUNTIME_OBSERVED_SOURCE,
         status,
-        response_format: InspectResponseFormat::Candid,
+        response_format: CANDID_RESPONSE_FORMAT,
     })
 }
 
@@ -418,7 +382,7 @@ fn render_text_report(report: &InspectReport) -> String {
     let mut lines = vec![
         report.command.label().to_string(),
         format!("status: {}", report.status.label()),
-        format!("endpoint: {}", report.endpoint.label()),
+        format!("endpoint: {}", report.endpoint),
         format!("canister: {}", report.target_resolution.canister_id),
         format!("environment: {}", report.target_resolution.environment),
         format!("source: {}", report.target_resolution.source.label()),
@@ -429,45 +393,27 @@ fn render_text_report(report: &InspectReport) -> String {
     if let Some(role) = &report.target_resolution.role {
         lines.push(format!("role: {role}"));
     }
-    if let Some(runtime_status) = &report.runtime_status {
-        lines.extend([
-            String::new(),
-            "runtime_status".to_string(),
-            format!("source: {}", runtime_status.source.label()),
-            format!(
-                "response_format: {}",
-                runtime_status.response_format.label()
-            ),
-        ]);
-        let status = &runtime_status.status;
-        lines.extend([
-            format!("runtime_status: {}", status.status.label()),
-            format!("schema_version: {}", status.schema_version),
-            format!("observed_at_ns: {}", status.observed_at_ns),
-            format!("role: {}", status.role.as_deref().unwrap_or("unknown")),
-            format!("features: {}", status.features.len()),
-            format!("timers: {}", status.timers.len()),
-            format!("recent_failures: {}", status.recent_failures.len()),
-        ]);
-        if let Some(state) = &status.state {
-            lines.push(format!("state_domains: {}", state.domains.len()));
-        }
-        append_runtime_metadata_lines(&mut lines, status);
+    let runtime_status = &report.runtime_status;
+    lines.extend([
+        String::new(),
+        "runtime_status".to_string(),
+        format!("source: {}", runtime_status.source),
+        format!("response_format: {}", runtime_status.response_format),
+    ]);
+    let status = &runtime_status.status;
+    lines.extend([
+        format!("runtime_status: {}", status.status.label()),
+        format!("schema_version: {}", status.schema_version),
+        format!("observed_at_ns: {}", status.observed_at_ns),
+        format!("role: {}", status.role.as_deref().unwrap_or("unknown")),
+        format!("features: {}", status.features.len()),
+        format!("timers: {}", status.timers.len()),
+        format!("recent_failures: {}", status.recent_failures.len()),
+    ]);
+    if let Some(state) = &status.state {
+        lines.push(format!("state_domains: {}", state.domains.len()));
     }
-    if !report.warnings.is_empty() {
-        lines.push(String::new());
-        lines.push("warnings".to_string());
-        for warning in &report.warnings {
-            lines.push(format!("- {warning}"));
-        }
-    }
-    if !report.next_actions.is_empty() {
-        lines.push(String::new());
-        lines.push("next_actions".to_string());
-        for action in &report.next_actions {
-            lines.push(format!("- {action}"));
-        }
-    }
+    append_runtime_metadata_lines(&mut lines, status);
     lines.join("\n")
 }
 
@@ -556,10 +502,6 @@ fn enabled_runtime_feature_rows(features: &[RuntimeFeatureStatus]) -> String {
     } else {
         names.join(", ")
     }
-}
-
-const fn inspect_status(payload: &RuntimeStatusPayload) -> RuntimeStatus {
-    payload.status.status
 }
 
 fn validate_principal(value: &str) -> Result<(), InspectCommandError> {
@@ -663,6 +605,7 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
 mod tests {
     use super::*;
     use candid::Encode;
+    use canic_core::cdk::utils::hash::hex_bytes;
 
     #[test]
     fn parses_direct_canister_target() {
@@ -776,14 +719,14 @@ mod tests {
         let response = Ok::<_, canic_core::dto::error::Error>(status.clone());
         let output = format!(
             r#"{{"response_bytes":"{}"}}"#,
-            hex_bytes(&Encode!(&response).expect("encode runtime status response"))
+            hex_bytes(Encode!(&response).expect("encode runtime status response"))
         );
         let payload = runtime_response_payload(&output).expect("decode runtime status");
 
-        assert_eq!(payload.source, InspectSource::RuntimeObserved);
+        assert_eq!(payload.source, RUNTIME_OBSERVED_SOURCE);
         assert_eq!(payload.status, status);
-        assert_eq!(payload.response_format, InspectResponseFormat::Candid);
-        assert_eq!(inspect_status(&payload), RuntimeStatus::Ok);
+        assert_eq!(payload.response_format, CANDID_RESPONSE_FORMAT);
+        assert_eq!(payload.status.status, RuntimeStatus::Ok);
     }
 
     #[test]
@@ -836,28 +779,13 @@ mod tests {
     }
 
     #[test]
-    fn text_report_renders_warnings_and_next_actions() {
-        let mut report = sample_inspect_report();
-        report.warnings = vec!["runtime status warning".to_string()];
-        report.next_actions = vec!["inspect the runtime endpoint".to_string()];
-
-        let rendered = render_text_report(&report);
-
-        assert!(rendered.contains("warnings\n- runtime status warning"));
-        assert!(rendered.contains("next_actions\n- inspect the runtime endpoint"));
-    }
-
-    #[test]
     fn json_report_labels_runtime_observed_payload() {
         let value = serde_json::to_value(sample_inspect_report()).expect("serialize report");
 
         assert_eq!(value["schema_version"], INSPECT_SCHEMA_VERSION);
         assert_eq!(value["command"], "canic inspect canister");
         assert_eq!(value["target_resolution"]["source"], "cli_arg");
-        assert_eq!(
-            value["endpoint"],
-            canic_core::protocol::CANIC_RUNTIME_STATUS
-        );
+        assert_eq!(value["endpoint"], CANIC_RUNTIME_STATUS);
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], "runtime_observed");
         assert_eq!(value["runtime_status"]["status"]["status"], "ok");
@@ -891,26 +819,17 @@ mod tests {
             true
         );
         assert_eq!(value["runtime_status"]["response_format"], "candid");
-    }
-
-    #[test]
-    fn json_report_renders_warnings_and_next_actions() {
-        let mut report = sample_inspect_report();
-        report.warnings = vec!["runtime status warning".to_string()];
-        report.next_actions = vec!["inspect the runtime endpoint".to_string()];
-
-        let value = serde_json::to_value(report).expect("serialize report");
-
-        assert_eq!(value["warnings"][0], "runtime status warning");
-        assert_eq!(value["next_actions"][0], "inspect the runtime endpoint");
+        assert!(value.get("health_status").is_none());
+        assert!(value.get("readiness_status").is_none());
+        assert!(value.get("warnings").is_none());
+        assert!(value.get("next_actions").is_none());
     }
 
     #[test]
     fn failing_runtime_status_maps_to_status_exit() {
         let mut report = sample_inspect_report();
-        let payload = report.runtime_status.as_mut().expect("runtime status");
-        payload.status = sample_runtime_status(RuntimeStatus::Failing);
-        report.status = inspect_status(payload);
+        report.runtime_status.status = sample_runtime_status(RuntimeStatus::Failing);
+        report.status = report.runtime_status.status.status;
 
         let err = command_exit_result(&report).expect_err("failing status exits nonzero");
 
@@ -930,17 +849,13 @@ mod tests {
                 environment: "local".to_string(),
                 source: InspectSource::CliArg,
             },
-            endpoint: InspectEndpoint::RuntimeStatus,
+            endpoint: CANIC_RUNTIME_STATUS,
             status: RuntimeStatus::Ok,
-            health_status: None,
-            readiness_status: None,
-            runtime_status: Some(RuntimeStatusPayload {
-                source: InspectSource::RuntimeObserved,
+            runtime_status: RuntimeStatusPayload {
+                source: RUNTIME_OBSERVED_SOURCE,
                 status: sample_runtime_status(RuntimeStatus::Ok),
-                response_format: InspectResponseFormat::Candid,
-            }),
-            warnings: Vec::new(),
-            next_actions: Vec::new(),
+                response_format: CANDID_RESPONSE_FORMAT,
+            },
         }
     }
 
@@ -1080,15 +995,5 @@ mod tests {
             invariant_failures_since_runtime_start: 0,
             stale_callbacks_since_runtime_start: 0,
         }
-    }
-
-    fn hex_bytes(bytes: &[u8]) -> String {
-        const HEX: &[u8; 16] = b"0123456789abcdef";
-        let mut out = String::with_capacity(bytes.len() * 2);
-        for byte in bytes {
-            out.push(char::from(HEX[usize::from(byte >> 4)]));
-            out.push(char::from(HEX[usize::from(byte & 0x0f)]));
-        }
-        out
     }
 }
