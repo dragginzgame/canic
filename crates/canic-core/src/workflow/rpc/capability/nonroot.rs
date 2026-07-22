@@ -19,7 +19,7 @@ use crate::{
     },
     workflow::rpc::{
         capability::{
-            RootCapabilityProofMode, project_replay_metadata, validate_nonroot_cycles_envelope,
+            metric_proof_mode, project_replay_metadata, validate_nonroot_cycles_envelope,
             verify_nonroot_cycles_proof,
         },
         request::handler::NonrootCyclesCapabilityWorkflow,
@@ -39,18 +39,14 @@ pub(super) async fn response_capability_v1_nonroot(
     } = envelope;
 
     let capability_key = RootCapabilityMetricKey::RequestCycles;
-    let proof_mode = RootCapabilityProofMode::from_proof(&proof);
-    let validated_proof = match validate_nonroot_cycles_envelope(
-        service,
-        capability_version,
-        &proof,
-    ) {
-        Ok(proof) => proof,
+    let proof_mode = metric_proof_mode(&proof);
+    match validate_nonroot_cycles_envelope(service, capability_version, &proof) {
+        Ok(()) => {}
         Err(err) => {
             RootCapabilityMetrics::record_envelope(
                 capability_key,
                 RootCapabilityMetricOutcome::Rejected,
-                proof_mode.metric_key(),
+                proof_mode,
             );
             log!(
                 Topic::Rpc,
@@ -60,24 +56,23 @@ pub(super) async fn response_capability_v1_nonroot(
                 IcOps::msg_caller(),
                 service,
                 capability_version,
-                proof_mode.label(),
+                proof_mode.metric_label(),
                 err
             );
             return Err(err);
         }
-    };
-    let proof_mode = validated_proof.mode();
+    }
     RootCapabilityMetrics::record_envelope(
         capability_key,
         RootCapabilityMetricOutcome::Accepted,
-        proof_mode.metric_key(),
+        proof_mode,
     );
 
     if let Err(err) = verify_nonroot_cycles_proof() {
         RootCapabilityMetrics::record_proof(
             capability_key,
             RootCapabilityMetricOutcome::Rejected,
-            proof_mode.metric_key(),
+            proof_mode,
         );
         log!(
             Topic::Rpc,
@@ -87,7 +82,7 @@ pub(super) async fn response_capability_v1_nonroot(
             IcOps::msg_caller(),
             service,
             capability_version,
-            proof_mode.label(),
+            proof_mode.metric_label(),
             err
         );
         return Err(err);
@@ -95,7 +90,7 @@ pub(super) async fn response_capability_v1_nonroot(
     RootCapabilityMetrics::record_proof(
         capability_key,
         RootCapabilityMetricOutcome::Accepted,
-        proof_mode.metric_key(),
+        proof_mode,
     );
 
     let replay_metadata = project_replay_metadata(metadata, IcOps::now_nanos())?;

@@ -121,9 +121,3 @@ Preferred format:
 ```rust
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 ```
-
-Legacy format is also acceptable:
-
-```rust
-// TEST CONFIG CATEGORY: A (internal runtime-configured)
-```

@@ -222,7 +222,7 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
         descriptor(
             StateAllocationKey::CoreRuntimeObservability,
             runtime_observability_domains(),
-            runtime_reserved_memory_domains(),
+            Vec::new(),
         ),
         descriptor(
             StateAllocationKey::CoreIcpRefillRecords,
@@ -528,12 +528,20 @@ fn replay_receipt_domains() -> Vec<StateDomainManifest> {
 
 fn runtime_observability_domains() -> Vec<StateDomainManifest> {
     use crate::storage::stable::cycles::{
-        CycleTopupEventRecord, CycleTopupEventsData, CyclesFundingLedgerData,
-        CyclesFundingLedgerRecord,
+        CycleTopupEventRecord, CycleTopupEventsData, CycleTrackerData, CycleTrackerEntryRecord,
+        CyclesFundingLedgerData, CyclesFundingLedgerRecord,
     };
     use crate::storage::stable::log::{LogEntriesData, LogEntryRecord};
 
     vec![
+        state_domain(
+            "cycle_tracker",
+            CYCLE_TRACKER_ID,
+            CycleTrackerEntryRecord::STATE_CONTRACT_NAME,
+            CycleTrackerData::STATE_CONTRACT_NAME,
+            75,
+            "cycle_tracker_restores_ordered_balance_samples",
+        ),
         state_domain(
             "cycle_topup_events",
             CYCLE_TOPUP_EVENTS_ID,
@@ -660,14 +668,6 @@ fn runtime_intent_domains() -> Vec<StateDomainManifest> {
     ]
 }
 
-fn runtime_reserved_memory_domains() -> Vec<ReservedMemoryManifest> {
-    vec![reserved_memory(
-        "cycle_tracker",
-        CYCLE_TRACKER_ID,
-        "cycle tracker stores raw cycle balances and needs an explicit record/snapshot declaration",
-    )]
-}
-
 fn state_domain(
     domain: &str,
     memory_id: u8,
@@ -689,15 +689,6 @@ fn state_domain(
         restore_order: Some(restore_order),
         post_upgrade_invariant: Some(invariant.to_string()),
         migrations: Vec::new(),
-    }
-}
-
-fn reserved_memory(label: &str, memory_id: u8, reason: &str) -> ReservedMemoryManifest {
-    ReservedMemoryManifest {
-        label: label.to_string(),
-        memory_id,
-        owner: AllocationOwner::CanicCore.as_str().to_string(),
-        reason: reason.to_string(),
     }
 }
 
@@ -960,8 +951,8 @@ mod tests {
     fn observability_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
             cycles::{
-                CycleTopupEventRecord, CycleTopupEventsData, CyclesFundingLedgerData,
-                CyclesFundingLedgerRecord,
+                CycleTopupEventRecord, CycleTopupEventsData, CycleTrackerData,
+                CycleTrackerEntryRecord, CyclesFundingLedgerData, CyclesFundingLedgerRecord,
             },
             icp_refill::{IcpRefillRecord, IcpRefillRecordsData},
             log::{LogEntriesData, LogEntryRecord},
@@ -970,6 +961,12 @@ mod tests {
         let descriptors = canic_state_descriptors();
 
         for (allocation, domain, record, snapshot) in [
+            (
+                StateAllocationKey::CoreRuntimeObservability,
+                "cycle_tracker",
+                CycleTrackerEntryRecord::STATE_CONTRACT_NAME,
+                CycleTrackerData::STATE_CONTRACT_NAME,
+            ),
             (
                 StateAllocationKey::CoreRuntimeObservability,
                 "cycle_topup_events",
@@ -1228,14 +1225,21 @@ mod tests {
     }
 
     #[test]
-    fn descriptors_track_reserved_core_memory_ids() {
+    fn descriptors_model_every_active_core_memory_id() {
         let descriptors = canic_state_descriptors();
-        let ids = descriptors
+        let cycle_tracker = descriptors
             .iter()
-            .flat_map(|descriptor| descriptor.reserved_memory.iter())
-            .map(|reservation| reservation.memory_id)
-            .collect::<Vec<_>>();
+            .flat_map(|descriptor| descriptor.state.iter())
+            .find(|domain| domain.domain == "cycle_tracker")
+            .expect("cycle tracker state descriptor");
 
-        assert_eq!(ids, vec![CYCLE_TRACKER_ID]);
+        assert!(
+            descriptors
+                .iter()
+                .flat_map(|descriptor| descriptor.reserved_memory.iter())
+                .next()
+                .is_none()
+        );
+        assert_eq!(cycle_tracker.memory_id, Some(CYCLE_TRACKER_ID));
     }
 }

@@ -151,7 +151,6 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         topup: None,
         icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
-        randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
         directory: None,
@@ -230,9 +229,6 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub cycles_funding: CyclesFundingPolicyConfig,
-
-    #[serde(default)]
-    pub randomness: RandomnessConfig,
 
     #[serde(default)]
     pub scaling: Option<ScalingConfig>,
@@ -458,46 +454,6 @@ pub struct IcpRefillPolicy {
 
     #[serde(default)]
     pub allow_ic_system_canister_overrides: bool,
-}
-
-///
-/// RandomnessConfig
-///
-/// Randomness behavior configuration for one canister role.
-/// Owned by config schema and consumed by runtime randomness setup.
-///
-
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields, default)]
-pub struct RandomnessConfig {
-    pub enabled: bool,
-    pub reseed_interval_secs: u64,
-    pub source: RandomnessSource,
-}
-
-impl Default for RandomnessConfig {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            reseed_interval_secs: 3600,
-            source: RandomnessSource::Ic,
-        }
-    }
-}
-
-///
-/// RandomnessSource
-///
-/// Randomness source selected for one canister role.
-/// Owned by config schema and consumed by runtime randomness setup.
-///
-
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RandomnessSource {
-    #[default]
-    Ic,
-    Time,
 }
 
 ///

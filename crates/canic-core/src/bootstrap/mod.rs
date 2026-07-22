@@ -19,7 +19,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 
 #[doc(hidden)]
-pub use crate::config::ConfigError;
+pub use crate::config::{ConfigError, ConfigTomlIssue};
 
 #[doc(hidden)]
 pub mod compiled {
@@ -30,10 +30,10 @@ pub mod compiled {
             CanisterPool, CanisterRoleNameIssue, ChainKeyRootProofConfig, ConfigModel,
             CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig,
             DirectoryConfig, DirectoryPool, FleetConfig, IcpRefillPolicy, LogConfig,
-            MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES, PoolImport, RandomnessConfig,
-            RandomnessSource, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind,
-            ScalePool, ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
-            Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+            MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES, PoolImport,
+            RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
+            ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+            StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
             validate_canister_role_name,
         },
         ids::{BuildNetwork, CanisterRole, SubnetRole},
@@ -175,6 +175,43 @@ fn hex_bytes(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use crate::domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
+
+    const MINIMAL_CONFIG: &str = r#"
+[fleet]
+name = "probe"
+
+[roles.root]
+kind = "root"
+package = "root"
+
+[subnets.prime.canisters.root]
+kind = "root"
+"#;
+
+    #[test]
+    fn strict_schema_accepts_current_canister_fields() {
+        parse_config_model(MINIMAL_CONFIG).expect("current config should parse");
+    }
+
+    #[test]
+    fn strict_schema_reports_typed_nested_unknown_field() {
+        let source = format!(
+            "{MINIMAL_CONFIG}\n[subnets.prime.canisters.root.randomness]\nenabled = true\n"
+        );
+        let error = parse_config_model(&source).expect_err("unknown field must reject");
+
+        assert!(matches!(
+            error,
+            ConfigError::CannotParseToml {
+                issue: ConfigTomlIssue::UnknownField {
+                    logical_path,
+                    unknown_field,
+                },
+                ..
+            } if logical_path == "subnets.prime.canisters.root.randomness"
+                && unknown_field == "randomness"
+        ));
+    }
 
     #[test]
     fn runtime_root_key_injection_sets_local_missing_key() {

@@ -33,8 +33,8 @@ pub mod dto;
 pub mod ids;
 pub(crate) mod ops;
 #[cfg(feature = "root-control-plane")]
-pub mod runtime;
-pub mod schema;
+pub(crate) mod runtime;
+pub(crate) mod schema;
 pub mod state_contract;
 pub(crate) mod storage;
 #[cfg(feature = "root-control-plane")]

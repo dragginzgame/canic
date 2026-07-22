@@ -7,12 +7,12 @@
 use crate::{
     cdk,
     infra::ic::mgmt::{
-        InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterSnapshot,
-        InfraCanisterStatusResult, InfraCanisterStatusType, InfraDefiniteCanisterSettings,
-        InfraEcdsaCurve, InfraEcdsaKeyId, InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult,
-        InfraEnvironmentVariable, InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats,
-        InfraSignWithEcdsaArgs, InfraSignWithEcdsaResult, InfraUpdateSettingsArgs,
-        InfraUpgradeFlags, InfraWasmMemoryPersistence,
+        InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterStatusResult,
+        InfraCanisterStatusType, InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId,
+        InfraEcdsaPublicKeyArgs, InfraEcdsaPublicKeyResult, InfraEnvironmentVariable,
+        InfraLogVisibility, InfraMemoryMetrics, InfraQueryStats, InfraSignWithEcdsaArgs,
+        InfraSignWithEcdsaResult, InfraUpdateSettingsArgs, InfraUpgradeFlags,
+        InfraWasmMemoryPersistence,
     },
     ops::prelude::*,
 };
@@ -163,19 +163,6 @@ pub struct SignWithEcdsaResult {
 }
 
 ///
-/// CanisterSnapshot
-///
-/// Operations-layer canister snapshot metadata.
-///
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CanisterSnapshot {
-    pub id: Vec<u8>,
-    pub taken_at_timestamp: u64,
-    pub total_size: u64,
-}
-
-///
 /// CanisterStatus
 ///
 /// Operations-layer canister status snapshot.
@@ -257,14 +244,6 @@ pub(super) fn canister_status_from_infra(status: InfraCanisterStatusResult) -> C
         reserved_cycles: status.reserved_cycles,
         idle_cycles_burned_per_day: status.idle_cycles_burned_per_day,
         query_stats: query_stats_from_infra(status.query_stats),
-    }
-}
-
-pub(super) fn canister_snapshot_from_infra(snapshot: InfraCanisterSnapshot) -> CanisterSnapshot {
-    CanisterSnapshot {
-        id: snapshot.id,
-        taken_at_timestamp: snapshot.taken_at_timestamp,
-        total_size: snapshot.total_size,
     }
 }
 

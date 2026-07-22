@@ -570,7 +570,8 @@ pub struct SignedRoleAttestation {
 Root canister-signature role attestations use:
 
 ```text
-RootPayloadKind::RoleAttestation
+seed   = canic-root-role-attestation
+domain = canic-root-role-attestation
 ```
 
 Issuance flow:

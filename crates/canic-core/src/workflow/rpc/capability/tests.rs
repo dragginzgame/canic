@@ -227,27 +227,11 @@ fn validate_root_capability_envelope_rejects_capability_version_mismatch() {
 }
 
 #[test]
-fn validate_root_capability_envelope_returns_structural_mode() {
-    let proof = validate_root_capability_envelope(
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        &CapabilityProof::Structural,
-    )
-    .expect("valid structural proof must validate");
-
-    assert_eq!(proof.mode(), RootCapabilityProofMode::Structural);
-}
-
-#[test]
-fn validate_nonroot_cycles_envelope_returns_structural_mode() {
-    let proof = validate_nonroot_cycles_envelope(
-        CapabilityService::Root,
-        CAPABILITY_VERSION_V1,
-        &CapabilityProof::Structural,
-    )
-    .expect("valid non-root structural proof must validate");
-
-    assert_eq!(proof.mode(), RootCapabilityProofMode::Structural);
+fn structural_capability_proof_maps_to_the_current_metric_mode() {
+    assert!(
+        metric_proof_mode(&CapabilityProof::Structural)
+            == RootCapabilityMetricProofMode::Structural
+    );
 }
 
 #[test]

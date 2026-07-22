@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    model::IcpCliVersion,
+    version::{is_supported_icp_cli_version, parse_icp_cli_version},
+    *,
+};
 use std::{path::Path, process::Command};
 
 #[test]
@@ -89,33 +93,12 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     fs::remove_dir_all(root).expect("remove temp dir");
 }
 
-// Keep generated commands tied to the selected ICP environment.
-#[test]
-fn renders_named_environment_target() {
-    let icp = IcpCli::new("icp", Some("staging".to_string()));
-
-    assert_eq!(
-        icp.snapshot_download_display("root", "snap-1", Path::new("backups/root")),
-        "icp canister snapshot download root snap-1 --output backups/root -e staging"
-    );
-}
-
 fn unique_temp_dir(label: &str) -> std::path::PathBuf {
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system time after unix epoch")
         .as_nanos();
     std::env::temp_dir().join(format!("{label}-{}-{nanos}", std::process::id()))
-}
-
-#[test]
-fn renders_implicit_ic_environment_target() {
-    let icp = IcpCli::new("icp", Some("ic".to_string()));
-
-    assert_eq!(
-        icp.snapshot_create_display("aaaaa-aa"),
-        "icp canister snapshot create aaaaa-aa --json -e ic"
-    );
 }
 
 // Keep explicit project roots visible instead of relying only on current_dir.
@@ -143,22 +126,6 @@ fn renders_argument_query_call_with_local_candid() {
             Some(Path::new(".icp/local/canisters/root/root.did"))
         ),
         "icp canister call root get_blob_storage_status (record { sync_gateway_principals = false }) --query --candid .icp/local/canisters/root/root.did --json -e local"
-    );
-}
-
-// Ensure update-call previews preserve the explicit Candid argument.
-#[test]
-fn renders_argument_update_call() {
-    let icp = IcpCli::new("icp", Some("ic".to_string()));
-
-    assert_eq!(
-        icp.canister_call_arg_output_display(
-            "root",
-            "canic_icp_refill",
-            "(record { dry_run = true })",
-            Some("json")
-        ),
-        "icp canister call root canic_icp_refill (record { dry_run = true }) --json -e ic"
     );
 }
 

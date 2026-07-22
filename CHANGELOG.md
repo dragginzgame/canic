@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.2` completes the architectural-sediment hard cut by deleting the false
+  randomness contract and unreachable runtime/host helpers, consolidating the
+  surviving authorities, and resolving the 42-candidate repository audit
+  without compatibility paths.
+
 - `0.98.1` hard-cuts the obsolete LocalIntent external-call race fixture and
   its two auxiliary test packages, leaving one focused receipt-backed
   PocketIC authority for the frozen replay, settlement, upgrade, capacity,

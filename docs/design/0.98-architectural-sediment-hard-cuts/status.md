@@ -10,13 +10,18 @@ passing 0.97 closeout. Its post-0.97 deletion/reachability inventory and
 final-0.96 receipt assertion manifest remain valid and are frozen in the
 [baseline report](../../audits/reports/2026-07/2026-07-22/0.98-immutable-baseline-and-inventory.md).
 Published `v0.98.0` supplies the corrected immutable predecessor and completes
-Slice A. Slice B is complete in the open `0.98.1` batch: the obsolete external
-race fixture and its two auxiliary packages are removed, while one focused
+Slice A. Published `v0.98.1` completes Slice B: the obsolete external race
+fixture and its two auxiliary packages are removed, while one focused
 receipt-backed PocketIC authority retains every frozen final-0.96 assertion.
-No package-version or downstream repository change is part of the current
-batch.
+Slice C is implementation-complete in the open `0.98.2` batch. The false
+randomness schema, render, projection, adapter, metrics, tests, and active docs
+are removed without a replacement or compatibility path. Before publication,
+the maintainer approved adding the bounded consolidation amendment to the same
+open patch. Its 42-candidate repository audit fixes one P1 and 11 P2 findings,
+proves 30 notes, and leaves no deferred or unresolved item. No package-version
+or downstream repository change is part of the current batch.
 
-The line removes exactly three findings proven by the repository-wide
+The original line removes three findings proven by the repository-wide
 architectural sediment audit:
 
 1. accepted/generated/displayed randomness configuration with no runtime
@@ -26,6 +31,13 @@ architectural sediment audit:
 3. the obsolete LocalIntent external-call race path, intent_client, and
    intent_external, while retaining the current receipt-backed intent
    conformance in intent_authority.
+
+The accepted [consolidation design amendment](consolidation-design-amendment.md)
+extends only the still-open 0.98.2 patch. Its
+[implementation tracker](consolidation-implementation-tracker.md),
+[disposition ledger](consolidation-ledger.md), and
+[validation evidence](consolidation-validation-evidence.md) support the one
+canonical [0.98 closeout audit](0.98-closeout-audit.md).
 
 Compatibility posture is a pre-1.0 hard cut. No aliases, deprecated wrappers,
 ignored config fields, fallback parsers, placeholder packages, legacy test
@@ -46,11 +58,19 @@ targets, or compatibility modes are permitted.
   `902883e318cf6fdb88cabb9f4195cfbdda13d18c80094ad622f45d0eb2a70524`,
   and Cargo.lock SHA-256
   `f7d26cf21ea029a4a76fbb7cbd2ba402e9b46d221c78a1af56a81968bf7d9550`.
+- Released Slice B: `v0.98.1` at
+  `e0dcd0cbb8f550e4c0366d9e1007ca32dceb2aa7`, source tree
+  `ae154b0deb862702d48fed4dd235caf76089f7a2`, product-tree hash
+  `b190d1f163cf8f2099290fb429a7e9f84c693cd15ae1b446e72165214622a042`,
+  and Cargo.lock SHA-256
+  `801ad42f9b2a733e925d3c4b0b66cae1922b60b3b7b2cc0166a9a52cfd2092e2`.
 - Final receipt contract: released `v0.96.8`.
 - Preceding line: released 0.97 role-owned runtime dependencies and CDK
   surface at `v0.97.3`; its rigorous closeout corrections are published in
   `v0.98.0` without changing the frozen 0.98 deletion inventory.
 - Canonical 0.98 design: [0.98-design.md](0.98-design.md).
+- Release-candidate closeout evidence:
+  [0.98-closeout-audit.md](0.98-closeout-audit.md).
 - Canonical evidence: the
   [architectural sediment audit](../../audits/reports/2026-07-21/architectural-sediment.md).
 
@@ -58,9 +78,10 @@ targets, or compatibility modes are permitted.
 
 | Finding | Severity | State | 0.98 disposition |
 | --- | --- | --- | --- |
-| CANIC-098-CONFIG-001 randomness is accepted but never executed | P1 | proposed | Delete schema, render, projection, adapter, metrics, docs, and tests |
+| CANIC-098-CONFIG-001 randomness is accepted but never executed | P1 | fixed | Schema, render, projection, adapter, metrics, docs, and tests deleted without replacement |
 | CANIC-098-PACKAGE-002 project-protocol-stub has no consumer | P2 | fixed | Package/member/lock row deleted without replacement |
 | CANIC-098-TEST-003 LocalIntent external race contradicts receipt contract | P2 | fixed | Client/external/buy path deleted; focused receipt conformance retained |
+| CANIC-098-CLOSE-* consolidation ledger | 1 P1, 11 P2, 30 notes | resolved | All findings fixed and every candidate disposition proved |
 
 ## Slice Order
 
@@ -68,8 +89,13 @@ targets, or compatibility modes are permitted.
 | --- | --- | --- |
 | A — dead project protocol package | completed | Workspace contains no consumerless protocol placeholder |
 | B — receipt-backed test narrowing | completed | One focused current intent conformance; no LocalIntent external await |
-| C — randomness contract hard cut | pending | No accepted no-op config or unreachable raw_rand runtime path |
-| Closeout — contract accounting | pending | Exact product/test/config/metric/package impact recorded |
+| C — randomness contract hard cut | completed | No accepted no-op config or unreachable raw_rand runtime path |
+| D — build and config authority | completed | Syntax-aware role build contract, one parsed config, executable current guide |
+| E — runtime and state authority | completed | Active CycleTracker metadata; dead duration/snapshot/capability layers removed |
+| F — authentication consolidation | completed | Fixed seed/domain families remain without singleton kind taxonomies |
+| G — host/operator and dependency surface | completed | Orphan helpers removed, visibility narrowed, intentional fixture edges recorded |
+| H — repository closure | completed | All 42 candidates resolved and cumulative validation recorded |
+| Closeout — contract accounting | pending tag | Complete 0.98.2 impact recorded; immutable identity waits for release |
 
 ## Implementation Prerequisite
 
@@ -96,9 +122,9 @@ have the validated immutable `v0.98.0` anchor.
 
 ## Next Action
 
-Review and release the open `0.98.1` Slice B hard cut, then begin the separately
-bounded randomness deletion in Slice C. Do not change versions outside the
-maintainer release flow or combine Slice C into this batch.
+Review and release the combined open `0.98.2` hard cut, then record its
+immutable tag identity in the closeout evidence. Do not change versions
+outside the maintainer release flow or extend 0.98 into unrelated cleanup.
 
 ## Slice A Validation
 
@@ -129,6 +155,43 @@ maintainer release flow or combine Slice C into this batch.
 - Product Candid and stable formats are unchanged; only the unpublished test
   canister's obsolete init argument and `buy` endpoint are removed.
 
+## Slice C Validation
+
+- All 15 checked-in active `canic.toml` files parse and validate after the
+  field/type/default deletion. The generated standalone minimal profile and
+  configured root audit profile both compile without a randomness field.
+- Direct core parsing and the complete host config projection reject an
+  explicit retired table through
+  `ConfigInvalid -> CoreConfig(Project) -> CannotParseToml`, with typed
+  `logical_path` and `unknown_field` values. The tests do not match rendered
+  TOML/Serde wording.
+- Focused core config/bootstrap, host projection, Canic reference, canonical
+  configuration-guide, and protocol-surface tests pass. The protocol suite
+  includes the checked-in Wasm-store Candid contract.
+- Strict all-target Clippy passes for `canic-core`, `canic-host`, and `canic`
+  with warnings denied. Formatting, layering, changelog governance, and diff
+  hygiene pass.
+- Active product/config/operator source contains no randomness schema,
+  generated field, projection, adapter, error, or metric path. The remaining
+  active mentions are two strict-schema rejection fixtures and accurate auth
+  documentation stating that auth does not call `raw_rand`.
+- Product Candid, stable memory, backup/restore, deployment, CLI command/JSON,
+  and package-version surfaces are unchanged. The host parser gains one
+  host-only dependency for structured path evidence.
+
+## Consolidation Amendment Validation
+
+- All 42 candidates have a final disposition: zero P0, one fixed P1, 11 fixed
+  P2 findings, and 30 proved notes.
+- Focused role-contract, state-manifest, config-guide, state-contract,
+  capability, auth, host ICP, CLI state, protocol, and reference checks pass.
+- The recorded cumulative unit/PocketIC selection, strict workspace Clippy,
+  formatting, layering, feature/dependency, audit-catalog, release-policy,
+  changelog-governance, and diff-hygiene gates pass.
+- No stable encoding or memory-ID, Candid, maintained JSON, CLI, workspace
+  package-set, or package-version change is introduced. Public Rust and TOML
+  hard cuts are explicitly recorded in the closeout contract table.
+
 ## Completion Gate
 
 0.98 closes only when:
@@ -150,4 +213,5 @@ maintainer release flow or combine Slice C into this batch.
 - product Candid, backup/restore, and deployment contracts have no
   unclassified change;
 - no compatibility surface is added; and
-- one 0.98 closeout report records the exact contract and deletion evidence.
+- one 0.98 closeout report records the exact contract, deletion, consolidation,
+  and validation evidence.

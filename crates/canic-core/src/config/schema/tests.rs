@@ -32,7 +32,6 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         topup: None,
         icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
-        randomness: RandomnessConfig::default(),
         scaling: None,
         sharding: None,
         directory: None,
@@ -231,6 +230,34 @@ fn checked_in_delegated_auth_configs_validate_with_chain_key_batch_policy() {
                 .allow_test_key,
             "{rel_path} should not require the test-key exemption",
         );
+    }
+}
+
+#[test]
+fn checked_in_active_configs_parse_and_validate() {
+    let root = workspace_root();
+    for rel_path in [
+        "canisters/audit/leaf_probe/canic.toml",
+        "canisters/audit/minimal_metrics/canic.toml",
+        "canisters/audit/root_probe/canic.toml",
+        "canisters/audit/scaling_probe/canic.toml",
+        "canisters/test/blob_storage_cashier_mock/canic.toml",
+        "canisters/test/blob_storage_probe/canic.toml",
+        "canisters/test/delegation_issuer_stub/canic.toml",
+        "canisters/test/delegation_root_stub/canic.toml",
+        "canisters/test/payload_limit_probe/canic.toml",
+        "canisters/test/project_hub_stub/canic.toml",
+        "canisters/test/project_instance_stub/canic.toml",
+        "canisters/test/runtime_probe/canic.toml",
+        "crates/canic-wasm-store/canic.toml",
+        "fleets/demo/canic.toml",
+        "fleets/test/canic.toml",
+    ] {
+        let path = root.join(rel_path);
+        let source =
+            fs::read_to_string(&path).unwrap_or_else(|err| panic!("read {rel_path} failed: {err}"));
+        crate::bootstrap::parse_config_model(&source)
+            .unwrap_or_else(|err| panic!("{rel_path} should parse and validate: {err}"));
     }
 }
 

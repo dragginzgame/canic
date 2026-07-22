@@ -26,12 +26,6 @@ impl Validate for SubnetConfig {
         for (role, cfg) in &self.canisters {
             validate_canister_role(role, "canister")?;
 
-            if cfg.randomness.enabled && cfg.randomness.reseed_interval_secs == 0 {
-                return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{role}' randomness reseed_interval_secs must be > 0",
-                )));
-            }
-
             validate_kind(cfg, role)?;
             validate_cycles_funding(&cfg.cycles_funding, role)?;
             validate_topup(cfg, role)?;

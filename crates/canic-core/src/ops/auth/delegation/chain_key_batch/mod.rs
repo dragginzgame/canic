@@ -33,7 +33,7 @@ use crate::{
                 chain_key_signing::ChainKeySigningPolicy,
                 delegation_cert::{PrepareDelegationCertInput, prepare_delegation_cert},
             },
-            issuer_canister_sig::{IssuerPayloadKind, issuer_canister_sig_seed_hash},
+            issuer_canister_sig::issuer_canister_sig_seed_hash,
         },
         storage::auth::{
             AuthStateOps, ChainKeyRootDelegationBatch, ChainKeyRootDelegationBatchIssuer,
@@ -505,7 +505,7 @@ fn build_chain_key_batch_leaf(
     let grants = delegated_role_grant_views(&due.template.grants);
 
     let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
-        seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+        seed_hash: issuer_canister_sig_seed_hash(),
     };
     let prepared = prepare_delegation_cert(PrepareDelegationCertInput {
         root_pid: plan.signing_policy.root_canister_id,

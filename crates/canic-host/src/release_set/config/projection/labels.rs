@@ -1,9 +1,5 @@
 use canic_core::bootstrap::compiled::MetricsProfile;
 
-pub(super) fn randomness_source_label(source: impl std::fmt::Debug) -> String {
-    format!("{source:?}").to_ascii_lowercase()
-}
-
 pub(super) const fn metrics_profile_label(profile: MetricsProfile) -> &'static str {
     match profile {
         MetricsProfile::Leaf => "leaf",

@@ -9,6 +9,9 @@ build = "build.rs"
 fleet = "fixture_protected_sibling"
 role = "app"
 
+[package.metadata.cargo-machete]
+ignored = ["canic"]
+
 [lib]
 crate-type = ["cdylib"]
 path = "src/lib.rs"
@@ -19,4 +22,3 @@ fixture_protected_helper = { path = "../helper" }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }
-

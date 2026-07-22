@@ -27,7 +27,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-AUTH-CAPABILITY-001` | `1` | `4dd5127b43716dc8a89bef6148b76856794f7c5e158f536a7737ddceee0f1c55` | `docs/audits/recurring/invariants/capability-scope-enforcement.md` |
 | `CANIC-AUTH-REPLAY-001` | `2` | `743b9fcc18e37be029e12fa9db2a5fa5ffb8d4258c484739a5b0e73e43632b6d` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` |
 | `CANIC-AUTH-SUBJECT-001` | `1` | `8af2c270ba89aae9715e6047afa908b1812865c5949f0f1da6441539fdee4475` | `docs/audits/recurring/invariants/subject-caller-binding.md` |
-| `CANIC-AUTH-TRUST-001` | `1` | `5cb6143aee5fec2e4ff5f7c8649fc70e120f5233be19b913e90cff9ae38341d6` | `docs/audits/recurring/invariants/token-trust-chain.md` |
+| `CANIC-AUTH-TRUST-001` | `2` | `1dc373172e21ce2141fb8922fb290b76cb0d3064fade0748722c5ee97f193970` | `docs/audits/recurring/invariants/token-trust-chain.md` |
 | `CANIC-LIFECYCLE-001` | `1` | `df4fd68b78e1fab92bf17f85ac6adec235e978c52783f5151b2c57411b0e4913` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |
@@ -50,6 +50,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | --- | --- | --- | --- | --- |
 | `CANIC-AUTH-AUDIENCE-001` | `1` | `9d28324a6101e94ba964e8d8478909323e16e83bc0134975ab37f69030602448` | `docs/audits/recurring/invariants/audience-target-binding.md` | `CANIC-AUTH-AUDIENCE-001/v2` |
 | `CANIC-AUTH-REPLAY-001` | `1` | `2a4726ca049194175f1230c9de54442746d462d460f2adea77b8b1df57f8868c` | `docs/audits/recurring/invariants/expiry-replay-single-use.md` | `CANIC-AUTH-REPLAY-001/v2` |
+| `CANIC-AUTH-TRUST-001` | `1` | `5cb6143aee5fec2e4ff5f7c8649fc70e120f5233be19b913e90cff9ae38341d6` | `docs/audits/recurring/invariants/token-trust-chain.md` | `CANIC-AUTH-TRUST-001/v2` |
 | `CANIC-BUILD-INTEGRITY-001` | `1` | `57f0a380b1722927498ddd0f41b5490e8726cab943c2d3df02ecac73897a5311` | `docs/audits/recurring/system/build-integrity.md` | `CANIC-BUILD-INTEGRITY-001/v2` |
 | `CANIC-CAPABILITY-SURFACE-001` | `1` | `d7de4f8b7115b5e4861bde23aaebe9b2ddee3c83a07f7730b61122b3f3fff898` | `docs/audits/recurring/system/capability-surface.md` | `CANIC-CAPABILITY-SURFACE-001/v2` |
 | `CANIC-CHANGE-FRICTION-001` | `1` | `00646b257428623f7ef4efce4dffdcd93f3bdc75cd7e2dbc02faad32cb2ce8d6` | `docs/audits/recurring/system/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v2` |
@@ -81,7 +82,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `5d7e2f15bdd195c63276d37beffce6a88fea2b593abfd7a1d6ede7274e6aa3c6` | `docs/audits/META-AUDIT.md` |
-| `26d16b0adc508176a938bcaeb05f54266b18ab4b8b1463ac20615c7ff5e482a4` | `docs/audits/METHODS.md` |
+| `09769c24b0005efac14846bed1a944bbc3bef11b1f5edad36041edd2d6470919` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |

@@ -135,7 +135,6 @@ policy.max_shards = 4
 
 [subnets.prime.canisters.user_shard]
 kind = "shard"
-randomness.enabled = false
 
 [subnets.prime.canisters.user_shard.auth]
 delegated_token_issuer = true

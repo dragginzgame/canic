@@ -4,31 +4,19 @@ use super::{
     command::command_display,
     error::IcpCommandError,
     model::{IcpCli, IcpCliVersion},
-    run::{command_stderr, run_output_unchecked},
+    run::command_stderr,
 };
 
 impl IcpCli {
-    /// Resolve the installed ICP CLI version.
-    pub fn version(&self) -> Result<String, IcpCommandError> {
-        let mut command = self.command();
-        command.arg("--version");
-        run_output_unchecked(&mut command)
-    }
-
     /// Resolve and validate the installed ICP CLI version.
     pub fn compatible_version(&self) -> Result<String, IcpCommandError> {
         compatible_version_output(&self.executable, self.cwd.as_deref())
-    }
-
-    /// Ensure this command context points at a supported ICP CLI.
-    pub fn ensure_compatible(&self) -> Result<(), IcpCommandError> {
-        self.compatible_version().map(|_| ())
     }
 }
 
 /// Parse an ICP CLI semantic version from `icp --version` output.
 #[must_use]
-pub fn parse_icp_cli_version(output: &str) -> Option<IcpCliVersion> {
+pub(super) fn parse_icp_cli_version(output: &str) -> Option<IcpCliVersion> {
     output
         .split_whitespace()
         .find_map(parse_icp_cli_version_token)
@@ -36,7 +24,7 @@ pub fn parse_icp_cli_version(output: &str) -> Option<IcpCliVersion> {
 
 /// Return whether an ICP CLI version is supported by this Canic release.
 #[must_use]
-pub const fn is_supported_icp_cli_version(version: IcpCliVersion) -> bool {
+pub(super) const fn is_supported_icp_cli_version(version: IcpCliVersion) -> bool {
     version.major == 1 && version.minor >= 1
 }
 

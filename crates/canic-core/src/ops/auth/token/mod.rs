@@ -33,7 +33,6 @@ use super::{
             verify_delegated_token, verify_delegated_token_cached_proof_identity,
         },
     },
-    issuer_canister_sig::IssuerPayloadKind,
 };
 use crate::{
     InternalError,
@@ -119,11 +118,7 @@ impl AuthOps {
         .map_err(map_prepare_delegated_token_error)?;
 
         let claims_hash = prepared.claims_hash;
-        let issuer_proof_prepare = Self::prepare_issuer_canister_signature(
-            IssuerPayloadKind::DelegatedTokenClaims,
-            claims_hash,
-            now_ns,
-        )?;
+        let issuer_proof_prepare = Self::prepare_issuer_canister_signature(claims_hash, now_ns)?;
 
         retention::insert(
             retention::RetainedDelegatedTokenKey::new(claims_hash, prepared_by),
@@ -150,11 +145,8 @@ impl AuthOps {
             IcOps::now_nanos(),
         )
         .map_err(|err| AuthValidationError::Auth(err.to_string()))?;
-        let issuer_proof = Self::get_issuer_canister_signature_proof(
-            IssuerPayloadKind::DelegatedTokenClaims,
-            claims_hash,
-            IcOps::canister_self(),
-        )?;
+        let issuer_proof =
+            Self::get_issuer_canister_signature_proof(claims_hash, IcOps::canister_self())?;
 
         Ok(finish_delegated_token(retained.prepared, issuer_proof))
     }

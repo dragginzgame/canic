@@ -21,16 +21,13 @@ use std::cell::RefCell;
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 pub const ISSUER_PROOF_RETRIEVAL_TTL_NS: u64 = 60_000_000_000;
 
-///
-/// IssuerPayloadKind
-///
-/// Issuer canister-signature payload family used for domain-separated proofs.
-///
-
-#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum IssuerPayloadKind {
-    DelegatedTokenClaims,
-}
+const ISSUER_CANISTER_SIG_SEED: &[u8] = b"canic-issuer-delegated-token";
+#[cfg(any(
+    feature = "auth-issuer-canister-sig-create",
+    feature = "auth-issuer-canister-sig-verify",
+    test
+))]
+const ISSUER_CANISTER_SIG_DOMAIN: &[u8] = b"canic-issuer-delegated-token";
 
 ///
 /// PreparedIssuerCanisterSignature
@@ -43,81 +40,52 @@ pub struct PreparedIssuerCanisterSignature {
     pub retrieval_expires_at_ns: u64,
 }
 
-pub const fn issuer_canister_sig_seed(kind: IssuerPayloadKind) -> &'static [u8] {
-    match kind {
-        IssuerPayloadKind::DelegatedTokenClaims => b"canic-issuer-delegated-token",
-    }
-}
-
-#[cfg(any(
-    feature = "auth-issuer-canister-sig-create",
-    feature = "auth-issuer-canister-sig-verify",
-    test
-))]
-pub const fn issuer_canister_sig_domain(kind: IssuerPayloadKind) -> &'static [u8] {
-    match kind {
-        IssuerPayloadKind::DelegatedTokenClaims => b"canic-issuer-delegated-token",
-    }
-}
-
-pub fn issuer_canister_sig_seed_hash(kind: IssuerPayloadKind) -> [u8; 32] {
-    Sha256::digest(issuer_canister_sig_seed(kind)).into()
+pub fn issuer_canister_sig_seed_hash() -> [u8; 32] {
+    Sha256::digest(ISSUER_CANISTER_SIG_SEED).into()
 }
 
 #[cfg(any(feature = "auth-issuer-canister-sig-verify", test))]
-pub fn issuer_canister_sig_verification_message(
-    kind: IssuerPayloadKind,
-    payload_hash: [u8; 32],
-) -> Vec<u8> {
-    let domain = issuer_canister_sig_domain(kind);
-    let domain_len =
-        u8::try_from(domain.len()).expect("issuer canister signature domain exceeds 255 bytes");
+pub fn issuer_canister_sig_verification_message(payload_hash: [u8; 32]) -> Vec<u8> {
+    let domain_len = u8::try_from(ISSUER_CANISTER_SIG_DOMAIN.len())
+        .expect("issuer canister signature domain exceeds 255 bytes");
 
-    let mut msg = Vec::with_capacity(1 + domain.len() + payload_hash.len());
+    let mut msg = Vec::with_capacity(1 + ISSUER_CANISTER_SIG_DOMAIN.len() + payload_hash.len());
     msg.push(domain_len);
-    msg.extend_from_slice(domain);
+    msg.extend_from_slice(ISSUER_CANISTER_SIG_DOMAIN);
     msg.extend_from_slice(&payload_hash);
     msg
 }
 
 impl AuthOps {
     pub(crate) fn prepare_issuer_canister_signature(
-        kind: IssuerPayloadKind,
         payload_hash: [u8; 32],
         now_ns: u64,
     ) -> Result<PreparedIssuerCanisterSignature, InternalError> {
         #[cfg(feature = "auth-issuer-canister-sig-create")]
         {
-            validate_issuer_canister_sig_domain_len(kind)?;
-            Ok(prepare_issuer_canister_signature(
-                kind,
-                payload_hash,
-                now_ns,
-            ))
+            validate_issuer_canister_sig_domain_len()?;
+            Ok(prepare_issuer_canister_signature(payload_hash, now_ns))
         }
         #[cfg(not(feature = "auth-issuer-canister-sig-create"))]
         {
-            prepare_issuer_canister_signature(kind, payload_hash, now_ns)
+            prepare_issuer_canister_signature(payload_hash, now_ns)
         }
     }
 
     pub(crate) fn get_issuer_canister_signature_proof(
-        kind: IssuerPayloadKind,
         payload_hash: [u8; 32],
         issuer_pid: Principal,
     ) -> Result<IssuerProof, InternalError> {
-        get_issuer_canister_signature_proof(kind, payload_hash, issuer_pid)
+        get_issuer_canister_signature_proof(payload_hash, issuer_pid)
     }
 
     pub(crate) fn verify_issuer_canister_signature_proof(
-        kind: IssuerPayloadKind,
         payload_hash: [u8; 32],
         proof: &IssuerProof,
         expected_issuer_pid: Principal,
         ic_root_public_key_raw: &[u8],
     ) -> Result<(), InternalError> {
         verify_issuer_canister_signature_proof(
-            kind,
             payload_hash,
             proof,
             expected_issuer_pid,
@@ -135,8 +103,8 @@ impl AuthOps {
 }
 
 #[cfg(feature = "auth-issuer-canister-sig-create")]
-fn validate_issuer_canister_sig_domain_len(kind: IssuerPayloadKind) -> Result<(), InternalError> {
-    u8::try_from(issuer_canister_sig_domain(kind).len())
+fn validate_issuer_canister_sig_domain_len() -> Result<(), InternalError> {
+    u8::try_from(ISSUER_CANISTER_SIG_DOMAIN.len())
         .map(|_| ())
         .map_err(|_| {
             AuthSignatureError::ProofInvalid(
@@ -154,7 +122,6 @@ thread_local! {
 
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 fn prepare_issuer_canister_signature(
-    kind: IssuerPayloadKind,
     payload_hash: [u8; 32],
     now_ns: u64,
 ) -> PreparedIssuerCanisterSignature {
@@ -163,8 +130,8 @@ fn prepare_issuer_canister_signature(
     crate::ops::runtime::metrics::delegated_auth::DelegatedAuthMetrics::record_issuer_proof_prepare_started();
 
     let inputs = CanisterSigInputs {
-        domain: issuer_canister_sig_domain(kind),
-        seed: issuer_canister_sig_seed(kind),
+        domain: ISSUER_CANISTER_SIG_DOMAIN,
+        seed: ISSUER_CANISTER_SIG_SEED,
         message: &payload_hash,
     };
     ISSUER_CANISTER_SIGNATURES.with(|signatures| {
@@ -191,7 +158,6 @@ fn refresh_issuer_canister_sig_certified_data(signature_root_hash: &[u8; 32]) {
 
 #[cfg(not(feature = "auth-issuer-canister-sig-create"))]
 fn prepare_issuer_canister_signature(
-    _kind: IssuerPayloadKind,
     _payload_hash: [u8; 32],
     _now_ns: u64,
 ) -> Result<PreparedIssuerCanisterSignature, InternalError> {
@@ -201,15 +167,14 @@ fn prepare_issuer_canister_signature(
 
 #[cfg(feature = "auth-issuer-canister-sig-create")]
 fn get_issuer_canister_signature_proof(
-    kind: IssuerPayloadKind,
     payload_hash: [u8; 32],
     issuer_pid: Principal,
 ) -> Result<IssuerProof, InternalError> {
     use ic_canister_sig_creation::{CanisterSigPublicKey, signature_map::CanisterSigInputs};
 
     let inputs = CanisterSigInputs {
-        domain: issuer_canister_sig_domain(kind),
-        seed: issuer_canister_sig_seed(kind),
+        domain: ISSUER_CANISTER_SIG_DOMAIN,
+        seed: ISSUER_CANISTER_SIG_SEED,
         message: &payload_hash,
     };
     let signature_cbor = ISSUER_CANISTER_SIGNATURES.with(|signatures| {
@@ -219,7 +184,7 @@ fn get_issuer_canister_signature_proof(
             .map_err(issuer_canister_signature_cbor_error)
     })?;
     let public_key_der =
-        CanisterSigPublicKey::new(issuer_pid, issuer_canister_sig_seed(kind).to_vec()).to_der();
+        CanisterSigPublicKey::new(issuer_pid, ISSUER_CANISTER_SIG_SEED.to_vec()).to_der();
 
     Ok(IssuerProof::IcCanisterSignatureV1(
         IcCanisterSignatureProofV1 {
@@ -245,7 +210,6 @@ fn issuer_canister_signature_cbor_error(
 
 #[cfg(not(feature = "auth-issuer-canister-sig-create"))]
 fn get_issuer_canister_signature_proof(
-    _kind: IssuerPayloadKind,
     _payload_hash: [u8; 32],
     _issuer_pid: Principal,
 ) -> Result<IssuerProof, InternalError> {
@@ -254,7 +218,6 @@ fn get_issuer_canister_signature_proof(
 
 #[cfg(feature = "auth-issuer-canister-sig-verify")]
 fn verify_issuer_canister_signature_proof(
-    kind: IssuerPayloadKind,
     payload_hash: [u8; 32],
     proof: &IssuerProof,
     expected_issuer_pid: Principal,
@@ -269,14 +232,14 @@ fn verify_issuer_canister_signature_proof(
         )
         .into());
     }
-    if seed != issuer_canister_sig_seed(kind) {
+    if seed != ISSUER_CANISTER_SIG_SEED {
         return Err(AuthSignatureError::ProofInvalid(
             "issuer canister signature seed mismatch".to_string(),
         )
         .into());
     }
 
-    let message = issuer_canister_sig_verification_message(kind, payload_hash);
+    let message = issuer_canister_sig_verification_message(payload_hash);
     ic_signature_verification::verify_canister_sig(
         &message,
         &proof.signature_cbor,
@@ -290,7 +253,6 @@ fn verify_issuer_canister_signature_proof(
 
 #[cfg(not(feature = "auth-issuer-canister-sig-verify"))]
 fn verify_issuer_canister_signature_proof(
-    _kind: IssuerPayloadKind,
     _payload_hash: [u8; 32],
     _proof: &IssuerProof,
     _expected_issuer_pid: Principal,
@@ -306,20 +268,19 @@ mod tests {
     #[test]
     fn issuer_canister_sig_verification_message_prefixes_domain_len() {
         let payload_hash = [7; 32];
-        let msg = issuer_canister_sig_verification_message(
-            IssuerPayloadKind::DelegatedTokenClaims,
-            payload_hash,
-        );
-        let domain = issuer_canister_sig_domain(IssuerPayloadKind::DelegatedTokenClaims);
+        let msg = issuer_canister_sig_verification_message(payload_hash);
 
-        assert_eq!(usize::from(msg[0]), domain.len());
-        assert_eq!(&msg[1..=domain.len()], domain);
-        assert_eq!(&msg[1 + domain.len()..], payload_hash);
+        assert_eq!(usize::from(msg[0]), ISSUER_CANISTER_SIG_DOMAIN.len());
+        assert_eq!(
+            &msg[1..=ISSUER_CANISTER_SIG_DOMAIN.len()],
+            ISSUER_CANISTER_SIG_DOMAIN
+        );
+        assert_eq!(&msg[1 + ISSUER_CANISTER_SIG_DOMAIN.len()..], payload_hash);
     }
 
     #[test]
     fn issuer_canister_sig_seed_hash_matches_binding_seed_hash_input() {
-        let seed_hash = issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims);
+        let seed_hash = issuer_canister_sig_seed_hash();
         let expected: [u8; 32] = Sha256::digest(b"canic-issuer-delegated-token").into();
 
         assert_eq!(seed_hash, expected);
@@ -340,21 +301,10 @@ mod tests {
     #[cfg(not(feature = "auth-issuer-canister-sig-create"))]
     #[test]
     fn issuer_canister_sig_create_requires_create_feature() {
+        assert!(AuthOps::prepare_issuer_canister_signature([1; 32], 1).is_err());
         assert!(
-            AuthOps::prepare_issuer_canister_signature(
-                IssuerPayloadKind::DelegatedTokenClaims,
-                [1; 32],
-                1,
-            )
-            .is_err()
-        );
-        assert!(
-            AuthOps::get_issuer_canister_signature_proof(
-                IssuerPayloadKind::DelegatedTokenClaims,
-                [2; 32],
-                Principal::from_slice(&[2; 29]),
-            )
-            .is_err()
+            AuthOps::get_issuer_canister_signature_proof([2; 32], Principal::from_slice(&[2; 29]),)
+                .is_err()
         );
     }
 
@@ -369,7 +319,6 @@ mod tests {
 
         assert!(
             AuthOps::verify_issuer_canister_signature_proof(
-                IssuerPayloadKind::DelegatedTokenClaims,
                 [2; 32],
                 &proof,
                 Principal::from_slice(&[2; 29]),

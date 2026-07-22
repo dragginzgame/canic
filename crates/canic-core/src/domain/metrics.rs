@@ -40,8 +40,6 @@ pub enum CanisterOpsMetricOperation {
     Delete,
     Install,
     Reinstall,
-    Restore,
-    Snapshot,
     Upgrade,
 }
 
@@ -54,8 +52,6 @@ impl CanisterOpsMetricOperation {
             Self::Delete => "delete",
             Self::Install => "install",
             Self::Reinstall => "reinstall",
-            Self::Restore => "restore",
-            Self::Snapshot => "snapshot",
             Self::Upgrade => "upgrade",
         }
     }
@@ -397,12 +393,9 @@ pub enum ManagementCallMetricOperation {
     GetCycles,
     InstallChunkedCode,
     InstallCode,
-    LoadCanisterSnapshot,
-    RawRand,
     SignWithEcdsa,
     StopCanister,
     StoredChunks,
-    TakeCanisterSnapshot,
     UninstallCode,
     UpdateSettings,
     UploadChunk,

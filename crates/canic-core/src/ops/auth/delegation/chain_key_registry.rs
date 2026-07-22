@@ -20,7 +20,7 @@ use crate::{
             delegated::canonical::{
                 delegated_auth_registry_hash, issuer_proof_binding_hash, root_key_policy_hash,
             },
-            issuer_canister_sig::{IssuerPayloadKind, issuer_canister_sig_seed_hash},
+            issuer_canister_sig::issuer_canister_sig_seed_hash,
         },
         storage::auth::AuthStateOps,
     },
@@ -65,7 +65,7 @@ fn current_chain_key_delegated_auth_registry_snapshot(
                     .map_or([0; 32], |template| renewal_template_fingerprint(&template));
             let issuer_proof_algorithm = IssuerProofAlgorithm::IcCanisterSignatureV1;
             let issuer_proof_binding = IssuerProofBinding::IcCanisterSignatureV1 {
-                seed_hash: issuer_canister_sig_seed_hash(IssuerPayloadKind::DelegatedTokenClaims),
+                seed_hash: issuer_canister_sig_seed_hash(),
             };
 
             let mut allowed_audiences = policy

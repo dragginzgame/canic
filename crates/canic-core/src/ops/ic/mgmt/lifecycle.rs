@@ -237,17 +237,4 @@ impl MgmtOps {
 
         Ok(())
     }
-
-    /// Query the management canister for raw randomness and record metrics.
-    pub async fn raw_rand() -> Result<[u8; 32], InternalError> {
-        let seed = management_call(
-            ManagementCallMetricOperation::RawRand,
-            MgmtInfra::raw_rand(),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::RawRand);
-
-        Ok(seed)
-    }
 }

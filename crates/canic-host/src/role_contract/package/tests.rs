@@ -182,6 +182,41 @@ fn isolated_role_workspace_rejects_unowned_build_dependency() {
 }
 
 #[test]
+fn isolated_role_workspace_rejects_build_macro_text_without_an_invocation() {
+    let fixture = FixtureWorkspace::materialize("supported");
+    fixture.rewrite(
+        "role/build.rs",
+        "    canic::build!(\"../canic.toml\");\n",
+        "    let _ = r#\"\ncanic::build!(\"../canic.toml\");\n\"#;\n",
+    );
+
+    let reason = fixture.rejection_reason();
+
+    assert!(reason.contains("requires exactly one `canic::build!` invocation"));
+}
+
+#[test]
+fn isolated_role_workspace_accepts_a_multiline_build_macro_invocation() {
+    let fixture = FixtureWorkspace::materialize("supported");
+    fixture.rewrite(
+        "role/build.rs",
+        "    canic::build!(\"../canic.toml\");\n",
+        "    canic::build!(\n        \"../canic.toml\"\n    );\n",
+    );
+
+    let validation = validate_declared_role_package(
+        &fixture.root.join("canic.toml"),
+        &CanisterRole::owned("app".to_string()),
+        PackageValidationMode::Build,
+    );
+
+    assert!(
+        matches!(validation, RolePackageValidation::Supported(_)),
+        "unexpected validation: {validation:?}"
+    );
+}
+
+#[test]
 fn repository_canic_runtime_closure_matches_the_protected_catalog() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let metadata = crate::cargo_metadata::cargo_metadata_catalog_for_manifest(
