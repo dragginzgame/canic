@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.97.md](docs/changelog/0.97.md)
 
+- `0.97.1` moves all Canic macro-required CDK plumbing behind one exact hidden
+  boundary and preserves locked PocketIC dependency evidence without changing
+  Candid or runtime behavior.
+
 - `0.97.0` closes 0.96 at immutable `v0.96.8`, freezes the complete
   role-graph, public-CDK, macro-plumbing, and root-manual-refill inventory,
   and hard-cuts role Cargo authority to explicit declarations plus one

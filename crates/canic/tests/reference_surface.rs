@@ -82,3 +82,31 @@ fn test_root_subnet_has_derivable_release_set() {
     assert!(!release_set.is_empty());
     assert!(!release_set.contains("root"));
 }
+
+// Keep compiler-facing CDK exports limited to the frozen macro inventory.
+#[test]
+fn hidden_macro_cdk_boundary_matches_the_frozen_inventory() {
+    let source = read_text(&workspace_root().join("crates/canic/src/lib.rs"));
+    let hidden = source
+        .split("    pub mod cdk {")
+        .nth(1)
+        .and_then(|source| source.split("    pub mod instructions {").next())
+        .expect("hidden CDK module should precede hidden instructions");
+
+    for required in [
+        "export_candid, init, inspect_message, post_upgrade, query, update",
+        "canic_core::cdk::types::Principal",
+        "canister_cycle_balance, canister_version, is_controller, msg_caller, time",
+    ] {
+        assert!(
+            hidden.contains(required),
+            "hidden CDK inventory is missing `{required}`"
+        );
+    }
+    for forbidden in [" call,", " eprintln,", " futures,", " println,", " trap,"] {
+        assert!(
+            !hidden.contains(forbidden),
+            "hidden CDK inventory unexpectedly exposes `{forbidden}`"
+        );
+    }
+}

@@ -19,7 +19,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             (config_model, config_source, config_path)
         }
 
-        #[::canic::cdk::init]
+        #[$crate::__internal::cdk::init]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             let (config, config_source, config_path) = __canic_compiled_config();
 
@@ -48,7 +48,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             );
         }
 
-        #[::canic::cdk::post_upgrade]
+        #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
@@ -96,8 +96,8 @@ macro_rules! __canic_start_local_lifecycle_core {
         }
 
         #[doc(hidden)]
-        fn __canic_local_principal(byte: u8) -> ::canic::cdk::types::Principal {
-            ::canic::cdk::types::Principal::from_slice(&[byte; 29])
+        fn __canic_local_principal(byte: u8) -> $crate::__internal::cdk::Principal {
+            $crate::__internal::cdk::Principal::from_slice(&[byte; 29])
         }
 
         #[doc(hidden)]
@@ -120,7 +120,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             }
         }
 
-        #[::canic::cdk::init]
+        #[$crate::__internal::cdk::init]
         fn init(args: Option<Vec<u8>>) {
             let (config, config_source, config_path) = __canic_compiled_config();
             let role = $canister_role;
@@ -151,7 +151,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             );
         }
 
-        #[::canic::cdk::post_upgrade]
+        #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
@@ -212,7 +212,7 @@ macro_rules! __canic_root_lifecycle_core {
             &[]
         }
 
-        #[::canic::cdk::init]
+        #[$crate::__internal::cdk::init]
         fn init(identity: ::canic::dto::subnet::SubnetIdentity) {
             let (config, config_source, config_path) = __canic_compiled_config();
             let embedded_wasm_store_bootstrap_release_set =
@@ -243,7 +243,7 @@ macro_rules! __canic_root_lifecycle_core {
             );
         }
 
-        #[::canic::cdk::post_upgrade]
+        #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
             let embedded_wasm_store_bootstrap_release_set =
@@ -299,7 +299,7 @@ macro_rules! __canic_after_optional_start_init_hook {
 #[macro_export]
 macro_rules! __canic_start_ingress_payload_inspect {
     () => {
-        #[::canic::cdk::inspect_message]
+        #[$crate::__internal::cdk::inspect_message]
         fn canic_inspect_message() {
             $crate::__internal::core::ingress::payload::inspect_update_message();
         }
@@ -333,7 +333,7 @@ macro_rules! finish {
         fn __canic_missing_finish_macro_add_canic_finish_at_end_after_all_endpoints() {}
 
         #[cfg(debug_assertions)]
-        $crate::cdk::export_candid!();
+        $crate::__internal::cdk::export_candid!();
     };
 }
 

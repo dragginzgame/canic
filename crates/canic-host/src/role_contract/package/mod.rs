@@ -62,8 +62,22 @@ const PROTECTED_CANIC_PACKAGES: &[ProtectedCanicPackage] = &[
 ///
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PackageValidationMode {
+    /// Development evidence that may resolve and update dependencies.
     Build,
+    /// Build evidence that must use the existing lockfile but may fetch dependencies.
+    LockedBuild,
+    /// Read-only evidence that must use the existing lockfile and local cache.
     Passive,
+}
+
+impl PackageValidationMode {
+    const fn locked(self) -> bool {
+        !matches!(self, Self::Build)
+    }
+
+    const fn offline(self) -> bool {
+        matches!(self, Self::Passive)
+    }
 }
 
 ///
@@ -221,12 +235,14 @@ pub fn validate_internal_test_wasm_packages(
                 "internal test package `{package_name}` has no matching ancestor canic.toml"
             ))
         })?;
-        let evidence =
-            match validate_declared_role_package(&config_path, &role, PackageValidationMode::Build)
-            {
-                RolePackageValidation::Supported(evidence) => evidence,
-                RolePackageValidation::Unsupported(finding) => return Err(finding),
-            };
+        let evidence = match validate_declared_role_package(
+            &config_path,
+            &role,
+            PackageValidationMode::LockedBuild,
+        ) {
+            RolePackageValidation::Supported(evidence) => evidence,
+            RolePackageValidation::Unsupported(finding) => return Err(finding),
+        };
         if evidence.role_package_name != *package_name
             || normalized_manifest_path(&evidence.role_manifest_path)
                 != normalized_manifest_path(&package.manifest_path)
@@ -319,7 +335,8 @@ fn validate_package_manifest(
     let metadata = match cargo_metadata_for_manifest(
         manifest_path,
         WASM_TARGET,
-        mode == PackageValidationMode::Passive,
+        mode.locked(),
+        mode.offline(),
     ) {
         Ok(metadata) => metadata,
         Err(error) => {
@@ -343,23 +360,22 @@ fn validate_package_manifest(
         Ok(selected) => selected,
         Err(finding) => return RolePackageValidation::Unsupported(finding),
     };
-    let catalog = match cargo_metadata_catalog_for_manifest(
-        manifest_path,
-        mode == PackageValidationMode::Passive,
-    ) {
-        Ok(catalog) => catalog,
-        Err(error) => {
-            return unsupported_shape(format!(
-                "unable to inspect the Cargo package catalog for {}: {error}",
-                manifest_path.display()
-            ));
-        }
-    };
+    let catalog =
+        match cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline()) {
+            Ok(catalog) => catalog,
+            Err(error) => {
+                return unsupported_shape(format!(
+                    "unable to inspect the Cargo package catalog for {}: {error}",
+                    manifest_path.display()
+                ));
+            }
+        };
     let tree = match cargo_tree_for_package(
         manifest_path,
         &selected.id,
         WASM_TARGET,
-        mode == PackageValidationMode::Passive,
+        mode.locked(),
+        mode.offline(),
         TREE_FORMAT,
     ) {
         Ok(tree) => tree,

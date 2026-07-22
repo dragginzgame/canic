@@ -10,7 +10,7 @@ macro_rules! canic_emit_lifecycle_core_endpoints {
     () => {
         #[$crate::canic_query(public)]
         fn canic_cycle_balance() -> Result<u128, ::canic::Error> {
-            Ok($crate::cdk::api::canister_cycle_balance())
+            Ok($crate::__internal::cdk::api::canister_cycle_balance())
         }
 
         #[$crate::canic_query(internal, public)]
@@ -34,7 +34,7 @@ macro_rules! canic_emit_runtime_introspection_endpoints {
         {
             Ok(
                 $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::health(Some(
-                    $crate::cdk::api::time(),
+                    $crate::__internal::cdk::api::time(),
                 )),
             )
         }
@@ -44,7 +44,7 @@ macro_rules! canic_emit_runtime_introspection_endpoints {
         -> Result<::canic::dto::runtime::CanicReadinessStatus, ::canic::Error> {
             Ok(
                 $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::readiness(
-                    $crate::cdk::api::time(),
+                    $crate::__internal::cdk::api::time(),
                 ),
             )
         }
@@ -54,11 +54,11 @@ macro_rules! canic_emit_runtime_introspection_endpoints {
         -> Result<::canic::dto::runtime::CanicRuntimeStatus, ::canic::Error> {
             Ok(
                 $crate::__internal::core::api::runtime::RuntimeIntrospectionApi::runtime_status(
-                    $crate::cdk::api::time(),
+                    $crate::__internal::cdk::api::time(),
                     env!("CARGO_PKG_NAME"),
                     env!("CARGO_PKG_VERSION"),
                     $crate::VERSION,
-                    $crate::cdk::api::canister_version(),
+                    $crate::__internal::cdk::api::canister_version(),
                 ),
             )
         }
@@ -95,7 +95,7 @@ macro_rules! canic_emit_canic_metadata_endpoints {
                 env!("CARGO_PKG_VERSION"),
                 env!("CARGO_PKG_DESCRIPTION"),
                 $crate::VERSION,
-                $crate::cdk::api::canister_version(),
+                $crate::__internal::cdk::api::canister_version(),
             )
         }
     };
@@ -116,11 +116,11 @@ macro_rules! canic_bundle_discovery_endpoints {
 #[macro_export]
 macro_rules! canic_emit_memory_ledger_diagnostic_endpoint {
     () => {
-        #[$crate::cdk::query]
+        #[$crate::__internal::cdk::query]
         fn canic_memory_ledger()
         -> Result<::canic::dto::memory::MemoryLedgerResponse, ::canic::Error> {
-            let caller = $crate::cdk::api::msg_caller();
-            if !$crate::cdk::api::is_controller(&caller) {
+            let caller = $crate::__internal::cdk::api::msg_caller();
+            if !$crate::__internal::cdk::api::is_controller(&caller) {
                 return Err(::canic::Error::unauthorized(format!(
                     "caller '{caller}' is not a controller of this canister"
                 )));

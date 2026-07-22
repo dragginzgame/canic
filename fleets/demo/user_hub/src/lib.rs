@@ -1,6 +1,7 @@
 #![expect(clippy::unused_async)]
 
 use canic::{Error, api::canister::placement::ShardingApi, prelude::*};
+use ic_cdk::api::{canister_self, msg_caller};
 
 const POOL_NAME: &str = "user_shards";
 

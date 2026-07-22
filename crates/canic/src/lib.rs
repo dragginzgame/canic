@@ -32,6 +32,19 @@ pub mod __internal {
     pub use canic_control_plane as control_plane;
     pub use canic_core as core;
 
+    pub mod cdk {
+        pub use canic_core::cdk::types::Principal;
+        pub use canic_core::cdk::{
+            export_candid, init, inspect_message, post_upgrade, query, update,
+        };
+
+        pub mod api {
+            pub use canic_core::cdk::api::{
+                canister_cycle_balance, canister_version, is_controller, msg_caller, time,
+            };
+        }
+    }
+
     pub mod instructions {
         pub use crate::instructions::format_instructions;
     }

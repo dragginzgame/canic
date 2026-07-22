@@ -122,12 +122,16 @@ pub fn cargo_metadata(
 pub fn cargo_metadata_for_manifest(
     manifest_path: &Path,
     filter_platform: &str,
-    locked_offline: bool,
+    locked: bool,
+    offline: bool,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
     let mut command = cargo_metadata_command(manifest_path);
     command.args(["--filter-platform", filter_platform]);
-    if locked_offline {
-        command.args(["--locked", "--offline"]);
+    if locked {
+        command.arg("--locked");
+    }
+    if offline {
+        command.arg("--offline");
     }
 
     run_cargo_metadata(command)
@@ -137,11 +141,15 @@ pub fn cargo_metadata_for_manifest(
 /// as role-specific activation evidence.
 pub fn cargo_metadata_catalog_for_manifest(
     manifest_path: &Path,
-    locked_offline: bool,
+    locked: bool,
+    offline: bool,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
     let mut command = cargo_metadata_command(manifest_path);
-    if locked_offline {
-        command.args(["--locked", "--offline"]);
+    if locked {
+        command.arg("--locked");
+    }
+    if offline {
+        command.arg("--offline");
     }
 
     run_cargo_metadata(command)
@@ -152,7 +160,8 @@ pub fn cargo_tree_for_package(
     manifest_path: &Path,
     package_spec: &str,
     filter_platform: &str,
-    locked_offline: bool,
+    locked: bool,
+    offline: bool,
     format: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut command = cargo_command();
@@ -176,8 +185,11 @@ pub fn cargo_tree_for_package(
             "--format",
             format,
         ]);
-    if locked_offline {
-        command.args(["--locked", "--offline"]);
+    if locked {
+        command.arg("--locked");
+    }
+    if offline {
+        command.arg("--offline");
     }
 
     let output = command.output()?;

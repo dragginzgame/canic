@@ -5,13 +5,15 @@ Last updated: 2026-07-22
 ## Current State
 
 0.97 is accepted and active after completing audit-only Slice A against
-released `v0.96.8` and implementing bounded Slice B in the open `0.97.0`
-batch. The required inventories and relocation decisions are frozen in the
+released `v0.96.8` and releasing bounded Slice B as `v0.97.0`. Slice C is
+implemented in the open `0.97.1` batch: macro expansion now uses one exact
+hidden CDK boundary, while human-facing facade removal remains the bounded
+next slice. The required inventories and relocation decisions are frozen in the
 [Slice A report](../../audits/reports/2026-07/2026-07-22/0.97-slice-a-surface-and-graph-inventory.md).
 Slice B gives every authoritative role-contract caller one canonical Cargo
 evidence producer and hard-cuts the declaration and protected-graph
 contradictions identified by Slice A. No package-version change, downstream
-edit, public CDK removal, or refill hard cut is part of this graph slice.
+edit, public CDK removal, or refill hard cut is part of the current slice.
 
 The proposal gives each configured role package sole external authority over
 Canic-owned framework packages and directly selected Canic capability
@@ -78,6 +80,16 @@ instructions; it cannot retain the facade.
   arbitrary target/CLI fabrication, unconditional lifecycle/metrics access,
   and child-funding integration are all inventoried for Slice E. The three
   removable stable error codes have no maintained producer.
+- Declarative lifecycle and endpoint macros now use definition-owned hidden
+  CDK paths; procedural endpoint expansion uses the canonical hidden Canic
+  path. The compiler boundary exposes only the frozen six macros, `Principal`,
+  and five required API functions.
+- Generic IC caller/self and Candid derive conveniences no longer arrive
+  through `canic::prelude`; maintained demo callers use their upstream owners.
+- Locked internal PocketIC builds now request locked online role evidence,
+  distinct from unlocked development builds and locked-offline passive
+  inspection. Focused validation proves the repository lockfile does not
+  change.
 
 ## Slice A Evidence
 
@@ -105,9 +117,22 @@ refill baseline/deletion set.
   separately existing cross-fleet role-name ambiguity in state-manifest
   discovery; it reports no role dependency-shape finding.
 
+## Slice C Validation
+
+- All 36 procedural-macro tests and 25 focused Canic endpoint, protocol, and
+  reference-surface tests pass.
+- All 22 focused role-package tests pass, including byte-for-byte lockfile
+  preservation for locked internal PocketIC evidence.
+- Strict all-target Clippy passes for the three changed packages. The
+  delegation-root, blob-storage probe, demo hub/shard, and built-in Wasm-store
+  packages compile with the hidden boundary.
+- Formatting and diff hygiene pass. Candid, stable records, CLI output, and
+  runtime behavior are unchanged.
+
 ## Next Action
 
-Finish the open `0.97.0` Slice B validation and publish boundary. After the
-maintainer pushes it, begin Slice C at the frozen hidden macro-plumbing and
-public `canic::cdk` boundary. Do not start the refill hard cut, change Cargo
-package versions, or edit Toko in the graph batch.
+Publish the open `0.97.1` Slice C boundary. Then migrate the remaining active
+human consumers and maintained documentation to their canonical upstream or
+Canic semantic owners and delete the public `canic::cdk` facade once. Do not
+start the refill hard cut, change Cargo package versions, or edit Toko in the
+CDK batch.

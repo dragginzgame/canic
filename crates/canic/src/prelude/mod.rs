@@ -12,10 +12,6 @@ pub use crate::{
         ops::{log, perf},
         timer::{timer, timer_interval},
     },
-    cdk::{
-        api::{canister_self, msg_caller},
-        candid::CandidType,
-    },
     dto::auth::DelegatedToken,
 };
 

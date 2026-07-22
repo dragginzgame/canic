@@ -1,7 +1,7 @@
 //! Canic proc macros.
 //!
 //! Thin, opinionated wrappers around IC CDK endpoint attributes
-//! (`#[query]`, `#[update]`), routed through `canic::cdk::*`.
+//! (`#[query]`, `#[update]`), routed through hidden Canic macro plumbing.
 //!
 //! The macro pipeline is strictly staged and deterministic:
 //!
