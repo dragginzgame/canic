@@ -14,16 +14,13 @@ use crate::{
     cdk::types::Principal,
     dto::{
         cascade::StateSnapshotInput,
-        state::{AppStateInput, SubnetStateInput},
+        state::AppStateInput,
         topology::{AppIndexArgs, SubnetIndexArgs},
     },
     ids::CanisterRole,
     ops::{
         runtime::env::EnvOps,
-        storage::{
-            registry::subnet::SubnetRegistryOps,
-            state::{app::AppStateOps, subnet::SubnetStateOps},
-        },
+        storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
         topology::index::{AppIndexResolver, SubnetIndexResolver},
     },
 };
@@ -37,7 +34,6 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct StateSnapshot {
     pub app_state: Option<AppStateInput>,
-    pub subnet_state: Option<SubnetStateInput>,
     pub app_index: Option<AppIndexArgs>,
     pub subnet_index: Option<SubnetIndexArgs>,
 }
@@ -69,12 +65,6 @@ impl StateSnapshotBuilder {
         self
     }
 
-    #[must_use]
-    pub fn with_subnet_state(mut self) -> Self {
-        self.snapshot.subnet_state = Some(SubnetStateOps::snapshot_input());
-        self
-    }
-
     pub fn with_app_index(mut self) -> Result<Self, InternalError> {
         self.snapshot.app_index = Some(AppIndexResolver::resolve_input()?);
         Ok(self)
@@ -95,7 +85,6 @@ impl From<StateSnapshotInput> for StateSnapshot {
     fn from(snapshot: StateSnapshotInput) -> Self {
         Self {
             app_state: snapshot.app_state,
-            subnet_state: snapshot.subnet_state,
             app_index: snapshot.app_index,
             subnet_index: snapshot.subnet_index,
         }
@@ -195,10 +184,7 @@ impl TopologySnapshotBuilder {
 
 #[must_use]
 pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
-    snapshot.app_state.is_none()
-        && snapshot.subnet_state.is_none()
-        && snapshot.app_index.is_none()
-        && snapshot.subnet_index.is_none()
+    snapshot.app_state.is_none() && snapshot.app_index.is_none() && snapshot.subnet_index.is_none()
 }
 
 #[must_use]
@@ -208,9 +194,8 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
     }
 
     format!(
-        "[{} {} {} {}]",
+        "[{} {} {}]",
         fmt(snapshot.app_state.is_some(), "as"),
-        fmt(snapshot.subnet_state.is_some(), "ss"),
         fmt(snapshot.app_index.is_some(), "ai"),
         fmt(snapshot.subnet_index.is_some(), "si"),
     )
@@ -219,20 +204,19 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
 #[cfg(test)]
 mod tests {
     use super::StateSnapshot;
-    use crate::dto::state::{AppMode, AppStateInput, SubnetStateInput};
+    use crate::dto::state::{AppMode, AppStateInput};
 
     #[test]
-    fn state_snapshot_debug_includes_subnet_state_slot() {
+    fn state_snapshot_debug_reports_current_slots() {
         let snapshot = StateSnapshot {
             app_state: Some(AppStateInput {
                 mode: AppMode::Enabled,
                 cycles_funding_enabled: true,
             }),
-            subnet_state: Some(SubnetStateInput::default()),
             app_index: None,
             subnet_index: None,
         };
 
-        assert_eq!(super::state_snapshot_debug(&snapshot), "[as ss .. ..]");
+        assert_eq!(super::state_snapshot_debug(&snapshot), "[as .. ..]");
     }
 }

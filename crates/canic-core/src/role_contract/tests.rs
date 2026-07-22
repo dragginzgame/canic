@@ -97,7 +97,7 @@ fn canonical_allocations_match_the_active_memory_map() {
             vec![11, 12, 13, 15],
         ),
         (StateAllocationKey::CoreRootAppRegistry, vec![14]),
-        (StateAllocationKey::CoreRuntimeEnvironment, vec![16, 17, 18]),
+        (StateAllocationKey::CoreRuntimeEnvironment, vec![16, 18]),
         (StateAllocationKey::CoreAuthState, vec![19]),
         (StateAllocationKey::CoreReplayReceipts, vec![20]),
         (
@@ -127,6 +127,31 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::WasmStoreGcState, vec![85]),
     ]);
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn retired_core_subnet_state_memory_id_cannot_be_reallocated() {
+    const RETIRED_ID: &[MemoryId] = &[MemoryId::new(
+        allocation::memory::env::RETIRED_SUBNET_STATE_ID,
+    )];
+
+    assert_eq!(
+        allocation::retired_memory_ids(),
+        &[MemoryId::new(
+            allocation::memory::env::RETIRED_SUBNET_STATE_ID
+        )]
+    );
+
+    let definition = AllocationDefinition {
+        key: StateAllocationKey::CoreRuntimeEnvironment,
+        owner: AllocationOwner::CanicCore,
+        memory_ids: RETIRED_ID,
+    };
+
+    assert!(matches!(
+        allocation::validate_allocation_definitions(&[definition]),
+        Err(RoleContractFinding::CatalogInvalid { .. })
+    ));
 }
 
 #[test]
@@ -358,8 +383,8 @@ fn surplus_state_feature_allocates_normally() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 62,
-            63, 64, 65,
+            11, 12, 13, 15, 16, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 62, 63,
+            64, 65,
         ]
     );
 }
@@ -396,8 +421,8 @@ fn repeated_selection_merges_allocation_provenance() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 30, 33, 34, 35, 39, 40, 41, 42, 43, 44, 45,
-            46, 47, 49, 80, 81, 82, 83, 84,
+            11, 12, 13, 14, 15, 16, 18, 19, 20, 29, 30, 33, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46,
+            47, 49, 80, 81, 82, 83, 84,
         ]
     );
 }
@@ -416,8 +441,8 @@ fn built_in_wasm_store_keeps_template_and_gc_ids() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 15, 16, 17, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 80,
-            81, 82, 83, 85,
+            11, 12, 13, 15, 16, 18, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46, 47, 80, 81,
+            82, 83, 85,
         ]
     );
     assert_eq!(

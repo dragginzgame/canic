@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 //! Module: storage::stable::receipt_capacity_tests
 //!
 //! Responsibility: measure the bounded receipt-related stable allocations.

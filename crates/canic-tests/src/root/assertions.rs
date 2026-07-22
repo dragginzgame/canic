@@ -16,7 +16,7 @@ use canic::{
             RuntimeStateDomainStatus, RuntimeStatus, TimerProcessCondition,
             TimerRegistrationStatus,
         },
-        state::{AppStateResponse, SubnetStateResponse},
+        state::AppStateResponse,
         topology::AppRegistryResponse,
     },
     ids::{CanisterRole, SubnetRole},
@@ -187,20 +187,16 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     );
 }
 
-/// Assert that root serves state snapshots and ordinary children do not export them.
+/// Assert that root serves application state and ordinary children do not export it.
 ///
 /// # Panics
 ///
-/// Panics if root state queries fail, if non-controller root state queries are
-/// accepted, or if ordinary children expose root-only state endpoints.
-pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child_pid: Principal) {
+/// Panics if the root state query fails, if a non-controller root query is
+/// accepted, or if an ordinary child exposes the root-only endpoint.
+pub fn assert_app_state_endpoint_is_root_only(pic: &Pic, root_id: Principal, child_pid: Principal) {
     let app_state: Result<AppStateResponse, canic::Error> =
         pic.query_call_or_panic(root_id, protocol::CANIC_APP_STATE, ());
     app_state.expect("root app state application");
-
-    let subnet_state: Result<SubnetStateResponse, canic::Error> =
-        pic.query_call_or_panic(root_id, protocol::CANIC_SUBNET_STATE, ());
-    subnet_state.expect("root subnet state application");
 
     let non_controller = Principal::from_slice(&[251; 29]);
     let denied_app_state: Result<AppStateResponse, canic::Error> =
@@ -210,26 +206,12 @@ pub fn assert_state_endpoints_are_root_only(pic: &Pic, root_id: Principal, child
     };
     assert_eq!(denied_app_state.code, ErrorCode::Unauthorized);
 
-    let denied_subnet_state: Result<SubnetStateResponse, canic::Error> =
-        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_SUBNET_STATE, ());
-    let Err(denied_subnet_state) = denied_subnet_state else {
-        panic!("non-controller subnet state query must be denied")
-    };
-    assert_eq!(denied_subnet_state.code, ErrorCode::Unauthorized);
-
     let child_app_state: Result<Result<AppStateResponse, canic::Error>, _> =
         pic.query_call(child_pid, protocol::CANIC_APP_STATE, ());
     let Err(err) = child_app_state else {
         panic!("child app state endpoint should be absent")
     };
     assert_missing_method(&err, protocol::CANIC_APP_STATE);
-
-    let child_subnet_state: Result<Result<SubnetStateResponse, canic::Error>, _> =
-        pic.query_call(child_pid, protocol::CANIC_SUBNET_STATE, ());
-    let Err(err) = child_subnet_state else {
-        panic!("child subnet state endpoint should be absent")
-    };
-    assert_missing_method(&err, protocol::CANIC_SUBNET_STATE);
 }
 
 /// Assert default root diagnostic endpoint exposure and controller gating.

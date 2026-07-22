@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.98.x] - 2026-07-22 - Architectural Sediment Hard Cuts
+## [0.98.x] - 2026-07-23 - Architectural Sediment Hard Cuts
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
+
+- `0.98.10` hard-cuts the empty core subnet-state storage, DTO, endpoint,
+  cascade, and probe authority, permanently retires stable memory ID 17, and
+  retains the independent control-plane subnet state at ID 84.
 
 - `0.98.9` removes duplicate internal chain-key and artifact-transform
   metadata, deriving fixed curve, role, tool, and mode values only from their

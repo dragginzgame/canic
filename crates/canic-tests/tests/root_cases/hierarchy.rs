@@ -3,9 +3,9 @@ use canic_testing_internal::canister;
 use canic_tests::root::{
     RootSetupProfile,
     assertions::{
-        assert_child_envs_match_registry, assert_child_runtime_introspection_is_controller_gated,
-        assert_children_match_registry, assert_registry_parents,
-        assert_root_diagnostics_are_controller_gated, assert_state_endpoints_are_root_only,
+        assert_app_state_endpoint_is_root_only, assert_child_envs_match_registry,
+        assert_child_runtime_introspection_is_controller_gated, assert_children_match_registry,
+        assert_registry_parents, assert_root_diagnostics_are_controller_gated,
     },
     harness::setup_root,
 };
@@ -64,9 +64,9 @@ fn root_reference_topology_is_consistent() {
 
     test_progress(
         "root_reference_topology_is_consistent",
-        "assert state endpoints are root-only",
+        "assert app state endpoint is root-only",
     );
-    assert_state_endpoints_are_root_only(&setup.pic, setup.root_id, app_pid);
+    assert_app_state_endpoint_is_root_only(&setup.pic, setup.root_id, app_pid);
     test_progress(
         "root_reference_topology_is_consistent",
         "assert root diagnostics are controller-gated",

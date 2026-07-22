@@ -39,10 +39,7 @@ impl AppStateWorkflow {
             return Ok(response);
         }
 
-        let snapshot = StateSnapshotBuilder::new()?
-            .with_app_state()
-            .with_subnet_state()
-            .build();
+        let snapshot = StateSnapshotBuilder::new()?.with_app_state().build();
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
         Ok(response)

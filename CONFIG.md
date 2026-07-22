@@ -122,9 +122,7 @@ Root/issuer delegated token authentication
 When delegated-token verification is enabled on a non-root endpoint canister,
 startup requires issuer canister-signature verification support, an effective
 root canister id, the raw IC root public key for the configured network, and a
-complete chain-key root proof policy. The verifier does not read
-`SubnetState.auth.delegated_root_public_key` for delegated-token root proof
-verification.
+complete chain-key root proof policy. Verification uses that policy directly.
 
 #### `[auth.delegated_tokens.chain_key_root_proof]`
 
