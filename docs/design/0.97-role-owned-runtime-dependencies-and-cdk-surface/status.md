@@ -4,18 +4,26 @@ Last updated: 2026-07-22
 
 ## Current State
 
-0.97 is accepted and active after completing audit-only Slice A against
-released `v0.96.8`, releasing bounded Slice B as `v0.97.0`, hidden
-macro-boundary Slice C as `v0.97.1`, and public-facade Slice D as `v0.97.2`.
-Slice E is implemented in the open `0.97.3` batch: manual ICP conversion is
-owned by the root role, its standard controller endpoint, root-only config and
-state, and the deployment-root CLI. The required
+0.97 is **not ready to close** at immutable `v0.97.3`. A rigorous
+baseline-to-tag audit found five P1 defects in the released implementation.
+The smallest corrections are present in the current working tree, but no new
+immutable release anchor contains them yet. The released line comprises
+audit-only Slice A against `v0.96.8`, bounded Slice B as `v0.97.0`, hidden
+macro-boundary Slice C as `v0.97.1`, public-facade Slice D as `v0.97.2`, and
+root-owned manual ICP conversion as `v0.97.3`. Manual conversion is owned by
+the root role, its standard controller endpoint, root-only config and state,
+and the deployment-root CLI. The required
 relocation decisions are frozen in the
 [Slice A report](../../audits/reports/2026-07/2026-07-22/0.97-slice-a-surface-and-graph-inventory.md).
 Slice B gives every authoritative role-contract caller one canonical Cargo
 evidence producer and hard-cuts the declaration and protected-graph
-contradictions identified by Slice A. No package-version change, downstream
+contradictions identified by Slice A. No package-version change or downstream
 edit is part of the current slice.
+
+The previous pass claim is superseded by the
+[rigorous closeout audit](0.97-closeout-audit.md). The release-line pointer is
+retained at
+[0.97-closeout.md](../../audits/release-lines/0.97-closeout.md).
 
 The proposal gives each configured role package sole external authority over
 Canic-owned framework packages and directly selected Canic capability
@@ -61,6 +69,10 @@ instructions; it cannot retain the facade.
   purpose-bearing build edge. Previously implicit `metrics` activation is
   explicit, and `delegation_root_stub` reaches control-plane DTOs through the
   semantic Canic facade rather than a sibling protected-package edge.
+- The released build macro incorrectly read `metrics` from the feature-empty
+  build dependency. The corrected tree reads the final role package's normal
+  dependency declaration, and the role-attestation PocketIC suite proves the
+  generated metrics endpoint.
 - The all-feature Canic normal closure contains exactly the four protected
   framework packages; no allowed non-protected Canic-owned implementation
   package is needed.
@@ -154,7 +166,7 @@ refill baseline/deletion set.
 
 ## Slice E Validation
 
-- All 981 `canic-core` library tests pass with one ignored. The focused
+- Of 981 `canic-core` library tests, 980 pass and one is ignored. The focused
   contract covers root-only configuration, direct root allocation, stable
   index rebuild, replay and recovery binding, non-self rejection, notification
   overflow, and root upgrade refusal while any refill remains resumable.
@@ -168,6 +180,10 @@ refill baseline/deletion set.
 
 ## Next Action
 
-Finish the targeted Slice E gate, publish `0.97.3`, and close 0.97 against the
-accepted design. Do not change Cargo package versions outside the maintainer's
-release flow or edit the downstream Toko repository.
+Review and release the five bounded closeout corrections, repeat the passing
+cumulative validation at the new immutable anchor, and record that anchor
+before declaring 0.97 closed. The corrected working tree's repository-pinned
+root PocketIC matrix passes all 28 cases. Keep the separately bounded 0.98
+architectural-sediment hard cuts distinct; do not extend either line with
+general cleanup, change Cargo package versions outside the maintainer's
+release flow, or edit the downstream Toko repository.

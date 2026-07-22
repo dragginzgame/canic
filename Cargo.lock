@@ -3295,13 +3295,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "project-protocol-stub"
-version = "0.97.3"
-dependencies = [
- "canic",
-]
-
-[[package]]
 name = "project_hub_stub"
 version = "0.97.3"
 dependencies = [

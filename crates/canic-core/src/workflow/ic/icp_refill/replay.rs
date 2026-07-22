@@ -346,6 +346,15 @@ pub(super) fn preserve_icp_refill_recovery_required(
     err
 }
 
+pub(super) fn preserve_icp_refill_post_effect_result(
+    token: &ReplayReceiptToken,
+    operation: &IcpRefillOperation,
+    effect: &'static str,
+    result: Result<IcpRefillOperation, InternalError>,
+) -> Result<IcpRefillOperation, InternalError> {
+    result.map_err(|err| preserve_icp_refill_recovery_required(token, operation, effect, err))
+}
+
 pub(super) fn log_icp_refill_fresh_reservation(
     request: &IcpRefillRequest,
     root_canister: Principal,

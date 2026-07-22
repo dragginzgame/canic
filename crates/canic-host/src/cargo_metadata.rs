@@ -7,9 +7,8 @@
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
 };
 
 use crate::cargo_command;
@@ -101,9 +100,6 @@ pub struct CargoMetadataDependencyKind {
     #[serde(default)]
     pub kind: Option<String>,
 }
-
-static CARGO_METADATA_NO_DEPS_CACHE: OnceLock<Mutex<HashMap<PathBuf, CargoMetadata>>> =
-    OnceLock::new();
 
 // Query cargo metadata for the selected workspace root.
 pub fn cargo_metadata(
@@ -234,26 +230,4 @@ fn run_cargo_metadata(
 
 const fn default_true() -> bool {
     true
-}
-
-// Reuse one per-process no-deps Cargo metadata snapshot for manifest discovery.
-pub fn cargo_metadata_no_deps_cached(
-    workspace_root: &Path,
-) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
-    let cache_key = workspace_root.canonicalize()?;
-    let cache = CARGO_METADATA_NO_DEPS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-
-    {
-        let cache = cache.lock().expect("cargo metadata cache lock poisoned");
-        if let Some(metadata) = cache.get(&cache_key) {
-            return Ok(metadata.clone());
-        }
-    }
-
-    let metadata = cargo_metadata(&cache_key, false)?;
-    {
-        let mut cache = cache.lock().expect("cargo metadata cache lock poisoned");
-        cache.insert(cache_key, metadata.clone());
-    }
-    Ok(metadata)
 }

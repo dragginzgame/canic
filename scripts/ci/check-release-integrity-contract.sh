@@ -120,7 +120,6 @@ for variable in "${version_vars[@]}"; do
 done
 
 sha256_count=0
-sha512_count=0
 declare -A validated_checksum_vars=()
 while IFS='=' read -r variable digest; do
     case "$variable" in
@@ -132,13 +131,11 @@ while IFS='=' read -r variable digest; do
     export\ CANIC_*_SHA512*)
         [[ "$digest" =~ ^[0-9a-f]{128}$ ]] || fail "invalid SHA-512 pin: $variable"
         validated_checksum_vars["${variable#export }"]=1
-        sha512_count=$((sha512_count + 1))
         ;;
     esac
 done <"$TOOLS"
 
 [ "$sha256_count" -gt 0 ] || fail "no SHA-256 pins were found"
-[ "$sha512_count" -gt 0 ] || fail "no SHA-512 pins were found"
 
 for installer in "${installers[@]}"; do
     rg -F 'verify-file-checksum.sh' "$installer" >/dev/null ||

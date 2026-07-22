@@ -49,23 +49,17 @@ pub fn resolve_project_state_manifest(
 
     if role_filter != Some(CanisterRole::WASM_STORE.as_str()) {
         for config_path in config_paths {
-            let source = match fs::read_to_string(config_path) {
-                Ok(source) => source,
-                Err(error) => {
-                    errors.push(RoleContractFinding::DependencyShapeUnsupported {
-                        reason: format!("failed to read {}: {error}", config_path.display()),
-                    });
-                    continue;
-                }
+            let Ok(source) = fs::read_to_string(config_path) else {
+                errors.push(RoleContractFinding::DependencyShapeUnsupported {
+                    reason: "failed to read role configuration".to_string(),
+                });
+                continue;
             };
-            let config = match parse_config_model(&source) {
-                Ok(config) => config,
-                Err(error) => {
-                    errors.push(RoleContractFinding::DependencyShapeUnsupported {
-                        reason: format!("invalid {}: {error}", config_path.display()),
-                    });
-                    continue;
-                }
+            let Ok(config) = parse_config_model(&source) else {
+                errors.push(RoleContractFinding::DependencyShapeUnsupported {
+                    reason: "invalid role configuration".to_string(),
+                });
+                continue;
             };
 
             for role in config.roles.keys() {

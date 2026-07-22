@@ -65,6 +65,33 @@ fn isolated_role_workspace_rejects_missing_resolver_two() {
 }
 
 #[test]
+fn role_contract_rejection_does_not_expose_local_or_source_data() {
+    let fixture = FixtureWorkspace::materialize("supported");
+    let config_path = fixture.root.join("canic.toml");
+    let secret_like_value = "canic-closeout-secret";
+    fs::write(
+        &config_path,
+        format!("[fleet]\nname = \"{secret_like_value}\n"),
+    )
+    .expect("write malformed config");
+
+    let RolePackageValidation::Unsupported(RoleContractFinding::DependencyShapeUnsupported {
+        reason,
+    }) = validate_declared_role_package(
+        &config_path,
+        &CanisterRole::owned("app".to_string()),
+        PackageValidationMode::Build,
+    )
+    else {
+        panic!("malformed role configuration must be rejected");
+    };
+
+    assert!(!reason.contains(&fixture.root.display().to_string()));
+    assert!(!reason.contains(secret_like_value));
+    assert_eq!(reason, "invalid role configuration");
+}
+
+#[test]
 fn isolated_role_workspace_rejects_unreviewed_resolver_three() {
     let fixture = FixtureWorkspace::materialize("supported");
     fixture.rewrite("Cargo.toml", "resolver = \"2\"", "resolver = \"3\"");
@@ -394,6 +421,52 @@ fn alternate_protected_package_path_names_the_target_and_dependency_alias() {
         "runtime_bridge (helper {})",
         env!("CARGO_PKG_VERSION")
     )));
+}
+
+#[test]
+fn protected_dependency_diagnostic_selects_the_globally_shortest_path() {
+    let packages = [
+        package("role", "role@1", "/tmp/role/Cargo.toml"),
+        package("long_entry", "long_entry@1", "/tmp/long_entry/Cargo.toml"),
+        package(
+            "long_bridge",
+            "long_bridge@1",
+            "/tmp/long_bridge/Cargo.toml",
+        ),
+        package("canic-core", "core@1", "/tmp/core/Cargo.toml"),
+        package("canic-macros", "macros@1", "/tmp/macros/Cargo.toml"),
+        package(CANIC_PACKAGE, "canic@1", "/tmp/canic/Cargo.toml"),
+    ];
+    let nodes = [
+        node(
+            "role@1",
+            vec![
+                normal_edge("canic", "canic@1"),
+                normal_edge("a_long", "long_entry@1"),
+                normal_edge("z_short", "macros@1"),
+            ],
+        ),
+        node("long_entry@1", vec![normal_edge("bridge", "long_bridge@1")]),
+        node("long_bridge@1", vec![normal_edge("canic_core", "core@1")]),
+        node("core@1", Vec::new()),
+        node("macros@1", Vec::new()),
+        node("canic@1", Vec::new()),
+    ];
+    let graph = runtime_graph(&packages, &nodes);
+    let direct_edge = graph.edges["role@1"]
+        .iter()
+        .find(|edge| edge.alias == "canic")
+        .expect("direct Canic edge");
+
+    let Err(RoleContractFinding::DependencyShapeUnsupported { reason }) =
+        validate_runtime_graph(&graph, direct_edge)
+    else {
+        panic!("protected dependency path must be rejected");
+    };
+
+    assert!(reason.contains("protected package `canic-macros`"));
+    assert!(reason.contains("z_short"));
+    assert!(!reason.contains("canic-core"));
 }
 
 #[test]

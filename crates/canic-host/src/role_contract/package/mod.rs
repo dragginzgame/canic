@@ -120,12 +120,9 @@ pub fn declared_role_manifest_path(
 ) -> Result<PathBuf, RoleContractFinding> {
     let config_source = fs::read_to_string(config_path)
         .map_err(|_| RoleContractFinding::PackageMissing { role: role.clone() })?;
-    let config = parse_config_model(&config_source).map_err(|error| {
+    let config = parse_config_model(&config_source).map_err(|_| {
         RoleContractFinding::DependencyShapeUnsupported {
-            reason: format!(
-                "invalid role configuration {}: {error}",
-                config_path.display()
-            ),
+            reason: "invalid role configuration".to_string(),
         }
     })?;
     let declaration = config
@@ -150,14 +147,8 @@ pub fn validate_declared_role_package(
             role: role.clone(),
         });
     };
-    let config = match parse_config_model(&config_source) {
-        Ok(config) => config,
-        Err(error) => {
-            return unsupported_shape(format!(
-                "invalid role configuration {}: {error}",
-                config_path.display()
-            ));
-        }
+    let Ok(config) = parse_config_model(&config_source) else {
+        return unsupported_shape("invalid role configuration".to_string());
     };
     validate_declared_role_package_from_config(config_path, &config, role, mode)
 }
@@ -175,7 +166,7 @@ pub fn validate_declared_role_package_from_config(
         });
     };
     let Some(fleet) = config.fleet_name() else {
-        return unsupported_shape(format!("missing [fleet].name in {}", config_path.display()));
+        return unsupported_shape("role configuration is missing [fleet].name".to_string());
     };
     let manifest_path = package_manifest_path(config_path, &declaration.package);
     if !manifest_path.is_file() {
@@ -218,9 +209,8 @@ pub fn validate_internal_test_wasm_packages(
     workspace_root: &Path,
     package_names: &[&str],
 ) -> Result<(), RoleContractFinding> {
-    let metadata = cargo_metadata(workspace_root, false).map_err(|error| {
-        unsupported_finding(format!("unable to inspect internal test packages: {error}"))
-    })?;
+    let metadata = cargo_metadata(workspace_root, false)
+        .map_err(|_| unsupported_finding("unable to inspect internal test package metadata"))?;
 
     for package_name in package_names {
         let matches = metadata
@@ -254,8 +244,7 @@ pub fn validate_internal_test_wasm_packages(
                 != normalized_manifest_path(&package.manifest_path)
         {
             return Err(unsupported_finding(format!(
-                "internal test package `{package_name}` does not match the package selected by {}",
-                config_path.display()
+                "internal test package `{package_name}` does not match the package selected by its role configuration"
             )));
         }
         match super::resolve_declared_role_package_contract(&config_path, &evidence) {
@@ -338,28 +327,21 @@ fn validate_package_manifest(
     mode: PackageValidationMode,
     built_in: bool,
 ) -> RolePackageValidation {
-    let metadata = match cargo_metadata_for_manifest(
-        manifest_path,
-        WASM_TARGET,
-        mode.locked(),
-        mode.offline(),
-    ) {
-        Ok(metadata) => metadata,
-        Err(error) => {
-            let finding = if built_in {
-                RoleContractFinding::BuiltInPackageUnavailable {
-                    role: BuiltInRoleKind::WasmStore,
-                }
-            } else {
-                RoleContractFinding::DependencyShapeUnsupported {
-                    reason: format!(
-                        "unable to inspect the local wasm runtime graph for {}: {error}",
-                        manifest_path.display()
-                    ),
-                }
-            };
-            return RolePackageValidation::Unsupported(finding);
-        }
+    let Ok(metadata) =
+        cargo_metadata_for_manifest(manifest_path, WASM_TARGET, mode.locked(), mode.offline())
+    else {
+        let finding = if built_in {
+            RoleContractFinding::BuiltInPackageUnavailable {
+                role: BuiltInRoleKind::WasmStore,
+            }
+        } else {
+            RoleContractFinding::DependencyShapeUnsupported {
+                reason:
+                    "unable to inspect the local wasm runtime graph for the selected role package"
+                        .to_string(),
+            }
+        };
+        return RolePackageValidation::Unsupported(finding);
     };
 
     let selected = match exact_manifest_package(&metadata, manifest_path, expected_role) {
@@ -374,31 +356,25 @@ fn validate_package_manifest(
     if let Err(finding) = validate_catalog() {
         return RolePackageValidation::Unsupported(finding);
     }
-    let catalog =
-        match cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline()) {
-            Ok(catalog) => catalog,
-            Err(error) => {
-                return unsupported_shape(format!(
-                    "unable to inspect the Cargo package catalog for {}: {error}",
-                    manifest_path.display()
-                ));
-            }
-        };
-    let tree = match cargo_tree_for_package(
+    let Ok(catalog) =
+        cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline())
+    else {
+        return unsupported_shape(
+            "unable to inspect the Cargo package catalog for the selected role package".to_string(),
+        );
+    };
+    let Ok(tree) = cargo_tree_for_package(
         manifest_path,
         &declaration.package.id,
         WASM_TARGET,
         mode.locked(),
         mode.offline(),
         TREE_FORMAT,
-    ) {
-        Ok(tree) => tree,
-        Err(error) => {
-            return unsupported_shape(format!(
-                "unable to inspect the package-selected wasm runtime graph for {}: {error}",
-                manifest_path.display()
-            ));
-        }
+    ) else {
+        return unsupported_shape(
+            "unable to inspect the package-selected wasm runtime graph for the selected role package"
+                .to_string(),
+        );
     };
     let graph = match correlate_package_tree(&catalog, &metadata, declaration.package, &tree) {
         Ok(graph) => graph,
@@ -805,18 +781,10 @@ fn validate_cargo_declarations(
 }
 
 fn read_cargo_document(path: &Path) -> Result<toml::Value, RoleContractFinding> {
-    let source = fs::read_to_string(path).map_err(|error| {
-        unsupported_finding(format!(
-            "unable to read Cargo manifest {}: {error}",
-            path.display()
-        ))
-    })?;
-    toml::from_str(&source).map_err(|error| {
-        unsupported_finding(format!(
-            "unable to parse Cargo manifest {}: {error}",
-            path.display()
-        ))
-    })
+    let source = fs::read_to_string(path)
+        .map_err(|_| unsupported_finding("unable to read selected Cargo manifest"))?;
+    toml::from_str(&source)
+        .map_err(|_| unsupported_finding("unable to parse selected Cargo manifest"))
 }
 
 fn cargo_dependency_value<'a>(
@@ -944,12 +912,8 @@ fn validate_build_script_purpose(
             "the Canic build dependency requires exactly one package build script",
         ));
     };
-    let source = fs::read_to_string(&build_target.src_path).map_err(|error| {
-        unsupported_finding(format!(
-            "unable to read Canic role build script {}: {error}",
-            build_target.src_path.display()
-        ))
-    })?;
+    let source = fs::read_to_string(&build_target.src_path)
+        .map_err(|_| unsupported_finding("unable to read Canic role build script"))?;
     let build_macro_calls = source
         .lines()
         .map(str::trim)
@@ -984,6 +948,7 @@ fn validate_runtime_graph(
         });
     }
 
+    let mut protected_paths = Vec::new();
     for dependency in graph
         .edges
         .get(&graph.selected_package_id)
@@ -999,8 +964,25 @@ fn validate_runtime_graph(
             ));
         }
         if let Some(path) = shortest_protected_path(graph, dependency) {
-            return Err(unsupported_finding(render_protected_path(graph, &path)));
+            protected_paths.push(path);
         }
+    }
+
+    protected_paths.sort_by(|left, right| {
+        left.edges.len().cmp(&right.edges.len()).then_with(|| {
+            left.edges
+                .iter()
+                .map(|edge| graph_edge_sort_key(graph, edge))
+                .cmp(
+                    right
+                        .edges
+                        .iter()
+                        .map(|edge| graph_edge_sort_key(graph, edge)),
+                )
+        })
+    });
+    if let Some(path) = protected_paths.first() {
+        return Err(unsupported_finding(render_protected_path(graph, path)));
     }
 
     Ok(())

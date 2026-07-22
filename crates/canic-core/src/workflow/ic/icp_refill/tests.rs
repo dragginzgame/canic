@@ -933,7 +933,7 @@ fn refill_replay_resumable_response_aborts_in_flight_receipt() {
 }
 
 #[test]
-fn refill_replay_recovery_required_preserves_effect_receipt() {
+fn refill_post_effect_storage_failure_requires_recovery_and_preserves_effect_receipt() {
     let request = request_with_operation(186);
     let IcpRefillReplayReservation::Fresh { token, .. } =
         reserve_icp_refill_replay(icp_refill_replay_reserve_input(&request, p(90), 1_000))
@@ -946,15 +946,19 @@ fn refill_replay_recovery_required_preserves_effect_receipt() {
     let operation = operation_from_record(&record);
     mark_icp_refill_transfer_effect(&token, &operation).expect("mark transfer effect");
 
-    let error = preserve_icp_refill_recovery_required(
+    let error = preserve_icp_refill_post_effect_result(
         &token,
         &operation,
         "ledger_transfer",
-        InternalError::infra(InternalErrorOrigin::Infra, "call failed"),
-    );
+        Err(InternalError::ops(
+            InternalErrorOrigin::Ops,
+            "record update failed",
+        )),
+    )
+    .expect_err("post-effect storage failure must require recovery");
     assert_eq!(
         error.log_fields(),
-        (crate::InternalErrorClass::Infra, InternalErrorOrigin::Infra)
+        (crate::InternalErrorClass::Ops, InternalErrorOrigin::Ops)
     );
 
     let receipt = ReplayReceiptOps::get(token.key())

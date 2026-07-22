@@ -12,20 +12,20 @@ TMP_DIR=""
 resolve_platform() {
     case "$(uname -s):$(uname -m)" in
     Darwin:arm64 | Darwin:aarch64)
-        package_platform="darwin-arm64"
-        checksum="$CANIC_IC_WASM_SHA512_DARWIN_ARM64"
+        archive_platform="aarch64-apple-darwin"
+        checksum="$CANIC_IC_WASM_SHA256_DARWIN_ARM64"
         ;;
     Darwin:x86_64 | Darwin:amd64)
-        package_platform="darwin-x64"
-        checksum="$CANIC_IC_WASM_SHA512_DARWIN_X64"
+        archive_platform="x86_64-apple-darwin"
+        checksum="$CANIC_IC_WASM_SHA256_DARWIN_X64"
         ;;
     Linux:arm64 | Linux:aarch64)
-        package_platform="linux-arm64"
-        checksum="$CANIC_IC_WASM_SHA512_LINUX_ARM64"
+        archive_platform="aarch64-unknown-linux-gnu"
+        checksum="$CANIC_IC_WASM_SHA256_LINUX_ARM64"
         ;;
     Linux:x86_64 | Linux:amd64)
-        package_platform="linux-x64"
-        checksum="$CANIC_IC_WASM_SHA512_LINUX_X64"
+        archive_platform="x86_64-unknown-linux-gnu"
+        checksum="$CANIC_IC_WASM_SHA256_LINUX_X64"
         ;;
     *)
         echo "unsupported ic-wasm platform: $(uname -s) $(uname -m)" >&2
@@ -35,9 +35,9 @@ resolve_platform() {
 }
 
 main() {
-    local package="ic-wasm-${package_platform}"
-    local archive="${package}-${CANIC_IC_WASM_VERSION}.tgz"
-    local url="https://registry.npmjs.org/@icp-sdk/${package}/-/${archive}"
+    local package="ic-wasm-${archive_platform}"
+    local archive="${package}.tar.xz"
+    local url="https://github.com/dfinity/ic-wasm/releases/download/${CANIC_IC_WASM_VERSION}/${archive}"
     local installed
     local candidate
     local version_output
@@ -47,10 +47,10 @@ main() {
 
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
         -o "$TMP_DIR/$archive" "$url"
-    bash "$SCRIPT_DIR/verify-file-checksum.sh" sha512 "$checksum" "$TMP_DIR/$archive"
-    tar -xzf "$TMP_DIR/$archive" -C "$TMP_DIR" package/bin/ic-wasm
+    bash "$SCRIPT_DIR/verify-file-checksum.sh" sha256 "$checksum" "$TMP_DIR/$archive"
+    tar -xJf "$TMP_DIR/$archive" -C "$TMP_DIR" "$package/ic-wasm"
 
-    candidate="$TMP_DIR/package/bin/ic-wasm"
+    candidate="$TMP_DIR/$package/ic-wasm"
     chmod +x "$candidate"
     version_output="$("$candidate" --version 2>&1)"
     case "$version_output" in

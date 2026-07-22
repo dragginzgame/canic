@@ -201,19 +201,6 @@ max_refill_e8s_per_call = 100000000
 }
 
 #[test]
-fn legacy_topup_icp_refill_table_is_rejected() {
-    toml::from_str::<CanisterConfig>(
-        r#"
-kind = "root"
-
-[topup.icp_refill]
-max_refill_e8s_per_call = 100000000
-"#,
-    )
-    .expect_err("legacy topup refill path must not parse");
-}
-
-#[test]
 fn nonroot_icp_refill_policy_is_rejected() {
     let mut canisters = BTreeMap::new();
     let cfg = CanisterConfig {

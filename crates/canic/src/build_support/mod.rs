@@ -10,6 +10,6 @@ pub use config::{
 };
 pub use metrics::{
     METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM, METRICS_TIER_RUNTIME,
-    METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, metrics_feature_enabled,
-    metrics_profile_tier_mask,
+    METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, metrics_profile_tier_mask,
+    role_normal_dependency_metrics_enabled,
 };
