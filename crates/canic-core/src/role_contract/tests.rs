@@ -7,8 +7,8 @@ use super::{
 };
 use crate::{
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, IcpRefillPolicy,
-        ScalingConfig, ShardingConfig, TopupPolicy,
+        CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, ScalingConfig,
+        ShardingConfig,
     },
     ids::CanisterRole,
     test::config::ConfigTestBuilder,
@@ -209,45 +209,22 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
 }
 
 #[test]
-fn icp_refill_config_requires_its_feature_and_selects_its_state() {
-    let mut app = ConfigTestBuilder::canister_config(CanisterKind::Service);
-    app.topup = Some(TopupPolicy {
-        icp_refill: Some(IcpRefillPolicy {
-            enabled: true,
-            max_refill_e8s_per_call: 100_000_000,
-            min_xdr_permyriad_per_icp: Some(40_000),
-            ledger_canister_id: None,
-            cmc_canister_id: None,
-            allow_ic_system_canister_overrides: false,
-        }),
-        ..TopupPolicy::default()
-    });
+fn root_inherently_selects_icp_refill_state() {
     let config = ConfigTestBuilder::new()
-        .with_prime_canister("app", app)
+        .with_prime_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
         .build();
-    let role = CanisterRole::owned("app".to_string());
 
     let RoleContractResolution::Resolved { contract } = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::Declared {
             config: &config,
-            role: &role,
+            role: &CanisterRole::ROOT,
         },
-        declared_features: BTreeSet::from([CanicFeatureKey::IcpRefill]),
+        declared_features: BTreeSet::from([CanicFeatureKey::ControlPlane]),
         default_features_enabled: true,
     }) else {
-        panic!("ICP refill contract should resolve");
+        panic!("root contract should resolve");
     };
 
-    assert!(
-        contract
-            .capabilities
-            .contains(&RoleCapabilityKey::IcpRefill)
-    );
-    assert!(
-        contract
-            .required_features
-            .contains(&CanicFeatureKey::IcpRefill)
-    );
     let allocation = contract
         .allocations
         .iter()
@@ -256,10 +233,7 @@ fn icp_refill_config_requires_its_feature_and_selects_its_state() {
     assert_eq!(allocation.memory_ids, vec![MemoryId::new(33)]);
     assert_eq!(
         allocation.selected_by,
-        BTreeSet::from([
-            SelectionProvenance::Capability(RoleCapabilityKey::IcpRefill),
-            SelectionProvenance::EffectiveFeature(CanicFeatureKey::IcpRefill),
-        ])
+        BTreeSet::from([SelectionProvenance::Capability(RoleCapabilityKey::Root)])
     );
 }
 
@@ -422,8 +396,8 @@ fn repeated_selection_merges_allocation_provenance() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 30, 34, 35, 39, 40, 41, 42, 43, 44, 45, 46,
-            47, 49, 80, 81, 82, 83, 84,
+            11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 30, 33, 34, 35, 39, 40, 41, 42, 43, 44, 45,
+            46, 47, 49, 80, 81, 82, 83, 84,
         ]
     );
 }

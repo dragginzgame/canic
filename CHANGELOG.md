@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.97.md](docs/changelog/0.97.md)
 
+- `0.97.3` hard-cuts generic ICP refill to one controller-operated root
+  self-conversion path, with root-owned configuration, state, lifecycle, and
+  metrics plus a narrowed deployment-root CLI and Candid contract.
+
 - `0.97.2` hard-cuts the public `canic::cdk` facade in favor of semantic Canic
   DTOs and direct upstream owners, and moves the procedural macro parser onto
   the existing Syn 3 dependency line without changing runtime behavior. Role

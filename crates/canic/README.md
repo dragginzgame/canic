@@ -37,7 +37,6 @@ required by the role.
 | `metrics` | Yes | The standard `canic_metrics` endpoint bundle. |
 | `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs; also enables `wasm-store-canister`. |
 | `wasm-store-canister` | No | The canonical `wasm_store` canister API used by generated/bootstrap store packages. Ordinary application roles should not enable it. |
-| `icp-refill` | No | ICP-to-cycles refill runtime APIs and generated endpoint support. |
 | `blob-storage` | No | Non-billing blob-storage status and gateway-administration runtime APIs/endpoints. |
 | `blob-storage-billing` | No | Cashier-backed blob-storage billing, funding, and readiness support; also enables `blob-storage`. |
 | `sharding` | No | Sharding placement, storage, metrics, and lifecycle support from `canic-core`. |

@@ -59,6 +59,14 @@ impl InternalError {
         Self::public(PublicError::invalid(message))
     }
 
+    pub fn conflict(message: impl Into<String>) -> Self {
+        Self::public(PublicError::conflict(message))
+    }
+
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self::public(PublicError::unavailable(message))
+    }
+
     pub fn resource_exhausted(message: impl Into<String>) -> Self {
         Self::public(PublicError::exhausted(message))
     }

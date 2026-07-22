@@ -38,6 +38,13 @@ macro_rules! canic_emit_root_admin_endpoints {
             $crate::__internal::core::api::config::ConfigApi::export_toml()
         }
 
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_icp_refill(
+            request: ::canic::dto::icp_refill::IcpRefillRequest,
+        ) -> Result<::canic::dto::icp_refill::IcpRefillEndpointResponse, ::canic::Error> {
+            $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(request).await
+        }
+
         // TBD: future app-level topology contract; keep private to controllers until
         // host/backup semantics are designed.
         #[$crate::canic_query(requires(caller::is_controller()))]

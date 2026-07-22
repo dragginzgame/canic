@@ -225,6 +225,7 @@ impl ConfigModel {
                 kind: CanisterKind::Root,
                 initial_cycles: crate::cdk::types::Cycles::new(0),
                 topup: None,
+                icp_refill: None,
                 cycles_funding: CyclesFundingPolicyConfig::default(),
                 randomness: RandomnessConfig::default(),
                 scaling: None,

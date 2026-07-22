@@ -8,7 +8,6 @@ pub struct IcpRefillPolicyInput {
     pub observed_xdr_permyriad_per_icp: Option<u64>,
     pub active_for_key: bool,
     pub cycles_funding_enabled: bool,
-    pub funding_cooldown_retry_after_secs: Option<u64>,
 }
 
 ///
@@ -17,7 +16,6 @@ pub struct IcpRefillPolicyInput {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct IcpRefillPolicyRules {
-    pub enabled: bool,
     pub max_refill_e8s_per_call: u64,
     pub min_xdr_permyriad_per_icp: Option<u64>,
 }
@@ -29,11 +27,7 @@ pub struct IcpRefillPolicyRules {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum IcpRefillPolicyViolation {
     NotConfigured,
-    Disabled,
     CyclesFundingDisabled,
-    FundingCooldownActive {
-        retry_after_secs: u64,
-    },
     AmountZero,
     MaxRefillPerCall {
         requested_e8s: u64,
@@ -71,9 +65,6 @@ const fn evaluate_common(
     if !input.cycles_funding_enabled {
         return Err(IcpRefillPolicyViolation::CyclesFundingDisabled);
     }
-    if !policy.enabled {
-        return Err(IcpRefillPolicyViolation::Disabled);
-    }
     if input.requested_amount_e8s == 0 {
         return Err(IcpRefillPolicyViolation::AmountZero);
     }
@@ -85,9 +76,6 @@ const fn evaluate_common(
     }
     if input.active_for_key {
         return Err(IcpRefillPolicyViolation::ConcurrentRefill);
-    }
-    if let Some(retry_after_secs) = input.funding_cooldown_retry_after_secs {
-        return Err(IcpRefillPolicyViolation::FundingCooldownActive { retry_after_secs });
     }
     if let Some(min_xdr_permyriad_per_icp) = policy.min_xdr_permyriad_per_icp {
         match input.observed_xdr_permyriad_per_icp {
@@ -116,7 +104,6 @@ mod tests {
 
     fn policy() -> IcpRefillPolicyRules {
         IcpRefillPolicyRules {
-            enabled: true,
             max_refill_e8s_per_call: 100_000_000,
             min_xdr_permyriad_per_icp: Some(40_000),
         }
@@ -128,7 +115,6 @@ mod tests {
             observed_xdr_permyriad_per_icp: Some(45_000),
             active_for_key: false,
             cycles_funding_enabled: true,
-            funding_cooldown_retry_after_secs: None,
         }
     }
 
@@ -202,20 +188,5 @@ mod tests {
         let err = evaluate_manual_refill(Some(&policy()), input).expect_err("kill switch");
 
         assert_eq!(err, IcpRefillPolicyViolation::CyclesFundingDisabled);
-    }
-
-    #[test]
-    fn manual_refill_denies_when_funding_cooldown_active() {
-        let mut input = input();
-        input.funding_cooldown_retry_after_secs = Some(11);
-
-        let err = evaluate_manual_refill(Some(&policy()), input).expect_err("cooldown");
-
-        assert_eq!(
-            err,
-            IcpRefillPolicyViolation::FundingCooldownActive {
-                retry_after_secs: 11
-            }
-        );
     }
 }

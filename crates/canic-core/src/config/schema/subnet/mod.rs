@@ -149,6 +149,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         kind: CanisterKind::Singleton,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
+        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         randomness: RandomnessConfig::default(),
         scaling: None,
@@ -223,6 +224,9 @@ pub struct CanisterConfig {
 
     #[serde(default)]
     pub topup: Option<TopupPolicy>,
+
+    #[serde(default)]
+    pub icp_refill: Option<IcpRefillPolicy>,
 
     #[serde(default)]
     pub cycles_funding: CyclesFundingPolicyConfig,
@@ -420,9 +424,6 @@ pub struct TopupPolicy {
         deserialize_with = "Cycles::from_config"
     )]
     pub amount: Cycles,
-
-    #[serde(default)]
-    pub icp_refill: Option<IcpRefillPolicy>,
 }
 
 impl Default for TopupPolicy {
@@ -430,7 +431,6 @@ impl Default for TopupPolicy {
         Self {
             threshold: defaults::topup_threshold(),
             amount: defaults::topup_amount(),
-            icp_refill: None,
         }
     }
 }
@@ -438,16 +438,13 @@ impl Default for TopupPolicy {
 ///
 /// IcpRefillPolicy
 ///
-/// ICP-funded cycle refill policy for one configured canister role.
+/// Manual ICP-funded cycle refill policy for the root canister.
 /// Owned by config schema and consumed by ICP refill workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IcpRefillPolicy {
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-
     pub max_refill_e8s_per_call: u64,
 
     #[serde(default)]
@@ -461,10 +458,6 @@ pub struct IcpRefillPolicy {
 
     #[serde(default)]
     pub allow_ic_system_canister_overrides: bool,
-}
-
-const fn default_enabled() -> bool {
-    true
 }
 
 ///

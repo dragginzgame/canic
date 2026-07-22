@@ -5,16 +5,17 @@ Last updated: 2026-07-22
 ## Current State
 
 0.97 is accepted and active after completing audit-only Slice A against
-released `v0.96.8`, releasing bounded Slice B as `v0.97.0`, and releasing
-hidden macro-boundary Slice C as `v0.97.1`. Slice D is implemented in the open
-`0.97.2` batch: every maintained consumer uses its semantic Canic or direct
-upstream owner and the human-facing CDK facade is deleted. The required
+released `v0.96.8`, releasing bounded Slice B as `v0.97.0`, hidden
+macro-boundary Slice C as `v0.97.1`, and public-facade Slice D as `v0.97.2`.
+Slice E is implemented in the open `0.97.3` batch: manual ICP conversion is
+owned by the root role, its standard controller endpoint, root-only config and
+state, and the deployment-root CLI. The required
 relocation decisions are frozen in the
 [Slice A report](../../audits/reports/2026-07/2026-07-22/0.97-slice-a-surface-and-graph-inventory.md).
 Slice B gives every authoritative role-contract caller one canonical Cargo
 evidence producer and hard-cuts the declaration and protected-graph
 contradictions identified by Slice A. No package-version change, downstream
-edit, or refill hard cut is part of the current slice.
+edit is part of the current slice.
 
 The proposal gives each configured role package sole external authority over
 Canic-owned framework packages and directly selected Canic capability
@@ -81,11 +82,12 @@ instructions; it cannot retain the facade.
 - Canic cycle values now live publicly under `dto::cycles`, and public ICRC-21
   protocol DTOs live under `dto::icrc21`. The former internal ICRC-21 path is
   removed rather than retained as an alias.
-- ICP refill has no current dedicated timer and no in-repository role enables
-  its generic feature. Its remaining generic feature/config/API/emitter,
-  arbitrary target/CLI fabrication, unconditional lifecycle/metrics access,
-  and child-funding integration are all inventoried for Slice E. The three
-  removable stable error codes have no maintained producer.
+- ICP refill has no dedicated timer. Slice E deletes its generic feature,
+  capability, facade API/emitter, arbitrary target and fabrication paths,
+  non-root lifecycle/metrics access, child-funding integration, and three
+  unproduced stable error variants. The executing root is the derived source
+  and target, and memory ID 33 is root-owned and lazily opened only by root
+  lifecycle or metrics.
 - Declarative lifecycle and endpoint macros now use definition-owned hidden
   CDK paths; procedural endpoint expansion uses the canonical hidden Canic
   path. The compiler boundary exposes only the frozen six macros, `Principal`,
@@ -150,8 +152,22 @@ refill baseline/deletion set.
   modules and no public `canic::cdk` module. The doc-hidden compiler module is
   not listed on the public crate index.
 
+## Slice E Validation
+
+- All 981 `canic-core` library tests pass with one ignored. The focused
+  contract covers root-only configuration, direct root allocation, stable
+  index rebuild, replay and recovery binding, non-self rejection, notification
+  overflow, and root upgrade refusal while any refill remains resumable.
+- Focused facade protocol tests pass for the standard root bundle's controller
+  guard and the narrowed named request and dry-run Candid records.
+- All 80 focused refill tests, 18 CLI conversion tests, 21 host state-manifest
+  tests, and two host role-capability tests pass. The generated root package
+  checks successfully.
+- Strict all-target Clippy for core, facade, CLI, and host passes. Targeted
+  formatting, layering, changelog governance, and diff hygiene also pass.
+
 ## Next Action
 
-Publish the open `0.97.2` Slice D boundary. Then begin Slice E at the frozen
-root-owned manual ICP-refill contract. Do not change Cargo package versions or
-edit Toko in the CDK batch.
+Finish the targeted Slice E gate, publish `0.97.3`, and close 0.97 against the
+accepted design. Do not change Cargo package versions outside the maintainer's
+release flow or edit the downstream Toko repository.

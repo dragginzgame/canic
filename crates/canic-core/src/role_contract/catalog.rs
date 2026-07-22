@@ -116,11 +116,6 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
         CanicFeatureEffect::StateBearing,
     ),
     feature(
-        CanicFeatureKey::IcpRefill,
-        "icp-refill",
-        CanicFeatureEffect::StateBearing,
-    ),
-    feature(
         CanicFeatureKey::Metrics,
         "metrics",
         CanicFeatureEffect::NoState,
@@ -190,12 +185,6 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
         "role-attestation caches verify root canister-signature proofs locally",
     ),
     requirement(
-        RoleCapabilityKey::IcpRefill,
-        "topup.icp_refill",
-        CanicFeatureKey::IcpRefill,
-        "ICP refill policy persists resumable ledger and CMC operation state",
-    ),
-    requirement(
         RoleCapabilityKey::RootControlPlane,
         "roles.root.kind",
         CanicFeatureKey::ControlPlane,
@@ -258,7 +247,7 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         StateAllocationKey::CoreAuthState,
     ),
     capability_allocation(
-        RoleCapabilityKey::IcpRefill,
+        RoleCapabilityKey::Root,
         StateAllocationKey::CoreIcpRefillRecords,
     ),
     capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CanisterPool),
@@ -357,10 +346,6 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
     feature_allocation(
         CanicFeatureKey::ControlPlane,
         StateAllocationKey::ControlPlaneSubnetState,
-    ),
-    feature_allocation(
-        CanicFeatureKey::IcpRefill,
-        StateAllocationKey::CoreIcpRefillRecords,
     ),
     feature_allocation(CanicFeatureKey::Sharding, StateAllocationKey::CanisterPool),
     feature_allocation(
@@ -485,7 +470,6 @@ impl CanicFeatureKey {
         Self::BlobStorage,
         Self::BlobStorageBilling,
         Self::ControlPlane,
-        Self::IcpRefill,
         Self::Metrics,
         Self::Sharding,
         Self::WasmStoreCanister,

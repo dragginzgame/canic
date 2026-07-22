@@ -7,7 +7,6 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    domain::icp_refill::IcpRefillMode,
     dto::{
         error::Error,
         icp_refill::{IcpRefillRequest, IcpRefillResponse},
@@ -59,11 +58,12 @@ pub(super) enum IcpRefillReplayReservation {
 pub(super) fn icp_refill_replay_reserve_input(
     request: &IcpRefillRequest,
     caller: Principal,
+    root_canister: Principal,
     now_ns: u64,
 ) -> ReplayReceiptReserveInput {
     let command_kind = icp_refill_command_kind();
     let actor = icp_refill_replay_actor(caller);
-    let payload_hash = icp_refill_payload_hash(&command_kind, &actor, request);
+    let payload_hash = icp_refill_payload_hash(&command_kind, &actor, request, root_canister);
 
     ReplayReceiptReserveInput::new(
         command_kind,
@@ -346,15 +346,18 @@ pub(super) fn preserve_icp_refill_recovery_required(
     err
 }
 
-pub(super) fn log_icp_refill_fresh_reservation(request: &IcpRefillRequest) {
+pub(super) fn log_icp_refill_fresh_reservation(
+    request: &IcpRefillRequest,
+    root_canister: Principal,
+) {
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
         "icp refill replay receipt reserved command_kind={} operation_id={} source={} target={} amount_e8s={}",
         ICP_REFILL_REPLAY_COMMAND_KIND,
         operation_id_display(request.operation_id),
-        request.source_canister,
-        request.target_canister,
+        root_canister,
+        root_canister,
         request.amount_e8s
     );
 }
@@ -432,14 +435,14 @@ pub(super) fn icp_refill_payload_hash(
     command_kind: &CommandKind,
     actor: &ReplayActor,
     request: &IcpRefillRequest,
+    root_canister: Principal,
 ) -> [u8; 32] {
     let mut hasher = ReplayPayloadHasher::new(command_kind, actor);
     hasher.hash_str("IcpRefill");
-    hasher.hash_principal(&request.source_canister);
+    hasher.hash_principal(&root_canister);
     hash_optional_subaccount(&mut hasher, request.source_subaccount);
-    hasher.hash_principal(&request.target_canister);
+    hasher.hash_principal(&root_canister);
     hasher.hash_u64(request.amount_e8s);
-    hasher.hash_str(icp_refill_mode_label(request.mode));
     hasher.finish()
 }
 
@@ -493,12 +496,5 @@ fn hash_optional_subaccount(hasher: &mut ReplayPayloadHasher, subaccount: Option
     hasher.hash_bool(subaccount.is_some());
     if let Some(subaccount) = subaccount {
         hasher.hash_bytes(&subaccount);
-    }
-}
-
-const fn icp_refill_mode_label(mode: IcpRefillMode) -> &'static str {
-    match mode {
-        IcpRefillMode::Canister => "canister",
-        IcpRefillMode::Fabricate => "fabricate",
     }
 }

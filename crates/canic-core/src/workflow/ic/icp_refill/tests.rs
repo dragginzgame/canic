@@ -1,11 +1,9 @@
-use super::{cost_guard::*, execution::*, manual::*, replay::*, *};
+use super::{cost_guard::*, execution::*, replay::*, *};
 use crate::{
     InternalErrorClass,
     cdk::{candid::Nat, types::Principal},
-    config::schema::CanisterKind,
-    domain::icp_refill::{IcpRefillErrorCode, IcpRefillMode, IcpRefillStatus},
+    domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus},
     dto::error::ErrorCode,
-    ids::{CanisterRole, SubnetRole},
     infra::ic::icp_refill::{NotifyTopUpError, TransferError},
     model::replay::{ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayReceiptStatus},
     ops::{
@@ -19,13 +17,28 @@ use crate::{
     },
     replay_policy::CostClass,
     storage::stable::icp_refill::IcpRefillRecord,
-    test::{config::ConfigTestBuilder, seams::lock, support::import_test_env},
     view::icp_refill::IcpRefillOperation,
 };
 use std::str::FromStr;
 
 fn p(id: u8) -> Principal {
     Principal::from_slice(&[id; 29])
+}
+
+fn icp_refill_replay_reserve_input(
+    request: &IcpRefillRequest,
+    caller: Principal,
+    now_ns: u64,
+) -> crate::ops::replay::receipt::ReplayReceiptReserveInput {
+    super::replay::icp_refill_replay_reserve_input(request, caller, p(1), now_ns)
+}
+
+fn icp_refill_payload_hash(
+    command_kind: &crate::model::replay::CommandKind,
+    actor: &crate::model::replay::ReplayActor,
+    request: &IcpRefillRequest,
+) -> [u8; 32] {
+    super::replay::icp_refill_payload_hash(command_kind, actor, request, p(1))
 }
 
 fn sample_record(status: IcpRefillStatus) -> IcpRefillRecord {
@@ -81,12 +94,9 @@ fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
 fn request_for(record: &IcpRefillRecord) -> IcpRefillRequest {
     IcpRefillRequest {
         operation_id: record.operation_id,
-        source_canister: record.source_canister,
         source_subaccount: record.source_subaccount,
-        target_canister: record.target_canister,
         amount_e8s: record.amount_e8s,
         dry_run: false,
-        mode: IcpRefillMode::Canister,
     }
 }
 
@@ -178,39 +188,6 @@ fn missing_build_network_fails_closed() {
 }
 
 #[test]
-fn missing_direct_child_funding_policy_preserves_config_failure() {
-    let _guard = lock();
-    let target = p(212);
-    let _config = ConfigTestBuilder::new()
-        .with_prime_canister_kind("funding_hub", CanisterKind::Service)
-        .install();
-    import_test_env("funding_hub", SubnetRole::PRIME, p(210));
-
-    let error = configured_funding_cooldown_retry_after_secs(
-        &CanisterRole::new("missing_child"),
-        target,
-        1_000,
-    )
-    .expect_err("missing child config must fail");
-
-    assert_eq!(error.class(), InternalErrorClass::Ops);
-    assert_eq!(error.origin(), InternalErrorOrigin::Ops);
-}
-
-#[test]
-fn fabricate_dry_run_message_is_loud() {
-    assert_eq!(
-        dry_run_message(IcpRefillMode::Fabricate),
-        Some("mode=fabricate (does not call canister refill endpoint)".to_string())
-    );
-}
-
-#[test]
-fn canister_dry_run_message_is_empty() {
-    assert_eq!(dry_run_message(IcpRefillMode::Canister), None);
-}
-
-#[test]
 fn estimate_cycles_uses_icp_xdr_permyriad_units() {
     assert_eq!(
         estimate_cycles(100_000_000, 40_000).to_u128(),
@@ -236,7 +213,6 @@ fn refill_canister_overrides_follow_config_resolution_fields() {
     );
 
     let policy = IcpRefillPolicy {
-        enabled: true,
         max_refill_e8s_per_call: 100_000_000,
         min_xdr_permyriad_per_icp: None,
         ledger_canister_id: Some(p(11)),
@@ -252,6 +228,56 @@ fn refill_canister_overrides_follow_config_resolution_fields() {
             allow_ic_overrides: true,
         }
     );
+}
+
+#[test]
+fn root_refill_requires_an_explicit_manual_policy() {
+    let error = validate_icp_refill_configured(None)
+        .expect_err("unconfigured root refill must fail before execution");
+    assert_eq!(error.class(), InternalErrorClass::Domain);
+    let public: crate::dto::error::Error = error.into();
+    assert_eq!(public.code, ErrorCode::Unavailable);
+
+    let policy = IcpRefillPolicy {
+        max_refill_e8s_per_call: 100_000_000,
+        min_xdr_permyriad_per_icp: None,
+        ledger_canister_id: None,
+        cmc_canister_id: None,
+        allow_ic_system_canister_overrides: false,
+    };
+    validate_icp_refill_configured(Some(&policy)).expect("configured root refill should proceed");
+}
+
+#[test]
+fn root_refill_policy_rejections_preserve_public_classification() {
+    let cases = [
+        (
+            IcpRefillPolicyViolation::AmountZero,
+            ErrorCode::InvalidInput,
+        ),
+        (
+            IcpRefillPolicyViolation::MaxRefillPerCall {
+                requested_e8s: 2,
+                max_e8s: 1,
+            },
+            ErrorCode::InvalidInput,
+        ),
+        (
+            IcpRefillPolicyViolation::ConcurrentRefill,
+            ErrorCode::Conflict,
+        ),
+        (
+            IcpRefillPolicyViolation::RateUnavailable {
+                min_xdr_permyriad_per_icp: 40_000,
+            },
+            ErrorCode::Unavailable,
+        ),
+    ];
+
+    for (violation, expected) in cases {
+        let public: crate::dto::error::Error = policy_denied(violation).into();
+        assert_eq!(public.code, expected);
+    }
 }
 
 #[test]
@@ -378,10 +404,12 @@ fn transfer_window_stale_applies_to_bad_fee_retry() {
 
 #[test]
 fn retry_request_must_match_stored_operation_identity() {
-    let record = sample_record(IcpRefillStatus::Requested);
+    let mut record = sample_record(IcpRefillStatus::Requested);
+    record.target_canister = record.source_canister;
     let mut request = request_for(&record);
     IcpRefillStoreOps::validate_retry_request_matches_operation(
         &request,
+        record.source_canister,
         &operation_from_record(&record),
     )
     .expect("matching retry");
@@ -389,9 +417,23 @@ fn retry_request_must_match_stored_operation_identity() {
     request.amount_e8s += 1;
     IcpRefillStoreOps::validate_retry_request_matches_operation(
         &request,
+        record.source_canister,
         &operation_from_record(&record),
     )
     .expect_err("changed amount must fail");
+}
+
+#[test]
+fn retry_rejects_pre_hard_cut_nonself_operation() {
+    let record = sample_record(IcpRefillStatus::Requested);
+    let request = request_for(&record);
+
+    IcpRefillStoreOps::validate_retry_request_matches_operation(
+        &request,
+        record.source_canister,
+        &operation_from_record(&record),
+    )
+    .expect_err("nonself refill operation must not be adopted");
 }
 
 #[test]
@@ -435,7 +477,7 @@ fn refill_replay_payload_hash_excludes_operation_id() {
 }
 
 #[test]
-fn refill_replay_payload_hash_binds_actor_and_transfer_fields() {
+fn refill_replay_payload_hash_binds_actor_root_and_transfer_fields() {
     let command_kind = icp_refill_command_kind();
     let actor = icp_refill_replay_actor(p(90));
     let other_actor = icp_refill_replay_actor(p(91));
@@ -461,11 +503,9 @@ fn refill_replay_payload_hash_binds_actor_and_transfer_fields() {
         icp_refill_payload_hash(&command_kind, &actor, &changed_subaccount)
     );
 
-    let mut changed_target = request;
-    changed_target.target_canister = p(92);
     assert_ne!(
         base,
-        icp_refill_payload_hash(&command_kind, &actor, &changed_target)
+        super::replay::icp_refill_payload_hash(&command_kind, &actor, &request, p(92))
     );
 }
 
@@ -936,43 +976,14 @@ fn refill_replay_recovery_required_preserves_effect_receipt() {
 }
 
 #[test]
-fn direct_child_refill_grant_records_matching_parent() {
-    let record = sample_record(IcpRefillStatus::Completed);
-
-    assert_eq!(
-        direct_child_refill_grant(
-            &operation_from_record(&record),
-            123,
-            Some(record.source_canister)
-        ),
-        Some((record.target_canister, 123))
-    );
-}
-
-#[test]
-fn direct_child_refill_grant_ignores_non_child_targets() {
-    let record = sample_record(IcpRefillStatus::Completed);
-
-    assert_eq!(
-        direct_child_refill_grant(&operation_from_record(&record), 123, None),
-        None
-    );
-    assert_eq!(
-        direct_child_refill_grant(&operation_from_record(&record), 123, Some(p(9))),
-        None
-    );
-}
-
-#[test]
 fn notify_cycle_total_at_u128_boundary_is_persisted_exactly() {
     let mut record = stored_record(10_011, 111, IcpRefillStatus::Transferred);
     record.ledger_block_index = Some(46);
     IcpRefillRecordOps::insert(record.clone()).expect("insert transferred refill record");
 
-    let (operation, grant) = apply_notify_success(record.id, Nat::from(u128::MAX), 2_000)
+    let operation = apply_notify_success(record.id, Nat::from(u128::MAX), 2_000)
         .expect("u128 boundary is a valid notified cycle total");
 
-    assert_eq!(grant, Some(u128::MAX));
     assert_eq!(operation.status, IcpRefillStatus::Completed);
     assert_eq!(operation.error_code, None);
     assert_eq!(operation.cycles_sent, Some(Nat::from(u128::MAX)));
@@ -986,10 +997,9 @@ fn oversized_notify_cycle_total_is_terminal_and_not_accounted() {
     let too_large =
         Nat::from_str("340282366920938463463374607431768211456").expect("u128 max plus one");
 
-    let (operation, grant) = apply_notify_success(record.id, too_large, 2_000)
+    let operation = apply_notify_success(record.id, too_large, 2_000)
         .expect("overflow is persisted as terminal outcome");
 
-    assert_eq!(grant, None);
     assert_eq!(operation.status, IcpRefillStatus::Failed);
     assert_eq!(
         operation.error_code,

@@ -450,6 +450,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let kind = render_canister_kind(config.kind);
     let initial_cycles = render_cycles(config.initial_cycles.to_u128());
     let topup = render_option(config.topup.as_ref(), render_topup);
+    let icp_refill = render_option(config.icp_refill.as_ref(), render_icp_refill_policy);
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
     let randomness = render_randomness_config(&config.randomness);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
@@ -465,6 +466,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             kind: #kind,
             initial_cycles: #initial_cycles,
             topup: #topup,
+            icp_refill: #icp_refill,
             cycles_funding: #cycles_funding,
             randomness: #randomness,
             scaling: #scaling,
@@ -616,20 +618,17 @@ fn render_u64_literal(value: u64) -> TokenStream {
 fn render_topup(policy: &TopupPolicy) -> TokenStream {
     let threshold = render_cycles(policy.threshold.to_u128());
     let amount = render_cycles(policy.amount.to_u128());
-    let icp_refill = render_option(policy.icp_refill.as_ref(), render_icp_refill_policy);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::TopupPolicy {
             threshold: #threshold,
             amount: #amount,
-            icp_refill: #icp_refill,
         }
     }
 }
 
 // Render the optional ICP-to-cycles refill policy.
 fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
-    let enabled = policy.enabled;
     let max_refill_e8s_per_call = policy.max_refill_e8s_per_call;
     let min_xdr_permyriad_per_icp =
         render_option(policy.min_xdr_permyriad_per_icp.as_ref(), |value| {
@@ -641,7 +640,6 @@ fn render_icp_refill_policy(policy: &IcpRefillPolicy) -> TokenStream {
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::IcpRefillPolicy {
-            enabled: #enabled,
             max_refill_e8s_per_call: #max_refill_e8s_per_call,
             min_xdr_permyriad_per_icp: #min_xdr_permyriad_per_icp,
             ledger_canister_id: #ledger_canister_id,
@@ -833,7 +831,6 @@ mod tests {
     #[test]
     fn render_icp_refill_policy_preserves_system_canister_overrides() {
         let rendered = render_icp_refill_policy(&IcpRefillPolicy {
-            enabled: true,
             max_refill_e8s_per_call: 100_000_000,
             min_xdr_permyriad_per_icp: Some(40_000),
             ledger_canister_id: Some(principal(11)),

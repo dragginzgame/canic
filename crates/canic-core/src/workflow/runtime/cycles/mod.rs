@@ -419,7 +419,6 @@ mod tests {
         let topup = TopupPolicy {
             threshold: Cycles::new(10),
             amount: Cycles::new(5),
-            icp_refill: None,
         };
 
         assert!(select_automatic_topup_config(true, Some(topup.clone()), 60).is_none());

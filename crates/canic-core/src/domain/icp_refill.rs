@@ -11,17 +11,6 @@ use candid::CandidType;
 use serde::{Deserialize, Serialize};
 
 ///
-/// IcpRefillMode
-///
-
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[remain::sorted]
-pub enum IcpRefillMode {
-    Canister,
-    Fabricate,
-}
-
-///
 /// IcpRefillStatus
 ///
 
@@ -47,16 +36,13 @@ pub enum IcpRefillErrorCode {
     BadFee,
     CyclesSentOverflow,
     Duplicate,
-    FabricationUnavailable,
     InvalidLedgerBlockIndex,
     InvalidTransaction,
     LedgerTransferFailed,
     NotifyFailed,
     NotifyMaxAttempts,
     Processing,
-    RateGateDenied,
     Refunded,
-    RequestDenied,
     TransactionTooOld,
     TransferWindowStale,
 }

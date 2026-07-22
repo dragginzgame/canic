@@ -31,6 +31,7 @@ use canic::{
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
     dto::cycles::Cycles,
+    dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
     dto::icrc21::{
         ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec, DisplayMessageType,
     },
@@ -1153,6 +1154,42 @@ fn runtime_introspection_endpoints_are_controller_guarded_by_default() {
     assert!(
         !endpoint_macro.contains("public)]"),
         "runtime introspection endpoints must not be public by default"
+    );
+}
+
+#[test]
+fn root_icp_refill_endpoint_is_controller_guarded() {
+    let macro_path = workspace_root().join("crates/canic/src/macros/endpoints/root.rs");
+    let source = read_text(&macro_path);
+    let attribute = preceding_attribute_context(&source, "async fn canic_icp_refill(");
+
+    assert!(
+        attribute.contains("canic_update(requires(caller::is_controller()))"),
+        "root ICP refill endpoint must remain controller-guarded"
+    );
+}
+
+#[test]
+fn root_icp_refill_dto_candid_shapes_are_named() {
+    let request_env = candid_type_env::<IcpRefillRequest>();
+    assert!(
+        request_env.contains("type IcpRefillRequest = record")
+            && request_env.contains("operation_id : blob")
+            && request_env.contains("source_subaccount : opt blob")
+            && request_env.contains("amount_e8s : nat64")
+            && request_env.contains("dry_run : bool"),
+        "root ICP refill request Candid changed:\n{request_env}"
+    );
+
+    let dry_run_env = candid_type_env::<IcpRefillDryRun>();
+    assert!(
+        dry_run_env.contains("type IcpRefillDryRun = record")
+            && dry_run_env.contains("operation_id : blob")
+            && dry_run_env.contains("amount_e8s : nat64")
+            && dry_run_env.contains("fee_e8s : nat64")
+            && dry_run_env.contains("xdr_permyriad_per_icp : opt nat64")
+            && dry_run_env.contains("estimated_cycles : opt nat"),
+        "root ICP refill dry-run Candid changed:\n{dry_run_env}"
     );
 }
 

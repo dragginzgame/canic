@@ -8,7 +8,6 @@ fn configured_role_capabilities_lists_enabled_role_features() {
     let capabilities = BTreeSet::from([
         RoleCapabilityKey::DelegatedTokenIssuer,
         RoleCapabilityKey::Directory,
-        RoleCapabilityKey::IcpRefill,
         RoleCapabilityKey::Root,
         RoleCapabilityKey::RootControlPlane,
         RoleCapabilityKey::Scaling,
@@ -20,7 +19,6 @@ fn configured_role_capabilities_lists_enabled_role_features() {
         vec![
             "auth".to_string(),
             "directory".to_string(),
-            "icp_refill".to_string(),
             "scaling".to_string(),
             "sharding".to_string(),
         ]

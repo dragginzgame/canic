@@ -25,11 +25,8 @@ pub(super) struct PendingIcpRefillOperationInput<'a> {
     pub(super) icp_root: &'a Path,
     pub(super) environment: &'a str,
     pub(super) deployment: &'a str,
-    pub(super) source: Option<&'a str>,
-    pub(super) source_canister_id: &'a str,
+    pub(super) root_canister_id: &'a str,
     pub(super) source_subaccount: Option<[u8; 32]>,
-    pub(super) target: Option<&'a str>,
-    pub(super) target_canister_id: &'a str,
     pub(super) amount_e8s: u64,
     pub(super) created_at_unix_nanos: u128,
 }
@@ -78,6 +75,7 @@ impl std::error::Error for PendingOperationLogError {}
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 struct PendingOperationLog {
     schema_version: u32,
     operations: Vec<PendingOperationRecord>,
@@ -97,6 +95,7 @@ impl PendingOperationLog {
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 struct PendingOperationRecord {
     schema_version: u32,
     command_kind: String,
@@ -107,11 +106,8 @@ struct PendingOperationRecord {
     cli_command: String,
     environment: String,
     deployment: String,
-    source: Option<String>,
-    source_canister_id: String,
+    root_canister_id: String,
     source_subaccount: Option<String>,
-    target: Option<String>,
-    target_canister_id: String,
     amount_e8s: u64,
     created_at_unix_nanos: String,
     completed_at_unix_nanos: Option<String>,
@@ -192,11 +188,8 @@ pub(super) fn reserve_pending_icp_refill_operation(
         cli_command: CYCLES_CONVERT_COMMAND.to_string(),
         environment: input.environment.to_string(),
         deployment: input.deployment.to_string(),
-        source: input.source.map(ToOwned::to_owned),
-        source_canister_id: input.source_canister_id.to_string(),
+        root_canister_id: input.root_canister_id.to_string(),
         source_subaccount: input.source_subaccount.map(hex_bytes),
-        target: input.target.map(ToOwned::to_owned),
-        target_canister_id: input.target_canister_id.to_string(),
         amount_e8s: input.amount_e8s,
         created_at_unix_nanos: input.created_at_unix_nanos.to_string(),
         completed_at_unix_nanos: None,
@@ -381,8 +374,7 @@ fn icp_refill_operation_key(input: &PendingIcpRefillOperationInput<'_>) -> Strin
     extend_key_part(&mut bytes, b"canic:pending-operation:icp-refill:v1");
     extend_key_part(&mut bytes, input.environment.as_bytes());
     extend_key_part(&mut bytes, input.deployment.as_bytes());
-    extend_key_part(&mut bytes, input.source_canister_id.as_bytes());
-    extend_key_part(&mut bytes, input.target_canister_id.as_bytes());
+    extend_key_part(&mut bytes, input.root_canister_id.as_bytes());
     extend_optional_key_part(
         &mut bytes,
         input.source_subaccount.as_ref().map(AsRef::as_ref),
@@ -449,8 +441,7 @@ mod tests {
         assert_eq!(record.cli_command, CYCLES_CONVERT_COMMAND);
         assert_eq!(record.environment, "ic");
         assert_eq!(record.deployment, "demo");
-        assert_eq!(record.source_canister_id, "source-canister");
-        assert_eq!(record.target_canister_id, "target-canister");
+        assert_eq!(record.root_canister_id, "root-canister");
         assert_eq!(record.amount_e8s, 100_000_000);
     }
 
@@ -540,11 +531,8 @@ mod tests {
             icp_root: root,
             environment: "ic",
             deployment: "demo",
-            source: Some("funding_hub"),
-            source_canister_id: "source-canister",
+            root_canister_id: "root-canister",
             source_subaccount: None,
-            target: Some("app"),
-            target_canister_id: "target-canister",
             amount_e8s: 100_000_000,
             created_at_unix_nanos: 111,
         }

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.97.1`.
-- The latest published release is `v0.97.1` at
-  `10de15fc14a6c8ff78a5ba07da45536391bc14c8`.
-- The `v0.97.1` source tree is
-  `f6ff3a6d3e9e6524a831a1101321f0d7ac0bfbec`; its product-tree hash is
-  `a58564c7cc8d3a12f67385a1ed51732efee37d1a3875f2c4c64d6752d7d56d5d` and
+- The workspace package version is `0.97.2`.
+- The latest published release is `v0.97.2` at
+  `f49c32c2d3facfd886e3480a10755304a2c4af54`.
+- The `v0.97.2` source tree is
+  `9e1582ffd660a931c1e2853da881b8ae381b8cd8`; its product-tree hash is
+  `dc86b1200098b5406bc27c1426b59db085fec1508d12d21a13175d79236f837f` and
   its Cargo.lock SHA-256 is
-  `32aa996739cdca2994d621f54311cf368a690735398b0974224a359f3213d54e`.
+  `02cda66cca743aebdc9c523539c0c2ab1f36027b17be7b14577d037f19f1894a`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -440,16 +440,16 @@ recoverable, while old terminal timing is rejected without a migration shim.
 General cleanup, dependency work, backup/restore changes, and compatibility
 layers remain excluded.
 
-0.97 is active after releasing Cargo graph Slice B as `v0.97.0` and hidden
-macro-boundary Slice C as `v0.97.1`. Slice C moves compiler-required CDK
-plumbing behind one exact hidden boundary, removes generic IC/CDK imports from
-the public prelude, and gives locked internal PocketIC builds matching locked
-online role evidence. Open `0.97.2` Slice D hard-cuts the public `canic::cdk`
-facade, moves public ICRC-21 and cycle values to semantic DTO owners, and
-migrates maintained application/test consumers to direct upstream crates.
-Direct source inspection corrected grouped imports missed by the published
-Slice A lexical inventory; no compatibility path is retained. The same open
-patch carries the independently compatible Syn 3 procedural-parser update.
+0.97 is active after releasing Cargo graph Slice B as `v0.97.0`, hidden
+macro-boundary Slice C as `v0.97.1`, and the public-CDK hard cut plus Syn 3
+maintenance as `v0.97.2`. Open `0.97.3` Slice E makes manual ICP conversion an
+inherent root capability: one controller endpoint, one root-only policy and
+state allocation, one self-to-self transfer identity, and one deployment-root
+CLI path. Generic feature/capability selection, the explicit emitter and
+facade API, fabrication, caller-selected source/target, non-root state access,
+and child-funding accounting are deleted without compatibility paths. Root
+upgrades reject while a refill remains resumable so the installed contract can
+settle it first.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -981,19 +981,27 @@ First primary results:
   all-target Clippy passes for `canic`, `canic-macros`, and `canic-host`;
   representative root, blob, demo, and Wasm-store packages compile; and the
   lockfile remains byte-for-byte unchanged.
-- Open `0.97.2` Slice D validation compiles every affected role, facade,
+- Released `0.97.2` Slice D validation compiles every affected role, facade,
   runtime, macro, internal-support, and integration-test target. Strict
   all-target Clippy passes for the same set; 26 focused facade/protocol tests
   plus all 36 procedural-macro tests and the cycle DTO test pass; focused Cargo
   Machete reports no unused dependency. Fresh isolated rustdoc exposes
   semantic ICRC-21/cycle modules and no public `canic::cdk` module.
+- Open `0.97.3` Slice E validation currently passes all 981 `canic-core`
+  library tests with one ignored, including root configuration, role/state,
+  stable-index, replay/recovery, overflow, and upgrade-admission coverage. The
+  80 focused refill tests, 18 CLI conversion tests, 21 host state-manifest
+  tests, two host role-capability tests, and two facade protocol tests pass.
+  The generated root package checks; strict all-target Clippy for the four
+  affected packages, targeted formatting, layering, changelog governance, and
+  diff hygiene pass.
 
 ## Next Action
 
-Publish the open `0.97.2` public-CDK hard cut and Syn 3 maintenance batch.
-Then begin Slice E at the already frozen root-owned manual ICP-refill contract.
-Do not inspect the stale local Toko repository, change package versions, or
-reopen 0.96 in the CDK batch.
+Finish the targeted validation and publish the open `0.97.3` root-owned manual
+ICP-refill hard cut, then close 0.97 against its accepted design. Do not inspect
+or edit the stale local Toko repository, change Cargo package versions outside
+the maintainer-owned release flow, or add an old refill compatibility path.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

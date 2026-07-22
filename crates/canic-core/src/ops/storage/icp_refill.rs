@@ -235,16 +235,13 @@ impl From<IcpRefillErrorCode> for IcpRefillRecordErrorCode {
             IcpRefillErrorCode::BadFee => Self::BadFee,
             IcpRefillErrorCode::CyclesSentOverflow => Self::CyclesSentOverflow,
             IcpRefillErrorCode::Duplicate => Self::Duplicate,
-            IcpRefillErrorCode::FabricationUnavailable => Self::FabricationUnavailable,
             IcpRefillErrorCode::InvalidLedgerBlockIndex => Self::InvalidLedgerBlockIndex,
             IcpRefillErrorCode::InvalidTransaction => Self::InvalidTransaction,
             IcpRefillErrorCode::LedgerTransferFailed => Self::LedgerTransferFailed,
             IcpRefillErrorCode::NotifyFailed => Self::NotifyFailed,
             IcpRefillErrorCode::NotifyMaxAttempts => Self::NotifyMaxAttempts,
             IcpRefillErrorCode::Processing => Self::Processing,
-            IcpRefillErrorCode::RateGateDenied => Self::RateGateDenied,
             IcpRefillErrorCode::Refunded => Self::Refunded,
-            IcpRefillErrorCode::RequestDenied => Self::RequestDenied,
             IcpRefillErrorCode::TransactionTooOld => Self::TransactionTooOld,
             IcpRefillErrorCode::TransferWindowStale => Self::TransferWindowStale,
         }
@@ -257,16 +254,13 @@ impl From<IcpRefillRecordErrorCode> for IcpRefillErrorCode {
             IcpRefillRecordErrorCode::BadFee => Self::BadFee,
             IcpRefillRecordErrorCode::CyclesSentOverflow => Self::CyclesSentOverflow,
             IcpRefillRecordErrorCode::Duplicate => Self::Duplicate,
-            IcpRefillRecordErrorCode::FabricationUnavailable => Self::FabricationUnavailable,
             IcpRefillRecordErrorCode::InvalidLedgerBlockIndex => Self::InvalidLedgerBlockIndex,
             IcpRefillRecordErrorCode::InvalidTransaction => Self::InvalidTransaction,
             IcpRefillRecordErrorCode::LedgerTransferFailed => Self::LedgerTransferFailed,
             IcpRefillRecordErrorCode::NotifyFailed => Self::NotifyFailed,
             IcpRefillRecordErrorCode::NotifyMaxAttempts => Self::NotifyMaxAttempts,
             IcpRefillRecordErrorCode::Processing => Self::Processing,
-            IcpRefillRecordErrorCode::RateGateDenied => Self::RateGateDenied,
             IcpRefillRecordErrorCode::Refunded => Self::Refunded,
-            IcpRefillRecordErrorCode::RequestDenied => Self::RequestDenied,
             IcpRefillRecordErrorCode::TransactionTooOld => Self::TransactionTooOld,
             IcpRefillRecordErrorCode::TransferWindowStale => Self::TransferWindowStale,
         }
@@ -369,6 +363,13 @@ impl IcpRefillStoreOps {
         Ok(())
     }
 
+    /// Return the number of refill operations that still require the current
+    /// binary's recovery contract.
+    #[must_use]
+    pub fn resumable_operation_count() -> usize {
+        IcpRefillRecordOps::resumable_operation_count()
+    }
+
     pub fn find_by_operation_id(
         operation_id: [u8; 32],
     ) -> Result<Option<IcpRefillOperation>, InternalError> {
@@ -377,23 +378,16 @@ impl IcpRefillStoreOps {
 
     pub fn validate_retry_request_matches_operation(
         request: &IcpRefillRequest,
+        root_canister: Principal,
         operation: &IcpRefillOperation,
     ) -> Result<(), InternalError> {
-        ensure_retry_field(
-            "source_canister",
-            request.source_canister,
-            operation.source_canister,
-        )?;
+        ensure_retry_field("source_canister", root_canister, operation.source_canister)?;
         ensure_retry_field(
             "source_subaccount",
             request.source_subaccount,
             operation.source_subaccount,
         )?;
-        ensure_retry_field(
-            "target_canister",
-            request.target_canister,
-            operation.target_canister,
-        )?;
+        ensure_retry_field("target_canister", root_canister, operation.target_canister)?;
         ensure_retry_field("amount_e8s", request.amount_e8s, operation.amount_e8s)?;
 
         Ok(())
@@ -526,17 +520,14 @@ impl IcpRefillStoreOps {
         id: u64,
         cycles_sent: Nat,
         now_ns: u64,
-    ) -> Result<(IcpRefillOperation, Option<u128>), InternalError> {
+    ) -> Result<IcpRefillOperation, InternalError> {
         match Cycles::try_from(cycles_sent) {
             Ok(cycles_sent) => {
                 let cycles_sent = cycles_sent.to_u128();
-                IcpRefillRecordOps::mark_completed(id, cycles_sent, now_ns)
-                    .map(record_to_operation)
-                    .map(|operation| (operation, Some(cycles_sent)))
+                IcpRefillRecordOps::mark_completed(id, cycles_sent, now_ns).map(record_to_operation)
             }
             Err(err) => IcpRefillRecordOps::mark_cycles_sent_overflow(id, err.to_string(), now_ns)
-                .map(record_to_operation)
-                .map(|operation| (operation, None)),
+                .map(record_to_operation),
         }
     }
 
@@ -818,6 +809,11 @@ impl IcpRefillRecordOps {
 
     pub fn metric_snapshot() -> IcpRefillMetricSnapshot {
         ICP_REFILL_DERIVED_INDEX.with_borrow(IcpRefillDerivedIndex::metric_snapshot)
+    }
+
+    #[must_use]
+    pub fn resumable_operation_count() -> usize {
+        ICP_REFILL_DERIVED_INDEX.with_borrow(|index| index.active_operations.len())
     }
 
     pub fn find_by_operation_id(
@@ -1310,6 +1306,7 @@ mod tests {
             )
             .expect("active lookup")
         );
+        assert_eq!(IcpRefillRecordOps::resumable_operation_count(), 1);
         assert_eq!(next_id().expect("next id"), 3);
         let metrics = IcpRefillRecordOps::metric_snapshot();
         assert_eq!(metrics.targets.len(), 1);
@@ -1415,6 +1412,7 @@ mod tests {
             )
             .expect("active lookup")
         );
+        assert_eq!(IcpRefillRecordOps::resumable_operation_count(), 0);
         let metrics = IcpRefillRecordOps::metric_snapshot();
         assert_eq!(metrics.targets[0].cycles_sent, Some(5_000));
         assert!(metrics.statuses.iter().any(|status| {

@@ -82,8 +82,6 @@ pub fn init_memory_registry_post_upgrade() -> Result<(), InternalError> {
 }
 
 pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
-    IcpRefillStoreOps::rebuild_indexes()
-        .map_err(|err| err.with_diagnostic_context("rebuild ICP-refill derived indexes"))?;
     IntentStoreOps::rebuild_expiry_index()
         .map_err(|err| err.with_diagnostic_context("rebuild intent expiry derived index"))?;
     ReceiptBackedIntentOps::reconcile_receipt_indexes()
@@ -92,4 +90,46 @@ pub(super) fn rebuild_derived_storage_indexes() -> Result<(), InternalError> {
         .map_err(|err| err.with_diagnostic_context("project receipt capacity"))?;
 
     Ok(())
+}
+
+pub(super) fn rebuild_root_derived_storage_indexes() -> Result<(), InternalError> {
+    IcpRefillStoreOps::rebuild_indexes()
+        .map_err(|err| err.with_diagnostic_context("rebuild root ICP-refill derived indexes"))?;
+    rebuild_derived_storage_indexes()
+}
+
+pub(super) fn require_no_resumable_refill_for_upgrade() -> Result<(), InternalError> {
+    validate_refill_upgrade_admission(IcpRefillStoreOps::resumable_operation_count())
+}
+
+fn validate_refill_upgrade_admission(count: usize) -> Result<(), InternalError> {
+    if count == 0 {
+        return Ok(());
+    }
+
+    Err(InternalError::invariant(
+        InternalErrorOrigin::Workflow,
+        format!(
+            "root upgrade requires all ICP refill operations to be terminal; resumable_count={count}"
+        ),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_refill_upgrade_admission;
+    use crate::{InternalErrorClass, InternalErrorOrigin};
+
+    #[test]
+    fn root_upgrade_accepts_terminal_refill_state() {
+        validate_refill_upgrade_admission(0).expect("terminal refill state should permit upgrade");
+    }
+
+    #[test]
+    fn root_upgrade_rejects_resumable_refill_state() {
+        let error = validate_refill_upgrade_admission(1)
+            .expect_err("resumable refill state must block upgrade");
+        assert_eq!(error.class(), InternalErrorClass::Invariant);
+        assert_eq!(error.origin(), InternalErrorOrigin::Workflow);
+    }
 }

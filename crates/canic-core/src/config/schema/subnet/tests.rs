@@ -15,6 +15,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         kind,
         initial_cycles: defaults::initial_cycles(),
         topup: None,
+        icp_refill: None,
         cycles_funding: CyclesFundingPolicyConfig::default(),
         randomness: RandomnessConfig::default(),
         scaling: None,
@@ -110,7 +111,7 @@ fn service_kind_parses_and_displays() {
 }
 
 #[test]
-fn topup_icp_refill_parses_mvp_config() {
+fn root_icp_refill_parses_manual_policy() {
     let cfg: CanisterConfig = toml::from_str(
         r#"
 kind = "root"
@@ -119,19 +120,15 @@ kind = "root"
 threshold = "10T"
 amount = "5T"
 
-[topup.icp_refill]
+[icp_refill]
 max_refill_e8s_per_call = 100000000
 min_xdr_permyriad_per_icp = 40000
 "#,
     )
     .expect("icp refill mvp config should parse");
 
-    let topup = cfg.topup.expect("topup policy should be present");
-    let icp_refill = topup
-        .icp_refill
-        .expect("icp refill policy should be present");
+    let icp_refill = cfg.icp_refill.expect("icp refill policy should be present");
 
-    assert!(icp_refill.enabled);
     assert_eq!(icp_refill.max_refill_e8s_per_call, 100_000_000);
     assert_eq!(icp_refill.min_xdr_permyriad_per_icp, Some(40_000));
     assert_eq!(icp_refill.ledger_canister_id, None);
@@ -140,7 +137,7 @@ min_xdr_permyriad_per_icp = 40000
 }
 
 #[test]
-fn topup_icp_refill_parses_system_canister_overrides() {
+fn root_icp_refill_parses_system_canister_overrides() {
     let cfg: CanisterConfig = toml::from_str(
         r#"
 kind = "root"
@@ -149,7 +146,7 @@ kind = "root"
 threshold = "10T"
 amount = "5T"
 
-[topup.icp_refill]
+[icp_refill]
 max_refill_e8s_per_call = 100000000
 ledger_canister_id = "ryjl3-tyaaa-aaaaa-aaaba-cai"
 cmc_canister_id = "rkp4c-7iaaa-aaaaa-aaaca-cai"
@@ -158,10 +155,7 @@ allow_ic_system_canister_overrides = true
     )
     .expect("icp refill canister ID overrides should parse");
 
-    let icp_refill = cfg
-        .topup
-        .and_then(|topup| topup.icp_refill)
-        .expect("icp refill policy should be present");
+    let icp_refill = cfg.icp_refill.expect("icp refill policy should be present");
 
     assert_eq!(
         icp_refill.ledger_canister_id,
@@ -175,7 +169,7 @@ allow_ic_system_canister_overrides = true
 }
 
 #[test]
-fn topup_icp_refill_rejects_followup_knobs() {
+fn root_icp_refill_rejects_followup_knobs() {
     toml::from_str::<CanisterConfig>(
         r#"
 kind = "root"
@@ -184,12 +178,62 @@ kind = "root"
 threshold = "10T"
 amount = "5T"
 
-[topup.icp_refill]
+[icp_refill]
 max_refill_e8s_per_call = 100000000
 max_refill_e8s_per_day = 1000000000
 "#,
     )
     .expect_err("follow-up treasury knobs should not parse in the current subnet config");
+}
+
+#[test]
+fn root_icp_refill_rejects_redundant_enabled_key() {
+    toml::from_str::<CanisterConfig>(
+        r#"
+kind = "root"
+
+[icp_refill]
+enabled = true
+max_refill_e8s_per_call = 100000000
+"#,
+    )
+    .expect_err("refill policy presence is the only enablement authority");
+}
+
+#[test]
+fn legacy_topup_icp_refill_table_is_rejected() {
+    toml::from_str::<CanisterConfig>(
+        r#"
+kind = "root"
+
+[topup.icp_refill]
+max_refill_e8s_per_call = 100000000
+"#,
+    )
+    .expect_err("legacy topup refill path must not parse");
+}
+
+#[test]
+fn nonroot_icp_refill_policy_is_rejected() {
+    let mut canisters = BTreeMap::new();
+    let cfg = CanisterConfig {
+        icp_refill: Some(IcpRefillPolicy {
+            max_refill_e8s_per_call: 100_000_000,
+            min_xdr_permyriad_per_icp: None,
+            ledger_canister_id: None,
+            cmc_canister_id: None,
+            allow_ic_system_canister_overrides: false,
+        }),
+        ..base_canister_config(CanisterKind::Service)
+    };
+    canisters.insert(CanisterRole::from("app"), cfg);
+
+    SubnetConfig {
+        canisters,
+        ..Default::default()
+    }
+    .validate()
+    .expect_err("nonroot refill policy must fail validation");
 }
 
 #[test]
@@ -820,7 +864,6 @@ fn topup_amount_above_half_threshold_fails() {
         topup: Some(TopupPolicy {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(6 * TC),
-            icp_refill: None,
         }),
         ..base_canister_config(CanisterKind::Singleton)
     };
@@ -845,7 +888,6 @@ fn topup_amount_equal_half_threshold_is_valid() {
         topup: Some(TopupPolicy {
             threshold: Cycles::new(50 * TC),
             amount: Cycles::new(25 * TC),
-            icp_refill: None,
         }),
         ..base_canister_config(CanisterKind::Singleton)
     };
@@ -870,7 +912,6 @@ fn topup_amount_below_half_threshold_is_valid() {
         topup: Some(TopupPolicy {
             threshold: Cycles::new(10 * TC),
             amount: Cycles::new(4 * TC),
-            icp_refill: None,
         }),
         ..base_canister_config(CanisterKind::Singleton)
     };
@@ -1006,21 +1047,16 @@ fn cycles_funding_request_limit_cannot_exceed_child_budget() {
 }
 
 #[test]
-fn topup_icp_refill_zero_max_refill_fails() {
+fn root_icp_refill_zero_max_refill_fails() {
     let mut canisters = BTreeMap::new();
 
     let cfg = CanisterConfig {
-        topup: Some(TopupPolicy {
-            threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(5 * TC),
-            icp_refill: Some(IcpRefillPolicy {
-                enabled: true,
-                max_refill_e8s_per_call: 0,
-                min_xdr_permyriad_per_icp: None,
-                ledger_canister_id: None,
-                cmc_canister_id: None,
-                allow_ic_system_canister_overrides: false,
-            }),
+        icp_refill: Some(IcpRefillPolicy {
+            max_refill_e8s_per_call: 0,
+            min_xdr_permyriad_per_icp: None,
+            ledger_canister_id: None,
+            cmc_canister_id: None,
+            allow_ic_system_canister_overrides: false,
         }),
         ..base_canister_config(CanisterKind::Root)
     };
@@ -1038,21 +1074,16 @@ fn topup_icp_refill_zero_max_refill_fails() {
 }
 
 #[test]
-fn topup_icp_refill_zero_rate_gate_fails() {
+fn root_icp_refill_zero_rate_gate_fails() {
     let mut canisters = BTreeMap::new();
 
     let cfg = CanisterConfig {
-        topup: Some(TopupPolicy {
-            threshold: Cycles::new(10 * TC),
-            amount: Cycles::new(5 * TC),
-            icp_refill: Some(IcpRefillPolicy {
-                enabled: true,
-                max_refill_e8s_per_call: 100_000_000,
-                min_xdr_permyriad_per_icp: Some(0),
-                ledger_canister_id: None,
-                cmc_canister_id: None,
-                allow_ic_system_canister_overrides: false,
-            }),
+        icp_refill: Some(IcpRefillPolicy {
+            max_refill_e8s_per_call: 100_000_000,
+            min_xdr_permyriad_per_icp: Some(0),
+            ledger_canister_id: None,
+            cmc_canister_id: None,
+            allow_ic_system_canister_overrides: false,
         }),
         ..base_canister_config(CanisterKind::Root)
     };
