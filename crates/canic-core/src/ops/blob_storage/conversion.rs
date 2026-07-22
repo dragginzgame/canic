@@ -4,12 +4,11 @@
 //! Does not own: blob lifecycle storage, gateway-principal checks, or workflows.
 //! Boundary: mirrors Toko wire inputs while returning typed Canic errors.
 
-use std::{error::Error, fmt};
-
 use crate::{
     cdk::utils::hash::hex_bytes,
     model::blob_storage::{BLOB_ROOT_HASH_BYTE_LENGTH, BlobRootHash, BlobRootHashError},
 };
+use thiserror::Error as ThisError;
 
 #[cfg(feature = "blob-storage-billing")]
 use crate::cdk::candid::Nat;
@@ -83,41 +82,25 @@ impl BlobStorageConversionOps {
 /// Typed failure returned by blob-storage boundary conversions.
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 pub enum BlobStorageConversionError {
-    InvalidRootHash(BlobRootHashError),
-    InvalidRootHashByteLength {
-        actual: usize,
-    },
+    #[error(transparent)]
+    InvalidRootHash(#[from] BlobRootHashError),
+
+    #[error(
+        "blob root hash byte input must be {expected} bytes, got {actual}",
+        expected = BLOB_ROOT_HASH_BYTE_LENGTH
+    )]
+    InvalidRootHashByteLength { actual: usize },
+
     #[cfg(feature = "blob-storage-billing")]
-    BillingNatExceedsU128 {
-        field: &'static str,
-    },
+    #[error("{field} exceeds u128")]
+    BillingNatExceedsU128 { field: &'static str },
+
     #[cfg(feature = "blob-storage-billing")]
+    #[error("gateway_principal_limit exceeds usize")]
     GatewayPrincipalLimitExceedsUsize,
 }
-
-impl fmt::Display for BlobStorageConversionError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            #[cfg(feature = "blob-storage-billing")]
-            Self::BillingNatExceedsU128 { field } => write!(formatter, "{field} exceeds u128"),
-            #[cfg(feature = "blob-storage-billing")]
-            Self::GatewayPrincipalLimitExceedsUsize => {
-                formatter.write_str("gateway_principal_limit exceeds usize")
-            }
-            Self::InvalidRootHash(err) => write!(formatter, "{err}"),
-            Self::InvalidRootHashByteLength { actual } => {
-                write!(
-                    formatter,
-                    "blob root hash byte input must be {BLOB_ROOT_HASH_BYTE_LENGTH} bytes, got {actual}"
-                )
-            }
-        }
-    }
-}
-
-impl Error for BlobStorageConversionError {}
 
 // -----------------------------------------------------------------------------
 // Tests

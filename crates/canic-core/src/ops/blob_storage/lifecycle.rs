@@ -4,8 +4,6 @@
 //! Does not own: endpoint guards, async gateway calls, or external principal synchronization.
 //! Boundary: workflow passes admitted inputs here before stable mutation.
 
-use std::{error::Error, fmt};
-
 use crate::{
     cdk::types::Principal,
     model::blob_storage::BlobRootHash,
@@ -14,6 +12,7 @@ use crate::{
         StoredBlobRecord,
     },
 };
+use thiserror::Error as ThisError;
 
 #[cfg(feature = "blob-storage-billing")]
 use crate::{
@@ -276,22 +275,14 @@ impl BlobPendingDeletionOutcome {
 /// Typed lifecycle failure for non-billing blob-storage operations.
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 pub enum BlobStorageLifecycleError {
+    #[error("blob is not registered live")]
     BlobNotLive,
+
+    #[error("blob is pending deletion")]
     BlobPendingDeletion,
 }
-
-impl fmt::Display for BlobStorageLifecycleError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::BlobNotLive => formatter.write_str("blob is not registered live"),
-            Self::BlobPendingDeletion => formatter.write_str("blob is pending deletion"),
-        }
-    }
-}
-
-impl Error for BlobStorageLifecycleError {}
 
 // -----------------------------------------------------------------------------
 // Tests

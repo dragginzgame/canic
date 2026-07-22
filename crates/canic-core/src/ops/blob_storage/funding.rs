@@ -5,7 +5,9 @@
 //! Boundary: workflow acquires the guard before awaiting external funding effects.
 //! The guard relies on `Drop` to clear the transient lock on every return path.
 
-use std::{cell::Cell, error::Error, fmt};
+use std::cell::Cell;
+
+use thiserror::Error as ThisError;
 
 thread_local! {
     static FUNDING_IN_PROGRESS: Cell<bool> = const { Cell::new(false) };
@@ -66,16 +68,9 @@ impl Drop for BlobStorageFundingGuard {
 /// Typed failure returned when another funding operation already holds the guard.
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ThisError)]
+#[error("blob-storage funding is already in progress")]
 pub struct BlobStorageFundingInProgress;
-
-impl fmt::Display for BlobStorageFundingInProgress {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("blob-storage funding is already in progress")
-    }
-}
-
-impl Error for BlobStorageFundingInProgress {}
 
 // -----------------------------------------------------------------------------
 // Tests

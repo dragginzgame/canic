@@ -4,9 +4,10 @@
 //! Does not own: DTO decoding, storage lookup, or gateway authorization.
 //! Boundary: accepts only `sha256:<64-hex>` values and stores lowercase hex.
 
-use std::{error::Error, fmt, str::FromStr};
+use std::{fmt, str::FromStr};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error as ThisError;
 
 pub const BLOB_ROOT_HASH_BYTE_LENGTH: usize = 32;
 
@@ -80,41 +81,23 @@ impl TryFrom<String> for BlobRootHash {
 /// Typed failure returned when parsing a canonical blob root hash.
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 pub enum BlobRootHashError {
+    #[error("blob root hash must not be empty")]
     Empty,
+
+    #[error("blob root hash must start with \"sha256:\"")]
     InvalidPrefix,
+
+    #[error(
+        "blob root hash must be {expected} bytes, got {actual}",
+        expected = BLOB_ROOT_HASH_TEXT_LENGTH
+    )]
     InvalidLength { actual: usize },
+
+    #[error("blob root hash contains non-hex byte 0x{byte:02x} at byte index {index}")]
     InvalidHexCharacter { index: usize, byte: u8 },
 }
-
-impl fmt::Display for BlobRootHashError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Empty => formatter.write_str("blob root hash must not be empty"),
-            Self::InvalidPrefix => {
-                write!(
-                    formatter,
-                    "blob root hash must start with {BLOB_ROOT_HASH_PREFIX:?}"
-                )
-            }
-            Self::InvalidLength { actual } => {
-                write!(
-                    formatter,
-                    "blob root hash must be {BLOB_ROOT_HASH_TEXT_LENGTH} bytes, got {actual}"
-                )
-            }
-            Self::InvalidHexCharacter { index, byte } => {
-                write!(
-                    formatter,
-                    "blob root hash contains non-hex byte 0x{byte:02x} at byte index {index}"
-                )
-            }
-        }
-    }
-}
-
-impl Error for BlobRootHashError {}
 
 fn canonicalize_root_hash(value: &str) -> Result<String, BlobRootHashError> {
     if value.is_empty() {
