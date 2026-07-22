@@ -128,6 +128,5 @@ pub fn adoption_report_from_config_source(
         observed_canisters,
         recommendations,
         blocked_actions: blocked_actions(),
-        warnings: Vec::new(),
     })
 }

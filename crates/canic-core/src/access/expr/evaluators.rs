@@ -91,11 +91,8 @@ pub(super) async fn evaluate(
             access::env::build_network_local()
         }
         BuiltinPredicate::Authenticated { required_scope } => {
-            let issuer_pid = access::auth::delegated_token_verified(
-                ctx.authenticated_caller,
-                *required_scope,
-                ctx.call.kind,
-            )?;
+            let issuer_pid =
+                access::auth::delegated_token_verified(ctx.authenticated_caller, *required_scope)?;
             DelegatedAuthMetrics::record_authority(issuer_pid);
             Ok(())
         }

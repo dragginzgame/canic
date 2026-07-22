@@ -64,6 +64,7 @@ impl FromStr for AdoptionProfileV1 {
 /// AdoptionReportV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct AdoptionReportV1 {
     pub schema_version: u32,
     pub report_id: String,
@@ -76,7 +77,6 @@ pub struct AdoptionReportV1 {
     pub observed_canisters: Vec<AdoptionObservedCanisterFindingV1>,
     pub recommendations: Vec<AdoptionRecommendationV1>,
     pub blocked_actions: Vec<String>,
-    pub warnings: Vec<String>,
 }
 
 ///

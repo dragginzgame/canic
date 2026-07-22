@@ -14,22 +14,28 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.10`.
-- The latest published release is `v0.98.10` at
-  `efa3f8c7214737fbee88721dc04989e1995a1440`.
-- The `v0.98.10` source tree is
-  `a6f6c8d1a155a1b93b1fb7fe3a8db4183332d747`; its product-tree hash is
-  `46ee58548c9406b772f19a64db29fbd9ba1901cc9631f9e2e18c95d2a86f230f` and
+- The workspace package version is `0.98.11`.
+- The latest published release is `v0.98.11` at
+  `146effab8efe71deffd7024cdd959ffe325fd21a`.
+- The `v0.98.11` source tree is
+  `ad93245e99c86a37301cbc36baf389d97ba9c0aa`; its product-tree hash is
+  `ab1a1b71b23406f67b830ffa19987c6ae2f0a5fce24e0225d42b31c43099af9a` and
   its Cargo.lock SHA-256 is
-  `438f794f6c0e35f77f9ebf9dfb7d467fff5f37b2bc82da9f747b7e5a9ea45ab0`.
+  `2328e7221c650287a927662a762b493a2803512ac915f50a6ce4ddee8699f3ac`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
   independent control-plane subnet state remains active at ID 84.
-- Open `0.98.11` implements Slice E: the delegated root-proof selector and
+- Released `0.98.11` implements Slice E: the delegated root-proof selector and
   three constant canonical bytes are removed from the sole V1 trust format.
   Configured proof/registry floors advance root counters and make restored
   pre-cut issuer proofs typed stale; no V2 or compatibility verifier exists.
+- Open `0.98.12` implements Slices F through J: delegated verification no
+  longer receives unused endpoint call kind, internal non-root bootstrap no
+  longer receives application init bytes, cost permits retain only their two
+  durable intent identities, and auth CLI parsing has no one-variant dispatch
+  wrapper. The permanently empty top-level adoption-report warning array and
+  its dead envelope projection are removed while finding-local warnings remain.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1053,14 +1059,13 @@ First primary results:
 
 ## Next Action
 
-Open `0.98.11` Slice E passes focused config, canonical-hash, epoch-floor,
-active-proof, token, renewal, provisioning, and two PocketIC delegated-auth
-journeys. Maintained source/config guidance contains no delegated root-proof
-selector or canonical mode encoder, the four V1 domains and registry schema
-remain unchanged, and no V2 or compatibility verifier exists. Five accepted
-post-closeout slices remain: Slice I stays separate because it changes JSON;
-Slices F, G, H, and J may form the next internal cleanup batch if the combined
-diff remains focused. Do not inspect or edit the stale local Toko
+Open `0.98.12` implements focused internal Slices F, G, H, and J plus the
+separately validated Slice I JSON hard cut. Targeted access-auth, lifecycle-
+boundary, cost-guard, and auth CLI suites, a rebuilt six-canister delegated-
+auth PocketIC journey, plus 22 host and 18 CLI adoption-report tests pass.
+Strict affected-crate Clippy, layering, formatting, changelog governance, and
+diff hygiene pass. No accepted post-closeout tail remains pending. Do not
+inspect or edit the stale local Toko
 repository, change Cargo package versions outside the maintainer-owned release
 flow, or commit, tag, publish, or push shared-worktree changes without
 maintainer action.

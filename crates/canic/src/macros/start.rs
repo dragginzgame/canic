@@ -34,7 +34,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:init_block",
                 {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::std::time::Duration::ZERO,
                         "canic:user:init",
@@ -137,7 +137,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             $crate::__canic_after_optional_start_init_hook!(
                 "canic:user:init_block",
                 {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap(args.clone());
+                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
                     $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
                         ::std::time::Duration::ZERO,
                         "canic:user:init",

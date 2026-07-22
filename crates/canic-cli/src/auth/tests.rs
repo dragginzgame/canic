@@ -22,7 +22,7 @@ fn icp_io_failure_keeps_usage_exit_class() {
 
 #[test]
 fn parses_renewal_status_options() {
-    let command = AuthOptions::parse([
+    let options = AuthOptions::parse([
         OsString::from("renewal"),
         OsString::from("status"),
         OsString::from("local"),
@@ -36,7 +36,6 @@ fn parses_renewal_status_options() {
     ])
     .expect("parse auth renewal status options");
 
-    let AuthCommand::RenewalStatus(options) = command;
     assert_eq!(options.deployment, "local");
     assert_eq!(options.issuer, "rrkah-fqaaa-aaaaa-aaaaq-cai");
     assert_eq!(options.common.environment, "local");

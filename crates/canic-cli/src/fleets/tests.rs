@@ -715,6 +715,9 @@ fn renders_adoption_report_text_for_declared_only_roles() {
     assert!(text.contains("read_only: true"));
     assert!(text.contains("demo.store: declared-only"));
     assert!(text.contains("deployment inventory was not supplied"));
+    assert!(
+        text.contains("warning: deployment-truth evidence does not confirm this attached role")
+    );
     assert!(text.contains("mutating_actions_performed: 0"));
     assert!(text.contains("Recommendations (report-only; not executed):"));
     assert!(text.contains(
@@ -756,6 +759,7 @@ fn writes_adoption_report_json_output_file() {
     assert_eq!(value["fleet"], "demo");
     assert_eq!(value["profile"], "Minimal");
     assert_eq!(value["summary"]["mutating_actions_performed"], 0);
+    assert_eq!(value.as_object().expect("adoption report object").len(), 11);
     assert!(
         value["recommendations"]
             .as_array()
@@ -810,6 +814,12 @@ fn writes_adoption_report_envelope_json_output_file() {
     assert_eq!(value["payload_schema"]["stability"], "experimental");
     assert_eq!(value["payload"]["fleet"], "demo");
     assert_eq!(value["payload"]["profile"], "Partial");
+    assert!(
+        value["summary"]["warnings"]
+            .as_array()
+            .expect("envelope warnings array")
+            .is_empty()
+    );
     assert!(
         value["payload_sha256"]
             .as_str()

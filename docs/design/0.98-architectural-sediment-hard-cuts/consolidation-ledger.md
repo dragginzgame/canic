@@ -8,8 +8,8 @@ in the supporting consolidation report and canonical 0.98 closeout audit.
 Post-closeout note: the resolved status and totals below apply to the original
 42 candidates published in `v0.98.2`. Seven later findings are recorded in the
 [post-closeout supplement](#post-closeout-supplement). They are accepted design
-scope; Slice D is published in `v0.98.10`, Slice E is implemented in open
-`0.98.11`, and five slices remain pending.
+scope; Slices D and E are published in `v0.98.10` and `v0.98.11`; Slices F
+through J are implemented in open `0.98.12`; no accepted tail remains pending.
 They are not included in the immutable 0.98.2 totals.
 
 ## Counting rules
@@ -98,12 +98,12 @@ were not exhaustive proofs against these newly traced tails.
 | ID | Severity | Candidate and authority evidence | Disposition |
 | --- | --- | --- | --- |
 | CANIC-098-POST-STATE-001 | P2 | The final core subnet-auth field was removed in `0.65.17`, but an empty stable record/cell, DTO, mapper, query, root endpoint, cascade slot, Candid shape, probe, and false restore invariant remained. The control-plane subnet state is separate and meaningful. | FIXED in `v0.98.10` — complete core surface deleted; ID 17 is excluded from active allocations and permanently rejected by the canonical allocation validator; control-plane ID 84 retained |
-| CANIC-098-POST-AUTH-001 | P2 | `root_proof_mode` accepts only `chain_key_batch`; `RootProofMode` has one variant; verification rejects an impossible alternative; canonical encoding still emits its obsolete tag at three hash positions. The removed alternative disappeared in `0.76.6`. | FIXED in open `0.98.11` — selector and three constant bytes removed from the sole V1 format; configured proof/registry floors advance root counters and reject restored stale issuer material; no V2 or compatibility verifier added |
-| CANIC-098-POST-AUTH-002 | P2 | Delegated-token access still forwards endpoint call kind after update-token consumption was removed in `0.61.0`; the terminal verifier parameter is unused. Metrics and performance still consume the shared call-kind type. | ACCEPT — remove only the delegated-auth argument chain; implementation pending |
-| CANIC-098-POST-LIFECYCLE-001 | P2 | Non-root init bytes are cloned through API/lifecycle/timer/workflow layers although internal bootstrap documents them as unused; the application hook independently consumes the original args. | ACCEPT — make internal bootstrap argument-free and retain user-hook args; implementation pending |
-| CANIC-098-POST-COST-001 | Note | `CostGuardPermit` stores cost class, quota key, payer, and a private sentinel that no settlement or capability path reads; only the quota and reservation intent IDs are authoritative. | ACCEPT — remove dead fields while retaining the permit proof boundary; implementation pending |
-| CANIC-098-POST-ADOPTION-001 | P2 | The top-level adoption-report warnings vector has been empty at its sole production constructor since introduction, yet remains in JSON and evidence-summary projection. Finding-local warning producers are distinct and active. | ACCEPT — remove the unproduced JSON field and mapping while retaining meaningful warnings; implementation pending |
-| CANIC-098-POST-CLI-001 | Note | Private auth CLI parsing wraps its sole renewal-status options in a one-variant enum and immediately unwraps it through one match arm. | ACCEPT — return the options directly without changing CLI behavior; implementation pending |
+| CANIC-098-POST-AUTH-001 | P2 | `root_proof_mode` accepts only `chain_key_batch`; `RootProofMode` has one variant; verification rejects an impossible alternative; canonical encoding still emits its obsolete tag at three hash positions. The removed alternative disappeared in `0.76.6`. | FIXED in `v0.98.11` — selector and three constant bytes removed from the sole V1 format; configured proof/registry floors advance root counters and reject restored stale issuer material; no V2 or compatibility verifier added |
+| CANIC-098-POST-AUTH-002 | P2 | Delegated-token access still forwards endpoint call kind after update-token consumption was removed in `0.61.0`; the terminal verifier parameter is unused. Metrics and performance still consume the shared call-kind type. | FIXED in open `0.98.12` — call kind removed only from delegated verification; endpoint identity, performance, and metrics retain it |
+| CANIC-098-POST-LIFECYCLE-001 | P2 | Non-root init bytes are cloned through API/lifecycle/timer/workflow layers although internal bootstrap documents them as unused; the application hook independently consumes the original args. | FIXED in open `0.98.12` — internal bootstrap is argument-free while both generated application hooks retain original init bytes |
+| CANIC-098-POST-COST-001 | Note | `CostGuardPermit` stores cost class, quota key, payer, and a private sentinel that no settlement or capability path reads; only the quota and reservation intent IDs are authoritative. | FIXED in open `0.98.12` — permit stores only the two durable intent identities and remains privately constructed |
+| CANIC-098-POST-ADOPTION-001 | P2 | The top-level adoption-report warnings vector has been empty at its sole production constructor since introduction, yet remains in JSON and evidence-summary projection. Finding-local warning producers are distinct and active. | FIXED in open `0.98.12` — dead top-level JSON field and envelope mapping removed; role and observed-canister warning producers retained |
+| CANIC-098-POST-CLI-001 | Note | Private auth CLI parsing wraps its sole renewal-status options in a one-variant enum and immediately unwraps it through one match arm. | FIXED in open `0.98.12` — parser returns renewal-status options directly with unchanged command behavior |
 
 ## Package coverage
 

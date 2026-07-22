@@ -468,17 +468,7 @@ fn push_optional_input_fingerprint(
 
 fn adoption_report_evidence_summary(report: &AdoptionReportV1) -> EvidenceSummaryV1 {
     EvidenceSummaryV1 {
-        warnings: report
-            .warnings
-            .iter()
-            .map(|warning| {
-                EvidenceMessageV1::new(
-                    "adoption.warning",
-                    warning.clone(),
-                    EvidenceMessageSeverityV1::Warning,
-                )
-            })
-            .collect(),
+        warnings: Vec::new(),
         blocked_actions: report
             .blocked_actions
             .iter()

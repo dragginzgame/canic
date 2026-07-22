@@ -44,11 +44,19 @@ fn adoption_report_round_trips_through_json() {
 
     let encoded = serde_json::to_string(&report).expect("encode report");
     let decoded = serde_json::from_str::<AdoptionReportV1>(&encoded).expect("decode report");
+    let value = serde_json::to_value(&report).expect("encode report value");
 
     assert_eq!(decoded, report);
+    assert_eq!(value.as_object().expect("report object").len(), 11);
     assert_eq!(
         role(&decoded, "api").artifact_state,
         AdoptionArtifactStateV1::CanicBuilt
+    );
+    assert!(
+        role(&decoded, "api")
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("does not confirm"))
     );
 }
 
