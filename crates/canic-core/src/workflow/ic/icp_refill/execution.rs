@@ -32,7 +32,7 @@ use crate::{
         replay::{
             finish_icp_refill_replay, map_icp_refill_replay_store_error,
             mark_icp_refill_notify_effect, mark_icp_refill_transfer_effect,
-            preserve_icp_refill_recovery_required,
+            preserve_icp_refill_post_effect_result, preserve_icp_refill_recovery_required,
         },
     },
     workflow::replay::abort_reserved_receipt_after_failure,
@@ -151,31 +151,40 @@ async fn transfer_operation(
     let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
     mark_icp_refill_transfer_effect(token, &operation)?;
 
-    match IcpRefillOps::icrc1_transfer(cost_permit, operation.ledger_canister_id, transfer_arg)
-        .await
-    {
-        Err(err) => Err(preserve_icp_refill_recovery_required(
-            token,
-            &operation,
-            "ledger_transfer",
-            err,
-        )),
-        Ok(Ok(block_index)) => {
-            let block_index = match IcpRefillOps::checked_block_index(block_index) {
-                Ok(block_index) => block_index,
-                Err(err) => {
-                    return IcpRefillStoreOps::mark_transfer_failed(
-                        operation.id,
-                        IcpRefillErrorCode::InvalidLedgerBlockIndex,
-                        err.to_string(),
-                        IcOps::now_nanos(),
-                    );
-                }
-            };
-            IcpRefillStoreOps::mark_transferred(operation.id, block_index, IcOps::now_nanos())
-        }
-        Ok(Err(err)) => apply_transfer_error(operation.id, err),
-    }
+    let result =
+        match IcpRefillOps::icrc1_transfer(cost_permit, operation.ledger_canister_id, transfer_arg)
+            .await
+        {
+            Err(err) => {
+                return Err(preserve_icp_refill_recovery_required(
+                    token,
+                    &operation,
+                    "ledger_transfer",
+                    err,
+                ));
+            }
+            Ok(Ok(block_index)) => {
+                let block_index = match IcpRefillOps::checked_block_index(block_index) {
+                    Ok(block_index) => block_index,
+                    Err(err) => {
+                        return preserve_icp_refill_post_effect_result(
+                            token,
+                            &operation,
+                            "ledger_transfer",
+                            IcpRefillStoreOps::mark_transfer_failed(
+                                operation.id,
+                                IcpRefillErrorCode::InvalidLedgerBlockIndex,
+                                err.to_string(),
+                                IcOps::now_nanos(),
+                            ),
+                        );
+                    }
+                };
+                IcpRefillStoreOps::mark_transferred(operation.id, block_index, IcOps::now_nanos())
+            }
+            Ok(Err(err)) => apply_transfer_error(operation.id, err),
+        };
+    preserve_icp_refill_post_effect_result(token, &operation, "ledger_transfer", result)
 }
 
 async fn advance_operation(
@@ -243,16 +252,21 @@ async fn notify_operation(
     let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
     mark_icp_refill_notify_effect(token, &operation)?;
 
-    match IcpRefillOps::notify_top_up(cost_permit, operation.cmc_canister_id, args).await {
+    let result = match IcpRefillOps::notify_top_up(cost_permit, operation.cmc_canister_id, args)
+        .await
+    {
         Ok(Ok(cycles_sent)) => apply_notify_success(operation.id, cycles_sent, IcOps::now_nanos()),
         Ok(Err(err)) => apply_notify_error(operation.id, operation.notify_attempts, err),
-        Err(err) => Err(preserve_icp_refill_recovery_required(
-            token,
-            &operation,
-            "cmc_notify_top_up",
-            err,
-        )),
-    }
+        Err(err) => {
+            return Err(preserve_icp_refill_recovery_required(
+                token,
+                &operation,
+                "cmc_notify_top_up",
+                err,
+            ));
+        }
+    };
+    preserve_icp_refill_post_effect_result(token, &operation, "cmc_notify_top_up", result)
 }
 
 pub(super) fn apply_notify_success(

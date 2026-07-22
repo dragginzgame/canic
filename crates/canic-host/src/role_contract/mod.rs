@@ -48,25 +48,19 @@ pub fn resolve_declared_role_package_contract(
     config_path: &Path,
     evidence: &RoleCargoGraphEvidence,
 ) -> RoleContractResolution {
-    let config_source = match fs::read_to_string(config_path) {
-        Ok(source) => source,
-        Err(error) => {
-            return RoleContractResolution::Rejected {
-                errors: vec![RoleContractFinding::DependencyShapeUnsupported {
-                    reason: format!("failed to read {}: {error}", config_path.display()),
-                }],
-            };
-        }
+    let Ok(config_source) = fs::read_to_string(config_path) else {
+        return RoleContractResolution::Rejected {
+            errors: vec![RoleContractFinding::DependencyShapeUnsupported {
+                reason: "failed to read role configuration".to_string(),
+            }],
+        };
     };
-    let config = match parse_config_model(&config_source) {
-        Ok(config) => config,
-        Err(error) => {
-            return RoleContractResolution::Rejected {
-                errors: vec![RoleContractFinding::DependencyShapeUnsupported {
-                    reason: format!("invalid {}: {error}", config_path.display()),
-                }],
-            };
-        }
+    let Ok(config) = parse_config_model(&config_source) else {
+        return RoleContractResolution::Rejected {
+            errors: vec![RoleContractFinding::DependencyShapeUnsupported {
+                reason: "invalid role configuration".to_string(),
+            }],
+        };
     };
 
     resolve_declared_role_package_contract_from_config(&config, evidence)

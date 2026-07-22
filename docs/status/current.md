@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.97.2`.
-- The latest published release is `v0.97.2` at
-  `f49c32c2d3facfd886e3480a10755304a2c4af54`.
-- The `v0.97.2` source tree is
-  `9e1582ffd660a931c1e2853da881b8ae381b8cd8`; its product-tree hash is
-  `dc86b1200098b5406bc27c1426b59db085fec1508d12d21a13175d79236f837f` and
+- The workspace package version is `0.97.3`.
+- The latest published release is `v0.97.3` at
+  `4f4397cd58b648759307b51d98033c7c21538345`.
+- The `v0.97.3` source tree is
+  `0efda05cd46e94c1c45d6a37f6a0270fa8b7bd0c`; its product-tree hash is
+  `e540970e5aad935a2f4c5aff5ff43c790beb1958d6e33fb5f801ba6c050cc03d` and
   its Cargo.lock SHA-256 is
-  `02cda66cca743aebdc9c523539c0c2ab1f36027b17be7b14577d037f19f1894a`.
+  `bcf041e99d7ead0f1d4419251f4fe5cd24d11604dbb15002330562e37dc547bd`.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -356,10 +356,13 @@ Historical detail is archived at:
   [0.92 holistic audit and audit-system validation](../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md).
 - The closed 0.96 line design is
   [0.96 receipt replay horizon and terminal reclamation](../design/0.96-receipt-replay-horizon-and-terminal-reclamation/0.96-design.md).
-- The active line design is
+- The closed 0.97 line design is
   [0.97 role-owned runtime dependencies and CDK surface](../design/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-design.md).
+- The active line design is
+  [0.98 architectural sediment hard cuts](../design/0.98-architectural-sediment-hard-cuts/0.98-design.md).
 - Current development notes are in the
-  [0.97 changelog](../changelog/0.97.md); released 0.96 notes remain in the
+  [0.98 changelog](../changelog/0.98.md); released 0.97 notes remain in the
+  [0.97 changelog](../changelog/0.97.md), released 0.96 notes remain in the
   [0.96 changelog](../changelog/0.96.md), released 0.95 notes remain in the
   [0.95 changelog](../changelog/0.95.md), released 0.94 notes remain in the
   [0.94 changelog](../changelog/0.94.md), and the completed 0.92 line remains in the
@@ -440,16 +443,26 @@ recoverable, while old terminal timing is rejected without a migration shim.
 General cleanup, dependency work, backup/restore changes, and compatibility
 layers remain excluded.
 
-0.97 is active after releasing Cargo graph Slice B as `v0.97.0`, hidden
-macro-boundary Slice C as `v0.97.1`, and the public-CDK hard cut plus Syn 3
-maintenance as `v0.97.2`. Open `0.97.3` Slice E makes manual ICP conversion an
-inherent root capability: one controller endpoint, one root-only policy and
-state allocation, one self-to-self transfer identity, and one deployment-root
-CLI path. Generic feature/capability selection, the explicit emitter and
-facade API, fabrication, caller-selected source/target, non-root state access,
-and child-funding accounting are deleted without compatibility paths. Root
-upgrades reject while a refill remains resumable so the installed contract can
-settle it first.
+Published `v0.97.3` contains the intended Cargo graph, hidden macro boundary,
+public-CDK hard cut, and root-owned manual ICP conversion slices, but 0.97 is
+**not ready to close** at that immutable anchor. A rigorous baseline-to-tag
+audit supersedes the previous pass claim after finding five P1 defects. Their
+smallest corrections are present in the current working tree; no corrected
+immutable anchor exists yet. Exact findings, corrections, and validation are
+in the
+[0.97 closeout audit](../design/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-closeout-audit.md).
+
+0.98 is active against immutable `v0.97.3`. The shared working tree also
+contains the bounded 0.97 closeout corrections, which must be released and
+validated before either line treats `v0.97.3` as a passing predecessor. The
+post-0.97 inventory reconfirms
+three bounded hard cuts: the consumerless project-protocol test package, the
+obsolete externally uncertain LocalIntent race fixture, and accepted but
+unexecuted randomness configuration/runtime scaffolding. Open `0.98.0` Slice A
+deletes only the dead project package/member/lock row and removes one explicit
+legacy-refill anti-resurrection test found during 0.97 closeout. The intent and
+randomness findings remain separate review batches. The final `v0.96.8`
+receipt assertion manifest is frozen before the obsolete fixture is narrowed.
 
 0.92 treats Canic as feature complete for this line, but not as 1.0-ready.
 The audit machinery has been inventoried, corrected, and frozen. Phase C has
@@ -987,7 +1000,7 @@ First primary results:
   plus all 36 procedural-macro tests and the cycle DTO test pass; focused Cargo
   Machete reports no unused dependency. Fresh isolated rustdoc exposes
   semantic ICRC-21/cycle modules and no public `canic::cdk` module.
-- Open `0.97.3` Slice E validation currently passes all 981 `canic-core`
+- Released `0.97.3` Slice E validation passes 980 of 981 `canic-core`
   library tests with one ignored, including root configuration, role/state,
   stable-index, replay/recovery, overflow, and upgrade-admission coverage. The
   80 focused refill tests, 18 CLI conversion tests, 21 host state-manifest
@@ -995,11 +1008,22 @@ First primary results:
   The generated root package checks; strict all-target Clippy for the four
   affected packages, targeted formatting, layering, changelog governance, and
   diff hygiene pass.
+- The rigorous 0.97 closeout audit subsequently found five P1 gaps not covered
+  by that slice evidence. The corrected working tree passes 841 host tests,
+  980 core tests with one ignored, 16 Canic tests, and the four-case
+  role-attestation PocketIC suite. The repository now checksum-pins
+  `ic-wasm 0.10.0` from DFINITY's official platform release archives. Its
+  installer, exact-version gate, artifact-I/O tests, and role-attestation
+  PocketIC suite pass; the Rust-library-only upstream API break is outside
+  Canic's CLI-only integration. The deterministic cumulative `root_suite`
+  passes all 28 cases with the upgraded binary.
 
 ## Next Action
 
-Finish the targeted validation and publish the open `0.97.3` root-owned manual
-ICP-refill hard cut, then close 0.97 against its accepted design. Do not inspect
+Review and release the bounded 0.97 closeout corrections and repeat the
+passing cumulative gate at the new immutable anchor before declaring 0.97
+closed. Keep the open `0.98.0` Slice A dead-package hard cut distinct, then
+begin the independent receipt-fixture Slice B. Do not inspect
 or edit the stale local Toko repository, change Cargo package versions outside
 the maintainer-owned release flow, or add an old refill compatibility path.
 

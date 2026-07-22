@@ -1,13 +1,10 @@
 //! Workspace and ICP CLI root discovery helpers for downstream install tooling.
 
-use serde_json::Value as JsonValue;
 use std::{
     fs, io,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
-
-use crate::cargo_metadata::{CargoMetadataPackage, cargo_metadata_no_deps_cached};
 
 const WORKSPACE_MANIFEST_RELATIVE: &str = "Cargo.toml";
 const ICP_CONFIG_FILE: &str = "icp.yaml";
@@ -50,54 +47,6 @@ pub enum WorkspaceDiscoveryError {
         path: PathBuf,
         #[source]
         source: io::Error,
-    },
-}
-
-/// Typed failure while resolving one role's Cargo package manifest.
-#[derive(Debug, ThisError)]
-pub enum CanisterManifestError {
-    #[error("failed to canonicalize Cargo workspace {}: {source}", path.display())]
-    WorkspaceRoot {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error("failed to canonicalize selected canister root {}: {source}", path.display())]
-    CanisterRoot {
-        path: PathBuf,
-        #[source]
-        source: io::Error,
-    },
-
-    #[error(
-        "cargo metadata failed while resolving role {role:?} from {}: {source}",
-        workspace_root.display()
-    )]
-    CargoMetadata {
-        role: String,
-        workspace_root: PathBuf,
-        #[source]
-        source: Box<dyn std::error::Error>,
-    },
-
-    #[error(
-        "no canister package under {} declares [package.metadata.canic] role = {role:?}",
-        canister_root.display()
-    )]
-    RoleNotFound {
-        role: String,
-        canister_root: PathBuf,
-    },
-
-    #[error(
-        "multiple canister packages under {} declare [package.metadata.canic] role = {role:?}: {manifests:?}",
-        canister_root.display()
-    )]
-    RoleAmbiguous {
-        role: String,
-        canister_root: PathBuf,
-        manifests: Vec<PathBuf>,
     },
 }
 
@@ -219,69 +168,6 @@ pub fn normalize_workspace_path(workspace_root: &Path, path: PathBuf) -> PathBuf
     }
 }
 
-// Resolve exactly one canister manifest for a role, restricted to packages below
-// the selected canister root.
-pub fn resolve_canister_manifest_from_metadata_under(
-    workspace_root: &Path,
-    role_name: &str,
-    search_root: &Path,
-) -> Result<PathBuf, CanisterManifestError> {
-    let workspace_root =
-        workspace_root
-            .canonicalize()
-            .map_err(|source| CanisterManifestError::WorkspaceRoot {
-                path: workspace_root.to_path_buf(),
-                source,
-            })?;
-    let search_root =
-        search_root
-            .canonicalize()
-            .map_err(|source| CanisterManifestError::CanisterRoot {
-                path: search_root.to_path_buf(),
-                source,
-            })?;
-    let metadata = cargo_metadata_no_deps_cached(&workspace_root).map_err(|source| {
-        CanisterManifestError::CargoMetadata {
-            role: role_name.to_string(),
-            workspace_root: workspace_root.clone(),
-            source,
-        }
-    })?;
-
-    let mut matches = metadata
-        .packages
-        .into_iter()
-        .filter(|package| package.manifest_path.starts_with(&search_root))
-        .filter(|package| package_declares_role(package, role_name))
-        .map(|package| package.manifest_path)
-        .collect::<Vec<_>>();
-    matches.sort();
-
-    match matches.as_slice() {
-        [manifest_path] => Ok(manifest_path.clone()),
-        [] => Err(CanisterManifestError::RoleNotFound {
-            role: role_name.to_string(),
-            canister_root: search_root,
-        }),
-        paths => Err(CanisterManifestError::RoleAmbiguous {
-            role: role_name.to_string(),
-            canister_root: search_root,
-            manifests: paths.to_vec(),
-        }),
-    }
-}
-
-// Check whether a package declares the requested Canic role in Cargo metadata.
-fn package_declares_role(package: &CargoMetadataPackage, role_name: &str) -> bool {
-    package
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.get("canic"))
-        .and_then(|canic| canic.get("role"))
-        .and_then(JsonValue::as_str)
-        == Some(role_name)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,21 +282,6 @@ mod tests {
             error,
             WorkspaceDiscoveryError::Inspect { path, source }
                 if path == config && source.kind() == io::ErrorKind::NotFound
-        );
-    }
-
-    #[test]
-    fn manifest_resolution_rejects_uncanonicalizable_canister_root() {
-        let project = TempProject::new("canic-workspace-missing-canister-root");
-        let canister_root = project.path.join("fleets");
-
-        let error =
-            resolve_canister_manifest_from_metadata_under(&project.path, "root", &canister_root)
-                .expect_err("missing canister root must fail");
-
-        std::assert_matches!(
-            error,
-            CanisterManifestError::CanisterRoot { path, .. } if path == canister_root
         );
     }
 }
