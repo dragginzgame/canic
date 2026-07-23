@@ -304,8 +304,8 @@ mod tests {
                 "blocked|config|plan_blocker|demo|deployment_plan_builder",
                 "unsupported|unsupported_shape|unsupported_pool|demo|deployment_plan_builder",
                 "warning|artifact|artifact_gap|alpha|deployment_plan_builder",
-                "warning|artifact|artifact_gap|beta|deployment_plan_builder",
                 "warning|artifact|artifact_gap|beta|app_config",
+                "warning|artifact|artifact_gap|beta|deployment_plan_builder",
                 "warning|config|z_config_gap|demo|deployment_plan_builder",
                 "info|config|resolved_fact|demo|deployment_plan_builder",
             ]
