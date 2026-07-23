@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.11`.
-- The latest published release is `v0.98.11` at
-  `146effab8efe71deffd7024cdd959ffe325fd21a`.
-- The `v0.98.11` source tree is
-  `ad93245e99c86a37301cbc36baf389d97ba9c0aa`; its product-tree hash is
-  `ab1a1b71b23406f67b830ffa19987c6ae2f0a5fce24e0225d42b31c43099af9a` and
+- The workspace package version is `0.98.12`.
+- The latest published release is `v0.98.12` at
+  `17c92b372f45e8e22fc0315fe446b786ddf0f60b`.
+- The `v0.98.12` source tree is
+  `759b0757620975feec2d58f3d5cab66b31d29e25`; its product-tree hash is
+  `2913f79fd481f843e68b7b1c9e9130ebc64c7e76c431d11f3e2544c7f93ecdad` and
   its Cargo.lock SHA-256 is
-  `2328e7221c650287a927662a762b493a2803512ac915f50a6ce4ddee8699f3ac`.
+  `4e7a4ba305ed560b6d69f1a9066cb5124551071872383aa839077c7c6ecb6ae7`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -30,12 +30,16 @@ Historical detail is archived at:
   three constant canonical bytes are removed from the sole V1 trust format.
   Configured proof/registry floors advance root counters and make restored
   pre-cut issuer proofs typed stale; no V2 or compatibility verifier exists.
-- Open `0.98.12` implements Slices F through J: delegated verification no
+- Released `0.98.12` implements Slices F through J: delegated verification no
   longer receives unused endpoint call kind, internal non-root bootstrap no
   longer receives application init bytes, cost permits retain only their two
   durable intent identities, and auth CLI parsing has no one-variant dispatch
   wrapper. The permanently empty top-level adoption-report warning array and
   its dead envelope projection are removed while finding-local warnings remain.
+- Open `0.98.13` implements Slice K: the orphan internal XRC binding family and
+  the unused 8-, 16-, 32-, and 256-byte bounded-string aliases are hard-cut.
+  The generic bounded-string invariant and its active 64- and 128-byte aliases
+  remain because they reject oversized boundary and stable-memory input.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1059,12 +1063,12 @@ First primary results:
 
 ## Next Action
 
-Open `0.98.12` implements focused internal Slices F, G, H, and J plus the
-separately validated Slice I JSON hard cut. Targeted access-auth, lifecycle-
-boundary, cost-guard, and auth CLI suites, a rebuilt six-canister delegated-
-auth PocketIC journey, plus 22 host and 18 CLI adoption-report tests pass.
-Strict affected-crate Clippy, layering, formatting, changelog governance, and
-diff hygiene pass. No accepted post-closeout tail remains pending. Do not
+Open `0.98.13` implements focused internal Slice K. The obsolete XRC binding
+family and unused bounded-string aliases are removed without a replacement or
+compatibility path; active length enforcement remains. Focused bounded-string,
+strict affected-crate, formatting, changelog-governance, stale-symbol, and diff
+hygiene results are recorded in the open patch changelog. The Canic app
+registry is explicitly deferred to 0.100; it is not part of this slice. Do not
 inspect or edit the stale local Toko
 repository, change Cargo package versions outside the maintainer-owned release
 flow, or commit, tag, publish, or push shared-worktree changes without

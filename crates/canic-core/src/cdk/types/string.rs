@@ -1,6 +1,6 @@
 //! Module: cdk::types::string
 //!
-//! Responsibility: bounded string wrappers for configs and stable structures.
+//! Responsibility: bounded string wrappers for runtime keys and stable structures.
 //! Does not own: field-specific validation or DTO compatibility policy.
 //! Boundary: enforces byte-size caps at construction and stable decoding.
 
@@ -18,8 +18,8 @@ use thiserror::Error as ThisError;
 ///
 /// BoundedString
 ///
-/// String wrapper enforcing a compile-time maximum length, with serde and
-/// storage trait implementations.
+/// String wrapper enforcing a compile-time maximum byte length across
+/// construction, Serde/Candid decoding, and stable storage.
 ///
 
 #[derive(CandidType, Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -109,12 +109,8 @@ impl<const N: u32> Display for BoundedString<N> {
     }
 }
 
-pub type BoundedString8 = BoundedString<8>;
-pub type BoundedString16 = BoundedString<16>;
-pub type BoundedString32 = BoundedString<32>;
 pub type BoundedString64 = BoundedString<64>;
 pub type BoundedString128 = BoundedString<128>;
-pub type BoundedString256 = BoundedString<256>;
 
 // Convert the bounded wrapper back into its owned string.
 impl<const N: u32> From<BoundedString<N>> for String {
@@ -183,22 +179,22 @@ mod tests {
     #[test]
     fn create_within_bounds() {
         let s = "hello".to_string();
-        let b = BoundedString16::new(s.clone());
+        let b = BoundedString::<16>::new(s.clone());
         assert_eq!(b.as_str(), s);
     }
 
     #[test]
     fn create_at_exact_limit() {
         let s = "a".repeat(16);
-        let b = BoundedString16::new(s.clone());
+        let b = BoundedString::<16>::new(s.clone());
         assert_eq!(b.as_str(), s);
     }
 
     #[test]
     fn ordering_and_equality() {
-        let a = BoundedString16::new("abc".to_string());
-        let b = BoundedString16::new("abc".to_string());
-        let c = BoundedString16::new("def".to_string());
+        let a = BoundedString::<16>::new("abc".to_string());
+        let b = BoundedString::<16>::new("abc".to_string());
+        let c = BoundedString::<16>::new("def".to_string());
 
         assert_eq!(a, b);
         assert_ne!(a, c);
@@ -207,7 +203,7 @@ mod tests {
 
     #[test]
     fn try_new_preserves_typed_length_cause() {
-        let err = BoundedString16::try_new("a".repeat(17)).unwrap_err();
+        let err = BoundedString::<16>::try_new("a".repeat(17)).unwrap_err();
         assert_eq!(
             err,
             BoundedStringError::TooLong {
@@ -219,11 +215,11 @@ mod tests {
 
     #[test]
     fn serde_decode_enforces_the_bound() {
-        let bounded = BoundedString16::new("bounded");
+        let bounded = BoundedString::<16>::new("bounded");
         let bounded_encoded = crate::cdk::serialize::serialize(&bounded)
             .expect("bounded string serializes through its existing shape");
         assert_eq!(
-            crate::cdk::serialize::deserialize::<BoundedString16>(&bounded_encoded)
+            crate::cdk::serialize::deserialize::<BoundedString<16>>(&bounded_encoded)
                 .expect("valid bounded string deserializes"),
             bounded
         );
@@ -232,24 +228,24 @@ mod tests {
             crate::cdk::serialize::serialize(&"a".repeat(17)).expect("string fixture serializes");
 
         assert!(
-            crate::cdk::serialize::deserialize::<BoundedString16>(&encoded).is_err(),
+            crate::cdk::serialize::deserialize::<BoundedString<16>>(&encoded).is_err(),
             "derived boundary decoding must not bypass construction validation"
         );
     }
 
     #[test]
     fn candid_decode_enforces_the_bound() {
-        let bounded = BoundedString16::new("bounded");
+        let bounded = BoundedString::<16>::new("bounded");
         let bounded_encoded = candid::encode_one(&bounded).expect("bounded string Candid-encodes");
         assert_eq!(
-            candid::decode_one::<BoundedString16>(&bounded_encoded)
+            candid::decode_one::<BoundedString<16>>(&bounded_encoded)
                 .expect("valid bounded string Candid-decodes"),
             bounded
         );
 
         let oversized = candid::encode_one("a".repeat(17)).expect("string Candid-encodes");
         assert!(
-            candid::decode_one::<BoundedString16>(&oversized).is_err(),
+            candid::decode_one::<BoundedString<16>>(&oversized).is_err(),
             "Candid decoding must not bypass construction validation"
         );
     }
@@ -257,12 +253,12 @@ mod tests {
     #[test]
     #[should_panic(expected = "stable BoundedString<16> is 17 bytes; maximum is 16")]
     fn stable_decode_rejects_overlong_bytes() {
-        let _ = BoundedString16::from_bytes(Cow::Owned(vec![b'a'; 17]));
+        let _ = BoundedString::<16>::from_bytes(Cow::Owned(vec![b'a'; 17]));
     }
 
     #[test]
     #[should_panic(expected = "stable BoundedString<16> is not UTF-8")]
     fn stable_decode_rejects_invalid_utf8() {
-        let _ = BoundedString16::from_bytes(Cow::Owned(vec![0xff]));
+        let _ = BoundedString::<16>::from_bytes(Cow::Owned(vec![0xff]));
     }
 }
