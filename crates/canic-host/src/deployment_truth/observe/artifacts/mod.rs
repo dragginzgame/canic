@@ -1,7 +1,7 @@
 use super::super::*;
 use super::shared::observation_gap;
 use crate::release_set::{
-    FleetConfigSnapshot, ROOT_RELEASE_SET_MANIFEST_FILE, artifact_root_path,
+    AppConfigSnapshot, ROOT_RELEASE_SET_MANIFEST_FILE, artifact_root_path,
     load_root_release_set_manifest, resolve_artifact_root,
 };
 use std::{
@@ -29,9 +29,9 @@ pub fn collect_local_role_artifact_manifest(
 ) -> RoleArtifactManifestV1 {
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_artifacts = Vec::new();
-    let (fleet_name, roles) = match FleetConfigSnapshot::load(&config) {
+    let (fleet_name, roles) = match AppConfigSnapshot::load(&config) {
         Ok(snapshot) => (
-            snapshot.fleet_name().to_string(),
+            snapshot.app_id().to_string(),
             deployment_truth_roles_with_implicit_wasm_store(snapshot.deployable_roles()),
         ),
         Err(err) => {

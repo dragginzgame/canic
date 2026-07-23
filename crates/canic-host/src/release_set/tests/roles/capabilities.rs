@@ -30,7 +30,7 @@ fn configured_role_capabilities_resolves_exact_role_package_contracts() {
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let config = workspace.join("canisters/audit/root_probe/canic.toml");
 
-    let capabilities = crate::release_set::FleetConfigSnapshot::load(&config)
+    let capabilities = crate::release_set::AppConfigSnapshot::load(&config)
         .expect("load config")
         .role_capabilities()
         .expect("resolved capabilities");
@@ -41,9 +41,10 @@ fn configured_role_capabilities_resolves_exact_role_package_contracts() {
 fn configured_role_metrics_profiles_lists_resolved_profiles() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -78,22 +79,22 @@ package = "scale"
 kind = "canister"
 package = "role_baseline"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+[subnets.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "shard"
 
-[subnets.prime.canisters.scale_replica]
+[subnets.default.canisters.scale_replica]
 kind = "replica"
 
-[subnets.prime.canisters.scale_replica.metrics]
+[subnets.default.canisters.scale_replica.metrics]
 profile = "full"
 "#;
     let profiles = configured_role_metrics_profiles_from_config(&parsed_config(config));
@@ -111,10 +112,13 @@ profile = "full"
 fn configured_role_topups_lists_configured_policy_summaries() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -147,15 +151,12 @@ package = "scale"
 [roles.role_baseline]
 kind = "canister"
 package = "role_baseline"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "4T"

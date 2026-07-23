@@ -2,7 +2,7 @@ use super::commands::{add_icp_environment_target, icp_canister_command, run_comm
 use crate::cycle_balance::query_cycle_balance;
 use crate::format::cycles_tc;
 use crate::icp::{IcpCli, LocalReplicaTarget};
-use crate::release_set::{FleetConfigSnapshot, LOCAL_ROOT_MIN_READY_CYCLES};
+use crate::release_set::{AppConfigSnapshot, LOCAL_ROOT_MIN_READY_CYCLES};
 use std::{path::Path, process::Command};
 
 pub(super) fn add_local_root_create_cycles_arg(
@@ -14,7 +14,7 @@ pub(super) fn add_local_root_create_cycles_arg(
         return Ok(());
     }
 
-    let cycles = FleetConfigSnapshot::load(config_path)?.local_root_create_cycles();
+    let cycles = AppConfigSnapshot::load(config_path)?.local_root_create_cycles();
     command.args(["--cycles", &cycles.to_string()]);
     Ok(())
 }

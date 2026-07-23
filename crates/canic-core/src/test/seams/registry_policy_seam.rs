@@ -4,9 +4,9 @@ use crate::{
     InternalError,
     cdk::types::Cycles,
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
-        DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool, MetricsCanisterConfig,
-        ScalePool, ScalePoolPolicy, ScalingConfig, ShardingConfig, StandardsCanisterConfig,
+        BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig, CanisterKind,
+        CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig, ScalePool,
+        ScalePoolPolicy, ScalingConfig, ShardingConfig, StandardsCanisterConfig,
     },
     domain::policy::pure::topology::TopologyPolicyError,
     domain::policy::pure::topology::registry::{
@@ -29,7 +29,7 @@ fn root_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -46,7 +46,7 @@ fn service_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -63,7 +63,7 @@ fn singleton_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -89,7 +89,7 @@ fn singleton_scaling_parent_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: Some(scaling),
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -113,7 +113,7 @@ fn singleton_sharding_parent_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: Some(ShardingConfig::default()),
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -128,12 +128,12 @@ fn service_sharding_parent_config() -> CanisterConfig {
     }
 }
 
-// Build a singleton parent that owns one keyed directory pool for instances.
+// Build a singleton parent that owns one keyed placement binding for instances.
 fn singleton_directory_parent_config() -> CanisterConfig {
-    let mut directory = DirectoryConfig::default();
+    let mut directory = BindingConfig::default();
     directory.pools.insert(
         "projects".to_string(),
-        DirectoryPool {
+        BindingPool {
             canister_role: CanisterRole::new("instance_child"),
             key_name: "project".to_string(),
         },
@@ -147,7 +147,7 @@ fn singleton_directory_parent_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: Some(directory),
+        binding: Some(directory),
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -171,7 +171,7 @@ fn replica_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -188,7 +188,7 @@ fn shard_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -205,7 +205,7 @@ fn instance_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -218,7 +218,7 @@ fn registry_shape(cfg: &CanisterConfig) -> RegistryCanisterShape {
         kind: registry_kind(cfg.kind),
         has_scaling: cfg.scaling.is_some(),
         has_sharding: cfg.sharding.is_some(),
-        has_directory: cfg.directory.is_some(),
+        has_directory: cfg.binding.is_some(),
     }
 }
 

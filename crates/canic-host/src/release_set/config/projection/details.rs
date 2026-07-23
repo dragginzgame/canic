@@ -9,11 +9,11 @@ pub(in crate::release_set) fn configured_role_details_from_config(
 ) -> BTreeMap<String, Vec<String>> {
     let mut details = BTreeMap::<String, BTreeSet<String>>::new();
 
-    for role in &config.app_index {
+    for role in &config.services.fleet.roles {
         details
             .entry(role.as_str().to_string())
             .or_default()
-            .insert("app_index".to_string());
+            .insert("services.fleet".to_string());
     }
 
     for subnet in config.subnets.values() {
@@ -80,10 +80,10 @@ pub(in crate::release_set) fn configured_role_details_from_config(
                     ));
                 }
             }
-            if let Some(directory) = &canister.directory {
-                for (pool_name, pool) in &directory.pools {
+            if let Some(binding) = &canister.binding {
+                for (pool_name, pool) in &binding.pools {
                     role_details.insert(format!(
-                        "directory {pool_name}->{} key={}",
+                        "binding {pool_name}->{} key={}",
                         pool.canister_role.as_str(),
                         pool.key_name
                     ));

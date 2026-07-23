@@ -143,9 +143,10 @@ EOF
 
     cat > "$DOWNSTREAM_ROOT/fleets/downstream/canic.toml" <<'EOF'
 controllers = []
-app_index = ["app"]
+[services.fleet]
+roles = ["app"]
 
-[fleet]
+[app]
 name = "downstream"
 
 [roles.root]
@@ -156,10 +157,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 EOF
 

@@ -180,10 +180,13 @@ fn demo_config_source(attached: &str) -> String {
     format!(
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -220,9 +223,6 @@ package = "scale"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
 {attached}
@@ -253,20 +253,20 @@ fn write_demo_root_only_config(config_path: &Path) {
         config_path,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
 package = "root"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -290,10 +290,13 @@ fn demo_install_deployment_truth_check(root_name: &str) -> (PathBuf, DeploymentC
         &config_path,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -334,12 +337,9 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -380,10 +380,13 @@ fn demo_unverified_registered_root_check(root_name: &str) -> (PathBuf, Deploymen
         &config_path,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -424,12 +427,9 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )

@@ -202,7 +202,7 @@ resolver = "3"
     fs::write(
         root.join("fleets").join(fleet).join("canic.toml"),
         format!(
-            r#"[fleet]
+            r#"[app]
 name = "{fleet}"
 
 [roles.root]
@@ -213,10 +213,10 @@ package = "root"
 kind = "canister"
 package = "{role}"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.{role}]
+[subnets.default.canisters.{role}]
 kind = "service"
 "#
         ),

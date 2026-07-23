@@ -11,10 +11,10 @@ fn install_truth_preflight_uses_current_install_inputs_without_mutation() {
         root.join("fleets/demo/canic.toml"),
         demo_config_source(
             r#"
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 "#,
         ),

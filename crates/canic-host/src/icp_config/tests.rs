@@ -119,7 +119,7 @@ fn inspects_icp_yaml_without_mutating_it() {
     fs::write(
         &config,
         r#"
-[fleet]
+[app]
 name = "toko"
 
 [roles.root]
@@ -130,10 +130,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     )
@@ -178,14 +178,14 @@ fn reports_missing_icp_yaml_as_incomplete() {
     fs::write(
         &config,
         r#"
-[fleet]
+[app]
 name = "toko"
 
 [roles.root]
 kind = "root"
 package = "root"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -209,7 +209,7 @@ fn discovers_root_fleet_configs_for_icp_inspection() {
     fs::write(
         &config,
         r#"
-[fleet]
+[app]
 name = "toko"
 
 [roles.root]
@@ -220,10 +220,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     )
@@ -277,7 +277,7 @@ fn nested_commands_discover_outer_project_root_with_fleets() {
     fs::create_dir_all(&nested).expect("create nested dir");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(root.join("icp.yaml"), "").expect("write icp config");
-    fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
+    fs::write(&config, "[app]\nname = \"toko\"\n").expect("write config");
 
     let icp_root = crate::install_root::discover_canic_project_root_from(&nested)
         .expect("discover project root")
@@ -299,8 +299,8 @@ fn outer_project_root_wins_over_nested_fleets() {
         .expect("create nested config parent");
     fs::create_dir_all(&nested).expect("create nested dir");
     fs::write(root.join("icp.yaml"), "").expect("write icp config");
-    fs::write(&outer_config, "[fleet]\nname = \"toko\"\n").expect("write outer config");
-    fs::write(&nested_config, "[fleet]\nname = \"toko\"\n").expect("write nested config");
+    fs::write(&outer_config, "[app]\nname = \"toko\"\n").expect("write outer config");
+    fs::write(&nested_config, "[app]\nname = \"toko\"\n").expect("write nested config");
 
     let icp_root = crate::install_root::discover_canic_project_root_from(&nested)
         .expect("discover project root")
@@ -318,8 +318,8 @@ fn icp_inspection_rejects_missing_fleet_configs() {
     let err = discover_project_spec(&root, None).expect_err("missing configs should fail");
     let message = err.to_string();
 
-    assert!(message.contains("no Canic fleet configs found under"));
-    assert!(message.contains("fleets/<fleet>/canic.toml"));
+    assert!(message.contains("no Canic App configs found under"));
+    assert!(message.contains("fleets/<app>/canic.toml"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -331,8 +331,8 @@ fn icp_inspection_preserves_invalid_fleet_config_cause() {
     fs::write(&config, "[fleet\nname = \"toko\"\n").expect("write invalid config");
 
     let error = discover_project_spec(&root, None).expect_err("invalid config should fail");
-    let IcpConfigError::FleetConfig(FleetConfigError::ConfigInvalid { path, .. }) = error else {
-        panic!("expected typed fleet config cause");
+    let IcpConfigError::AppConfig(AppConfigError::ConfigInvalid { path, .. }) = error else {
+        panic!("expected typed App config cause");
     };
 
     assert_eq!(path, config);
@@ -351,9 +351,9 @@ fn icp_config_preserves_workspace_discovery_cause() {
     );
 }
 
-fn write_test_config(path: &Path, fleet: &str, roles: &[&str]) {
+fn write_test_config(path: &Path, app: &str, roles: &[&str]) {
     fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
-    let mut source = format!("[fleet]\nname = \"{fleet}\"\n");
+    let mut source = format!("[app]\nname = \"{app}\"\n");
     for role in roles {
         let kind = if *role == "root" { "root" } else { "canister" };
         write!(
@@ -366,7 +366,7 @@ fn write_test_config(path: &Path, fleet: &str, roles: &[&str]) {
         let kind = if *role == "root" { "root" } else { "service" };
         write!(
             source,
-            "\n[subnets.prime.canisters.{role}]\nkind = \"{kind}\"\n"
+            "\n[subnets.default.canisters.{role}]\nkind = \"{kind}\"\n"
         )
         .expect("write config source");
     }

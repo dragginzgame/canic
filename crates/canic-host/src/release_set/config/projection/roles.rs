@@ -34,10 +34,7 @@ pub(in crate::release_set) fn configured_role_kinds_from_config(
 pub(in crate::release_set) fn configured_role_lifecycle_from_config(
     config: &ConfigModel,
 ) -> Vec<ConfiguredRoleLifecycle> {
-    let fleet = config
-        .fleet_name()
-        .expect("validated config must declare [fleet].name")
-        .to_string();
+    let fleet = config.app_id().to_string();
     let attached_roles = config.attached_roles();
     let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
 
@@ -66,12 +63,12 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
                 }
             }
 
-            if let Some(directory) = &canister.directory {
-                for (pool, directory_pool) in &directory.pools {
+            if let Some(binding) = &canister.binding {
+                for (pool, binding_pool) in &binding.pools {
                     topology
-                        .entry(directory_pool.canister_role.clone())
+                        .entry(binding_pool.canister_role.clone())
                         .or_default()
-                        .push(format!("{subnet_role}/{role}/directory/{pool}"));
+                        .push(format!("{subnet_role}/{role}/binding/{pool}"));
                 }
             }
         }

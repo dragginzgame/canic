@@ -194,7 +194,7 @@ fn deployment_check_text_renders_operator_summary() {
 fn deployment_check_envelope_wraps_raw_payload() {
     let config_path = temp_json_path("deploy-check-envelope-canic.toml");
     let build_provenance_path = temp_json_path("deploy-check-build-provenance.json");
-    fs::write(&config_path, "[fleet]\nname = \"demo\"\n").expect("write config");
+    fs::write(&config_path, "[app]\nname = \"demo\"\n").expect("write config");
     fs::write(
         &build_provenance_path,
         br#"{"payload_schema":{"id":"canic.build_provenance.v1"}}"#,

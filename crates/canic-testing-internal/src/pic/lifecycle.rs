@@ -6,7 +6,7 @@ use canic::{
         env::EnvBootstrapArgs,
         topology::{AppIndexArgs, IndexEntryInput, SubnetIndexArgs},
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
 };
 use ic_testkit::{
     Fake,
@@ -142,7 +142,7 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
 
     let env = EnvBootstrapArgs {
         prime_root_pid: Some(root_pid),
-        subnet_role: Some(SubnetRole::PRIME),
+        subnet_role: Some(SubnetSlotId::DEFAULT),
         subnet_pid: Some(Fake::principal(2)),
         root_pid: Some(root_pid),
         canister_role: Some(TEST),

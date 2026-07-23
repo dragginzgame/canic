@@ -1,6 +1,6 @@
 use super::super::*;
 use super::shared::observation_gap;
-use crate::release_set::{ConfiguredPoolExpectation, FleetConfigSnapshot};
+use crate::release_set::{AppConfigSnapshot, ConfiguredPoolExpectation};
 use std::path::Path;
 
 const UNKNOWN_FLEET_NAME: &str = "unknown";
@@ -15,9 +15,9 @@ pub(super) fn observe_local_config_facts(
     config: &Path,
     unresolved_observations: &mut Vec<DeploymentObservationGapV1>,
 ) -> LocalConfigObservation {
-    let (fleet_name, roles, pool_expectations) = match FleetConfigSnapshot::load(config) {
+    let (fleet_name, roles, pool_expectations) = match AppConfigSnapshot::load(config) {
         Ok(snapshot) => (
-            snapshot.fleet_name().to_string(),
+            snapshot.app_id().to_string(),
             deployment_truth_roles_with_implicit_wasm_store(snapshot.deployable_roles()),
             snapshot.pool_expectations(),
         ),

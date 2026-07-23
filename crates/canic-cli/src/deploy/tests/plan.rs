@@ -8,10 +8,13 @@ use std::{ffi::OsString, fs, path::PathBuf};
 
 const SAMPLE_CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -20,15 +23,12 @@ package = "root"
 [roles.user_hub]
 kind = "canister"
 package = "user_hub"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 "#;
 
@@ -37,7 +37,7 @@ const USER_HUB_ARTIFACT: &[u8] = b"user-hub-artifact";
 const MALFORMED_DESIRED_CONFIG: &str = r#"
 controllers = ["not-a-principal"]
 
-[fleet]
+[app]
 name = "demo"
 "#;
 
@@ -46,10 +46,13 @@ controllers = [
   "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
   "aaaaa-aa",
 ]
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -58,24 +61,24 @@ package = "root"
 [roles.user_hub]
 kind = "canister"
 package = "user_hub"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 "#;
 
 const POOL_CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -88,23 +91,20 @@ package = "user_hub"
 [roles.user_shard]
 kind = "canister"
 package = "user_shard"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+[subnets.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "shard"
 "#;
 
@@ -808,7 +808,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
         "phase: future_apply_preview label: verify_topology subject: demo-local status: not_executed"
     ));
     assert!(text.contains("run canic build or provide a build profile with resolved artifacts"));
-    assert!(text.contains("source: fleet_config"));
+    assert!(text.contains("source: app_config"));
     assert!(text.contains("source: deployment_plan_builder"));
     assert!(text.contains("source: installed_deployment"));
     assert_no_deploy_plan_safety_claims(&text);
@@ -999,7 +999,7 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
         ),
         ("build_profile_resolved", "demo-local", "build_profile"),
         ("config_path_resolved", "demo-local", "deployment_config"),
-        ("deployment_target_resolved", "demo-local", "fleet_config"),
+        ("deployment_target_resolved", "demo-local", "app_config"),
         (
             "expected_controller_set_resolved",
             "demo-local",
@@ -1020,7 +1020,7 @@ fn assert_base_plan_verified_facts(report: &JsonValue) {
             "demo-local",
             "deployment_plan_builder",
         ),
-        ("fleet_template_resolved", "demo-local", "fleet_config"),
+        ("fleet_template_resolved", "demo-local", "app_config"),
         (
             "environment_resolved",
             "demo-local",

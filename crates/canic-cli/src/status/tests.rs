@@ -137,7 +137,7 @@ fn status_deployment_row_uses_project_root_for_config_paths() {
     fs::write(
         &config,
         r#"
-[fleet]
+[app]
 name = "toko"
 
 [roles.root]
@@ -151,10 +151,10 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     )

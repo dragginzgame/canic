@@ -143,9 +143,7 @@ pub fn validate_declared_role_package(
             role: role.clone(),
         });
     };
-    let Some(fleet) = config.fleet_name() else {
-        return unsupported_shape("role configuration is missing [fleet].name".to_string());
-    };
+    let app = config.app_id().as_str();
     let manifest_path = package_manifest_path(config_path, &declaration.package);
     if !manifest_path.is_file() {
         return RolePackageValidation::Unsupported(RoleContractFinding::PackageMissing {
@@ -153,7 +151,7 @@ pub fn validate_declared_role_package(
         });
     }
 
-    validate_package_manifest(&manifest_path, fleet, role, mode, false)
+    validate_package_manifest(&manifest_path, app, role, mode, false)
 }
 
 #[must_use]
@@ -284,7 +282,7 @@ fn package_role_config_path(
         let Ok(config) = parse_config_model(&source) else {
             continue;
         };
-        if config.fleet_name() != Some(expected_fleet) {
+        if config.app_id().as_str() != expected_fleet {
             continue;
         }
         let Some(declaration) = config.roles.get(expected_role) else {

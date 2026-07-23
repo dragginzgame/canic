@@ -115,10 +115,13 @@ controllers = [
   "zbf4m-zw3nk-6owqc-qmluz-xhwxt-2pkky-xhjy2-kqxor-qzxsn-6d2bz-nae",
   "aaaaa-aa",
 ]
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -135,12 +138,9 @@ package = "user_shard"
 [roles.store]
 kind = "canister"
 package = "store"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -235,10 +235,13 @@ fn local_plan_uses_configured_pools_as_expected_pool_identities() {
         config_dir.join("canic.toml"),
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -251,23 +254,20 @@ package = "user_hub"
 [roles.user_shard]
 kind = "canister"
 package = "user_shard"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+[subnets.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "shard"
 "#,
     )

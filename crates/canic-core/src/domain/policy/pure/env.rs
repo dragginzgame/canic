@@ -1,6 +1,6 @@
 use crate::{
     domain::value::Principal,
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
     model::env::ValidatedEnv,
 };
 use thiserror::Error as ThisError;
@@ -12,7 +12,7 @@ use thiserror::Error as ThisError;
 #[derive(Clone, Debug)]
 pub struct EnvInput {
     pub prime_root_pid: Option<Principal>,
-    pub subnet_role: Option<SubnetRole>,
+    pub subnet_role: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
     pub canister_role: Option<CanisterRole>,

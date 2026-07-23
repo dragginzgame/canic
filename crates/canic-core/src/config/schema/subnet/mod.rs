@@ -153,7 +153,7 @@ fn implicit_wasm_store_canister_config() -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -237,7 +237,7 @@ pub struct CanisterConfig {
     pub sharding: Option<ShardingConfig>,
 
     #[serde(default)]
-    pub directory: Option<DirectoryConfig>,
+    pub binding: Option<BindingConfig>,
 
     #[serde(default)]
     pub auth: CanisterAuthConfig,
@@ -268,7 +268,7 @@ impl CanisterConfig {
             return MetricsProfile::Storage;
         }
 
-        if self.scaling.is_some() || self.sharding.is_some() || self.directory.is_some() {
+        if self.scaling.is_some() || self.sharding.is_some() || self.binding.is_some() {
             return MetricsProfile::Hub;
         }
 
@@ -286,14 +286,14 @@ impl CanisterConfig {
             .sharding
             .iter()
             .flat_map(|sharding| sharding.pools.values().map(|pool| &pool.canister_role));
-        let directory_roles = self
-            .directory
+        let binding_roles = self
+            .binding
             .iter()
-            .flat_map(|directory| directory.pools.values().map(|pool| &pool.canister_role));
+            .flat_map(|binding| binding.pools.values().map(|pool| &pool.canister_role));
 
         scaling_roles
             .chain(sharding_roles)
-            .chain(directory_roles)
+            .chain(binding_roles)
             .collect()
     }
 }
@@ -531,29 +531,29 @@ pub struct ShardingConfig {
 }
 
 ///
-/// DirectoryConfig
+/// BindingConfig
 ///
-/// Keyed instance placement configuration.
-/// Owned by config schema and consumed by directory placement workflows.
+/// Keyed instance placement binding configuration.
+/// Owned by config schema and consumed by keyed placement workflows.
 ///
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct DirectoryConfig {
+pub struct BindingConfig {
     #[serde(default)]
-    pub pools: BTreeMap<String, DirectoryPool>,
+    pub pools: BTreeMap<String, BindingPool>,
 }
 
 ///
-/// DirectoryPool
+/// BindingPool
 ///
-/// One keyed instance placement pool.
-/// Owned by config schema and consumed by directory placement workflows.
+/// One keyed instance placement binding pool.
+/// Owned by config schema and consumed by keyed placement workflows.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct DirectoryPool {
+pub struct BindingPool {
     pub canister_role: CanisterRole,
     pub key_name: String,
 }

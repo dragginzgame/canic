@@ -40,7 +40,7 @@ impl AppIndexResolver {
             let registry = SubnetRegistryOps::data();
             let cfg = ConfigOps::get()?;
 
-            RootAppIndexBuilder::build(&registry, &cfg.app_index)
+            RootAppIndexBuilder::build(&registry, &cfg.services.fleet.roles)
         } else {
             Ok(AppIndexOps::data())
         }

@@ -142,10 +142,10 @@ canic install test
 canic install test
 ```
 
-The selected install config must include a fleet identity:
+The selected install config must include an App source identity:
 
 ```toml
-[fleet]
+[app]
 name = "test"
 ```
 

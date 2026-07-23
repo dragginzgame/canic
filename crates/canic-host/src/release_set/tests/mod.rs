@@ -34,10 +34,13 @@ fn parsed_config(source: &str) -> ConfigModel {
 
 const REAL_CONFIG: &str = r#"
 controllers = []
-app_index = ["user_hub", "scale_hub"]
+[services.fleet]
+roles = ["user_hub", "scale_hub"]
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -70,9 +73,6 @@ package = "scale"
 [roles.role_baseline]
 kind = "canister"
 package = "role_baseline"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
 [auth.delegated_tokens]
@@ -81,32 +81,32 @@ enabled = false
 [standards]
 icrc21 = true
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 "#;
 
 const MULTI_ROOT_CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
 package = "root"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
 [subnets.secondary.canisters.root]
@@ -115,20 +115,20 @@ kind = "root"
 
 const NO_ROOT_CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.user_hub]
 kind = "canister"
 package = "user_hub"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 "#;
 

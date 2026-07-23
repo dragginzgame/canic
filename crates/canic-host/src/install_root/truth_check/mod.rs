@@ -10,7 +10,7 @@ use crate::deployment_truth::{
     deployment_execution_preflight_from_check, safety_report_from_diff,
     validate_deployment_execution_preflight_for_check,
 };
-use crate::release_set::{FleetConfigSnapshot, icp_root, workspace_root};
+use crate::release_set::{AppConfigSnapshot, icp_root, workspace_root};
 use std::path::{Path, PathBuf};
 
 struct CurrentInstallTruthInputs {
@@ -147,7 +147,7 @@ pub(super) fn validate_expected_fleet_name(
         return Ok(());
     }
     Err(format!(
-        "install requested fleet {expected}, but {} declares [fleet].name = {actual:?}",
+        "install requested App {expected}, but {} declares [app].name = {actual:?}",
         config_path.display()
     )
     .into())
@@ -192,9 +192,7 @@ fn resolve_current_install_truth_inputs(
         }
     };
     let workspace_root = workspace_root()?;
-    let fleet_template = FleetConfigSnapshot::load(&config_path)?
-        .fleet_name()
-        .to_string();
+    let fleet_template = AppConfigSnapshot::load(&config_path)?.app_id().to_string();
     let expected_fleet = options
         .expected_fleet
         .as_deref()

@@ -4,7 +4,10 @@
 //! Does not own: topology attachment validation, package resolution, or runtime state.
 //! Boundary: config schema re-exports these data shapes for validated models.
 
-use crate::{ids::CanisterRole, shared_support::is_ascii_snake_case};
+use crate::{
+    ids::{AppId, CanisterRole},
+    shared_support::is_ascii_snake_case,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -55,31 +58,28 @@ pub const fn validate_canister_role_name(role: &str) -> Result<(), CanisterRoleN
 }
 
 ///
-/// FleetRoleRef
+/// AppRoleRef
 ///
-/// Fleet-scoped role reference derived from config role declarations.
+/// App-scoped role reference derived from config role declarations.
 /// Owned by config schema and used by validation diagnostics and topology views.
 ///
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct FleetRoleRef {
-    pub fleet: String,
+pub struct AppRoleRef {
+    pub app: AppId,
     pub role: CanisterRole,
 }
 
-impl FleetRoleRef {
+impl AppRoleRef {
     #[must_use]
-    pub fn new(fleet: impl Into<String>, role: CanisterRole) -> Self {
-        Self {
-            fleet: fleet.into(),
-            role,
-        }
+    pub const fn new(app: AppId, role: CanisterRole) -> Self {
+        Self { app, role }
     }
 }
 
-impl fmt::Display for FleetRoleRef {
+impl fmt::Display for AppRoleRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.fleet, self.role)
+        write!(f, "{}.{}", self.app, self.role)
     }
 }
 

@@ -9,10 +9,13 @@ fn install_truth_artifact_gate_blocks_missing_built_artifacts() {
         &config_path,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -53,15 +56,12 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 "#,
     )

@@ -19,7 +19,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -219,7 +219,7 @@ fn metrics_profile_defaults_follow_canister_role() {
     );
 
     let mut hub = base_canister_config(CanisterKind::Singleton);
-    hub.directory = Some(DirectoryConfig::default());
+    hub.binding = Some(BindingConfig::default());
     assert_eq!(
         hub.resolved_metrics_profile(&CanisterRole::from("user_hub")),
         MetricsProfile::Hub
@@ -597,21 +597,21 @@ fn scaling_pool_name_must_fit_bound() {
 }
 
 #[test]
-fn directory_pool_references_must_exist_in_subnet() {
+fn binding_pool_references_must_exist_in_subnet() {
     let managing_role: CanisterRole = "project_hub".into();
     let mut canisters = BTreeMap::new();
 
-    let mut directory = DirectoryConfig::default();
-    directory.pools.insert(
+    let mut binding = BindingConfig::default();
+    binding.pools.insert(
         "projects".into(),
-        DirectoryPool {
+        BindingPool {
             canister_role: CanisterRole::from("missing_project_instance"),
             key_name: "project".into(),
         },
     );
 
     let manager_cfg = CanisterConfig {
-        directory: Some(directory),
+        binding: Some(binding),
         ..base_canister_config(CanisterKind::Service)
     };
 
@@ -624,18 +624,18 @@ fn directory_pool_references_must_exist_in_subnet() {
 
     subnet
         .validate()
-        .expect_err("expected missing directory target role to fail");
+        .expect_err("expected missing binding target role to fail");
 }
 
 #[test]
-fn directory_pool_target_must_be_instance_kind() {
+fn binding_pool_target_must_be_instance_kind() {
     let managing_role: CanisterRole = "project_hub".into();
     let mut canisters = BTreeMap::new();
 
-    let mut directory = DirectoryConfig::default();
-    directory.pools.insert(
+    let mut binding = BindingConfig::default();
+    binding.pools.insert(
         "projects".into(),
-        DirectoryPool {
+        BindingPool {
             canister_role: CanisterRole::from("project_instance"),
             key_name: "project".into(),
         },
@@ -648,7 +648,7 @@ fn directory_pool_target_must_be_instance_kind() {
     canisters.insert(
         managing_role,
         CanisterConfig {
-            directory: Some(directory),
+            binding: Some(binding),
             ..base_canister_config(CanisterKind::Service)
         },
     );
@@ -660,18 +660,18 @@ fn directory_pool_target_must_be_instance_kind() {
 
     subnet
         .validate()
-        .expect_err("expected non-instance directory target role to fail");
+        .expect_err("expected non-instance binding target role to fail");
 }
 
 #[test]
-fn directory_pool_requires_non_empty_key_name() {
+fn binding_pool_requires_non_empty_key_name() {
     let managing_role: CanisterRole = "project_hub".into();
     let mut canisters = BTreeMap::new();
 
-    let mut directory = DirectoryConfig::default();
-    directory.pools.insert(
+    let mut binding = BindingConfig::default();
+    binding.pools.insert(
         "projects".into(),
-        DirectoryPool {
+        BindingPool {
             canister_role: CanisterRole::from("project_instance"),
             key_name: String::new(),
         },
@@ -684,7 +684,7 @@ fn directory_pool_requires_non_empty_key_name() {
     canisters.insert(
         managing_role,
         CanisterConfig {
-            directory: Some(directory),
+            binding: Some(binding),
             ..base_canister_config(CanisterKind::Service)
         },
     );
@@ -696,18 +696,18 @@ fn directory_pool_requires_non_empty_key_name() {
 
     subnet
         .validate()
-        .expect_err("expected empty directory key name to fail");
+        .expect_err("expected empty binding key name to fail");
 }
 
 #[test]
-fn service_kind_can_own_directory_pool() {
+fn service_kind_can_own_binding_pool() {
     let managing_role: CanisterRole = "project_hub".into();
     let mut canisters = BTreeMap::new();
 
-    let mut directory = DirectoryConfig::default();
-    directory.pools.insert(
+    let mut binding = BindingConfig::default();
+    binding.pools.insert(
         "projects".into(),
-        DirectoryPool {
+        BindingPool {
             canister_role: CanisterRole::from("project_instance"),
             key_name: "project".into(),
         },
@@ -720,7 +720,7 @@ fn service_kind_can_own_directory_pool() {
     canisters.insert(
         managing_role,
         CanisterConfig {
-            directory: Some(directory),
+            binding: Some(binding),
             ..base_canister_config(CanisterKind::Service)
         },
     );
@@ -732,16 +732,16 @@ fn service_kind_can_own_directory_pool() {
 
     subnet
         .validate()
-        .expect("service manager should accept directory pools");
+        .expect("service manager should accept binding pools");
 }
 
 #[test]
 fn singleton_kind_cannot_own_manager_pools() {
     let role: CanisterRole = "project_ledger".into();
-    let mut directory = DirectoryConfig::default();
-    directory.pools.insert(
+    let mut binding = BindingConfig::default();
+    binding.pools.insert(
         "projects".into(),
-        DirectoryPool {
+        BindingPool {
             canister_role: CanisterRole::from("project_instance"),
             key_name: "project".into(),
         },
@@ -755,7 +755,7 @@ fn singleton_kind_cannot_own_manager_pools() {
     canisters.insert(
         role,
         CanisterConfig {
-            directory: Some(directory),
+            binding: Some(binding),
             ..base_canister_config(CanisterKind::Singleton)
         },
     );

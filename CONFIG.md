@@ -4,11 +4,11 @@ This guide documents the canonical shape of `canic.toml`, the configuration file
 
 At a high level the file describes:
 
-- Fleet identity and package-backed roles (`fleet`, `roles`).
-- Global cluster settings (`controllers`, `app_index`, `standards`, `app`, `auth`, `log`).
+- App identity and package-backed roles (`app`, `roles`).
+- Global settings (`controllers`, `services`, `standards`, `app`, `auth`, `log`).
 - Subnet-specific behaviour under `subnets.<name>` (including per-subnet pool settings).
 - Per-canister policies inside each subnet, with optional scaling, sharding,
-  and directory pools.
+  and keyed placement bindings.
 - The implicit wasm-store behavior used by chunk-store-backed installs.
 
 All fields are validated when `canic::build!` runs, so configuration drift fails
@@ -21,7 +21,7 @@ fleet = "demo"
 role = "app"
 ```
 
-That package fleet must match `[fleet] name = "..."`, and the package role must
+That package fleet must match `[app].name`, and the package role must
 exist in `canic.toml`. `role = "root"` selects the root lifecycle and root
 endpoint bundle; every other role selects the ordinary non-root lifecycle and
 endpoint bundle.
@@ -45,12 +45,6 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 
 ## Global Keys
 
-### `[fleet]`
-
-Required operator-facing identity for the configured fleet.
-
-- `name: string` – required; used in role evidence and host install-state paths.
-
 ### `[roles.<role>]`
 
 Required package declaration for every role attached through `subnets`. The
@@ -68,14 +62,18 @@ Role declarations own package identity. The matching
 
 Optional list of controller principals appended to every provisioned canister.
 
-### `app_index = ["role_a", "role_b", ...]`
+### `[services.fleet]`
 
-Global set of canister roles that should appear in the prime root directory export. Every entry must also exist under `subnets.prime.canisters` and have `kind = "service"`.
+- `roles = ["role_a", "role_b", ...]` – App-declared Fleet service roles that
+  appear in the current root directory export. Every entry must also exist
+  under `subnets.default.canisters` and have `kind = "service"`.
 
 ### `[app]`
 
-Initial application mode applied at canister install.
+Required source identity and initial application mode.
 
+- `name: string` – required immutable App identity used in role and build
+  evidence.
 - `init_mode = "enabled" | "readonly" | "disabled"` – default `enabled`.
 
 ### `[app.whitelist]`
@@ -159,9 +157,10 @@ Feature toggles tied to public standards.
 
 ## Subnets
 
-Declare each subnet under `[subnets.<name>]`. The name is an arbitrary identifier; `prime` is reserved for the main orchestrator subnet and should always be present.
+Declare each logical Subnet Slot under `[subnets.<name>]`. `default` is the
+required current workload slot for a managed topology.
 Canisters are declared as nested subnet canister tables such as
-`[subnets.prime.canisters.app]`; Canic does not use a flat `[[canisters]]`
+`[subnets.default.canisters.app]`; Canic does not use a flat `[[canisters]]`
 array.
 
 ### `[subnets.<name>]`
@@ -204,9 +203,9 @@ from the table key (`subnets.<name>.canisters.<role>`); do not declare `role`, `
   - `root` cannot define placement pools, canister-local authentication roles,
     or canister-local standards.
   - `root` must be unique across all subnets.
-  - `subnets.prime.canisters.root` must exist and set `kind = "root"`.
+  - `subnets.default.canisters.root` must exist and set `kind = "root"`.
   - `service` is root-created, appears in the subnet index, and may own
-    scaling, sharding, or directory pools.
+    scaling, sharding, or keyed placement binding pools.
   - `singleton`, `replica`, `shard`, and `instance` cannot own placement pools.
 - `initial_cycles = "5T"` – cycles to allocate when provisioning (defaults to 5T).
 - `topup.threshold = "10T"` – minimum cycles before requesting a top-up
@@ -279,19 +278,19 @@ Fields:
 - `policy.min_workers` – minimum workers to keep alive (default `1`).
 - `policy.max_workers` – hard cap on workers (default `32`, set to `0` for no max).
 
-#### Directory Pools
+#### Placement Binding Pools
 
-Directory pools place keyed stateful instances.
+Placement binding pools place keyed stateful instances.
 
 ```toml
-[subnets.<name>.canisters.<role>.directory.pools.<pool>]
+[subnets.<name>.canisters.<role>.binding.pools.<pool>]
 canister_role = "instance_role"
 key_name = "project"
 ```
 
 - `canister_role` – same-subnet role implementing the instance; it must have
   `kind = "instance"`.
-- `key_name` – non-empty logical key name used by directory admission.
+- `key_name` – non-empty logical key name used by keyed placement admission.
 
 #### Sharding Pools
 
@@ -319,9 +318,11 @@ Fields:
 ```toml
 # CANIC_CONFIG_EXAMPLE_START
 controllers = ["aaaaa-aa"]
-app_index = ["user_hub", "scale_hub"]
 
-[fleet]
+[services.fleet]
+roles = ["user_hub", "scale_hub"]
+
+[app]
 name = "example"
 
 [roles.root]
@@ -375,43 +376,43 @@ build_network = "local"
 [standards]
 icrc21 = true
 
-[subnets.prime]
+[subnets.default]
 pool.minimum_size = 3
 pool.import.initial = 3
 pool.import.local = ["aaaaa-aa"]
 pool.import.ic = ["aaaaa-aa"]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+[subnets.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "5T"
 
-[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+[subnets.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale"
 policy.initial_workers = 1
 policy.min_workers = 2
 
-[subnets.prime.canisters.scale]
+[subnets.default.canisters.scale]
 kind = "replica"
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "shard"
 
 [subnets.general]
@@ -422,7 +423,9 @@ initial_cycles = "3T"
 # CANIC_CONFIG_EXAMPLE_END
 ```
 
-This example defines two subnets (`prime` and `general`), enables the pool, enables ICRC-21, and configures sharding on `user_hub` plus scaling on `scale_hub`. Each subnet also gets one implicit `wasm_store` automatically.
+This example defines two Subnet Slots (`default` and `general`), enables the
+pool, enables ICRC-21, and configures sharding on `user_hub` plus scaling on
+`scale_hub`. Each slot also gets one implicit `wasm_store` automatically.
 
 ---
 
@@ -435,7 +438,7 @@ Static config owns:
 
 - user-defined canister roles and policies
 - configured service roles that root bootstraps and exposes through the subnet index
-- the explicit app index exported by the prime root
+- the Fleet service directory exported by the current Fleet root
 
 Root-authoritative runtime state owns:
 

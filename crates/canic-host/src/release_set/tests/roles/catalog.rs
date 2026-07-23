@@ -13,9 +13,10 @@ fn configured_role_kinds_lists_configured_roles() {
 fn configured_role_lifecycle_lists_declared_and_attached_roles() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -34,16 +35,16 @@ package = "canisters/user_shard"
 kind = "canister"
 package = "canisters/store"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.user_hub.sharding.pools.users]
+[subnets.default.canisters.user_hub.sharding.pools.users]
 canister_role = "user_shard"
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "shard"
 "#;
     let lifecycle = configured_role_lifecycle_from_config(&parsed_config(config));
@@ -54,7 +55,7 @@ kind = "shard"
         .expect("root lifecycle row");
     assert_eq!(root.display, "demo.root");
     assert_eq!(root.state, "attached");
-    assert_eq!(root.topology.as_deref(), Some("prime/root"));
+    assert_eq!(root.topology.as_deref(), Some("default/root"));
 
     let shard = lifecycle
         .iter()
@@ -63,7 +64,7 @@ kind = "shard"
     assert_eq!(shard.state, "attached");
     assert_eq!(
         shard.topology.as_deref(),
-        Some("prime/user_hub/sharding/users,prime/user_shard")
+        Some("default/user_hub/sharding/users,default/user_shard")
     );
 
     let store = lifecycle
@@ -79,10 +80,13 @@ kind = "shard"
 fn configured_role_details_lists_verbose_config_features() {
     let config = r#"
 controllers = []
-app_index = ["user_hub", "scale_hub"]
+[services.fleet]
+roles = ["user_hub", "scale_hub"]
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -115,43 +119,40 @@ package = "scale"
 [roles.role_baseline]
 kind = "canister"
 package = "role_baseline"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 topup.threshold = "10T"
 topup.amount = "4T"
 
-[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+[subnets.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.max_shards = 4
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "shard"
 
-[subnets.prime.canisters.user_shard.auth]
+[subnets.default.canisters.user_shard.auth]
 delegated_token_issuer = true
 role_attestation_cache = true
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 
-[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+[subnets.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 2
 policy.min_workers = 2
 
-[subnets.prime.canisters.scale_replica]
+[subnets.default.canisters.scale_replica]
 kind = "replica"
 
-[subnets.prime.canisters.scale_replica.metrics]
+[subnets.default.canisters.scale_replica.metrics]
 profile = "full"
 "#;
     let details = configured_role_details_from_config(&parsed_config(config));
@@ -159,7 +160,7 @@ profile = "full"
     assert!(
         details
             .get("user_hub")
-            .is_some_and(|details| details.contains(&"app_index".to_string()))
+            .is_some_and(|details| details.contains(&"services.fleet".to_string()))
     );
     assert!(details.get("user_hub").is_some_and(|details| {
         details

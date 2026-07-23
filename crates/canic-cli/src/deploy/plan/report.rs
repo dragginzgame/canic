@@ -33,7 +33,7 @@ pub(super) const SOURCE_DEPLOYMENT_CONFIG: PlanDiagnosticSource =
     PlanDiagnosticSource::DeploymentConfig;
 pub(super) const SOURCE_DEPLOYMENT_PLAN_BUILDER: PlanDiagnosticSource =
     PlanDiagnosticSource::DeploymentPlanBuilder;
-pub(super) const SOURCE_FLEET_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::FleetConfig;
+pub(super) const SOURCE_APP_CONFIG: PlanDiagnosticSource = PlanDiagnosticSource::AppConfig;
 pub(super) const SOURCE_INSTALLED_DEPLOYMENT: PlanDiagnosticSource =
     PlanDiagnosticSource::InstalledDeployment;
 pub(super) const SOURCE_LOCAL_OBSERVATION: PlanDiagnosticSource =
@@ -171,7 +171,7 @@ pub(super) enum PlanDiagnosticSource {
     CliArg,
     DeploymentConfig,
     DeploymentPlanBuilder,
-    FleetConfig,
+    AppConfig,
     InstalledDeployment,
     LocalObservation,
 }
@@ -183,7 +183,7 @@ impl PlanDiagnosticSource {
             Self::CliArg => "cli_arg",
             Self::DeploymentConfig => "deployment_config",
             Self::DeploymentPlanBuilder => "deployment_plan_builder",
-            Self::FleetConfig => "fleet_config",
+            Self::AppConfig => "app_config",
             Self::InstalledDeployment => "installed_deployment",
             Self::LocalObservation => "local_observation",
         }

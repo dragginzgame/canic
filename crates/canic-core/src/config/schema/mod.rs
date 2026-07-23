@@ -18,7 +18,7 @@ pub use subnet::*;
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::candid::Principal,
-    ids::{BuildNetwork, CanisterRole, SubnetRole},
+    ids::{AppId, BuildNetwork, CanisterRole, SubnetSlotId},
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::collections::{BTreeMap, BTreeSet};
@@ -87,10 +87,10 @@ pub trait Validate {
 /// Top-level configuration object.
 ///
 /// Invariants enforced here:
-/// - A PRIME subnet MUST exist
+/// - A default Subnet Slot MUST exist
 /// - Exactly one ROOT canister MUST exist globally
-/// - ROOT canister MUST be in the PRIME subnet
-/// - App index canisters must be SERVICEs in PRIME
+/// - ROOT canister MUST be in the default Subnet Slot
+/// - Fleet service roles must be SERVICEs in the default Subnet Slot
 /// - Canister role names follow the canonical deployment identity rule
 /// - Delegated token TTL is sane
 /// - Whitelist principals are valid
@@ -99,10 +99,6 @@ pub trait Validate {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConfigModel {
-    /// Operator-facing fleet identity for host install state.
-    #[serde(default)]
-    pub fleet: Option<FleetConfig>,
-
     /// Controllers for the canister.
     /// Stored as a Vec because they are appended directly to controller args.
     #[serde(default)]
@@ -117,43 +113,40 @@ pub struct ConfigModel {
     #[serde(default)]
     pub auth: AuthConfig,
 
-    /// App-level configuration (init mode, whitelist).
-    #[serde(default)]
+    /// App source identity, startup mode and whitelist.
     pub app: AppConfig,
 
-    /// Canister roles that participate in the application index.
-    /// These must exist in the PRIME subnet and be SERVICE canisters.
+    /// App-declared services consumed at Fleet scope.
     #[serde(default)]
-    pub app_index: BTreeSet<CanisterRole>,
+    pub services: ServicesConfig,
 
     /// Fleet-scoped role declarations. Topology attachment is derived from
     /// `subnets`; this table declares which package-backed roles exist.
     #[serde(default)]
     pub roles: BTreeMap<CanisterRole, RoleDeclaration>,
 
-    /// All subnets keyed by role.
+    /// App-declared logical Subnet Slots.
     #[serde(default)]
-    pub subnets: BTreeMap<SubnetRole, SubnetConfig>,
+    pub subnets: BTreeMap<SubnetSlotId, SubnetConfig>,
 }
 
 impl ConfigModel {
-    /// Get a subnet configuration by role.
+    /// Get a subnet configuration by logical slot.
     #[must_use]
-    pub fn get_subnet(&self, role: &SubnetRole) -> Option<SubnetConfig> {
-        self.subnets.get(role).cloned()
+    pub fn get_subnet(&self, slot: &SubnetSlotId) -> Option<SubnetConfig> {
+        self.subnets.get(slot).cloned()
     }
 
-    /// Return the configured fleet name.
+    /// Return the configured App identity.
     #[must_use]
-    pub fn fleet_name(&self) -> Option<&str> {
-        self.fleet.as_ref().and_then(|fleet| fleet.name.as_deref())
+    pub const fn app_id(&self) -> &AppId {
+        &self.app.name
     }
 
-    /// Return a fleet-scoped role reference for a local role.
+    /// Return an App-scoped role reference for a local role.
     #[must_use]
-    pub fn fleet_role_ref(&self, role: &CanisterRole) -> Option<FleetRoleRef> {
-        self.fleet_name()
-            .map(|fleet| FleetRoleRef::new(fleet, role.clone()))
+    pub fn app_role_ref(&self, role: &CanisterRole) -> AppRoleRef {
+        AppRoleRef::new(self.app.name.clone(), role.clone())
     }
 
     /// Return whether a local canister role is explicitly declared.
@@ -193,23 +186,19 @@ impl ConfigModel {
         attached
     }
 
-    /// Return the fleet-scoped roles attached to topology.
+    /// Return the App-scoped roles attached to topology.
     #[must_use]
-    pub fn attached_fleet_roles(&self) -> BTreeSet<FleetRoleRef> {
-        let Some(fleet) = self.fleet_name() else {
-            return BTreeSet::new();
-        };
-
+    pub fn attached_app_roles(&self) -> BTreeSet<AppRoleRef> {
         self.attached_roles()
             .into_iter()
-            .map(|role| FleetRoleRef::new(fleet, role))
+            .map(|role| AppRoleRef::new(self.app.name.clone(), role))
             .collect()
     }
 
     /// Test-only helper: produces a minimally valid config.
     ///
     /// Includes:
-    /// - PRIME subnet
+    /// - default Subnet Slot
     /// - ROOT canister of correct kind
     ///
     /// This avoids tests accidentally relying on invalid configs.
@@ -217,9 +206,9 @@ impl ConfigModel {
     #[must_use]
     pub fn test_default() -> Self {
         let mut cfg = Self::default();
-        let mut prime = SubnetConfig::default();
+        let mut default_slot = SubnetConfig::default();
 
-        prime.canisters.insert(
+        default_slot.canisters.insert(
             CanisterRole::ROOT,
             CanisterConfig {
                 kind: CanisterKind::Root,
@@ -229,7 +218,7 @@ impl ConfigModel {
                 cycles_funding: CyclesFundingPolicyConfig::default(),
                 scaling: None,
                 sharding: None,
-                directory: None,
+                binding: None,
                 auth: CanisterAuthConfig::default(),
                 standards: StandardsCanisterConfig::default(),
                 diagnostics: DiagnosticsCanisterConfig::default(),
@@ -237,9 +226,7 @@ impl ConfigModel {
             },
         );
 
-        cfg.fleet = Some(FleetConfig {
-            name: Some("test".to_string()),
-        });
+        cfg.app.name = AppId::from("test");
         cfg.auth.delegated_tokens.enabled = true;
         cfg.auth.delegated_tokens.build_network = BuildNetwork::Local;
         cfg.auth.delegated_tokens.chain_key_root_proof.key_id = Some("key_1".to_string());
@@ -288,7 +275,7 @@ impl ConfigModel {
                 package: "root".to_string(),
             },
         );
-        cfg.subnets.insert(SubnetRole::PRIME, prime);
+        cfg.subnets.insert(SubnetSlotId::DEFAULT, default_slot);
         cfg
     }
 
@@ -307,29 +294,17 @@ impl ConfigModel {
 }
 
 ///
-/// FleetConfig
-///
-/// Operator-facing fleet identity configuration.
-/// Owned by config schema and validated before install-state paths use it.
-///
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct FleetConfig {
-    #[serde(default)]
-    pub name: Option<String>,
-}
-
-///
 /// AppConfig
 ///
-/// Application startup mode and optional whitelist configuration.
+/// App identity, startup mode and optional whitelist configuration.
 /// Owned by config schema and consumed by access/app-state setup.
 ///
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AppConfig {
+    pub name: AppId,
+
     #[serde(default)]
     pub init_mode: AppInitMode,
 
@@ -345,10 +320,39 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            name: AppId::default(),
             init_mode: AppInitMode::Enabled,
             whitelist: None,
         }
     }
+}
+
+///
+/// ServicesConfig
+///
+/// App-declared service selections grouped by their eventual authority scope.
+/// Owned by config schema and consumed by topology bootstrap.
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServicesConfig {
+    #[serde(default)]
+    pub fleet: FleetServicesConfig,
+}
+
+///
+/// FleetServicesConfig
+///
+/// Roles selected for the Fleet-wide service directory.
+/// In 0.99 the current one-member root retains their existing placement.
+///
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetServicesConfig {
+    #[serde(default)]
+    pub roles: BTreeSet<CanisterRole>,
 }
 
 ///

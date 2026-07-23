@@ -5,16 +5,17 @@ use toml::Value as TomlValue;
 fn declare_fleet_role_adds_declared_only_canister_role() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
 kind = "root"
 package = "root"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
     let updated =
@@ -69,13 +70,13 @@ role = "user_hub"
     let declared =
         plan_declare_fleet_role(&config_path, "demo", "store", "store").expect("plan declare");
     let attached =
-        plan_attach_fleet_role(&config_path, "demo", "role_baseline", "prime", "service")
+        plan_attach_fleet_role(&config_path, "demo", "role_baseline", "default", "service")
             .expect("plan attach");
     let renamed = plan_rename_fleet_role(&config_path, "demo", "user_hub", "user_router")
         .expect("plan rename");
 
     assert_eq!(declared.display, "demo.store");
-    assert_eq!(attached.topology, "prime/role_baseline");
+    assert_eq!(attached.topology, "default/role_baseline");
     assert_eq!(renamed.new_display, "demo.user_router");
     assert!(renamed.package_manifest.is_some());
     assert_eq!(
@@ -92,9 +93,10 @@ role = "user_hub"
 fn attach_fleet_role_adds_direct_topology_attachment() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -105,18 +107,18 @@ package = "root"
 kind = "canister"
 package = "store"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
-    let updated = attach_fleet_role_source(config, "demo", "store", "prime", "singleton")
+    let updated = attach_fleet_role_source(config, "demo", "store", "default", "singleton")
         .expect("attach role");
 
     assert_eq!(updated.role.display, "demo.store");
-    assert_eq!(updated.role.topology, "prime/store");
+    assert_eq!(updated.role.topology, "default/store");
     assert!(
         updated
             .source
-            .contains("[subnets.\"prime\".canisters.\"store\"]")
+            .contains("[subnets.\"default\".canisters.\"store\"]")
     );
     assert!(updated.source.contains("kind = \"singleton\""));
 
@@ -126,16 +128,17 @@ kind = "root"
         .find(|role| role.role == "store")
         .expect("store row");
     assert_eq!(store.state, "attached");
-    assert_eq!(store.topology.as_deref(), Some("prime/store"));
+    assert_eq!(store.topology.as_deref(), Some("default/store"));
 }
 
 #[test]
 fn attach_fleet_role_preserves_explicit_supported_kind() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -146,14 +149,14 @@ package = "root"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
-    let updated = attach_fleet_role_source(config, "demo", "worker", "prime", "replica")
+    let updated = attach_fleet_role_source(config, "demo", "worker", "default", "replica")
         .expect("attach role");
 
     assert_eq!(updated.role.kind, "replica");
-    assert_eq!(updated.role.topology, "prime/worker");
+    assert_eq!(updated.role.topology, "default/worker");
     assert!(updated.source.contains("kind = \"replica\""));
 }
 
@@ -161,9 +164,10 @@ kind = "root"
 fn attach_fleet_role_accepts_service_kind() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -174,29 +178,29 @@ package = "root"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
-    let updated = attach_fleet_role_source(config, "demo", "worker", "prime", "service")
+    let updated = attach_fleet_role_source(config, "demo", "worker", "default", "service")
         .expect("attach service role");
 
     assert_eq!(updated.role.kind, "service");
-    assert_eq!(updated.role.topology, "prime/worker");
+    assert_eq!(updated.role.topology, "default/worker");
     assert!(updated.source.contains("kind = \"service\""));
 }
 
 #[test]
 fn attach_fleet_role_rejects_missing_duplicate_root_and_unknown_kind() {
-    attach_fleet_role_source(REAL_CONFIG, "demo", "missing", "prime", "singleton")
+    attach_fleet_role_source(REAL_CONFIG, "demo", "missing", "default", "singleton")
         .expect_err("missing role should fail");
 
-    attach_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "prime", "singleton")
+    attach_fleet_role_source(REAL_CONFIG, "demo", "user_hub", "default", "singleton")
         .expect_err("duplicate attachment should fail");
 
-    attach_fleet_role_source(REAL_CONFIG, "demo", "root", "prime", "singleton")
+    attach_fleet_role_source(REAL_CONFIG, "demo", "root", "default", "singleton")
         .expect_err("root attachment should fail");
 
-    attach_fleet_role_source(REAL_CONFIG, "demo", "minimal", "prime", "worker")
+    attach_fleet_role_source(REAL_CONFIG, "demo", "minimal", "default", "worker")
         .expect_err("unknown kind should fail");
 }
 
@@ -220,9 +224,10 @@ role = "hub"
     .expect("write manifest");
     let config = r#"
 controllers = []
-app_index = ["hub"]
+[services.fleet]
+roles = ["hub"]
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -237,16 +242,16 @@ package = "hub"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.hub]
+[subnets.default.canisters.hub]
 kind = "service"
 
-[subnets.prime.canisters.hub.sharding.pools.primary]
+[subnets.default.canisters.hub.sharding.pools.primary]
 canister_role = "worker"
 
-[subnets.prime.canisters.worker]
+[subnets.default.canisters.worker]
 kind = "shard"
 "#;
     let updated = rename_fleet_role_source(config, &config_path, "demo", "hub", "router")
@@ -267,12 +272,12 @@ kind = "shard"
     assert!(
         updated
             .source
-            .contains("[\"subnets\".\"prime\".\"canisters\".\"router\"]")
+            .contains("[\"subnets\".\"default\".\"canisters\".\"router\"]")
     );
     assert!(updated.source.contains(
-        "[\"subnets\".\"prime\".\"canisters\".\"router\".\"sharding\".\"pools\".\"primary\"]"
+        "[\"subnets\".\"default\".\"canisters\".\"router\".\"sharding\".\"pools\".\"primary\"]"
     ));
-    assert!(updated.source.contains("app_index = [\"router\"]"));
+    assert!(updated.source.contains("roles = [\"router\"]"));
     assert!(!updated.source.contains("[roles.hub]"));
     assert!(
         updated
@@ -309,9 +314,10 @@ kind = "shard"
 fn rename_fleet_role_updates_role_bearing_references() {
     let config = r#"
 controllers = []
-app_index = ["hub"]
+[services.fleet]
+roles = ["hub"]
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -326,16 +332,16 @@ package = "hub"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.hub]
+[subnets.default.canisters.hub]
 kind = "service"
 
-[subnets.prime.canisters.hub.sharding.pools.primary]
+[subnets.default.canisters.hub.sharding.pools.primary]
 canister_role = "worker"
 
-[subnets.prime.canisters.worker]
+[subnets.default.canisters.worker]
 kind = "shard"
 "#;
     let config_path = Path::new("canic.toml");
@@ -347,7 +353,7 @@ kind = "shard"
     assert!(
         updated
             .source
-            .contains("[\"subnets\".\"prime\".\"canisters\".\"worker_v2\"]")
+            .contains("[\"subnets\".\"default\".\"canisters\".\"worker_v2\"]")
     );
 }
 

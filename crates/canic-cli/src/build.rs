@@ -29,7 +29,7 @@ use canic_host::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
         select_discovered_fleet_config_path,
     },
-    release_set::{FleetConfigError, FleetConfigSnapshot, WorkspaceDiscoveryError, workspace_root},
+    release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, workspace_root},
 };
 use clap::Command as ClapCommand;
 use std::{
@@ -81,7 +81,7 @@ pub enum BuildCommandError {
     Build(#[from] Box<dyn std::error::Error>),
 
     #[error(transparent)]
-    FleetConfig(#[from] FleetConfigError),
+    AppConfig(#[from] AppConfigError),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -212,7 +212,7 @@ fn validate_attached_role(
     options: &BuildOptions,
     config_path: &Path,
 ) -> Result<(), BuildCommandError> {
-    let roles = FleetConfigSnapshot::load(config_path)?.role_lifecycle();
+    let roles = AppConfigSnapshot::load(config_path)?.role_lifecycle();
     let Some(row) = roles.iter().find(|row| row.role == options.role) else {
         return Err(BuildCommandError::Usage(format!(
             "role {}.{} is not declared in {}",
@@ -335,9 +335,7 @@ fn validate_config_fleet(
     config_path: &Path,
     expected_fleet: &str,
 ) -> Result<(), BuildCommandError> {
-    let actual_fleet = FleetConfigSnapshot::load(config_path)?
-        .fleet_name()
-        .to_string();
+    let actual_fleet = AppConfigSnapshot::load(config_path)?.app_id().to_string();
     if actual_fleet != expected_fleet {
         return Err(BuildCommandError::Usage(format!(
             "selected config declares fleet {actual_fleet:?}, not {expected_fleet:?}"
@@ -631,9 +629,10 @@ mod tests {
             .expect("write workspace manifest");
         let mut config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -647,14 +646,14 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#
         .to_string();
         if attach_app {
             config.push_str(
                 r#"
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
             );

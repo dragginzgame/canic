@@ -5,7 +5,7 @@
 //! Boundary: maps registry state into workflow-only classification outcomes.
 
 use crate::{
-    config::schema::DirectoryPool,
+    config::schema::BindingPool,
     ops::{
         runtime::metrics::{
             directory::{
@@ -26,7 +26,7 @@ impl DirectoryWorkflow {
     pub(super) fn classify_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &DirectoryPool,
+        pool_cfg: &BindingPool,
         now: u64,
     ) -> Option<DirectoryEntryClassification> {
         let Some(state) = DirectoryRegistryOps::lookup_state(pool, key_value) else {

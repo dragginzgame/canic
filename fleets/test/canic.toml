@@ -6,10 +6,13 @@
 # Global Settings
 # ----------------------------------------------------------------
 controllers = []
-app_index = ["user_hub", "scale_hub"]
+[services.fleet]
+roles = ["user_hub", "scale_hub"]
 
-[fleet]
+[app]
 name = "test"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -38,9 +41,6 @@ package = "scale"
 [roles.test]
 kind = "canister"
 package = "test"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
 [auth.delegated_tokens]
@@ -78,53 +78,53 @@ icrc21 = true # Enable ICRC-21 capability
 # ================================================================
 #  PRIME SUBNET
 # ================================================================
-[subnets.prime]
+[subnets.default]
 pool.minimum_size = 3
 
 # --- Root ---
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
 # --- App ---
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 topup = {}
 
 # --- User Hub ---
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 topup = {}
 
 # --- User Hub Pools ---
-[subnets.prime.canisters.user_hub.sharding.pools.user_shards]
+[subnets.default.canisters.user_hub.sharding.pools.user_shards]
 canister_role = "user_shard"
 policy.capacity = 100
 policy.initial_shards = 1
 policy.max_shards = 4
 
 # --- User Shard ---
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "shard"
 topup = {}
 
-[subnets.prime.canisters.user_shard.auth]
+[subnets.default.canisters.user_shard.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
 
 # --- Scale Hub ---
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 topup = {}
 
 # --- Scale Hub Pools ---
-[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+[subnets.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 1
 policy.min_workers = 2
 
 # --- Scale Replica ---
-[subnets.prime.canisters.scale_replica]
+[subnets.default.canisters.scale_replica]
 kind = "replica"
 topup = {}
 

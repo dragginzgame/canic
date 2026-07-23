@@ -32,13 +32,13 @@ impl ProvisionWorkflow {
         let allow_incomplete = updated_role.is_some();
         let subnet_index_roles = subnet_cfg.subnet_index_roles();
 
-        let include_app = updated_role.is_none_or(|role| cfg.app_index.contains(role));
+        let include_app = updated_role.is_none_or(|role| cfg.services.fleet.roles.contains(role));
         let include_subnet = updated_role.is_none_or(|role| subnet_index_roles.contains(role));
 
         let mut builder = StateSnapshotBuilder::new()?;
 
         if include_app {
-            let app_data = RootAppIndexBuilder::build(&registry, &cfg.app_index)?;
+            let app_data = RootAppIndexBuilder::build(&registry, &cfg.services.fleet.roles)?;
 
             if allow_incomplete {
                 AppIndexOps::import_trusted_partial(app_data)?;

@@ -153,7 +153,7 @@ macro_rules! __canic_build_internal {
         if __canic_wasm_store_special
             && !$crate::__build::config_declares_role($cfg.as_ref(), fleet_name, role_name)
         {
-            fleet_name = $crate::__build::config_fleet_name($cfg.as_ref()).unwrap_or(fleet_name);
+            fleet_name = $crate::__build::config_app_id($cfg.as_ref());
         }
         if !__canic_wasm_store_special
             && !$crate::__build::config_declares_role($cfg.as_ref(), fleet_name, role_name)

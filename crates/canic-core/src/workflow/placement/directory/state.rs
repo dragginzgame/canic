@@ -7,7 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    config::schema::DirectoryConfig,
+    config::schema::BindingConfig,
     ids::CanisterRole,
     ops::{
         ic::IcOps,
@@ -95,7 +95,7 @@ pub(super) enum DirectoryEntryClassification {
 
 static DIRECTORY_CLAIM_NONCE: AtomicU64 = AtomicU64::new(1);
 
-pub(super) fn available_pool_names(directory: &DirectoryConfig) -> String {
+pub(super) fn available_pool_names(directory: &BindingConfig) -> String {
     if directory.pools.is_empty() {
         return "none".to_string();
     }

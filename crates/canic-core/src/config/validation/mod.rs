@@ -6,7 +6,6 @@
 
 mod app;
 mod auth;
-mod fleet;
 mod subnet;
 
 use crate::{
@@ -14,7 +13,7 @@ use crate::{
         CanisterKind, ConfigModel, ConfigSchemaError, NAME_MAX_BYTES, RoleDeclarationKind,
         Validate, validate_canister_role_name,
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
 };
 
 fn validate_canister_role(
@@ -30,10 +29,13 @@ fn validate_canister_role(
     })
 }
 
-fn validate_subnet_role_len(role: &SubnetRole, context: &str) -> Result<(), ConfigSchemaError> {
-    if role.as_ref().len() > NAME_MAX_BYTES {
+fn validate_subnet_slot_id_len(
+    slot: &SubnetSlotId,
+    context: &str,
+) -> Result<(), ConfigSchemaError> {
+    if slot.as_ref().len() > NAME_MAX_BYTES {
         return Err(ConfigSchemaError::ValidationError(format!(
-            "{context} '{role}' exceeds {NAME_MAX_BYTES} bytes",
+            "{context} '{slot}' exceeds {NAME_MAX_BYTES} bytes",
         )));
     }
     Ok(())
@@ -43,24 +45,13 @@ impl Validate for ConfigModel {
     fn validate(&self) -> Result<(), ConfigSchemaError> {
         // Validation order is intentional to surface the most meaningful
         // errors first and avoid cascaded failures.
-        for subnet_role in self.subnets.keys() {
-            validate_subnet_role_len(subnet_role, "subnet")?;
+        for subnet_slot in self.subnets.keys() {
+            validate_subnet_slot_id_len(subnet_slot, "Subnet Slot")?;
         }
 
         self.log.validate()?;
         self.auth.validate()?;
         self.app.validate()?;
-        let fleet = self.fleet.as_ref().ok_or_else(|| {
-            ConfigSchemaError::ValidationError(
-                "fleet config is required; add [fleet] name = \"<fleet>\"".into(),
-            )
-        })?;
-        fleet.validate()?;
-        if fleet.name.is_none() {
-            return Err(ConfigSchemaError::ValidationError(
-                "fleet name is required; add [fleet] name = \"<fleet>\"".into(),
-            ));
-        }
 
         validate_role_declarations(self)?;
 
@@ -70,23 +61,24 @@ impl Validate for ConfigModel {
                     "topology-less configs cannot declare role 'root'".into(),
                 ));
             }
-            if !self.app_index.is_empty() {
+            if !self.services.fleet.roles.is_empty() {
                 return Err(ConfigSchemaError::ValidationError(
-                    "topology-less configs cannot define app_index entries".into(),
+                    "topology-less configs cannot define services.fleet.roles entries".into(),
                 ));
             }
             return Ok(());
         }
 
-        let prime = SubnetRole::PRIME;
-        let prime_subnet = self
-            .subnets
-            .get(&prime)
-            .ok_or_else(|| ConfigSchemaError::ValidationError("prime subnet not found".into()))?;
+        let default_slot = SubnetSlotId::DEFAULT;
+        let default_subnet = self.subnets.get(&default_slot).ok_or_else(|| {
+            ConfigSchemaError::ValidationError("default Subnet Slot not found".into())
+        })?;
 
         let root_role = CanisterRole::ROOT;
-        let root_cfg = prime_subnet.canisters.get(&root_role).ok_or_else(|| {
-            ConfigSchemaError::ValidationError("root canister not defined in prime subnet".into())
+        let root_cfg = default_subnet.canisters.get(&root_role).ok_or_else(|| {
+            ConfigSchemaError::ValidationError(
+                "root canister not defined in default Subnet Slot".into(),
+            )
         })?;
 
         if root_cfg.kind != CanisterKind::Root {
@@ -95,27 +87,27 @@ impl Validate for ConfigModel {
             ));
         }
 
-        for canister_role in &self.app_index {
-            validate_canister_role(canister_role, "app index canister")?;
+        for canister_role in &self.services.fleet.roles {
+            validate_canister_role(canister_role, "Fleet service role")?;
 
-            let canister_cfg = prime_subnet.canisters.get(canister_role).ok_or_else(|| {
+            let canister_cfg = default_subnet.canisters.get(canister_role).ok_or_else(|| {
                 ConfigSchemaError::ValidationError(format!(
-                    "app index canister '{canister_role}' is not in prime subnet",
+                    "Fleet service role '{canister_role}' is not in default Subnet Slot",
                 ))
             })?;
 
             if canister_cfg.kind != CanisterKind::Service {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "app index canister '{canister_role}' must have kind = \"service\"",
+                    "Fleet service role '{canister_role}' must have kind = \"service\"",
                 )));
             }
         }
 
         let mut root_roles = Vec::new();
-        for (subnet_role, subnet) in &self.subnets {
+        for (subnet_slot, subnet) in &self.subnets {
             for (canister_role, canister_cfg) in &subnet.canisters {
                 if canister_cfg.kind == CanisterKind::Root {
-                    root_roles.push(format!("{subnet_role}:{canister_role}"));
+                    root_roles.push(format!("{subnet_slot}:{canister_role}"));
                 }
             }
         }
@@ -180,9 +172,7 @@ fn validate_topology_roles_are_declared(config: &ConfigModel) -> Result<(), Conf
 
     for role in &attached_roles {
         if !config.roles.contains_key(role) {
-            let display = config
-                .fleet_role_ref(role)
-                .map_or_else(|| role.to_string(), |role_ref| role_ref.to_string());
+            let display = config.app_role_ref(role).to_string();
             return Err(ConfigSchemaError::ValidationError(format!(
                 "topology role '{display}' is not declared; add [roles.{role}]",
             )));

@@ -1,8 +1,11 @@
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "payload_limit_probe"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -15,15 +18,12 @@ package = "."
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.prime]
+[subnets.default]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.test]
+[subnets.default.canisters.test]
 kind = "service"
-
-[app]
-init_mode = "enabled"
 
 [app.whitelist]

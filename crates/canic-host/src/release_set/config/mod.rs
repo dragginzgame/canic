@@ -14,9 +14,9 @@ use std::{
 };
 
 pub use error::{
-    FleetConfigDeclaration, FleetConfigError, FleetConfigIoOperation, FleetConfigMutationConflict,
-    FleetConfigNameField, FleetConfigNameIssue, FleetConfigOperation, FleetConfigPackageIssue,
-    FleetConfigTomlOperation,
+    AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
+    AppConfigNameField, AppConfigNameIssue, AppConfigOperation, AppConfigPackageIssue,
+    AppConfigTomlOperation,
 };
 pub use model::{
     AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
@@ -27,45 +27,36 @@ pub(super) use mutation::{
 };
 pub use projection::configured_release_roles_from_config;
 pub(super) use projection::{
-    configured_bootstrap_roles_from_config, configured_controllers_from_config,
-    configured_deployable_roles_from_config, configured_local_root_create_cycles_from_config,
-    configured_pool_expectations_from_config, configured_role_auto_create_from_config,
-    configured_role_details_from_config, configured_role_kinds_from_config,
-    configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
-    configured_role_topups_from_config, fleet_identity_from_source,
+    app_identity_from_source, configured_bootstrap_roles_from_config,
+    configured_controllers_from_config, configured_deployable_roles_from_config,
+    configured_local_root_create_cycles_from_config, configured_pool_expectations_from_config,
+    configured_role_auto_create_from_config, configured_role_details_from_config,
+    configured_role_kinds_from_config, configured_role_lifecycle_from_config,
+    configured_role_metrics_profiles_from_config, configured_role_topups_from_config,
 };
 
-/// One immutable, validated view of a fleet configuration file.
+/// One immutable, validated view of an App configuration file.
 ///
 /// Commands that need several projections should load this once so every
 /// decision is derived from the same bytes on disk.
 #[derive(Debug)]
-pub struct FleetConfigSnapshot {
+pub struct AppConfigSnapshot {
     path: PathBuf,
     config: ConfigModel,
-    fleet_name: String,
 }
 
-impl FleetConfigSnapshot {
-    pub fn load(path: &Path) -> Result<Self, FleetConfigError> {
+impl AppConfigSnapshot {
+    pub fn load(path: &Path) -> Result<Self, AppConfigError> {
         let source = read_config_source(path)?;
         let config = parse_config_model(&source)
-            .map_err(|source| FleetConfigError::CoreConfig {
-                operation: FleetConfigOperation::Project,
+            .map_err(|source| AppConfigError::CoreConfig {
+                operation: AppConfigOperation::Project,
                 source,
             })
             .map_err(|error| error.at_config_path(path))?;
-        let fleet_name = config
-            .fleet_name()
-            .ok_or(FleetConfigError::DeclarationMissing {
-                declaration: FleetConfigDeclaration::FleetName,
-            })
-            .map_err(|error| error.at_config_path(path))?
-            .to_string();
         Ok(Self {
             path: path.to_path_buf(),
             config,
-            fleet_name,
         })
     }
 
@@ -75,8 +66,8 @@ impl FleetConfigSnapshot {
     }
 
     #[must_use]
-    pub const fn fleet_name(&self) -> &str {
-        self.fleet_name.as_str()
+    pub const fn app_id(&self) -> &str {
+        self.config.app_id().as_str()
     }
 
     #[must_use]
@@ -114,7 +105,7 @@ impl FleetConfigSnapshot {
         configured_role_kinds_from_config(&self.config)
     }
 
-    pub fn role_capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, FleetConfigError> {
+    pub fn role_capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, AppConfigError> {
         let mut projected = BTreeMap::new();
 
         for role in self.config.attached_roles() {
@@ -128,7 +119,7 @@ impl FleetConfigSnapshot {
                     contract
                 }
                 canic_core::role_contract::RoleContractResolution::Rejected { errors } => {
-                    return Err(FleetConfigError::RoleContractRejected { errors });
+                    return Err(AppConfigError::RoleContractRejected { errors });
                 }
             };
             let labels = project_role_capabilities(&contract.capabilities);
@@ -161,23 +152,23 @@ impl FleetConfigSnapshot {
     }
 }
 
-/// Read only `[fleet].name` for candidate discovery and malformed-config diagnostics.
+/// Read only `[app].name` for candidate discovery and malformed-config diagnostics.
 ///
-/// Operational projections must use [`FleetConfigSnapshot`].
-pub fn read_fleet_config_identity(path: &Path) -> Result<String, FleetConfigError> {
+/// Operational projections must use [`AppConfigSnapshot`].
+pub fn read_app_config_identity(path: &Path) -> Result<String, AppConfigError> {
     let source = read_config_source(path)?;
-    fleet_identity_from_source(&source).map_err(|error| error.at_config_path(path))
+    app_identity_from_source(&source).map_err(|error| error.at_config_path(path))
 }
 
 // Validate a package-backed role declaration without writing `canic.toml`.
 pub fn plan_declare_fleet_role(
     config_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     role: &str,
     package: &str,
-) -> Result<DeclaredFleetRole, FleetConfigError> {
+) -> Result<DeclaredFleetRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = declare_fleet_role_source(&source, expected_fleet, role, package)
+    let updated = declare_fleet_role_source(&source, expected_app, role, package)
         .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
 }
@@ -185,13 +176,13 @@ pub fn plan_declare_fleet_role(
 // Validate a package-backed role topology attachment without writing `canic.toml`.
 pub fn plan_attach_fleet_role(
     config_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     role: &str,
     subnet: &str,
     kind: &str,
-) -> Result<AttachedFleetRole, FleetConfigError> {
+) -> Result<AttachedFleetRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = attach_fleet_role_source(&source, expected_fleet, role, subnet, kind)
+    let updated = attach_fleet_role_source(&source, expected_app, role, subnet, kind)
         .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
 }
@@ -199,29 +190,28 @@ pub fn plan_attach_fleet_role(
 // Validate a role rename and package metadata update without writing files.
 pub fn plan_rename_fleet_role(
     config_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<RenamedFleetRole, FleetConfigError> {
+) -> Result<RenamedFleetRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated =
-        rename_fleet_role_source(&source, config_path, expected_fleet, old_role, new_role)
-            .map_err(|error| error.at_config_path(config_path))?;
+    let updated = rename_fleet_role_source(&source, config_path, expected_app, old_role, new_role)
+        .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
 }
 
 // Declare a package-backed role without attaching it to topology.
 pub fn declare_fleet_role(
     config_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     role: &str,
     package: &str,
-) -> Result<DeclaredFleetRole, FleetConfigError> {
+) -> Result<DeclaredFleetRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = declare_fleet_role_source(&source, expected_fleet, role, package)
+    let updated = declare_fleet_role_source(&source, expected_app, role, package)
         .map_err(|error| error.at_config_path(config_path))?;
     write_bytes(config_path, updated.source.as_bytes()).map_err(|source| {
-        FleetConfigError::io(FleetConfigIoOperation::WriteConfig, config_path, source)
+        AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
     })?;
     Ok(updated.role)
 }
@@ -229,16 +219,16 @@ pub fn declare_fleet_role(
 // Attach a declared package-backed role directly to subnet topology.
 pub fn attach_fleet_role(
     config_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     role: &str,
     subnet: &str,
     kind: &str,
-) -> Result<AttachedFleetRole, FleetConfigError> {
+) -> Result<AttachedFleetRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = attach_fleet_role_source(&source, expected_fleet, role, subnet, kind)
+    let updated = attach_fleet_role_source(&source, expected_app, role, subnet, kind)
         .map_err(|error| error.at_config_path(config_path))?;
     write_bytes(config_path, updated.source.as_bytes()).map_err(|source| {
-        FleetConfigError::io(FleetConfigIoOperation::WriteConfig, config_path, source)
+        AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
     })?;
     Ok(updated.role)
 }
@@ -246,14 +236,13 @@ pub fn attach_fleet_role(
 // Rename a declared role and its role-bearing topology references.
 pub fn rename_fleet_role(
     config_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<RenamedFleetRole, FleetConfigError> {
+) -> Result<RenamedFleetRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated =
-        rename_fleet_role_source(&source, config_path, expected_fleet, old_role, new_role)
-            .map_err(|error| error.at_config_path(config_path))?;
+    let updated = rename_fleet_role_source(&source, config_path, expected_app, old_role, new_role)
+        .map_err(|error| error.at_config_path(config_path))?;
     commit_role_rename_sources(
         config_path,
         &source,
@@ -271,7 +260,7 @@ fn commit_role_rename_sources(
     original_config: &str,
     updated_config: &str,
     package_update: Option<(&Path, &str)>,
-) -> Result<(), FleetConfigError> {
+) -> Result<(), AppConfigError> {
     commit_role_rename_sources_with_writer(
         config_path,
         original_config,
@@ -287,24 +276,24 @@ fn commit_role_rename_sources_with_writer(
     updated_config: &str,
     package_update: Option<(&Path, &str)>,
     mut write: impl FnMut(&Path, &[u8]) -> io::Result<()>,
-) -> Result<(), FleetConfigError> {
+) -> Result<(), AppConfigError> {
     write(config_path, updated_config.as_bytes()).map_err(|source| {
-        FleetConfigError::io(FleetConfigIoOperation::WriteConfig, config_path, source)
+        AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
     })?;
     let Some((package_path, package_source)) = package_update else {
         return Ok(());
     };
 
     if let Err(source) = write(package_path, package_source.as_bytes()) {
-        let mutation = FleetConfigError::io(
-            FleetConfigIoOperation::WritePackageManifest,
+        let mutation = AppConfigError::io(
+            AppConfigIoOperation::WritePackageManifest,
             package_path,
             source,
         );
         if let Err(source) = write(config_path, original_config.as_bytes()) {
             let rollback =
-                FleetConfigError::io(FleetConfigIoOperation::RestoreConfig, config_path, source);
-            return Err(FleetConfigError::RollbackFailed {
+                AppConfigError::io(AppConfigIoOperation::RestoreConfig, config_path, source);
+            return Err(AppConfigError::RollbackFailed {
                 mutation: Box::new(mutation),
                 rollback: Box::new(rollback),
             });
@@ -350,8 +339,7 @@ pub(in crate::release_set) fn project_role_capabilities(
     labels.into_iter().map(str::to_string).collect()
 }
 
-fn read_config_source(config_path: &Path) -> Result<String, FleetConfigError> {
-    fs::read_to_string(config_path).map_err(|source| {
-        FleetConfigError::io(FleetConfigIoOperation::ReadConfig, config_path, source)
-    })
+fn read_config_source(config_path: &Path) -> Result<String, AppConfigError> {
+    fs::read_to_string(config_path)
+        .map_err(|source| AppConfigError::io(AppConfigIoOperation::ReadConfig, config_path, source))
 }

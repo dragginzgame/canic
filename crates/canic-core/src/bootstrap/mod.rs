@@ -26,17 +26,17 @@ pub mod compiled {
     pub use crate::{
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
-            AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-            CanisterPool, CanisterRoleNameIssue, ChainKeyRootProofConfig, ConfigModel,
-            CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig,
-            DirectoryConfig, DirectoryPool, FleetConfig, IcpRefillPolicy, LogConfig,
+            AppConfig, AppInitMode, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig,
+            CanisterConfig, CanisterKind, CanisterPool, CanisterRoleNameIssue,
+            ChainKeyRootProofConfig, ConfigModel, CyclesFundingPolicyConfig, DelegatedTokenConfig,
+            DiagnosticsCanisterConfig, FleetServicesConfig, IcpRefillPolicy, LogConfig,
             MetricsCanisterConfig, MetricsProfile, NAME_MAX_BYTES, PoolImport,
             RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
-            ScalePoolPolicy, ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-            StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
-            validate_canister_role_name,
+            ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy,
+            ShardingConfig, Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy,
+            Whitelist, validate_canister_role_name,
         },
-        ids::{BuildNetwork, CanisterRole, SubnetRole},
+        ids::{AppId, BuildNetwork, CanisterRole, SubnetSlotId},
     };
 }
 
@@ -168,14 +168,14 @@ mod tests {
     use crate::domain::auth::{IC_ROOT_PUBLIC_KEY_RAW_LENGTH, MAINNET_IC_ROOT_PUBLIC_KEY_RAW};
 
     const MINIMAL_CONFIG: &str = r#"
-[fleet]
+[app]
 name = "probe"
 
 [roles.root]
 kind = "root"
 package = "root"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
 
@@ -187,7 +187,7 @@ kind = "root"
     #[test]
     fn strict_schema_reports_typed_nested_unknown_field() {
         let source = format!(
-            "{MINIMAL_CONFIG}\n[subnets.prime.canisters.root.randomness]\nenabled = true\n"
+            "{MINIMAL_CONFIG}\n[subnets.default.canisters.root.randomness]\nenabled = true\n"
         );
         let error = parse_config_model(&source).expect_err("unknown field must reject");
 
@@ -199,7 +199,7 @@ kind = "root"
                     unknown_field,
                 },
                 ..
-            } if logical_path == "subnets.prime.canisters.root.randomness"
+            } if logical_path == "subnets.default.canisters.root.randomness"
                 && unknown_field == "randomness"
         ));
     }

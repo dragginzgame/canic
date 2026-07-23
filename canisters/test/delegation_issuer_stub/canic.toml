@@ -1,7 +1,8 @@
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "delegation_issuer_stub"
 
 [roles.root]
@@ -29,15 +30,15 @@ valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 
-[subnets.prime]
+[subnets.default]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.issuer]
+[subnets.default.canisters.issuer]
 kind = "service"
 
-[subnets.prime.canisters.issuer.auth]
+[subnets.default.canisters.issuer.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true

@@ -1,7 +1,7 @@
 use candid::{decode_args, decode_one};
 use canic::{
     dto::abi::v1::CanisterInitPayload,
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
 };
 use canic_testing_internal::{
     canister::{APP, SCALE_HUB, SCALE_REPLICA, TEST, USER_HUB, USER_SHARD, WASM_STORE},
@@ -54,5 +54,5 @@ fn upgrade_args_encode_empty_tuple() {
 fn role_constants_match_core_role_helpers() {
     assert_eq!(CanisterRole::WASM_STORE, WASM_STORE);
     assert!(WASM_STORE.is_wasm_store());
-    assert_eq!(SubnetRole::PRIME.as_str(), "prime");
+    assert_eq!(SubnetSlotId::DEFAULT.as_str(), "default");
 }

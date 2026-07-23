@@ -109,7 +109,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             ::canic::dto::abi::v1::CanisterInitPayload {
                 env: ::canic::dto::env::EnvBootstrapArgs {
                     prime_root_pid: Some(root_pid),
-                    subnet_role: Some($crate::__internal::core::ids::SubnetRole::PRIME),
+                    subnet_role: Some($crate::__internal::core::ids::SubnetSlotId::DEFAULT),
                     subnet_pid: Some(subnet_pid),
                     root_pid: Some(root_pid),
                     canister_role: Some(role),

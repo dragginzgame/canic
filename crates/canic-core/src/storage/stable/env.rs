@@ -35,7 +35,7 @@ pub struct EnvRecord {
     pub prime_root_pid: Option<Principal>,
 
     // subnet
-    pub subnet_role: Option<SubnetRole>,
+    pub subnet_role: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
@@ -78,7 +78,7 @@ impl Env {
     }
 
     #[must_use]
-    pub(crate) fn get_subnet_role() -> Option<SubnetRole> {
+    pub(crate) fn get_subnet_role() -> Option<SubnetSlotId> {
         ENV.with_borrow(|cell| cell.get().subnet_role.clone())
     }
 

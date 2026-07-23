@@ -373,7 +373,7 @@ fn renders_medic_ci_report_with_fail_only_rows() {
                 "demo.app",
                 "demo.app requires canic feature `auth-root-canister-sig-verify`",
                 "edit runtime [dependencies].canic",
-                MedicSource::FleetConfig,
+                MedicSource::AppConfig,
             ),
         ],
     );
@@ -815,9 +815,10 @@ fn deployment_name_conflation_checks_find_fleet_and_role_names() {
         &root,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -828,10 +829,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     );
@@ -866,9 +867,10 @@ fn project_config_quality_checks_validate_role_package_metadata() {
         &root,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -883,10 +885,10 @@ package = "app"
 kind = "canister"
 package = "store"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     );
@@ -919,9 +921,10 @@ fn project_config_quality_checks_fail_on_missing_or_mismatched_package_metadata(
         &root,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -936,13 +939,13 @@ package = "app"
 kind = "canister"
 package = "store"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.store]
+[subnets.default.canisters.store]
 kind = "service"
 "#,
     );
@@ -978,9 +981,10 @@ fn project_config_quality_checks_report_missing_required_canic_features() {
         &root,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -991,13 +995,13 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.app.auth]
+[subnets.default.canisters.app.auth]
 role_attestation_cache = true
 "#,
     );
@@ -1047,9 +1051,10 @@ fn project_config_quality_checks_accept_required_canic_features() {
         &root,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -1060,13 +1065,13 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.app.auth]
+[subnets.default.canisters.app.auth]
 role_attestation_cache = true
 "#,
     );
@@ -1107,9 +1112,10 @@ fn project_config_quality_checks_reject_workspace_canic_features() {
         &root,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -1120,13 +1126,13 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.app.auth]
+[subnets.default.canisters.app.auth]
 role_attestation_cache = true
 "#,
     );
@@ -1166,9 +1172,10 @@ fn project_config_quality_checks_reject_package_feature_forwarding() {
         &root,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -1179,10 +1186,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     );

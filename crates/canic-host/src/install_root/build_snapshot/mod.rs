@@ -9,7 +9,7 @@ use crate::{
         CanisterArtifactBuildSpec, WorkspaceBuildContext, resolve_canister_artifact_build_spec,
     },
     release_set::{
-        FleetConfigSnapshot, RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
+        AppConfigSnapshot, RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
         artifact_root_path, configured_release_roles_from_config, load_root_package_version,
         root_release_set_manifest_path, workspace_manifest_path,
     },
@@ -41,8 +41,8 @@ pub(super) fn resolve_install_snapshot(
     root_build_target: &str,
     uses_deployment_plan: bool,
 ) -> Result<ValidatedInstallSnapshot, Box<dyn std::error::Error>> {
-    let config = FleetConfigSnapshot::load(&context.config_path)?;
-    let fleet_name = config.fleet_name().to_string();
+    let config = AppConfigSnapshot::load(&context.config_path)?;
+    let fleet_name = config.app_id().to_string();
 
     if uses_deployment_plan {
         return Ok(ValidatedInstallSnapshot {

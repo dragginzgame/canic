@@ -7,7 +7,7 @@
 //! Boundary: DTOs re-export these values for the init-argument Candid boundary
 //! while workflow consumes the domain owner directly.
 
-use crate::{cdk::types::Principal, ids::SubnetRole};
+use crate::{cdk::types::Principal, ids::SubnetSlotId};
 use candid::CandidType;
 use serde::Deserialize;
 
@@ -38,6 +38,6 @@ pub enum SubnetIdentity {
 
 #[derive(CandidType, Debug, Deserialize)]
 pub struct SubnetContextParams {
-    pub subnet_type: SubnetRole,
+    pub subnet_type: SubnetSlotId,
     pub prime_root_pid: Principal,
 }

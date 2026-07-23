@@ -35,7 +35,7 @@ fn install_config_error_lists_choices_when_project_default_missing() {
     fs::write(
         &demo,
         r#"
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -78,13 +78,13 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 "#,
     )
@@ -114,7 +114,7 @@ fn config_selection_error_is_whitespace_table() {
     fs::write(
         &config,
         r#"
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -157,10 +157,10 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     )
@@ -193,10 +193,10 @@ fn config_selection_error_lists_multiple_paths_with_numbered_options() {
         &demo,
         demo_config_source(
             r#"
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
         ),
@@ -206,19 +206,19 @@ kind = "service"
         &example,
         demo_config_source(
             r#"
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "service"
 
-[subnets.prime.canisters.scale_replica]
+[subnets.default.canisters.scale_replica]
 kind = "service"
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 "#,
         ),
@@ -250,7 +250,7 @@ fn config_selection_preview_lists_six_canisters_before_ellipsis() {
     fs::write(
         &config,
         r#"
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -293,28 +293,28 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.role_baseline]
+[subnets.default.canisters.role_baseline]
 kind = "service"
 
-[subnets.prime.canisters.scale_replica]
+[subnets.default.canisters.scale_replica]
 kind = "service"
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.user_shard]
+[subnets.default.canisters.user_shard]
 kind = "service"
 
-[subnets.prime.canisters.worker]
+[subnets.default.canisters.worker]
 kind = "service"
 "#,
     )
@@ -367,7 +367,7 @@ fn discovered_install_config_choices_accept_split_source_fleet_configs() {
     let root = temp_dir("canic-install-config-split-source");
     let config = root.join("toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
-    fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
+    fs::write(&config, "[app]\nname = \"toko\"\n").expect("write config");
 
     let choices = discover_canic_config_choices(&root).expect("discover choices");
 
@@ -380,7 +380,7 @@ fn discovered_workspace_config_choices_accept_root_fleets() {
     let root = temp_dir("canic-install-config-root-fleets");
     let config = root.join("fleets/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
-    fs::write(&config, "[fleet]\nname = \"toko\"\n").expect("write config");
+    fs::write(&config, "[app]\nname = \"toko\"\n").expect("write config");
 
     let choices = discover_project_canic_config_choices(&root).expect("discover choices");
 
@@ -415,9 +415,10 @@ fn discovered_install_config_choices_reject_duplicate_fleet_names() {
     .expect("write copy root manifest");
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -460,7 +461,7 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
     fs::write(&demo, config).expect("write demo config");

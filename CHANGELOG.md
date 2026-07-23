@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.99.x] - 2026-07-23 - App/Fleet Identity Hard Cut
+
+Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
+
+- `0.99.0` begins the reinstall-only App/Fleet hard cut: source identity moves
+  from `[fleet].name` to required `[app].name`, `app_index` authoring becomes
+  `[services.fleet].roles`, `SubnetRole::PRIME` becomes
+  `SubnetSlotId::DEFAULT`, and keyed `directory` config becomes `binding`
+  across parsing, validation, generation, mutation, diagnostics, fixtures,
+  scripts, scaffolding, and active guidance.
+
 ## [0.98.x] - 2026-07-23 - Architectural Sediment Hard Cuts
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)

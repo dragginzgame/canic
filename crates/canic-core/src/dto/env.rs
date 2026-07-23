@@ -10,7 +10,7 @@ pub struct EnvBootstrapArgs {
     pub prime_root_pid: Option<Principal>,
 
     // subnet
-    pub subnet_role: Option<SubnetRole>,
+    pub subnet_role: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
@@ -29,7 +29,7 @@ pub struct EnvSnapshotResponse {
     pub prime_root_pid: Option<Principal>,
 
     // subnet
-    pub subnet_role: Option<SubnetRole>,
+    pub subnet_role: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 

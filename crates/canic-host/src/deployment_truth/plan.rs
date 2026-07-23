@@ -3,7 +3,7 @@ use crate::{
     install_root::{
         InstallStateError, RootVerificationStatus, read_named_deployment_install_state_from_root,
     },
-    release_set::{ConfiguredPoolExpectation, FleetConfigSnapshot},
+    release_set::{AppConfigSnapshot, ConfiguredPoolExpectation},
 };
 use std::path::PathBuf;
 
@@ -29,9 +29,9 @@ pub fn build_local_deployment_plan(request: &LocalDeploymentPlanRequest) -> Depl
     let config = deployment_config_path(&request.workspace_root, request.config_path.as_deref());
     let mut unresolved_assumptions = Vec::new();
     let (fleet_template, roles, expected_controllers, expected_pool) =
-        match FleetConfigSnapshot::load(&config) {
+        match AppConfigSnapshot::load(&config) {
             Ok(snapshot) => (
-                snapshot.fleet_name().to_string(),
+                snapshot.app_id().to_string(),
                 deployment_truth_roles_with_implicit_wasm_store(snapshot.bootstrap_roles()),
                 snapshot.controllers(),
                 local_expected_pool(snapshot.pool_expectations()),

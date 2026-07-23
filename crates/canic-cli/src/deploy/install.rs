@@ -134,7 +134,7 @@ impl DeployInstallPlanOptions {
             icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
-            config_path: Some(default_fleet_config_path(&fleet_template)),
+            config_path: Some(default_app_config_path(&fleet_template)),
             expected_fleet: Some(fleet_template),
             interactive_config_selection: false,
             deployment_plan_override: Some(plan.deployment_plan),
@@ -157,7 +157,7 @@ fn root_canister_for_plan(plan: &DeploymentPlanV1) -> String {
         .unwrap_or_else(|| DEFAULT_ROOT_TARGET.to_string())
 }
 
-fn default_fleet_config_path(fleet: &str) -> String {
+fn default_app_config_path(fleet: &str) -> String {
     format!("fleets/{fleet}/canic.toml")
 }
 

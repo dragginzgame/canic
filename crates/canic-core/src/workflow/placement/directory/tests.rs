@@ -2,11 +2,11 @@ use super::*;
 use crate::{
     cdk::types::Cycles,
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, CyclesFundingPolicyConfig,
-        DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool, MetricsCanisterConfig,
+        BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig, CanisterKind,
+        CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig,
         StandardsCanisterConfig,
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
     ops::{
         storage::children::CanisterChildrenOps,
         storage::intent::IntentStoreOps,
@@ -28,10 +28,10 @@ fn claim_id(id: u64) -> u64 {
 }
 
 fn directory_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
-    let mut directory = DirectoryConfig::default();
+    let mut directory = BindingConfig::default();
     directory.pools.insert(
         "projects".to_string(),
-        DirectoryPool {
+        BindingPool {
             canister_role: instance_role.clone(),
             key_name: "project".to_string(),
         },
@@ -45,7 +45,7 @@ fn directory_hub_config(instance_role: &CanisterRole) -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: Some(directory),
+        binding: Some(directory),
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -73,7 +73,7 @@ fn install_directory_test_context(child_role: &CanisterRole, child_pid: Principa
 
     import_test_env(
         CanisterRole::new("project_hub"),
-        SubnetRole::PRIME,
+        SubnetSlotId::DEFAULT,
         root_pid,
     );
 

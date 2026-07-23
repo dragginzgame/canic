@@ -8,7 +8,7 @@ use crate::{
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, StandardsCanisterConfig,
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
     ops::runtime::env::EnvOps,
     storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
@@ -36,7 +36,7 @@ pub fn init_sharding_test_config() {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -51,7 +51,7 @@ pub fn init_sharding_test_config() {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: Some(sharding),
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -66,7 +66,7 @@ pub fn init_sharding_test_config() {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -81,7 +81,7 @@ pub fn init_sharding_test_config() {
 
     // Single synthetic principal for root/subnet/parent roles in tests.
     let root_pid = Principal::from_slice(&[1; 29]);
-    import_test_env("manager", SubnetRole::PRIME, root_pid);
+    import_test_env("manager", SubnetSlotId::DEFAULT, root_pid);
 }
 
 /// Imports a synthetic runtime env for unit tests.
@@ -91,7 +91,7 @@ pub fn init_sharding_test_config() {
 /// Panics if the synthetic environment snapshot fails runtime import.
 pub fn import_test_env(
     canister_role: impl Into<CanisterRole>,
-    subnet_role: impl Into<SubnetRole>,
+    subnet_role: impl Into<SubnetSlotId>,
     root_pid: Principal,
 ) {
     let snapshot = EnvRecord {

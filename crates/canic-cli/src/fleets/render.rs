@@ -6,7 +6,7 @@
 use crate::cli::render::append_dry_run_footer;
 use canic_host::{
     release_set::{
-        AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole, FleetConfigSnapshot,
+        AppConfigSnapshot, AttachedFleetRole, ConfiguredRoleLifecycle, DeclaredFleetRole,
         RenamedFleetRole, display_workspace_path,
     },
     table::{ColumnAlign, render_table},
@@ -68,7 +68,7 @@ fn fleet_list_rows(
 }
 
 fn fleet_list_row(workspace_root: &Path, path: &Path, environment: &str) -> FleetListRow {
-    let Ok(config) = FleetConfigSnapshot::load(path) else {
+    let Ok(config) = AppConfigSnapshot::load(path) else {
         return FleetListRow {
             environment: environment.to_string(),
             fleet: "invalid config".to_string(),
@@ -78,7 +78,7 @@ fn fleet_list_row(workspace_root: &Path, path: &Path, environment: &str) -> Flee
     };
     FleetListRow {
         environment: environment.to_string(),
-        fleet: config.fleet_name().to_string(),
+        fleet: config.app_id().to_string(),
         config: display_workspace_path(workspace_root, path),
         canisters: format_canister_summary(&config.deployable_roles()),
     }
