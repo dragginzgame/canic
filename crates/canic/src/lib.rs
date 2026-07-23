@@ -33,13 +33,11 @@ pub mod __internal {
     pub use canic_core as core;
 
     pub mod cdk {
-        pub use canic_core::cdk::types::Principal;
-        pub use canic_core::cdk::{
-            export_candid, init, inspect_message, post_upgrade, query, update,
-        };
+        pub use candid::Principal;
+        pub use ic_cdk::{export_candid, init, inspect_message, post_upgrade, query, update};
 
         pub mod api {
-            pub use canic_core::cdk::api::{
+            pub use ic_cdk::api::{
                 canister_cycle_balance, canister_version, is_controller, msg_caller, time,
             };
         }

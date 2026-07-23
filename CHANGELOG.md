@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.19` hard-cuts the remaining `canic-core` IC runtime API relay:
+  Canic macros and runtime code now use upstream `ic-cdk` directly, time is
+  owned by `IcOps`, and unused stable-structures re-exports are removed.
+
+- `0.98.18` records design-only refinements for the future 0.99 Fleet-identity
+  cut and 0.100 Prime-owned multi-subnet Registry/mirror/Directory model. It
+  changes no active runtime behavior.
+
 - `0.98.17` moves generic IC call and HTTP-outcall ownership to upstream
   `ic-cdk`, removes their unused Canic facade/helper stacks, and retains only
   the internal transport and build-network authorities used by Canic itself.

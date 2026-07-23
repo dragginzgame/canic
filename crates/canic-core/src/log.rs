@@ -147,7 +147,7 @@ pub fn __append_runtime_log(crate_name: &str, topic: Option<Topic>, level: Level
         LogRetentionWorkflow::append_runtime_log(crate_name, topic, level, message, created_at)
     {
         #[cfg(debug_assertions)]
-        crate::cdk::println!("log append failed: {err}");
+        ic_cdk::println!("log append failed: {err}");
 
         #[cfg(not(debug_assertions))]
         let _ = err;
@@ -159,7 +159,7 @@ pub fn __emit_runtime_log(crate_name: &str, topic: Option<Topic>, level: Level, 
     __append_runtime_log(crate_name, topic, level, message);
 
     let line = __render_runtime_log_line(topic, level, message);
-    crate::cdk::println!("{line}");
+    ic_cdk::println!("{line}");
 }
 
 #[doc(hidden)]

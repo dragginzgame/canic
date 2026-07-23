@@ -1,8 +1,7 @@
 //! Module: cdk::utils
 //!
-//! Responsibility: small runtime-safe helpers shared across the Canic stack.
-//! Does not own: canister API wrappers, serialization, or stable structures.
-//! Boundary: exposes pure utility functions used by CDK-adjacent modules.
+//! Responsibility: pure hash and hexadecimal helpers shared across the Canic stack.
+//! Does not own: IC runtime APIs, serialization, or stable structures.
+//! Boundary: deterministic byte utilities used by runtime and host crates.
 
 pub mod hash;
-pub mod time;

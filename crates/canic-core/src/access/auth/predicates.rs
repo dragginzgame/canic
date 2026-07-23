@@ -9,16 +9,14 @@ use super::{
 };
 use crate::{
     access::AccessError,
-    cdk::{
-        api::{canister_self, is_controller as caller_is_controller},
-        types::Principal,
-    },
+    cdk::types::Principal,
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
         storage::{children::CanisterChildrenOps, registry::subnet::SubnetRegistryOps},
     },
 };
+use ic_cdk::api::{canister_self, is_controller as caller_is_controller};
 
 /// Require that the caller controls the current canister.
 /// Allows controller-only maintenance calls.

@@ -5,9 +5,10 @@
 //! Boundary: extends `MgmtInfra` with chain-key signing effects.
 
 use crate::{
-    cdk::{api, candid::Principal},
+    cdk::candid::Principal,
     infra::{InfraError, ic::IcInfraError, ic::call::Call},
 };
+use ic_cdk::api;
 
 use super::{
     MgmtInfra, MgmtInfraError,

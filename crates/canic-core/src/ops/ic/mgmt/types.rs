@@ -5,7 +5,6 @@
 //! Boundary: type conversion layer for `ops::ic::mgmt`.
 
 use crate::{
-    cdk,
     infra::ic::mgmt::{
         InfraCanisterInstallMode, InfraCanisterSettings, InfraCanisterStatusResult,
         InfraCanisterStatusType, InfraDefiniteCanisterSettings, InfraEcdsaCurve, InfraEcdsaKeyId,
@@ -353,7 +352,7 @@ pub(super) fn update_settings_to_infra(args: &UpdateSettingsArgs) -> InfraUpdate
     InfraUpdateSettingsArgs {
         canister_id: args.canister_id,
         settings: settings_to_infra(&args.settings),
-        sender_canister_version: Some(cdk::api::canister_version()),
+        sender_canister_version: Some(ic_cdk::api::canister_version()),
     }
 }
 

@@ -6,7 +6,6 @@
 
 use crate::{
     cdk::{
-        call::Response,
         candid::{
             CandidType,
             utils::{ArgumentDecoder, ArgumentEncoder},
@@ -16,6 +15,7 @@ use crate::{
     infra::{InfraError, ic::IcInfraError},
 };
 use candid::{encode_args, encode_one};
+use ic_cdk::call::Response;
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
 
@@ -118,11 +118,9 @@ impl CallBuilder<'_> {
     /// Execute the configured IC call and return the raw response wrapper.
     pub async fn execute(self) -> Result<CallResult, InfraError> {
         let mut call = match self.wait {
-            WaitMode::Bounded => {
-                crate::cdk::call::Call::bounded_wait(self.canister_id, &self.method)
-            }
+            WaitMode::Bounded => ic_cdk::call::Call::bounded_wait(self.canister_id, &self.method),
             WaitMode::Unbounded => {
-                crate::cdk::call::Call::unbounded_wait(self.canister_id, &self.method)
+                ic_cdk::call::Call::unbounded_wait(self.canister_id, &self.method)
             }
         };
 

@@ -4,7 +4,6 @@
 //! Does not own: endpoint dispatch, authorization, or payload decoding.
 //! Boundary: stores method limit metadata consumed during ingress inspection.
 
-use crate::cdk;
 use std::sync::Mutex;
 
 pub const DEFAULT_UPDATE_INGRESS_MAX_BYTES: usize = 16 * 1024;
@@ -54,15 +53,15 @@ pub fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePa
 /// Panics if reading the configured payload limit finds a poisoned registry
 /// mutex.
 pub fn inspect_update_message() {
-    let method = cdk::api::msg_method_name();
-    let payload_len = cdk::api::msg_arg_data().len();
+    let method = ic_cdk::api::msg_method_name();
+    let payload_len = ic_cdk::api::msg_arg_data().len();
     let Ok(max_bytes) = update_limit_for(&method) else {
         return;
     };
     let max_bytes = max_bytes.unwrap_or(DEFAULT_UPDATE_INGRESS_MAX_BYTES);
 
     if payload_len <= max_bytes {
-        cdk::api::accept_message();
+        ic_cdk::api::accept_message();
     }
 }
 

@@ -94,7 +94,7 @@ pub(super) fn validate_delegated_session_subject(
 #[cfg(target_arch = "wasm32")]
 #[expect(clippy::unnecessary_wraps)]
 fn try_canister_self() -> Option<Principal> {
-    Some(crate::cdk::api::canister_self())
+    Some(ic_cdk::api::canister_self())
 }
 
 #[cfg(not(target_arch = "wasm32"))]

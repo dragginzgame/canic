@@ -10,12 +10,8 @@ pub mod icp_refill;
 pub mod mgmt;
 pub mod nns;
 
-use crate::{
-    InternalError,
-    cdk::{self, types::Principal},
-    infra,
-    ops::OpsError,
-};
+use crate::{InternalError, cdk::types::Principal, infra, ops::OpsError};
+use std::time::SystemTime;
 use thiserror::Error as ThisError;
 
 ///
@@ -54,19 +50,19 @@ impl IcOps {
     /// Return the current canister principal.
     #[must_use]
     pub fn canister_self() -> Principal {
-        cdk::api::canister_self()
+        ic_cdk::api::canister_self()
     }
 
     /// Return the current canister's cycle balance.
     #[must_use]
     pub fn canister_cycle_balance() -> crate::cdk::types::Cycles {
-        cdk::api::canister_cycle_balance().into()
+        ic_cdk::api::canister_cycle_balance().into()
     }
 
     /// Return the current caller principal.
     #[must_use]
     pub fn msg_caller() -> Principal {
-        cdk::api::msg_caller()
+        ic_cdk::api::msg_caller()
     }
 
     /// Return a metadata-hash caller principal on both IC and host targets.
@@ -113,31 +109,35 @@ impl IcOps {
 
     /// Return the current UNIX epoch time in seconds.
     #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
     pub fn now_secs() -> u64 {
-        cdk::utils::time::now_secs()
+        (time_nanos() / 1_000_000_000) as u64
     }
 
     /// Return the current UNIX epoch time in milliseconds.
     #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
     pub fn now_millis() -> u64 {
-        cdk::utils::time::now_millis()
+        (time_nanos() / 1_000_000) as u64
     }
 
     /// Return the current UNIX epoch time in microseconds.
     #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
     pub fn now_micros() -> u64 {
-        cdk::utils::time::now_micros()
+        (time_nanos() / 1_000) as u64
     }
 
     /// Return the current UNIX epoch time in nanoseconds.
     #[must_use]
+    #[expect(clippy::cast_possible_truncation)]
     pub fn now_nanos() -> u64 {
-        cdk::utils::time::now_nanos()
+        time_nanos() as u64
     }
 
     /// Print a line to the IC debug output.
     pub fn println(message: &str) {
-        cdk::println!("{message}");
+        ic_cdk::println!("{message}");
     }
 
     /// Spawn a task on the IC runtime.
@@ -145,6 +145,30 @@ impl IcOps {
     where
         F: Future<Output = ()> + 'static,
     {
-        cdk::futures::spawn(future);
+        ic_cdk::futures::spawn(future);
+    }
+}
+
+/// Return the current UNIX epoch time in nanoseconds as the internal base unit.
+#[cfg_attr(target_arch = "wasm32", expect(unreachable_code))]
+fn time_nanos() -> u128 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        return u128::from(ic_cdk::api::time());
+    }
+
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(duration) => duration.as_nanos(),
+        Err(_) => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IcOps;
+
+    #[test]
+    fn current_time_is_a_recent_unix_timestamp() {
+        assert!(IcOps::now_secs() > 1_700_000_000);
     }
 }

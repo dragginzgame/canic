@@ -55,7 +55,7 @@ thread_local! {
 pub fn perf_counter() -> u64 {
     #[cfg(target_arch = "wasm32")]
     {
-        crate::cdk::api::performance_counter(1)
+        ic_cdk::api::performance_counter(1)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

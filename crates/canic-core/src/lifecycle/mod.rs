@@ -32,7 +32,7 @@ impl fmt::Display for LifecyclePhase {
 }
 
 pub fn lifecycle_trap(phase: LifecyclePhase, err: impl fmt::Display) -> ! {
-    crate::cdk::api::trap(format!("{phase}: {err}"))
+    ic_cdk::api::trap(format!("{phase}: {err}"))
 }
 
 fn config_with_current_root_controller(config: ConfigModel) -> ConfigModel {

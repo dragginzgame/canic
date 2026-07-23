@@ -115,7 +115,7 @@ pub fn emit_config_model_source(config: &ConfigModel) -> String {
 #[cfg(target_arch = "wasm32")]
 fn inject_runtime_ic_root_public_key(config: &mut ConfigModel) -> Result<(), ConfigError> {
     if should_inject_runtime_ic_root_public_key(config) {
-        let root_key = crate::cdk::api::root_key();
+        let root_key = ic_cdk::api::root_key();
         inject_runtime_ic_root_public_key_from(config, &root_key)?;
     }
     Ok(())

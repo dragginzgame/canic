@@ -1,6 +1,6 @@
 # 0.98 Architectural Sediment Hard Cuts - Status
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## Current State
 
@@ -90,6 +90,7 @@ targets, or compatibility modes are permitted.
 | CANIC-098-PACKAGE-002 project-protocol-stub has no consumer | P2 | fixed | Package/member/lock row deleted without replacement |
 | CANIC-098-TEST-003 LocalIntent external race contradicts receipt contract | P2 | fixed | Client/external/buy path deleted; focused receipt conformance retained |
 | CANIC-098-CLOSE-* consolidation ledger | 1 P1, 11 P2, 30 notes | resolved | All findings fixed and every candidate disposition proved |
+| CANIC-098-POST-CDK-RELAY-001 redundant internal IC runtime relay | P2 | fixed in open 0.98.19 | Direct upstream runtime/macro ownership; clock consolidated; unused stable exports removed |
 
 ## Slice Order
 
@@ -118,8 +119,8 @@ have the validated immutable `v0.98.0` anchor.
 
 - change 0.96 receipt storage, replay, eligibility, reclamation, timers, or
   downstream conformance;
-- reopen 0.97 role-dependency or hidden macro-CDK design; Slice O only removes
-  public generic-helper residue under its released upstream-ownership rule;
+- change the hidden compiler namespace emitted by Canic macros; Slice P only
+  replaces its Canic-core IC API relay with direct upstream ownership;
 - add replay receipt observation or RecoveryRequired reconciliation;
 - delete or redesign icp-refill;
 - delete or redesign LocalIntent;
@@ -132,15 +133,13 @@ have the validated immutable `v0.98.0` anchor.
 ## Next Action
 
 The immutable `v0.98.2` closeout remains closed. The maintainer subsequently
-accepted bounded post-closeout hard-cut tails through released `v0.98.16`.
-Open `0.98.17` removes the consumerless generic IC call and HTTP-outcall
-facades, the orphan HTTP implementation/metric stack, and the redundant
-build-network API/workflow wrappers. Application-owned generic IC calls use
-upstream `ic-cdk`; Canic retains its active internal call transport and
-build-network ops/infra authority. This does not reopen the immutable
-42-candidate accounting, the excluded ICP-refill state machine, or the
-app-registry work deferred to 0.100. After targeted validation, exercise the
-resulting release in real deployments.
+accepted bounded post-closeout hard-cut tails through released `v0.98.17`.
+Released `v0.98.18` changes only the proposed 0.99/0.100 design documents and
+normal release metadata; it adds no 0.98 product slice. Open `0.98.19` removes
+the remaining Canic-core IC runtime API relay while preserving the hidden
+compiler namespace, active internal call transport, and build-network
+ops/infra authority. The immutable 42-candidate accounting remains closed,
+and future Fleet/multi-subnet contracts are not implemented by this work.
 
 ## Slice A Validation
 

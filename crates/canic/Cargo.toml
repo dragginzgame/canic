@@ -13,9 +13,6 @@ keywords = { workspace = true }
 categories = { workspace = true }
 publish = true
 
-[package.metadata.cargo-machete]
-ignored = ["ic-cdk"]
-
 [features]
 default = ["metrics"]
 metrics = []
@@ -41,6 +38,7 @@ candid = { workspace = true }
 canic-control-plane = { workspace = true, optional = true }
 canic-core = { workspace = true }
 canic-macros = { workspace = true }
+ic-cdk = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 flate2 = { workspace = true }
@@ -48,7 +46,6 @@ toml = { workspace = true }
 
 [dev-dependencies]
 candid_parser = { workspace = true }
-ic-cdk = { workspace = true }
 
 [lints]
 workspace = true

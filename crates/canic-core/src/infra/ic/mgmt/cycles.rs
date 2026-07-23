@@ -6,7 +6,6 @@
 
 use crate::{
     cdk::{
-        self,
         candid::{Nat, Principal},
         types::Cycles,
     },
@@ -19,7 +18,7 @@ impl MgmtInfra {
     /// Return the local canister's cycle balance.
     #[must_use]
     pub fn canister_cycle_balance() -> Cycles {
-        cdk::api::canister_cycle_balance().into()
+        ic_cdk::api::canister_cycle_balance().into()
     }
 
     /// Deposit cycles into a canister through the management canister.

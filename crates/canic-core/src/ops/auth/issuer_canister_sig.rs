@@ -8,8 +8,6 @@ use super::AuthOps;
 #[cfg(feature = "auth-issuer-canister-sig-verify")]
 use super::canister_sig_key::parse_canister_sig_public_key_der;
 #[cfg(feature = "auth-issuer-canister-sig-create")]
-use crate::cdk;
-#[cfg(feature = "auth-issuer-canister-sig-create")]
 use crate::dto::auth::IcCanisterSignatureProofV1;
 use crate::{
     InternalError, cdk::types::Principal, dto::auth::IssuerProof, ops::auth::AuthSignatureError,
@@ -153,7 +151,7 @@ fn refresh_issuer_canister_sig_certified_data(signature_root_hash: &[u8; 32]) {
     use ic_canister_sig_creation::signature_map::LABEL_SIG;
     use ic_certification::labeled_hash;
 
-    cdk::api::certified_data_set(labeled_hash(LABEL_SIG, signature_root_hash));
+    ic_cdk::api::certified_data_set(labeled_hash(LABEL_SIG, signature_root_hash));
 }
 
 #[cfg(not(feature = "auth-issuer-canister-sig-create"))]

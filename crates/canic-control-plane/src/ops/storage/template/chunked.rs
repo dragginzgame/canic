@@ -25,12 +25,13 @@ use crate::{
     },
     ids::{CanisterRole, TemplateChunkingMode},
 };
-use canic_core::cdk::{api::canister_self, structures::storable::Storable, utils::hash::wasm_hash};
+use canic_core::cdk::{structures::storable::Storable, utils::hash::wasm_hash};
 use canic_core::control_plane_support::{
     error::InternalError, format::byte_size, ops::ic::mgmt::MgmtOps,
 };
 #[cfg(test)]
 use canic_core::dto::error::ErrorCode;
+use ic_cdk::api::canister_self;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
