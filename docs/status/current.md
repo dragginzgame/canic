@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.12`.
-- The latest published release is `v0.98.12` at
-  `17c92b372f45e8e22fc0315fe446b786ddf0f60b`.
-- The `v0.98.12` source tree is
-  `759b0757620975feec2d58f3d5cab66b31d29e25`; its product-tree hash is
-  `2913f79fd481f843e68b7b1c9e9130ebc64c7e76c431d11f3e2544c7f93ecdad` and
+- The workspace package version is `0.98.13`.
+- The latest published release is `v0.98.13` at
+  `f511c41c2ade76e2c82c9048f466c029b3d9b186`.
+- The `v0.98.13` source tree is
+  `245602e05925258d6ec41d6babee74636bf9ab60`; its product-tree hash is
+  `30139cef86ff3134510a54eee00a50556c0a094871b311414c01fbb3915e52a8` and
   its Cargo.lock SHA-256 is
-  `4e7a4ba305ed560b6d69f1a9066cb5124551071872383aa839077c7c6ecb6ae7`.
+  `c9e1880dad36547e12834fe7f3f829e7a203babb0eed6782d38da98bde839a85`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -36,10 +36,15 @@ Historical detail is archived at:
   durable intent identities, and auth CLI parsing has no one-variant dispatch
   wrapper. The permanently empty top-level adoption-report warning array and
   its dead envelope projection are removed while finding-local warnings remain.
-- Open `0.98.13` implements Slice K: the orphan internal XRC binding family and
-  the unused 8-, 16-, 32-, and 256-byte bounded-string aliases are hard-cut.
+- Released `0.98.13` implements Slice K: the orphan internal XRC binding
+  family and the unused 8-, 16-, 32-, and 256-byte bounded-string aliases are
+  hard-cut.
   The generic bounded-string invariant and its active 64- and 128-byte aliases
   remain because they reject oversized boundary and stable-memory input.
+- Open `0.98.14` implements Slice L: repo-only test support retains one cached
+  issuer attestation baseline. The never-consumed upgrade wrapper, orphan
+  verifier baseline, unused fixture projections, and self-sustaining minimal-
+  role constant are removed.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1063,12 +1068,13 @@ First primary results:
 
 ## Next Action
 
-Open `0.98.13` implements focused internal Slice K. The obsolete XRC binding
-family and unused bounded-string aliases are removed without a replacement or
-compatibility path; active length enforcement remains. Focused bounded-string,
-strict affected-crate, formatting, changelog-governance, stale-symbol, and diff
-hygiene results are recorded in the open patch changelog. The Canic app
-registry is explicitly deferred to 0.100; it is not part of this slice. Do not
+Open `0.98.14` implements repo-only test-support Slice L. The maintained
+issuer-only role-attestation baseline remains; its unused verifier alternative,
+never-consumed upgrade wrapper, unused projections, and self-sustaining role
+constant are removed. Focused test-support, role-attestation PocketIC, strict
+Clippy, formatting, changelog-governance, stale-symbol, and diff-hygiene
+evidence belongs with this open patch. The Canic app registry is explicitly
+deferred to 0.100; it is not part of this slice. Do not
 inspect or edit the stale local Toko
 repository, change Cargo package versions outside the maintainer-owned release
 flow, or commit, tag, publish, or push shared-worktree changes without

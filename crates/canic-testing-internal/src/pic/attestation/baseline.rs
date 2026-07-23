@@ -1,8 +1,7 @@
 use candid::{Principal, encode_one};
 use canic_core::dto::subnet::SubnetIdentity;
 use ic_testkit::pic::{
-    CachedPicBaseline, CachedPicBaselineGuard, InstallSpec, Pic,
-    restore_or_rebuild_cached_pic_baseline,
+    CachedPicBaseline, InstallSpec, Pic, restore_or_rebuild_cached_pic_baseline,
 };
 use std::sync::{Mutex, OnceLock};
 
@@ -14,11 +13,7 @@ use super::{
 };
 
 const ROOT_INSTALL_CYCLES: u128 = 80_000_000_000_000;
-const VERIFIER_ROLE: &str = "project_hub";
 static ROOT_ISSUER_BASELINE: OnceLock<
-    Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
-> = OnceLock::new();
-static ROOT_ISSUER_VERIFIER_BASELINE: OnceLock<
     Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
 > = OnceLock::new();
 
@@ -26,13 +21,6 @@ pub struct AttestationBaselineMetadata {
     root_id: Principal,
     wasm_store_id: Principal,
     issuer_id: Principal,
-    verifier_id: Option<Principal>,
-}
-
-#[derive(Clone, Copy)]
-enum RoleAttestationBaselineKind {
-    IssuerOnly,
-    IssuerAndVerifier,
 }
 
 struct InstalledRoot {
@@ -42,38 +30,14 @@ struct InstalledRoot {
 
 // Restore or create the cached `root + issuer` baseline.
 #[must_use]
-pub(super) fn install_issuer_only_cached_root_fixture() -> CachedInstalledRoot {
-    install_cached_root_fixture(RoleAttestationBaselineKind::IssuerOnly)
-}
-
-// Restore or create the cached `root + issuer + verifier` baseline.
-#[must_use]
-pub(super) fn install_issuer_and_verifier_cached_root_fixture() -> CachedInstalledRoot {
-    install_cached_root_fixture(RoleAttestationBaselineKind::IssuerAndVerifier)
-}
-
-// Resolve the issuer canister from the root-managed subnet registry.
-#[must_use]
-pub(super) fn issuer_pid(pic: &Pic, root_id: Principal) -> Principal {
-    lookup_role_pid(pic, root_id, "issuer", 120)
-}
-
-// Resolve the managed wasm_store canister from the root-managed subnet registry.
-#[must_use]
-pub(super) fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
-    lookup_role_pid(pic, root_id, "wasm_store", 120)
-}
-
-// Restore or create the requested cached baseline and keep it alive until test drop.
-fn install_cached_root_fixture(cache_kind: RoleAttestationBaselineKind) -> CachedInstalledRoot {
-    progress(match cache_kind {
-        RoleAttestationBaselineKind::IssuerOnly => "request cached root+issuer baseline",
-        RoleAttestationBaselineKind::IssuerAndVerifier => {
-            "request cached root+issuer+verifier baseline"
-        }
-    });
-    let baseline_slot = baseline_slot(cache_kind).get_or_init(|| Mutex::new(None));
-    let (baseline, cache_hit) = restore_or_rebuild_cached_baseline(baseline_slot, cache_kind);
+pub(super) fn install_cached_root_fixture() -> CachedInstalledRoot {
+    progress("request cached root+issuer baseline");
+    let baseline_slot = ROOT_ISSUER_BASELINE.get_or_init(|| Mutex::new(None));
+    let (baseline, cache_hit) = restore_or_rebuild_cached_pic_baseline(
+        baseline_slot,
+        build_cached_baseline,
+        restore_cached_baseline,
+    );
     if cache_hit {
         progress("cache hit");
     }
@@ -82,59 +46,37 @@ fn install_cached_root_fixture(cache_kind: RoleAttestationBaselineKind) -> Cache
     CachedInstalledRoot {
         root_id: baseline.metadata().root_id,
         issuer_id: baseline.metadata().issuer_id,
-        verifier_id: baseline.metadata().verifier_id,
         pic: baseline,
     }
 }
 
-// Restore a cached baseline when possible, or rebuild it if the underlying
-// PocketIC instance has gone away between tests.
-fn restore_or_rebuild_cached_baseline(
-    baseline_slot: &'static Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>,
-    cache_kind: RoleAttestationBaselineKind,
-) -> (
-    CachedPicBaselineGuard<'static, AttestationBaselineMetadata>,
-    bool,
-) {
-    restore_or_rebuild_cached_pic_baseline(
-        baseline_slot,
-        || build_cached_baseline(cache_kind),
-        restore_cached_baseline,
-    )
+// Resolve the issuer canister from the root-managed subnet registry.
+#[must_use]
+fn issuer_pid(pic: &Pic, root_id: Principal) -> Principal {
+    lookup_role_pid(pic, root_id, "issuer", 120)
+}
+
+// Resolve the managed wasm_store canister from the root-managed subnet registry.
+#[must_use]
+fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
+    lookup_role_pid(pic, root_id, "wasm_store", 120)
 }
 
 // Build one reusable baseline and capture immutable snapshot IDs inside it.
-fn build_cached_baseline(
-    cache_kind: RoleAttestationBaselineKind,
-) -> CachedPicBaseline<AttestationBaselineMetadata> {
+fn build_cached_baseline() -> CachedPicBaseline<AttestationBaselineMetadata> {
     progress("cache miss, building fresh baseline");
-    let InstalledRoot { pic, root_id } = match cache_kind {
-        RoleAttestationBaselineKind::IssuerOnly
-        | RoleAttestationBaselineKind::IssuerAndVerifier => install_test_root(),
-    };
+    let InstalledRoot { pic, root_id } = install_test_root();
     progress("waiting for issuer registration");
     let issuer_id = issuer_pid(&pic, root_id);
     wait_for_ready_canister(&pic, issuer_id, 240);
     let wasm_store_id = wasm_store_pid(&pic, root_id);
     wait_for_ready_canister(&pic, wasm_store_id, 240);
     progress("issuer ready");
-    let verifier_id =
-        matches!(cache_kind, RoleAttestationBaselineKind::IssuerAndVerifier).then(|| {
-            progress("resolving verifier baseline canister");
-            let verifier_id = lookup_role_pid(&pic, root_id, VERIFIER_ROLE, 120);
-            wait_for_ready_canister(&pic, verifier_id, 240);
-            progress("verifier baseline canister ready");
-            verifier_id
-        });
 
     progress("waiting for root readiness before snapshot capture");
     wait_for_ready_canister(&pic, root_id, 240);
     progress("capturing baseline snapshots");
-    let controller_ids = std::iter::once(root_id)
-        .chain(std::iter::once(wasm_store_id))
-        .chain(std::iter::once(issuer_id))
-        .chain(verifier_id)
-        .collect::<Vec<_>>();
+    let controller_ids = vec![root_id, wasm_store_id, issuer_id];
     let baseline = CachedPicBaseline::capture(
         pic.into_pic(),
         root_id,
@@ -143,7 +85,6 @@ fn build_cached_baseline(
             root_id,
             wasm_store_id,
             issuer_id,
-            verifier_id,
         },
     )
     .expect("downloaded baseline snapshots unavailable");
@@ -161,10 +102,6 @@ fn restore_cached_baseline(baseline: &CachedPicBaseline<AttestationBaselineMetad
     progress("waiting for restored root and issuer readiness");
     wait_for_ready_canister(baseline.pic(), baseline.metadata().wasm_store_id, 240);
     wait_for_ready_canister(baseline.pic(), baseline.metadata().issuer_id, 240);
-    if let Some(verifier_id) = baseline.metadata().verifier_id {
-        progress("waiting for restored verifier readiness");
-        wait_for_ready_canister(baseline.pic(), verifier_id, 240);
-    }
     wait_for_ready_canister(baseline.pic(), baseline.metadata().root_id, 240);
 }
 
@@ -179,16 +116,6 @@ fn install_root_fixture(root_wasm: Vec<u8>) -> InstalledRoot {
     let root_id = install_root_canister(&pic, root_wasm);
 
     InstalledRoot { pic, root_id }
-}
-
-// Return the immutable baseline slot for one cache kind.
-const fn baseline_slot(
-    cache_kind: RoleAttestationBaselineKind,
-) -> &'static OnceLock<Mutex<Option<CachedPicBaseline<AttestationBaselineMetadata>>>> {
-    match cache_kind {
-        RoleAttestationBaselineKind::IssuerOnly => &ROOT_ISSUER_BASELINE,
-        RoleAttestationBaselineKind::IssuerAndVerifier => &ROOT_ISSUER_VERIFIER_BASELINE,
-    }
 }
 
 // Install the root canister under PocketIC with the manual subnet identity.

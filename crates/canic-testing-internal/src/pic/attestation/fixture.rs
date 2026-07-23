@@ -1,5 +1,5 @@
 use candid::Principal;
-use ic_testkit::pic::{CachedPicBaselineGuard, Pic};
+use ic_testkit::pic::CachedPicBaselineGuard;
 use std::io::Write;
 
 use super::baseline::{self, AttestationBaselineMetadata};
@@ -12,7 +12,6 @@ pub struct CachedInstalledRoot {
     pub pic: BaselinePicGuard<'static>,
     pub root_id: Principal,
     pub issuer_id: Principal,
-    pub verifier_id: Option<Principal>,
 }
 
 pub type BaselinePicGuard<'a> = CachedPicBaselineGuard<'a, AttestationBaselineMetadata>;
@@ -26,23 +25,5 @@ pub(super) fn progress(phase: &str) {
 /// Restore or create the cached `root + issuer` baseline.
 #[must_use]
 pub fn install_test_root_cached() -> CachedInstalledRoot {
-    baseline::install_issuer_only_cached_root_fixture()
-}
-
-/// Restore or create the cached `root + issuer + verifier` baseline.
-#[must_use]
-pub fn install_test_root_with_verifier_cached() -> CachedInstalledRoot {
-    baseline::install_issuer_and_verifier_cached_root_fixture()
-}
-
-// Resolve the issuer canister from the root-managed subnet registry.
-#[must_use]
-pub fn issuer_pid(pic: &Pic, root_id: Principal) -> Principal {
-    baseline::issuer_pid(pic, root_id)
-}
-
-// Resolve the managed wasm_store canister from the root-managed subnet registry.
-#[must_use]
-pub fn wasm_store_pid(pic: &Pic, root_id: Principal) -> Principal {
-    baseline::wasm_store_pid(pic, root_id)
+    baseline::install_cached_root_fixture()
 }

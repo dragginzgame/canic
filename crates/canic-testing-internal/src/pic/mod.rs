@@ -7,13 +7,9 @@ mod canic;
 mod delegation;
 mod lifecycle;
 mod root;
-mod upgrade;
 
 pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
-pub use attestation::{
-    BaselinePicGuard, CachedInstalledRoot, install_test_root_cached,
-    install_test_root_with_verifier_cached, issuer_pid, wasm_store_pid,
-};
+pub use attestation::{BaselinePicGuard, CachedInstalledRoot, install_test_root_cached};
 pub use audit::{
     RootAuditProbeFixture, install_audit_leaf_probe, install_audit_root_probe,
     install_audit_scaling_probe,
@@ -34,4 +30,3 @@ pub use root::{
     ensure_root_release_artifacts_built, load_root_wasm, restore_root_cached_baseline,
     setup_root_topology,
 };
-pub use upgrade::{UpgradeScenario, UpgradeScenarioError};

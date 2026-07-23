@@ -7,7 +7,6 @@ use canic::ids::CanisterRole;
 ///
 
 pub const APP: CanisterRole = CanisterRole::new("app");
-pub const MINIMAL: CanisterRole = CanisterRole::new("minimal");
 pub const SCALE_HUB: CanisterRole = CanisterRole::new("scale_hub");
 pub const SCALE_REPLICA: CanisterRole = CanisterRole::new("scale_replica");
 pub const TEST: CanisterRole = CanisterRole::new("test");

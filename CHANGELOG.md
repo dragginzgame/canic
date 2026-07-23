@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.14` hard-cuts orphan repo-only PocketIC helpers: the never-consumed
+  upgrade-scenario wrapper, the unused root+verifier attestation baseline, and
+  a self-sustaining test-role constant. The active issuer baseline remains.
+
 - `0.98.13` hard-cuts the orphan internal XRC wire binding family and unused
   bounded-string aliases while retaining the actively enforced bounded stable-
   string invariant and its current `64`- and `128`-byte uses.
