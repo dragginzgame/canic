@@ -256,7 +256,7 @@ pub(super) fn config_selection_error(
     )];
 
     if choices.is_empty() {
-        lines.push("create apps/<app>/canic.toml and run canic install <app>".to_string());
+        lines.push("create apps/<app>/canic.toml and run canic install <app> <fleet>".to_string());
         return lines.join("\n");
     }
 
@@ -265,7 +265,7 @@ pub(super) fn config_selection_error(
         lines.push(String::new());
         lines.extend(config_choice_table(workspace_root, choices));
         lines.push(String::new());
-        lines.push(format!("run: canic install {app}"));
+        lines.push(format!("run: canic install <fleet> --app {app}"));
         return lines.join("\n");
     }
 
@@ -273,7 +273,7 @@ pub(super) fn config_selection_error(
     lines.push(String::new());
     lines.extend(config_choice_table(workspace_root, choices));
     lines.push(String::new());
-    lines.push("run: canic install <app>".to_string());
+    lines.push("run: canic install <app> <fleet>".to_string());
     lines.join("\n")
 }
 

@@ -101,7 +101,7 @@ kind = "service"
     assert!(message.contains("apps/canic.toml\n\n#"));
     assert!(message.contains("3 (root, app, user_hub)\n\nrun:"));
     assert!(!message.contains("canisters/test/runtime_probe/canic.toml"));
-    assert!(message.contains("run: canic install demo"));
+    assert!(message.contains("run: canic install <fleet> --app demo"));
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -178,7 +178,7 @@ kind = "service"
     assert!(message.contains("2 (root, app)"));
     assert!(message.contains("apps/canic.toml\n\n#"));
     assert!(message.contains("2 (root, app)\n\nrun:"));
-    assert!(message.contains("run: canic install demo"));
+    assert!(message.contains("run: canic install <fleet> --app demo"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
@@ -238,7 +238,7 @@ kind = "service"
     assert!(message.contains("apps/example/canic.toml"));
     assert!(message.contains("5 (root, scale_hub, scale_replica, user_hub, user_shard)"));
     assert!(message.contains("5 (root, scale_hub, scale_replica, user_hub, user_shard)\n\nrun:"));
-    assert!(message.contains("run: canic install <app>"));
+    assert!(message.contains("run: canic install <app> <fleet>"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 

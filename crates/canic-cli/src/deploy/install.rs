@@ -130,12 +130,12 @@ impl DeployInstallPlanOptions {
             root_canister: root_canister_for_plan(&plan.deployment_plan),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             environment: self.environment,
-            deployment_name: Some(self.deployment),
+            fleet_name: self.deployment,
             icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
             config_path: Some(default_app_config_path(&fleet_template)),
-            expected_fleet: Some(fleet_template),
+            expected_app: Some(fleet_template),
             interactive_config_selection: false,
             deployment_plan_override: Some(plan.deployment_plan),
             artifact_promotion_plan_override: plan.artifact_promotion_plan,
@@ -157,8 +157,8 @@ fn root_canister_for_plan(plan: &DeploymentPlanV1) -> String {
         .unwrap_or_else(|| DEFAULT_ROOT_TARGET.to_string())
 }
 
-fn default_app_config_path(fleet: &str) -> String {
-    format!("apps/{fleet}/canic.toml")
+fn default_app_config_path(app: &str) -> String {
+    format!("apps/{app}/canic.toml")
 }
 
 pub(super) fn command() -> ClapCommand {

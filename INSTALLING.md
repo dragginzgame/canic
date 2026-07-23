@@ -339,8 +339,8 @@ environment. Nonlocal targets must be managed externally.
 
 The local ICP CLI replica does not persist canister state across stop/start. If
 `canic status` shows a local fleet as `lost`, the recorded root canister is
-gone from the restarted local replica; run `canic install <fleet>` to recreate
-the local deployment.
+gone from the restarted local replica; run
+`canic install <app> <fleet>` to recreate the local deployment.
 
 App configs live under project-root `apps/`. Commands launched from nested
 directories discover the outer project root and keep ICP project config plus

@@ -40,14 +40,14 @@ const CONFIG_HEADER: &str = "CONFIG";
 const CANISTERS_HEADER: &str = "CANISTERS";
 const ROOT_HEADER: &str = "ROOT";
 const LOCAL_LOST_DEPLOYMENT: &str = "lost";
-const LOCAL_LOST_NOTE: &str = "Note: local ICP CLI replica state is not persistent; a lost local deployment target means the recorded root is gone. Run `canic install <fleet-template>` to recreate it.";
+const LOCAL_LOST_NOTE: &str = "Note: local ICP CLI replica state is not persistent; a lost local Fleet means the recorded root is gone. Run `canic install <app> <fleet>` to recreate it.";
 const STATUS_HELP_AFTER: &str = "\
 Examples:
   canic status
 
 Note:
   The local ICP CLI replica does not persist canister state across stop/start.
-  If a local deployment target is shown as lost, run `canic install <fleet-template>` to recreate it.";
+  If a local Fleet is shown as lost, run `canic install <app> <fleet>` to recreate it.";
 
 ///
 /// StatusCommandError

@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.3`.
-- The latest published release is `v0.99.3` at
-  `536ae2da8e1e05dafcc63fdb7a26e4db705b15af`.
-- The `v0.99.3` source tree is
-  `ffd6a54d12e005d27c13e6080546a78d728b4ab0`. Its Cargo.lock SHA-256 is
-  `92e46242a324f9eddcbe8837cef9a4e9d60a584a1180a505e6dafd58e9822442`.
+- The workspace package version is `0.99.4`.
+- The latest published release is `v0.99.4` at
+  `3e4b125ff2eaf0c471546d889190059b12cebab9`.
+- The `v0.99.4` source tree is
+  `0aed5613950840c9f6691bb02d6d3a88573a3d70`. Its Cargo.lock SHA-256 is
+  `4f2236596eb154a1d09b9bc50a0bd4c864b90534bc8a44d8c3fbb53414e414db`.
+- Released `0.99.4` establishes one durable non-circular release-build
+  identity before Wasm compilation and finalizes exact release-set manifest
+  evidence before Canister creation.
 - Released `0.99.3` establishes generated Fleet identity types and one strict
   canonical-network-scoped Fleet catalog read authority. The legacy
   environment-scoped deployment catalog has no reader or fallback.
@@ -1149,13 +1152,12 @@ command family, and discovery fallback do not survive. Live
 install/deployment behavior and runtime topology authorities remain for their
 explicit later slices.
 
-The open `0.99.4` batch continues Implementation Slice 3 with the non-circular
-release-build authority. A cryptographic nonce and its exact derived
-`ReleaseBuildId` are durably `Planned` before normal complete-install Wasm
-compilation, passed through one host-owned child-build context and atomically
-`Finalized` from the exact no-follow release-set manifest before root
-resolution or creation. Canonical CBOR, nonce/ID/path agreement and the
-domain-separated finalized plan hash fail closed.
+The open `0.99.5` batch continues Implementation Slice 3 by separating fresh
+install's required source App from its required Fleet label. The sole
+maintained command is `canic install <app> <fleet>`; config lookup and identity
+validation use the first operand, while deployment-truth and installed-target
+lookup use the second. The removed one-argument and `--app` forms have no
+inference or compatibility fallback.
 
 Fleet ID cryptographic generation and activation-journal commitment, supplied
 deployment-plan release-build admission, the installed Fleet tree, complete

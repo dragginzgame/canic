@@ -10,15 +10,15 @@ fn root_registry_hint_explains_empty_root_canister() {
     assert!(hint.contains("no Canic root code is installed"));
 }
 
-// Ensure missing-root hints use deployment-target wording, not fleet-state wording.
+// Ensure missing-root hints use the installed Fleet and source App identities.
 #[test]
-fn root_registry_hint_explains_missing_deployment_root() {
+fn root_registry_hint_explains_missing_fleet_root() {
     let hint = root_registry_hint("Cannot find canister id")
         .expect("missing canister hint should be available");
 
-    assert!(hint.contains("deployment target"));
+    assert!(hint.contains("this Fleet"));
     assert!(hint.contains("canic app config <app>"));
-    assert!(!hint.contains("this fleet"));
+    assert!(hint.contains("canic install <app> <fleet>"));
 }
 
 // Ensure a panicked live-query worker cannot silently remove its canister.

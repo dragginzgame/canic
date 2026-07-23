@@ -557,7 +557,7 @@ fn deployment_target_missing_points_to_deploy_plan() {
 
     assert_eq!(missing.status, MedicStatus::Fail);
     assert!(missing.next.contains("canic deploy plan demo"));
-    assert!(missing.next.contains("canic install <fleet-template>"));
+    assert!(missing.next.contains("canic install <app> <fleet>"));
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -1464,7 +1464,7 @@ fn wraps_long_medic_report_fields() {
             "deployment_target_missing",
             "deployment",
             "this is a deliberately long diagnostic message that should wrap across multiple indented lines instead of widening a terminal table",
-            "run canic install <fleet-template> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
+            "run canic install <app> <fleet> or canic deploy register <deployment> --fleet-template <fleet-template> --root <principal> --allow-unverified",
             MedicSource::InstalledDeployment,
         )],
     ));

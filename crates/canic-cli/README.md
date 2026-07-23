@@ -148,21 +148,22 @@ Live list sources call `canic_ready` for each listed canister and include a
 `READY` column with `yes`, `no`, or `error`, plus a `CYCLES` balance column.
 
 If the list only shows the `root` row, the project has reserved a local root id
-but has not installed the tree. Run `canic install test`, then use
+but has not installed the tree. Run `canic install test test`, then use
 `canic --environment local info list test` to read the installed root registry.
 
 Install and bootstrap the local fleet:
 
 ```bash
-canic install test
+canic install test test
 ```
 
-The current `canic install <fleet>` surface selects the same-named App config
-under `apps/<app>/canic.toml`, plus the conventional `root` ICP canister name
-and Canic's built-in readiness timeout:
+The current `canic install <app> <fleet>` surface keeps the source App selected
+under `apps/<app>/canic.toml` separate from the installed Fleet label. It also
+selects the conventional `root` ICP canister name and Canic's built-in
+readiness timeout:
 
 ```bash
-canic install test
+canic install test test-local
 ```
 
 The selected install config must include an App source identity:

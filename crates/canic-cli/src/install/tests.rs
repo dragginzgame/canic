@@ -4,12 +4,14 @@ use canic_host::install_root::InstallRootPhase;
 // Ensure install defaults to the conventional local root canister target.
 #[test]
 fn install_defaults_to_root_target() {
-    let options = InstallOptions::parse([OsString::from("demo")]).expect("parse defaults");
+    let options = InstallOptions::parse([OsString::from("demo"), OsString::from("demo-local")])
+        .expect("parse defaults");
     let install = options
         .clone()
         .into_install_root_options_with_icp_root(None);
 
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.fleet, "demo-local");
+    assert_eq!(options.app, "demo");
     assert_eq!(options.environment, local_environment());
     assert_eq!(options.profile, None);
     assert_eq!(install.root_canister, "root");
@@ -21,13 +23,15 @@ fn install_defaults_to_root_target() {
         install.config_path,
         Some("apps/demo/canic.toml".to_string())
     );
-    assert_eq!(install.expected_fleet, Some("demo".to_string()));
+    assert_eq!(install.fleet_name, "demo-local");
+    assert_eq!(install.expected_app, Some("demo".to_string()));
 }
 
 // Ensure top-level dispatch can pass environment selection internally.
 #[test]
 fn install_accepts_internal_environment() {
     let options = InstallOptions::parse([
+        OsString::from("toko"),
         OsString::from("demo"),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
         OsString::from("local"),
@@ -42,6 +46,7 @@ fn install_accepts_build_profile() {
     let options = InstallOptions::parse([
         OsString::from("--profile"),
         OsString::from("fast"),
+        OsString::from("toko"),
         OsString::from("demo"),
     ])
     .expect("parse profile");
@@ -55,6 +60,7 @@ fn install_rejects_invalid_build_profile() {
     let err = InstallOptions::parse([
         OsString::from("--profile"),
         OsString::from("tiny"),
+        OsString::from("toko"),
         OsString::from("demo"),
     ])
     .expect_err("invalid profile should fail");
@@ -74,10 +80,18 @@ fn install_preserves_icp_root_resolution_causes() {
     );
 }
 
-// Ensure install requires an explicit fleet argument.
+// Ensure install requires both source App and installed Fleet identities.
+#[test]
+fn install_requires_app_argument() {
+    let err = InstallOptions::parse([]).expect_err("missing App should fail");
+
+    std::assert_matches!(err, InstallCommandError::Usage(_));
+}
+
 #[test]
 fn install_requires_fleet_argument() {
-    let err = InstallOptions::parse([]).expect_err("missing fleet should fail");
+    let err =
+        InstallOptions::parse([OsString::from("demo")]).expect_err("missing Fleet should fail");
 
     std::assert_matches!(err, InstallCommandError::Usage(_));
 }
@@ -89,8 +103,10 @@ fn install_usage_explains_app_config() {
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
 
     assert!(text.contains("Install and bootstrap a Canic fleet"));
-    assert!(text.contains("Usage: canic install <fleet>"));
+    assert!(text.contains("Usage: canic install <app> <fleet>"));
+    assert!(text.contains("<app>"));
     assert!(text.contains("<fleet>"));
+    assert!(!text.contains("--app"));
     assert!(text.contains("--profile"));
     assert!(normalized.contains("fresh local creation"));
     assert!(normalized.contains("project upgrade flow"));
