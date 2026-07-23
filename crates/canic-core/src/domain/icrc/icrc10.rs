@@ -2,44 +2,40 @@ const ICRC10_NAME: &str = "ICRC-10";
 const ICRC10_URL: &str = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-10";
 const ICRC21_NAME: &str = "ICRC-21";
 const ICRC21_URL: &str = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-21";
-const ICRC103_NAME: &str = "ICRC-103";
-const ICRC103_URL: &str = "https://github.com/dfinity/ICRC/blob/main/ICRCs/ICRC-103";
 
-///
-/// Icrc10Registry
-///
-/// Runtime projection of supported ICRC standards based on static IC spec
-/// and dynamic canister configuration.
+/// Project the supported ICRC standards from the maintained runtime surface.
 ///
 /// - ICRC-10 is always supported.
-/// - Additional standards are opt-in via config.
+/// - ICRC-21 is included only when its endpoint is enabled.
 /// - This is a pure, recomputed view (no storage, no persistence).
-///
-/// Used by macro-generated endpoints in downstream crates.
-///
+#[must_use]
+pub fn supported_standards(icrc21_enabled: bool) -> Vec<(String, String)> {
+    let mut supported = Vec::with_capacity(1 + usize::from(icrc21_enabled));
+    supported.push((ICRC10_NAME.to_string(), ICRC10_URL.to_string()));
 
-pub struct Icrc10Registry;
+    if icrc21_enabled {
+        supported.push((ICRC21_NAME.to_string(), ICRC21_URL.to_string()));
+    }
 
-impl Icrc10Registry {
-    /// Returns `(name, url)` for all supported standards from the static list.
-    #[must_use]
-    pub fn supported_standards(
-        icrc21_enabled: bool,
-        icrc103_enabled: bool,
-    ) -> Vec<(String, String)> {
-        let mut supported =
-            Vec::with_capacity(1 + usize::from(icrc21_enabled) + usize::from(icrc103_enabled));
+    supported
+}
 
-        supported.push((ICRC10_NAME.to_string(), ICRC10_URL.to_string()));
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        if icrc21_enabled {
-            supported.push((ICRC21_NAME.to_string(), ICRC21_URL.to_string()));
-        }
-
-        if icrc103_enabled {
-            supported.push((ICRC103_NAME.to_string(), ICRC103_URL.to_string()));
-        }
-
-        supported
+    #[test]
+    fn supported_standards_report_only_implemented_contracts() {
+        assert_eq!(
+            supported_standards(false),
+            vec![(ICRC10_NAME.to_string(), ICRC10_URL.to_string())]
+        );
+        assert_eq!(
+            supported_standards(true),
+            vec![
+                (ICRC10_NAME.to_string(), ICRC10_URL.to_string()),
+                (ICRC21_NAME.to_string(), ICRC21_URL.to_string()),
+            ]
+        );
     }
 }

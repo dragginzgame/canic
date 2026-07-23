@@ -574,9 +574,6 @@ pub struct Whitelist {
 pub struct Standards {
     #[serde(default)]
     pub icrc21: bool,
-
-    #[serde(default)]
-    pub icrc103: bool,
 }
 
 // -----------------------------------------------------------------------------

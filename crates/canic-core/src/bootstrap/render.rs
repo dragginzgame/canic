@@ -204,12 +204,10 @@ where
 // Render the top-level standards feature flags.
 fn render_standards(standards: &Standards) -> TokenStream {
     let icrc21 = standards.icrc21;
-    let icrc103 = standards.icrc103;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::Standards {
             icrc21: #icrc21,
-            icrc103: #icrc103,
         }
     }
 }
