@@ -17,6 +17,7 @@ use canic::dto::blob_storage::{
     BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
 };
 use canic::{
+    api::protocol::icrc21::Icrc21Dispatcher,
     dto::auth::{
         ActiveDelegationProofStatus, ActiveDelegationProofStatusResponse, ChainKeyAlgorithm,
         ChainKeyBatchHeaderV1, ChainKeyBatchWitnessStepV1, ChainKeyBatchWitnessV1,
@@ -33,7 +34,8 @@ use canic::{
     dto::cycles::Cycles,
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
     dto::icrc21::{
-        ConsentMessageMetadata, ConsentMessageRequest, ConsentMessageSpec, DisplayMessageType,
+        ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
+        ConsentMessageResponse, ConsentMessageSpec, DisplayMessageType,
     },
     dto::memory::MemoryLedgerResponse,
     dto::runtime::{
@@ -74,10 +76,9 @@ fn candid_type_env<T: candid::CandidType>() -> String {
     types.env.to_string()
 }
 
-#[test]
-fn semantic_protocol_and_cycle_types_are_public() {
-    assert_candid_roundtrip(ConsentMessageRequest {
-        method: "transfer".to_string(),
+fn consent_message_request(method: &str) -> ConsentMessageRequest {
+    ConsentMessageRequest {
+        method: method.to_string(),
         arg: vec![1, 2, 3],
         user_preferences: ConsentMessageSpec {
             metadata: ConsentMessageMetadata {
@@ -86,10 +87,36 @@ fn semantic_protocol_and_cycle_types_are_public() {
             },
             device_spec: Some(DisplayMessageType::GenericDisplay),
         },
-    });
+    }
+}
+
+#[test]
+fn semantic_protocol_and_cycle_types_are_public() {
+    assert_candid_roundtrip(consent_message_request("transfer"));
 
     let cycles = Cycles::new(42);
     assert_eq!(cycles.to_u128(), 42);
+}
+
+#[test]
+fn icrc21_dispatcher_uses_the_registered_typed_handler() {
+    let method = "protocol_surface_transfer";
+    Icrc21Dispatcher::register(method, |request| {
+        ConsentMessageResponse::Ok(ConsentInfo {
+            consent_message: ConsentMessage::GenericDisplayMessage(request.method),
+            metadata: request.user_preferences.metadata,
+        })
+    });
+
+    let ConsentMessageResponse::Ok(info) =
+        Icrc21Dispatcher::consent_message(consent_message_request(method))
+    else {
+        panic!("registered handler should return consent information");
+    };
+    assert_eq!(
+        info.consent_message,
+        ConsentMessage::GenericDisplayMessage(method.to_string())
+    );
 }
 
 fn preceding_attribute<'a>(source: &'a str, signature: &str) -> &'a str {

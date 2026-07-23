@@ -1,8 +1,5 @@
 use crate::{
-    dto::icrc21::{
-        ConsentInfo, ConsentMessage, ConsentMessageMetadata, ConsentMessageRequest,
-        ConsentMessageResponse, ErrorInfo, Icrc21Error,
-    },
+    dto::icrc21::{ConsentMessageRequest, ConsentMessageResponse, ErrorInfo, Icrc21Error},
     log,
     log::Topic,
 };
@@ -37,7 +34,7 @@ impl RegisteredConsentHandler {
 }
 
 ///
-/// Icrc21Registry
+/// Icrc21Dispatcher
 ///
 /// Runtime dispatch table for ICRC-21 consent message handlers.
 ///
@@ -47,7 +44,7 @@ impl RegisteredConsentHandler {
 /// - Registry is process-local and cleared on upgrade.
 ///
 
-pub struct Icrc21Dispatcher {}
+pub struct Icrc21Dispatcher;
 
 impl Icrc21Dispatcher {
     ///
@@ -70,23 +67,6 @@ impl Icrc21Dispatcher {
                     "icrc21 handler replaced for method={method}"
                 );
             }
-        });
-    }
-
-    pub fn register_static_with<F>(method: &str, generator: F)
-    where
-        F: Fn(&ConsentMessageRequest) -> String + 'static,
-    {
-        Self::register(method, move |req| {
-            let message = generator(&req);
-
-            ConsentMessageResponse::Ok(ConsentInfo {
-                consent_message: ConsentMessage::GenericDisplayMessage(message),
-                metadata: ConsentMessageMetadata {
-                    language: "en".to_string(),
-                    utc_offset_minutes: None,
-                },
-            })
         });
     }
 
