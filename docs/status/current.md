@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.20`.
-- The latest published release is `v0.98.20` at
-  `d13edb8598902b1607be86e774800c3cdc5c6878`.
-- The `v0.98.20` source tree is
-  `2a6cefd36de6349f810807ab8ca06697e3772d17`; its product-tree hash is
-  `4be9a3fd3aa161a3e342ef32d3aef1ea7b838e88aa0bd9381eb59530bfc7b1e6` and
+- The workspace package version is `0.98.21`.
+- The latest published release is `v0.98.21` at
+  `3c87da1aa5fd82e179ee37153681e4222a31fa17`.
+- The `v0.98.21` source tree is
+  `92da81dfb006994b1e4acb1b6643d75f56ebb68d`; its product-tree hash is
+  `cdab8b99f47f5d534addf5bb138780a1d8a275976678209ec0e47519d6c6fa64` and
   its Cargo.lock SHA-256 is
-  `0d075ba4debba1f0dbf1ea0e04f8d1061cf123c8f10eaabc19d653e66e78d278`.
+  `96b378394f0d72c0433f02271edc4e577553f4aa1d154a40b129536a7a5487f9`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -67,12 +67,14 @@ Historical detail is archived at:
 - Released `0.98.20` localizes the ICRC-1 account wire shape to the manual
   ICP-refill adapter, removes unused generic account/subaccount helpers, and
   makes resumed transfers consume the exact persisted CMC account identity.
-- Open `0.98.21` removes the unsupported global ICRC-103 configuration and
+- Released `0.98.21` removes the unsupported global ICRC-103 configuration and
   advertisement path. ICRC-10 reports only itself and configured ICRC-21,
   whose maintained endpoint remains unchanged. It also restores the canonical
   instrumented `canic::api::call::Call` builder and prelude entrypoint over the
   surviving single call transport; generic CDK, HTTP, and build-network
   facades remain removed.
+- Open `0.98.22` adds direct typed execution and decoding to that canonical
+  builder without changing or duplicating the underlying call authority.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1097,8 +1099,8 @@ First primary results:
 ## Next Action
 
 Released `v0.98.17` removed the generic CDK, HTTP, build-network, and call
-facades while retaining the internal call/build-network authorities. Open
-`0.98.21` corrects that cut for developer experience by restoring only one
+facades while retaining the internal call/build-network authorities. Released
+`v0.98.21` corrects that cut for developer experience by restoring only one
 canonical instrumented `canic::api::call` builder over the existing transport;
 the other deleted facades remain absent. Released `v0.98.18` changes only the
 proposed 0.99/0.100 design documents and normal release metadata. Released
@@ -1106,9 +1108,11 @@ proposed 0.99/0.100 design documents and normal release metadata. Released
 stable-structures export inventory; the hidden compiler namespace and
 maintained call/build-network authorities remain. Released `v0.98.20` gives
 manual ICP refill one adapter-local ICRC-1 account shape and uses persisted CMC
-identity on resume. Open `0.98.21` also removes the false ICRC-103
+identity on resume. Released `v0.98.21` also removes the false ICRC-103
 configuration/advertisement path while retaining implemented ICRC-10/21
-behavior. It does not implement Fleet identity, a Fleet Registry, multi-subnet
+behavior. Open `0.98.22` adds direct typed call completion only at the public
+API boundary; explicit `execute`/`CallResult` handling remains supported. It
+does not implement Fleet identity, a Fleet Registry, multi-subnet
 synchronization, or any other proposed 0.99/0.100 behavior. Preserve the
 maintainer's active 0.99/0.100 design edits. Do not inspect or edit the stale
 local Toko repository, change Cargo package versions outside the
