@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## Purpose
 
@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.2`.
-- The latest published release is `v0.99.2` at
-  `c906a7c00832e2090e5b1fe7edc8dc2fee320d35`.
-- The `v0.99.2` source tree is
-  `65507b6e742db43cc7f39b41792a0d88c189e066`. Its Cargo.lock SHA-256 is
-  `14b954dd6aeb3c9d0ee33626af7f3b2c4379ce27bb36677ea796a25686854bba`.
+- The workspace package version is `0.99.3`.
+- The latest published release is `v0.99.3` at
+  `536ae2da8e1e05dafcc63fdb7a26e4db705b15af`.
+- The `v0.99.3` source tree is
+  `ffd6a54d12e005d27c13e6080546a78d728b4ab0`. Its Cargo.lock SHA-256 is
+  `92e46242a324f9eddcbe8837cef9a4e9d60a584a1180a505e6dafd58e9822442`.
+- Released `0.99.3` establishes generated Fleet identity types and one strict
+  canonical-network-scoped Fleet catalog read authority. The legacy
+  environment-scoped deployment catalog has no reader or fallback.
 - Released `0.99.2` establishes one trust-derived canonical network identity,
   explicit immutable non-public trust enrollment and revalidated
   environment-profile lookup. Public-IC staging/production aliases converge
@@ -1144,24 +1147,22 @@ scaffolding, fixtures, CI scripts, and the source CLI use App identity only.
 The old `fleets/` source tree, package-metadata `fleet` key, `canic fleet`
 command family, and discovery fallback do not survive. Live
 install/deployment behavior and runtime topology authorities remain for their
-explicit later slices; the open `.3` batch below now owns the Fleet catalog
-read hard cut.
+explicit later slices.
 
-The open `0.99.3` batch continues Implementation Slice 3 with the canonical
-Fleet identity and catalog read boundary. `FleetId`, `FleetName`, `FleetKey`
-and `FleetBinding` keep generated security identity separate from the
-operator-facing label and source App. Catalog inspection resolves the selected
-environment to one canonical network and reads only
-`.canic/networks/<canonical-network-id>/fleets/catalog.json`; the removed
-environment-scoped deployment-state catalog has no reader or fallback.
-Malformed, contradictory, duplicate, non-canonical and unsafe catalog
-authority fails closed, while an absent catalog reports no installed Fleets.
+The open `0.99.4` batch continues Implementation Slice 3 with the non-circular
+release-build authority. A cryptographic nonce and its exact derived
+`ReleaseBuildId` are durably `Planned` before normal complete-install Wasm
+compilation, passed through one host-owned child-build context and atomically
+`Finalized` from the exact no-follow release-set manifest before root
+resolution or creation. Canonical CBOR, nonce/ID/path agreement and the
+domain-separated finalized plan hash fail closed.
 
-Fleet ID cryptographic generation and durable planning, the installed Fleet
-tree, complete plan/receipt/host-state identity propagation and the activation
-journal's post-activation catalog commitment remain the next bounded Slice 3
-and Slice 4 work. No standalone generator or catalog writer is exposed ahead
-of that recovery authority.
+Fleet ID cryptographic generation and activation-journal commitment, supplied
+deployment-plan release-build admission, the installed Fleet tree, complete
+plan/receipt/host-state identity propagation and post-activation Fleet catalog
+commitment remain the next bounded Slice 3 and Slice 4 work. No standalone
+Fleet-ID generator or catalog writer is exposed ahead of that recovery
+authority.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

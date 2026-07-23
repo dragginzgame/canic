@@ -20,9 +20,9 @@ fn current_install_records_gates_before_activation_mutation() {
         "run_install_deployment_truth_safety_gate(",
     );
     assert_before(
-        prepare,
-        "run_install_deployment_truth_safety_gate(",
-        "resolve_root_canister_with_phase(",
+        install,
+        "emit_manifest_with_deployment_truth_receipt(",
+        "resolve_root_canister_after_manifest(",
     );
 
     let gate = include_str!("../../current_execution/mod.rs");

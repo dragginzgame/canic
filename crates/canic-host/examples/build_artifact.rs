@@ -54,6 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         icp_root,
         local_replica: None,
         refresh_canonical_wasm_store_did,
+        release_build_id: None,
     };
     print_workspace_build_context_once(&context)?;
     let output = build_workspace_canister_artifact(&context)?;

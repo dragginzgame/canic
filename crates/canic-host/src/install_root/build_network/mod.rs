@@ -27,6 +27,7 @@ pub(super) fn resolve_install_build_context(
         config_path: config_path.to_path_buf(),
         local_replica: local_replica_icp_target(environment, icp_root),
         refresh_canonical_wasm_store_did: false,
+        release_build_id: None,
     })
 }
 

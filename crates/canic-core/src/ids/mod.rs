@@ -13,6 +13,7 @@ mod fleet;
 mod intent;
 mod metrics;
 mod network;
+mod release_build;
 mod subnet;
 
 pub use app::AppId;
@@ -27,5 +28,8 @@ pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};
 pub use network::{
     CanonicalNetworkId, CanonicalNetworkIdParseError, CanonicalNetworkTrustAnchorError,
+};
+pub use release_build::{
+    RELEASE_BUILD_ID_ENV, ReleaseBuildId, ReleaseBuildIdParseError, ReleaseBuildNonce,
 };
 pub use subnet::SubnetSlotId;

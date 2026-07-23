@@ -378,6 +378,7 @@ fn resolve_build_context(
         config_path,
         local_replica: None,
         refresh_canonical_wasm_store_did: false,
+        release_build_id: None,
     })
 }
 

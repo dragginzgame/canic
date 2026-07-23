@@ -8,6 +8,7 @@ use crate::{
     canister_build::{
         CanisterArtifactBuildSpec, WorkspaceBuildContext, resolve_canister_artifact_build_spec,
     },
+    release_build::PlannedReleaseBuild,
     release_set::{
         AppConfigSnapshot, RootReleaseSetBuildSnapshot, RootReleaseSetBuildTarget,
         artifact_root_path, configured_release_roles_from_config, load_root_package_version,
@@ -34,6 +35,7 @@ pub(super) struct CompleteInstallBuildSnapshot {
 pub(super) struct ValidatedInstallSnapshot {
     pub(super) fleet_name: String,
     pub(super) complete_build: Option<CompleteInstallBuildSnapshot>,
+    pub(super) release_build: Option<PlannedReleaseBuild>,
 }
 
 pub(super) fn resolve_install_snapshot(
@@ -48,6 +50,7 @@ pub(super) fn resolve_install_snapshot(
         return Ok(ValidatedInstallSnapshot {
             fleet_name,
             complete_build: None,
+            release_build: None,
         });
     }
 
@@ -92,5 +95,6 @@ pub(super) fn resolve_install_snapshot(
                 targets: manifest_targets,
             },
         }),
+        release_build: None,
     })
 }
