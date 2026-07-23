@@ -66,7 +66,7 @@ walkthrough.
   observed resources, but recommendations are non-executed previews. See
   [adoption-profiles.md](docs/architecture/adoption-profiles.md).
 * **Evidence and catalog reports:** Build provenance, deployment-check
-  envelopes, policy gates, and the passive deployment catalog give operators a
+  envelopes, policy gates, and the passive network-scoped Fleet catalog give operators a
   compact evidence flow without adding install, controller, registry, topology,
   or teardown authority. See
   [v1-readiness-checklist.md](docs/architecture/v1-readiness-checklist.md) and

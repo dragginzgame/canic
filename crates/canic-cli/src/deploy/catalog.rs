@@ -14,9 +14,9 @@ use crate::{
     output, version_text,
 };
 use canic_host::{
-    deployment_catalog::{
-        DeploymentCatalogReportV1, DeploymentCatalogRequest, build_deployment_catalog_report,
-        deployment_catalog_report_text, inspect_deployment_catalog_report,
+    fleet_catalog::{
+        FleetCatalogReportV1, FleetCatalogRequest, build_fleet_catalog_report,
+        fleet_catalog_report_text, inspect_fleet_catalog_report,
     },
     icp_config::resolve_current_canic_icp_root,
 };
@@ -39,37 +39,37 @@ Examples:
   canic deploy inspect catalog inspect demo-local
   canic --environment local deploy inspect catalog list --json --output catalog.json
 
-Catalog commands are read-only local-state reports. They list or inspect
-deployment targets recorded under .canic/<environment>/deployments and do not query
-live deployments, create deployment truth, mutate topology, change
-controllers, install Wasm, or infer deployments from fleet-template names.";
+Catalog commands are read-only local-state reports. Environment profiles resolve
+one canonical network catalog under .canic/networks/<network-id>/fleets and do
+not query live Fleets, create deployment truth, mutate topology, change
+controllers, install Wasm, or infer Fleets from App names.";
 const DEPLOY_CATALOG_LIST_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog list
   canic deploy inspect catalog list --json
   canic --environment local deploy inspect catalog list --json --output catalog.json
 
-Lists deployment targets from existing local deployment-target state only. This
-does not refresh live state or infer deployments from fleet-template names.";
+Lists Fleets from the resolved canonical network catalog only. This does not
+refresh live state or infer Fleets from App names.";
 const DEPLOY_CATALOG_INSPECT_HELP_AFTER: &str = "\
 Examples:
   canic deploy inspect catalog inspect demo-local
   canic deploy inspect catalog inspect demo-local --json
   canic --environment local deploy inspect catalog inspect demo-local --json --output demo-local.json
 
-Inspects one deployment target from existing local deployment-target state
-only. The deployment argument is a deployment target, not a fleet template.";
+Inspects one Fleet from the resolved canonical network catalog only. The Fleet
+argument is an operator-facing label, not an App identity.";
 const JSON_ARG: &str = "json";
 
 const LIST_COMMAND: CatalogCommand = CatalogCommand {
     name: "list",
-    about: "List known deployment targets from local state",
+    about: "List known Fleets from canonical network state",
     bin_name: "canic deploy inspect catalog list",
     help_after: DEPLOY_CATALOG_LIST_HELP_AFTER,
 };
 const INSPECT_COMMAND: CatalogCommand = CatalogCommand {
     name: "inspect",
-    about: "Inspect one known deployment target from local state",
+    about: "Inspect one known Fleet from canonical network state",
     bin_name: "canic deploy inspect catalog inspect",
     help_after: DEPLOY_CATALOG_INSPECT_HELP_AFTER,
 };
@@ -79,7 +79,7 @@ const INSPECT_COMMAND: CatalogCommand = CatalogCommand {
 ///
 #[derive(Debug)]
 pub(super) struct DeployCatalogOptions {
-    pub(super) deployment: Option<String>,
+    pub(super) fleet: Option<String>,
     pub(super) environment: String,
     pub(super) format: JsonTextOutputFormat,
     pub(super) output: Option<PathBuf>,
@@ -114,7 +114,7 @@ where
     }
 
     let options = DeployCatalogOptions::parse_list(args)?;
-    let report = build_deployment_catalog_report(&request(&options)?)
+    let report = build_fleet_catalog_report(&request(&options)?)
         .map_err(Box::<dyn std::error::Error>::from)
         .map_err(DeployCommandError::from)?;
     write_report(&options, &report)
@@ -130,12 +130,12 @@ where
     }
 
     let options = DeployCatalogOptions::parse_inspect(args)?;
-    let report = inspect_deployment_catalog_report(
+    let report = inspect_fleet_catalog_report(
         &request(&options)?,
         options
-            .deployment
+            .fleet
             .as_deref()
-            .expect("catalog inspect parser requires deployment"),
+            .expect("catalog inspect parser requires Fleet"),
     )
     .map_err(Box::<dyn std::error::Error>::from)
     .map_err(DeployCommandError::from)?;
@@ -144,12 +144,12 @@ where
 
 pub(super) fn write_report(
     options: &DeployCatalogOptions,
-    report: &DeploymentCatalogReportV1,
+    report: &FleetCatalogReportV1,
 ) -> Result<(), DeployCommandError> {
     match options.format {
         JsonTextOutputFormat::Text => output::write_text::<Box<dyn std::error::Error>>(
             options.output.as_deref(),
-            &deployment_catalog_report_text(report),
+            &fleet_catalog_report_text(report),
         )
         .map_err(DeployCommandError::from),
         JsonTextOutputFormat::Json => output::write_pretty_json::<_, Box<dyn std::error::Error>>(
@@ -160,12 +160,12 @@ pub(super) fn write_report(
     }
 }
 
-fn request(options: &DeployCatalogOptions) -> Result<DeploymentCatalogRequest, DeployCommandError> {
-    let icp_root = resolve_current_canic_icp_root()
+fn request(options: &DeployCatalogOptions) -> Result<FleetCatalogRequest, DeployCommandError> {
+    let project_root = resolve_current_canic_icp_root()
         .map_err(Box::<dyn std::error::Error>::from)
         .map_err(DeployCommandError::from)?;
-    Ok(DeploymentCatalogRequest {
-        icp_root,
+    Ok(FleetCatalogRequest {
+        project_root,
         environment: options.environment.clone(),
         generated_at: current_observed_at()?,
     })
@@ -195,7 +195,7 @@ impl DeployCatalogOptions {
         let matches = parse_matches(list_command(), args)
             .map_err(|_| DeployCommandError::Usage(list_usage()))?;
         Ok(Self {
-            deployment: None,
+            fleet: None,
             environment: string_option_or_else(&matches, "environment", local_environment),
             format: JsonTextOutputFormat::from_json_flag(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
@@ -209,7 +209,7 @@ impl DeployCatalogOptions {
         let matches = parse_matches(inspect_command(), args)
             .map_err(|_| DeployCommandError::Usage(inspect_usage()))?;
         Ok(Self {
-            deployment: Some(required_string(&matches, "deployment")),
+            fleet: Some(required_string(&matches, "fleet")),
             environment: string_option_or_else(&matches, "environment", local_environment),
             format: JsonTextOutputFormat::from_json_flag(matches.get_flag(JSON_ARG)),
             output: path_option(&matches, "output"),
@@ -223,7 +223,7 @@ pub(super) fn command() -> ClapCommand {
         .fold(
             ClapCommand::new("catalog")
                 .bin_name("canic deploy inspect catalog")
-                .about("List or inspect known deployment targets")
+                .about("List or inspect known Fleets")
                 .disable_help_flag(true),
             |command, subcommand| command.subcommand(catalog_passthrough_command(*subcommand)),
         )
@@ -236,10 +236,10 @@ fn list_command() -> ClapCommand {
 
 fn inspect_command() -> ClapCommand {
     catalog_leaf_command(INSPECT_COMMAND).arg(
-        value_arg("deployment")
-            .value_name("deployment")
+        value_arg("fleet")
+            .value_name("fleet")
             .required(true)
-            .help("Deployment target name to inspect"),
+            .help("Fleet name to inspect"),
     )
 }
 

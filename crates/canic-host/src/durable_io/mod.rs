@@ -1,13 +1,37 @@
 //! Module: durable_io
 //!
-//! Responsibility: publish one complete host-owned file without exposing partial bytes.
+//! Responsibility: read and publish complete host-owned regular files safely.
 //! Does not own: document serialization, multi-file transactions, or path selection.
-//! Boundary: callers provide final bytes; this module owns sibling staging and filesystem syncs.
+//! Boundary: reads reject links/special files; writes own sibling staging and filesystem syncs.
 
 #[cfg(test)]
 mod tests;
 
 use std::{io, path::Path};
+
+#[derive(Debug)]
+pub(crate) enum RegularFileReadError {
+    NotRegular,
+    Io(io::Error),
+    #[cfg(not(unix))]
+    UnsupportedPlatform,
+}
+
+/// Read one optional regular file without following a final symlink.
+pub(crate) fn read_optional_regular_bytes(
+    path: &Path,
+) -> Result<Option<Vec<u8>>, RegularFileReadError> {
+    #[cfg(unix)]
+    {
+        supported::read_optional_regular_bytes(path)
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Err(RegularFileReadError::UnsupportedPlatform)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum FileCommitMode {
@@ -59,12 +83,12 @@ fn commit_bytes(path: &Path, bytes: &[u8], mode: FileCommitMode) -> io::Result<(
 
 #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
 mod supported {
-    use super::FileCommitMode;
+    use super::{FileCommitMode, RegularFileReadError};
 
     use std::{
         ffi::{OsStr, OsString},
         fs,
-        io::{self, Write},
+        io::{self, Read, Write},
         path::{Path, PathBuf},
         sync::atomic::{AtomicU64, Ordering},
     };
@@ -76,6 +100,39 @@ mod supported {
 
     const TEMP_ATTEMPTS: usize = 64;
     static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    pub(super) fn read_optional_regular_bytes(
+        path: &Path,
+    ) -> Result<Option<Vec<u8>>, RegularFileReadError> {
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(RegularFileReadError::Io(error)),
+        };
+        if !metadata.file_type().is_file() {
+            return Err(RegularFileReadError::NotRegular);
+        }
+
+        let fd: OwnedFd = unix_fs::open(
+            path,
+            OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(errno_to_io)
+        .map_err(RegularFileReadError::Io)?;
+        let metadata = unix_fs::fstat(&fd)
+            .map_err(errno_to_io)
+            .map_err(RegularFileReadError::Io)?;
+        if unix_fs::FileType::from_raw_mode(metadata.st_mode) != unix_fs::FileType::RegularFile {
+            return Err(RegularFileReadError::NotRegular);
+        }
+
+        let mut file = fs::File::from(fd);
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)
+            .map_err(RegularFileReadError::Io)?;
+        Ok(Some(bytes))
+    }
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub(super) enum FileCommitStep {

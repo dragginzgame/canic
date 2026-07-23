@@ -2,7 +2,7 @@
 
 This guide shows the compact pre-v1 Canic operator story as it exists now.
 It is intentionally small: build one App role, save evidence, check that
-evidence against policy, and inspect the local deployment catalog.
+evidence against policy, and inspect the canonical-network Fleet catalog.
 
 The walkthrough is about command boundaries. It is not an import, promotion,
 controller-mutation, teardown, signing, lock, or registry workflow.
@@ -175,36 +175,36 @@ payload_schema = "canic.deployment_check.v1"
 deployment = "demo-staging"
 ```
 
-## Inspect Known Deployments
+## Inspect Known Fleets
 
-List deployment targets recorded in local deployment-target state:
+List Fleets recorded in the selected canonical network catalog:
 
 ```text
 canic deploy inspect catalog list
 canic deploy inspect catalog list --json
 ```
 
-Inspect one known deployment target:
+Inspect one known Fleet:
 
 ```text
 canic deploy inspect catalog inspect demo-staging
 canic deploy inspect catalog inspect demo-staging --json
 ```
 
-The catalog reads only:
+The selected environment profile resolves the catalog at:
 
 ```text
-.canic/<environment>/deployments/<deployment>.json
+.canic/networks/<canonical-network-id>/fleets/catalog.json
 ```
 
-It does not refresh live state, infer deployments from fleet names, create
+It does not refresh live state, infer Fleets from App names, create
 deployment truth, install Wasm, mutate topology, change controllers, register
 artifacts, acquire locks, sign evidence, add groups, or scan saved evidence
 files.
 
-An empty catalog is valid when no deployment-target state exists. In that case
-the command reports warnings instead of inventing deployments from nearby fleet
-or legacy install state.
+An empty catalog is valid when no Fleet has committed host authority on that
+network. The command never falls back to removed environment-scoped deployment
+state.
 
 ## Useful Local Smoke Checks
 
@@ -217,12 +217,12 @@ canic deploy inspect catalog list --json
 canic deploy inspect catalog list --json --output /tmp/canic-catalog-smoke.json
 ```
 
-Expected behavior in a fresh checkout without deployment-target state:
+Expected behavior in a fresh checkout without a Fleet catalog:
 
 - the catalog has zero entries;
-- warnings explain that no deployment-target state exists;
-- legacy fleet-named state, if present, is ignored;
-- `inspect <deployment>` fails clearly until that deployment target is known.
+- the canonical network identity and selected environment are still reported;
+- removed environment-scoped deployment state, if present, is ignored;
+- `inspect <fleet>` fails clearly until that Fleet is known.
 
 The maintained temporary-project smoke path is:
 

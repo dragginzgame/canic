@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.3` introduces the canonical generated Fleet identity types and
+  hard-cuts catalog inspection to one fail-closed, network-scoped Fleet
+  catalog with no environment/deployment-state fallback.
+
 - `0.99.2` establishes one trust-derived canonical network identity: public-IC
   profiles resolve from the compiled pinned root key, while the new
   `canic network enroll` command durably enrolls exact non-public DER anchors

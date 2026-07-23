@@ -107,11 +107,11 @@ Evaluate saved evidence against a project policy:
 canic evidence gate --policy <path> --manifest <path>
 ```
 
-Inspect deployment-target local state:
+Inspect the Fleet catalog for the selected canonical network:
 
 ```text
 canic deploy inspect catalog list
-canic deploy inspect catalog inspect <deployment>
+canic deploy inspect catalog inspect <fleet>
 ```
 
 ## Expected Outputs
@@ -123,7 +123,7 @@ The v1 surface should produce or read these evidence artifacts:
 - `canic.build_provenance.v1` for build provenance payloads;
 - `canic.deployment_check.v1` for deployment-check payloads;
 - `PolicyGateReportV1` or `ProjectEvidenceGateReportV1` for policy results;
-- `DeploymentCatalogReportV1` for local deployment-target catalog output.
+- `FleetCatalogReportV1` for canonical-network Fleet catalog output.
 
 Raw command payloads may be command-specific. CI should prefer stable envelope
 fields and payload schemas that are explicitly marked stable.
@@ -154,7 +154,7 @@ scripts/ci/v1-readiness-smoke.sh
 
 It runs in a temporary project and proves the safe local subset of this
 checklist: App creation, canister scaffold, declared-only inspection,
-explicit role attachment, attached inspection, empty local deployment catalog,
+explicit role attachment, attached inspection, empty network-scoped Fleet catalog,
 and policy evaluation of one saved envelope.
 
 Runbook:
@@ -181,13 +181,13 @@ deployment-check envelope that fingerprints the build provenance. The
 deployment check is expected to be blocked because the proof does not install
 or live-verify the deployment.
 
-In a fresh checkout without deployment-target state:
+In a fresh checkout without a Fleet catalog:
 
 ```text
 canic deploy inspect catalog list
 canic deploy inspect catalog list --json
 ```
 
-should succeed with zero catalog entries and warnings explaining that no
-deployment-target state exists. This is expected. Catalog commands must not
-invent deployments from fleet names or legacy install state.
+should succeed with zero catalog entries. This is expected. Catalog commands
+must not invent Fleets from App names or read removed environment-scoped
+deployment state.

@@ -1,14 +1,14 @@
 # canic-cli
 
 `canic-cli` publishes the `canic` operator binary. It is the command-line
-surface for fleet setup, role lifecycle inspection, artifact builds, stable
-evidence output, passive deployment catalog inspection, policy gates, local
-fleet installs, snapshots, backup validation, and guarded restores.
+surface for App setup, role lifecycle inspection, artifact builds, stable
+evidence output, passive Fleet catalog inspection, policy gates, local Fleet
+installs, snapshots, backup validation, and guarded restores.
 
-The compact v1 operator path is deliberately explicit: create or select a
-fleet, scaffold and attach roles, build attached roles with provenance, check
-saved deployment evidence, gate that evidence with policy, and inspect known
-deployment-target state. Backup and restore commands remain available for
+The compact operator path is deliberately explicit: create or select an App,
+scaffold and attach roles, build attached roles with provenance, check saved
+deployment evidence, gate that evidence with policy, and inspect known Fleets
+in the selected canonical network catalog. Backup and restore commands remain available for
 snapshot workflows; where they perform live snapshot or restore mutations,
 Canic owns topology selection, manifests, journals, readiness checks, restore
 ordering, and runner state around the underlying `icp` calls.
@@ -56,8 +56,12 @@ canic deploy check <deployment> --evidence-envelope
 canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
 canic deploy inspect catalog list
-canic deploy inspect catalog inspect <deployment>
+canic deploy inspect catalog inspect <fleet>
 ```
+
+Catalog lookup resolves `--environment` to a canonical network identity and
+reads `.canic/networks/<network-id>/fleets/catalog.json`; it never scans the
+removed environment-scoped deployment-state path.
 
 These commands do not imply one-command deployment, controller mutation,
 artifact registry import, teardown, deployment groups, or signing. The only

@@ -14,12 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.1`.
-- The latest published release is `v0.99.1` at
-  `2dd79b2c4e06a0e55cf887d199a8eccfbed52c79`.
-- The `v0.99.1` source tree is
-  `098b4e34392054c9fea20c23f8fd8269acedb70c`. Its Cargo.lock SHA-256 is
-  `d160150355bc5231227d045910af8e4510df6c9c955a26e3fe27453074827fca`.
+- The workspace package version is `0.99.2`.
+- The latest published release is `v0.99.2` at
+  `c906a7c00832e2090e5b1fe7edc8dc2fee320d35`.
+- The `v0.99.2` source tree is
+  `65507b6e742db43cc7f39b41792a0d88c189e066`. Its Cargo.lock SHA-256 is
+  `14b954dd6aeb3c9d0ee33626af7f3b2c4379ce27bb36677ea796a25686854bba`.
+- Released `0.99.2` establishes one trust-derived canonical network identity,
+  explicit immutable non-public trust enrollment and revalidated
+  environment-profile lookup. Public-IC staging/production aliases converge
+  on the compiled pinned root trust identity.
 - Released `0.99.1` hard-cuts tracked source identity from Fleet to App:
   `apps/<app>/`, package metadata, config discovery, source role lifecycle,
   builds, evidence, scaffolding, fixtures, scripts, and source CLI commands
@@ -1139,18 +1143,25 @@ source role lifecycle, builds, build provenance, adoption, evidence selectors,
 scaffolding, fixtures, CI scripts, and the source CLI use App identity only.
 The old `fleets/` source tree, package-metadata `fleet` key, `canic fleet`
 command family, and discovery fallback do not survive. Live
-install/deployment/catalog Fleet semantics and runtime topology authorities
-remain unchanged for their explicit later slices.
+install/deployment behavior and runtime topology authorities remain for their
+explicit later slices; the open `.3` batch below now owns the Fleet catalog
+read hard cut.
 
-The open `0.99.2` batch begins Implementation Slice 3 at its canonical
-dependency: network trust identity. `CanonicalNetworkId` is derived from an
-exact root trust anchor, public-IC profiles use Canic's compiled pinned DER
-key, and `canic network enroll` publishes a verified non-public authority
-before its non-authoritative environment-profile pointer. Exact enrollment is
-idempotent; changed anchors, incomplete authority, special files, symlinks and
-fingerprint mismatches reject without a compatibility or trust-on-first-use
-path. Fleet IDs, network-scoped catalogs and the live install/deployment
-propagation remain the next bounded Slice 3 work.
+The open `0.99.3` batch continues Implementation Slice 3 with the canonical
+Fleet identity and catalog read boundary. `FleetId`, `FleetName`, `FleetKey`
+and `FleetBinding` keep generated security identity separate from the
+operator-facing label and source App. Catalog inspection resolves the selected
+environment to one canonical network and reads only
+`.canic/networks/<canonical-network-id>/fleets/catalog.json`; the removed
+environment-scoped deployment-state catalog has no reader or fallback.
+Malformed, contradictory, duplicate, non-canonical and unsafe catalog
+authority fails closed, while an absent catalog reports no installed Fleets.
+
+Fleet ID cryptographic generation and durable planning, the installed Fleet
+tree, complete plan/receipt/host-state identity propagation and the activation
+journal's post-activation catalog commitment remain the next bounded Slice 3
+and Slice 4 work. No standalone generator or catalog writer is exposed ahead
+of that recovery authority.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

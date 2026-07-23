@@ -9,6 +9,7 @@ mod build_network;
 mod canister;
 pub mod capability;
 mod endpoint;
+mod fleet;
 mod intent;
 mod metrics;
 mod network;
@@ -19,6 +20,9 @@ pub use build_network::BuildNetwork;
 pub use canister::CanisterRole;
 pub use capability as cap;
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
+pub use fleet::{
+    FleetBinding, FleetId, FleetIdParseError, FleetKey, FleetName, FleetNameParseError,
+};
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};
 pub use network::{
