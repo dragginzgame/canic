@@ -14,12 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.0`.
-- The latest published release is `v0.99.0` at
-  `6c21d12ebadce7160db22f2ff6711c2254305fdc`.
-- The `v0.99.0` source tree is
-  `373d9892f1f932538376403bca87331333355865`. Its Cargo.lock SHA-256 is
-  `82c0c65531200d1907270690c944f1a7576fd5028a561d60deb559570dc0aa1c`.
+- The workspace package version is `0.99.1`.
+- The latest published release is `v0.99.1` at
+  `2dd79b2c4e06a0e55cf887d199a8eccfbed52c79`.
+- The `v0.99.1` source tree is
+  `098b4e34392054c9fea20c23f8fd8269acedb70c`. Its Cargo.lock SHA-256 is
+  `d160150355bc5231227d045910af8e4510df6c9c955a26e3fe27453074827fca`.
+- Released `0.99.1` hard-cuts tracked source identity from Fleet to App:
+  `apps/<app>/`, package metadata, config discovery, source role lifecycle,
+  builds, evidence, scaffolding, fixtures, scripts, and source CLI commands
+  use App identity only.
 - Released `0.99.0` implements the reinstall-only minimum App config hard cut:
   required `[app].name`, `[services.fleet].roles`, `SubnetSlotId::DEFAULT`,
   `subnets.default`, and keyed `binding` are the sole maintained config
@@ -1129,7 +1133,7 @@ installed-state trees or deployment catalogs. The first mutating batch is
 0.99 **Implementation Slice 1 — Minimum Config Hard Cut**.
 
 Implementation Slice 1 is released as `v0.99.0`. Implementation Slice 2 — App
-Source Surfaces is complete in the working tree as the open `0.99.1` draft.
+Source Surfaces is released as `v0.99.1`.
 The tracked source layout is `apps/<app>/`; package metadata, config discovery,
 source role lifecycle, builds, build provenance, adoption, evidence selectors,
 scaffolding, fixtures, CI scripts, and the source CLI use App identity only.
@@ -1138,16 +1142,15 @@ command family, and discovery fallback do not survive. Live
 install/deployment/catalog Fleet semantics and runtime topology authorities
 remain unchanged for their explicit later slices.
 
-Focused App CLI, list, Medic, evidence, config discovery, release-set,
-build-provenance, adoption, role-contract, workspace-manifest,
-reference-surface, timer/receipt inventory, and blob-storage inventory checks
-pass. The complete `canic-cli` library suite passes 608 tests with one
-explicitly disposable-environment recovery test ignored. Strict all-target
-Clippy passes for `canic-core`, `canic`, `canic-host`, and `canic-cli`;
-formatting and diff hygiene pass. No Cargo package version, dependency,
-lockfile, Candid, stable-memory, or live deployment contract has changed. The
-source path, package metadata, Rust source model, source CLI, and
-source/evidence JSON changes are intentional hard cuts.
+The open `0.99.2` batch begins Implementation Slice 3 at its canonical
+dependency: network trust identity. `CanonicalNetworkId` is derived from an
+exact root trust anchor, public-IC profiles use Canic's compiled pinned DER
+key, and `canic network enroll` publishes a verified non-public authority
+before its non-authoritative environment-profile pointer. Exact enrollment is
+idempotent; changed anchors, incomplete authority, special files, symlinks and
+fingerprint mismatches reject without a compatibility or trust-on-first-use
+path. Fleet IDs, network-scoped catalogs and the live install/deployment
+propagation remain the next bounded Slice 3 work.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

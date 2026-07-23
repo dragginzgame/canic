@@ -62,6 +62,46 @@ fn durable_create_new_does_not_create_missing_parents() {
 }
 
 #[test]
+fn durable_create_new_with_parents_never_replaces_an_existing_file() {
+    let root = temp_root("create-new-with-parents");
+    fs::create_dir_all(&root).expect("create temp root");
+    let path = root.join("nested/report.json");
+
+    create_new_bytes_with_parents(&path, b"first complete contents").expect("create output");
+    let error = create_new_bytes_with_parents(&path, b"replacement")
+        .expect_err("existing output must reject");
+
+    assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(
+        fs::read(&path).expect("read target"),
+        b"first complete contents"
+    );
+    assert_no_temporary_files(&root);
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn durable_create_new_with_parents_rejects_a_symlinked_parent() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_root("create-new-symlink-parent");
+    let outside = temp_root("create-new-symlink-outside");
+    fs::create_dir_all(&root).expect("create temp root");
+    fs::create_dir_all(&outside).expect("create outside root");
+    symlink(&outside, root.join("linked")).expect("create parent symlink");
+
+    let error = create_new_bytes_with_parents(&root.join("linked/report.json"), b"contents")
+        .expect_err("symlinked parent must reject");
+
+    assert_eq!(error.kind(), io::ErrorKind::NotADirectory);
+    assert!(!outside.join("report.json").exists());
+    fs::remove_dir_all(root).expect("remove temp root");
+    fs::remove_dir_all(outside).expect("remove outside root");
+}
+
+#[test]
 fn durable_write_rejects_a_target_without_a_file_name() {
     let error = write_bytes(Path::new("/"), b"value").expect_err("directory target must fail");
 

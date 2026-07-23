@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.2` establishes one trust-derived canonical network identity: public-IC
+  profiles resolve from the compiled pinned root key, while the new
+  `canic network enroll` command durably enrolls exact non-public DER anchors
+  before publishing revalidated environment-profile pointers.
+
 - `0.99.1` hard-cuts source ownership from Fleet to App across the `apps/`
   tree, package metadata, config discovery, role lifecycle, builds, adoption,
   evidence, CLI commands, fixtures, scripts, and active guidance while leaving

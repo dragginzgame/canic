@@ -21,7 +21,6 @@ pub const MAINNET_IC_ROOT_PUBLIC_KEY_RAW: [u8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH] = 
     0x91, 0x09, 0x1c, 0x5f, 0x87, 0xb9, 0x88, 0x83, 0x46, 0x3f, 0x98, 0x09, 0x1a, 0x0b, 0xaa, 0xae,
 ];
 
-#[cfg(any(target_arch = "wasm32", test))]
 const IC_ROOT_PK_DER_PREFIX: &[u8; 37] = b"\x30\x81\x82\x30\x1d\x06\x0d\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x01\x02\x01\x06\x0c\x2b\x06\x01\x04\x01\x82\xdc\x7c\x05\x03\x02\x01\x03\x61\x00";
 
 pub fn is_mainnet_ic_root_public_key_raw(root_key: &[u8]) -> bool {
@@ -48,7 +47,6 @@ fn encode_len(out: &mut Vec<u8>, len: usize) {
     out.extend_from_slice(&len.to_be_bytes());
 }
 
-#[cfg(any(target_arch = "wasm32", test))]
 pub fn ic_root_public_key_raw_from_der_or_raw(root_key: &[u8]) -> Result<Vec<u8>, String> {
     if root_key.len() == IC_ROOT_PUBLIC_KEY_RAW_LENGTH {
         return Ok(root_key.to_vec());
@@ -62,6 +60,15 @@ pub fn ic_root_public_key_raw_from_der_or_raw(root_key: &[u8]) -> Result<Vec<u8>
         return Err("invalid IC root public key DER prefix".to_string());
     }
     Ok(root_key[IC_ROOT_PK_DER_PREFIX.len()..].to_vec())
+}
+
+/// Return Canic's compiled, pinned IC mainnet root public key in DER form.
+#[must_use]
+pub fn mainnet_ic_root_public_key_der() -> Vec<u8> {
+    let mut der = Vec::with_capacity(IC_ROOT_PK_DER_PREFIX.len() + IC_ROOT_PUBLIC_KEY_RAW_LENGTH);
+    der.extend_from_slice(IC_ROOT_PK_DER_PREFIX);
+    der.extend_from_slice(&MAINNET_IC_ROOT_PUBLIC_KEY_RAW);
+    der
 }
 
 #[cfg(test)]
@@ -80,6 +87,14 @@ mod tests {
         assert_eq!(
             ic_root_public_key_raw_from_der_or_raw(&[8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]).unwrap(),
             vec![8; IC_ROOT_PUBLIC_KEY_RAW_LENGTH]
+        );
+    }
+
+    #[test]
+    fn compiled_mainnet_der_round_trips_to_the_pinned_raw_key() {
+        assert_eq!(
+            ic_root_public_key_raw_from_der_or_raw(&mainnet_ic_root_public_key_der()).unwrap(),
+            MAINNET_IC_ROOT_PUBLIC_KEY_RAW
         );
     }
 }

@@ -11,6 +11,7 @@ pub mod capability;
 mod endpoint;
 mod intent;
 mod metrics;
+mod network;
 mod subnet;
 
 pub use app::AppId;
@@ -20,4 +21,7 @@ pub use capability as cap;
 pub use endpoint::{EndpointCall, EndpointCallKind, EndpointId};
 pub use intent::{IntentId, IntentResourceKey};
 pub use metrics::{AccessMetricKind, SystemMetricKind};
+pub use network::{
+    CanonicalNetworkId, CanonicalNetworkIdParseError, CanonicalNetworkTrustAnchorError,
+};
 pub use subnet::SubnetSlotId;
