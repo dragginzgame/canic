@@ -276,10 +276,12 @@ fn enrollment_rejects_symlink_and_special_root_key_inputs_without_writing() {
     );
 
     let socket_path = root.join("root-key.sock");
-    let _socket = UnixListener::bind(&socket_path).expect("bind unix socket");
+    let socket = UnixListener::bind(&socket_path).expect("bind unix socket");
     let socket_error = enroll_network(enroll(&root, "local", &socket_path, &fingerprint))
         .expect_err("special input must reject");
     std::assert_matches!(socket_error, NetworkIdentityError::RootKeyNotRegular { .. });
     assert!(!root.join(CANIC_STATE_DIRECTORY).exists());
+    drop(socket);
+    fs::remove_file(socket_path).expect("remove unix socket");
     fs::remove_dir_all(root).expect("remove fixture");
 }
