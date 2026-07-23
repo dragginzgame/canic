@@ -7,7 +7,6 @@
 pub mod build_network;
 pub mod call;
 pub mod icp_refill;
-pub mod ledger;
 pub mod mgmt;
 pub mod provision;
 

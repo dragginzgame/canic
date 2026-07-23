@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.14`.
-- The latest published release is `v0.98.14` at
-  `ecf6d22e5c285315d15041d054f66e1460e0b225`.
-- The `v0.98.14` source tree is
-  `31c25cf1abe5e5b3e41b8bae5b2db6e914eacaa2`; its product-tree hash is
-  `14a853b7bd4683cecfeca5055e3316fc7d55ae6279d87b0867f894bfd2c83e7f` and
+- The workspace package version is `0.98.15`.
+- The latest published release is `v0.98.15` at
+  `889da0486cde2174215ff2e6750455dc2e2f2db2`.
+- The `v0.98.15` source tree is
+  `d0d200059d010e1e6c7b3378d4aa1f241443cba2`; its product-tree hash is
+  `319cdf855c9a5a0685b7a3ddca25a912524df1a2c2c0674477c274a857f413ef` and
   its Cargo.lock SHA-256 is
-  `95e09240cb590fb033a92555ad76fb1fa1bc94ef0f4daf12ce5ed9bd6f585080`.
+  `864aeeb55beafe629b933f393d66a5120e562f3c11fe093642a433d5ed4b605a`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -45,9 +45,12 @@ Historical detail is archived at:
   issuer attestation baseline. The never-consumed upgrade wrapper, orphan
   verifier baseline, unused fixture projections, and self-sustaining minimal-
   role constant are removed.
-- Open `0.98.15` implements Slice M: the unused ICRC-21 static-message
+- Released `0.98.15` implements Slice M: the unused ICRC-21 static-message
   registration convenience is removed. The typed handler registration and
   consent-message dispatch path remain the sole public runtime authority.
+- Open `0.98.16` implements Slice N: the orphan generic ICRC-2 allowance and
+  `transfer_from` stack is removed across API, workflow, ops, infra, wire
+  bindings, known-ledger constants, and its unused platform metric dimension.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1071,13 +1074,15 @@ First primary results:
 
 ## Next Action
 
-Open `0.98.15` implements ICRC-21 dispatcher Slice M. The typed
-`Icrc21Dispatcher::register` and `consent_message` path remains; the
-definition-only `register_static_with` convenience path is removed without an
-alias or replacement. Focused facade protocol, strict Clippy, formatting,
-changelog-governance, stale-symbol, and diff-hygiene evidence belongs with
-this open patch. The Canic app registry is explicitly deferred to 0.100; it is
-not part of this slice. Do not
+Open `0.98.16` implements generic ICRC-2 ledger-stack Slice N. The
+consumerless allowance/`transfer_from` API-through-infra chain, its internal
+Candid bindings, ckUSDC/ckUSDT metadata constants, and its dead platform
+metric surface are removed without replacement. The root-only manual
+ICP-to-cycles workflow retains its separate ICP-ledger/CMC implementation.
+Focused core checks, ICP-refill and platform-metric tests, facade protocol,
+strict Clippy, formatting, changelog-governance, stale-symbol, and
+diff-hygiene evidence belongs with this open patch. The Canic app registry is
+explicitly deferred to 0.100; it is not part of this slice. Do not
 inspect or edit the stale local Toko
 repository, change Cargo package versions outside the maintainer-owned release
 flow, or commit, tag, publish, or push shared-worktree changes without

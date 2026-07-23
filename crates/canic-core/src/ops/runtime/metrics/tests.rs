@@ -699,13 +699,13 @@ fn platform_call_metrics_are_exposed_with_stable_labels() {
         PlatformCallMetricReason::Ok,
     );
     PlatformCallMetrics::record(
-        PlatformCallMetricSurface::Ledger,
+        PlatformCallMetricSurface::Http,
         PlatformCallMetricMode::Update,
         PlatformCallMetricOutcome::Failed,
         PlatformCallMetricReason::Infra,
     );
     PlatformCallMetrics::record(
-        PlatformCallMetricSurface::Ledger,
+        PlatformCallMetricSurface::Http,
         PlatformCallMetricMode::Update,
         PlatformCallMetricOutcome::Failed,
         PlatformCallMetricReason::Infra,
@@ -720,7 +720,7 @@ fn platform_call_metrics_are_exposed_with_stable_labels() {
     );
     assert_metric_count(
         &entries,
-        &["platform_call", "ledger", "update", "failed", "infra"],
+        &["platform_call", "http", "update", "failed", "infra"],
         2,
     );
 }

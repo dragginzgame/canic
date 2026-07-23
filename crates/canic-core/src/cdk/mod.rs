@@ -11,7 +11,6 @@ pub use ic_cdk::{
 };
 
 pub mod serialize;
-pub mod spec;
 pub mod structures;
 pub mod types;
 pub mod utils;
