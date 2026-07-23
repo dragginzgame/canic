@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.18`.
-- The latest published release is `v0.98.18` at
-  `2ee7cce30e7d3c17179790af407f6d946caaf0f9`.
-- The `v0.98.18` source tree is
-  `86931bd5d8bb6acaa8d7c67d44bfa611ef75e537`; its product-tree hash is
-  `5994797776e565d60c4be97116d6c00b8de6181fe8394fd245586dafc9eb99c5` and
+- The workspace package version is `0.98.19`.
+- The latest published release is `v0.98.19` at
+  `9b7cff1f690dec18fe3e5e7737c85eae3594185d`.
+- The `v0.98.19` source tree is
+  `3e4829990341b9897d402e05ddda55b42f020f3e`; its product-tree hash is
+  `e43ff9f4f3b8bef636cd280a97a0ad27bc45c9213bc32953b78021a13780f247` and
   its Cargo.lock SHA-256 is
-  `94556cf50c6bd0a6527b375ebeb3c7a6ce6d4f669e207cd219db93b741bc4c3a`.
+  `644e0c56ba47a1c63b7e2e034ff22ae0bf27e3558ca94cff4e710ebdda78a353`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -59,10 +59,13 @@ Historical detail is archived at:
   universal across every managed Canister in the proposed 0.99 hard cut and
   refines the proposed 0.100 Prime-owned Registry, mirror, Directory,
   synchronization, and recovery contracts. No active runtime code changed.
-- Open `0.98.19` hard-cuts the remaining Canic-core IC runtime API relay.
+- Released `0.98.19` hard-cuts the remaining Canic-core IC runtime API relay.
   Runtime and hidden macro plumbing use upstream `ic-cdk` directly, time is
   owned by `IcOps`, and unused stable-structures exports are removed without
   changing runtime behavior or package versions.
+- Open `0.98.20` localizes the ICRC-1 account wire shape to the manual
+  ICP-refill adapter, removes unused generic account/subaccount helpers, and
+  makes resumed transfers consume the exact persisted CMC account identity.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1090,14 +1093,16 @@ Released `v0.98.17` completes generic-IC-helper Slice O. Application-owned
 generic IC calls use upstream `ic-cdk`; Canic retains one shared internal call
 transport and the active build-network ops/infra authority. Released
 `v0.98.18` changes only the proposed 0.99/0.100 design documents and normal
-release metadata. Open `0.98.19` removes the remaining internal IC runtime API
-relay and narrows the stable-structures export inventory; the hidden compiler
-namespace and maintained call/build-network authorities remain. It does not
-implement Fleet identity, a Fleet Registry, multi-subnet synchronization, or
-any other proposed 0.99/0.100 behavior. Do not inspect or edit the stale local
-Toko repository, change Cargo package versions outside the maintainer-owned
-release flow, or commit, tag, publish, or push shared-worktree changes without
-maintainer action.
+release metadata. Released `v0.98.19` removes the remaining internal IC
+runtime API relay and narrows the stable-structures export inventory; the
+hidden compiler namespace and maintained call/build-network authorities
+remain. Open `0.98.20` gives manual ICP refill one adapter-local ICRC-1 account
+shape and uses persisted CMC identity on resume. It does not implement Fleet
+identity, a Fleet Registry, multi-subnet synchronization, or any other
+proposed 0.99/0.100 behavior. Preserve the maintainer's active 0.99/0.100
+design edits. Do not inspect or edit the stale local Toko repository, change
+Cargo package versions outside the maintainer-owned release flow, or commit,
+tag, publish, or push shared-worktree changes without maintainer action.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

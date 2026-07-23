@@ -6,13 +6,13 @@ Status: all investigated candidates resolved; validation evidence is recorded
 in the supporting consolidation report and canonical 0.98 closeout audit.
 
 Post-closeout note: the resolved status and totals below apply to the original
-42 candidates published in `v0.98.2`. Thirteen later findings are recorded in the
+42 candidates published in `v0.98.2`. Fourteen later findings are recorded in the
 [post-closeout supplement](#post-closeout-supplement). They are accepted design
 scope; Slices D and E are published in `v0.98.10` and `v0.98.11`; Slices F
 through J are published in `v0.98.12`; Slice K is published in `v0.98.13`;
 Slice L is published in `v0.98.14`; Slice M is published in `v0.98.15`; Slice
 N is published in `v0.98.16`; Slice O is published in `v0.98.17`; Slice P is
-in implementation for `0.98.19`.
+published in `v0.98.19`; Slice Q is in implementation for `0.98.20`.
 They are not included in the immutable 0.98.2 totals.
 
 ## Counting rules
@@ -112,7 +112,8 @@ were not exhaustive proofs against these newly traced tails.
 | CANIC-098-POST-ICRC21-001 | P2 | `Icrc21Dispatcher::register_static_with` has no repository caller or active documentation and constructs one fixed English generic-display response beside the complete typed `register` contract. | FIXED in `v0.98.15` — convenience deleted; typed registration and `consent_message` dispatch retained |
 | CANIC-098-POST-ICRC2-001 | P2 | The generic ICRC-2 API, workflow allowance rule, ops adapter, infra calls, wire bindings, known-ledger metadata, and platform metric dimension form one self-contained call chain with no facade, endpoint, canister, CLI, test, or script entrypoint. | FIXED in `v0.98.16` — complete chain and dead metric dimension deleted; independent root ICP-refill ledger/CMC path retained |
 | CANIC-098-POST-IC-HELPERS-001 | P2 | The facade and prelude preserve generic IC call, HTTP-outcall, and build-network convenience surfaces after 0.97 moved generic IC ownership upstream. Call/HTTP have no maintained repository consumer; the build-network API and workflow only forward to an independently active ops/infra authority. | FIXED in `v0.98.17` — public helpers, orphan HTTP stack, and redundant wrappers deleted; active internal call transport and build-network ops/infra retained |
-| CANIC-098-POST-CDK-RELAY-001 | P2 | `canic-core::cdk` still relays upstream IC runtime APIs to Canic runtime and macro code after the public facade hard cut; its separate time module only forwards that clock into `IcOps`, and its stable-structures inventory exports many types with no repository consumer. | FIXED in open `0.98.19` — runtime and hidden macro plumbing import upstream `ic-cdk` directly, time is owned by `IcOps`, and unused stable exports are removed without an alias |
+| CANIC-098-POST-CDK-RELAY-001 | P2 | `canic-core::cdk` still relays upstream IC runtime APIs to Canic runtime and macro code after the public facade hard cut; its separate time module only forwards that clock into `IcOps`, and its stable-structures inventory exports many types with no repository consumer. | FIXED in `v0.98.19` — runtime and hidden macro plumbing import upstream `ic-cdk` directly, time is owned by `IcOps`, and unused stable exports are removed without an alias |
+| CANIC-098-POST-ICP-ACCOUNT-001 | P2 | Generic CDK `Account`/`Subaccount` helpers are consumed only by manual ICP refill; custom ordering/hash/default-subaccount semantics have no production caller, and transfer resume rebuilds the CMC account instead of consuming the exact identity already persisted in the refill record. | FIXED in open `0.98.20` — the wire account is adapter-local, unused semantics and aliases are removed, and resume consumes the persisted CMC owner/subaccount |
 
 ## Package coverage
 

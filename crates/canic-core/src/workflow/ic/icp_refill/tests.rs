@@ -78,6 +78,8 @@ fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
         target_canister: record.target_canister,
         ledger_canister_id: record.ledger_canister_id,
         cmc_canister_id: record.cmc_canister_id,
+        cmc_to_account_owner: record.cmc_to_account_owner,
+        cmc_to_account_subaccount: record.cmc_to_account_subaccount,
         amount_e8s: record.amount_e8s,
         fee_e8s: record.fee_e8s,
         memo: record.memo.clone(),

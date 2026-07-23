@@ -100,7 +100,7 @@ async fn execute_manual_refill_operation(
     let context =
         prepare_context(&request, root_canister, RateQueryMode::WhenGateConfigured).await?;
     validate_receipt_token(token).map_err(map_icp_refill_replay_store_error)?;
-    let cmc_account = IcpRefillOps::cmc_topup_account(context.cmc_canister_id, root_canister)?;
+    let cmc_subaccount = IcpRefillOps::cmc_topup_subaccount(root_canister)?;
     let operation = create_or_get_operation(IcpRefillOperationCreateInput {
         operation_id,
         source_canister: root_canister,
@@ -108,8 +108,8 @@ async fn execute_manual_refill_operation(
         target_canister: root_canister,
         ledger_canister_id: context.ledger_canister_id,
         cmc_canister_id: context.cmc_canister_id,
-        cmc_to_account_owner: cmc_account.owner,
-        cmc_to_account_subaccount: cmc_account.subaccount,
+        cmc_to_account_owner: context.cmc_canister_id,
+        cmc_to_account_subaccount: Some(cmc_subaccount),
         amount_e8s: request.amount_e8s,
         fee_e8s: context.fee_e8s,
         memo: IcpRefillOps::topup_memo(),
@@ -137,10 +137,10 @@ async fn transfer_operation(
     token: &ReplayReceiptToken,
     cost_permit: &mut Option<CostGuardPermit>,
 ) -> Result<IcpRefillOperation, InternalError> {
-    let to = IcpRefillOps::cmc_topup_account(operation.cmc_canister_id, operation.target_canister)?;
     let transfer_arg = IcpRefillOps::transfer_arg(
         operation.source_subaccount,
-        to,
+        operation.cmc_to_account_owner,
+        operation.cmc_to_account_subaccount,
         operation.amount_e8s,
         operation.fee_e8s,
         operation.memo.clone(),

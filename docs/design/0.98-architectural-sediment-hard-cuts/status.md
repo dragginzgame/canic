@@ -90,7 +90,8 @@ targets, or compatibility modes are permitted.
 | CANIC-098-PACKAGE-002 project-protocol-stub has no consumer | P2 | fixed | Package/member/lock row deleted without replacement |
 | CANIC-098-TEST-003 LocalIntent external race contradicts receipt contract | P2 | fixed | Client/external/buy path deleted; focused receipt conformance retained |
 | CANIC-098-CLOSE-* consolidation ledger | 1 P1, 11 P2, 30 notes | resolved | All findings fixed and every candidate disposition proved |
-| CANIC-098-POST-CDK-RELAY-001 redundant internal IC runtime relay | P2 | fixed in open 0.98.19 | Direct upstream runtime/macro ownership; clock consolidated; unused stable exports removed |
+| CANIC-098-POST-CDK-RELAY-001 redundant internal IC runtime relay | P2 | fixed in v0.98.19 | Direct upstream runtime/macro ownership; clock consolidated; unused stable exports removed |
+| CANIC-098-POST-ICP-ACCOUNT-001 global refill-only account helpers | P2 | fixed in open 0.98.20 | Adapter-local wire account; persisted CMC identity drives resume |
 
 ## Slice Order
 
@@ -135,11 +136,13 @@ have the validated immutable `v0.98.0` anchor.
 The immutable `v0.98.2` closeout remains closed. The maintainer subsequently
 accepted bounded post-closeout hard-cut tails through released `v0.98.17`.
 Released `v0.98.18` changes only the proposed 0.99/0.100 design documents and
-normal release metadata; it adds no 0.98 product slice. Open `0.98.19` removes
-the remaining Canic-core IC runtime API relay while preserving the hidden
-compiler namespace, active internal call transport, and build-network
-ops/infra authority. The immutable 42-candidate accounting remains closed,
-and future Fleet/multi-subnet contracts are not implemented by this work.
+normal release metadata; it adds no 0.98 product slice. Released `v0.98.19`
+removes the remaining Canic-core IC runtime API relay while preserving the
+hidden compiler namespace, active internal call transport, and build-network
+ops/infra authority. Open `0.98.20` localizes the refill-only ICRC-1 account
+shape and makes persisted CMC identity authoritative on resume. The immutable
+42-candidate accounting remains closed, and future Fleet/multi-subnet
+contracts are not implemented by this work.
 
 ## Slice A Validation
 

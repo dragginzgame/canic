@@ -5,10 +5,6 @@
 //! Boundary: ops calls this after policy approves an ICP-to-cycles refill attempt.
 
 use crate::{
-    cdk::{
-        candid::{CandidType, Nat},
-        types::{Account, Principal, Subaccount},
-    },
     ids::BuildNetwork,
     infra::{
         InfraError,
@@ -19,6 +15,7 @@ use crate::{
         },
     },
 };
+use candid::{CandidType, Nat, Principal};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::fmt;
@@ -28,21 +25,29 @@ const CMC_TOPUP_MEMO_BYTES: &[u8] = b"TPUP\0\0\0\0";
 const CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES: usize = 31;
 
 ///
+/// Icrc1Account
+///
+/// Raw ICRC-1 account payload used only by the ICP ledger adapter.
+///
+
+#[derive(CandidType)]
+pub struct Icrc1Account {
+    pub owner: Principal,
+    pub subaccount: Option<[u8; 32]>,
+}
+
+///
 /// TransferArg
 ///
 /// ICRC-1 `icrc1_transfer` request payload used for ICP refill transfers.
 ///
 
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType)]
 pub struct TransferArg {
-    #[serde(default)]
-    pub from_subaccount: Option<Subaccount>,
-    pub to: Account,
-    #[serde(default)]
+    pub from_subaccount: Option<[u8; 32]>,
+    pub to: Icrc1Account,
     pub fee: Option<Nat>,
-    #[serde(default)]
     pub created_at_time: Option<u64>,
-    #[serde(default)]
     pub memo: Option<Memo>,
     pub amount: Nat,
 }
@@ -246,7 +251,7 @@ impl IcpRefillInfra {
     }
 
     /// Build the CMC top-up subaccount for a target canister.
-    pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<Subaccount, InfraError> {
+    pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<[u8; 32], InfraError> {
         let bytes = target_canister.as_slice();
         if bytes.len() > CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES {
             return Err(
@@ -261,21 +266,12 @@ impl IcpRefillInfra {
         Ok(subaccount)
     }
 
-    pub fn cmc_topup_account(
-        cmc_canister_id: Principal,
-        target_canister: Principal,
-    ) -> Result<Account, InfraError> {
-        Ok(Account {
-            owner: cmc_canister_id,
-            subaccount: Some(Self::cmc_topup_subaccount(target_canister)?),
-        })
-    }
-
     /// Build an ICRC-1 transfer argument for a refill transfer.
     #[must_use]
     pub fn transfer_arg(
-        from_subaccount: Option<Subaccount>,
-        to: Account,
+        from_subaccount: Option<[u8; 32]>,
+        to_owner: Principal,
+        to_subaccount: Option<[u8; 32]>,
         amount_e8s: u64,
         fee_e8s: u64,
         memo: Vec<u8>,
@@ -283,7 +279,10 @@ impl IcpRefillInfra {
     ) -> TransferArg {
         TransferArg {
             from_subaccount,
-            to,
+            to: Icrc1Account {
+                owner: to_owner,
+                subaccount: to_subaccount,
+            },
             fee: Some(Nat::from(fee_e8s)),
             created_at_time: Some(created_at_time_ns),
             memo: Some(Memo::from(memo)),
@@ -443,13 +442,12 @@ mod tests {
 
     #[test]
     fn transfer_arg_preserves_recovery_identity() {
-        let to = Account {
-            owner: principal(9),
-            subaccount: Some([8_u8; 32]),
-        };
+        let to_owner = principal(9);
+        let to_subaccount = Some([8_u8; 32]);
         let args = IcpRefillInfra::transfer_arg(
             Some([7_u8; 32]),
-            to,
+            to_owner,
+            to_subaccount,
             100_000_000,
             10_000,
             IcpRefillInfra::topup_memo(),
@@ -457,7 +455,8 @@ mod tests {
         );
 
         assert_eq!(args.from_subaccount, Some([7_u8; 32]));
-        assert_eq!(args.to, to);
+        assert_eq!(args.to.owner, to_owner);
+        assert_eq!(args.to.subaccount, to_subaccount);
         assert_eq!(args.amount, Nat::from(100_000_000_u64));
         assert_eq!(args.fee, Some(Nat::from(10_000_u64)));
         assert_eq!(args.created_at_time, Some(42));
