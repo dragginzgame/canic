@@ -11,7 +11,6 @@ pub mod cascade;
 pub mod config;
 pub mod cost_guard;
 pub mod env;
-pub mod http;
 pub mod ic;
 pub mod icrc;
 pub mod log;

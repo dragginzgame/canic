@@ -118,7 +118,8 @@ have the validated immutable `v0.98.0` anchor.
 
 - change 0.96 receipt storage, replay, eligibility, reclamation, timers, or
   downstream conformance;
-- implement any 0.97 dependency/CDK work;
+- reopen 0.97 role-dependency or hidden macro-CDK design; Slice O only removes
+  public generic-helper residue under its released upstream-ownership rule;
 - add replay receipt observation or RecoveryRequired reconciliation;
 - delete or redesign icp-refill;
 - delete or redesign LocalIntent;
@@ -131,14 +132,15 @@ have the validated immutable `v0.98.0` anchor.
 ## Next Action
 
 The immutable `v0.98.2` closeout remains closed. The maintainer subsequently
-accepted bounded post-closeout hard-cut tails through released `v0.98.15`.
-Open `0.98.16` removes the consumerless generic ICRC-2 allowance and
-`transfer_from` stack, its internal bindings and metadata, and its unreachable
-platform metric surface. The separate root-only manual ICP-to-cycles workflow
-remains. This does not reopen the immutable 42-candidate accounting, the
-excluded ICP-refill state machine, or the app-registry work deferred to 0.100.
-After targeted validation, exercise the resulting release in real
-deployments.
+accepted bounded post-closeout hard-cut tails through released `v0.98.16`.
+Open `0.98.17` removes the consumerless generic IC call and HTTP-outcall
+facades, the orphan HTTP implementation/metric stack, and the redundant
+build-network API/workflow wrappers. Application-owned generic IC calls use
+upstream `ic-cdk`; Canic retains its active internal call transport and
+build-network ops/infra authority. This does not reopen the immutable
+42-candidate accounting, the excluded ICP-refill state machine, or the
+app-registry work deferred to 0.100. After targeted validation, exercise the
+resulting release in real deployments.
 
 ## Slice A Validation
 

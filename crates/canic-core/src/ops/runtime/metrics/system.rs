@@ -77,12 +77,12 @@ mod tests {
     fn increment_accumulates() {
         SystemMetrics::reset();
 
-        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
-        SystemMetrics::increment(SystemMetricKind::HttpOutcall);
+        SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+        SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+        SystemMetrics::increment(SystemMetricKind::CanisterStatus);
 
         let map = snapshot_map();
-        assert_eq!(map.get(&SystemMetricKind::HttpOutcall), Some(&3));
+        assert_eq!(map.get(&SystemMetricKind::CanisterStatus), Some(&3));
     }
 
     #[test]

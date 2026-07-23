@@ -104,7 +104,7 @@ mod tests {
             PlatformCallMetricReason::Ok,
         );
         PlatformCallMetrics::record(
-            PlatformCallMetricSurface::Http,
+            PlatformCallMetricSurface::Management,
             PlatformCallMetricMode::Update,
             PlatformCallMetricOutcome::Failed,
             PlatformCallMetricReason::Infra,
@@ -122,7 +122,7 @@ mod tests {
         );
         assert_eq!(
             map.get(&PlatformCallMetricKey {
-                surface: PlatformCallMetricSurface::Http,
+                surface: PlatformCallMetricSurface::Management,
                 mode: PlatformCallMetricMode::Update,
                 outcome: PlatformCallMetricOutcome::Failed,
                 reason: PlatformCallMetricReason::Infra,

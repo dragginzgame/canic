@@ -438,7 +438,6 @@ pub enum ManagementCallMetricReason {
 #[remain::sorted]
 pub enum PlatformCallMetricSurface {
     Generic,
-    Http,
     Management,
 }
 
@@ -448,7 +447,6 @@ impl PlatformCallMetricSurface {
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::Generic => "generic",
-            Self::Http => "http",
             Self::Management => "management",
         }
     }
@@ -517,7 +515,6 @@ impl PlatformCallMetricOutcome {
 pub enum PlatformCallMetricReason {
     CandidDecode,
     CandidEncode,
-    HttpStatus,
     Infra,
     Ok,
 }
@@ -529,7 +526,6 @@ impl PlatformCallMetricReason {
         match self {
             Self::CandidDecode => "candid_decode",
             Self::CandidEncode => "candid_encode",
-            Self::HttpStatus => "http_status",
             Self::Infra => "infra",
             Self::Ok => "ok",
         }

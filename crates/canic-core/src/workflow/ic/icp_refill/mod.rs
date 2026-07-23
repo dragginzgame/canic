@@ -25,10 +25,9 @@ use crate::{
     infra::ic::icp_refill::IcpRefillCanisterOverrides,
     ops::{
         config::ConfigOps,
-        ic::{IcOps, icp_refill::IcpRefillOps},
+        ic::{IcOps, build_network::BuildNetworkOps, icp_refill::IcpRefillOps},
         storage::{icp_refill::IcpRefillStoreOps, state::app::AppStateOps},
     },
-    workflow::ic::build_network::BuildNetworkWorkflow,
 };
 use thiserror::Error as ThisError;
 
@@ -161,7 +160,7 @@ async fn prepare_context(
     }
 
     let canisters = IcpRefillOps::resolve_canisters(
-        build_network()?,
+        require_build_network(BuildNetworkOps::build_network())?,
         refill_canister_overrides(policy.as_ref()),
     )?;
     let fee = IcpRefillOps::icrc1_fee(canisters.ledger_canister_id).await?;
@@ -296,10 +295,6 @@ fn active_for_request(
         root_canister,
         request.operation_id,
     )
-}
-
-fn build_network() -> Result<BuildNetwork, InternalError> {
-    require_build_network(BuildNetworkWorkflow::build_network())
 }
 
 fn require_build_network(

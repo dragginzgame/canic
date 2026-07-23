@@ -68,7 +68,7 @@ invalid-input error for that canister.
 | ------------- | -------- | ----- |
 | `Core` | `lifecycle`, `canister_ops`, `cycles_funding`, `cycles_topup` | Operator-facing lifecycle, canister operation, and cycles rows. |
 | `Placement` | `cascade`, `directory`, `pool`, `scaling`, `sharding` | Fleet placement and topology rows. `sharding` is present only when the sharding feature is enabled. |
-| `Platform` | `platform_call`, `http`, `inter_canister_call` | Low-cardinality IC/platform I/O rows. |
+| `Platform` | `platform_call`, `inter_canister_call` | Low-cardinality IC/platform I/O rows. |
 | `Runtime` | `intent`, `perf`, `timer` | Runtime reservation, instruction, and timer rows. |
 | `Security` | `access`, `auth`, `delegated_auth`, `replay`, `root_capability` | Access, delegated auth, replay, and capability rows. |
 | `Storage` | `wasm_store` | Wasm-store source, chunk, and publication rows. |
@@ -85,8 +85,7 @@ scaling, and feature-gated sharding.
 
 ### `Platform`
 
-Platform rows cover IC/platform call outcomes, HTTP outcalls, and
-inter-canister calls.
+Platform rows cover IC/platform call outcomes and inter-canister calls.
 
 ### `Runtime`
 
@@ -118,7 +117,6 @@ use the existing family-specific dimensions:
 | `cycles_topup` | `[metric]` | `None` | `Count` |
 | `delegated_auth` | `[delegated_auth_authority]` or `[operation, outcome, reason]` | Verified signer authority for authority rows | `Count` |
 | `directory` | `[operation, outcome, reason]` | `None` | `Count` |
-| `http` | `[method, label]` | `None` | `Count` |
 | `intent` | `[surface, operation, outcome, reason]` | `None` | `Count` |
 | `inter_canister_call` | `[method]` | Target canister principal | `Count` |
 | `lifecycle` | `[phase, role, stage, outcome]` | `None` | `Count` |
@@ -163,5 +161,5 @@ they overlap the public operator tiers:
   `canister_ops` rows.
 - Provisioning workflow progress is folded into public canister operation and
   placement rows where it is operator-relevant.
-- Coarse system counters are redundant with `platform_call`, `http`,
+- Coarse system counters are redundant with `platform_call`,
   `inter_canister_call`, and `timer`.

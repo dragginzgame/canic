@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.17` moves generic IC call and HTTP-outcall ownership to upstream
+  `ic-cdk`, removes their unused Canic facade/helper stacks, and retains only
+  the internal transport and build-network authorities used by Canic itself.
+
 - `0.98.16` hard-cuts the orphan generic ICRC-2 allowance and transfer stack
   while retaining the separate root-only manual ICP-to-cycles workflow.
 

@@ -6,7 +6,6 @@
 
 pub mod build_network;
 pub mod call;
-pub mod http;
 pub mod icp_refill;
 pub mod mgmt;
 pub mod nns;
@@ -32,9 +31,6 @@ pub enum IcOpsError {
 
     #[error(transparent)]
     CallOps(#[from] call::CallError),
-
-    #[error(transparent)]
-    HttpOps(#[from] http::HttpOpsError),
 
     #[error(transparent)]
     IcpRefillOps(#[from] icp_refill::IcpRefillOpsError),

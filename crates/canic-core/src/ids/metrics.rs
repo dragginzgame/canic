@@ -55,7 +55,6 @@ pub enum SystemMetricKind {
     CreateCanister,
     DeleteCanister,
     DepositCycles,
-    HttpOutcall,
     InstallCode,
     ReinstallCode,
     TimerScheduled,

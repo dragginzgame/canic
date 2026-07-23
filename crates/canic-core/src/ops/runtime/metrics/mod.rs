@@ -12,7 +12,6 @@ pub mod cycles_funding;
 pub mod cycles_topup;
 pub mod delegated_auth;
 pub mod directory;
-pub mod http;
 pub mod icp_refill;
 pub mod intent;
 pub mod inter_canister_call;
@@ -41,11 +40,11 @@ use {
     access::AccessMetrics, auth::AuthMetrics, canister_ops::CanisterOpsMetrics,
     cascade::CascadeMetrics, cycles_funding::CyclesFundingMetrics,
     cycles_topup::CyclesTopupMetrics, delegated_auth::DelegatedAuthMetrics,
-    directory::DirectoryMetrics, http::HttpMetrics, icp_refill::IcpRefillMetrics,
-    intent::IntentMetrics, inter_canister_call::InterCanisterCallMetrics,
-    lifecycle::LifecycleMetrics, platform_call::PlatformCallMetrics, pool::PoolMetrics,
-    replay::ReplayMetrics, root_capability::RootCapabilityMetrics, scaling::ScalingMetrics,
-    timer::TimerMetrics, wasm_store::WasmStoreMetrics,
+    directory::DirectoryMetrics, icp_refill::IcpRefillMetrics, intent::IntentMetrics,
+    inter_canister_call::InterCanisterCallMetrics, lifecycle::LifecycleMetrics,
+    platform_call::PlatformCallMetrics, pool::PoolMetrics, replay::ReplayMetrics,
+    root_capability::RootCapabilityMetrics, scaling::ScalingMetrics, timer::TimerMetrics,
+    wasm_store::WasmStoreMetrics,
 };
 
 #[cfg(feature = "sharding")]
@@ -93,7 +92,6 @@ pub fn placement_entries() -> Vec<MetricEntry> {
 #[must_use]
 pub fn platform_entries() -> Vec<MetricEntry> {
     let mut entries = prefix_entries("platform_call", platform_call_entries());
-    entries.extend(prefix_entries("http", http_entries()));
     entries.extend(prefix_entries(
         "inter_canister_call",
         inter_canister_call_entries(),
@@ -145,7 +143,6 @@ pub fn reset_for_tests() {
     CyclesTopupMetrics::reset();
     DelegatedAuthMetrics::reset();
     DirectoryMetrics::reset();
-    HttpMetrics::reset();
     PlatformCallMetrics::reset();
     InterCanisterCallMetrics::reset();
     IntentMetrics::reset();
@@ -385,20 +382,6 @@ fn inter_canister_call_entries() -> Vec<MetricEntry> {
         .map(|(key, count)| MetricEntry {
             labels: vec![key.method],
             principal: Some(key.target),
-            value: MetricValue::Count(count),
-        })
-        .collect()
-}
-
-/// Project HTTP outcall counters into the unified public metrics row shape.
-#[must_use]
-fn http_entries() -> Vec<MetricEntry> {
-    HttpMetrics::snapshot()
-        .entries
-        .into_iter()
-        .map(|(key, count)| MetricEntry {
-            labels: vec![key.method.as_str().to_string(), key.label],
-            principal: None,
             value: MetricValue::Count(count),
         })
         .collect()

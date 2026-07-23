@@ -296,7 +296,7 @@ Accepted protocol source:
 
 Mode and Candid:
 
-- Mode: update, used through `canic::api::ic::Call::bounded_wait`.
+- Mode: update, called directly through `ic_cdk::call::Call::bounded_wait`.
 - Candid signature:
   ```did
   account_balance_get_v1 : (
@@ -377,7 +377,7 @@ Accepted protocol source:
 
 Mode and Candid:
 
-- Mode: update, used through `canic::api::ic::Call::bounded_wait`.
+- Mode: update, called directly through `ic_cdk::call::Call::bounded_wait`.
 - Candid signature:
   ```did
   account_top_up_v1 : (
@@ -470,7 +470,7 @@ Accepted protocol source:
 
 Mode and Candid:
 
-- Mode: update, used through `canic::api::ic::Call::bounded_wait`.
+- Mode: update, called directly through `ic_cdk::call::Call::bounded_wait`.
 - Candid signature:
   ```did
   storage_gateway_principal_list_v1 : () -> (vec principal);
