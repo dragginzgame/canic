@@ -82,9 +82,9 @@ fn install_requires_fleet_argument() {
     std::assert_matches!(err, InstallCommandError::Usage(_));
 }
 
-// Ensure install help documents config-owned fleet identity.
+// Ensure install help documents the App-owned source identity.
 #[test]
-fn install_usage_explains_fleet_config() {
+fn install_usage_explains_app_config() {
     let text = usage();
     let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
 
@@ -95,7 +95,7 @@ fn install_usage_explains_fleet_config() {
     assert!(normalized.contains("fresh local creation"));
     assert!(normalized.contains("project upgrade flow"));
     assert!(normalized.contains("canic medic deployment"));
-    assert!(text.contains("[fleet]"));
+    assert!(text.contains("[app]"));
     assert!(text.contains("name = \"test\""));
 }
 
