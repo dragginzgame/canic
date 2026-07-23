@@ -24,8 +24,8 @@ prepare_proof_root() {
         exit 2
     fi
 
-    mkdir -p "$PROOF_ROOT/fleets/demo"
-    cp "$ROOT/fleets/demo/canic.toml" "$PROOF_ROOT/fleets/demo/canic.toml"
+    mkdir -p "$PROOF_ROOT/apps/demo"
+    cp "$ROOT/apps/demo/canic.toml" "$PROOF_ROOT/apps/demo/canic.toml"
 }
 
 assert_contains() {
@@ -64,7 +64,7 @@ main() {
 
     assert_contains "$BUILD_PROVENANCE" '"id": "canic.build_provenance.v1"'
     assert_contains "$BUILD_PROVENANCE" '"kind": "artifact"'
-    assert_contains "$BUILD_PROVENANCE" '"fleet": "demo"'
+    assert_contains "$BUILD_PROVENANCE" '"app": "demo"'
     assert_contains "$BUILD_PROVENANCE" '"role": "app"'
     assert_contains "$BUILD_PROVENANCE" '"build_status": "success"'
     assert_contains "$BUILD_PROVENANCE" '"artifact_kind": "wasm_gzip"'

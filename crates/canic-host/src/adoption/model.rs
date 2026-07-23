@@ -66,7 +66,7 @@ pub struct AdoptionReportV1 {
     pub schema_version: u32,
     pub report_id: String,
     pub generated_at: String,
-    pub fleet: String,
+    pub app: String,
     pub profile: AdoptionProfileV1,
     pub inputs: AdoptionReportInputsV1,
     pub summary: AdoptionReportSummaryV1,
@@ -108,7 +108,7 @@ pub struct AdoptionReportSummaryV1 {
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AdoptionRoleFindingV1 {
-    pub fleet: String,
+    pub app: String,
     pub role: String,
     pub classifications: Vec<AdoptionClassificationV1>,
     pub declaration_state: AdoptionDeclarationStateV1,
@@ -128,7 +128,7 @@ pub struct AdoptionRoleFindingV1 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AdoptionObservedCanisterFindingV1 {
     pub canister_id: String,
-    pub matched_fleet: Option<String>,
+    pub matched_app: Option<String>,
     pub matched_role: Option<String>,
     pub confidence: AdoptionMatchConfidenceV1,
     pub classifications: Vec<AdoptionClassificationV1>,
@@ -160,7 +160,7 @@ pub struct AdoptionRecommendationV1 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AdoptionPackageMetadataV1 {
     pub package: String,
-    pub fleet: Option<String>,
+    pub app: Option<String>,
     pub role: Option<String>,
 }
 
@@ -237,7 +237,7 @@ pub enum AdoptionPackageStateV1 {
     UndeclaredRole,
     NotChecked,
     Matches,
-    MissingFleet,
+    MissingApp,
     MissingRole,
     Mismatch,
 }

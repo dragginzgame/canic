@@ -5,7 +5,7 @@ fleet model: one root canister creates and registers two singleton child
 canisters. Use this as the reference before adapting a product canister layout.
 
 This guide tracks the current Canic scaffold shape. For new fleets, prefer
-`canic fleet create <name>` and keep all `canic` dependencies on the same
+`canic app create <name>` and keep all `canic` dependencies on the same
 release as the installed `canic` CLI. The current schema uses
 `[services.fleet].roles`, `[app].name`, subnet canister tables, `topup`, and
 `canic::finish!()`.
@@ -17,7 +17,7 @@ from the root registry and call the child canisters directly.
 ## Layout
 
 ```text
-fleets/example/
+apps/example/
 ├── canic.toml
 ├── root/
 │   ├── Cargo.toml
@@ -38,7 +38,7 @@ resolve to a declared role in `canic.toml`:
 
 ```toml
 [package.metadata.canic]
-fleet = "example"
+app = "example"
 role = "hub"
 ```
 
@@ -157,7 +157,7 @@ and `auth-delegated-token-verify` to endpoint verifiers.
 
 ```toml
 [package.metadata.canic]
-fleet = "example"
+app = "example"
 role = "root"
 
 [dependencies]
@@ -188,7 +188,7 @@ macros for application methods.
 
 ```toml
 [package.metadata.canic]
-fleet = "example"
+app = "example"
 role = "hub"
 
 [dependencies]
@@ -231,7 +231,7 @@ Use the same `lib.rs` shape for `registry`; set its role in that crate's
 
 ```toml
 [package.metadata.canic]
-fleet = "example"
+app = "example"
 role = "registry"
 ```
 

@@ -22,7 +22,7 @@ prepare_blob_storage_cli_fixture() {
   "root_build_target": "root",
   "workspace_root": ".",
   "icp_root": ".",
-  "config_path": "fleets/downstream/canic.toml",
+  "config_path": "apps/downstream/canic.toml",
   "release_set_manifest_path": ".icp/fixture/canisters/root/release-set.json"
 }
 EOF

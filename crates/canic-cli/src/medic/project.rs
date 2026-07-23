@@ -67,17 +67,17 @@ pub(super) fn project_config_checks(root: &Path, options: &MedicOptions) -> Vec<
         Ok(configs) if configs.is_empty() => checks.push(MedicCheck::fail(
             MedicCategory::ProjectConfig,
             "app_config_missing",
-            "fleets",
-            "no Canic fleet configs found",
-            "create fleets/<fleet>/canic.toml or run canic fleet create <fleet>",
+            "apps",
+            "no Canic App configs found",
+            "create apps/<app>/canic.toml or run canic app create <app>",
             MedicSource::AppConfig,
         )),
         Ok(configs) => {
             checks.push(MedicCheck::pass(
                 MedicCategory::ProjectConfig,
                 "app_config_discovered",
-                "fleets",
-                format!("found {} Canic fleet config(s)", configs.len()),
+                "apps",
+                format!("found {} Canic App config(s)", configs.len()),
                 "none",
                 MedicSource::AppConfig,
             ));
@@ -86,9 +86,9 @@ pub(super) fn project_config_checks(root: &Path, options: &MedicOptions) -> Vec<
         Err(err) => checks.push(MedicCheck::fail(
             MedicCategory::ProjectConfig,
             "app_config_missing",
-            "fleets",
+            "apps",
             err.to_string(),
-            "repair Canic fleet config discovery",
+            "repair Canic App config discovery",
             MedicSource::AppConfig,
         )),
     }

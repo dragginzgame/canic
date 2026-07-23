@@ -156,7 +156,7 @@ fn deploy_plan_options_parse_supported_surface() {
         OsString::from("--out"),
         OsString::from("deployment-plan.json"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
         OsString::from("--build-profile"),
         OsString::from("fast"),
         OsString::from(crate::cli::globals::INTERNAL_ENVIRONMENT_OPTION),
@@ -168,10 +168,7 @@ fn deploy_plan_options_parse_supported_surface() {
     assert_eq!(options.environment, "local");
     assert!(options.json);
     assert_eq!(options.out, Some(PathBuf::from("deployment-plan.json")));
-    assert_eq!(
-        options.config,
-        Some(PathBuf::from("fleets/demo/canic.toml"))
-    );
+    assert_eq!(options.config, Some(PathBuf::from("apps/demo/canic.toml")));
 }
 
 #[test]
@@ -181,7 +178,7 @@ fn deploy_plan_report_builds_from_config_without_installed_state() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -255,7 +252,7 @@ fn deploy_plan_report_records_verified_installed_root_fact() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -315,7 +312,7 @@ fn deploy_plan_report_marks_complete_installed_state_as_compared() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -370,7 +367,7 @@ fn deploy_plan_report_previews_pool_canister_creation() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -404,7 +401,7 @@ fn deploy_plan_report_previews_controller_reconciliation() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -444,7 +441,7 @@ fn deploy_plan_report_blocks_unverified_installed_root_state() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -495,7 +492,7 @@ fn deploy_plan_report_marks_installed_environment_mismatch_as_drift() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -561,7 +558,7 @@ fn deploy_plan_report_blocks_invalid_deployment_target_name() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo/local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -590,7 +587,7 @@ fn deploy_plan_report_blocks_malformed_desired_config() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
 
@@ -648,7 +645,7 @@ fn deploy_plan_json_out_is_create_new_and_json_only() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
         OsString::from("--out"),
         OsString::from(out.as_os_str()),
     ])
@@ -690,7 +687,7 @@ fn deploy_plan_out_does_not_create_parent_directories() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
         OsString::from("--out"),
         OsString::from(out.as_os_str()),
     ])
@@ -716,7 +713,7 @@ fn deploy_plan_json_renderer_is_report_only() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
     let report = deploy_plan::build_report(
@@ -743,7 +740,7 @@ fn deploy_plan_json_renderer_uses_contract_field_order() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
     let report = deploy_plan::build_report(
@@ -785,7 +782,7 @@ fn deploy_plan_text_avoids_apply_safety_claims() {
     let options = deploy_plan::DeployPlanOptions::parse([
         OsString::from("demo-local"),
         OsString::from("--config"),
-        OsString::from("fleets/demo/canic.toml"),
+        OsString::from("apps/demo/canic.toml"),
     ])
     .expect("parse deploy plan options");
     let report = deploy_plan::build_report(
@@ -822,7 +819,7 @@ fn temp_plan_workspace_with_config(prefix: &str, config: &str) -> (TempDir, Path
     let temp = TempDir::new(prefix);
     let workspace_root = temp.join("workspace");
     let icp_root = temp.join("icp");
-    let config_dir = workspace_root.join("fleets").join("demo");
+    let config_dir = workspace_root.join("apps").join("demo");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::create_dir_all(&icp_root).expect("create icp root");
     fs::write(config_dir.join("canic.toml"), config).expect("write config");
@@ -903,7 +900,7 @@ fn sample_install_state(deployment_name: &str, root_canister_id: &str) -> Instal
         root_build_target: "root".to_string(),
         workspace_root: "/workspace".to_string(),
         icp_root: "/workspace".to_string(),
-        config_path: "fleets/demo/canic.toml".to_string(),
+        config_path: "apps/demo/canic.toml".to_string(),
         release_set_manifest_path: ".icp/local/canisters/root/release-set.json".to_string(),
     }
 }

@@ -151,9 +151,9 @@ fn loaded_snapshot_keeps_one_validated_file_state_across_projections() {
 }
 
 #[test]
-fn fleet_mutation_failures_are_classified_without_rendered_text() {
+fn app_mutation_failures_are_classified_without_rendered_text() {
     assert!(matches!(
-        declare_fleet_role_source(CONFIG, "demo", "bad role", "store")
+        declare_app_role_source(CONFIG, "demo", "bad role", "store")
             .expect_err("invalid role must fail"),
         AppConfigError::InvalidName {
             field: AppConfigNameField::Role,
@@ -162,24 +162,24 @@ fn fleet_mutation_failures_are_classified_without_rendered_text() {
         }
     ));
     assert!(matches!(
-        attach_fleet_role_source(CONFIG, "demo", "store", "default", "worker")
+        attach_app_role_source(CONFIG, "demo", "store", "default", "worker")
             .expect_err("invalid kind must fail"),
         AppConfigError::InvalidKind { .. }
     ));
     assert!(matches!(
-        declare_fleet_role_source(CONFIG, "production", "new_role", "new_role")
+        declare_app_role_source(CONFIG, "production", "new_role", "new_role")
             .expect_err("App mismatch must fail"),
         AppConfigError::AppMismatch { .. }
     ));
     assert!(matches!(
-        attach_fleet_role_source(CONFIG, "demo", "missing", "default", "service")
+        attach_app_role_source(CONFIG, "demo", "missing", "default", "service")
             .expect_err("missing role must fail"),
         AppConfigError::DeclarationMissing {
             declaration: AppConfigDeclaration::Role { .. }
         }
     ));
     assert!(matches!(
-        declare_fleet_role_source(CONFIG, "demo", "store", "store")
+        declare_app_role_source(CONFIG, "demo", "store", "store")
             .expect_err("duplicate role must fail"),
         AppConfigError::MutationConflict {
             conflict: AppConfigMutationConflict::RoleAlreadyDeclared { .. }
@@ -188,13 +188,13 @@ fn fleet_mutation_failures_are_classified_without_rendered_text() {
 }
 
 #[test]
-fn fleet_mutations_use_canonical_canister_role_admission() {
-    let declare_error = declare_fleet_role_source(CONFIG, "demo", "user-hub", "store")
+fn app_mutations_use_canonical_canister_role_admission() {
+    let declare_error = declare_app_role_source(CONFIG, "demo", "user-hub", "store")
         .expect_err("kebab-case declaration must fail");
-    let attach_error = attach_fleet_role_source(CONFIG, "demo", "Store", "default", "service")
+    let attach_error = attach_app_role_source(CONFIG, "demo", "Store", "default", "service")
         .expect_err("mixed-case attachment must fail");
     let rename_error =
-        rename_fleet_role_source(CONFIG, Path::new("canic.toml"), "demo", "store", "store_")
+        rename_app_role_source(CONFIG, Path::new("canic.toml"), "demo", "store", "store_")
             .expect_err("trailing-underscore rename must fail");
 
     for error in [declare_error, attach_error, rename_error] {
@@ -210,7 +210,7 @@ fn fleet_mutations_use_canonical_canister_role_admission() {
 
     let long_role = "a".repeat(canic_core::bootstrap::compiled::NAME_MAX_BYTES + 1);
     assert!(matches!(
-        declare_fleet_role_source(CONFIG, "demo", &long_role, "store")
+        declare_app_role_source(CONFIG, "demo", &long_role, "store")
             .expect_err("overlong declaration must fail"),
         AppConfigError::InvalidName {
             field: AppConfigNameField::Role,
@@ -219,7 +219,7 @@ fn fleet_mutations_use_canonical_canister_role_admission() {
         } if max_bytes == canic_core::bootstrap::compiled::NAME_MAX_BYTES
     ));
 
-    declare_fleet_role_source(CONFIG, "demo", "new_role", "store")
+    declare_app_role_source(CONFIG, "demo", "new_role", "store")
         .expect("canonical role should be admitted");
 }
 

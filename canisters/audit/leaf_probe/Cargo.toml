@@ -9,7 +9,7 @@ publish = false
 ignored = ["candid"]
 
 [package.metadata.canic]
-fleet = "standalone"
+app = "standalone"
 role = "app"
 
 [lib]

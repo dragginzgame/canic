@@ -678,19 +678,19 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "create_worker" => (
             "Scaling creation workflow",
-            "`fleets/test/scale_hub/src/lib.rs`; `crates/canic-core/src/workflow/placement/scaling/mod.rs`",
+            "`apps/test/scale_hub/src/lib.rs`; `crates/canic-core/src/workflow/placement/scaling/mod.rs`",
         ),
         "create_account" => (
             "Sharding assignment workflow",
-            "`fleets/test/user_hub/src/lib.rs`; `crates/canic-core/src/workflow/placement/sharding/assignment.rs`",
+            "`apps/test/user_hub/src/lib.rs`; `crates/canic-core/src/workflow/placement/sharding/assignment.rs`",
         ),
         "request_cycles_from_parent" => (
             "Scale child-to-parent capability workflow",
-            "`fleets/test/scale/src/lib.rs`; `crates/canic-core/src/workflow/rpc/request/handler/mod.rs`",
+            "`apps/test/scale/src/lib.rs`; `crates/canic-core/src/workflow/rpc/request/handler/mod.rs`",
         ),
         "test_provision_chain_key_delegation_proof_for_issuer" => (
             "Root proof provisioning workflow",
-            "`fleets/test/root/src/lib.rs`; `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs`",
+            "`apps/test/root/src/lib.rs`; `crates/canic-core/src/workflow/runtime/auth/provisioning/mod.rs`",
         ),
         "canic_prepare_delegated_token" => (
             "Issuer delegated-token preparation",
@@ -698,7 +698,7 @@ fn hotspot_hint(subject_label: &str) -> (&'static str, &'static str) {
         ),
         "test_verify_delegated_token" => (
             "Verifier delegated-token boundary",
-            "`fleets/test/test/src/lib.rs`; `crates/canic-core/src/ops/auth/delegated/verify.rs`",
+            "`apps/test/test/src/lib.rs`; `crates/canic-core/src/ops/auth/delegated/verify.rs`",
         ),
         "root_bootstrap_init" => (
             "Root installation checkpoint group",

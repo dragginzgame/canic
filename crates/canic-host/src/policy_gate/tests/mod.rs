@@ -119,7 +119,8 @@ fn sample_envelope_with_payload(payload: serde_json::Value) -> EvidenceEnvelopeV
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::Artifact,
             deployment: None,
-            fleet: Some("demo".to_string()),
+            app: Some("demo".to_string()),
+            fleet: None,
             role: Some("app".to_string()),
             profile: None,
             environment: None,
@@ -171,8 +172,8 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
             cargo_lock_sha256: Some("1".repeat(64)),
             package_manifest_sha256: Some("2".repeat(64)),
             package_name: "demo_app".to_string(),
-            package_manifest: "fleets/demo/app/Cargo.toml".to_string(),
-            package_metadata_fleet: "demo".to_string(),
+            package_manifest: "apps/demo/app/Cargo.toml".to_string(),
+            package_metadata_app: "demo".to_string(),
             package_metadata_role: "app".to_string(),
             rustc_version: Some("rustc 1.88.0".to_string()),
             cargo_version: Some("cargo 1.88.0".to_string()),
@@ -203,7 +204,7 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
 fn sample_artifact(kind: ArtifactProvenanceKindV1, hash_char: &str) -> ArtifactProvenanceV1 {
     ArtifactProvenanceV1 {
         role: "app".to_string(),
-        fleet: "demo".to_string(),
+        app: "demo".to_string(),
         artifact_kind: kind,
         path: Some("target/app.wasm.gz".to_string()),
         path_display: InputPathDisplayV1::Relative,
@@ -230,7 +231,7 @@ required = {required}
 payload_schema = "canic.build_provenance.v1"
 
 [evidence.target]
-fleet = "demo"
+app = "demo"
 role = "app"
 "#
     )

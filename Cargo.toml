@@ -1,5 +1,16 @@
 [workspace]
 members = [
+    "apps/demo/app",
+    "apps/demo/root",
+    "apps/demo/user_hub",
+    "apps/demo/user_shard",
+    "apps/test/app",
+    "apps/test/root",
+    "apps/test/scale",
+    "apps/test/scale_hub",
+    "apps/test/test",
+    "apps/test/user_hub",
+    "apps/test/user_shard",
     "canisters/audit/leaf_probe",
     "canisters/audit/minimal",
     "canisters/audit/minimal_metrics",
@@ -26,17 +37,6 @@ members = [
     "crates/canic-testing-internal",
     "crates/canic-tests",
     "crates/canic-wasm-store",
-    "fleets/demo/app",
-    "fleets/demo/root",
-    "fleets/demo/user_hub",
-    "fleets/demo/user_shard",
-    "fleets/test/app",
-    "fleets/test/root",
-    "fleets/test/scale",
-    "fleets/test/scale_hub",
-    "fleets/test/test",
-    "fleets/test/user_hub",
-    "fleets/test/user_shard",
 ]
 resolver = "2"
 

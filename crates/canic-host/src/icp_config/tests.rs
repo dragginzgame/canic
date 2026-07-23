@@ -114,7 +114,7 @@ fn build_network_resolution_rejects_incomplete_config() {
 #[test]
 fn inspects_icp_yaml_without_mutating_it() {
     let root = temp_dir("canic-icp-read-only");
-    let config = root.join("fleets/toko/canic.toml");
+    let config = root.join("apps/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
         &config,
@@ -173,7 +173,7 @@ environments:
 #[test]
 fn reports_missing_icp_yaml_as_incomplete() {
     let root = temp_dir("canic-icp-missing-yaml");
-    let config = root.join("fleets/toko/canic.toml");
+    let config = root.join("apps/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
         &config,
@@ -202,9 +202,9 @@ kind = "root"
 }
 
 #[test]
-fn discovers_root_fleet_configs_for_icp_inspection() {
-    let root = temp_dir("canic-icp-inspect-root-fleets");
-    let config = root.join("fleets/toko/canic.toml");
+fn discovers_root_app_configs_for_icp_inspection() {
+    let root = temp_dir("canic-icp-inspect-root-apps");
+    let config = root.join("apps/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
         &config,
@@ -243,15 +243,11 @@ kind = "service"
 }
 
 #[test]
-fn fleet_filter_limits_inspected_project_spec() {
-    let root = temp_dir("canic-icp-inspect-fleet-filter");
+fn app_filter_limits_inspected_project_spec() {
+    let root = temp_dir("canic-icp-inspect-app-filter");
+    write_test_config(&root.join("apps/demo/canic.toml"), "demo", &["root", "app"]);
     write_test_config(
-        &root.join("fleets/demo/canic.toml"),
-        "demo",
-        &["root", "app"],
-    );
-    write_test_config(
-        &root.join("fleets/test/canic.toml"),
+        &root.join("apps/test/canic.toml"),
         "test",
         &["root", "scale"],
     );
@@ -270,9 +266,9 @@ fn fleet_filter_limits_inspected_project_spec() {
 }
 
 #[test]
-fn nested_commands_discover_outer_project_root_with_fleets() {
+fn nested_commands_discover_outer_project_root_with_apps() {
     let root = temp_dir("canic-icp-root-nested");
-    let config = root.join("fleets/toko/canic.toml");
+    let config = root.join("apps/toko/canic.toml");
     let nested = root.join("backend/src");
     fs::create_dir_all(&nested).expect("create nested dir");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
@@ -288,10 +284,10 @@ fn nested_commands_discover_outer_project_root_with_fleets() {
 }
 
 #[test]
-fn outer_project_root_wins_over_nested_fleets() {
+fn outer_project_root_wins_over_nested_apps() {
     let root = temp_dir("canic-icp-root-outer-wins");
-    let outer_config = root.join("fleets/toko/canic.toml");
-    let nested_config = root.join("services/fleets/toko/canic.toml");
+    let outer_config = root.join("apps/toko/canic.toml");
+    let nested_config = root.join("services/apps/toko/canic.toml");
     let nested = root.join("services/src");
     fs::create_dir_all(outer_config.parent().expect("outer config parent"))
         .expect("create outer config parent");
@@ -311,7 +307,7 @@ fn outer_project_root_wins_over_nested_fleets() {
 }
 
 #[test]
-fn icp_inspection_rejects_missing_fleet_configs() {
+fn icp_inspection_rejects_missing_app_configs() {
     let root = temp_dir("canic-icp-inspect-missing");
     fs::create_dir_all(&root).expect("create root");
 
@@ -319,16 +315,16 @@ fn icp_inspection_rejects_missing_fleet_configs() {
     let message = err.to_string();
 
     assert!(message.contains("no Canic App configs found under"));
-    assert!(message.contains("fleets/<app>/canic.toml"));
+    assert!(message.contains("apps/<app>/canic.toml"));
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
-fn icp_inspection_preserves_invalid_fleet_config_cause() {
-    let root = temp_dir("canic-icp-invalid-fleet-config");
-    let config = root.join("fleets/toko/canic.toml");
+fn icp_inspection_preserves_invalid_app_config_cause() {
+    let root = temp_dir("canic-icp-invalid-app-config");
+    let config = root.join("apps/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
-    fs::write(&config, "[fleet\nname = \"toko\"\n").expect("write invalid config");
+    fs::write(&config, "[app\nname = \"toko\"\n").expect("write invalid config");
 
     let error = discover_project_spec(&root, None).expect_err("invalid config should fail");
     let IcpConfigError::AppConfig(AppConfigError::ConfigInvalid { path, .. }) = error else {

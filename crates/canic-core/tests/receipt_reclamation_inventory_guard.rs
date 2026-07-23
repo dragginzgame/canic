@@ -89,7 +89,7 @@ fn receipt_backed_stable_allocations_remain_single_owner() {
 
 fn source_paths_containing(root: &Path, needle: &str) -> BTreeSet<String> {
     let mut paths = BTreeSet::new();
-    for source_root in ["crates", "canisters", "fleets"] {
+    for source_root in ["crates", "canisters", "apps"] {
         collect_rust_sources(&root.join(source_root), root, &mut |path, source| {
             if path == "crates/canic-core/tests/receipt_reclamation_inventory_guard.rs" {
                 return;

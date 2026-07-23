@@ -220,7 +220,7 @@ kind = "service"
 
     add_local_root_create_cycles_arg(
         &mut command,
-        &workspace_root.join("fleets/canic.toml"),
+        &workspace_root.join("apps/canic.toml"),
         "local",
     )
     .expect("local cycles arg");
@@ -294,12 +294,8 @@ kind = "root"
     let mut command = std::process::Command::new("icp");
     command.args(["canister", "create", "root", "-q"]);
 
-    add_local_root_create_cycles_arg(
-        &mut command,
-        &workspace_root.join("fleets/canic.toml"),
-        "ic",
-    )
-    .expect("nonlocal cycles arg");
+    add_local_root_create_cycles_arg(&mut command, &workspace_root.join("apps/canic.toml"), "ic")
+        .expect("nonlocal cycles arg");
 
     assert_eq!(
         command

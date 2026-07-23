@@ -76,7 +76,7 @@ pub(super) struct ListTitle {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ListTitleSource {
     Deployment,
-    FleetTemplate,
+    App,
 }
 
 ///
@@ -144,7 +144,7 @@ pub(super) fn render_list_output(
     Ok(output)
 }
 
-/// Render config-defined roles for a selected fleet that has not been installed yet.
+/// Render config-defined roles for a selected App that has not been installed yet.
 pub(super) fn render_config_output(
     title: &ListTitle,
     rows: &[ConfigRoleRow],
@@ -160,7 +160,7 @@ pub(super) fn render_config_output(
 fn render_list_title(title: &ListTitle) -> String {
     let label = match title.source {
         ListTitleSource::Deployment => "Deployment",
-        ListTitleSource::FleetTemplate => "Fleet template",
+        ListTitleSource::App => "App",
     };
     format!(
         "{label}: {} (environment {})",

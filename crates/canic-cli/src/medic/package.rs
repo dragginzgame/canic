@@ -1,7 +1,7 @@
 //! Module: canic_cli::medic::package
 //!
 //! Responsibility: inspect role-package metadata and resolved Canic dependency features.
-//! Does not own: fleet configuration policy, report rendering, or Cargo manifest mutation.
+//! Does not own: app configuration policy, report rendering, or Cargo manifest mutation.
 //! Boundary: reads Cargo manifests and returns passive metadata to project medic checks.
 
 use std::{
@@ -13,7 +13,7 @@ use toml::Value as TomlValue;
 const PACKAGE_MANIFEST_FILE: &str = "Cargo.toml";
 
 pub(super) struct CanicPackageMetadata {
-    pub(super) fleet: String,
+    pub(super) app: String,
     pub(super) role: String,
 }
 
@@ -38,9 +38,9 @@ pub(super) fn canic_package_metadata(path: &Path) -> Result<CanicPackageMetadata
         .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
     let manifest = toml::from_str::<TomlValue>(&source)
         .map_err(|err| format!("invalid {}: {err}", path.display()))?;
-    let fleet = manifest_string(&manifest, &["package", "metadata", "canic", "fleet"], path)?;
+    let app = manifest_string(&manifest, &["package", "metadata", "canic", "app"], path)?;
     let role = manifest_string(&manifest, &["package", "metadata", "canic", "role"], path)?;
-    Ok(CanicPackageMetadata { fleet, role })
+    Ok(CanicPackageMetadata { app, role })
 }
 
 pub(super) fn canic_dependency_feature_snippet<'a>(

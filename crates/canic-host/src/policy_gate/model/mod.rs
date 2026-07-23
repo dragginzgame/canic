@@ -206,6 +206,7 @@ pub struct ProjectEvidenceManifestEntryV1 {
 #[serde(deny_unknown_fields)]
 pub struct ProjectEvidenceManifestTargetV1 {
     pub deployment: Option<String>,
+    pub app: Option<String>,
     pub fleet: Option<String>,
     pub role: Option<String>,
     pub profile: Option<String>,
@@ -314,6 +315,7 @@ pub enum PolicyEvaluationStatusV1 {
 impl ProjectEvidenceManifestTargetV1 {
     pub(super) const fn has_selector(&self) -> bool {
         self.deployment.is_some()
+            || self.app.is_some()
             || self.fleet.is_some()
             || self.role.is_some()
             || self.profile.is_some()
@@ -324,6 +326,10 @@ impl ProjectEvidenceManifestTargetV1 {
         self.deployment
             .as_ref()
             .is_none_or(|expected| target.deployment.as_ref() == Some(expected))
+            && self
+                .app
+                .as_ref()
+                .is_none_or(|expected| target.app.as_ref() == Some(expected))
             && self
                 .fleet
                 .as_ref()

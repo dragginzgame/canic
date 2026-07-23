@@ -21,10 +21,10 @@ canic --environment academic info env <deployment>
 canic --environment academic medic deployment <deployment>
 ```
 
-Use `canic fleet config <fleet>` to inspect what is configured and
+Use `canic app config <app>` to inspect what is configured and
 `canic info list <deployment>` to inspect what is deployed. If those disagree,
 treat the deployed root registry as the source for current canister IDs and
-the fleet config as the source for intended roles, metrics profiles, and
+the App config as the source for intended roles, metrics profiles, and
 topology.
 
 ## ICP Target Hygiene
@@ -144,7 +144,7 @@ scripts or tests.
 
 ## Metrics And Deployed Wasm
 
-`canic fleet config <fleet> --verbose` shows configured or inferred metrics
+`canic app config <app> --verbose` shows configured or inferred metrics
 profiles. `canic info metrics <deployment> --kind <tier>` queries what the
 deployed canister actually exposes.
 
@@ -152,7 +152,7 @@ If a metrics tier reports `empty` or `canic_metrics` is unavailable, check all
 three states before changing code:
 
 ```bash
-canic fleet config <fleet> --verbose
+canic app config <app> --verbose
 canic --environment academic info list <deployment> --verbose
 canic --environment academic info metrics <deployment> --kind core
 ```
@@ -168,7 +168,7 @@ code:
 
 ```bash
 canic status
-canic fleet config <fleet> --verbose
+canic app config <app> --verbose
 canic --environment academic info list <deployment> --verbose
 canic --environment academic info env <deployment>
 canic --environment academic medic deployment <deployment>

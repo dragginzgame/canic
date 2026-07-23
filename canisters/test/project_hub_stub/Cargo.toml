@@ -9,7 +9,7 @@ publish = false
 ignored = ["ic-cdk"]
 
 [package.metadata.canic]
-fleet = "project_hub_stub"
+app = "project_hub_stub"
 role = "project_hub"
 
 [lib]

@@ -28,7 +28,7 @@ pub fn adoption_report_from_config_source(
 ) -> Result<AdoptionReportV1, AdoptionReportError> {
     let config = parse_config_model(request.config_source)
         .map_err(|err| AdoptionReportError::InvalidConfig(err.to_string()))?;
-    let fleet = config.app_id().to_string();
+    let app = config.app_id().to_string();
     let attached_roles = config.attached_roles();
     let observed_by_role = observed_canisters_by_role(request.inventory);
     let observed_duplicate_roles = duplicate_observed_roles(&observed_by_role);
@@ -47,7 +47,7 @@ pub fn adoption_report_from_config_source(
         seen_roles.insert(role.as_str().to_string());
         role_findings.push(role_finding_for_declared_role(DeclaredRoleFindingInput {
             profile: request.profile,
-            fleet: &fleet,
+            app: &app,
             role,
             package: declaration.package.as_str(),
             attached: attached_roles.contains(role),
@@ -69,7 +69,7 @@ pub fn adoption_report_from_config_source(
         role_findings.push(role_finding_for_observed_only_role(
             ObservedOnlyRoleFindingInput {
                 profile: request.profile,
-                fleet: &fleet,
+                app: &app,
                 role,
                 observed,
                 duplicate_observation: observed_duplicate_roles.contains(role),
@@ -86,7 +86,7 @@ pub fn adoption_report_from_config_source(
 
     let observed_canisters = observed_canister_findings(
         request.profile,
-        &fleet,
+        &app,
         request.inventory,
         &declared_roles,
         &attached_roles,
@@ -104,7 +104,7 @@ pub fn adoption_report_from_config_source(
         schema_version: ADOPTION_REPORT_SCHEMA_VERSION,
         report_id: request.report_id.to_string(),
         generated_at: request.generated_at.to_string(),
-        fleet,
+        app,
         profile: request.profile,
         inputs: AdoptionReportInputsV1 {
             config_present: true,

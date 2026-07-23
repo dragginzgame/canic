@@ -6,7 +6,7 @@ version = { workspace = true }
 publish = false
 
 [package.metadata.canic]
-fleet = "project_instance_stub"
+app = "project_instance_stub"
 role = "project_instance"
 
 [lib]

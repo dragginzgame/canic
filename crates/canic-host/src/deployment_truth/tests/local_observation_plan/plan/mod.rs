@@ -5,7 +5,7 @@ fn local_plan_uses_configured_roles_and_local_artifact_manifest() {
     let temp = TempWorkspace::new("canic-host-local-plan");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
@@ -106,7 +106,7 @@ fn local_plan_uses_configured_controllers_as_expected_authority() {
     let temp = TempWorkspace::new("canic-host-local-plan-controllers");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(
         config_dir.join("canic.toml"),
@@ -180,7 +180,7 @@ fn local_plan_uses_install_state_root_as_expected_canister() {
     let temp = TempWorkspace::new("canic-host-local-plan-root-state");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
@@ -229,7 +229,7 @@ fn local_plan_uses_configured_pools_as_expected_pool_identities() {
     let temp = TempWorkspace::new("canic-host-local-plan-pools");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(
         config_dir.join("canic.toml"),

@@ -1,6 +1,6 @@
 # Local Demo Workflow (`scripts/app/`)
 
-These scripts support the reference canisters under `fleets/test/` and the local topology in `icp.yaml`.
+These scripts support the reference canisters under `apps/test/` and the local topology in `icp.yaml`.
 
 ## Prerequisites
 
@@ -99,7 +99,7 @@ Downstream repos that consume Canic from crates.io should use the installed CLI
 surface instead:
 
 ```bash
-canic build <fleet> <role>
+canic build <app> <role>
 ```
 
 That builder:
@@ -126,7 +126,7 @@ not rewrite the checked-in source file. Maintainers refresh it explicitly with
 the low-level builder's `--refresh-wasm-store-did` argument.
 
 Profile selection for the builder is:
-- `canic build <fleet> <role> --profile debug|fast|release` when using the
+- `canic build <app> <role> --profile debug|fast|release` when using the
   installed CLI
 - explicit role, profile, workspace-root, ICP-root, and config-path arguments
   for the low-level `build_artifact` example
@@ -157,7 +157,7 @@ In split repos where the Rust workspace lives under `backend/` but `icp.yaml`
 and `.icp` live at the repo root, pass the roots to the installed CLI:
 
 ```bash
-canic build --workspace /path/to/repo/backend --icp-root /path/to/repo <fleet> <role>
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo <app> <role>
 ```
 
 The first root drives Cargo and config discovery; the second root owns emitted
@@ -167,7 +167,7 @@ If canister crates live under a different directory such as
 `backend/src/canisters`, point the command at the real config:
 
 ```bash
-canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config /path/to/repo/backend/src/canisters/canic.toml <fleet> <role>
+canic build --workspace /path/to/repo/backend --icp-root /path/to/repo --config /path/to/repo/backend/src/canisters/canic.toml <app> <role>
 ```
 
 The builder infers the canister root from that config location.
@@ -179,6 +179,6 @@ convention, declare the mapping in `Cargo.toml`:
 
 ```toml
 [package.metadata.canic]
-fleet = "project"
+app = "project"
 role = "project_ledger"
 ```

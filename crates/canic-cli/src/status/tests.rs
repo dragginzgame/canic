@@ -33,14 +33,14 @@ fn renders_status_report() {
             StatusDeploymentRow {
                 deployment: "demo".to_string(),
                 deployed: "no".to_string(),
-                config: "fleets/demo/canic.toml".to_string(),
+                config: "apps/demo/canic.toml".to_string(),
                 canisters: "4".to_string(),
                 root: "-".to_string(),
             },
             StatusDeploymentRow {
                 deployment: "test".to_string(),
                 deployed: "yes".to_string(),
-                config: "fleets/test/canic.toml".to_string(),
+                config: "apps/test/canic.toml".to_string(),
                 canisters: "7".to_string(),
                 root: "aaaaa-aa".to_string(),
             },
@@ -57,8 +57,8 @@ fn renders_status_report() {
             "",
             "DEPLOYMENT   DEPLOYED   CONFIG                   CANISTERS   ROOT",
             "----------   --------   ----------------------   ---------   --------",
-            "demo         no         fleets/demo/canic.toml   4           -",
-            "test         yes        fleets/test/canic.toml   7           aaaaa-aa",
+            "demo         no         apps/demo/canic.toml   4           -",
+            "test         yes        apps/test/canic.toml   7           aaaaa-aa",
         ]
         .join("\n")
     );
@@ -113,7 +113,7 @@ fn renders_lost_local_deployment_target_note() {
         deployments: vec![StatusDeploymentRow {
             deployment: "test".to_string(),
             deployed: LOCAL_LOST_DEPLOYMENT.to_string(),
-            config: "fleets/test/canic.toml".to_string(),
+            config: "apps/test/canic.toml".to_string(),
             canisters: "6".to_string(),
             root: "t63gs-up777-77776-aaaba-cai".to_string(),
         }],
@@ -132,7 +132,7 @@ fn renders_lost_local_deployment_target_note() {
 #[test]
 fn status_deployment_row_uses_project_root_for_config_paths() {
     let root = temp_dir("canic-status-project-root");
-    let config = root.join("fleets/toko/canic.toml");
+    let config = root.join("apps/toko/canic.toml");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");
     fs::write(
         &config,
@@ -168,7 +168,7 @@ kind = "service"
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert_eq!(row.deployment, "toko");
-    assert_eq!(row.config, "fleets/toko/canic.toml");
+    assert_eq!(row.config, "apps/toko/canic.toml");
     assert_eq!(row.canisters, "2");
 }
 

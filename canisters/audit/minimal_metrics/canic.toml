@@ -9,7 +9,7 @@ init_mode = "enabled"
 
 [roles.root]
 kind = "root"
-package = "../../../fleets/test/root"
+package = "../../../apps/test/root"
 
 [roles.minimal_metrics]
 kind = "canister"

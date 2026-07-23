@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn install_truth_gate_lines_include_warning_codes() {
     let root = temp_dir("canic-install-truth-warning-lines");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
@@ -74,7 +74,7 @@ kind = "root"
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -125,7 +125,7 @@ kind = "root"
 #[test]
 fn install_truth_gate_lines_distinguish_plan_assumptions() {
     let root = temp_dir("canic-install-truth-plan-assumption-lines");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
@@ -195,7 +195,7 @@ kind = "root"
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,

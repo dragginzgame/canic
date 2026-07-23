@@ -1,22 +1,22 @@
 use super::{
-    RenamedFleetRoleSource,
+    RenamedAppRoleSource,
     support::{admit_canister_role_name, toml_assignment_key, toml_string_literal},
 };
 use crate::release_set::config::{
     AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
-    AppConfigOperation, AppConfigPackageIssue, AppConfigTomlOperation, model::RenamedFleetRole,
+    AppConfigOperation, AppConfigPackageIssue, AppConfigTomlOperation, model::RenamedAppRole,
 };
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 use std::{fs, path::Path};
 use toml::Value as TomlValue;
 
-pub(in crate::release_set) fn rename_fleet_role_source(
+pub(in crate::release_set) fn rename_app_role_source(
     config_source: &str,
     config_path: &Path,
     expected_app: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<RenamedFleetRoleSource, AppConfigError> {
+) -> Result<RenamedAppRoleSource, AppConfigError> {
     let old_role = old_role.trim();
     let new_role = new_role.trim();
     admit_canister_role_name(old_role)?;
@@ -53,14 +53,14 @@ pub(in crate::release_set) fn rename_fleet_role_source(
             .get(&old_id)
             .ok_or_else(|| AppConfigError::DeclarationMissing {
                 declaration: AppConfigDeclaration::Role {
-                    fleet: expected_app.to_string(),
+                    app: expected_app.to_string(),
                     role: old_role.to_string(),
                 },
             })?;
     if config.declares_role(&new_id) {
         return Err(AppConfigError::MutationConflict {
             conflict: AppConfigMutationConflict::RoleAlreadyDeclared {
-                fleet: expected_app.to_string(),
+                app: expected_app.to_string(),
                 role: new_role.to_string(),
             },
         });
@@ -83,7 +83,7 @@ pub(in crate::release_set) fn rename_fleet_role_source(
                         None,
                         None,
                         Some(format!(
-                            "{} did not contain matching [package.metadata.canic] fleet/role metadata",
+                            "{} did not contain matching [package.metadata.canic] app/role metadata",
                             manifest.display()
                         )),
                     ),
@@ -92,12 +92,12 @@ pub(in crate::release_set) fn rename_fleet_role_source(
             },
         );
 
-    Ok(RenamedFleetRoleSource {
+    Ok(RenamedAppRoleSource {
         source,
         package_manifest: package_manifest.clone(),
         package_source,
-        role: RenamedFleetRole {
-            fleet: expected_app.to_string(),
+        role: RenamedAppRole {
+            app: expected_app.to_string(),
             old_role: old_role.to_string(),
             new_role: new_role.to_string(),
             old_display: format!("{expected_app}.{old_role}"),
@@ -220,7 +220,7 @@ fn update_package_manifest_role(
     let source = fs::read_to_string(manifest).map_err(|source| {
         AppConfigError::io(AppConfigIoOperation::ReadPackageManifest, manifest, source)
     })?;
-    let Some((fleet, role)) = package_canic_metadata(&source).map_err(|source| {
+    let Some((app, role)) = package_canic_metadata(&source).map_err(|source| {
         AppConfigError::Toml {
             operation: AppConfigTomlOperation::ParsePackageManifest,
             source,
@@ -230,26 +230,25 @@ fn update_package_manifest_role(
     else {
         return Ok(None);
     };
-    if fleet != expected_app || role != old_role {
+    if app != expected_app || role != old_role {
         return Ok(None);
     }
 
     let updated = rename_package_metadata_role_source(&source, old_role, new_role);
-    let Some((updated_fleet, updated_role)) =
-        package_canic_metadata(&updated).map_err(|source| {
-            AppConfigError::Toml {
-                operation: AppConfigTomlOperation::ParsePackageManifest,
-                source,
-            }
-            .at_config_path(manifest)
-        })?
+    let Some((updated_app, updated_role)) = package_canic_metadata(&updated).map_err(|source| {
+        AppConfigError::Toml {
+            operation: AppConfigTomlOperation::ParsePackageManifest,
+            source,
+        }
+        .at_config_path(manifest)
+    })?
     else {
         return Err(AppConfigError::PackageMetadataInvalid {
             path: manifest.to_path_buf(),
             issue: AppConfigPackageIssue::MetadataMissing,
         });
     };
-    if updated_fleet != expected_app || updated_role != new_role {
+    if updated_app != expected_app || updated_role != new_role {
         return Err(AppConfigError::PackageMetadataInvalid {
             path: manifest.to_path_buf(),
             issue: AppConfigPackageIssue::MetadataMismatch {
@@ -274,13 +273,13 @@ fn package_canic_metadata(source: &str) -> Result<Option<(String, String)>, toml
     else {
         return Ok(None);
     };
-    let Some(fleet) = canic_metadata.get("fleet").and_then(TomlValue::as_str) else {
+    let Some(app) = canic_metadata.get("app").and_then(TomlValue::as_str) else {
         return Ok(None);
     };
     let Some(role) = canic_metadata.get("role").and_then(TomlValue::as_str) else {
         return Ok(None);
     };
-    Ok(Some((fleet.to_string(), role.to_string())))
+    Ok(Some((app.to_string(), role.to_string())))
 }
 
 fn rename_package_metadata_role_source(source: &str, old_role: &str, new_role: &str) -> String {

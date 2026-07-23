@@ -17,7 +17,7 @@ pub struct ConfiguredPoolExpectation {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConfiguredRoleLifecycle {
-    pub fleet: String,
+    pub app: String,
     pub role: String,
     pub display: String,
     pub declaration_kind: String,
@@ -28,22 +28,22 @@ pub struct ConfiguredRoleLifecycle {
 }
 
 ///
-/// DeclaredFleetRole
+/// DeclaredAppRole
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DeclaredFleetRole {
-    pub fleet: String,
+pub struct DeclaredAppRole {
+    pub app: String,
     pub role: String,
     pub display: String,
     pub package: String,
 }
 
 ///
-/// AttachedFleetRole
+/// AttachedAppRole
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AttachedFleetRole {
-    pub fleet: String,
+pub struct AttachedAppRole {
+    pub app: String,
     pub role: String,
     pub display: String,
     pub subnet: String,
@@ -52,11 +52,11 @@ pub struct AttachedFleetRole {
 }
 
 ///
-/// RenamedFleetRole
+/// RenamedAppRole
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RenamedFleetRole {
-    pub fleet: String,
+pub struct RenamedAppRole {
+    pub app: String,
     pub old_role: String,
     pub new_role: String,
     pub old_display: String,

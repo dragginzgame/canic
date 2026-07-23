@@ -11,20 +11,20 @@ use super::model::{
 
 pub(super) fn package_state(
     package: &str,
-    fleet: &str,
+    app: &str,
     role: &str,
     packages_by_path: &BTreeMap<String, AdoptionPackageMetadataV1>,
 ) -> AdoptionPackageStateV1 {
     let Some(metadata) = packages_by_path.get(package) else {
         return AdoptionPackageStateV1::NotChecked;
     };
-    if metadata.fleet.is_none() {
-        return AdoptionPackageStateV1::MissingFleet;
+    if metadata.app.is_none() {
+        return AdoptionPackageStateV1::MissingApp;
     }
     if metadata.role.is_none() {
         return AdoptionPackageStateV1::MissingRole;
     }
-    if metadata.fleet.as_deref() == Some(fleet) && metadata.role.as_deref() == Some(role) {
+    if metadata.app.as_deref() == Some(app) && metadata.role.as_deref() == Some(role) {
         AdoptionPackageStateV1::Matches
     } else {
         AdoptionPackageStateV1::Mismatch

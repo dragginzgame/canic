@@ -4,7 +4,7 @@ use super::{
     render::ConfigRoleRow,
 };
 use canic_host::{
-    install_root::{discover_current_canic_config_choices, select_discovered_fleet_config_path},
+    install_root::{discover_current_canic_config_choices, select_discovered_app_config_path},
     registry::RegistryEntry,
     release_set::AppConfigSnapshot,
 };
@@ -91,8 +91,8 @@ pub(super) fn missing_config_roles(
 }
 
 pub(super) fn selected_config_path(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
-    let fleet = &options.target;
+    let app = &options.target;
     let choices = discover_current_canic_config_choices()?;
-    select_discovered_fleet_config_path(&choices, fleet)?
-        .ok_or_else(|| ListCommandError::UnknownFleet(fleet.clone()))
+    select_discovered_app_config_path(&choices, app)?
+        .ok_or_else(|| ListCommandError::UnknownApp(app.clone()))
 }

@@ -252,7 +252,7 @@ check_forbidden() {
     fi
 }
 
-mapfile -t cargo_files < <(find Cargo.toml crates canisters fleets -name Cargo.toml -print)
+mapfile -t cargo_files < <(find Cargo.toml crates canisters apps -name Cargo.toml -print)
 
 check_forbidden \
     "blob-storage feature or dependency metadata before inventory completion" \
@@ -260,25 +260,25 @@ check_forbidden \
 
 check_forbidden \
     "blob_storage source/module path before inventory completion" \
-    find crates canisters fleets -path "*/blob_storage*" -print -quit
+    find crates canisters apps -path "*/blob_storage*" -print -quit
 
 check_forbidden \
     "gateway method literal before inventory completion" \
-    rg -n "_immutableObjectStorage" crates canisters fleets \
+    rg -n "_immutableObjectStorage" crates canisters apps \
         --glob "*.rs" \
         --glob "*.did" \
         --glob "*.toml"
 
 check_forbidden \
     "internal blob-storage API/model type before inventory completion" \
-    rg -n "BlobStorageApi|BlobRootHash|BlobStorage" crates canisters fleets \
+    rg -n "BlobStorageApi|BlobRootHash|BlobStorage" crates canisters apps \
         --glob "*.rs" \
         --glob "*.did"
 
 check_forbidden \
     "blob-storage billing/Cashier implementation surface before inventory completion" \
     rg -n "blob-storage-billing|blob_storage_billing|cashier|Cashier|account_balance_get_v1|account_top_up_v1|storage_gateway_principal_list_v1|get_blob_storage_status" \
-        crates canisters fleets \
+        crates canisters apps \
         --glob "*.rs" \
         --glob "*.did" \
         --glob "*.toml"

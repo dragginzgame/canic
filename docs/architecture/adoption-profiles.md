@@ -7,10 +7,10 @@ artifact evidence without making Canic own or mutate anything.
 The command is:
 
 ```bash
-canic fleet adoption report <fleet> --profile <profile>
+canic app adoption report <app> --profile <profile>
 ```
 
-The report is fleet-template scoped. It does not operate on deployment target
+The report is App-scoped. It does not operate on live Fleet or deployment target
 identity, install Wasm, update controllers, attach topology, import pools, or
 edit manifests.
 
@@ -69,26 +69,26 @@ Adoption report generation is read-only.
 By default it writes only to stdout:
 
 ```bash
-canic fleet adoption report demo --profile brownfield
+canic app adoption report demo --profile brownfield
 ```
 
 An explicit output path writes only that report artifact:
 
 ```bash
-canic fleet adoption report demo --profile partial --output adoption-report.txt
+canic app adoption report demo --profile partial --output adoption-report.txt
 ```
 
 JSON output is available for inspection, but the adoption-report schema is
 experimental:
 
 ```bash
-canic fleet adoption report demo --profile minimal --json
+canic app adoption report demo --profile minimal --json
 ```
 
 Evidence can be supplied from existing JSON artifacts:
 
 ```bash
-canic fleet adoption report demo --profile partial \
+canic app adoption report demo --profile partial \
   --deployment-check check.json \
   --cargo-metadata cargo-metadata.json
 ```
@@ -96,7 +96,7 @@ canic fleet adoption report demo --profile partial \
 or with a standalone inventory artifact:
 
 ```bash
-canic fleet adoption report demo --profile partial \
+canic app adoption report demo --profile partial \
   --inventory inventory.json \
   --artifact-manifest artifact-manifest.json \
   --package-metadata package-metadata.json
@@ -116,9 +116,9 @@ Those inputs are read-only:
 - `--artifact-manifest` reads `RoleArtifactManifestV1` JSON evidence;
 - `--package-metadata` reads a JSON array of `AdoptionPackageMetadataV1`
   entries;
-- `--cargo-metadata` reads `[package.metadata.canic]` fleet/role evidence from
+- `--cargo-metadata` reads `[package.metadata.canic]` App/role evidence from
   a saved `cargo metadata --format-version 1` JSON artifact and normalizes
-  Cargo package paths against the selected fleet config.
+  Cargo package paths against the selected App config.
 
 Use either `--deployment-check` or `--inventory`, not both.
 Use either `--package-metadata` or `--cargo-metadata`, not both.
@@ -145,7 +145,7 @@ Text output renders suggested commands as previews:
 ```text
 Recommendations (report-only; not executed):
   - declare observed role candidate [warning; mutates-state; unsupported-by-adoption; requires-explicit-operator-action]
-    suggested_action_preview: canic fleet role declare demo store --package canisters/store
+    suggested_action_preview: canic app role declare demo store --package canisters/store
     status: not executed by adoption report
     support: unsupported-by-adoption
 ```
@@ -172,13 +172,13 @@ for that action outside adoption reporting. For example, declaring a role and
 attaching topology are separate role-lifecycle commands:
 
 ```bash
-canic fleet role declare demo store --package canisters/store
-canic fleet role attach demo store --subnet application
+canic app role declare demo store --package canisters/store
+canic app role attach demo store --subnet application
 ```
 
 Declaration recommendations are authority-gated. If an observed-only role is
 already Canic-authorized, the report may recommend a future
-`canic fleet role declare ...` command as a blocked, non-executed preview. If
+`canic app role declare ...` command as a blocked, non-executed preview. If
 the observed candidate is user-controlled, externally controlled, or unknown,
 the report recommends authority review first and does not preview role
 declaration.

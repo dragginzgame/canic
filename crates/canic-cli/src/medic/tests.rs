@@ -959,7 +959,7 @@ kind = "service"
         .find(|check| check.subject == "demo.app" && check.code == "role_package_metadata_missing")
         .expect("mismatched metadata check");
     assert_eq!(app.status, MedicStatus::Fail);
-    assert!(app.detail.contains("expected fleet=demo role=app"));
+    assert!(app.detail.contains("expected app=demo role=app"));
 
     let store = checks
         .iter()
@@ -1031,7 +1031,7 @@ role_attestation_cache = true
     assert_eq!(app.status, MedicStatus::Fail);
     assert!(app.detail.contains("auth.role_attestation_cache"));
     assert!(app.detail.contains("auth-root-canister-sig-verify"));
-    assert!(app.next.contains("fleets/demo/app/Cargo.toml"));
+    assert!(app.next.contains("apps/demo/app/Cargo.toml"));
     assert!(app.next.contains("runtime [dependencies].canic"));
     assert!(app.next.contains("not [build-dependencies]"));
     assert!(
@@ -1195,7 +1195,7 @@ kind = "service"
     );
     write_medic_package_with_canic_features(&root, "root", "demo", "root", &["control-plane"]);
     write_medic_package(&root, "app", "demo", "app");
-    let manifest = root.join("fleets/demo/app/Cargo.toml");
+    let manifest = root.join("apps/demo/app/Cargo.toml");
     let mut source = fs::read_to_string(&manifest).expect("read app manifest");
     source.push_str(
         r#"
@@ -1543,7 +1543,7 @@ fn sample_install_state() -> InstallState {
         root_build_target: "root".to_string(),
         workspace_root: "/workspace".to_string(),
         icp_root: "/workspace".to_string(),
-        config_path: "/workspace/fleets/demo/canic.toml".to_string(),
+        config_path: "/workspace/apps/demo/canic.toml".to_string(),
         release_set_manifest_path: "/workspace/.icp/local/canisters/root/root.release-set.json"
             .to_string(),
     }
@@ -1591,7 +1591,7 @@ fn write_candid(root: &std::path::Path, environment: &str, role: &str, candid: &
 
 fn write_medic_config(root: &std::path::Path, source: &str) -> std::path::PathBuf {
     write_medic_role_contract_workspace(root, &[]);
-    let path = root.join("fleets").join("demo").join("canic.toml");
+    let path = root.join("apps").join("demo").join("canic.toml");
     fs::create_dir_all(path.parent().expect("config parent")).expect("create config parent");
     fs::write(&path, source).expect("write config");
     path
@@ -1616,7 +1616,7 @@ fn write_medic_role_contract_workspace(root: &std::path::Path, features: &[&str]
         root.join("Cargo.toml"),
         format!(
             r#"[workspace]
-members = ["crates/canic", "crates/canic-core", "fleets/demo/*"]
+members = ["crates/canic", "crates/canic-core", "apps/demo/*"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -1697,7 +1697,7 @@ fn write_medic_package_with_canic_features(
     features: &[&str],
 ) {
     let path = root
-        .join("fleets")
+        .join("apps")
         .join("demo")
         .join(package)
         .join("Cargo.toml");
@@ -1730,7 +1730,7 @@ canic = {{ workspace = true, features = [{features}] }}
 canic = {{ workspace = true, features = [] }}
 
 [package.metadata.canic]
-fleet = "{fleet}"
+app = "{fleet}"
 role = "{role}"
 "#
         ),

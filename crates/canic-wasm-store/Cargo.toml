@@ -17,7 +17,7 @@ publish = true
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
-fleet = "wasm_store"
+app = "wasm_store"
 role = "wasm_store"
 
 [lib]

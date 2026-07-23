@@ -14,14 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.24`.
-- The latest published release is `v0.98.24` at
-  `9bc0f016dadf99fb88c3f2fa28855eb666f5660c`.
-- The `v0.98.24` source tree is
-  `c4b124444d9db307efac4f4e2c45e8349f0f4c37`; its product-tree hash is
-  `f7ec3dc5ba5251037388aa22e080234b49280acd5eaf1875569041dab3517651`.
-  Its Cargo.lock SHA-256 is
-  `01f762bb8b70e52372cc817999d476f838d7124bca4b7b053634f6764e260ce5`.
+- The workspace package version is `0.99.0`.
+- The latest published release is `v0.99.0` at
+  `6c21d12ebadce7160db22f2ff6711c2254305fdc`.
+- The `v0.99.0` source tree is
+  `373d9892f1f932538376403bca87331333355865`. Its Cargo.lock SHA-256 is
+  `82c0c65531200d1907270690c944f1a7576fd5028a561d60deb559570dc0aa1c`.
+- Released `0.99.0` implements the reinstall-only minimum App config hard cut:
+  required `[app].name`, `[services.fleet].roles`, `SubnetSlotId::DEFAULT`,
+  `subnets.default`, and keyed `binding` are the sole maintained config
+  surfaces.
 - Released `0.98.24` is the final Tier 2 architectural-sediment closeout. It
   fixes all 3 P1 and 9 P2 findings with no deferral.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
@@ -1126,19 +1128,24 @@ reinstall-only: 0.99 does not read, migrate or upgrade 0.98 Canister state,
 installed-state trees or deployment catalogs. The first mutating batch is
 0.99 **Implementation Slice 1 — Minimum Config Hard Cut**.
 
-Implementation Slice 1 is implemented in the working tree. Source identity is
-required at `[app].name`; `FleetConfig` is removed; top-level `app_index`
-authoring is `[services.fleet].roles`; source topology uses
-`SubnetSlotId::DEFAULT` and `subnets.default`; and keyed placement config uses
-`binding`. Parsing, validation, generated config, runtime config consumers,
-host mutation/diagnostics, tracked configs, CI fixtures, scaffolding and
-active guidance use only the new shapes. Runtime `AppIndex` and Directory
-authorities remain intentionally unchanged until their later live-topology
-slice. Focused Canic-core config/bootstrap, Canic-host release-set/ICP-config,
-Canic CLI scaffold, and Canic config/reference-surface tests pass. No package
-version has changed. Strict all-target Clippy passes for the six affected
-packages; formatting, shell syntax, changelog governance and diff hygiene also
-pass.
+Implementation Slice 1 is released as `v0.99.0`. Implementation Slice 2 — App
+Source Surfaces is complete in the working tree as the open `0.99.1` draft.
+The tracked source layout is `apps/<app>/`; package metadata, config discovery,
+source role lifecycle, builds, build provenance, adoption, evidence selectors,
+scaffolding, fixtures, CI scripts, and the source CLI use App identity only.
+The old `fleets/` source tree, package-metadata `fleet` key, `canic fleet`
+command family, and discovery fallback do not survive. Live
+install/deployment/catalog Fleet semantics and runtime topology authorities
+remain unchanged for their explicit later slices.
+
+Focused App CLI, list, Medic, evidence, config discovery, release-set,
+build-provenance, adoption, role-contract, workspace-manifest,
+reference-surface, timer/receipt inventory, and blob-storage inventory checks
+pass. Strict all-target Clippy passes for `canic-core`, `canic`, `canic-host`,
+and `canic-cli`; formatting and diff hygiene pass. No Cargo package version,
+dependency, lockfile, Candid, stable-memory, or live deployment contract has
+changed. The source path, package metadata, Rust source model, source CLI, and
+source/evidence JSON changes are intentional hard cuts.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

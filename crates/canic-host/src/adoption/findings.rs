@@ -23,7 +23,7 @@ use super::{
 
 pub(super) struct DeclaredRoleFindingInput<'a> {
     pub(super) profile: AdoptionProfileV1,
-    pub(super) fleet: &'a str,
+    pub(super) app: &'a str,
     pub(super) role: &'a CanisterRole,
     pub(super) package: &'a str,
     pub(super) attached: bool,
@@ -37,7 +37,7 @@ pub(super) struct DeclaredRoleFindingInput<'a> {
 
 pub(super) struct ObservedOnlyRoleFindingInput<'a> {
     pub(super) profile: AdoptionProfileV1,
-    pub(super) fleet: &'a str,
+    pub(super) app: &'a str,
     pub(super) role: &'a str,
     pub(super) observed: &'a [&'a crate::deployment_truth::ObservedCanisterV1],
     pub(super) duplicate_observation: bool,
@@ -72,7 +72,7 @@ pub(super) fn role_finding_for_declared_role(
                     .to_string(),
             );
         } else {
-            recommendations.push(attach_later_recommendation(input.fleet, &role_name));
+            recommendations.push(attach_later_recommendation(input.app, &role_name));
         }
     }
 
@@ -102,20 +102,15 @@ pub(super) fn role_finding_for_declared_role(
         classifications.insert(AdoptionClassificationV1::UserControlled);
     }
 
-    let package_state = package_state(
-        input.package,
-        input.fleet,
-        &role_name,
-        input.packages_by_path,
-    );
+    let package_state = package_state(input.package, input.app, &role_name, input.packages_by_path);
     if matches!(
         package_state,
-        AdoptionPackageStateV1::MissingFleet
+        AdoptionPackageStateV1::MissingApp
             | AdoptionPackageStateV1::MissingRole
             | AdoptionPackageStateV1::Mismatch
     ) {
         classifications.insert(AdoptionClassificationV1::EvidenceConflict);
-        warnings.push("package metadata does not match declared fleet role".to_string());
+        warnings.push("package metadata does not match declared app role".to_string());
     }
 
     if input.duplicate_observation {
@@ -141,7 +136,7 @@ pub(super) fn role_finding_for_declared_role(
     }
 
     AdoptionRoleFindingV1 {
-        fleet: input.fleet.to_string(),
+        app: input.app.to_string(),
         role: role_name,
         classifications: classifications.into_iter().collect(),
         declaration_state: AdoptionDeclarationStateV1::Declared,
@@ -215,7 +210,7 @@ pub(super) fn role_finding_for_observed_only_role(
     }
 
     AdoptionRoleFindingV1 {
-        fleet: input.fleet.to_string(),
+        app: input.app.to_string(),
         role: input.role.to_string(),
         classifications: classifications.into_iter().collect(),
         declaration_state: AdoptionDeclarationStateV1::Undeclared,
@@ -227,7 +222,7 @@ pub(super) fn role_finding_for_observed_only_role(
         evidence,
         recommendations: observed_only_recommendations(
             input.profile,
-            input.fleet,
+            input.app,
             input.role,
             authority_state,
         ),
@@ -237,7 +232,7 @@ pub(super) fn role_finding_for_observed_only_role(
 
 pub(super) fn observed_canister_findings(
     profile: AdoptionProfileV1,
-    fleet: &str,
+    app: &str,
     inventory: Option<&DeploymentInventoryV1>,
     declarations: &BTreeSet<CanisterRole>,
     attached_roles: &BTreeSet<CanisterRole>,
@@ -272,7 +267,7 @@ pub(super) fn observed_canister_findings(
 
         findings.push(AdoptionObservedCanisterFindingV1 {
             canister_id: canister.canister_id.clone(),
-            matched_fleet: role.map(|_| fleet.to_string()),
+            matched_app: role.map(|_| app.to_string()),
             matched_role: role.map(str::to_string),
             confidence: match (role, declared, attached) {
                 (Some(_), true, true) => AdoptionMatchConfidenceV1::ExplicitEvidence,
@@ -289,7 +284,7 @@ pub(super) fn observed_canister_findings(
             recommendations: match (role, declared) {
                 (Some(role), false) => observed_only_recommendations(
                     profile,
-                    fleet,
+                    app,
                     role,
                     authority_state_for_control_class(canister.control_class),
                 ),
@@ -304,7 +299,7 @@ pub(super) fn observed_canister_findings(
     for pool in &inventory.observed_pool {
         findings.push(AdoptionObservedCanisterFindingV1 {
             canister_id: pool.canister_id.clone(),
-            matched_fleet: pool.role.as_ref().map(|_| fleet.to_string()),
+            matched_app: pool.role.as_ref().map(|_| app.to_string()),
             matched_role: pool.role.clone(),
             confidence: AdoptionMatchConfidenceV1::Candidate,
             classifications: vec![AdoptionClassificationV1::ImportedPoolCandidate],

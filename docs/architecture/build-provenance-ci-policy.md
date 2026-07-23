@@ -5,7 +5,7 @@ provenance. It is policy guidance, not a new command contract.
 
 ## Purpose
 
-`canic build <fleet> <role> --provenance <path>` writes an
+`canic build <app> <role> --provenance <path>` writes an
 `EvidenceEnvelopeV1` whose payload schema is stable:
 
 ```text
@@ -26,7 +26,7 @@ passes that saved evidence into passive report envelopes:
 ```text
 canic build demo app --provenance artifacts/canic/build-provenance.json
 
-canic fleet adoption report demo --profile minimal --evidence-envelope \
+canic app adoption report demo --profile minimal --evidence-envelope \
   --build-provenance artifacts/canic/build-provenance.json \
   --output artifacts/canic/adoption-envelope.json
 
@@ -47,7 +47,7 @@ CI policy should branch on the stable envelope plus the stable
 - `payload_schema.id == "canic.build_provenance.v1"`;
 - `payload_schema.stability == "stable"`;
 - `target.kind == "artifact"`;
-- `target.fleet`, `target.role`, `target.profile`, and `target.environment`;
+- `target.app`, `target.role`, `target.profile`, and `target.environment`;
 - `exit_class`;
 - `summary.warnings[].code`;
 - `payload.source`;
@@ -126,11 +126,11 @@ Package identity comes from `[package.metadata.canic]`.
 
 Recommended CI policy:
 
-- require `payload.cargo.package_metadata_fleet == envelope.target.fleet`;
+- require `payload.cargo.package_metadata_app == envelope.target.app`;
 - require `payload.cargo.package_metadata_role == envelope.target.role`;
 - require both values to match the intended release target;
 - reject any artifact whose package metadata does not match the selected
-  `fleet.role`.
+  `app.role`.
 
 Canic must not infer this identity from crate names. If package metadata is
 missing or mismatched, the Canic-managed build should fail before provenance is

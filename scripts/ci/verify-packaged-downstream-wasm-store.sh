@@ -147,10 +147,10 @@ prepare_downstream_root() {
     local downstream_root="$1"
     local package_root="$2"
 
-    mkdir -p "$downstream_root/src" "$downstream_root/fleets"
+    mkdir -p "$downstream_root/src" "$downstream_root/apps"
     prepare_packaged_canic_patch_config "$downstream_root" "$package_root"
 
-    cp "$ROOT/fleets/test/canic.toml" "$downstream_root/fleets/canic.toml"
+    cp "$ROOT/apps/test/canic.toml" "$downstream_root/apps/canic.toml"
 
     cat > "$downstream_root/Cargo.toml" <<EOF
 [package]
@@ -186,7 +186,7 @@ run_probe() {
             TMPDIR="$PROOF_TMPDIR" \
             cargo run --manifest-path "$tool_root/Cargo.toml" --offline -q -p canic-host \
                 --example build_artifact -- wasm_store fast "$downstream_root" \
-                "$downstream_root" "$downstream_root/fleets/canic.toml" >/dev/null
+                "$downstream_root" "$downstream_root/apps/canic.toml" >/dev/null
     )
 }
 

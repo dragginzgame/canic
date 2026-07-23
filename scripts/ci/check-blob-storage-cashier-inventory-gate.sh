@@ -165,7 +165,7 @@ check_forbidden() {
     fi
 }
 
-mapfile -t cargo_files < <(find Cargo.toml crates canisters fleets -name Cargo.toml -print)
+mapfile -t cargo_files < <(find Cargo.toml crates canisters apps -name Cargo.toml -print)
 
 check_forbidden \
     "blob-storage billing feature or dependency metadata before Cashier inventory completion" \
@@ -173,14 +173,14 @@ check_forbidden \
 
 check_forbidden \
     "blob-storage billing or Cashier source/module path before Cashier inventory completion" \
-    find crates canisters fleets \( -path "*/blob_storage_billing*" -o -path "*/cashier*" \) \
+    find crates canisters apps \( -path "*/blob_storage_billing*" -o -path "*/cashier*" \) \
         -print \
         -quit
 
 check_forbidden \
     "Cashier method literal before Cashier inventory completion" \
     rg -n "account_balance_get_v1|account_top_up_v1|storage_gateway_principal_list_v1" \
-        crates canisters fleets \
+        crates canisters apps \
         --glob "*.rs" \
         --glob "*.did" \
         --glob "*.toml"
@@ -188,7 +188,7 @@ check_forbidden \
 check_forbidden \
     "billing endpoint literal before Cashier inventory completion" \
     rg -n "get_blob_storage_status|_immutableObjectStorageUpdateGatewayPrincipals|_immutableObjectStorageFundFromProjectCycles" \
-        crates canisters fleets \
+        crates canisters apps \
         --glob "*.rs" \
         --glob "*.did" \
         --glob "*.toml"
@@ -196,7 +196,7 @@ check_forbidden \
 check_forbidden \
     "public Cashier/billing API or model type before Cashier inventory completion" \
     rg -n "Cashier|BlobStorageBilling|BlobStorageStatus|BlobStorageFunding|GatewayPrincipalSync" \
-        crates canisters fleets \
+        crates canisters apps \
         --glob "*.rs" \
         --glob "*.did"
 

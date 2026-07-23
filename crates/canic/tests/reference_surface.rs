@@ -44,7 +44,7 @@ fn icp_canister_keys() -> Vec<String> {
 
 // Read the root-subnet canister keys from the checked-in test Canic config.
 fn test_root_subnet_canister_keys() -> Vec<String> {
-    let path = workspace_root().join("fleets/test/canic.toml");
+    let path = workspace_root().join("apps/test/canic.toml");
     let source = read_text(&path);
     let parsed: toml::Value = toml::from_str(&source)
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()));
@@ -67,7 +67,7 @@ fn icp_visible_canisters_match_test_root_subnet() {
 
     assert_eq!(
         icp_keys, test_root_subnet,
-        "icp.yaml canister keys must stay aligned with fleets/test/canic.toml root subnet"
+        "icp.yaml canister keys must stay aligned with apps/test/canic.toml root subnet"
     );
 }
 

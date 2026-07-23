@@ -139,6 +139,7 @@ fn policy_gate_target(report: &EvidenceGateReport) -> EvidenceTargetV1 {
         EvidenceGateReport::Envelope(report) => EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::PolicyGate,
             deployment: report.evaluated_target.deployment.clone(),
+            app: report.evaluated_target.app.clone(),
             fleet: report.evaluated_target.fleet.clone(),
             role: report.evaluated_target.role.clone(),
             profile: report.evaluated_target.profile.clone(),
@@ -147,6 +148,7 @@ fn policy_gate_target(report: &EvidenceGateReport) -> EvidenceTargetV1 {
         EvidenceGateReport::Manifest(report) => EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::PolicyGate,
             deployment: None,
+            app: None,
             fleet: None,
             role: None,
             profile: Some(report.project_name.clone()),

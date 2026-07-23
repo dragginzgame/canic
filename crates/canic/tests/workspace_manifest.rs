@@ -8,7 +8,7 @@ use toml::Value;
 /// CanicPackageMetadata
 ///
 struct CanicPackageMetadata {
-    fleet: String,
+    app: String,
     role: String,
 }
 
@@ -96,7 +96,7 @@ fn canic_package_metadata(manifest: &Value) -> Option<CanicPackageMetadata> {
         .get("canic")?
         .as_table()?;
     Some(CanicPackageMetadata {
-        fleet: canic.get("fleet")?.as_str()?.to_string(),
+        app: canic.get("app")?.as_str()?.to_string(),
         role: canic.get("role")?.as_str()?.to_string(),
     })
 }
@@ -169,7 +169,7 @@ fn collect_named_files(root: &Path, file_name: &str, files: &mut Vec<PathBuf>) {
     }
 }
 
-// Returns the declared Canic roles from repository configs, keyed by fleet and role.
+// Returns the declared Canic roles from repository configs, keyed by app and role.
 fn declared_canic_roles(root: &Path) -> BTreeMap<(String, String), CanicConfigRole> {
     let mut config_paths = Vec::new();
     collect_named_files(root, "canic.toml", &mut config_paths);
@@ -177,9 +177,9 @@ fn declared_canic_roles(root: &Path) -> BTreeMap<(String, String), CanicConfigRo
     let mut roles = BTreeMap::new();
     for config_path in config_paths {
         let config = read_canic_config(&config_path);
-        let Some(fleet) = config
-            .get("fleet")
-            .and_then(|fleet| fleet.get("name"))
+        let Some(app) = config
+            .get("app")
+            .and_then(|app| app.get("name"))
             .and_then(Value::as_str)
         else {
             continue;
@@ -217,7 +217,7 @@ fn declared_canic_roles(root: &Path) -> BTreeMap<(String, String), CanicConfigRo
                 });
 
             roles.insert(
-                (fleet.to_string(), role.clone()),
+                (app.to_string(), role.clone()),
                 CanicConfigRole {
                     config_path: config_path.clone(),
                     kind,
@@ -250,7 +250,7 @@ fn uses_generated_standalone_config(
     manifest: &Value,
     metadata: &CanicPackageMetadata,
 ) -> bool {
-    if metadata.fleet != "standalone" || metadata.role == "root" {
+    if metadata.app != "standalone" || metadata.role == "root" {
         return false;
     }
     if !is_explicitly_unpublished(manifest) || !lib_crate_types(manifest).contains("cdylib") {
@@ -619,16 +619,16 @@ fn canic_role_declaration_packages_exist() {
     let declared_roles = declared_canic_roles(&root);
 
     let mut failures = Vec::new();
-    for ((fleet, role), declaration) in declared_roles {
+    for ((app, role), declaration) in declared_roles {
         match declaration.package_manifest.as_ref() {
             Some(package_manifest) if package_manifest.is_file() => {}
             Some(package_manifest) => failures.push(format!(
-                "{}: [roles.{role}] package for {fleet}.{role} must contain Cargo.toml, missing {}",
+                "{}: [roles.{role}] package for {app}.{role} must contain Cargo.toml, missing {}",
                 relative_display(&root, &declaration.config_path),
                 relative_display(&root, package_manifest)
             )),
             None => failures.push(format!(
-                "{}: [roles.{role}] package for {fleet}.{role} must be declared",
+                "{}: [roles.{role}] package for {app}.{role} must be declared",
                 relative_display(&root, &declaration.config_path)
             )),
         }
@@ -643,9 +643,9 @@ fn canic_role_declaration_packages_exist() {
     }
 }
 
-// Verifies canister package metadata stays aligned with fleet role declarations.
+// Verifies canister package metadata stays aligned with app role declarations.
 #[test]
-fn canic_package_metadata_resolves_to_declared_fleet_roles() {
+fn canic_package_metadata_resolves_to_declared_app_roles() {
     let root = workspace_root();
     let root_manifest_path = root.join("Cargo.toml");
     let root_manifest = read_manifest(&root_manifest_path);
@@ -658,23 +658,22 @@ fn canic_package_metadata_resolves_to_declared_fleet_roles() {
         let Some(metadata) = canic_package_metadata(&manifest) else {
             continue;
         };
-        if metadata.fleet.trim().is_empty() || metadata.role.trim().is_empty() {
+        if metadata.app.trim().is_empty() || metadata.role.trim().is_empty() {
             failures.push(format!(
-                "{}: [package.metadata.canic] fleet and role must be non-empty strings",
+                "{}: [package.metadata.canic] app and role must be non-empty strings",
                 relative_display(&root, &manifest_path)
             ));
             continue;
         }
 
-        let Some(role) = declared_roles.get(&(metadata.fleet.clone(), metadata.role.clone()))
-        else {
+        let Some(role) = declared_roles.get(&(metadata.app.clone(), metadata.role.clone())) else {
             if uses_generated_standalone_config(&manifest_path, &manifest, &metadata) {
                 continue;
             }
             failures.push(format!(
                 "{}: [package.metadata.canic] {}.{} is not declared by any canic.toml [roles.{}]",
                 relative_display(&root, &manifest_path),
-                metadata.fleet,
+                metadata.app,
                 metadata.role,
                 metadata.role
             ));
@@ -687,7 +686,7 @@ fn canic_package_metadata_resolves_to_declared_fleet_roles() {
             Some(package_manifest) => failures.push(format!(
                 "{}: [package.metadata.canic] {}.{} package path points at {}, declared in {}",
                 relative_display(&root, &manifest_path),
-                metadata.fleet,
+                metadata.app,
                 metadata.role,
                 relative_display(&root, package_manifest),
                 relative_display(&root, &role.config_path)
@@ -695,7 +694,7 @@ fn canic_package_metadata_resolves_to_declared_fleet_roles() {
             None => failures.push(format!(
                 "{}: [package.metadata.canic] {}.{} resolves to a role without a package path in {}",
                 relative_display(&root, &manifest_path),
-                metadata.fleet,
+                metadata.app,
                 metadata.role,
                 relative_display(&root, &role.config_path)
             )),
@@ -720,7 +719,7 @@ fn canic_package_metadata_resolves_to_declared_fleet_roles() {
     if !failures.is_empty() {
         failures.sort();
         panic!(
-            "Canic package metadata is not aligned with fleet role declarations:\n{}",
+            "Canic package metadata is not aligned with app role declarations:\n{}",
             failures.join("\n")
         );
     }

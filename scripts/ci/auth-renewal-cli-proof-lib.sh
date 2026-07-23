@@ -11,8 +11,8 @@ prepare_auth_renewal_cli_surface_fixture() {
         "$downstream_root/.canic/fixture/deployments" \
         "$downstream_root/.icp/fixture/canisters/app" \
         "$downstream_root/.icp/fixture/canisters/root" \
-        "$downstream_root/fleets/downstream/app" \
-        "$downstream_root/fleets/downstream/root"
+        "$downstream_root/apps/downstream/app" \
+        "$downstream_root/apps/downstream/root"
 
     cat > "$downstream_root/icp.yaml" <<'EOF'
 canisters:
@@ -32,7 +32,7 @@ environments:
     canisters: [root, app]
 EOF
 
-    cat > "$downstream_root/fleets/downstream/canic.toml" <<'EOF'
+    cat > "$downstream_root/apps/downstream/canic.toml" <<'EOF'
 controllers = []
 [services.fleet]
 roles = ["app"]
@@ -69,30 +69,30 @@ EOF
   "root_build_target": "root",
   "workspace_root": "$downstream_root",
   "icp_root": "$downstream_root",
-  "config_path": "$downstream_root/fleets/downstream/canic.toml",
+  "config_path": "$downstream_root/apps/downstream/canic.toml",
   "release_set_manifest_path": "$downstream_root/.icp/fixture/canisters/root/release-set.json"
 }
 EOF
 
-    cat > "$downstream_root/fleets/downstream/root/Cargo.toml" <<'EOF'
+    cat > "$downstream_root/apps/downstream/root/Cargo.toml" <<'EOF'
 [package]
 name = "downstream-root"
 version = { workspace = true }
 edition = "2024"
 
 [package.metadata.canic]
-fleet = "downstream"
+app = "downstream"
 role = "root"
 EOF
 
-    cat > "$downstream_root/fleets/downstream/app/Cargo.toml" <<'EOF'
+    cat > "$downstream_root/apps/downstream/app/Cargo.toml" <<'EOF'
 [package]
 name = "downstream-app"
 version = { workspace = true }
 edition = "2024"
 
 [package.metadata.canic]
-fleet = "downstream"
+app = "downstream"
 role = "app"
 EOF
 

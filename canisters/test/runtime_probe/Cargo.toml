@@ -9,7 +9,7 @@ publish = false
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
-fleet = "runtime_probe"
+app = "runtime_probe"
 role = "test"
 
 [lib]

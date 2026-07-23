@@ -18,9 +18,9 @@ pub(super) fn cargo_provenance(
     let manifest_source = fs::read_to_string(package_manifest)?;
     let manifest = toml::from_str::<TomlValue>(&manifest_source)?;
     let cargo_lock_path = request.workspace_root.join("Cargo.lock");
-    let package_metadata_fleet = required_manifest_str(
+    let package_metadata_app = required_manifest_str(
         &manifest,
-        &["package", "metadata", "canic", "fleet"],
+        &["package", "metadata", "canic", "app"],
         package_manifest,
     )?;
     let package_metadata_role = required_manifest_str(
@@ -28,13 +28,13 @@ pub(super) fn cargo_provenance(
         &["package", "metadata", "canic", "role"],
         package_manifest,
     )?;
-    if package_metadata_fleet != request.fleet || package_metadata_role != request.role {
+    if package_metadata_app != request.app || package_metadata_role != request.role {
         return Err(format!(
-            "{} declares [package.metadata.canic] fleet={:?} role={:?}, not {}.{}",
+            "{} declares [package.metadata.canic] app={:?} role={:?}, not {}.{}",
             package_manifest.display(),
-            package_metadata_fleet,
+            package_metadata_app,
             package_metadata_role,
-            request.fleet,
+            request.app,
             request.role
         )
         .into());
@@ -45,7 +45,7 @@ pub(super) fn cargo_provenance(
         package_manifest_sha256: Some(sha256_hex(manifest_source.as_bytes())),
         package_name: required_manifest_str(&manifest, &["package", "name"], package_manifest)?,
         package_manifest: display_path(package_manifest, &request.workspace_root),
-        package_metadata_fleet,
+        package_metadata_app,
         package_metadata_role,
         rustc_version: command_version("rustc", ["--version"]),
         cargo_version: cargo_version(),

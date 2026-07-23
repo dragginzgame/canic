@@ -112,13 +112,13 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
             format!("multiple Cargo packages resolve for role {role}")
         }
         RoleContractFinding::PackageMetadataMismatch {
-            expected_fleet,
+            expected_app,
             expected_role,
-            actual_fleet,
+            actual_app,
             actual_role,
         } => format!(
-            "package metadata declares fleet={} role={}, expected fleet={expected_fleet} role={expected_role}",
-            actual_fleet.as_deref().unwrap_or("<missing>"),
+            "package metadata declares app={} role={}, expected app={expected_app} role={expected_role}",
+            actual_app.as_deref().unwrap_or("<missing>"),
             actual_role.as_deref().unwrap_or("<missing>")
         ),
         RoleContractFinding::PackageMissing { role } => {

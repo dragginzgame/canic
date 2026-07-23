@@ -57,7 +57,7 @@ impl Display for AppConfigIoOperation {
 ///
 /// AppConfigNameField
 ///
-/// Input-name family used by typed fleet mutation validation.
+/// Input-name family used by typed app mutation validation.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -80,7 +80,7 @@ impl Display for AppConfigNameField {
 ///
 /// AppConfigNameIssue
 ///
-/// Reason a bounded fleet mutation name is invalid.
+/// Reason a bounded app mutation name is invalid.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -117,14 +117,14 @@ impl Display for AppConfigNameIssue {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AppConfigDeclaration {
     AppName,
-    Role { fleet: String, role: String },
+    Role { app: String, role: String },
 }
 
 impl Display for AppConfigDeclaration {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AppName => formatter.write_str("missing required [app].name in canic.toml"),
-            Self::Role { fleet, role } => write!(formatter, "role {fleet}.{role} is not declared"),
+            Self::Role { app, role } => write!(formatter, "role {app}.{role} is not declared"),
         }
     }
 }
@@ -137,8 +137,8 @@ impl Display for AppConfigDeclaration {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AppConfigMutationConflict {
-    RoleAlreadyAttached { fleet: String, role: String },
-    RoleAlreadyDeclared { fleet: String, role: String },
+    RoleAlreadyAttached { app: String, role: String },
+    RoleAlreadyDeclared { app: String, role: String },
     RootRoleAttach,
     RootRoleDeclare,
     RootRoleRename,
@@ -148,11 +148,11 @@ pub enum AppConfigMutationConflict {
 impl Display for AppConfigMutationConflict {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RoleAlreadyAttached { fleet, role } => {
-                write!(formatter, "role {fleet}.{role} is already attached")
+            Self::RoleAlreadyAttached { app, role } => {
+                write!(formatter, "role {app}.{role} is already attached")
             }
-            Self::RoleAlreadyDeclared { fleet, role } => {
-                write!(formatter, "role {fleet}.{role} is already declared")
+            Self::RoleAlreadyDeclared { app, role } => {
+                write!(formatter, "role {app}.{role} is already declared")
             }
             Self::RootRoleAttach => {
                 formatter.write_str("root role must already be attached through root topology")
@@ -160,7 +160,7 @@ impl Display for AppConfigMutationConflict {
             Self::RootRoleDeclare => formatter
                 .write_str("root role must be attached to topology; declare ordinary roles only"),
             Self::RootRoleRename => {
-                formatter.write_str("root role cannot be renamed through fleet role rename")
+                formatter.write_str("root role cannot be renamed through app role rename")
             }
             Self::SameRoleRename => formatter.write_str("old role and new role must differ"),
         }

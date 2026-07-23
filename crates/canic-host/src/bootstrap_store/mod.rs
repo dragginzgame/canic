@@ -323,7 +323,7 @@ version = \"0.0.0\"\n\
 edition = \"2024\"\n\
 publish = false\n\n\
 [package.metadata.canic]\n\
-fleet = \"wasm_store\"\n\
+app = \"wasm_store\"\n\
 role = \"wasm_store\"\n\n\
 [workspace]\n\
 resolver = \"2\"\n\n\

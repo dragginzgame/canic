@@ -44,7 +44,7 @@ pub fn build_workspace_canister_artifact(
 /// Copy the uncompressed artifact to the path requested by ICP custom builds.
 ///
 /// ICP CLI sets `ICP_WASM_OUTPUT_PATH` for script-backed canister builds. Normal
-/// direct `canic build <fleet> <role>` calls leave it unset and only write Canic's
+/// direct `canic build <app> <role>` calls leave it unset and only write Canic's
 /// canonical `.icp/local/canisters/<role>/` artifacts.
 pub fn copy_icp_wasm_output(
     canister_name: &str,
@@ -189,9 +189,9 @@ fn validate_artifact_role_attached(
         .into());
     }
     if !config.attached_roles().contains(&role) {
-        let fleet = config.app_id().as_str();
+        let app = config.app_id().as_str();
         return Err(format!(
-            "role {fleet}.{canister_name} is declared but not attached to topology; run `canic fleet role attach {fleet} {canister_name} --subnet <subnet>` before building an artifact"
+            "role {app}.{canister_name} is declared but not attached to topology; run `canic app role attach {app} {canister_name} --subnet <subnet>` before building an artifact"
         )
         .into());
     }

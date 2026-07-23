@@ -1,3 +1,4 @@
+mod apps;
 mod auth;
 mod backup;
 mod blob_storage;
@@ -8,7 +9,6 @@ mod deploy;
 mod endpoints;
 mod evidence;
 mod evidence_support;
-mod fleets;
 mod info;
 mod info_env;
 mod inspect;
@@ -83,8 +83,8 @@ pub enum CliError {
     #[error("medic: {0}")]
     Medic(#[from] medic::MedicCommandError),
 
-    #[error("fleet: {0}")]
-    Fleets(#[from] fleets::FleetCommandError),
+    #[error("app: {0}")]
+    Apps(#[from] apps::AppCommandError),
 
     #[error("state: {0}")]
     State(#[from] state::StateCommandError),
@@ -155,7 +155,7 @@ where
         "cycles" => cycles::run(tail).map_err(CliError::from),
         "deploy" => deploy::run(tail).map_err(CliError::from),
         "evidence" => evidence::run(tail).map_err(CliError::from),
-        "fleet" => fleets::run(tail).map_err(CliError::from),
+        "app" => apps::run(tail).map_err(CliError::from),
         "info" => info::run(tail).map_err(CliError::from),
         "install" => install::run(tail).map_err(CliError::from),
         "inspect" => inspect::run(tail).map_err(CliError::from),

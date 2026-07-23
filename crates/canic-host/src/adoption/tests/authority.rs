@@ -102,7 +102,7 @@ fn adoption_report_recommends_declaration_only_for_canic_authorized_observed_rol
             .iter()
             .any(|recommendation| recommendation.kind == "declare_role"
                 && recommendation.suggested_action.as_deref()
-                    == Some("canic fleet role declare demo candidate --package <path>")
+                    == Some("canic app role declare demo candidate --package <path>")
                 && recommendation.suggested_action_effect
                     == AdoptionSuggestedActionEffectV1::MutatesState
                 && recommendation.suggested_action_support
@@ -122,7 +122,7 @@ fn adoption_report_authority_gates_observed_only_declaration_recommendations() {
             CanisterControlClassV1::DeploymentControlled,
             AdoptionAuthorityStateV1::CanicAuthorized,
             "declare_role",
-            Some("canic fleet role declare demo candidate --package <path>"),
+            Some("canic app role declare demo candidate --package <path>"),
         ),
         (
             CanisterControlClassV1::UserControlled,

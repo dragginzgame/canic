@@ -15,7 +15,7 @@ package = "."
 
 [roles.scale_replica]
 kind = "canister"
-package = "../../../fleets/test/scale"
+package = "../../../apps/test/scale"
 
 [auth.delegated_tokens]
 enabled = false

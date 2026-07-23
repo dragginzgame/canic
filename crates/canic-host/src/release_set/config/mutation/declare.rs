@@ -1,19 +1,19 @@
 use super::{
-    DeclaredFleetRoleSource,
+    DeclaredAppRoleSource,
     support::{admit_canister_role_name, toml_string_literal},
 };
 use crate::release_set::config::{
     AppConfigError, AppConfigMutationConflict, AppConfigNameField, AppConfigNameIssue,
-    AppConfigOperation, model::DeclaredFleetRole,
+    AppConfigOperation, model::DeclaredAppRole,
 };
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 
-pub(in crate::release_set) fn declare_fleet_role_source(
+pub(in crate::release_set) fn declare_app_role_source(
     config_source: &str,
     expected_app: &str,
     role: &str,
     package: &str,
-) -> Result<DeclaredFleetRoleSource, AppConfigError> {
+) -> Result<DeclaredAppRoleSource, AppConfigError> {
     let role = role.trim();
     let package = package.trim();
     admit_canister_role_name(role)?;
@@ -47,7 +47,7 @@ pub(in crate::release_set) fn declare_fleet_role_source(
     if config.declares_role(&role_id) {
         return Err(AppConfigError::MutationConflict {
             conflict: AppConfigMutationConflict::RoleAlreadyDeclared {
-                fleet: expected_app.to_string(),
+                app: expected_app.to_string(),
                 role: role.to_string(),
             },
         });
@@ -65,10 +65,10 @@ pub(in crate::release_set) fn declare_fleet_role_source(
         source,
     })?;
 
-    Ok(DeclaredFleetRoleSource {
+    Ok(DeclaredAppRoleSource {
         source,
-        role: DeclaredFleetRole {
-            fleet: expected_app.to_string(),
+        role: DeclaredAppRole {
+            app: expected_app.to_string(),
             role: role.to_string(),
             display: format!("{expected_app}.{role}"),
             package: package.to_string(),

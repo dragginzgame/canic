@@ -127,7 +127,7 @@ fn build_plan(
 
 fn plan_config_path(workspace_root: &Path, options: &DeployPlanOptions) -> PathBuf {
     let config = options.config.clone().unwrap_or_else(|| {
-        PathBuf::from("fleets")
+        PathBuf::from("apps")
             .join(&options.deployment)
             .join("canic.toml")
     });
@@ -473,7 +473,7 @@ mod tests {
             target: "demo-local".to_string(),
             environment: "local".to_string(),
             build_profile: "debug".to_string(),
-            config_path: "fleets/demo/canic.toml".to_string(),
+            config_path: "apps/demo/canic.toml".to_string(),
             status,
             comparison_status: ComparisonStatus::NotRequested,
             plan: plan_with_assumptions([]),

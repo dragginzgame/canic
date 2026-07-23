@@ -13,20 +13,19 @@ docs/architecture/v1-operator-walkthrough.md
 
 ## Names To Keep Separate
 
-- `fleet`: the fleet template in `canic.toml`;
-- `role`: the package-backed canister role declared for that fleet;
+- `app`: the source definition identified by `[app].name` in `canic.toml`;
+- `role`: the package-backed canister role declared for that App;
 - `deployment`: the deployment target recorded in local deployment-target
   state.
 
-Do not treat a fleet name as a deployment target unless the project has
-explicitly chosen the same string for both concepts.
+An App source identity is not a live deployment target.
 
 ## Required Project Files
 
-A small managed fleet should have:
+A small managed App should have:
 
 ```text
-fleets/<fleet>/canic.toml
+apps/<app>/canic.toml
 icp.yaml
 Cargo.toml
 <canister-crate>/Cargo.toml
@@ -38,7 +37,7 @@ Each canister package must declare both fields:
 
 ```toml
 [package.metadata.canic]
-fleet = "<fleet>"
+app = "<app>"
 role = "<role>"
 ```
 
@@ -59,28 +58,28 @@ kind = "service"
 
 ## Command Checklist
 
-Create the fleet config:
+Create the App config:
 
 ```text
-canic fleet create <fleet>
+canic app create <app>
 ```
 
 Scaffold an ordinary package-backed role:
 
 ```text
-canic scaffold canister <fleet> <role>
+canic scaffold canister <app> <role>
 ```
 
 Attach the role when placement is known:
 
 ```text
-canic fleet role attach <fleet> <role> --subnet <subnet>
+canic app role attach <app> <role> --subnet <subnet>
 ```
 
 Build an attached role and write stable build provenance:
 
 ```text
-canic build <fleet> <role> --provenance <path>
+canic build <app> <role> --provenance <path>
 ```
 
 Inspect the desired deployment shape without mutation:
@@ -135,7 +134,7 @@ The checklist does not add authority. In particular, it does not:
 
 - install or upgrade Wasm;
 - mutate controllers;
-- attach topology except through the explicit `fleet role attach` command;
+- attach topology except through the explicit `app role attach` command;
 - import brownfield deployments;
 - register artifacts in `wasm_store`;
 - sign evidence;
@@ -154,7 +153,7 @@ scripts/ci/v1-readiness-smoke.sh
 ```
 
 It runs in a temporary project and proves the safe local subset of this
-checklist: fleet creation, canister scaffold, declared-only inspection,
+checklist: App creation, canister scaffold, declared-only inspection,
 explicit role attachment, attached inspection, empty local deployment catalog,
 and policy evaluation of one saved envelope.
 

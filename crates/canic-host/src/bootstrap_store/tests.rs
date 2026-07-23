@@ -32,7 +32,7 @@ fn generated_wasm_store_wrapper_enables_wasm_store_canister_feature() {
     assert!(!manifest.contains("incremental = true"));
     assert!(manifest.contains("canic = { path = "));
     assert!(manifest.contains("[package.metadata.canic]"));
-    assert!(manifest.contains("fleet = \"wasm_store\""));
+    assert!(manifest.contains("app = \"wasm_store\""));
     assert!(manifest.contains("role = \"wasm_store\""));
     fs::remove_dir_all(root).expect("clean temp dir");
 }

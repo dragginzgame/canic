@@ -39,7 +39,7 @@ fn resolve_root_canister_operation_owns_current_install_evidence() {
         Path::new("/workspace/.icp"),
         "local",
         "root",
-        Path::new("/workspace/fleets/demo/canic.toml"),
+        Path::new("/workspace/apps/demo/canic.toml"),
         None,
     );
 
@@ -88,7 +88,7 @@ fn build_target(role: &str) -> InstallBuildTarget {
         spec: CanisterArtifactBuildSpec {
             role: role.to_string(),
             package_name: format!("canister_{role}"),
-            package_manifest_path: PathBuf::from("/workspace/fleets")
+            package_manifest_path: PathBuf::from("/workspace/apps")
                 .join(role)
                 .join("Cargo.toml"),
             wasm_path: artifact_root.join(format!("{role}.wasm")),
@@ -198,7 +198,7 @@ fn test_build_context() -> WorkspaceBuildContext {
         build_network: BuildNetwork::Local,
         workspace_root: PathBuf::from("/workspace"),
         icp_root: PathBuf::from("/workspace/.icp"),
-        config_path: PathBuf::from("/workspace/fleets/demo/canic.toml"),
+        config_path: PathBuf::from("/workspace/apps/demo/canic.toml"),
         local_replica: None,
         refresh_canonical_wasm_store_did: false,
     }

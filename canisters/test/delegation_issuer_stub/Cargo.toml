@@ -8,7 +8,7 @@ publish = false
 ignored = ["ic-cdk"]
 
 [package.metadata.canic]
-fleet = "delegation_issuer_stub"
+app = "delegation_issuer_stub"
 role = "issuer"
 
 [lib]

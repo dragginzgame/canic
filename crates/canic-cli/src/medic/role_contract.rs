@@ -2,7 +2,7 @@
 //!
 //! Responsibility: diagnose configured role-package and runtime-feature contracts.
 //! Does not own: Cargo package resolution, role-contract policy, or report rendering.
-//! Boundary: maps fleet declarations and resolved package evidence into Medic checks.
+//! Boundary: maps app declarations and resolved package evidence into Medic checks.
 
 use crate::medic::{
     display_medic_path,
@@ -50,18 +50,18 @@ fn app_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
                 "app_config_missing",
                 config_display,
                 err.to_string(),
-                "repair the fleet config before running deployment checks",
+                "repair the app config before running deployment checks",
                 MedicSource::AppConfig,
             )];
         }
     };
-    let fleet = snapshot.app_id().to_string();
+    let app = snapshot.app_id().to_string();
     let roles = snapshot.role_lifecycle();
     let required_features_by_role = required_canic_features_by_role(snapshot.model(), &roles);
     roles
         .iter()
         .flat_map(|role| {
-            let mut checks = vec![check_role_package_metadata(root, config, role, &fleet)];
+            let mut checks = vec![check_role_package_metadata(root, config, role, &app)];
             let role_id = CanisterRole::owned(role.role.clone());
             match validate_declared_role_package(
                 config,
@@ -118,18 +118,18 @@ fn check_role_package_metadata(
     root: &Path,
     config: &Path,
     role: &ConfiguredRoleLifecycle,
-    fleet: &str,
+    app: &str,
 ) -> MedicCheck {
     let manifest = role_package_manifest_path(config, &role.package);
     match canic_package_metadata(&manifest) {
-        Ok(metadata) if metadata.fleet == fleet && metadata.role == role.role => MedicCheck::pass(
+        Ok(metadata) if metadata.app == app && metadata.role == role.role => MedicCheck::pass(
             MedicCategory::ProjectConfig,
             "role_package_metadata_present",
             role.display.clone(),
             format!(
-                "{} declares [package.metadata.canic] fleet={} role={}",
+                "{} declares [package.metadata.canic] app={} role={}",
                 display_medic_path(root, &manifest),
-                metadata.fleet,
+                metadata.app,
                 metadata.role
             ),
             "none",
@@ -140,14 +140,14 @@ fn check_role_package_metadata(
             "role_package_metadata_missing",
             role.display.clone(),
             format!(
-                "{} declares [package.metadata.canic] fleet={} role={}, expected fleet={} role={}",
+                "{} declares [package.metadata.canic] app={} role={}, expected app={} role={}",
                 display_medic_path(root, &manifest),
-                metadata.fleet,
+                metadata.app,
                 metadata.role,
-                fleet,
+                app,
                 role.role
             ),
-            "update package metadata or repair the fleet role declaration",
+            "update package metadata or repair the app role declaration",
             MedicSource::AppConfig,
         ),
         Err(err) => MedicCheck::fail(
@@ -155,7 +155,7 @@ fn check_role_package_metadata(
             "role_package_metadata_missing",
             role.display.clone(),
             err,
-            "add matching [package.metadata.canic] fleet and role metadata",
+            "add matching [package.metadata.canic] app and role metadata",
             MedicSource::AppConfig,
         ),
     }
@@ -305,8 +305,8 @@ fn check_declared_role_not_deployable(
             display_medic_path(root, config)
         ),
         format!(
-            "run canic fleet role attach {} {} --subnet <subnet>, or remove the declaration",
-            role.fleet, role.role
+            "run canic app role attach {} {} --subnet <subnet>, or remove the declaration",
+            role.app, role.role
         ),
         MedicSource::AppConfig,
     )

@@ -47,8 +47,8 @@ use build_network::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
     ConfigDiscoveryError, current_canic_project_root, discover_canic_config_choices,
-    discover_canic_project_root_from, discover_project_canic_config_choices, project_fleet_roots,
-    select_discovered_fleet_config_path,
+    discover_canic_project_root_from, discover_project_canic_config_choices, project_app_roots,
+    select_discovered_app_config_path,
 };
 use current_execution::current_install_execution_context;
 pub use deployment_registration::{

@@ -3,7 +3,7 @@
 //!
 //! This canister is intentionally excluded from the reference release set and
 //! test fixtures. Keep throwaway experiments here instead of changing
-//! `fleets/test/runtime_probe`.
+//! `apps/test/runtime_probe`.
 //!
 
 #![expect(clippy::unused_async)]

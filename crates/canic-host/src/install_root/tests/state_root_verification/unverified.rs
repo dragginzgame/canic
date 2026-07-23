@@ -5,7 +5,7 @@ fn unverified_registered_root_is_not_used_as_plan_authority() {
     let root = temp_dir("canic-register-unverified-plan");
     let workspace_root = root.join("workspace");
     let icp_root = root.join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(
         config_dir.join("canic.toml"),
@@ -104,7 +104,7 @@ fn unverified_registered_root_blocks_install_truth_gate() {
     let root = temp_dir("canic-register-unverified-gate");
     let workspace_root = root.join("workspace");
     let icp_root = root.join("icp");
-    let config_path = workspace_root.join("fleets/demo/canic.toml");
+    let config_path = workspace_root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,

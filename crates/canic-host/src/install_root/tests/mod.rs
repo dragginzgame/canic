@@ -5,7 +5,7 @@ use super::commands::{
 };
 use super::config_selection::{
     config_selection_error, discover_canic_config_choices, discover_project_canic_config_choices,
-    resolve_install_config_path, select_discovered_fleet_config_path,
+    resolve_install_config_path, select_discovered_app_config_path,
 };
 use super::current_execution::{
     current_install_execution_context, current_install_executor_missing_capabilities,
@@ -158,7 +158,7 @@ fn sample_install_state(root: &Path, deployment_name: &str, fleet_template: &str
         workspace_root: root.display().to_string(),
         icp_root: root.display().to_string(),
         config_path: root
-            .join(format!("fleets/{fleet_template}/canic.toml"))
+            .join(format!("apps/{fleet_template}/canic.toml"))
             .display()
             .to_string(),
         release_set_manifest_path: root
@@ -170,8 +170,8 @@ fn sample_install_state(root: &Path, deployment_name: &str, fleet_template: &str
 
 fn write_temp_workspace_config(config_source: &str) -> PathBuf {
     let root = temp_dir("canic-install-test");
-    fs::create_dir_all(root.join("fleets")).expect("temp fleets dir must be created");
-    fs::write(root.join("fleets/canic.toml"), config_source)
+    fs::create_dir_all(root.join("apps")).expect("temp apps dir must be created");
+    fs::write(root.join("apps/canic.toml"), config_source)
         .expect("temp canic.toml must be written");
     root
 }
@@ -239,7 +239,7 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -284,7 +284,7 @@ fn write_wasm_gz_artifact(root: &Path, role: &str, bytes: &[u8]) {
 
 fn demo_install_deployment_truth_check(root_name: &str) -> (PathBuf, DeploymentCheckV1) {
     let root = temp_dir(root_name);
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
@@ -354,7 +354,7 @@ kind = "root"
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -374,7 +374,7 @@ kind = "root"
 
 fn demo_unverified_registered_root_check(root_name: &str) -> (PathBuf, DeploymentCheckV1) {
     let root = temp_dir(root_name);
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
@@ -445,7 +445,7 @@ kind = "root"
 }
 
 fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
@@ -454,7 +454,7 @@ fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,

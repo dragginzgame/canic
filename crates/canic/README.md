@@ -78,12 +78,12 @@ Each canister crate declares its role in package metadata:
 
 ```toml
 [package.metadata.canic]
-fleet = "demo"
+app = "demo"
 role = "app"
 ```
 
 Use `canic::build!("../canic.toml")` from `build.rs` and `canic::start!()` from
-`lib.rs`. The `fleet` value must match `[app].name` in the selected
+`lib.rs`. The `app` value must match `[app].name` in the selected
 `canic.toml`. `role = "root"` selects the root lifecycle and root endpoint
 bundle; ordinary roles select the non-root lifecycle and endpoint bundle.
 

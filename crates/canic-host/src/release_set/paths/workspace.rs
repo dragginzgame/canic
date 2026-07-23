@@ -3,7 +3,7 @@ use crate::workspace_discovery::{
 };
 use std::path::{Path, PathBuf};
 
-use super::super::{CANISTERS_ROOT_RELATIVE, ROOT_CONFIG_FILE, WORKSPACE_MANIFEST_RELATIVE};
+use super::super::{APP_SOURCES_ROOT_RELATIVE, ROOT_CONFIG_FILE, WORKSPACE_MANIFEST_RELATIVE};
 
 // Resolve the downstream Cargo workspace root from the current directory.
 pub fn workspace_root() -> Result<PathBuf, WorkspaceDiscoveryError> {
@@ -38,13 +38,13 @@ pub fn icp_root() -> Result<PathBuf, WorkspaceDiscoveryError> {
 // Resolve the downstream Canic config path.
 #[must_use]
 pub fn config_path(workspace_root: &Path) -> PathBuf {
-    canisters_root(workspace_root).join(ROOT_CONFIG_FILE)
+    app_sources_root(workspace_root).join(ROOT_CONFIG_FILE)
 }
 
-// Resolve the downstream canister-manifest root.
+// Resolve the downstream App source root.
 #[must_use]
-pub fn canisters_root(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(CANISTERS_ROOT_RELATIVE)
+pub fn app_sources_root(workspace_root: &Path) -> PathBuf {
+    workspace_root.join(APP_SOURCES_ROOT_RELATIVE)
 }
 
 // Resolve the downstream workspace manifest path.

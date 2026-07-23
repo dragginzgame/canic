@@ -92,7 +92,7 @@ required = true
 payload_schema = "canic.build_provenance.v1"
 
 [evidence.target]
-fleet = "demo"
+app = "demo"
 role = "app"
 
 [[evidence]]

@@ -1,0 +1,28 @@
+[package]
+name = "demo_fleet_app"
+edition = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+publish = false
+build = "../build.rs"
+
+[package.metadata.cargo-machete]
+ignored = ["candid", "ic-cdk"]
+
+[package.metadata.canic]
+app = "demo"
+role = "app"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = { workspace = true }
+canic = { workspace = true, features = ["metrics"] }
+ic-cdk = { workspace = true }
+
+[build-dependencies]
+canic = { workspace = true, features = [] }
+
+[lints]
+workspace = true

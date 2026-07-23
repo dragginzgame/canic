@@ -111,14 +111,14 @@ single source of truth for both `canic::build!` and `canic::start!()`:
 
 ```toml
 [package.metadata.canic]
-fleet = "test"
+app = "test"
 role = "app"
 ```
 
 Use `role = "root"` for the root canister. Ordinary child roles use their
-configured Fleet role name, such as `app`, `hub`, or `registry`. The `fleet`
-metadata value currently matches the App source identity from `[app].name`; it
-is not a live deployment target name.
+configured App role name, such as `app`, `hub`, or `registry`. The `app`
+metadata value must match the App source identity from `[app].name`; it is not
+a live Fleet name.
 Root canisters also need the `control-plane` feature on their runtime `canic`
 dependency. When delegated-token material is enabled, root issuers also need
 `auth-root-canister-sig-create`; canisters that issue delegated tokens need
@@ -137,7 +137,7 @@ ic-cdk = "<version>"
 canic = { path = "/path/to/canic/crates/canic" }
 
 [package.metadata.canic]
-fleet = "test"
+app = "test"
 role = "app"
 ```
 
@@ -162,9 +162,9 @@ fn main() {
 
 ## Minimal Canister Shapes
 
-Every normal fleet canister uses `canic::start!()`. Root vs non-root behavior
-comes from `[package.metadata.canic] fleet = "..."` plus `role = "..."` and the
-validated fleet config.
+Every normal managed canister uses `canic::start!()`. Root vs non-root behavior
+comes from `[package.metadata.canic] app = "..."` plus `role = "..."` and the
+validated App config.
 
 Non-root `lib.rs`:
 
@@ -215,9 +215,9 @@ Use `#[canic_query]` and `#[canic_update]` for Canic-managed application
 methods so endpoint dispatch, metrics, access checks, Candid export, and
 payload inspection stay on the same path as the runtime bundle.
 
-## Define A Fleet
+## Define An App
 
-Create `fleets/<fleet>/canic.toml`:
+Create `apps/<app>/canic.toml`:
 
 ```toml
 controllers = []
@@ -244,12 +244,12 @@ kind = "service"
 topup = {}
 ```
 
-Every role named in package metadata must exist in this config. Declared-only
-ordinary roles may compile before topology placement, but only attached roles
-under `[subnets.*.canisters.*]` can be built as deploy artifacts or enter
-deployment truth. `role = "root"` selects the root lifecycle and root endpoint
-bundle; all other roles select the ordinary fleet lifecycle and non-root
-endpoint bundle.
+Every role named in package metadata must exist in this App config.
+Declared-only ordinary roles may compile before topology placement, but only
+attached roles under `[subnets.*.canisters.*]` can be built as deploy artifacts
+or enter deployment truth. `role = "root"` selects the root lifecycle and root
+endpoint bundle; all other roles select the ordinary Fleet lifecycle and
+non-root endpoint bundle.
 
 The full schema lives in [`CONFIG.md`](CONFIG.md).
 
@@ -285,8 +285,8 @@ both paths explicitly:
 canic --environment local build \
   --workspace /path/to/cargo-workspace \
   --icp-root /path/to/icp-project \
-  --config /path/to/cargo-workspace/fleets/<fleet>/canic.toml \
-  <fleet> root \
+  --config /path/to/cargo-workspace/apps/<app>/canic.toml \
+  <app> root \
   --profile fast
 ```
 
@@ -305,19 +305,18 @@ for the short runbook on `canic --environment ...`, raw `icp` target hygiene,
 `canic info env` / `CANIC_ROOT`-style canister ID variables, sourced shell
 helpers, sharded calls, metrics checks, and install versus upgrade decisions.
 
-## Fleet Management
+## App And Fleet Management
 
-Use `canic fleet list` to list config-defined fleets. Use
-`canic fleet config <fleet>` for declared config, and pass `<fleet>` as the first
-argument to deployed-fleet commands.
+Use `canic app list` to list source Apps and `canic app config <app>` to inspect
+declared config. Live commands continue to select an installed Fleet.
 
 ```bash
-canic fleet config test
+canic app config test
 canic info list test
 canic status
 canic --environment local fleet list
-canic fleet create demo --yes
-canic fleet delete demo
+canic app create demo --yes
+canic app delete demo
 ```
 
 Use `canic medic` when local project state, replica ownership, or a named
@@ -331,8 +330,8 @@ canic medic deployment test
 Use `canic info list <deployment>`, `canic info env <deployment>`, and
 `canic medic deployment <deployment>` before changing fleet topology when local
 state looks wrong. `info list` shows the deployed root registry, `info env`
-prints sourceable `CANIC_<ROLE>` canister ID exports, and `fleet config` shows
-configured intent.
+prints sourceable `CANIC_<ROLE>` canister ID exports, and `app config` shows
+configured source intent.
 
 Named-fleet commands default to the local ICP CLI environment. Pass top-level
 `--environment <name>` for one command against another configured ICP CLI
@@ -343,7 +342,7 @@ The local ICP CLI replica does not persist canister state across stop/start. If
 gone from the restarted local replica; run `canic install <fleet>` to recreate
 the local deployment.
 
-Fleet configs live under project-root `fleets/`. Commands launched from nested
+App configs live under project-root `apps/`. Commands launched from nested
 directories discover the outer project root and keep ICP project config plus
 `.icp/` and `.canic/` state there.
 
@@ -418,8 +417,8 @@ Canic-owned methods.
   root proof issuance, `auth-issuer-canister-sig-create` for delegated-token
   issuance, and `auth-delegated-token-verify` for protected endpoint
   verification.
-- Each canister crate must declare its fleet-scoped role with
-  `[package.metadata.canic] fleet = "<fleet>"` and `role = "<role>"`.
+- Each canister crate must declare its App-scoped role with
+  `[package.metadata.canic] app = "<app>"` and `role = "<role>"`.
 - If `canic info list <fleet>` only shows `root`, the managed children were not
   fully installed or the local replica lost state. Run
   `canic medic deployment <fleet>` and reinstall the local fleet.

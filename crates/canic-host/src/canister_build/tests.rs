@@ -45,7 +45,7 @@ fn build_context_distinguishes_environment_from_build_network() {
         build_network: BuildNetwork::Ic,
         workspace_root: "/workspace".into(),
         icp_root: "/workspace".into(),
-        config_path: "/workspace/fleets/demo/canic.toml".into(),
+        config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
         refresh_canonical_wasm_store_did: false,
     };
@@ -65,7 +65,7 @@ fn build_context_applies_exact_child_build_network() {
         build_network: BuildNetwork::Ic,
         workspace_root: "/workspace".into(),
         icp_root: "/project".into(),
-        config_path: "/workspace/fleets/demo/canic.toml".into(),
+        config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
         refresh_canonical_wasm_store_did: false,
     };
@@ -91,6 +91,6 @@ fn build_context_applies_exact_child_build_network() {
         environment.get(std::ffi::OsStr::new(
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
         )),
-        Some(&std::ffi::OsStr::new("/workspace/fleets/demo/canic.toml"))
+        Some(&std::ffi::OsStr::new("/workspace/apps/demo/canic.toml"))
     );
 }

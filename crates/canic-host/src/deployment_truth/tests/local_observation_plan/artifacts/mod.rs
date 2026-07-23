@@ -35,7 +35,7 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
     let temp = TempWorkspace::new("canic-host-local-artifact-manifest");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
@@ -109,7 +109,7 @@ fn local_artifact_manifest_requires_selected_environment_artifact_root() {
     let temp = TempWorkspace::new("canic-host-local-artifact-manifest-environment-root");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
@@ -150,7 +150,7 @@ fn local_deployment_check_rejects_missing_exact_artifact_root() {
     let temp = TempWorkspace::new("canic-host-local-check-missing-artifact-root");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
 
@@ -179,7 +179,7 @@ fn local_deployment_check_separates_target_environment_from_artifact_environment
     let temp = TempWorkspace::new("canic-host-local-check-explicit-artifact-environment");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
@@ -216,7 +216,7 @@ fn local_artifact_manifest_records_missing_artifacts_as_gaps() {
     let temp = TempWorkspace::new("canic-host-local-artifact-manifest-missing");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");

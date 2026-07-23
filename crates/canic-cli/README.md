@@ -48,10 +48,10 @@ The maintained v1 command set keeps setup, build, evidence, policy, and local
 catalog inspection separate:
 
 ```bash
-canic fleet create <fleet>
-canic scaffold canister <fleet> <role>
-canic fleet role attach <fleet> <role> --subnet <subnet>
-canic build <fleet> <role> --provenance artifacts/<role>-provenance.json
+canic app create <app>
+canic scaffold canister <app> <role>
+canic app role attach <app> <role> --subnet <subnet>
+canic build <app> <role> --provenance artifacts/<role>-provenance.json
 canic deploy check <deployment> --evidence-envelope
 canic evidence gate --policy policy.toml --envelope evidence.json
 canic evidence gate --policy policy.toml --manifest evidence-manifest.json
@@ -61,19 +61,19 @@ canic deploy inspect catalog inspect <deployment>
 
 These commands do not imply one-command deployment, controller mutation,
 artifact registry import, teardown, deployment groups, or signing. The only
-topology mutation in that list is the explicit `fleet role attach` command.
+topology mutation in that list is the explicit `app role attach` command.
 
 The installed binary also includes the artifact builder:
 
 ```bash
-canic build <fleet> <role>
+canic build <app> <role>
 ```
 
 To archive CI-friendly build provenance next to an artifact, request an
 explicit provenance file:
 
 ```bash
-canic build <fleet> <role> --provenance artifacts/<role>-provenance.json
+canic build <app> <role> --provenance artifacts/<role>-provenance.json
 ```
 
 For downstream repos where the Cargo workspace and ICP project root differ,
@@ -85,8 +85,8 @@ canic build \
   --profile fast \
   --workspace <cargo-workspace-dir> \
   --icp-root <icp-project-dir> \
-  --config fleets/<fleet>/canic.toml \
-  <fleet> \
+  --config apps/<app>/canic.toml \
+  <app> \
   root
 ```
 
@@ -135,8 +135,9 @@ Install and bootstrap the local fleet:
 canic install test
 ```
 
-`canic install <fleet>` uses `fleets/<fleet>/canic.toml`, the conventional
-`root` ICP canister name, and Canic's built-in readiness timeout:
+The current `canic install <fleet>` surface selects the same-named App config
+under `apps/<app>/canic.toml`, plus the conventional `root` ICP canister name
+and Canic's built-in readiness timeout:
 
 ```bash
 canic install test
@@ -152,7 +153,7 @@ name = "test"
 Successful installs write
 `.canic/<environment>/deployments/<deployment>.json` with the deployment name, fleet
 template, root target, resolved root principal, build target, config path, root
-verification state, and staging manifest path. `canic fleet config <name>` shows the
+verification state, and staging manifest path. `canic app config <name>` shows the
 selected fleet declaration, including opt-in role features such as auth,
 sharding, and scaling, while `canic info list <name>` queries the deployed root
 registry for that target.
@@ -166,22 +167,22 @@ and `canic replica status` show the configured local gateway port; use
 `canic replica start --port <port>` to require this project's `icp.yaml`
 `gateway.port` to match before starting. Use `canic replica status --json` when
 scripts need the structured ICP CLI local-network status payload.
-Fleet configs live under the project-root `fleets/` directory. Commands
+App configs live under the project-root `apps/` directory. Commands
 launched from nested directories discover that outer project root and keep
 ICP project config plus `.icp/` and `.canic/` state there.
 
-List saved fleet configs:
+List saved App configs:
 
 ```bash
-canic fleet list
-canic fleet delete demo
-canic --environment ic fleet list
+canic app list
+canic app delete demo
+canic --environment ic app list
 ```
 
-Create a new root-plus-app fleet:
+Create a new root-plus-app source App:
 
 ```bash
-canic fleet create my_app --yes
+canic app create my_app --yes
 canic install my_app
 ```
 

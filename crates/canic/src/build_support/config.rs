@@ -11,7 +11,7 @@ use toml::Value as TomlValue;
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PackageCanicMetadata {
-    pub fleet: String,
+    pub app: String,
     pub role: String,
 }
 
@@ -25,7 +25,7 @@ pub fn assert_canonical_role_contract_build(target: &str, marker: Option<&str>) 
     assert!(
         target != "wasm32-unknown-unknown"
             || marker == Some(canic_core::role_contract::CANONICAL_BUILD_MARKER_VALUE),
-        "authoritative Canic wasm builds must use `canic build <fleet> <role>`; direct `cargo build --target wasm32-unknown-unknown` is unsupported"
+        "authoritative Canic wasm builds must use `canic build <app> <role>`; direct `cargo build --target wasm32-unknown-unknown` is unsupported"
     );
 }
 
@@ -70,10 +70,10 @@ pub fn declared_package_metadata(manifest_dir: &Path) -> Option<PackageCanicMeta
         .get("metadata")?
         .get("canic")?
         .clone();
-    let fleet = canic.get("fleet")?.as_str()?.to_string();
+    let app = canic.get("app")?.as_str()?.to_string();
     let role = canic.get("role")?.as_str()?.to_string();
 
-    Some(PackageCanicMetadata { fleet, role })
+    Some(PackageCanicMetadata { app, role })
 }
 
 /// Read an optional Canic role declared in the package manifest metadata.
@@ -87,13 +87,13 @@ pub fn declared_package_role(manifest_dir: &Path) -> Option<String> {
 /// # Panics
 ///
 /// Panics when `Cargo.toml` does not declare `[package.metadata.canic]` with
-/// both `fleet` and `role`.
+/// both `app` and `role`.
 #[must_use]
 pub fn required_package_metadata(manifest_dir: &Path) -> PackageCanicMetadata {
     let manifest_path = manifest_dir.join("Cargo.toml");
     declared_package_metadata(manifest_dir).unwrap_or_else(|| {
         panic!(
-            "missing Canic package metadata in {}; add [package.metadata.canic] fleet = \"<fleet>\" and role = \"<role>\"",
+            "missing Canic package metadata in {}; add [package.metadata.canic] app = \"<app>\" and role = \"<role>\"",
             manifest_path.display()
         )
     })
@@ -253,7 +253,7 @@ version = "0.1.0"
 edition = "2024"
 
 [package.metadata.canic]
-fleet = "test"
+app = "test"
 role = "scale_replica"
 "#,
         )
