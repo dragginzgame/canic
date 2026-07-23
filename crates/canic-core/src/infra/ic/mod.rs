@@ -11,10 +11,8 @@ pub mod known;
 pub mod mgmt;
 pub mod nns;
 
-use crate::cdk::{
-    call::{CallFailed, CandidDecodeFailed, Error as CallError},
-    candid::Error as CandidError,
-};
+use crate::cdk::candid::Error as CandidError;
+use ic_cdk::call::{CallFailed, CandidDecodeFailed, Error as CallError};
 use thiserror::Error as ThisError;
 
 ///

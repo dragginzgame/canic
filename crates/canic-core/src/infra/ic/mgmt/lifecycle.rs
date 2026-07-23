@@ -6,12 +6,12 @@
 
 use crate::{
     cdk::{
-        api,
         candid::{Principal, encode_args, utils::ArgumentEncoder},
         types::Cycles,
     },
     infra::{InfraError, ic::IcInfraError, ic::call::Call},
 };
+use ic_cdk::api;
 
 use super::{
     MgmtInfra,

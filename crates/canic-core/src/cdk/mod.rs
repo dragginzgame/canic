@@ -1,14 +1,10 @@
 //! Module: cdk
 //!
-//! Responsibility: Canic's internal IC SDK substrate and stable-structure helper macros.
-//! Does not own: application policy, endpoint auth, or stable schema design.
-//! Boundary: centralizes SDK dependencies for Canic-owned runtime implementation.
+//! Responsibility: Canic's internal Candid, stable-structure, value-type, and hash substrate.
+//! Does not own: IC runtime APIs, application policy, endpoint auth, or stable schema design.
+//! Boundary: shared implementation support for Canic-owned runtime crates.
 
 pub use candid;
-pub use ic_cdk::{
-    api, call, eprintln, export_candid, futures, init, inspect_message, post_upgrade, println,
-    query, trap, update,
-};
 
 pub mod serialize;
 pub mod structures;

@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.16`.
-- The latest published release is `v0.98.16` at
-  `f98ffc728194a8822013b9ffb3fdacc9c94a9694`.
-- The `v0.98.16` source tree is
-  `7db1d4310d0dd6d74efe966eeb4f990678de2c80`; its product-tree hash is
-  `396d631a3c872c005d3a3c988abf686a809c692749f7dee8a6166819fb30206e` and
+- The workspace package version is `0.98.18`.
+- The latest published release is `v0.98.18` at
+  `2ee7cce30e7d3c17179790af407f6d946caaf0f9`.
+- The `v0.98.18` source tree is
+  `86931bd5d8bb6acaa8d7c67d44bfa611ef75e537`; its product-tree hash is
+  `5994797776e565d60c4be97116d6c00b8de6181fe8394fd245586dafc9eb99c5` and
   its Cargo.lock SHA-256 is
-  `0a27e02585479b2b1fdc13e204f39cfbdaf77060f207cd1a294604963e569d37`.
+  `94556cf50c6bd0a6527b375ebeb3c7a6ce6d4f669e207cd219db93b741bc4c3a`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -51,10 +51,18 @@ Historical detail is archived at:
 - Released `0.98.16` implements Slice N: the orphan generic ICRC-2 allowance and
   `transfer_from` stack is removed across API, workflow, ops, infra, wire
   bindings, known-ledger constants, and its unused platform metric dimension.
-- Open `0.98.17` implements Slice O: generic application IC calls move to
+- Released `0.98.17` implements Slice O: generic application IC calls move to
   upstream `ic-cdk`; the unused facade/prelude call, HTTP-outcall, and
   build-network helpers plus the orphan HTTP stack are removed while active
   internal call and build-network authorities remain.
+- Released `0.98.18` is design-only: it makes protected `FleetBinding`
+  universal across every managed Canister in the proposed 0.99 hard cut and
+  refines the proposed 0.100 Prime-owned Registry, mirror, Directory,
+  synchronization, and recovery contracts. No active runtime code changed.
+- Open `0.98.19` hard-cuts the remaining Canic-core IC runtime API relay.
+  Runtime and hidden macro plumbing use upstream `ic-cdk` directly, time is
+  owned by `IcOps`, and unused stable-structures exports are removed without
+  changing runtime behavior or package versions.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1078,19 +1086,17 @@ First primary results:
 
 ## Next Action
 
-Open `0.98.17` implements generic-IC-helper Slice O. The consumerless public
-call, HTTP-outcall, and build-network helpers, prelude call export, orphan HTTP
-implementation/metric stack, empty IC module, and redundant workflow wrappers
-are removed without replacement. Application-owned generic IC calls use
-upstream `ic-cdk`. Canic retains one shared internal call transport for
-management, NNS, auth, RPC, and ICP refill plus the active build-network
-ops/infra authority. Focused core/facade checks, metric and transport tests,
-the direct-`ic-cdk` sharding fixture, strict Clippy, formatting,
-changelog-governance, stale-symbol, layering, and diff-hygiene evidence belong
-with this open patch. The Canic app registry is explicitly deferred to 0.100;
-it is not part of this slice. Do not inspect or edit the stale local Toko
-repository, change Cargo package versions outside the maintainer-owned release
-flow, or commit, tag, publish, or push shared-worktree changes without
+Released `v0.98.17` completes generic-IC-helper Slice O. Application-owned
+generic IC calls use upstream `ic-cdk`; Canic retains one shared internal call
+transport and the active build-network ops/infra authority. Released
+`v0.98.18` changes only the proposed 0.99/0.100 design documents and normal
+release metadata. Open `0.98.19` removes the remaining internal IC runtime API
+relay and narrows the stable-structures export inventory; the hidden compiler
+namespace and maintained call/build-network authorities remain. It does not
+implement Fleet identity, a Fleet Registry, multi-subnet synchronization, or
+any other proposed 0.99/0.100 behavior. Do not inspect or edit the stale local
+Toko repository, change Cargo package versions outside the maintainer-owned
+release flow, or commit, tag, publish, or push shared-worktree changes without
 maintainer action.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is

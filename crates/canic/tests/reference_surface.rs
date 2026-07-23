@@ -95,7 +95,8 @@ fn hidden_macro_cdk_boundary_matches_the_frozen_inventory() {
 
     for required in [
         "export_candid, init, inspect_message, post_upgrade, query, update",
-        "canic_core::cdk::types::Principal",
+        "candid::Principal",
+        "ic_cdk::",
         "canister_cycle_balance, canister_version, is_controller, msg_caller, time",
     ] {
         assert!(

@@ -9,7 +9,6 @@ use crate::{
     InternalError,
     access::AccessError,
     cdk::{
-        api::msg_arg_data,
         candid::de::{DecoderConfig, IDLDeserialize},
         types::Principal,
     },
@@ -20,6 +19,7 @@ use crate::{
         ic::IcOps,
     },
 };
+use ic_cdk::api::msg_arg_data;
 
 const DELEGATED_TOKEN_DECODING_QUOTA: usize = 256 * 1024;
 const DELEGATED_TOKEN_MAX_TYPE_LEN: usize = 16 * 1024;

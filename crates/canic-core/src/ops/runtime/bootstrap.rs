@@ -6,8 +6,7 @@
 
 use super::recent_failure::{RecentFailureInput, RecentFailureOps};
 use crate::{
-    cdk::utils::time::now_nanos, domain::runtime::FailureSeverity,
-    dto::state::BootstrapStatusResponse,
+    domain::runtime::FailureSeverity, dto::state::BootstrapStatusResponse, ops::ic::IcOps,
 };
 use std::cell::RefCell;
 
@@ -101,7 +100,7 @@ impl BootstrapStatusOps {
             status.phase = BootstrapPhaseLabel::FAILED;
             status.last_error = Some(message);
             RecentFailureOps::record(RecentFailureInput {
-                occurred_at_ns: now_nanos(),
+                occurred_at_ns: IcOps::now_nanos(),
                 subsystem: "runtime_bootstrap".to_string(),
                 code: "bootstrap_failed".to_string(),
                 severity: FailureSeverity::Error,

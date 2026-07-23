@@ -9,7 +9,6 @@ pub mod memory {
 }
 
 pub use ic_stable_structures::{
-    BTreeMap, BTreeSet, Cell, DefaultMemoryImpl, FileMemory, Log, Memory, MinHeap, StableBTreeMap,
-    StableBTreeSet, StableCell, StableLog, StableMinHeap, StableVec, Storable, Vec, VectorMemory,
-    btreemap, btreeset, cell, file_mem, log, min_heap, reader, storable, vec, vec_mem, writer,
+    BTreeMap, DefaultMemoryImpl, Memory, StableVec, Storable, Vec, VectorMemory, btreemap, cell,
+    storable,
 };

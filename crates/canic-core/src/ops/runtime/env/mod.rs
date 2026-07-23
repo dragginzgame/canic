@@ -8,7 +8,6 @@ pub mod mapper;
 
 use crate::{
     InternalError,
-    cdk::api::canister_self,
     dto::env::EnvSnapshotResponse,
     ids::SubnetRole,
     memory::runtime::is_memory_bootstrap_ready,
@@ -17,6 +16,7 @@ use crate::{
     ops::{prelude::*, runtime::RuntimeOpsError},
     storage::stable::env::{Env, EnvData, EnvRecord},
 };
+use ic_cdk::api::canister_self;
 use thiserror::Error as ThisError;
 
 ///

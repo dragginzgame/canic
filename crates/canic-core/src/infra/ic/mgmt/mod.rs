@@ -37,7 +37,7 @@ pub enum MgmtInfraError {
     },
 
     #[error(transparent)]
-    SignCost(#[from] crate::cdk::api::SignCostError),
+    SignCost(#[from] ic_cdk::api::SignCostError),
 }
 
 ///
