@@ -231,7 +231,8 @@ fn deployment_check_envelope_wraps_raw_payload() {
     assert_eq!(value["payload_schema"]["stability"], "internal");
     assert_eq!(value["target"]["kind"], "deployment");
     assert_eq!(value["target"]["deployment"], "demo");
-    assert_eq!(value["target"]["fleet"], "demo");
+    assert_eq!(value["target"]["app"], "demo");
+    assert!(value["target"]["fleet"].is_null());
     assert_eq!(value["target"]["profile"], "fast");
     assert_eq!(value["command"]["name"], "canic deploy check");
     assert_eq!(value["command"]["format"], "envelope-json");

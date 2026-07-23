@@ -1,7 +1,7 @@
 //! Module: canic_cli::status
 //!
 //! Responsibility: render the quick local Canic project status summary.
-//! Does not own: installed deployment state, replica lifecycle, or fleet config parsing.
+//! Does not own: installed deployment state, replica lifecycle, or App config parsing.
 //! Boundary: reads host/project state and formats the operator-facing status view.
 
 #[cfg(test)]
@@ -97,7 +97,7 @@ enum ReplicaStatus {
     Error(String),
 }
 
-/// One fleet config row in the status deployment table.
+/// One App config row in the status deployment table.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusDeploymentRow {
@@ -198,7 +198,7 @@ fn load_replica_port(icp_root: &Path) -> String {
 
 fn load_icp_project_config_status(icp_root: &Path, choices: &[std::path::PathBuf]) -> String {
     if choices.is_empty() {
-        return "not checked (no Canic fleet configs)".to_string();
+        return "not checked (no Canic App configs)".to_string();
     }
 
     match inspect_canic_icp_yaml_from_root(icp_root, None) {

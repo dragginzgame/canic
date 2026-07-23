@@ -43,8 +43,8 @@ fn usage_lists_command_families() {
     assert!(plain.contains("Backup and restore commands"));
     assert!(plain.find("    status") < plain.find("    medic"));
     assert!(plain.find("    medic") < plain.find("    state"));
-    assert!(plain.find("    state") < plain.find("    fleet"));
-    assert!(plain.find("    fleet") < plain.find("    scaffold"));
+    assert!(plain.find("    state") < plain.find("    app"));
+    assert!(plain.find("    app") < plain.find("    scaffold"));
     assert!(plain.find("    scaffold") < plain.find("    replica"));
     assert!(plain.find("    replica") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
@@ -76,7 +76,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("    status"));
     assert!(plain.contains("    medic"));
     assert!(plain.contains("    state"));
-    assert!(plain.contains("fleet"));
+    assert!(plain.contains("    app"));
     assert!(plain.contains("replica"));
     assert!(plain.contains("install"));
     assert!(plain.contains("backup"));
@@ -155,13 +155,13 @@ fn command_family_help_returns_ok() {
         &["evidence", "--help"],
         &["evidence", "compare", "--help"],
         &["install", "--help"],
-        &["fleet"],
-        &["fleet", "--help"],
-        &["fleet", "check", "--help"],
-        &["fleet", "config", "--help"],
-        &["fleet", "create", "--help"],
-        &["fleet", "list", "--help"],
-        &["fleet", "delete", "--help"],
+        &["app"],
+        &["app", "--help"],
+        &["app", "check", "--help"],
+        &["app", "config", "--help"],
+        &["app", "create", "--help"],
+        &["app", "list", "--help"],
+        &["app", "delete", "--help"],
         &["inspect", "--help"],
         &["inspect", "canister", "--help"],
         &["inspect", "deployment", "--help"],
@@ -274,13 +274,13 @@ fn version_flags_return_ok() {
     assert!(run([OsString::from("install"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("inspect"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
-    assert!(run([OsString::from("fleet"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("app"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("state"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("status"), OsString::from("--version")]).is_ok());
     assert!(
         run([
-            OsString::from("fleet"),
+            OsString::from("app"),
             OsString::from("create"),
             OsString::from("--version")
         ])
@@ -288,7 +288,7 @@ fn version_flags_return_ok() {
     );
     assert!(
         run([
-            OsString::from("fleet"),
+            OsString::from("app"),
             OsString::from("check"),
             OsString::from("--version")
         ])
@@ -296,7 +296,7 @@ fn version_flags_return_ok() {
     );
     assert!(
         run([
-            OsString::from("fleet"),
+            OsString::from("app"),
             OsString::from("config"),
             OsString::from("--version")
         ])
@@ -763,12 +763,12 @@ fn global_environment_is_forwarded_only_to_restore_run() {
 }
 
 #[test]
-fn global_environment_is_forwarded_only_to_fleet_list() {
+fn global_environment_is_forwarded_only_to_app_list() {
     let mut create_tail = vec![OsString::from("create")];
     let mut list_tail = vec![OsString::from("list")];
 
-    apply_global_environment("fleet", &mut create_tail, Some("local".to_string()));
-    apply_global_environment("fleet", &mut list_tail, Some("local".to_string()));
+    apply_global_environment("app", &mut create_tail, Some("local".to_string()));
+    apply_global_environment("app", &mut list_tail, Some("local".to_string()));
 
     assert_eq!(create_tail, vec![OsString::from("create")]);
     assert_eq!(

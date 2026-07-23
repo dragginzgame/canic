@@ -17,7 +17,7 @@ fn root_registry_hint_explains_missing_deployment_root() {
         .expect("missing canister hint should be available");
 
     assert!(hint.contains("deployment target"));
-    assert!(hint.contains("canic app config <fleet-template>"));
+    assert!(hint.contains("canic app config <app>"));
     assert!(!hint.contains("this fleet"));
 }
 

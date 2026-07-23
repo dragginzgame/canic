@@ -55,8 +55,8 @@ fn renders_status_report() {
             "ICP project: ok (icp.yaml)",
             "Deployments: 1/2 deployed (environment local)",
             "",
-            "DEPLOYMENT   DEPLOYED   CONFIG                   CANISTERS   ROOT",
-            "----------   --------   ----------------------   ---------   --------",
+            "DEPLOYMENT   DEPLOYED   CONFIG                 CANISTERS   ROOT",
+            "----------   --------   --------------------   ---------   --------",
             "demo         no         apps/demo/canic.toml   4           -",
             "test         yes        apps/test/canic.toml   7           aaaaa-aa",
         ]
@@ -64,7 +64,7 @@ fn renders_status_report() {
     );
 }
 
-// Ensure empty fleet workspaces still render a useful quick status.
+// Ensure workspaces without App configs still render a useful quick status.
 #[test]
 fn renders_empty_status_report() {
     let report = StatusReport {
@@ -72,13 +72,13 @@ fn renders_empty_status_report() {
         replica: ReplicaStatus::Stopped,
         replica_port: "8001".to_string(),
         icp_cli: "icp 0.2.5".to_string(),
-        icp_project: "not checked (no Canic fleet configs)".to_string(),
+        icp_project: "not checked (no Canic App configs)".to_string(),
         deployments: Vec::new(),
     };
 
     assert_eq!(
         render_status_report(&report),
-        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic fleet configs)\nDeployments: 0/0 deployed (environment local)"
+        "Replica: stopped (local, port 8001)\nICP CLI: icp 0.2.5\nICP project: not checked (no Canic App configs)\nDeployments: 0/0 deployed (environment local)"
     );
 }
 
