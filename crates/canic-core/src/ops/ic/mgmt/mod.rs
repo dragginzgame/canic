@@ -22,9 +22,9 @@ use crate::{
         EnvironmentVariable as EnvironmentVariableDto, MemoryMetrics, QueryStats,
     },
     ids::SystemMetricKind,
-    infra::{InfraError, ic::mgmt::MgmtInfra},
+    infra::ic::{IcInfraError, mgmt::MgmtInfra},
     ops::{
-        ic::IcOpsError,
+        OpsError,
         prelude::*,
         runtime::metrics::{
             management_call::ManagementCallMetrics, platform_call::PlatformCallMetrics,
@@ -67,7 +67,7 @@ pub struct MgmtOps;
 // Execute one management-canister call and record low-cardinality outcomes.
 async fn management_call<T>(
     operation: ManagementCallMetricOperation,
-    fut: impl Future<Output = Result<T, InfraError>>,
+    fut: impl Future<Output = Result<T, IcInfraError>>,
 ) -> Result<T, InternalError> {
     record_management_call(
         operation,
@@ -96,7 +96,7 @@ async fn management_call<T>(
                 ManagementCallMetricOutcome::Failed,
                 ManagementCallMetricReason::Infra,
             );
-            Err(IcOpsError::from(err).into())
+            Err(OpsError::from(err).into())
         }
     }
 }

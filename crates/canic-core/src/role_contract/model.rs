@@ -79,7 +79,6 @@ pub enum StateAllocationKey {
     CoreAuthState,
     CoreIcpRefillRecords,
     CoreReplayReceipts,
-    CoreRootAppRegistry,
     CoreRuntimeEnvironment,
     CoreRuntimeIntent,
     CoreRuntimeObservability,

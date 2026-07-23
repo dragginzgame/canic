@@ -67,7 +67,7 @@ The provenance file is an `EvidenceEnvelopeV1` containing stable
 `canic.build_provenance.v1` payload. It records source, Cargo, package
 metadata, build-profile, artifact hash, and optional artifact-transform
 evidence after a successful build. Each transform record identifies the role,
-transform, mode, tool, reported tool version, and outcome. An applied transform
+transform, tool, reported tool version, and outcome. An applied transform
 requires a non-empty tool version; unavailable or unrequested transforms cannot
 claim one. Missing or inconsistent transform evidence makes the payload
 invalid. It does not change deployment truth, install state, controllers,

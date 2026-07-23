@@ -18,8 +18,8 @@ use thiserror::Error as ThisError;
 ///
 /// IcInfraError
 ///
-/// IC infra failure wrapper for raw IC transport and protocol adapters.
-/// Owned by `infra::ic` and converted into `InfraError`.
+/// IC infra failure surface for raw IC transport and protocol adapters.
+/// Owned by `infra::ic` and converted at the calling layer boundary.
 ///
 
 #[derive(Debug, ThisError)]

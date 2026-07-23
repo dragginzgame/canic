@@ -10,30 +10,8 @@ pub mod icp_refill;
 pub mod mgmt;
 pub mod nns;
 
-use crate::{InternalError, cdk::types::Principal, infra, ops::OpsError};
+use crate::cdk::types::Principal;
 use std::time::SystemTime;
-use thiserror::Error as ThisError;
-
-///
-/// IcOpsError
-///
-/// Typed failure surface for IC operation facades.
-///
-
-#[derive(Debug, ThisError)]
-pub enum IcOpsError {
-    #[error(transparent)]
-    Infra(#[from] infra::InfraError),
-
-    #[error(transparent)]
-    IcpRefillOps(#[from] icp_refill::IcpRefillOpsError),
-}
-
-impl From<IcOpsError> for InternalError {
-    fn from(err: IcOpsError) -> Self {
-        OpsError::from(err).into()
-    }
-}
 
 ///
 /// IcOps
@@ -116,13 +94,6 @@ impl IcOps {
     #[expect(clippy::cast_possible_truncation)]
     pub fn now_millis() -> u64 {
         (time_nanos() / 1_000_000) as u64
-    }
-
-    /// Return the current UNIX epoch time in microseconds.
-    #[must_use]
-    #[expect(clippy::cast_possible_truncation)]
-    pub fn now_micros() -> u64 {
-        (time_nanos() / 1_000) as u64
     }
 
     /// Return the current UNIX epoch time in nanoseconds.

@@ -20,7 +20,7 @@ pub mod memory {
         pub const CANISTER_CHILDREN_ID: u8 = 11;
         pub const APP_INDEX_ID: u8 = 12;
         pub const SUBNET_INDEX_ID: u8 = 13;
-        pub const APP_REGISTRY_ID: u8 = 14;
+        pub const RETIRED_APP_REGISTRY_ID: u8 = 14;
         pub const SUBNET_REGISTRY_ID: u8 = 15;
     }
 
@@ -110,7 +110,8 @@ use memory::{
         TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
     },
     topology::{
-        APP_INDEX_ID, APP_REGISTRY_ID, CANISTER_CHILDREN_ID, SUBNET_INDEX_ID, SUBNET_REGISTRY_ID,
+        APP_INDEX_ID, CANISTER_CHILDREN_ID, RETIRED_APP_REGISTRY_ID, SUBNET_INDEX_ID,
+        SUBNET_REGISTRY_ID,
     },
 };
 
@@ -120,10 +121,12 @@ const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
     MemoryId::new(SUBNET_INDEX_ID),
     MemoryId::new(SUBNET_REGISTRY_ID),
 ];
-const CORE_ROOT_APP_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(APP_REGISTRY_ID)];
 const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =
     &[MemoryId::new(ENV_ID), MemoryId::new(APP_STATE_ID)];
-const RETIRED_MEMORY_IDS: &[MemoryId] = &[MemoryId::new(RETIRED_SUBNET_STATE_ID)];
+const RETIRED_MEMORY_IDS: &[MemoryId] = &[
+    MemoryId::new(RETIRED_APP_REGISTRY_ID),
+    MemoryId::new(RETIRED_SUBNET_STATE_ID),
+];
 const CORE_AUTH_STATE_IDS: &[MemoryId] = &[MemoryId::new(AUTH_STATE_ID)];
 const CORE_REPLAY_RECEIPTS_IDS: &[MemoryId] = &[MemoryId::new(REPLAY_RECEIPTS_ID)];
 const CORE_RUNTIME_OBSERVABILITY_IDS: &[MemoryId] = &[
@@ -166,11 +169,6 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreRuntimeTopology,
         AllocationOwner::CanicCore,
         CORE_RUNTIME_TOPOLOGY_IDS,
-    ),
-    definition(
-        StateAllocationKey::CoreRootAppRegistry,
-        AllocationOwner::CanicCore,
-        CORE_ROOT_APP_REGISTRY_IDS,
     ),
     definition(
         StateAllocationKey::CoreRuntimeEnvironment,

@@ -30,7 +30,6 @@ pub const CANIC_APP: &str = "canic_app";
 pub const CANIC_CANISTER_UPGRADE: &str = "canic_canister_upgrade";
 pub const CANIC_CANISTER_STATUS: &str = "canic_canister_status";
 pub const CANIC_CONFIG: &str = "canic_config";
-pub const CANIC_APP_REGISTRY: &str = "canic_app_registry";
 pub const CANIC_SUBNET_REGISTRY: &str = "canic_subnet_registry";
 pub const CANIC_POOL_LIST: &str = "canic_pool_list";
 pub const CANIC_POOL_ADMIN: &str = "canic_pool_admin";

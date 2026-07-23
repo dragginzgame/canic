@@ -225,10 +225,6 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
         RoleCapabilityKey::Runtime,
         StateAllocationKey::CoreRuntimeIntent,
     ),
-    capability_allocation(
-        RoleCapabilityKey::Root,
-        StateAllocationKey::CoreRootAppRegistry,
-    ),
     capability_allocation(RoleCapabilityKey::Root, StateAllocationKey::CoreAuthState),
     capability_allocation(
         RoleCapabilityKey::DelegatedTokenIssuer,

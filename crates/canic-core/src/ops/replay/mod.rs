@@ -35,7 +35,7 @@ pub const ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const POOL_CREATE_EMPTY_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 pub const ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
-const ROOT_REPLAY_COMPACT_TAG: &[u8] = b"RR2";
+const ROOT_REPLAY_COMPACT_TAG: &[u8] = b"RR1";
 const ROOT_REPLAY_COMPACT_CYCLES_V1: u8 = 0;
 const ROOT_REPLAY_RESPONSE_SCHEMA_VERSION: u32 = 1;
 
@@ -470,6 +470,7 @@ mod tests {
             encoded.starts_with(ROOT_REPLAY_COMPACT_TAG),
             "cycles replay should use compact encoding"
         );
+        assert_eq!(&encoded[..ROOT_REPLAY_COMPACT_TAG.len()], b"RR1");
 
         let decoded = decode_root_replay_response(&encoded).expect("decode");
         match (decoded, response) {

@@ -14,14 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.22`.
-- The latest published release is `v0.98.22` at
-  `c5886d322cb09b81697f8811f3ce8118d54d074d`.
-- The `v0.98.22` source tree is
-  `8d4a9d6d33ea54625fd3c2fa4b4ca9a481a1d474`; its product-tree hash is
-  `b4219c3a996e7245f580ab037c9c3306c88a959f5b19b0266fdcb3f6cefe75e7` and
+- The workspace package version is `0.98.23`.
+- The latest published release is `v0.98.23` at
+  `411e6598af0f3704ca11c83136bb08c80501a3f8`.
+- The `v0.98.23` source tree is
+  `0fa80dded513a112ecf5a4a7257d1882814c23a8`; its product-tree hash is
+  `89903340e6ea3506744281caec405ac7e6ffbaf6f5d9b5abe39496c7c9ac223e` and
   its Cargo.lock SHA-256 is
-  `2ae2be5a14c7251b7ae47f7ccde93562a2840ce2897e350c711ff41a47f87a8f`.
+  `b923e37b9f01cde72b3c6f6e0283ef95845af68e7df918903ee7d4e90b2e0c8d`.
+- Open `0.98.24` is the maintainer-requested final Tier 2 architectural-
+  sediment closeout. It fixes all 3 P1 and 9 P2 findings with no deferral.
+  Package versions remain at the latest published `0.98.23` until the
+  maintainer-owned release flow.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -75,8 +79,13 @@ Historical detail is archived at:
   facades remain removed.
 - Released `0.98.22` adds direct typed execution and decoding to that canonical
   builder without changing or duplicating the underlying call authority.
-- Open `0.98.23` removes dead raw-response comparison and transparent generic
+- Released `0.98.23` removes dead raw-response comparison and transparent generic
   call/NNS error envelopes while retaining typed causes and behavior.
+- Open `0.98.24` removes the write-only App Registry and retires memory ID 14;
+  collapses redundant error, empty response, fixed provenance, replay-marker,
+  stable-compatibility, helper, and visibility surfaces; resets current
+  Canic-owned pre-1.0 schemas/tags to 1; and repairs environment-bound CLI
+  proof fixtures. The final audit records no deferred or unresolved finding.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -703,7 +712,7 @@ First primary results:
   fixes both build findings. Two isolated offline lanes now produce identical
   root/bootstrap raw and gzip artifacts plus identical semantic provenance;
   final root Wasm contains neither temporary root. The host builder records
-  transform role, kind, optional mode, tool, version, and applied, unavailable,
+  transform role, kind, tool, version, and applied, unavailable,
   or unrequested outcome through the required hard-cut provenance shape.
 - [authentication invariants](../audits/reports/2026-07/2026-07-14/0.92-auth-invariants.md)
   found no accepting bypass: invalid trust, audience, subject, scope, replay,
@@ -1114,10 +1123,13 @@ identity on resume. Released `v0.98.21` also removes the false ICRC-103
 configuration/advertisement path while retaining implemented ICRC-10/21
 behavior. Released `v0.98.22` adds direct typed call completion only at the
 public API boundary; explicit `execute`/`CallResult` handling remains
-supported. Open `0.98.23` removes only dead raw-response comparison and
+supported. Released `v0.98.23` removes only dead raw-response comparison and
 redundant transparent IC error envelopes. It does not implement Fleet
 identity, a Fleet Registry, multi-subnet synchronization, or any other
-proposed 0.99/0.100 behavior. Preserve the
+proposed 0.99/0.100 behavior. Open `0.98.24` now owns the final repository-wide
+Tier 2 sediment closeout and all twelve confirmed corrections. Do not extend
+the batch with unrelated redesign or pull forward 0.99/0.100 behavior.
+Preserve the
 maintainer's active 0.99/0.100 design edits. Do not inspect or edit the stale
 local Toko repository, change Cargo package versions outside the
 maintainer-owned release flow, or commit, tag, publish, or push shared-worktree

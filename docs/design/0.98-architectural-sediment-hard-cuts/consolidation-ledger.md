@@ -15,9 +15,12 @@ N is published in `v0.98.16`; Slice O is published in `v0.98.17`; Slice P is
 published in `v0.98.19`; Slice Q is published in `v0.98.20`; Slice R and the
 call-builder correction are published in `v0.98.21`. Direct typed call
 completion is published in `v0.98.22`; the related IC error-authority
-refinement is in implementation for `0.98.23`. These refinements are not new
+refinement is published in `v0.98.23`. These refinements are not new
 rows in the immutable fifteen-finding supplement.
 They are not included in the immutable 0.98.2 totals.
+The maintainer-requested final Tier 2 closeout is recorded separately below;
+its twelve findings are implemented in open `0.98.24`, with no deferral or
+change to the immutable earlier counts.
 
 ## Counting rules
 
@@ -119,6 +122,28 @@ were not exhaustive proofs against these newly traced tails.
 | CANIC-098-POST-CDK-RELAY-001 | P2 | `canic-core::cdk` still relays upstream IC runtime APIs to Canic runtime and macro code after the public facade hard cut; its separate time module only forwards that clock into `IcOps`, and its stable-structures inventory exports many types with no repository consumer. | FIXED in `v0.98.19` — runtime and hidden macro plumbing import upstream `ic-cdk` directly, time is owned by `IcOps`, and unused stable exports are removed without an alias |
 | CANIC-098-POST-ICP-ACCOUNT-001 | P2 | Generic CDK `Account`/`Subaccount` helpers are consumed only by manual ICP refill; custom ordering/hash/default-subaccount semantics have no production caller, and transfer resume rebuilds the CMC account instead of consuming the exact identity already persisted in the refill record. | FIXED in `v0.98.20` — the wire account is adapter-local, unused semantics and aliases are removed, and resume consumes the persisted CMC owner/subaccount |
 | CANIC-098-POST-ICRC103-001 | P2 | Global config can advertise ICRC-103 through the supported-standards query even though Canic has no allowance-list endpoint, required ledger metadata, or surviving generic ICRC-2 allowance authority. | FIXED in `v0.98.21` — unsupported config/render/query branches removed; the result lists only ICRC-10 and configured ICRC-21 |
+
+## Final Tier 2 closeout supplement
+
+Date: 2026-07-23
+
+These findings come from the maintainer-requested repository-wide
+`CANIC-MODULE-SURFACE-001/v2.0` closeout. All are fixed in open `0.98.24`.
+
+| ID | Severity | Candidate and authority evidence | Disposition |
+| --- | --- | --- | --- |
+| CANIC-098-FINAL-APP-REGISTRY-001 | P1 | Root bootstrap wrote a stable Subnet-to-root App Registry and exposed a controller query, but no runtime decision consumed it. Its endpoint described future behavior and would compete with the real Fleet Registry designed for 0.100. | FIXED — complete DTO/API/workflow/ops/storage/bootstrap/Candid/state-contract path deleted; memory ID 14 retired |
+| CANIC-098-FINAL-STABLE-COMPAT-002 | P1 | Current stable records retained explicit `serde(default)` old-shape fallbacks after the maintainer selected pre-1.0 hard cuts. Replay also omitted absent current fields from its encoded map. | FIXED — compatibility defaults removed; current replay encoding emits every optional field and exact-byte fixtures pin the surviving format |
+| CANIC-098-FINAL-PROOF-FIXTURE-003 | P1 | Installed/packaged CLI proof fixtures still wrote the removed install-state `network` key under a strict current schema, and the fake ICP process emitted the obsolete decoded-value JSON instead of the current `response_bytes` envelope. The proofs could not establish the maintained environment or ICP 1.1 contracts. | FIXED — fixtures write canonical `environment`, current schema version 1, and exact typed Candid bytes in the maintained ICP response envelope |
+| CANIC-098-FINAL-ERROR-004 | P2 | Domain, infra, IC ops, refill ops, and log ops carried transparent envelopes that added no fields, classification, or boundary behavior. | FIXED — callers retain the meaningful typed causes and map directly through the existing layer-origin authorities |
+| CANIC-098-FINAL-RPC-005 | P2 | Acknowledgement, upgrade, and recycle success responses each allocated a public empty record reserved only for possible future metadata. | FIXED — unit success flows through DTO, RPC, workflow, replay, Candid endpoint, stub, and tests |
+| CANIC-098-FINAL-PROVENANCE-006 | P2 | Artifact transform provenance serialized a `mode` enum whose only possible value was `optional`; build policy already owned that fixed admission rule. | FIXED — field and enum removed; role, transform, tool, version, and outcome remain |
+| CANIC-098-FINAL-REPLAY-007 | P2 | Replay payload hashing retained a constant false actor-extension byte solely to preserve a retired layout, and tests retained removed-behavior assertions. | FIXED — marker and historical-behavior assertions removed; current replay invariants remain tested |
+| CANIC-098-FINAL-VERSION-008 | P2 | State manifest, state audit, install state, and compact root replay still advertised version/tag 2 despite the maintainer's single-current-version pre-1.0 rule. | FIXED — current owned schemas and compact tag are version 1; no old reader or alias remains |
+| CANIC-098-FINAL-CFG-009 | P2 | Feature-exclusive delegated-auth metric branches survived only through conditional dead-code suppressions. | FIXED — definitions and their sole reason variant are compiled exactly where their owning feature branch exists |
+| CANIC-098-FINAL-HELPER-010 | P2 | An unused microsecond clock, stale memory-range aliases, and an orphan deployment-catalog schema constant remained after their consumers were removed or centralized. | FIXED — dead helpers/constants deleted |
+| CANIC-098-FINAL-VISIBILITY-011 | P2 | The zero-state runtime `Config` namespace was publicly constructible despite having only crate-private methods and no generated/facade consumer. | FIXED — namespace narrowed to crate-only |
+| CANIC-098-FINAL-DTO-012 | P2 | Ten Candid DTO option fields carried explicit `serde(default)` annotations even though missing `Option` fields already decode as `None`. The redundant annotations suggested compatibility behavior that did not exist. | FIXED — redundant attributes removed; current optional-field and Candid shapes are unchanged |
 
 ## Package coverage
 

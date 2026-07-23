@@ -6,8 +6,8 @@ use crate::{
         error::ErrorCode,
         rpc::{
             AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
-            CyclesRequest, CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse,
-            Request, RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
+            CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request, RootRequestMetadata,
+            UpgradeCanisterRequest,
         },
     },
     ids::CanisterRole,
@@ -1434,11 +1434,7 @@ fn response_commit_retry_promotes_staged_response_without_reexecution() {
         replay::ReplayPreflight::Fresh(pending) => pending,
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
-    replay::stage_response(
-        &pending,
-        &Response::RecycleCanister(RecycleCanisterResponse {}),
-    )
-    .expect("stage terminal response");
+    replay::stage_response(&pending, &Response::RecycleCanister).expect("stage terminal response");
     replay::mark_recovery_required(&pending, RecoveryReason::ResponseCommitFailed)
         .expect("mark response recovery");
 
@@ -1446,7 +1442,7 @@ fn response_commit_retry_promotes_staged_response_without_reexecution() {
         .expect("identical retry should promote staged response");
     assert!(matches!(
         recovered,
-        replay::ReplayPreflight::Cached(Response::RecycleCanister(RecycleCanisterResponse {}))
+        replay::ReplayPreflight::Cached(Response::RecycleCanister)
     ));
     let receipt = ReplayReceiptOps::get(pending.receipt_token.key())
         .expect("receipt")
@@ -1517,11 +1513,7 @@ fn check_replay_rejects_cross_variant_same_request_id() {
         replay::ReplayPreflight::Fresh(pending) => pending,
         replay::ReplayPreflight::Cached(_) => panic!("first replay must be fresh"),
     };
-    replay::stage_response(
-        &pending,
-        &Response::UpgradeCanister(UpgradeCanisterResponse {}),
-    )
-    .expect("stage response");
+    replay::stage_response(&pending, &Response::UpgradeCanister).expect("stage response");
     RootResponseWorkflow::commit_replay(&pending).expect("commit");
 
     RootResponseWorkflow::check_replay(&ctx, &cycles).expect_err("must conflict");
@@ -1531,7 +1523,7 @@ fn check_replay_rejects_cross_variant_same_request_id() {
 fn replay_purge_respects_limit_and_keeps_unexpired_entries() {
     ReplayReceiptOps::reset_for_tests();
 
-    let ok = encode_one(Response::UpgradeCanister(UpgradeCanisterResponse {})).expect("encode");
+    let ok = encode_one(Response::UpgradeCanister).expect("encode");
 
     for i in 0..5u8 {
         seed_root_replay_receipt(

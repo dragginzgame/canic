@@ -7,23 +7,9 @@
 pub mod ic;
 
 use crate::{InternalError, InternalErrorOrigin};
-use thiserror::Error as ThisError;
 
-///
-/// InfraError
-///
-/// Infra-layer failure wrapper converted to the workspace internal error shape.
-/// Owned by infra and returned to ops callers crossing platform boundaries.
-///
-
-#[derive(Debug, ThisError)]
-pub enum InfraError {
-    #[error(transparent)]
-    IcInfra(#[from] ic::IcInfraError),
-}
-
-impl From<InfraError> for InternalError {
-    fn from(err: InfraError) -> Self {
+impl From<ic::IcInfraError> for InternalError {
+    fn from(err: ic::IcInfraError) -> Self {
         Self::infra(InternalErrorOrigin::Infra, err.to_string())
     }
 }

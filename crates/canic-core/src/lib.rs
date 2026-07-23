@@ -78,8 +78,6 @@ pub mod __reexports {
 
 pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const CANIC_MEMORY_MIN: u8 = role_contract::allocation::CANIC_CORE_MIN_ID;
-pub const CANIC_MEMORY_MAX: u8 = role_contract::allocation::CANIC_CORE_MAX_ID;
 // Canonical hardcoded 1 MiB chunk size for Canic wasm staging/install flows.
 // The management canister wasm chunk store rejects larger payloads.
 pub const CANIC_WASM_CHUNK_BYTES: usize = 1_048_576;

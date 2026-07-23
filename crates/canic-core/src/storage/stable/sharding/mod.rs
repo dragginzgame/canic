@@ -80,7 +80,6 @@ impl_storable_bounded!(ShardKey, ShardKey::STORABLE_MAX_SIZE, false);
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ShardEntryRecord {
     /// Logical slot index within the pool (assigned deterministically).
-    #[serde(default = "ShardEntryRecord::slot_default")]
     pub slot: u32,
     pub capacity: u32,
     pub count: u32,
@@ -112,10 +111,6 @@ impl ShardEntryRecord {
             pool,
             created_at,
         })
-    }
-
-    const fn slot_default() -> u32 {
-        Self::UNASSIGNED_SLOT
     }
 
     #[must_use]

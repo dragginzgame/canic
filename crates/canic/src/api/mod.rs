@@ -51,9 +51,7 @@ pub mod canister {
     }
 
     pub mod registry {
-        pub use crate::__internal::core::api::topology::registry::{
-            AppRegistryApi, SubnetRegistryApi,
-        };
+        pub use crate::__internal::core::api::topology::registry::SubnetRegistryApi;
     }
 
     pub mod placement {

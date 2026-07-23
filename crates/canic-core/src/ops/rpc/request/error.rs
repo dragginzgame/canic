@@ -4,7 +4,7 @@
 //! Does not own: workflow error mapping or public endpoint DTOs.
 //! Boundary: converts request dispatch failures into the shared RPC ops error path.
 
-use crate::{InternalError, infra::InfraError, ops::rpc::RpcOpsError};
+use crate::{InternalError, infra::ic::IcInfraError, ops::rpc::RpcOpsError};
 use thiserror::Error as ThisError;
 
 ///
@@ -16,7 +16,7 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum RequestOpsError {
     #[error(transparent)]
-    Infra(#[from] InfraError),
+    IcInfra(#[from] IcInfraError),
 
     #[error("invalid response type")]
     InvalidResponseType,

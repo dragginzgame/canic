@@ -148,7 +148,6 @@ pub enum ArtifactProvenanceKindV1 {
 pub struct ArtifactTransformProvenanceV1 {
     pub role: String,
     pub transform: ArtifactTransformKindV1,
-    pub mode: ArtifactTransformModeV1,
     pub tool: String,
     pub tool_version: Option<String>,
     pub outcome: ArtifactTransformOutcomeV1,
@@ -160,13 +159,6 @@ pub struct ArtifactTransformProvenanceV1 {
 pub enum ArtifactTransformKindV1 {
     Shrink,
     CandidMetadata,
-}
-
-/// Admission mode for an artifact transform.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ArtifactTransformModeV1 {
-    Optional,
 }
 
 /// Recorded outcome of one artifact transform decision.

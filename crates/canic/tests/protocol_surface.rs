@@ -38,6 +38,7 @@ use canic::{
         ConsentMessageResponse, ConsentMessageSpec, DisplayMessageType,
     },
     dto::memory::MemoryLedgerResponse,
+    dto::rpc::Response as RootRpcResponse,
     dto::runtime::{
         CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
         RuntimeFieldVisibility,
@@ -74,6 +75,28 @@ fn candid_type_env<T: candid::CandidType>() -> String {
     let mut types = TypeContainer::new();
     types.add::<T>();
     types.env.to_string()
+}
+
+#[test]
+fn root_rpc_commands_without_result_data_use_unit_variants() {
+    for response in [
+        RootRpcResponse::AcknowledgePlacementReceipt,
+        RootRpcResponse::UpgradeCanister,
+        RootRpcResponse::RecycleCanister,
+    ] {
+        let encoded = encode_one(&response).expect("encode root RPC response");
+        let decoded =
+            decode_one::<RootRpcResponse>(&encoded).expect("decode root RPC unit response");
+        assert_eq!(
+            std::mem::discriminant(&decoded),
+            std::mem::discriminant(&response)
+        );
+    }
+
+    let env = candid_type_env::<RootRpcResponse>();
+    assert!(env.contains("AcknowledgePlacementReceipt"));
+    assert!(env.contains("UpgradeCanister"));
+    assert!(env.contains("RecycleCanister"));
 }
 
 fn consent_message_request(method: &str) -> ConsentMessageRequest {

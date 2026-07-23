@@ -9,7 +9,7 @@ use crate::{
         candid::{Principal, encode_args, utils::ArgumentEncoder},
         types::Cycles,
     },
-    infra::{InfraError, ic::IcInfraError, ic::call::Call},
+    infra::ic::{IcInfraError, call::Call},
 };
 use ic_cdk::api;
 
@@ -28,7 +28,7 @@ impl MgmtInfra {
     pub async fn create_canister(
         controllers: Vec<Principal>,
         cycles: Cycles,
-    ) -> Result<Principal, InfraError> {
+    ) -> Result<Principal, IcInfraError> {
         let settings = Some(InfraCanisterSettings {
             controllers: Some(controllers),
             ..Default::default()
@@ -52,7 +52,7 @@ impl MgmtInfra {
     pub async fn upload_chunk(
         canister_pid: Principal,
         chunk: Vec<u8>,
-    ) -> Result<Vec<u8>, InfraError> {
+    ) -> Result<Vec<u8>, IcInfraError> {
         let args = InfraUploadChunkArgs {
             canister_id: canister_pid,
             chunk,
@@ -68,7 +68,7 @@ impl MgmtInfra {
     }
 
     /// List the chunk hashes currently stored in one canister's chunk store.
-    pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, InfraError> {
+    pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, IcInfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
         };
@@ -82,7 +82,7 @@ impl MgmtInfra {
     }
 
     /// Clear the chunk store of one canister.
-    pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), InfraError> {
+    pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), IcInfraError> {
         let args = InfraClearChunkStoreArgs {
             canister_id: canister_pid,
         };
@@ -103,7 +103,7 @@ impl MgmtInfra {
         chunk_hashes_list: Vec<Vec<u8>>,
         wasm_module_hash: Vec<u8>,
         args: T,
-    ) -> Result<(), InfraError> {
+    ) -> Result<(), IcInfraError> {
         let arg = encode_args(args).map_err(IcInfraError::from)?;
         let install_args = InfraInstallChunkedCodeArgs {
             mode,
@@ -132,7 +132,7 @@ impl MgmtInfra {
         canister_id: Principal,
         wasm_module: Vec<u8>,
         args: T,
-    ) -> Result<(), InfraError> {
+    ) -> Result<(), IcInfraError> {
         let arg = encode_args(args).map_err(IcInfraError::from)?;
         let install_args = InfraInstallCodeArgs {
             mode,
@@ -151,7 +151,7 @@ impl MgmtInfra {
     }
 
     /// Uninstall code from a canister.
-    pub async fn uninstall_code(canister_pid: Principal) -> Result<(), InfraError> {
+    pub async fn uninstall_code(canister_pid: Principal) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecordExtended {
             canister_id: canister_pid,
             sender_canister_version: Some(api::canister_version()),
@@ -165,7 +165,7 @@ impl MgmtInfra {
     }
 
     /// Stop a canister.
-    pub async fn stop_canister(canister_pid: Principal) -> Result<(), InfraError> {
+    pub async fn stop_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
         };
@@ -178,7 +178,7 @@ impl MgmtInfra {
     }
 
     /// Delete a canister through the management canister.
-    pub async fn delete_canister(canister_pid: Principal) -> Result<(), InfraError> {
+    pub async fn delete_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
         };

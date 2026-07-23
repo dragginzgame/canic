@@ -7,7 +7,7 @@
 use crate::{
     InternalError,
     infra::ic::nns::registry::NnsRegistryInfra,
-    ops::{ic::IcOpsError, prelude::*},
+    ops::{OpsError, prelude::*},
 };
 
 ///
@@ -24,7 +24,7 @@ impl NnsRegistryOps {
     ) -> Result<Option<Principal>, InternalError> {
         let subnet = NnsRegistryInfra::get_subnet_for_canister(pid)
             .await
-            .map_err(IcOpsError::from)?;
+            .map_err(OpsError::from)?;
 
         Ok(subnet)
     }

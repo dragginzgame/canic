@@ -6,8 +6,7 @@ use crate::canister_build::{ArtifactTransformKind, ArtifactTransformOutcome};
 
 use super::model::{
     ArtifactProvenanceKindV1, ArtifactProvenanceV1, ArtifactTransformKindV1,
-    ArtifactTransformModeV1, ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1,
-    BuildProvenanceRequest,
+    ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1, BuildProvenanceRequest,
 };
 
 pub(super) fn artifact_provenance(
@@ -70,7 +69,6 @@ pub(super) fn artifact_transform_provenance(
                         ArtifactTransformKindV1::CandidMetadata
                     }
                 },
-                mode: ArtifactTransformModeV1::Optional,
                 tool: IC_WASM_TOOL.to_string(),
                 tool_version: transform.tool_version.clone(),
                 outcome: match transform.outcome {

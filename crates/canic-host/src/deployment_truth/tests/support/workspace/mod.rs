@@ -94,7 +94,7 @@ pub(in crate::deployment_truth::tests) fn sample_install_state(
     root_canister_id: &str,
 ) -> InstallState {
     InstallState {
-        schema_version: 2,
+        schema_version: 1,
         deployment_name: deployment_name.to_string(),
         fleet_template: "demo".to_string(),
         created_at_unix_secs: 1,

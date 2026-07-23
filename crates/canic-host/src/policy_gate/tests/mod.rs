@@ -2,9 +2,9 @@ use super::model::PolicyBuildProvenanceRuleV1;
 use super::*;
 use crate::build_provenance::{
     ArtifactProvenanceKindV1, ArtifactProvenanceV1, ArtifactTransformKindV1,
-    ArtifactTransformModeV1, ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1,
-    BuildProvenanceStatusV1, BuildProvenanceV1, BuildScriptInputStateV1, CargoProvenanceV1,
-    SourceDirtyPolicyV1, SourceProvenanceV1, SourceVcsV1,
+    ArtifactTransformOutcomeV1, ArtifactTransformProvenanceV1, BuildProvenanceStatusV1,
+    BuildProvenanceV1, BuildScriptInputStateV1, CargoProvenanceV1, SourceDirtyPolicyV1,
+    SourceProvenanceV1, SourceVcsV1,
 };
 use crate::evidence_envelope::{
     CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
@@ -192,7 +192,6 @@ fn sample_build_provenance_payload() -> BuildProvenanceV1 {
         transforms: vec![ArtifactTransformProvenanceV1 {
             role: "app".to_string(),
             transform: ArtifactTransformKindV1::Shrink,
-            mode: ArtifactTransformModeV1::Optional,
             tool: "ic-wasm".to_string(),
             tool_version: Some("ic-wasm 0.test".to_string()),
             outcome: ArtifactTransformOutcomeV1::Applied,

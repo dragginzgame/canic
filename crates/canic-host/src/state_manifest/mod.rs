@@ -18,7 +18,7 @@ use serde::Serialize;
 
 pub const STATE_AUDIT_COMMAND: &str = "canic state audit";
 pub const STATE_MANIFEST_COMMAND: &str = "canic state manifest";
-pub const STATE_AUDIT_SCHEMA_VERSION: u16 = 2;
+pub const STATE_AUDIT_SCHEMA_VERSION: u16 = 1;
 
 const SCOPE_PROJECT: StateAuditScope = StateAuditScope::Project;
 const SCOPE_ROLE: StateAuditScope = StateAuditScope::Role;
@@ -256,7 +256,6 @@ mod tests {
                 None,
                 &[
                     StateAllocationKey::CoreRuntimeTopology,
-                    StateAllocationKey::CoreRootAppRegistry,
                     StateAllocationKey::CoreRuntimeEnvironment,
                     StateAllocationKey::CoreAuthState,
                     StateAllocationKey::CoreReplayReceipts,

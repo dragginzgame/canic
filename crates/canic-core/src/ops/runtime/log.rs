@@ -12,30 +12,8 @@ use crate::{
     },
     log::{Level, Topic},
     ops::runtime::RuntimeOpsError,
-    storage::{
-        StorageError,
-        stable::log::{Log, LogEntryRecord, LogRetentionBatch},
-    },
+    storage::stable::log::{Log, LogEntryRecord, LogRetentionBatch},
 };
-use thiserror::Error as ThisError;
-
-///
-/// LogOpsError
-///
-/// Typed failure surface for storage-backed runtime log operations.
-///
-
-#[derive(Debug, ThisError)]
-pub enum LogOpsError {
-    #[error(transparent)]
-    Storage(#[from] StorageError),
-}
-
-impl From<LogOpsError> for InternalError {
-    fn from(err: LogOpsError) -> Self {
-        RuntimeOpsError::LogOps(err).into()
-    }
-}
 
 ///
 /// LogOps
@@ -75,7 +53,9 @@ impl LogOps {
             message: message.to_string(),
         };
 
-        let id = Log::append(max_entries, max_entry_bytes, entry).map_err(LogOpsError::from)?;
+        let id = Log::append(max_entries, max_entry_bytes, entry)
+            .map_err(RuntimeOpsError::from)
+            .map_err(InternalError::from)?;
 
         Ok(id)
     }

@@ -14,7 +14,7 @@ use crate::{
         Call as InfraCall, CallBuilder as InfraCallBuilder, CallResult as InfraCallResult,
     },
     ops::{
-        ic::IcOpsError,
+        OpsError,
         prelude::*,
         runtime::metrics::{
             inter_canister_call::InterCanisterCallMetrics, platform_call::PlatformCallMetrics,
@@ -78,7 +78,7 @@ impl CallBuilder<'_> {
         A: CandidType,
     {
         let mode = self.mode;
-        let inner = match self.inner.with_arg(arg).map_err(IcOpsError::from) {
+        let inner = match self.inner.with_arg(arg).map_err(OpsError::from) {
             Ok(inner) => inner,
             Err(err) => {
                 record_generic_call(
@@ -99,7 +99,7 @@ impl CallBuilder<'_> {
         A: ArgumentEncoder,
     {
         let mode = self.mode;
-        let inner = match self.inner.with_args(args).map_err(IcOpsError::from) {
+        let inner = match self.inner.with_args(args).map_err(OpsError::from) {
             Ok(inner) => inner,
             Err(err) => {
                 record_generic_call(
@@ -134,7 +134,7 @@ impl CallBuilder<'_> {
             PlatformCallMetricOutcome::Started,
             PlatformCallMetricReason::Ok,
         );
-        let inner = match self.inner.execute().await.map_err(IcOpsError::from) {
+        let inner = match self.inner.execute().await.map_err(OpsError::from) {
             Ok(inner) => inner,
             Err(err) => {
                 record_generic_call(
@@ -173,7 +173,7 @@ impl CallResult {
     where
         R: CandidType + DeserializeOwned,
     {
-        match self.inner.candid().map_err(IcOpsError::from) {
+        match self.inner.candid().map_err(OpsError::from) {
             Ok(value) => {
                 record_generic_call(
                     self.mode,
@@ -197,7 +197,7 @@ impl CallResult {
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        match self.inner.candid_tuple().map_err(IcOpsError::from) {
+        match self.inner.candid_tuple().map_err(OpsError::from) {
             Ok(value) => {
                 record_generic_call(
                     self.mode,

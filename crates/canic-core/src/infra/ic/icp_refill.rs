@@ -6,13 +6,10 @@
 
 use crate::{
     ids::BuildNetwork,
-    infra::{
-        InfraError,
-        ic::{
-            IcInfraError,
-            call::Call,
-            known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
-        },
+    infra::ic::{
+        IcInfraError,
+        call::Call,
+        known::{CYCLES_MINTING_CANISTER, ICP_LEDGER_CANISTER},
     },
 };
 use candid::{CandidType, Nat, Principal};
@@ -124,7 +121,7 @@ impl fmt::Display for TransferError {
 /// IcpRefillInfraError
 ///
 /// Mechanical ICP refill failure returned by ledger and CMC helpers.
-/// Owned by ICP refill infra and converted into `InfraError`.
+/// Owned by ICP refill infra and converted into `IcInfraError`.
 ///
 
 #[derive(Debug, ThisError)]
@@ -137,12 +134,6 @@ pub enum IcpRefillInfraError {
 
     #[error("target principal is too long for CMC top-up subaccount: len={len}")]
     PrincipalTooLongForCmcSubaccount { len: usize },
-}
-
-impl From<IcpRefillInfraError> for InfraError {
-    fn from(err: IcpRefillInfraError) -> Self {
-        IcInfraError::IcpRefillInfra(err).into()
-    }
 }
 
 ///
@@ -251,7 +242,7 @@ impl IcpRefillInfra {
     }
 
     /// Build the CMC top-up subaccount for a target canister.
-    pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<[u8; 32], InfraError> {
+    pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<[u8; 32], IcInfraError> {
         let bytes = target_canister.as_slice();
         if bytes.len() > CMC_TOPUP_SUBACCOUNT_MAX_PRINCIPAL_BYTES {
             return Err(
@@ -291,7 +282,7 @@ impl IcpRefillInfra {
     }
 
     /// Convert a ledger block index into `u64` with overflow detection.
-    pub fn checked_block_index(block_index: Nat) -> Result<u64, InfraError> {
+    pub fn checked_block_index(block_index: Nat) -> Result<u64, IcInfraError> {
         u64::try_from(block_index.0.clone()).map_err(|_| {
             IcpRefillInfraError::LedgerBlockIndexOverflow { value: block_index }.into()
         })
@@ -301,7 +292,7 @@ impl IcpRefillInfra {
     pub fn resolve_canisters(
         build_network: BuildNetwork,
         overrides: IcpRefillCanisterOverrides,
-    ) -> Result<IcpRefillCanisters, InfraError> {
+    ) -> Result<IcpRefillCanisters, IcInfraError> {
         if build_network == BuildNetwork::Ic
             && !overrides.allow_ic_overrides
             && (overrides.ledger_canister_id.is_some() || overrides.cmc_canister_id.is_some())
@@ -318,7 +309,7 @@ impl IcpRefillInfra {
     }
 
     /// Query `icrc1_fee` on the selected ICP ledger.
-    pub async fn icrc1_fee(ledger_id: Principal) -> Result<Nat, InfraError> {
+    pub async fn icrc1_fee(ledger_id: Principal) -> Result<Nat, IcInfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_fee")
             .execute()
             .await?
@@ -326,7 +317,7 @@ impl IcpRefillInfra {
     }
 
     /// Query `icrc1_decimals` on the selected ICP ledger.
-    pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, InfraError> {
+    pub async fn icrc1_decimals(ledger_id: Principal) -> Result<u8, IcInfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_decimals")
             .execute()
             .await?
@@ -337,7 +328,7 @@ impl IcpRefillInfra {
     pub async fn icrc1_transfer(
         ledger_id: Principal,
         args: TransferArg,
-    ) -> Result<Result<Nat, TransferError>, InfraError> {
+    ) -> Result<Result<Nat, TransferError>, IcInfraError> {
         Call::unbounded_wait(ledger_id, "icrc1_transfer")
             .with_arg(args)?
             .execute()
@@ -349,7 +340,7 @@ impl IcpRefillInfra {
     pub async fn notify_top_up(
         cmc_id: Principal,
         args: NotifyTopUpArg,
-    ) -> Result<Result<Nat, NotifyTopUpError>, InfraError> {
+    ) -> Result<Result<Nat, NotifyTopUpError>, IcInfraError> {
         Call::unbounded_wait(cmc_id, "notify_top_up")
             .with_arg(args)?
             .execute()
@@ -360,7 +351,7 @@ impl IcpRefillInfra {
     /// Query the cycles minting canister for the current ICP/XDR conversion rate.
     pub async fn get_icp_xdr_conversion_rate(
         cmc_id: Principal,
-    ) -> Result<IcpXdrConversionRateResponse, InfraError> {
+    ) -> Result<IcpXdrConversionRateResponse, IcInfraError> {
         Call::unbounded_wait(cmc_id, "get_icp_xdr_conversion_rate")
             .execute()
             .await?
@@ -406,9 +397,9 @@ mod tests {
 
         assert!(matches!(
             IcpRefillInfra::checked_block_index(too_large),
-            Err(InfraError::IcInfra(IcInfraError::IcpRefillInfra(
+            Err(IcInfraError::IcpRefillInfra(
                 IcpRefillInfraError::LedgerBlockIndexOverflow { .. }
-            )))
+            ))
         ));
     }
 
@@ -422,9 +413,9 @@ mod tests {
 
         assert!(matches!(
             IcpRefillInfra::resolve_canisters(BuildNetwork::Ic, overrides),
-            Err(InfraError::IcInfra(IcInfraError::IcpRefillInfra(
+            Err(IcInfraError::IcpRefillInfra(
                 IcpRefillInfraError::MainnetSystemCanisterOverrideRejected
-            )))
+            ))
         ));
     }
 

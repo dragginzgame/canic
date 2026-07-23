@@ -31,7 +31,7 @@ use canic_core::control_plane_support::{
         storage::{
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
             pool::PoolOps,
-            registry::{app::AppRegistryOps, subnet::SubnetRegistryOps},
+            registry::subnet::SubnetRegistryOps,
         },
     },
     view::topology::IndexEntryView,
@@ -370,7 +370,6 @@ pub async fn root_set_subnet_id() -> Result<(), InternalError> {
 
     if build_network != BuildNetwork::Ic {
         let subnet_pid = EnvOps::subnet_pid()?;
-        AppRegistryOps::upsert(subnet_pid, IcOps::canister_self());
         log!(
             Topic::Topology,
             Info,
@@ -382,7 +381,6 @@ pub async fn root_set_subnet_id() -> Result<(), InternalError> {
     match IcWorkflow::try_get_current_subnet_pid().await {
         Ok(Some(subnet_pid)) => {
             EnvOps::set_subnet_pid(subnet_pid);
-            AppRegistryOps::upsert(subnet_pid, IcOps::canister_self());
             Ok(())
         }
 

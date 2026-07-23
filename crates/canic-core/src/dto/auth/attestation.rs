@@ -15,12 +15,10 @@ use crate::dto::{prelude::*, rpc::RootRequestMetadata};
 pub struct RoleAttestationRequest {
     pub subject: Principal,
     pub role: CanisterRole,
-    #[serde(default)]
     pub subnet_id: Option<Principal>,
     pub audience: Principal,
     pub ttl_ns: u64,
     pub epoch: u64,
-    #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
 
@@ -32,7 +30,6 @@ pub struct RoleAttestationRequest {
 pub struct RoleAttestation {
     pub subject: Principal,
     pub role: CanisterRole,
-    #[serde(default)]
     pub subnet_id: Option<Principal>,
     pub audience: Principal,
     pub issued_at_ns: u64,

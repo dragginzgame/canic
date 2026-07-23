@@ -56,12 +56,12 @@ EOF
 
     cat > "$downstream_root/.canic/fixture/deployments/downstream.json" <<EOF
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "deployment_name": "downstream",
   "fleet_template": "downstream",
   "created_at_unix_secs": 1,
   "updated_at_unix_secs": 1,
-  "network": "fixture",
+  "environment": "fixture",
   "root_target": "root",
   "root_canister_id": "ryjl3-tyaaa-aaaaa-aaaba-cai",
   "root_verification": "not_verified",

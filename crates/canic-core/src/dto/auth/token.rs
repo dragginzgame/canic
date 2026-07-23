@@ -23,7 +23,6 @@ pub struct DelegatedTokenClaims {
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub nonce: [u8; 16],
-    #[serde(default)]
     pub ext: Option<Vec<u8>>,
 }
 
@@ -44,13 +43,11 @@ pub struct DelegatedToken {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct DelegatedTokenPrepareRequest {
-    #[serde(default)]
     pub metadata: Option<AuthRequestMetadata>,
     pub subject: Principal,
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub ttl_ns: u64,
-    #[serde(default)]
     pub ext: Option<Vec<u8>>,
 }
 

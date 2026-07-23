@@ -9,9 +9,7 @@ pub mod handler;
 use crate::{
     InternalError,
     cdk::{candid::CandidType, types::Principal},
-    dto::rpc::{
-        CreateCanisterParent, CreateCanisterResponse, CyclesResponse, UpgradeCanisterResponse,
-    },
+    dto::rpc::{CreateCanisterParent, CreateCanisterResponse, CyclesResponse},
     ids::CanisterRole,
     ops::rpc::request::RequestOps,
 };
@@ -38,9 +36,7 @@ impl RpcRequestWorkflow {
     }
 
     /// Create an upgrade request for a registered child canister.
-    pub async fn upgrade_canister_request(
-        canister_pid: Principal,
-    ) -> Result<UpgradeCanisterResponse, InternalError> {
+    pub async fn upgrade_canister_request(canister_pid: Principal) -> Result<(), InternalError> {
         RequestOps::upgrade_canister(canister_pid).await
     }
 

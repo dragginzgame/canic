@@ -9,10 +9,9 @@ use crate::model::replay::OperationId;
 use crate::{
     InternalError, InternalErrorOrigin,
     dto::rpc::{
-        AcknowledgePlacementReceiptRequest, AcknowledgePlacementReceiptResponse,
-        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse, CyclesRequest,
-        CyclesResponse, RecycleCanisterRequest, RecycleCanisterResponse, Request, Response,
-        RootRequestMetadata, UpgradeCanisterRequest, UpgradeCanisterResponse,
+        AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
+        CreateCanisterResponse, CyclesRequest, CyclesResponse, RecycleCanisterRequest, Request,
+        Response, RootRequestMetadata, UpgradeCanisterRequest,
     },
     ops::{
         ic::IcOps,
@@ -74,7 +73,7 @@ impl RequestOps {
     pub(crate) async fn acknowledge_placement_receipt(
         root_pid: Principal,
         operation_id: OperationId,
-    ) -> Result<AcknowledgePlacementReceiptResponse, InternalError> {
+    ) -> Result<(), InternalError> {
         RpcOps::execute_response_rpc(
             root_pid,
             AcknowledgePlacementReceiptRpc {
@@ -146,9 +145,7 @@ impl RequestOps {
     }
 
     /// Dispatch an upgrade request for a child canister through root RPC.
-    pub async fn upgrade_canister(
-        canister_pid: Principal,
-    ) -> Result<UpgradeCanisterResponse, InternalError> {
+    pub async fn upgrade_canister(canister_pid: Principal) -> Result<(), InternalError> {
         let root_pid = EnvOps::root_pid()?;
         RpcOps::execute_response_rpc(
             root_pid,
@@ -161,9 +158,7 @@ impl RequestOps {
     }
 
     /// Dispatch a recycle request for a child canister through root RPC.
-    pub async fn recycle_canister(
-        canister_pid: Principal,
-    ) -> Result<RecycleCanisterResponse, InternalError> {
+    pub async fn recycle_canister(canister_pid: Principal) -> Result<(), InternalError> {
         let root_pid = EnvOps::root_pid()?;
         RpcOps::execute_response_rpc(
             root_pid,
@@ -201,7 +196,7 @@ struct AcknowledgePlacementReceiptRpc {
 }
 
 impl Rpc for AcknowledgePlacementReceiptRpc {
-    type Response = AcknowledgePlacementReceiptResponse;
+    type Response = ();
 
     fn into_request(self) -> Request {
         Request::acknowledge_placement_receipt(AcknowledgePlacementReceiptRequest {
@@ -212,7 +207,7 @@ impl Rpc for AcknowledgePlacementReceiptRpc {
 
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
-            Response::AcknowledgePlacementReceipt(response) => Ok(response),
+            Response::AcknowledgePlacementReceipt => Ok(()),
             _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }
@@ -273,7 +268,7 @@ struct UpgradeCanisterRpc {
 }
 
 impl Rpc for UpgradeCanisterRpc {
-    type Response = UpgradeCanisterResponse;
+    type Response = ();
 
     fn into_request(self) -> Request {
         Request::upgrade_canister(UpgradeCanisterRequest {
@@ -284,7 +279,7 @@ impl Rpc for UpgradeCanisterRpc {
 
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
-            Response::UpgradeCanister(r) => Ok(r),
+            Response::UpgradeCanister => Ok(()),
             _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }
@@ -302,7 +297,7 @@ struct RecycleCanisterRpc {
 }
 
 impl Rpc for RecycleCanisterRpc {
-    type Response = RecycleCanisterResponse;
+    type Response = ();
 
     fn into_request(self) -> Request {
         Request::recycle_canister(RecycleCanisterRequest {
@@ -313,7 +308,7 @@ impl Rpc for RecycleCanisterRpc {
 
     fn try_from_response(resp: Response) -> Result<Self::Response, InternalError> {
         match resp {
-            Response::RecycleCanister(r) => Ok(r),
+            Response::RecycleCanister => Ok(()),
             _ => Err(RequestOpsError::InvalidResponseType.into()),
         }
     }
@@ -417,15 +412,11 @@ mod tests {
 
     #[test]
     fn upgrade_canister_rpc_accepts_only_upgrade_response() {
-        UpgradeCanisterRpc::try_from_response(Response::UpgradeCanister(
-            UpgradeCanisterResponse {},
-        ))
-        .expect("upgrade response accepted");
+        UpgradeCanisterRpc::try_from_response(Response::UpgradeCanister)
+            .expect("upgrade response accepted");
 
-        UpgradeCanisterRpc::try_from_response(Response::RecycleCanister(
-            RecycleCanisterResponse {},
-        ))
-        .expect_err("wrong response variant rejected");
+        UpgradeCanisterRpc::try_from_response(Response::RecycleCanister)
+            .expect_err("wrong response variant rejected");
     }
 
     #[test]

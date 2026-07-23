@@ -6,10 +6,7 @@ use candid::{CandidType, Deserialize, Nat, Principal};
 use canic::{
     Error,
     dto::capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
-    dto::rpc::{
-        AcknowledgePlacementReceiptResponse, CreateCanisterResponse, CyclesResponse,
-        RecycleCanisterResponse, Request, Response, UpgradeCanisterResponse,
-    },
+    dto::rpc::{CreateCanisterResponse, CyclesResponse, Request, Response},
 };
 use ic_cdk::call::Call;
 
@@ -69,17 +66,15 @@ async fn canic_response_capability_v1(
 
 async fn handle_request(request: Request) -> Result<Response, Error> {
     match request {
-        Request::AcknowledgePlacementReceipt(_) => Ok(Response::AcknowledgePlacementReceipt(
-            AcknowledgePlacementReceiptResponse {},
-        )),
+        Request::AcknowledgePlacementReceipt(_) => Ok(Response::AcknowledgePlacementReceipt),
         Request::AllocatePlacementChild(_) | Request::CreateCanister(_) => {
             let pid = create_canister().await?;
             Ok(Response::CreateCanister(CreateCanisterResponse {
                 new_canister_pid: pid,
             }))
         }
-        Request::UpgradeCanister(_) => Ok(Response::UpgradeCanister(UpgradeCanisterResponse {})),
-        Request::RecycleCanister(_) => Ok(Response::RecycleCanister(RecycleCanisterResponse {})),
+        Request::UpgradeCanister(_) => Ok(Response::UpgradeCanister),
+        Request::RecycleCanister(_) => Ok(Response::RecycleCanister),
         Request::Cycles(req) => Ok(Response::Cycles(CyclesResponse {
             cycles_transferred: req.cycles,
         })),
