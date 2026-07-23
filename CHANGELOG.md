@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.20` localizes the ICRC-1 account wire shape to the manual ICP-refill
+  adapter, removes the unused global account/subaccount helpers, and makes
+  resumed transfers consume their persisted CMC account identity.
+
 - `0.98.19` hard-cuts the remaining `canic-core` IC runtime API relay:
   Canic macros and runtime code now use upstream `ic-cdk` directly, time is
   owned by `IcOps`, and unused stable-structures re-exports are removed.

@@ -6,10 +6,6 @@
 
 use crate::{
     InternalError,
-    cdk::{
-        candid::Nat,
-        types::{Account, Principal, Subaccount},
-    },
     ids::BuildNetwork,
     infra::{
         InfraError,
@@ -21,6 +17,7 @@ use crate::{
     },
     ops::{cost_guard::CostGuardPermit, ic::IcOpsError},
 };
+use candid::{Nat, Principal};
 use thiserror::Error as ThisError;
 
 ///
@@ -55,20 +52,15 @@ impl IcpRefillOps {
         IcpRefillInfra::topup_memo()
     }
 
-    pub fn cmc_topup_account(
-        cmc_canister_id: Principal,
-        target_canister: Principal,
-    ) -> Result<Account, InternalError> {
-        map_infra(IcpRefillInfra::cmc_topup_account(
-            cmc_canister_id,
-            target_canister,
-        ))
+    pub fn cmc_topup_subaccount(target_canister: Principal) -> Result<[u8; 32], InternalError> {
+        map_infra(IcpRefillInfra::cmc_topup_subaccount(target_canister))
     }
 
     #[must_use]
     pub fn transfer_arg(
-        from_subaccount: Option<Subaccount>,
-        to: Account,
+        from_subaccount: Option<[u8; 32]>,
+        to_owner: Principal,
+        to_subaccount: Option<[u8; 32]>,
         amount_e8s: u64,
         fee_e8s: u64,
         memo: Vec<u8>,
@@ -76,7 +68,8 @@ impl IcpRefillOps {
     ) -> TransferArg {
         IcpRefillInfra::transfer_arg(
             from_subaccount,
-            to,
+            to_owner,
+            to_subaccount,
             amount_e8s,
             fee_e8s,
             memo,

@@ -6,10 +6,7 @@
 
 use crate::{
     InternalError,
-    cdk::{
-        candid::Nat,
-        types::{Cycles, Principal, Subaccount},
-    },
+    cdk::types::Cycles,
     domain::icp_refill::{IcpRefillErrorCode, IcpRefillStatus, icp_refill_outcome_is_resumable},
     dto::icp_refill::{IcpRefillRequest, IcpRefillResponse},
     ops::storage::StorageOpsError,
@@ -18,6 +15,7 @@ use crate::{
     },
     view::icp_refill::IcpRefillOperation,
 };
+use candid::{Nat, Principal};
 use std::{cell::RefCell, collections::BTreeMap};
 use thiserror::Error as ThisError;
 
@@ -31,7 +29,7 @@ thread_local! {
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct IcpRefillActiveKey {
     source_canister: Principal,
-    source_subaccount: Option<Subaccount>,
+    source_subaccount: Option<[u8; 32]>,
     target_canister: Principal,
 }
 
@@ -46,7 +44,7 @@ impl IcpRefillActiveKey {
 
     const fn new(
         source_canister: Principal,
-        source_subaccount: Option<Subaccount>,
+        source_subaccount: Option<[u8; 32]>,
         target_canister: Principal,
     ) -> Self {
         Self {
@@ -290,12 +288,12 @@ impl PartialEq<IcpRefillRecordErrorCode> for IcpRefillErrorCode {
 pub struct IcpRefillRecordCreateInput {
     pub operation_id: [u8; 32],
     pub source_canister: Principal,
-    pub source_subaccount: Option<Subaccount>,
+    pub source_subaccount: Option<[u8; 32]>,
     pub target_canister: Principal,
     pub ledger_canister_id: Principal,
     pub cmc_canister_id: Principal,
     pub cmc_to_account_owner: Principal,
-    pub cmc_to_account_subaccount: Option<Subaccount>,
+    pub cmc_to_account_subaccount: Option<[u8; 32]>,
     pub amount_e8s: u64,
     pub fee_e8s: u64,
     pub memo: Vec<u8>,
@@ -314,12 +312,12 @@ pub struct IcpRefillRecordCreateInput {
 pub struct IcpRefillOperationCreateInput {
     pub operation_id: [u8; 32],
     pub source_canister: Principal,
-    pub source_subaccount: Option<Subaccount>,
+    pub source_subaccount: Option<[u8; 32]>,
     pub target_canister: Principal,
     pub ledger_canister_id: Principal,
     pub cmc_canister_id: Principal,
     pub cmc_to_account_owner: Principal,
-    pub cmc_to_account_subaccount: Option<Subaccount>,
+    pub cmc_to_account_subaccount: Option<[u8; 32]>,
     pub amount_e8s: u64,
     pub fee_e8s: u64,
     pub memo: Vec<u8>,
@@ -395,7 +393,7 @@ impl IcpRefillStoreOps {
 
     pub fn has_active_for_key(
         source_canister: Principal,
-        source_subaccount: Option<Subaccount>,
+        source_subaccount: Option<[u8; 32]>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
     ) -> Result<bool, InternalError> {
@@ -836,7 +834,7 @@ impl IcpRefillRecordOps {
 
     pub fn has_active_for_key(
         source_canister: Principal,
-        source_subaccount: Option<Subaccount>,
+        source_subaccount: Option<[u8; 32]>,
         target_canister: Principal,
         except_operation_id: [u8; 32],
     ) -> Result<bool, IcpRefillRecordOpsError> {
@@ -905,7 +903,7 @@ impl IcpRefillRecordOps {
 
     fn find_active_for_key(
         source_canister: Principal,
-        source_subaccount: Option<Subaccount>,
+        source_subaccount: Option<[u8; 32]>,
         target_canister: Principal,
         except_operation_id: Option<[u8; 32]>,
     ) -> Result<Option<IcpRefillRecord>, IcpRefillRecordOpsError> {
@@ -1218,6 +1216,8 @@ fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {
         target_canister: record.target_canister,
         ledger_canister_id: record.ledger_canister_id,
         cmc_canister_id: record.cmc_canister_id,
+        cmc_to_account_owner: record.cmc_to_account_owner,
+        cmc_to_account_subaccount: record.cmc_to_account_subaccount,
         amount_e8s: record.amount_e8s,
         fee_e8s: record.fee_e8s,
         memo: record.memo,
@@ -1275,6 +1275,18 @@ mod tests {
     fn reset_records() {
         IcpRefillRecords::clear_for_tests();
         ICP_REFILL_DERIVED_INDEX.with_borrow_mut(|index| *index = IcpRefillDerivedIndex::default());
+    }
+
+    #[test]
+    fn operation_projection_preserves_persisted_cmc_account_identity() {
+        let mut record = record(1, [2; 32], p(3));
+        record.cmc_to_account_owner = p(40);
+        record.cmc_to_account_subaccount = Some([41; 32]);
+
+        let operation = record_to_operation(record);
+
+        assert_eq!(operation.cmc_to_account_owner, p(40));
+        assert_eq!(operation.cmc_to_account_subaccount, Some([41; 32]));
     }
 
     #[test]
