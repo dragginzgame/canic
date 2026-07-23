@@ -33,19 +33,6 @@ pub mod env {
     pub use crate::__internal::core::api::env::EnvQuery;
 }
 
-/// IC primitives (calls, HTTP, crypto, network, system APIs)
-pub mod ic {
-    pub use crate::__internal::core::api::ic::{Call, CallBuilder, CallResult};
-
-    pub mod http {
-        pub use crate::__internal::core::api::ic::http::HttpApi;
-    }
-
-    pub mod build_network {
-        pub use crate::__internal::core::api::ic::build_network::BuildNetworkApi;
-    }
-}
-
 /// Canister lifecycle, placement, and topology
 pub mod canister {
     pub use crate::__internal::core::ids::CanisterRole;

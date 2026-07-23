@@ -1,12 +1,11 @@
 //! Module: infra::ic
 //!
-//! Responsibility: group raw IC call, HTTP, NNS, and management adapters.
+//! Responsibility: group raw IC call, NNS, and management adapters.
 //! Does not own: ops conversion, workflow policy, or endpoint DTO shaping.
 //! Boundary: ops calls this namespace for low-level IC platform interactions.
 
 pub mod build_network;
 pub mod call;
-pub mod http;
 pub mod icp_refill;
 pub mod known;
 pub mod mgmt;
@@ -27,9 +26,6 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum IcInfraError {
-    #[error(transparent)]
-    HttpInfra(#[from] http::HttpInfraError),
-
     #[error(transparent)]
     IcpRefillInfra(#[from] icp_refill::IcpRefillInfraError),
 

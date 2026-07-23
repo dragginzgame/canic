@@ -8,7 +8,6 @@
 pub use crate::{
     api::{
         canister::CanisterRole,
-        ic::Call,
         ops::{log, perf},
         timer::{timer, timer_interval},
     },

@@ -4,8 +4,6 @@
 //! Does not own: IC call execution, endpoint authorization, or stable storage.
 //! Boundary: exposes workflow facades over IC ops and build-network metadata.
 
-pub mod build_network;
-pub mod call;
 pub mod icp_refill;
 pub mod mgmt;
 pub mod provision;

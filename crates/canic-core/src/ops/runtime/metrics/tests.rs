@@ -24,7 +24,6 @@ use crate::{
                 DelegatedAuthMetricOperation, DelegatedAuthMetricOutcome, DelegatedAuthMetricReason,
             },
             directory::{DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason},
-            http::HttpMethod,
             icp_refill::entries_from_snapshot,
             intent::{
                 IntentMetricOperation, IntentMetricOutcome, IntentMetricReason, IntentMetricSurface,
@@ -699,13 +698,13 @@ fn platform_call_metrics_are_exposed_with_stable_labels() {
         PlatformCallMetricReason::Ok,
     );
     PlatformCallMetrics::record(
-        PlatformCallMetricSurface::Http,
+        PlatformCallMetricSurface::Management,
         PlatformCallMetricMode::Update,
         PlatformCallMetricOutcome::Failed,
         PlatformCallMetricReason::Infra,
     );
     PlatformCallMetrics::record(
-        PlatformCallMetricSurface::Http,
+        PlatformCallMetricSurface::Management,
         PlatformCallMetricMode::Update,
         PlatformCallMetricOutcome::Failed,
         PlatformCallMetricReason::Infra,
@@ -720,7 +719,7 @@ fn platform_call_metrics_are_exposed_with_stable_labels() {
     );
     assert_metric_count(
         &entries,
-        &["platform_call", "http", "update", "failed", "infra"],
+        &["platform_call", "management", "update", "failed", "infra"],
         2,
     );
 }
@@ -902,7 +901,6 @@ fn seed_all_metric_families_for_reset_test() {
         DirectoryMetricOutcome::Started,
         DirectoryMetricReason::Ok,
     );
-    HttpMetrics::record_http_request(HttpMethod::Get, "https://example.test/a", Some("api"));
     PlatformCallMetrics::record(
         PlatformCallMetricSurface::Generic,
         PlatformCallMetricMode::BoundedWait,
