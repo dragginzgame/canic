@@ -1141,10 +1141,12 @@ remain unchanged for their explicit later slices.
 Focused App CLI, list, Medic, evidence, config discovery, release-set,
 build-provenance, adoption, role-contract, workspace-manifest,
 reference-surface, timer/receipt inventory, and blob-storage inventory checks
-pass. Strict all-target Clippy passes for `canic-core`, `canic`, `canic-host`,
-and `canic-cli`; formatting and diff hygiene pass. No Cargo package version,
-dependency, lockfile, Candid, stable-memory, or live deployment contract has
-changed. The source path, package metadata, Rust source model, source CLI, and
+pass. The complete `canic-cli` library suite passes 608 tests with one
+explicitly disposable-environment recovery test ignored. Strict all-target
+Clippy passes for `canic-core`, `canic`, `canic-host`, and `canic-cli`;
+formatting and diff hygiene pass. No Cargo package version, dependency,
+lockfile, Candid, stable-memory, or live deployment contract has changed. The
+source path, package metadata, Rust source model, source CLI, and
 source/evidence JSON changes are intentional hard cuts.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
