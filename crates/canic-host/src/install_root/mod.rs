@@ -41,6 +41,7 @@ mod state;
 mod timing;
 mod truth_check;
 
+use crate::release_build::{ReleaseBuildPlanError, plan_release_build};
 use activation::run_root_activation_phases;
 use artifact_promotion::write_artifact_promotion_execution_receipt_for_install;
 use build_network::resolve_install_build_context;
@@ -62,7 +63,7 @@ use output::{print_install_result_summary, print_install_timing_summary};
 pub use phase_receipts::InstallPhaseFailureError;
 use phase_receipts::InstallReceiptScope;
 use plan_artifacts::emit_manifest_with_deployment_truth_receipt;
-use preparation::prepare_install_deployment_truth;
+use preparation::{prepare_install_deployment_truth, resolve_root_canister_after_manifest};
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 pub(crate) use state::validate_environment_name;
 pub use state::{
@@ -246,60 +247,57 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &install_snapshot,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Preparation))?;
-    timings.create_canisters = prepared.timings.create_canisters;
     timings.build_all = prepared.timings.build_all;
+    let receipt_scope = InstallReceiptScope {
+        icp_root: &icp_root,
+        environment,
+        deployment_name: &deployment_name,
+        check: &prepared.deployment_truth_check,
+        execution_context: Some(&execution_context),
+    };
 
-    let (manifest_path, emit_manifest_duration) = emit_manifest_with_deployment_truth_receipt(
-        &icp_root,
-        &options,
-        &deployment_name,
-        &prepared.deployment_truth_check,
-        &execution_context,
-        &install_snapshot,
-        &prepared.build_outputs,
-        prepared.plan_artifacts.as_ref(),
-    )
-    .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;
+    let (manifest_path, emit_manifest_duration, finalized_release_build) =
+        emit_manifest_with_deployment_truth_receipt(
+            receipt_scope,
+            &options,
+            &install_snapshot,
+            &prepared.build_outputs,
+            prepared.plan_artifacts.as_ref(),
+        )
+        .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;
     timings.emit_manifest = emit_manifest_duration;
+    if prepared.plan_artifacts.is_none() && finalized_release_build.is_none() {
+        return Err(InstallRootError::new(
+            InstallRootPhase::Manifest,
+            ReleaseBuildPlanError::MissingFinalizedAuthority,
+        ));
+    }
+    let (root_canister_id, create_duration) =
+        resolve_root_canister_after_manifest(receipt_scope, &options, &config_path, &build_context)
+            .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
+    timings.create_canisters = create_duration;
     let activation_timings = run_root_activation_phases(
-        InstallReceiptScope {
-            icp_root: &icp_root,
-            environment,
-            deployment_name: &deployment_name,
-            check: &prepared.deployment_truth_check,
-            execution_context: Some(&execution_context),
-        },
+        receipt_scope,
         &options,
-        &prepared.root_canister_id,
+        &root_canister_id,
         &manifest_path,
         total_started_at,
         &build_context,
         prepared.plan_artifacts.as_ref(),
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    timings.install_root = activation_timings.install_root;
-    timings.fund_root = activation_timings.fund_root;
-    timings.stage_release_set = activation_timings.stage_release_set;
-    timings.resume_bootstrap = activation_timings.resume_bootstrap;
-    timings.wait_ready = activation_timings.wait_ready;
-    timings.finalize_root_funding = activation_timings.finalize_root_funding;
+    timings.record_activation(activation_timings);
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     persist_install_result(
-        InstallReceiptScope {
-            icp_root: &icp_root,
-            environment,
-            deployment_name: &deployment_name,
-            check: &prepared.deployment_truth_check,
-            execution_context: Some(&execution_context),
-        },
+        receipt_scope,
         &options,
         &workspace_root,
         &config_path,
         &manifest_path,
         InstallCompletion {
             fleet_name: &fleet_name,
-            root_canister_id: &prepared.root_canister_id,
+            root_canister_id: &root_canister_id,
             execution_context: &execution_context,
         },
     )
@@ -365,7 +363,7 @@ fn current_install_build_inputs(
     ),
     Box<dyn std::error::Error>,
 > {
-    let context = resolve_install_build_context(
+    let mut context = resolve_install_build_context(
         workspace_root,
         icp_root,
         config_path,
@@ -373,10 +371,15 @@ fn current_install_build_inputs(
         &options.root_build_target,
         options.build_profile,
     )?;
-    let snapshot = resolve_install_snapshot(
+    let mut snapshot = resolve_install_snapshot(
         &context,
         &options.root_build_target,
         options.deployment_plan_override.is_some(),
     )?;
+    if snapshot.complete_build.is_some() {
+        let release_build = plan_release_build(icp_root)?;
+        context = context.with_release_build_id(release_build.record.release_build_id);
+        snapshot.release_build = Some(release_build);
+    }
     Ok((context, snapshot))
 }

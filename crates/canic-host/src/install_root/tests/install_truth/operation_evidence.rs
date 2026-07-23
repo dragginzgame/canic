@@ -201,6 +201,7 @@ fn test_build_context() -> WorkspaceBuildContext {
         config_path: PathBuf::from("/workspace/apps/demo/canic.toml"),
         local_replica: None,
         refresh_canonical_wasm_store_did: false,
+        release_build_id: None,
     }
 }
 

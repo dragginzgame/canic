@@ -25,6 +25,7 @@ pub mod installed_deployment;
 pub mod network;
 pub mod policy_gate;
 pub mod registry;
+pub mod release_build;
 pub mod release_set;
 pub mod replica_query;
 pub mod role_contract;

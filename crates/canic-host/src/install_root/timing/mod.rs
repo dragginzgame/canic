@@ -37,3 +37,14 @@ pub(super) struct InstallTimingSummary {
     pub(super) wait_ready: Duration,
     pub(super) finalize_root_funding: Duration,
 }
+
+impl InstallTimingSummary {
+    pub(super) const fn record_activation(&mut self, activation: Self) {
+        self.install_root = activation.install_root;
+        self.fund_root = activation.fund_root;
+        self.stage_release_set = activation.stage_release_set;
+        self.resume_bootstrap = activation.resume_bootstrap;
+        self.wait_ready = activation.wait_ready;
+        self.finalize_root_funding = activation.finalize_root_funding;
+    }
+}

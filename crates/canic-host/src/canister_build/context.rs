@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf, process::Command};
 
-use canic_core::ids::BuildNetwork;
+use canic_core::ids::{BuildNetwork, RELEASE_BUILD_ID_ENV, ReleaseBuildId};
 
 use crate::icp::LocalReplicaTarget;
 
@@ -23,6 +23,7 @@ pub struct WorkspaceBuildContext {
     pub config_path: PathBuf,
     pub local_replica: Option<LocalReplicaTarget>,
     pub refresh_canonical_wasm_store_did: bool,
+    pub release_build_id: Option<ReleaseBuildId>,
 }
 
 impl WorkspaceBuildContext {
@@ -39,6 +40,9 @@ impl WorkspaceBuildContext {
 
         if self.icp_root != self.workspace_root {
             lines.push(format!("icp root: {}", self.icp_root.display()));
+        }
+        if let Some(release_build_id) = self.release_build_id {
+            lines.push(format!("release build: {release_build_id}"));
         }
 
         lines
@@ -60,9 +64,18 @@ impl WorkspaceBuildContext {
         context
     }
 
+    /// Return a copy bound to one already-durable release-build plan.
+    #[must_use]
+    pub fn with_release_build_id(&self, release_build_id: ReleaseBuildId) -> Self {
+        let mut context = self.clone();
+        context.release_build_id = Some(release_build_id);
+        context
+    }
+
     /// Apply the exact Canic build authority to one child command.
     pub fn apply_to_command(&self, command: &mut Command) {
         command
+            .env_remove(RELEASE_BUILD_ID_ENV)
             .env("ICP_ENVIRONMENT", self.build_network.as_str())
             .env(
                 canic_core::role_contract::CANONICAL_BUILD_ICP_ROOT_ENV,
@@ -72,6 +85,9 @@ impl WorkspaceBuildContext {
                 canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
                 &self.config_path,
             );
+        if let Some(release_build_id) = self.release_build_id {
+            command.env(RELEASE_BUILD_ID_ENV, release_build_id.to_string());
+        }
     }
 }
 

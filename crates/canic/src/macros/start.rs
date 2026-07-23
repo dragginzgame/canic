@@ -361,6 +361,14 @@ macro_rules! start {
     ($(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
 
+        #[doc(hidden)]
+        #[used]
+        static __CANIC_RELEASE_BUILD_ID: &str =
+            match option_env!("CANIC_RELEASE_BUILD_ID") {
+                Some(value) => value,
+                None => "",
+            };
+
         #[cfg(canic_is_root)]
         $crate::__canic_root_lifecycle_core!($($init)?);
 
@@ -425,6 +433,13 @@ macro_rules! start_local {
 macro_rules! start_wasm_store {
     ($(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
+        #[doc(hidden)]
+        #[used]
+        static __CANIC_RELEASE_BUILD_ID: &str =
+            match option_env!("CANIC_RELEASE_BUILD_ID") {
+                Some(value) => value,
+                None => "",
+            };
         #[expect(clippy::unused_async)]
         async fn canic_setup() {}
 

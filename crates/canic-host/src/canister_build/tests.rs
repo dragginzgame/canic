@@ -48,6 +48,7 @@ fn build_context_distinguishes_environment_from_build_network() {
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
         refresh_canonical_wasm_store_did: false,
+        release_build_id: None,
     };
 
     let lines = context.lines();
@@ -68,6 +69,9 @@ fn build_context_applies_exact_child_build_network() {
         config_path: "/workspace/apps/demo/canic.toml".into(),
         local_replica: None,
         refresh_canonical_wasm_store_did: false,
+        release_build_id: Some(canic_core::ids::ReleaseBuildId::from_nonce(
+            canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32]),
+        )),
     };
     let mut command = std::process::Command::new("cargo");
 
@@ -92,5 +96,41 @@ fn build_context_applies_exact_child_build_network() {
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
         )),
         Some(&std::ffi::OsStr::new("/workspace/apps/demo/canic.toml"))
+    );
+    assert_eq!(
+        environment
+            .get(std::ffi::OsStr::new(canic_core::ids::RELEASE_BUILD_ID_ENV,))
+            .copied(),
+        context
+            .release_build_id
+            .map(|value| value.to_string())
+            .as_deref()
+            .map(std::ffi::OsStr::new)
+    );
+}
+
+#[test]
+fn unqualified_build_context_removes_an_ambient_release_build_id() {
+    let context = WorkspaceBuildContext {
+        role: "app".to_string(),
+        profile: super::CanisterBuildProfile::Fast,
+        environment: "local".to_string(),
+        build_network: BuildNetwork::Local,
+        workspace_root: "/workspace".into(),
+        icp_root: "/project".into(),
+        config_path: "/workspace/apps/demo/canic.toml".into(),
+        local_replica: None,
+        refresh_canonical_wasm_store_did: false,
+        release_build_id: None,
+    };
+    let mut command = std::process::Command::new("cargo");
+    command.env(canic_core::ids::RELEASE_BUILD_ID_ENV, "ambient");
+
+    context.apply_to_command(&mut command);
+
+    assert!(
+        command.get_envs().any(|(key, value)| {
+            key == canic_core::ids::RELEASE_BUILD_ID_ENV && value.is_none()
+        })
     );
 }

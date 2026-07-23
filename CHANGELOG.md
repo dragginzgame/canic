@@ -8,9 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-## [0.99.x] - 2026-07-23 - App/Fleet Identity Hard Cut
+## [0.99.x] - 2026-07-24 - App/Fleet Identity Hard Cut
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
+
+- `0.99.4` gives complete source builds one durable, non-circular
+  release-build identity: a cryptographic plan precedes every selected Wasm,
+  the same ID is embedded throughout the build, and exact manifest evidence
+  finalizes the plan before Canister creation.
 
 - `0.99.3` introduces the canonical generated Fleet identity types and
   hard-cuts catalog inspection to one fail-closed, network-scoped Fleet

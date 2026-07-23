@@ -61,6 +61,17 @@ macro_rules! __canic_build_internal {
         println!("cargo:rerun-if-env-changed=ICP_ENVIRONMENT");
         println!("cargo:rerun-if-env-changed={__canic_config_path_env}");
         println!("cargo:rerun-if-env-changed=CANIC_INTERNAL_TEST_ENDPOINTS");
+        let __canic_release_build_id_env =
+            $crate::__internal::core::ids::RELEASE_BUILD_ID_ENV;
+        println!("cargo:rerun-if-env-changed={__canic_release_build_id_env}");
+        if let Ok(value) = std::env::var(__canic_release_build_id_env) {
+            let release_build_id = value
+                .parse::<$crate::__internal::core::ids::ReleaseBuildId>()
+                .expect("CANIC_RELEASE_BUILD_ID must be one canonical release-build ID");
+            println!(
+                "cargo:rustc-env={__canic_release_build_id_env}={release_build_id}"
+            );
+        }
 
         let __canic_default_role = (__canic_role_name != "root").then(|| __canic_role_name.clone());
 

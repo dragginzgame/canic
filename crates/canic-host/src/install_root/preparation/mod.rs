@@ -19,7 +19,6 @@ use std::{
 };
 
 pub(super) struct PreparedInstallTruth {
-    pub(super) root_canister_id: String,
     pub(super) deployment_truth_check: DeploymentCheckV1,
     pub(super) timings: InstallTimingSummary,
     pub(super) build_outputs: Vec<CurrentCanisterArtifactBuildOutput>,
@@ -61,9 +60,6 @@ pub(super) fn prepare_install_deployment_truth(
             .as_ref()
             .map(PreparedPlanArtifacts::plan),
     )?;
-    let (root_canister_id, create_phase, create_duration) =
-        resolve_root_canister_with_phase(options, icp_root, config_path, build_context)?;
-    timings.create_canisters = create_duration;
     let receipt_scope = InstallReceiptScope {
         icp_root,
         environment: &options.environment,
@@ -71,11 +67,9 @@ pub(super) fn prepare_install_deployment_truth(
         check: &deployment_truth_check,
         execution_context: Some(execution_context),
     };
-    write_completed_install_phase_receipt(receipt_scope, create_phase)?;
     write_completed_install_phase_receipt(receipt_scope, build.phase)?;
 
     Ok(PreparedInstallTruth {
-        root_canister_id,
         deployment_truth_check,
         timings,
         build_outputs: build.outputs,
@@ -83,7 +77,7 @@ pub(super) fn prepare_install_deployment_truth(
     })
 }
 
-fn resolve_root_canister_with_phase(
+pub(super) fn resolve_root_canister_with_phase(
     options: &InstallRootOptions,
     icp_root: &Path,
     config_path: &Path,
@@ -109,6 +103,22 @@ fn resolve_root_canister_with_phase(
         role_names: Vec::new(),
     };
     Ok((root_canister_id, phase, duration))
+}
+
+pub(super) fn resolve_root_canister_after_manifest(
+    receipt_scope: InstallReceiptScope<'_>,
+    options: &InstallRootOptions,
+    config_path: &Path,
+    build_context: &WorkspaceBuildContext,
+) -> Result<(String, Duration), Box<dyn std::error::Error>> {
+    let (root_canister_id, phase, duration) = resolve_root_canister_with_phase(
+        options,
+        receipt_scope.icp_root,
+        config_path,
+        build_context,
+    )?;
+    write_completed_install_phase_receipt(receipt_scope, phase)?;
+    Ok((root_canister_id, duration))
 }
 
 fn build_install_targets_with_phase(
