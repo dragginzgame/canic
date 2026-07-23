@@ -1,7 +1,7 @@
 # V1 Operator Walkthrough
 
 This guide shows the compact pre-v1 Canic operator story as it exists now.
-It is intentionally small: build one fleet role, save evidence, check that
+It is intentionally small: build one App role, save evidence, check that
 evidence against policy, and inspect the local deployment catalog.
 
 The walkthrough is about command boundaries. It is not an import, promotion,
@@ -17,20 +17,20 @@ docs/architecture/v1-readiness-checklist.md
 
 Canic keeps three names separate:
 
-- `fleet`: the fleet template in `canic.toml`;
-- `role`: the package-backed canister role declared for that fleet;
+- `app`: the source definition identified by `[app].name` in `canic.toml`;
+- `role`: the package-backed canister role declared for that App;
 - `deployment`: the deployment target recorded in local deployment-target
   state.
 
 For example:
 
 ```text
-fleet:      demo
+app:        demo
 role:       app
 deployment: demo-staging
 ```
 
-The fleet and role answer:
+The App and role answer:
 
 ```text
 What am I building?
@@ -42,21 +42,21 @@ The deployment target answers:
 What installed deployment am I checking?
 ```
 
-Canic does not treat a fleet template name as a deployment target. The names
+Canic does not treat an App source identity as a deployment target. The names
 may be similar in a project, but the command surfaces keep them separate.
 
 ## Setup Contract
 
-Each package-backed canister crate declares its fleet and role in
+Each package-backed canister crate declares its App and role in
 `Cargo.toml`:
 
 ```toml
 [package.metadata.canic]
-fleet = "demo"
+app = "demo"
 role = "app"
 ```
 
-The fleet config declares package-backed roles:
+The App config declares package-backed roles:
 
 ```toml
 [roles.app]
@@ -71,7 +71,7 @@ deployment plans.
 The visible artifact build remains attached-role strict:
 
 ```text
-canic build <fleet> <role>
+canic build <app> <role>
 ```
 
 ## Build With Provenance
@@ -162,7 +162,7 @@ required = true
 payload_schema = "canic.build_provenance.v1"
 
 [evidence.target]
-fleet = "demo"
+app = "demo"
 role = "app"
 
 [[evidence]]

@@ -213,7 +213,7 @@ fn resolve_current_install_truth_inputs(
 }
 
 fn default_config_path_for_deployment(deployment: &str) -> String {
-    format!("fleets/{deployment}/canic.toml")
+    format!("apps/{deployment}/canic.toml")
 }
 
 fn current_install_deployment_truth_check_for_plan(

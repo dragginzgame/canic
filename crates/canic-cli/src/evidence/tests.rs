@@ -271,7 +271,7 @@ fn gate_envelope_wraps_policy_report() {
 
     fs::remove_dir_all(root).expect("clean");
     assert_eq!(gate.target.kind, EvidenceTargetKindV1::PolicyGate);
-    assert_eq!(gate.target.fleet.as_deref(), Some("demo"));
+    assert_eq!(gate.target.app.as_deref(), Some("demo"));
     assert_eq!(gate.payload_schema.id, "canic.policy_gate_report.v1");
     assert_eq!(gate.exit_class, ExitClassV1::Success);
     assert_eq!(gate.inputs.len(), 2);
@@ -356,10 +356,10 @@ fn sample_envelope() -> EvidenceEnvelopeV1 {
         envelope_schema: evidence_envelope_schema(),
         canic_version: env!("CARGO_PKG_VERSION").to_string(),
         command: CommandProvenanceV1 {
-            name: "canic fleet adoption report".to_string(),
+            name: "canic app adoption report".to_string(),
             argv_normalized: vec![
                 "canic".to_string(),
-                "fleet".to_string(),
+                "app".to_string(),
                 "adoption".to_string(),
                 "report".to_string(),
                 "demo".to_string(),
@@ -368,9 +368,10 @@ fn sample_envelope() -> EvidenceEnvelopeV1 {
             format: "envelope-json".to_string(),
         },
         target: EvidenceTargetV1 {
-            kind: EvidenceTargetKindV1::FleetAdoption,
+            kind: EvidenceTargetKindV1::AppAdoption,
             deployment: None,
-            fleet: Some("demo".to_string()),
+            app: Some("demo".to_string()),
+            fleet: None,
             role: None,
             profile: Some("minimal".to_string()),
             environment: None,
@@ -415,7 +416,7 @@ required = true
 payload_schema = "canic.adoption_report.v1"
 
 [evidence.target]
-fleet = "demo"
+app = "demo"
 profile = "minimal"
 "#
     .to_string()

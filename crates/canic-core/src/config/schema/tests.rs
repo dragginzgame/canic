@@ -181,10 +181,10 @@ fn complete_config_validation_rejects_unadmitted_role_declarations() {
 fn checked_in_delegated_auth_configs_validate_with_current_chain_key_policy() {
     let root = workspace_root();
     for rel_path in [
-        "fleets/test/canic.toml",
-        "fleets/test/test-configs/root-capability.toml",
-        "fleets/test/test-configs/root-scaling.toml",
-        "fleets/test/test-configs/root-sharding.toml",
+        "apps/test/canic.toml",
+        "apps/test/test-configs/root-capability.toml",
+        "apps/test/test-configs/root-scaling.toml",
+        "apps/test/test-configs/root-sharding.toml",
         "canisters/test/delegation_issuer_stub/canic.toml",
         "canisters/test/delegation_root_stub/canic.toml",
         "canisters/test/project_hub_stub/canic.toml",
@@ -254,8 +254,8 @@ fn checked_in_active_configs_parse_and_validate() {
         "canisters/test/project_instance_stub/canic.toml",
         "canisters/test/runtime_probe/canic.toml",
         "crates/canic-wasm-store/canic.toml",
-        "fleets/demo/canic.toml",
-        "fleets/test/canic.toml",
+        "apps/demo/canic.toml",
+        "apps/test/canic.toml",
     ] {
         let path = root.join(rel_path);
         let source =

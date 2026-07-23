@@ -56,13 +56,13 @@ fn adoption_report_marks_role_only_package_metadata_as_conflict() {
         None,
         vec![AdoptionPackageMetadataV1 {
             package: "store".to_string(),
-            fleet: None,
+            app: None,
             role: Some("store".to_string()),
         }],
     );
     let store = role(&report, "store");
 
-    assert_eq!(store.package_state, AdoptionPackageStateV1::MissingFleet);
+    assert_eq!(store.package_state, AdoptionPackageStateV1::MissingApp);
     assert!(
         store
             .classifications

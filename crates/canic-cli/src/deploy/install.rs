@@ -158,7 +158,7 @@ fn root_canister_for_plan(plan: &DeploymentPlanV1) -> String {
 }
 
 fn default_app_config_path(fleet: &str) -> String {
-    format!("fleets/{fleet}/canic.toml")
+    format!("apps/{fleet}/canic.toml")
 }
 
 pub(super) fn command() -> ClapCommand {

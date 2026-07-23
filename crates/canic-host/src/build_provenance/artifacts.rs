@@ -107,7 +107,7 @@ fn push_artifact(
         file_input_fingerprint("build_artifact", path, &request.workspace_root, None, None)?;
     artifacts.push(ArtifactProvenanceV1 {
         role: request.role.clone(),
-        fleet: request.fleet.clone(),
+        app: request.app.clone(),
         artifact_kind: kind,
         path: fingerprint.path,
         path_display: fingerprint.path_display,

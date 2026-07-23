@@ -1,7 +1,7 @@
 use crate::{
     install_root::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
-        project_fleet_roots,
+        project_app_roots,
     },
     release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, icp_root},
     workspace_discovery::discover_icp_root_from,
@@ -142,20 +142,20 @@ pub fn resolve_icp_build_network_from_root(
 
 /// Inspect whether `icp.yaml` contains the entries implied by Canic App configs.
 pub fn inspect_canic_icp_yaml(
-    fleet_filter: Option<&str>,
+    app_filter: Option<&str>,
 ) -> Result<IcpProjectConfigReport, IcpConfigError> {
     let root = resolve_current_canic_icp_root()?;
-    inspect_canic_icp_yaml_from_root(&root, fleet_filter)
+    inspect_canic_icp_yaml_from_root(&root, app_filter)
 }
 
 /// Inspect one ICP project root without mutating its `icp.yaml`.
 pub fn inspect_canic_icp_yaml_from_root(
     root: &Path,
-    fleet_filter: Option<&str>,
+    app_filter: Option<&str>,
 ) -> Result<IcpProjectConfigReport, IcpConfigError> {
     let path = root.join(ICP_CONFIG_FILE);
     let (source, icp_yaml_present) = read_optional_icp_yaml(&path)?;
-    let spec = discover_project_spec(root, fleet_filter)?;
+    let spec = discover_project_spec(root, app_filter)?;
     let configured_canisters = top_level_named_items(&source, "canisters:");
     let configured_environments = top_level_named_items(&source, "environments:");
     let lines = source.lines().collect::<Vec<_>>();
@@ -199,7 +199,7 @@ fn current_icp_root() -> Result<PathBuf, IcpConfigError> {
     discover_icp_root_from(&start)?.ok_or(IcpConfigError::NoIcpRoot { start })
 }
 
-/// Resolve the ICP project root implied by the current Canic fleet layout.
+/// Resolve the ICP project root implied by the current Canic app layout.
 pub fn resolve_current_canic_icp_root() -> Result<PathBuf, IcpConfigError> {
     let root = current_canic_project_root()?.canonicalize()?;
     if !discover_project_canic_config_choices(&root)?.is_empty() {
@@ -221,25 +221,25 @@ struct CanicIcpSpec {
 
 fn discover_project_spec(
     root: &Path,
-    fleet_filter: Option<&str>,
+    app_filter: Option<&str>,
 ) -> Result<CanicIcpSpec, IcpConfigError> {
     let choices = discover_project_canic_config_choices(root)?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
-            "no Canic App configs found under {}\nCreate fleets/<app>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
-            display_project_fleet_roots(root)
+            "no Canic App configs found under {}\nCreate apps/<app>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
+            display_project_app_roots(root)
         )));
     }
 
     let mut canisters = Vec::<String>::new();
     let mut seen_canisters = BTreeSet::<String>::new();
     let mut environments = BTreeMap::<String, Vec<String>>::new();
-    let mut matched_filter = fleet_filter.is_none();
+    let mut matched_filter = app_filter.is_none();
 
     for config_path in choices {
         let config = AppConfigSnapshot::load(&config_path)?;
         let app = config.app_id().to_string();
-        if let Some(filter) = fleet_filter {
+        if let Some(filter) = app_filter {
             if filter != app {
                 continue;
             }
@@ -255,12 +255,12 @@ fn discover_project_spec(
         environments.insert(app, roles);
     }
 
-    if let Some(fleet) = fleet_filter
+    if let Some(app) = app_filter
         && !matched_filter
     {
         return Err(IcpConfigError::Config(format!(
-            "no Canic App config found for {fleet}\nExpected a config under {} with `[app].name = \"{fleet}\"`.",
-            display_project_fleet_roots(root)
+            "no Canic App config found for {app}\nExpected a config under {} with `[app].name = \"{app}\"`.",
+            display_project_app_roots(root)
         )));
     }
 
@@ -270,8 +270,8 @@ fn discover_project_spec(
     })
 }
 
-fn display_project_fleet_roots(root: &Path) -> String {
-    project_fleet_roots(root)
+fn display_project_app_roots(root: &Path) -> String {
+    project_app_roots(root)
         .into_iter()
         .map(|path| path.display().to_string())
         .collect::<Vec<_>>()

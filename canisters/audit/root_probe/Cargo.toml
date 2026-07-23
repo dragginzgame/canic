@@ -9,7 +9,7 @@ publish = false
 ignored = ["candid", "ic-cdk"]
 
 [package.metadata.canic]
-fleet = "root_probe"
+app = "root_probe"
 role = "root"
 
 [lib]

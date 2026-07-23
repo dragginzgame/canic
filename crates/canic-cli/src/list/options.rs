@@ -17,8 +17,8 @@ Examples:
   canic info list demo-local --verbose";
 const CONFIG_HELP_AFTER: &str = "\
 Examples:
-  canic fleet config test
-  canic fleet config test --verbose";
+  canic app config test
+  canic app config test --verbose";
 
 ///
 /// ListOptions
@@ -54,7 +54,7 @@ impl ListOptions {
     {
         let matches = parse_matches(config_command(), args)
             .map_err(|_| ListCommandError::Usage(config_usage()))?;
-        Ok(Self::from_matches(&matches, ListSource::Config, "fleet"))
+        Ok(Self::from_matches(&matches, ListSource::Config, "app"))
     }
 
     fn from_matches(matches: &clap::ArgMatches, source: ListSource, target_arg: &str) -> Self {
@@ -109,13 +109,13 @@ fn info_list_command() -> ClapCommand {
 }
 
 fn config_command() -> ClapCommand {
-    base_list_options(ClapCommand::new("config").bin_name("canic fleet config"))
-        .about("List canisters declared by the selected fleet config")
+    base_list_options(ClapCommand::new("config").bin_name("canic app config"))
+        .about("List canisters declared by the selected App config")
         .arg(
-            value_arg("fleet")
-                .value_name("fleet")
+            value_arg("app")
+                .value_name("app")
                 .required(true)
-                .help("Fleet name to inspect"),
+                .help("App name to inspect"),
         )
         .arg(
             flag_arg("verbose")

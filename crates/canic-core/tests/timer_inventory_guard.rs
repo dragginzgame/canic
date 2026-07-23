@@ -12,7 +12,7 @@ fn timer_and_timed_wait_inventory_is_explicit() {
     let mut scheduling = BTreeMap::new();
     let mut waits = BTreeMap::new();
 
-    for source_root in ["crates", "canisters", "fleets"] {
+    for source_root in ["crates", "canisters", "apps"] {
         collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
             if excluded_test_source(path) {
                 return;
@@ -59,7 +59,7 @@ fn direct_ic_timer_access_has_one_production_owner() {
     let mut raw_crate_users = BTreeMap::new();
     let mut reexport_users = BTreeMap::new();
 
-    for source_root in ["crates", "canisters", "fleets"] {
+    for source_root in ["crates", "canisters", "apps"] {
         collect_rust_sources(&root.join(source_root), &root, &mut |path, source| {
             if excluded_test_source(path) {
                 return;

@@ -68,7 +68,7 @@ impl TempWorkspace {
         write_file(&root, "Cargo.toml", "[workspace]\n");
         fs::create_dir_all(root.join("crates")).expect("crates directory should be created");
         fs::create_dir_all(root.join("canisters")).expect("canisters directory should be created");
-        fs::create_dir_all(root.join("fleets")).expect("fleets directory should be created");
+        fs::create_dir_all(root.join("apps")).expect("apps directory should be created");
         Self { root }
     }
 }

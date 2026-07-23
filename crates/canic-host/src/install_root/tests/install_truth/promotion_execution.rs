@@ -394,7 +394,7 @@ fn install_writes_artifact_promotion_execution_receipt_for_promotion_plan() {
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan.clone()),

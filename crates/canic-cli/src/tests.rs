@@ -67,7 +67,7 @@ fn usage_lists_command_families() {
     assert!(plain.contains("info"));
     assert!(plain.contains("    build"));
     assert!(plain.contains("    deploy"));
-    assert!(plain.contains("Manage Canic fleets and roles"));
+    assert!(plain.contains("Manage Canic source apps and roles"));
     assert!(plain.contains("Check, inspect, register, and install deployments"));
     assert!(plain.contains("Plan, inspect, and verify backups"));
     assert!(!plain.contains("Check deployment truth before mutation"));

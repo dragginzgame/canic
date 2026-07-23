@@ -50,10 +50,7 @@ fn deploy_install_plan_builds_current_install_options_with_plan_override() {
     assert_eq!(options.environment, "local");
     assert_eq!(options.deployment_name.as_deref(), Some("demo-local"));
     assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
-    assert_eq!(
-        options.config_path.as_deref(),
-        Some("fleets/demo/canic.toml")
-    );
+    assert_eq!(options.config_path.as_deref(), Some("apps/demo/canic.toml"));
     assert_eq!(options.expected_fleet.as_deref(), Some("demo"));
     assert!(options.deployment_plan_override.is_some());
 }

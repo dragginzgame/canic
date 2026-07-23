@@ -312,7 +312,7 @@ fn add_root_registry_hint(error: ListCommandError) -> ListCommandError {
 fn root_registry_hint(stderr: &str) -> Option<&'static str> {
     match classify_icp_diagnostic(stderr) {
         Some(IcpDiagnostic::CanisterIdMissing) => Some(
-            "no root canister id exists for this deployment target. Use `canic fleet config <fleet-template>` for the selected fleet config, or run `canic install <fleet-template>` before querying the root registry.",
+            "no root canister id exists for this deployment target. Use `canic app config <app>` to inspect source config, or run `canic install <fleet>` before querying the root registry.",
         ),
         Some(IcpDiagnostic::CanisterWasmMissing) => Some(
             "the root canister id exists but no Canic root code is installed. Run `canic install <name>`, then use `canic info list <name>`.",

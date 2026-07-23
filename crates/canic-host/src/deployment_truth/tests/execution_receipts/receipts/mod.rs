@@ -178,7 +178,7 @@ fn artifact_gate_receipt_records_missing_artifact_postcondition() {
     let temp = TempWorkspace::new("canic-host-artifact-gate-receipt");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");

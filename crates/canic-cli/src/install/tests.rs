@@ -19,7 +19,7 @@ fn install_defaults_to_root_target() {
     assert_eq!(install.ready_timeout_seconds, DEFAULT_READY_TIMEOUT_SECONDS);
     assert_eq!(
         install.config_path,
-        Some("fleets/demo/canic.toml".to_string())
+        Some("apps/demo/canic.toml".to_string())
     );
     assert_eq!(install.expected_fleet, Some("demo".to_string()));
 }

@@ -20,7 +20,7 @@ struct ConfigChoiceRow {
 }
 
 const CONFIG_CHOICE_ROLE_PREVIEW_LIMIT: usize = 6;
-const FLEETS_ROOT: &str = "fleets";
+const APPS_ROOT: &str = "apps";
 const ICP_CONFIG_FILE: &str = "icp.yaml";
 const ROOT_CONFIG_RELATIVE: &str = "canic.toml";
 
@@ -54,8 +54,8 @@ pub enum ConfigDiscoveryError {
         source: io::Error,
     },
 
-    #[error("multiple configs declare fleet {fleet}: {configs}")]
-    DuplicateFleet { fleet: String, configs: String },
+    #[error("multiple configs declare app {app}: {configs}")]
+    DuplicateApp { app: String, configs: String },
 
     #[error(transparent)]
     WorkspaceDiscovery(#[from] WorkspaceDiscoveryError),
@@ -77,7 +77,7 @@ pub fn current_canic_project_root() -> Result<PathBuf, ConfigDiscoveryError> {
 pub fn discover_canic_project_root_from(
     start: &Path,
 ) -> Result<Option<PathBuf>, ConfigDiscoveryError> {
-    let mut nearest_fleets_root = None;
+    let mut nearest_apps_root = None;
     for candidate in start.ancestors() {
         if !discover_project_canic_config_choices(candidate)?.is_empty() {
             let root =
@@ -90,12 +90,12 @@ pub fn discover_canic_project_root_from(
             if candidate.join(ICP_CONFIG_FILE).is_file() {
                 return Ok(Some(root));
             }
-            if nearest_fleets_root.is_none() {
-                nearest_fleets_root = Some(root);
+            if nearest_apps_root.is_none() {
+                nearest_apps_root = Some(root);
             }
         }
     }
-    Ok(nearest_fleets_root)
+    Ok(nearest_apps_root)
 }
 
 // Resolve install config selection without silently choosing among demo/test configs.
@@ -111,7 +111,7 @@ pub(super) fn resolve_install_config_path(
         ));
     }
 
-    let default = workspace_root.join(FLEETS_ROOT).join(ROOT_CONFIG_RELATIVE);
+    let default = workspace_root.join(APPS_ROOT).join(ROOT_CONFIG_RELATIVE);
     if default.is_file() {
         return Ok(default);
     }
@@ -126,81 +126,81 @@ pub(super) fn resolve_install_config_path(
     Err(config_selection_error(workspace_root, &default, &choices).into())
 }
 
-// Discover installable Canic config choices from the fleet root.
+// Discover installable Canic config choices from the app root.
 pub(super) fn discover_workspace_canic_config_choices(
     workspace_root: &Path,
 ) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     discover_project_canic_config_choices(workspace_root)
 }
 
-// Discover candidate `canic.toml` files under conventional project fleet roots.
+// Discover candidate `canic.toml` files under conventional project app roots.
 pub fn discover_project_canic_config_choices(
     project_root: &Path,
 ) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let mut choices = Vec::new();
-    for root in project_fleet_roots(project_root) {
+    for root in project_app_roots(project_root) {
         collect_canic_config_choices(&root, &mut choices)?;
     }
     choices.sort();
     choices.dedup();
-    reject_duplicate_fleet_names(&choices)?;
+    reject_duplicate_app_names(&choices)?;
     Ok(choices)
 }
 
-// Discover candidate `canic.toml` files under one fleet config root.
+// Discover candidate `canic.toml` files under one app config root.
 pub fn discover_canic_config_choices(root: &Path) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
     let mut choices = Vec::new();
     collect_canic_config_choices(root, &mut choices)?;
     choices.sort();
-    reject_duplicate_fleet_names(&choices)?;
+    reject_duplicate_app_names(&choices)?;
     Ok(choices)
 }
 
 #[must_use]
-pub fn project_fleet_roots(project_root: &Path) -> Vec<PathBuf> {
-    vec![project_root.join(FLEETS_ROOT)]
+pub fn project_app_roots(project_root: &Path) -> Vec<PathBuf> {
+    vec![project_root.join(APPS_ROOT)]
 }
 
-fn reject_duplicate_fleet_names(choices: &[PathBuf]) -> Result<(), ConfigDiscoveryError> {
-    let _ = unique_configs_by_fleet(choices)?;
+fn reject_duplicate_app_names(choices: &[PathBuf]) -> Result<(), ConfigDiscoveryError> {
+    let _ = unique_configs_by_app(choices)?;
     Ok(())
 }
 
-/// Select one config from a canonically admitted discovery result by fleet name.
-pub fn select_discovered_fleet_config_path(
+/// Select one config from a canonically admitted discovery result by app name.
+pub fn select_discovered_app_config_path(
     choices: &[PathBuf],
-    fleet: &str,
+    app: &str,
 ) -> Result<Option<PathBuf>, ConfigDiscoveryError> {
-    Ok(unique_configs_by_fleet(choices)?.remove(fleet))
+    Ok(unique_configs_by_app(choices)?.remove(app))
 }
 
-fn unique_configs_by_fleet(
+fn unique_configs_by_app(
     choices: &[PathBuf],
 ) -> Result<BTreeMap<String, PathBuf>, ConfigDiscoveryError> {
-    let mut by_fleet = BTreeMap::<String, Vec<&PathBuf>>::new();
+    let mut by_app = BTreeMap::<String, Vec<&PathBuf>>::new();
     for path in choices {
-        if let Ok(fleet) = read_app_config_identity(path) {
-            by_fleet.entry(fleet).or_default().push(path);
+        if let Ok(app) = read_app_config_identity(path) {
+            by_app.entry(app).or_default().push(path);
         }
     }
 
-    for (fleet, paths) in &by_fleet {
+    for (app, paths) in &by_app {
         if paths.len() > 1 {
             let configs = paths
                 .iter()
                 .map(|path| path.display().to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            return Err(ConfigDiscoveryError::DuplicateFleet {
-                fleet: fleet.clone(),
+            return Err(ConfigDiscoveryError::DuplicateApp {
+                app: app.clone(),
                 configs,
             });
         }
     }
 
-    Ok(by_fleet
+    Ok(by_app
         .into_iter()
-        .filter_map(|(fleet, mut paths)| paths.pop().cloned().map(|path| (fleet, path)))
+        .filter_map(|(app, mut paths)| paths.pop().cloned().map(|path| (app, path)))
         .collect())
 }
 
@@ -256,28 +256,28 @@ pub(super) fn config_selection_error(
     )];
 
     if choices.is_empty() {
-        lines.push("create fleets/<fleet>/canic.toml and run canic install <fleet>".to_string());
+        lines.push("create apps/<app>/canic.toml and run canic install <app>".to_string());
         return lines.join("\n");
     }
 
     if choices.len() == 1 {
-        let fleet = fleet_name_from_config_path(&choices[0]).unwrap_or("<fleet>");
+        let app = app_name_from_config_path(&choices[0]).unwrap_or("<app>");
         lines.push(String::new());
         lines.extend(config_choice_table(workspace_root, choices));
         lines.push(String::new());
-        lines.push(format!("run: canic install {fleet}"));
+        lines.push(format!("run: canic install {app}"));
         return lines.join("\n");
     }
 
-    lines.push("choose a fleet explicitly:".to_string());
+    lines.push("choose an App explicitly:".to_string());
     lines.push(String::new());
     lines.extend(config_choice_table(workspace_root, choices));
     lines.push(String::new());
-    lines.push("run: canic install <fleet>".to_string());
+    lines.push("run: canic install <app>".to_string());
     lines.join("\n")
 }
 
-fn fleet_name_from_config_path(path: &Path) -> Option<&str> {
+fn app_name_from_config_path(path: &Path) -> Option<&str> {
     path.parent()?.file_name()?.to_str()
 }
 

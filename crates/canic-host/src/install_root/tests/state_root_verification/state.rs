@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn install_rejects_config_identity_mismatch() {
-    validate_expected_fleet_name(Some("demo"), "test", Path::new("fleets/demo/canic.toml"))
+    validate_expected_fleet_name(Some("demo"), "test", Path::new("apps/demo/canic.toml"))
         .expect_err("mismatched fleet identity should fail");
 }
 
@@ -204,7 +204,7 @@ fn deploy_register_writes_minimal_unverified_deployment_state() {
     assert_eq!(state.root_canister_id, "uxrrr-q7777-77774-qaaaq-cai");
     assert_eq!(state.root_verification, RootVerificationStatus::NotVerified);
     assert_eq!(state.created_at_unix_secs, state.updated_at_unix_secs);
-    assert!(state.config_path.ends_with("fleets/demo/canic.toml"));
+    assert!(state.config_path.ends_with("apps/demo/canic.toml"));
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

@@ -97,7 +97,7 @@ pub fn register_deployment_state(
         workspace_root: workspace_root.display().to_string(),
         icp_root: icp_root.display().to_string(),
         config_path: workspace_root
-            .join("fleets")
+            .join("apps")
             .join(&options.fleet_template)
             .join("canic.toml")
             .display()

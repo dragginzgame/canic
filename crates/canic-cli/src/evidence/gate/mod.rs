@@ -31,8 +31,8 @@ use render::render_gate_report;
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum EvidenceGateReport {
-    Envelope(PolicyGateReportV1),
-    Manifest(ProjectEvidenceGateReportV1),
+    Envelope(Box<PolicyGateReportV1>),
+    Manifest(Box<ProjectEvidenceGateReportV1>),
 }
 
 impl EvidenceGateReport {
@@ -60,6 +60,7 @@ pub(super) fn evaluate_gate_files(
                 fingerprint_root: &root,
                 envelope,
             })
+            .map(Box::new)
             .map(EvidenceGateReport::Envelope)
             .map_err(EvidenceCommandError::from)
         }
@@ -72,6 +73,7 @@ pub(super) fn evaluate_gate_files(
                 manifest_path,
                 fingerprint_root: &root,
             })
+            .map(Box::new)
             .map(EvidenceGateReport::Manifest)
             .map_err(EvidenceCommandError::from)
         }

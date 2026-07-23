@@ -192,7 +192,8 @@ pub(super) fn build_deployment_check_envelope(
         target: EvidenceTargetV1 {
             kind: EvidenceTargetKindV1::Deployment,
             deployment: Some(check.plan.deployment_identity.deployment_name.clone()),
-            fleet: Some(check.plan.fleet_template.clone()),
+            app: Some(check.plan.fleet_template.clone()),
+            fleet: None,
             role: None,
             profile: options
                 .truth

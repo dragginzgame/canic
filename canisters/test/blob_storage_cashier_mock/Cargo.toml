@@ -6,7 +6,7 @@ version = { workspace = true }
 publish = false
 
 [package.metadata.canic]
-fleet = "blob_storage_cashier_mock"
+app = "blob_storage_cashier_mock"
 role = "test"
 
 [lib]

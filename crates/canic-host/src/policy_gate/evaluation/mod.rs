@@ -445,17 +445,17 @@ impl PolicyReportBuilder {
         target: &EvidenceTargetV1,
     ) {
         let requirement_id = "build_provenance.require_package_identity_matches_target";
-        let target_fleet = target.fleet.as_deref();
+        let target_app = target.app.as_deref();
         let target_role = target.role.as_deref();
-        let package_fleet = provenance.cargo.package_metadata_fleet.as_str();
+        let package_app = provenance.cargo.package_metadata_app.as_str();
         let package_role = provenance.cargo.package_metadata_role.as_str();
 
-        if target_fleet == Some(package_fleet) && target_role == Some(package_role) {
+        if target_app == Some(package_app) && target_role == Some(package_role) {
             self.pass(requirement_id);
             return;
         }
 
-        let exit_class = if target_fleet.is_none() || target_role.is_none() {
+        let exit_class = if target_app.is_none() || target_role.is_none() {
             ExitClassV1::MissingRequiredEvidence
         } else {
             ExitClassV1::BlockedByPolicy
@@ -469,11 +469,11 @@ impl PolicyReportBuilder {
                 exit_class,
             )
             .expected(serde_json::json!({
-                "target_fleet": target_fleet,
+                "target_app": target_app,
                 "target_role": target_role,
             }))
             .actual(serde_json::json!({
-                "package_metadata_fleet": package_fleet,
+                "package_metadata_app": package_app,
                 "package_metadata_role": package_role,
             })),
         );

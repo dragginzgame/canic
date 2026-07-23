@@ -25,9 +25,9 @@ payload DTO.
 The current envelope emitters are:
 
 ```text
-canic fleet adoption report <fleet> --profile <profile> --evidence-envelope
+canic app adoption report <app> --profile <profile> --evidence-envelope
 canic deploy check <deployment> --evidence-envelope
-canic build <fleet> <role> --provenance <path>
+canic build <app> <role> --provenance <path>
 ```
 
 Stable envelope comparison is available with:
@@ -47,7 +47,7 @@ canic evidence gate --policy <path> --manifest <path>
 Existing raw JSON output remains available:
 
 ```text
-canic fleet adoption report <fleet> --profile <profile> --json
+canic app adoption report <app> --profile <profile> --json
 canic deploy check <deployment> --json
 ```
 
@@ -62,7 +62,8 @@ stable outer contract should use `--evidence-envelope`.
 - envelope schema identity;
 - Canic version;
 - normalized command provenance;
-- target identity such as deployment, fleet, profile, environment, or role;
+- target identity such as App, Fleet, deployment, profile, environment, or
+  role;
 - generation timestamp;
 - source config fingerprint when available;
 - supplied input fingerprints;
@@ -171,7 +172,7 @@ Saved build provenance can be attached to passive adoption and deployment-check
 envelopes as input evidence:
 
 ```text
-canic fleet adoption report <fleet> --profile <profile> --evidence-envelope \
+canic app adoption report <app> --profile <profile> --evidence-envelope \
   --build-provenance <path>
 canic deploy check <deployment> --evidence-envelope \
   --build-provenance <path>
@@ -238,7 +239,7 @@ One conservative pipeline shape is:
 ```text
 canic build demo app --provenance artifacts/canic/build-provenance.json
 
-canic fleet adoption report demo --profile minimal --evidence-envelope \
+canic app adoption report demo --profile minimal --evidence-envelope \
   --build-provenance artifacts/canic/build-provenance.json \
   --output artifacts/canic/adoption-envelope.json
 
@@ -277,14 +278,14 @@ DTOs:
 Raw JSON remains command-specific:
 
 ```text
-canic fleet adoption report demo --profile brownfield --json
+canic app adoption report demo --profile brownfield --json
 canic deploy check demo-staging --json
 ```
 
 Envelope JSON is the stable automation wrapper:
 
 ```text
-canic fleet adoption report demo --profile brownfield --evidence-envelope
+canic app adoption report demo --profile brownfield --evidence-envelope
 canic deploy check demo-staging --evidence-envelope
 ```
 

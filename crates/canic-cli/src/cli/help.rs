@@ -62,8 +62,8 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         scope: CommandScope::Project,
     },
     CommandSpec {
-        name: "fleet",
-        about: "Manage Canic fleets and roles",
+        name: "app",
+        about: "Manage Canic source apps and roles",
         scope: CommandScope::Project,
     },
     CommandSpec {

@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn install_truth_check_uses_deployment_state_config_for_target_named_commands() {
     let root = temp_dir("canic-deploy-target-state-config");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,

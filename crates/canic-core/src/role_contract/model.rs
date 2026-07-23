@@ -156,7 +156,7 @@ pub struct AllocationDefinition {
 ///
 /// BuiltInRoleKind
 ///
-/// Canic-managed role that is not resolved from a fleet role declaration.
+/// Canic-managed role that is not resolved from an App role declaration.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -294,9 +294,9 @@ pub enum RoleContractFinding {
         role: CanisterRole,
     },
     PackageMetadataMismatch {
-        expected_fleet: String,
+        expected_app: String,
         expected_role: CanisterRole,
-        actual_fleet: Option<String>,
+        actual_app: Option<String>,
         actual_role: Option<String>,
     },
     PackageMissing {

@@ -127,7 +127,7 @@ fn matching_metadata() -> Vec<AdoptionPackageMetadataV1> {
         .into_iter()
         .map(|package| AdoptionPackageMetadataV1 {
             package: package.to_string(),
-            fleet: Some("demo".to_string()),
+            app: Some("demo".to_string()),
             role: Some(package.to_string()),
         })
         .collect()
@@ -209,7 +209,7 @@ fn inventory(observed_canisters: Vec<ObservedCanisterV1>) -> DeploymentInventory
             role_assignment_source: Some("local-state".to_string()),
         }),
         local_config: LocalDeploymentConfigV1 {
-            config_path: Some("fleets/demo/canic.toml".to_string()),
+            config_path: Some("apps/demo/canic.toml".to_string()),
             raw_config_sha256: None,
             canonical_embedded_config_sha256: None,
         },

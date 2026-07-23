@@ -30,13 +30,13 @@ fn parses_scaffold_dry_run_option() {
     assert!(options.dry_run);
 }
 
-// Ensure canister scaffold options parse fleet and role identity.
+// Ensure canister scaffold options parse app and role identity.
 #[test]
 fn parses_canister_scaffold_options() {
     let options = CanisterScaffoldOptions::parse([OsString::from("demo"), OsString::from("store")])
         .expect("parse canister scaffold options");
 
-    assert_eq!(options.fleet, "demo");
+    assert_eq!(options.app, "demo");
     assert_eq!(options.role, "store");
     assert!(!options.dry_run);
 }
@@ -70,7 +70,7 @@ fn confirm_scaffold_accepts_yes() {
 
     let output = String::from_utf8(output).expect("utf8 prompt");
     assert!(output.contains("target:"));
-    assert!(output.contains("fleets/my_app"));
+    assert!(output.contains("apps/my_app"));
     assert!(output.contains("install: canic install my_app"));
 }
 
@@ -156,7 +156,7 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(!config.contains("topup_policy"));
     assert!(!config.contains("[[canisters]]"));
     assert!(root_manifest.contains("version = \"0.1.0\""));
-    assert!(root_manifest.contains("fleet = \"my_app\""));
+    assert!(root_manifest.contains("app = \"my_app\""));
     assert!(root_manifest.contains("role = \"root\""));
     assert!(root_manifest.contains("Add runtime Canic features here"));
     assert!(root_manifest.contains("canic = \""));
@@ -165,7 +165,7 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(root_lib.contains("canic::start!();"));
     assert!(root_lib.contains("canic::finish!();"));
     assert!(app_manifest.contains("name = \"canister_my_app_app\""));
-    assert!(app_manifest.contains("fleet = \"my_app\""));
+    assert!(app_manifest.contains("app = \"my_app\""));
     assert!(app_manifest.contains("role = \"app\""));
     assert!(app_manifest.contains("Add runtime Canic features here"));
     assert!(app_manifest.contains("canic = \""));
@@ -176,7 +176,7 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(app_lib.contains("canic::finish!();"));
 }
 
-// Ensure fleet scaffold dry-run plans files without creating them.
+// Ensure app scaffold dry-run plans files without creating them.
 #[test]
 fn scaffold_project_plan_does_not_write_files() {
     let root = TempDir::new("canic-cli-scaffold-plan");
@@ -189,50 +189,50 @@ fn scaffold_project_plan_does_not_write_files() {
     let plan = plan_scaffold_project_at(&root, &options).expect("plan scaffold");
     let text = render_scaffold_project_plan(&plan);
 
-    assert!(text.contains("Planned Canic fleet scaffold:"));
+    assert!(text.contains("Planned Canic app scaffold:"));
     assert!(text.contains("dry_run: true"));
     assert!(text.contains("files_changed: 0"));
     assert!(text.contains("canic.toml"));
     assert!(!plan.result.project_dir.exists());
 }
 
-// Ensure canister scaffold writes a declared-only canister role under one fleet.
+// Ensure canister scaffold writes a declared-only canister role under one app.
 #[test]
 fn scaffold_canister_writes_declared_only_role_files() {
     let root = TempDir::new("canic-cli-scaffold-canister");
-    let fleet_dir = root.join("fleets/demo");
-    fs::create_dir_all(&fleet_dir).expect("create fleet dir");
+    let app_dir = root.join("apps/demo");
+    fs::create_dir_all(&app_dir).expect("create app dir");
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\n    \"fleets/demo/root\",\n]\n",
+        "[workspace]\nmembers = [\n    \"apps/demo/root\",\n]\n",
     )
     .expect("write workspace manifest");
-    fs::write(fleet_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
+    fs::write(app_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
     let options = CanisterScaffoldOptions {
-        fleet: "demo".to_string(),
+        app: "demo".to_string(),
         role: "store".to_string(),
         dry_run: false,
     };
 
     let result = scaffold_canister_at(&root, &options).expect("scaffold canister");
-    let config = fs::read_to_string(fleet_dir.join("canic.toml")).expect("read config");
+    let config = fs::read_to_string(app_dir.join("canic.toml")).expect("read config");
     let workspace_manifest = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace");
-    let manifest = fs::read_to_string(fleet_dir.join("store/Cargo.toml")).expect("read manifest");
-    let build_rs = fs::read_to_string(fleet_dir.join("store/build.rs")).expect("read build");
-    let lib = fs::read_to_string(fleet_dir.join("store/src/lib.rs")).expect("read lib");
+    let manifest = fs::read_to_string(app_dir.join("store/Cargo.toml")).expect("read manifest");
+    let build_rs = fs::read_to_string(app_dir.join("store/build.rs")).expect("read build");
+    let lib = fs::read_to_string(app_dir.join("store/src/lib.rs")).expect("read lib");
 
-    assert_eq!(result.fleet, "demo");
+    assert_eq!(result.app, "demo");
     assert_eq!(result.role, "store");
     assert_eq!(result.package, "store");
     assert_eq!(result.package_name, "canister_demo_store");
-    assert_eq!(result.canister_dir, PathBuf::from("fleets/demo/store"));
-    assert_eq!(result.config_path, PathBuf::from("fleets/demo/canic.toml"));
+    assert_eq!(result.canister_dir, PathBuf::from("apps/demo/store"));
+    assert_eq!(result.config_path, PathBuf::from("apps/demo/canic.toml"));
     assert!(config.contains("[roles.\"store\"]"));
     assert!(config.contains("package = \"store\""));
     assert!(!config.contains("[subnets.default.canisters.store]"));
-    assert!(workspace_manifest.contains("\"fleets/demo/store\""));
+    assert!(workspace_manifest.contains("\"apps/demo/store\""));
     assert!(manifest.contains("name = \"canister_demo_store\""));
-    assert!(manifest.contains("fleet = \"demo\""));
+    assert!(manifest.contains("app = \"demo\""));
     assert!(manifest.contains("role = \"store\""));
     assert!(manifest.contains("crate-type = [\"cdylib\"]"));
     assert!(manifest.contains("Add runtime Canic features here"));
@@ -246,40 +246,40 @@ fn scaffold_canister_writes_declared_only_role_files() {
 #[test]
 fn scaffold_canister_plan_does_not_write_files() {
     let root = TempDir::new("canic-cli-scaffold-canister-plan");
-    let fleet_dir = root.join("fleets/demo");
-    fs::create_dir_all(&fleet_dir).expect("create fleet dir");
+    let app_dir = root.join("apps/demo");
+    fs::create_dir_all(&app_dir).expect("create app dir");
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\n    \"fleets/demo/root\",\n]\n",
+        "[workspace]\nmembers = [\n    \"apps/demo/root\",\n]\n",
     )
     .expect("write workspace manifest");
-    fs::write(fleet_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
-    let before_config = fs::read_to_string(fleet_dir.join("canic.toml")).expect("read config");
+    fs::write(app_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
+    let before_config = fs::read_to_string(app_dir.join("canic.toml")).expect("read config");
     let before_workspace = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace");
     let options = CanisterScaffoldOptions {
-        fleet: "demo".to_string(),
+        app: "demo".to_string(),
         role: "store".to_string(),
         dry_run: true,
     };
 
     let plan = plan_scaffold_canister_at(&root, &options).expect("plan canister scaffold");
     let text = render_canister_scaffold_plan(&plan);
-    let after_config = fs::read_to_string(fleet_dir.join("canic.toml")).expect("read config");
+    let after_config = fs::read_to_string(app_dir.join("canic.toml")).expect("read config");
     let after_workspace = fs::read_to_string(root.join("Cargo.toml")).expect("read workspace");
 
     assert_eq!(after_config, before_config);
     assert_eq!(after_workspace, before_workspace);
-    assert!(!fleet_dir.join("store").exists());
-    assert_eq!(plan.canister_dir, fleet_dir.join("store"));
-    assert_eq!(plan.config_path, fleet_dir.join("canic.toml"));
-    assert_eq!(plan.result.canister_dir, PathBuf::from("fleets/demo/store"));
+    assert!(!app_dir.join("store").exists());
+    assert_eq!(plan.canister_dir, app_dir.join("store"));
+    assert_eq!(plan.config_path, app_dir.join("canic.toml"));
+    assert_eq!(plan.result.canister_dir, PathBuf::from("apps/demo/store"));
     assert_eq!(
         plan.result.config_path,
-        PathBuf::from("fleets/demo/canic.toml")
+        PathBuf::from("apps/demo/canic.toml")
     );
     assert!(text.contains("Planned Canic canister role scaffold:"));
     assert!(text.contains("role: demo.store"));
-    assert!(text.contains("workspace_member: fleets/demo/store"));
+    assert!(text.contains("workspace_member: apps/demo/store"));
     assert!(text.contains("files_changed: 0"));
 }
 
@@ -287,21 +287,21 @@ fn scaffold_canister_plan_does_not_write_files() {
 #[test]
 fn append_workspace_member_source_updates_compact_members_array() {
     let updated = append_workspace_member_source(
-        "[workspace]\nmembers = [\"fleets/demo/root\"]\n",
-        "fleets/demo/store",
+        "[workspace]\nmembers = [\"apps/demo/root\"]\n",
+        "apps/demo/store",
     )
     .expect("append member");
 
-    assert!(updated.contains("\"fleets/demo/root\""));
-    assert!(updated.contains("\"fleets/demo/store\""));
+    assert!(updated.contains("\"apps/demo/root\""));
+    assert!(updated.contains("\"apps/demo/store\""));
 }
 
 // Ensure workspace appends only treat real [workspace].members entries as present.
 #[test]
 fn append_workspace_member_source_does_not_skip_unrelated_string_matches() {
     let updated = append_workspace_member_source(
-        "[package]\ndescription = \"fleets/demo/store\"\n\n[workspace]\nmembers = [\"fleets/demo/root\"]\n",
-        "fleets/demo/store",
+        "[package]\ndescription = \"apps/demo/store\"\n\n[workspace]\nmembers = [\"apps/demo/root\"]\n",
+        "apps/demo/store",
     )
     .expect("append member");
 
@@ -317,7 +317,7 @@ fn append_workspace_member_source_does_not_skip_unrelated_string_matches() {
         members
             .iter()
             .filter_map(TomlValue::as_str)
-            .filter(|member| *member == "fleets/demo/store")
+            .filter(|member| *member == "apps/demo/store")
             .count(),
         1
     );
@@ -327,8 +327,8 @@ fn append_workspace_member_source_does_not_skip_unrelated_string_matches() {
 #[test]
 fn append_workspace_member_source_rejects_non_array_members() {
     let err = append_workspace_member_source(
-        "[workspace]\nmembers = \"fleets/demo/root\"\n",
-        "fleets/demo/store",
+        "[workspace]\nmembers = \"apps/demo/root\"\n",
+        "apps/demo/store",
     )
     .expect_err("non-array members should fail");
 
@@ -339,11 +339,11 @@ fn append_workspace_member_source_rejects_non_array_members() {
 #[test]
 fn scaffold_canister_rejects_existing_target() {
     let root = TempDir::new("canic-cli-scaffold-canister-existing");
-    let fleet_dir = root.join("fleets/demo");
-    fs::create_dir_all(fleet_dir.join("store")).expect("create existing canister dir");
-    fs::write(fleet_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
+    let app_dir = root.join("apps/demo");
+    fs::create_dir_all(app_dir.join("store")).expect("create existing canister dir");
+    fs::write(app_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
     let options = CanisterScaffoldOptions {
-        fleet: "demo".to_string(),
+        app: "demo".to_string(),
         role: "store".to_string(),
         dry_run: false,
     };
@@ -357,11 +357,11 @@ fn scaffold_canister_rejects_existing_target() {
 #[test]
 fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
     let root = TempDir::new("canic-cli-scaffold-canister-declared");
-    let fleet_dir = root.join("fleets/demo");
-    fs::create_dir_all(&fleet_dir).expect("create fleet dir");
-    fs::write(fleet_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
+    let app_dir = root.join("apps/demo");
+    fs::create_dir_all(&app_dir).expect("create app dir");
+    fs::write(app_dir.join("canic.toml"), canic_toml("demo")).expect("write config");
     let options = CanisterScaffoldOptions {
-        fleet: "demo".to_string(),
+        app: "demo".to_string(),
         role: "app".to_string(),
         dry_run: false,
     };
@@ -369,7 +369,7 @@ fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
     let err = scaffold_canister_at(&root, &options).expect_err("declared role should fail");
 
     std::assert_matches!(err, ScaffoldCommandError::Usage(_));
-    assert!(!fleet_dir.join("app").exists());
+    assert!(!app_dir.join("app").exists());
 }
 
 // Ensure rollback restores every existing document and removes only the new scaffold root.
@@ -377,8 +377,8 @@ fn scaffold_canister_rejects_existing_declaration_without_writing_files() {
 fn scaffold_rollback_restores_documents_and_removes_new_directory() {
     let root = TempDir::new("canic-cli-scaffold-rollback");
     let workspace = root.join("Cargo.toml");
-    let config = root.join("fleets/demo/canic.toml");
-    let created_dir = root.join("fleets/demo/store");
+    let config = root.join("apps/demo/canic.toml");
+    let created_dir = root.join("apps/demo/store");
     let workspace_before = b"[workspace]\nmembers = []\n".to_vec();
     let config_before = b"[app]\nname = \"demo\"\n".to_vec();
     fs::create_dir_all(&created_dir).expect("create partial scaffold");
@@ -408,7 +408,7 @@ fn scaffold_rollback_restores_documents_and_removes_new_directory() {
 #[test]
 fn scaffold_rollback_attempts_cleanup_after_restore_failure() {
     let root = TempDir::new("canic-cli-scaffold-rollback-failure");
-    let created_dir = root.join("fleets/demo/store");
+    let created_dir = root.join("apps/demo/store");
     let invalid_restore_target = root.join("existing-directory");
     fs::create_dir_all(&created_dir).expect("create partial scaffold");
     fs::create_dir_all(&invalid_restore_target).expect("create invalid restore target");
@@ -431,12 +431,12 @@ fn scaffold_rollback_attempts_cleanup_after_restore_failure() {
 
 // Ensure canister scaffold help exposes the declared-only workflow.
 #[test]
-fn scaffold_canister_usage_lists_fleet_and_role() {
+fn scaffold_canister_usage_lists_app_and_role() {
     let text = scaffold_canister_usage();
 
     assert!(text.contains("Create a declared-only canister role"));
     assert!(text.contains("Usage: canic scaffold canister"));
-    assert!(text.contains("<fleet>"));
+    assert!(text.contains("<app>"));
     assert!(text.contains("<role>"));
     assert!(text.contains("--dry-run"));
     assert!(text.contains("Examples:"));
@@ -462,7 +462,7 @@ fn scaffold_project_rejects_existing_target() {
         yes: true,
         dry_run: false,
     };
-    fs::create_dir_all(root.join("fleets/my_app")).expect("create existing target");
+    fs::create_dir_all(root.join("apps/my_app")).expect("create existing target");
 
     let err = scaffold_project_at(&root, &options).expect_err("existing scaffold should fail");
 

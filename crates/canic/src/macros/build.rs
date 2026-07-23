@@ -43,7 +43,7 @@ macro_rules! __canic_build_internal {
             std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
         let __canic_package_metadata =
             $crate::__build::required_package_metadata(std::path::Path::new(&manifest_dir));
-        let __canic_fleet_name = __canic_package_metadata.fleet;
+        let __canic_app_name = __canic_package_metadata.app;
         let __canic_role_name = __canic_package_metadata.role;
         let default_cfg_path = std::path::PathBuf::from(&manifest_dir).join($file);
         let __canic_config_path_env =
@@ -148,19 +148,19 @@ macro_rules! __canic_build_internal {
         let mut metrics_security = false;
         let mut metrics_storage = false;
         let role_id: $crate::__internal::core::ids::CanisterRole = role_name.to_string().into();
-        let mut fleet_name = __canic_fleet_name.as_str();
+        let mut app_name = __canic_app_name.as_str();
         let __canic_wasm_store_special = role_name == "wasm_store";
         if __canic_wasm_store_special
-            && !$crate::__build::config_declares_role($cfg.as_ref(), fleet_name, role_name)
+            && !$crate::__build::config_declares_role($cfg.as_ref(), app_name, role_name)
         {
-            fleet_name = $crate::__build::config_app_id($cfg.as_ref());
+            app_name = $crate::__build::config_app_id($cfg.as_ref());
         }
         if !__canic_wasm_store_special
-            && !$crate::__build::config_declares_role($cfg.as_ref(), fleet_name, role_name)
+            && !$crate::__build::config_declares_role($cfg.as_ref(), app_name, role_name)
         {
             panic!(
                 "canister role '{}.{}' from [package.metadata.canic] was not declared in {}",
-                fleet_name,
+                app_name,
                 role_name,
                 $cfg_path.display()
             );
@@ -168,7 +168,7 @@ macro_rules! __canic_build_internal {
         println!("cargo:rustc-cfg=canic_role_declared");
 
         let __canic_role_attached =
-            $crate::__build::config_attaches_role($cfg.as_ref(), fleet_name, role_name);
+            $crate::__build::config_attaches_role($cfg.as_ref(), app_name, role_name);
         if __canic_role_attached {
             println!("cargo:rustc-cfg=canic_role_attached");
         } else {
@@ -281,8 +281,8 @@ macro_rules! __canic_build_internal {
             .expect("canonicalize source canic config path");
 
         println!("cargo:rustc-env=CANIC_CANISTER_ROLE={role_name}");
-        println!("cargo:rustc-env=CANIC_FLEET={fleet_name}");
-        println!("cargo:rustc-env=CANIC_FLEET_ROLE={fleet_name}.{role_name}");
+        println!("cargo:rustc-env=CANIC_APP={app_name}");
+        println!("cargo:rustc-env=CANIC_APP_ROLE={app_name}.{role_name}");
         println!("cargo:rustc-env=CANIC_CANISTER_ROLE_DECLARED=true");
         println!(
             "cargo:rustc-env=CANIC_CANISTER_ROLE_ATTACHED={}",

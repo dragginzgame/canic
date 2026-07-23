@@ -101,7 +101,7 @@ fn list_preserves_icp_root_resolution_causes() {
 }
 
 #[test]
-fn list_preserves_fleet_config_causes() {
+fn list_preserves_app_config_causes() {
     let error = ListCommandError::from(AppConfigError::DeclarationMissing {
         declaration: AppConfigDeclaration::AppName,
     });
@@ -114,7 +114,7 @@ fn list_preserves_fleet_config_causes() {
     );
 }
 
-// Ensure config options parse declared fleet inspection.
+// Ensure config options parse declared App inspection.
 #[test]
 fn parses_config_options() {
     let options = ListOptions::parse_config([
@@ -146,9 +146,9 @@ fn config_rejects_subtree_option() {
     std::assert_matches!(err, ListCommandError::Usage(_));
 }
 
-// Ensure list and config help keep deployment-target and fleet-template selection separate.
+// Ensure list and config help keep deployment-target and App selection separate.
 #[test]
-fn list_and_config_usage_explain_fleet_and_subtree_options() {
+fn list_and_config_usage_explain_app_and_subtree_options() {
     let list = info_usage();
     let config = config_usage();
 
@@ -158,8 +158,8 @@ fn list_and_config_usage_explain_fleet_and_subtree_options() {
     assert!(list.contains("Installed deployment target name to inspect"));
     assert!(list.contains("--subtree <name-or-principal>"));
     assert!(list.contains("--verbose"));
-    assert!(config.contains("Usage: canic fleet config [OPTIONS] <fleet>"));
-    assert!(config.contains("<fleet>"));
+    assert!(config.contains("Usage: canic app config [OPTIONS] <app>"));
+    assert!(config.contains("<app>"));
     assert!(config.contains("--verbose"));
     assert!(config.contains("-v"));
     assert!(config.contains("Examples:"));
@@ -466,11 +466,11 @@ fn renders_list_output_with_wasm_size_and_missing_roles() {
     assert!(output.contains("Missing roles: audit"));
 }
 
-// Ensure config-only fleets render their declared roles instead of deployed inventory.
+// Ensure config-only Apps render their declared roles instead of deployed inventory.
 #[test]
-fn renders_config_output_with_fleet_roles() {
+fn renders_config_output_with_app_roles() {
     let title = ListTitle {
-        source: ListTitleSource::FleetTemplate,
+        source: ListTitleSource::App,
         name: "test_me".to_string(),
         environment: "local".to_string(),
     };
@@ -503,7 +503,7 @@ fn renders_config_output_with_fleet_roles() {
     assert_eq!(
         output,
         [
-            "Fleet template: test_me (environment local)",
+            "App: test_me (environment local)",
             "",
             "ROLE   KIND        AUTO   CAPS             METRICS   TOPUP",
             "----   ---------   ----   --------------   -------   ------------------",

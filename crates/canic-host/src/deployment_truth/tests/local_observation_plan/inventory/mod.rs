@@ -6,7 +6,7 @@ fn local_check_builds_plan_inventory_diff_and_report() {
     let temp = TempWorkspace::new("canic-host-local-check");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_artifact(&icp_root, "root", b"root-artifact");
@@ -45,7 +45,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
     let temp = TempWorkspace::new("canic-host-local-inventory");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
 
@@ -119,7 +119,7 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     let temp = TempWorkspace::new("canic-host-local-root-evidence");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let config_dir = workspace_root.join("fleets");
+    let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
     write_deployment_state_json(&icp_root, "local", sample_install_state("prod", "aaaaa-aa"));

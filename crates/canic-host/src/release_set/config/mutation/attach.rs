@@ -1,22 +1,22 @@
 use super::{
-    AttachedFleetRoleSource,
+    AttachedAppRoleSource,
     support::{
         admit_canister_role_name, toml_string_literal, validate_attach_kind, validate_subnet_name,
     },
 };
 use crate::release_set::config::{
     AppConfigDeclaration, AppConfigError, AppConfigMutationConflict, AppConfigOperation,
-    model::AttachedFleetRole,
+    model::AttachedAppRole,
 };
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 
-pub(in crate::release_set) fn attach_fleet_role_source(
+pub(in crate::release_set) fn attach_app_role_source(
     config_source: &str,
     expected_app: &str,
     role: &str,
     subnet: &str,
     kind: &str,
-) -> Result<AttachedFleetRoleSource, AppConfigError> {
+) -> Result<AttachedAppRoleSource, AppConfigError> {
     let role = role.trim();
     let subnet = subnet.trim();
     let kind = kind.trim();
@@ -48,14 +48,14 @@ pub(in crate::release_set) fn attach_fleet_role_source(
         .get(&role_id)
         .ok_or_else(|| AppConfigError::DeclarationMissing {
             declaration: AppConfigDeclaration::Role {
-                fleet: expected_app.to_string(),
+                app: expected_app.to_string(),
                 role: role.to_string(),
             },
         })?;
     if config.attached_roles().contains(&role_id) {
         return Err(AppConfigError::MutationConflict {
             conflict: AppConfigMutationConflict::RoleAlreadyAttached {
-                fleet: expected_app.to_string(),
+                app: expected_app.to_string(),
                 role: role.to_string(),
             },
         });
@@ -75,10 +75,10 @@ pub(in crate::release_set) fn attach_fleet_role_source(
         source,
     })?;
 
-    Ok(AttachedFleetRoleSource {
+    Ok(AttachedAppRoleSource {
         source,
-        role: AttachedFleetRole {
-            fleet: expected_app.to_string(),
+        role: AttachedAppRole {
+            app: expected_app.to_string(),
             role: role.to_string(),
             display: format!("{expected_app}.{role}"),
             subnet: subnet.to_string(),

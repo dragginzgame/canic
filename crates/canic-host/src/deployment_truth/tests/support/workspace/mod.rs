@@ -106,7 +106,7 @@ pub(in crate::deployment_truth::tests) fn sample_install_state(
         root_build_target: "root".to_string(),
         workspace_root: "/workspace".to_string(),
         icp_root: "/workspace".to_string(),
-        config_path: "fleets/canic.toml".to_string(),
+        config_path: "apps/canic.toml".to_string(),
         release_set_manifest_path: ".icp/local/canisters/root/release-set.json".to_string(),
     }
 }

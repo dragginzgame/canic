@@ -30,7 +30,7 @@ const ROOT_WASM_WATCH_PATHS: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
     "canisters",
-    "fleets/test",
+    "apps/test",
     "icp.yaml",
     "crates",
 ];
@@ -128,7 +128,7 @@ fn profile_build_extra_env(profile: RootSetupProfile) -> Vec<(String, String)> {
 }
 
 fn profile_build_config_path(profile: RootSetupProfile, workspace_root: &Path) -> PathBuf {
-    let test_fleet_root = workspace_root.join("fleets").join("test");
+    let test_fleet_root = workspace_root.join("apps").join("test");
     match profile {
         RootSetupProfile::Topology | RootSetupProfile::ReconcileSmallStore => {
             test_fleet_root.join("canic.toml")

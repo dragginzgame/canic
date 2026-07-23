@@ -82,7 +82,7 @@ fn render_fleet_services_config(config: &FleetServicesConfig) -> TokenStream {
     }
 }
 
-// Render a fleet role declaration.
+// Render an App role declaration.
 fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
     let kind = render_role_declaration_kind(declaration.kind);
     let package = render_owned_string(&declaration.package);

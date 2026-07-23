@@ -1,8 +1,8 @@
 # Canisters
 
 This directory contains runnable canister crates that are not config-defined
-Canic fleets. They may still be Cargo workspace members, ICP build targets, or
-PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
+Canic Apps. They may still be Cargo workspace members, ICP build targets, or
+PocketIC fixtures, but `canic app list` must not discover them as Apps.
 
 ## Layout
 
@@ -14,7 +14,7 @@ PocketIC fixtures, but `canic fleet list` must not discover them as fleets.
   config and is not part of `icp.yaml`, the demo topology, the reference
   release set, or automated test fixtures.
 - `test/` – isolated PocketIC and integration-test fixture canisters that are
-  not themselves a config-defined fleet.
+  not themselves a config-defined App.
 
 ## Local Workflow
 

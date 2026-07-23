@@ -6,7 +6,7 @@ publish = false
 build = "build.rs"
 
 [package.metadata.canic]
-fleet = "fixture_protected_sibling"
+app = "fixture_protected_sibling"
 role = "app"
 
 [package.metadata.cargo-machete]

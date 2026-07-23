@@ -75,7 +75,7 @@ walkthrough.
   to read and refresh cached public IC subnet metadata without requiring the
   standalone NNS inspection CLI.
 * **Operator workflows:** The `canic` binary builds artifacts, manages local
-  fleet configs and replica status, installs fleets, creates topology-aware
+  App configs and replica status, installs Fleets, creates topology-aware
   backups, validates their manifests, and drives journaled, resumable restore
   execution.
 
@@ -125,8 +125,8 @@ Useful next reads:
 
 ## Repository Layout
 
-The workspace keeps Rust crates under [crates/](crates/) and fleet fixtures under
-[fleets/](fleets/). Detailed ownership and layering rules live in
+The workspace keeps Rust crates under [crates/](crates/) and App fixtures under
+[apps/](apps/). Detailed ownership and layering rules live in
 [AGENTS.md](AGENTS.md).
 
 * [crates/canic/](crates/canic/) - public facade crate, lifecycle/build macros,
@@ -146,9 +146,10 @@ The workspace keeps Rust crates under [crates/](crates/) and fleet fixtures unde
 * [crates/canic-testing-internal/](crates/canic-testing-internal/) and
   [crates/canic-tests/](crates/canic-tests/) - repo-only PocketIC harnesses and
   integration tests.
-* [fleets/test/](fleets/test/) and [fleets/demo/](fleets/demo/) - local reference
-  fleet configs.
-* [canisters/](canisters/) - runnable canisters that are not Canic fleets.
+* [apps/test/](apps/test/) and [apps/demo/](apps/demo/) - local reference App
+  configs.
+* [canisters/](canisters/) - runnable canisters that are not config-defined
+  Apps.
 * [scripts/](scripts/) - dev setup, CI, release, Wasm, and audit helpers.
 * [docs/](docs/) and [.github/workflows/](.github/workflows/) - design notes,
   operational docs, audits, and CI.

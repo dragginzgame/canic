@@ -6,9 +6,9 @@ fn install_truth_preflight_uses_current_install_inputs_without_mutation() {
     fs::create_dir_all(&root).expect("create project root");
     fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n")
         .expect("write workspace manifest");
-    fs::create_dir_all(root.join("fleets/demo")).expect("create config dir");
+    fs::create_dir_all(root.join("apps/demo")).expect("create config dir");
     fs::write(
-        root.join("fleets/demo/canic.toml"),
+        root.join("apps/demo/canic.toml"),
         demo_config_source(
             r#"
 [subnets.default.canisters.root]

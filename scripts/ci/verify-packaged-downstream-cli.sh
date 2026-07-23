@@ -115,8 +115,8 @@ prepare_downstream_root() {
     mkdir -p \
         "$DOWNSTREAM_ROOT/.icp/local/canisters/app" \
         "$DOWNSTREAM_ROOT/.icp/local/canisters/root" \
-        "$DOWNSTREAM_ROOT/fleets/downstream/app" \
-        "$DOWNSTREAM_ROOT/fleets/downstream/root"
+        "$DOWNSTREAM_ROOT/apps/downstream/app" \
+        "$DOWNSTREAM_ROOT/apps/downstream/root"
 
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
 [workspace]
@@ -127,21 +127,21 @@ resolver = "2"
 version = "0.0.0"
 EOF
 
-    cat > "$DOWNSTREAM_ROOT/fleets/downstream/root/Cargo.toml" <<'EOF'
+    cat > "$DOWNSTREAM_ROOT/apps/downstream/root/Cargo.toml" <<'EOF'
 [package]
 name = "downstream-root"
 version = { workspace = true }
 edition = "2024"
 EOF
 
-    cat > "$DOWNSTREAM_ROOT/fleets/downstream/app/Cargo.toml" <<'EOF'
+    cat > "$DOWNSTREAM_ROOT/apps/downstream/app/Cargo.toml" <<'EOF'
 [package]
 name = "downstream-app"
 version = { workspace = true }
 edition = "2024"
 EOF
 
-    cat > "$DOWNSTREAM_ROOT/fleets/downstream/canic.toml" <<'EOF'
+    cat > "$DOWNSTREAM_ROOT/apps/downstream/canic.toml" <<'EOF'
 controllers = []
 [services.fleet]
 roles = ["app"]
@@ -185,9 +185,9 @@ run_probe() {
     mkdir -p "$PROOF_HOME" "$PROOF_TARGET_DIR" "$PROOF_TMPDIR"
     assert_packaged_tool_root
 
-    run_packaged_canic fleet list > "$TMP_ROOT/fleet-list.out"
-    run_packaged_canic fleet role list downstream > "$TMP_ROOT/role-list.out"
-    run_packaged_canic fleet role inspect downstream app > "$TMP_ROOT/app-inspect.out"
+    run_packaged_canic app list > "$TMP_ROOT/app-list.out"
+    run_packaged_canic app role list downstream > "$TMP_ROOT/role-list.out"
+    run_packaged_canic app role inspect downstream app > "$TMP_ROOT/app-inspect.out"
     run_packaged_canic deploy inspect catalog list --json --output "$TMP_ROOT/catalog.json"
     run_packaged_canic blob-storage --help > "$TMP_ROOT/blob-storage-help.out"
     if run_packaged_canic blob-storage status downstream app --json \
@@ -204,14 +204,14 @@ run_probe() {
 }
 
 assert_probe_outputs() {
-    grep -q 'downstream' "$TMP_ROOT/fleet-list.out" || {
-        echo "expected packaged canic CLI to list downstream fleet" >&2
-        sed -n '1,120p' "$TMP_ROOT/fleet-list.out" >&2
+    grep -q 'downstream' "$TMP_ROOT/app-list.out" || {
+        echo "expected packaged canic CLI to list downstream App" >&2
+        sed -n '1,120p' "$TMP_ROOT/app-list.out" >&2
         exit 1
     }
-    grep -q '2 (root, app)' "$TMP_ROOT/fleet-list.out" || {
+    grep -q '2 (root, app)' "$TMP_ROOT/app-list.out" || {
         echo "expected packaged canic CLI to summarize root and app canisters" >&2
-        sed -n '1,120p' "$TMP_ROOT/fleet-list.out" >&2
+        sed -n '1,120p' "$TMP_ROOT/app-list.out" >&2
         exit 1
     }
     grep -q 'downstream.root' "$TMP_ROOT/role-list.out" || {

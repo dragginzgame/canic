@@ -45,6 +45,7 @@ pub struct CommandProvenanceV1 {
 pub struct EvidenceTargetV1 {
     pub kind: EvidenceTargetKindV1,
     pub deployment: Option<String>,
+    pub app: Option<String>,
     pub fleet: Option<String>,
     pub role: Option<String>,
     pub profile: Option<String>,
@@ -58,8 +59,9 @@ pub struct EvidenceTargetV1 {
 #[serde(rename_all = "snake_case")]
 pub enum EvidenceTargetKindV1 {
     Deployment,
+    App,
     Fleet,
-    FleetAdoption,
+    AppAdoption,
     Artifact,
     PolicyGate,
     Unknown,

@@ -88,13 +88,13 @@ fn build_provenance_envelope_wraps_stable_payload() {
     write_sample_workspace(&root, "demo", "app");
     let output = write_sample_artifacts(&root, "app");
     let request = BuildProvenanceRequest {
-        fleet: "demo".to_string(),
+        app: "demo".to_string(),
         role: "app".to_string(),
         environment: "staging".to_string(),
         build_network: BuildNetwork::Ic,
         profile: CanisterBuildProfile::Fast,
         workspace_root: root.clone(),
-        config_path: root.join("fleets/demo/canic.toml"),
+        config_path: root.join("apps/demo/canic.toml"),
         output,
         command: sample_command(),
         generated_at: "unix:1".to_string(),
@@ -107,7 +107,7 @@ fn build_provenance_envelope_wraps_stable_payload() {
 
     fs::remove_dir_all(&root).expect("remove root");
     assert_eq!(envelope.target.kind, EvidenceTargetKindV1::Artifact);
-    assert_eq!(envelope.target.fleet.as_deref(), Some("demo"));
+    assert_eq!(envelope.target.app.as_deref(), Some("demo"));
     assert_eq!(envelope.target.role.as_deref(), Some("app"));
     assert_eq!(envelope.target.environment.as_deref(), Some("staging"));
     assert!(envelope.inputs.iter().any(|input| {
@@ -115,7 +115,7 @@ fn build_provenance_envelope_wraps_stable_payload() {
             && input.note.as_deref() == Some("environment=staging;build_network=ic")
     }));
     assert_eq!(envelope.payload_schema, build_provenance_schema());
-    assert_eq!(payload.cargo.package_metadata_fleet, "demo");
+    assert_eq!(payload.cargo.package_metadata_app, "demo");
     assert_eq!(payload.cargo.package_metadata_role, "app");
     assert!(payload.cargo.cargo_lock_sha256.is_some());
     assert_eq!(payload.artifacts.len(), 2);
@@ -162,13 +162,13 @@ fn build_provenance_rejects_transform_outcome_without_matching_tool_version() {
 
 fn sample_request(root: &Path, output: CanisterArtifactBuildOutput) -> BuildProvenanceRequest {
     BuildProvenanceRequest {
-        fleet: "demo".to_string(),
+        app: "demo".to_string(),
         role: "app".to_string(),
         environment: "local".to_string(),
         build_network: BuildNetwork::Local,
         profile: CanisterBuildProfile::Fast,
         workspace_root: root.to_path_buf(),
-        config_path: root.join("fleets/demo/canic.toml"),
+        config_path: root.join("apps/demo/canic.toml"),
         output,
         command: sample_command(),
         generated_at: "unix:1".to_string(),
@@ -185,14 +185,14 @@ fn sample_command() -> CommandProvenanceV1 {
     }
 }
 
-fn write_sample_workspace(root: &Path, fleet: &str, role: &str) {
-    let package_dir = root.join("fleets").join(fleet).join(role);
+fn write_sample_workspace(root: &Path, app: &str, role: &str) {
+    let package_dir = root.join("apps").join(app).join(role);
     fs::create_dir_all(package_dir.join("src")).expect("create package");
     fs::write(
         root.join("Cargo.toml"),
         format!(
             r#"[workspace]
-members = ["fleets/{fleet}/{role}"]
+members = ["apps/{app}/{role}"]
 resolver = "3"
 "#
         ),
@@ -200,10 +200,10 @@ resolver = "3"
     .expect("write workspace manifest");
     fs::write(root.join("Cargo.lock"), "# lock\n").expect("write lock");
     fs::write(
-        root.join("fleets").join(fleet).join("canic.toml"),
+        root.join("apps").join(app).join("canic.toml"),
         format!(
             r#"[app]
-name = "{fleet}"
+name = "{app}"
 
 [roles.root]
 kind = "root"
@@ -226,12 +226,12 @@ kind = "service"
         package_dir.join("Cargo.toml"),
         format!(
             r#"[package]
-name = "canister_{fleet}_{role}"
+name = "canister_{app}_{role}"
 version = "0.0.0"
 edition = "2024"
 
 [package.metadata.canic]
-fleet = "{fleet}"
+app = "{app}"
 role = "{role}"
 "#
         ),

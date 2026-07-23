@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn normal_named_environment_install_checks_fresh_local_build_artifacts() {
     let root = temp_dir("canic-install-truth-named-environment-artifacts");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     write_demo_root_only_config(&config_path);
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
@@ -49,7 +49,7 @@ fn normal_named_environment_install_checks_fresh_local_build_artifacts() {
 #[test]
 fn install_truth_artifact_gate_blocks_materialized_digest_drift() {
     let root = temp_dir("canic-install-truth-artifact-digest-gate");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
@@ -98,7 +98,7 @@ kind = "root"
 #[test]
 fn install_truth_gate_blocks_observed_controller_drift() {
     let root = temp_dir("canic-install-truth-controller-gate");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     write_demo_root_only_config(&config_path);
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
 
@@ -110,7 +110,7 @@ fn install_truth_gate_blocks_observed_controller_drift() {
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -184,7 +184,7 @@ fn install_truth_gate_blocks_observed_controller_drift() {
 #[test]
 fn install_truth_gate_blocks_missing_expected_root_canister() {
     let root = temp_dir("canic-install-truth-missing-root-gate");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
@@ -206,7 +206,7 @@ kind = "root"
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
@@ -260,7 +260,7 @@ kind = "root"
 #[test]
 fn install_truth_gate_blocks_all_safety_report_hard_failures() {
     let root = temp_dir("canic-install-truth-all-hard-failures");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,

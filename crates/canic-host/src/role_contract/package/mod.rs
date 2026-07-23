@@ -94,7 +94,7 @@ impl PackageValidationMode {
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoleCargoGraphEvidence {
-    pub fleet: String,
+    pub app: String,
     pub role: CanisterRole,
     pub role_package_name: String,
     pub role_manifest_path: PathBuf,
@@ -199,10 +199,10 @@ pub fn validate_internal_test_wasm_packages(
                 "internal test package `{package_name}` did not resolve exactly once"
             )));
         };
-        let Some((fleet, role)) = package_canic_identity(package)? else {
+        let Some((app, role)) = package_canic_identity(package)? else {
             continue;
         };
-        let config_path = package_role_config_path(package, &fleet, &role).ok_or_else(|| {
+        let config_path = package_role_config_path(package, &app, &role).ok_or_else(|| {
             unsupported_finding(format!(
                 "internal test package `{package_name}` has no matching ancestor canic.toml"
             ))
@@ -249,16 +249,16 @@ fn package_canic_identity(
         .metadata
         .as_ref()
         .and_then(|metadata| metadata.get("canic"));
-    let fleet = canic
-        .and_then(|metadata| metadata.get("fleet"))
+    let app = canic
+        .and_then(|metadata| metadata.get("app"))
         .and_then(serde_json::Value::as_str);
     let role = canic
         .and_then(|metadata| metadata.get("role"))
         .and_then(serde_json::Value::as_str);
-    match (canic, fleet, role) {
+    match (canic, app, role) {
         (None, _, _) => Ok(None),
-        (Some(_), Some(fleet), Some(role)) => Ok(Some((
-            fleet.to_string(),
+        (Some(_), Some(app), Some(role)) => Ok(Some((
+            app.to_string(),
             CanisterRole::owned(role.to_string()),
         ))),
         (Some(_), _, _) => Err(unsupported_finding(format!(
@@ -270,7 +270,7 @@ fn package_canic_identity(
 
 fn package_role_config_path(
     package: &CargoMetadataPackage,
-    expected_fleet: &str,
+    expected_app: &str,
     expected_role: &CanisterRole,
 ) -> Option<PathBuf> {
     let manifest_dir = package.manifest_path.parent()?;
@@ -282,7 +282,7 @@ fn package_role_config_path(
         let Ok(config) = parse_config_model(&source) else {
             continue;
         };
-        if config.app_id().as_str() != expected_fleet {
+        if config.app_id().as_str() != expected_app {
             continue;
         }
         let Some(declaration) = config.roles.get(expected_role) else {
@@ -303,7 +303,7 @@ fn normalized_manifest_path(path: &Path) -> PathBuf {
 
 fn validate_package_manifest(
     manifest_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     expected_role: &CanisterRole,
     mode: PackageValidationMode,
     built_in: bool,
@@ -330,7 +330,7 @@ fn validate_package_manifest(
         Err(finding) => return RolePackageValidation::Unsupported(finding),
     };
     let declaration =
-        match validate_role_declaration(&metadata, selected, expected_fleet, expected_role) {
+        match validate_role_declaration(&metadata, selected, expected_app, expected_role) {
             Ok(declaration) => declaration,
             Err(finding) => return RolePackageValidation::Unsupported(finding),
         };
@@ -362,13 +362,7 @@ fn validate_package_manifest(
         Err(reason) => return unsupported_shape(reason),
     };
 
-    match validate_resolved_package(
-        &metadata,
-        &graph,
-        &declaration,
-        expected_fleet,
-        expected_role,
-    ) {
+    match validate_resolved_package(&metadata, &graph, &declaration, expected_app, expected_role) {
         Ok(evidence) => RolePackageValidation::Supported(evidence),
         Err(finding) => RolePackageValidation::Unsupported(finding),
     }
@@ -377,10 +371,10 @@ fn validate_package_manifest(
 fn validate_role_declaration<'a>(
     metadata: &CargoMetadata,
     package: &'a CargoMetadataPackage,
-    expected_fleet: &str,
+    expected_app: &str,
     expected_role: &CanisterRole,
 ) -> Result<ValidatedRoleDeclaration<'a>, RoleContractFinding> {
-    validate_package_metadata(package, expected_fleet, expected_role)?;
+    validate_package_metadata(package, expected_app, expected_role)?;
 
     let direct_dependency = direct_canic_dependency(package, expected_role)?;
     let dependency_key = direct_dependency
@@ -402,7 +396,7 @@ fn validate_resolved_package(
     metadata: &CargoMetadata,
     graph: &CargoGraphEvidence,
     declaration: &ValidatedRoleDeclaration<'_>,
-    expected_fleet: &str,
+    expected_app: &str,
     expected_role: &CanisterRole,
 ) -> Result<RoleCargoGraphEvidence, RoleContractFinding> {
     let selected = declaration.package;
@@ -473,7 +467,7 @@ fn validate_resolved_package(
     validate_selected_canic_features(graph, direct_edge, canic_package, &direct_features)?;
 
     Ok(RoleCargoGraphEvidence {
-        fleet: expected_fleet.to_string(),
+        app: expected_app.to_string(),
         role: expected_role.clone(),
         role_package_name: selected.name.clone(),
         role_manifest_path: selected.manifest_path.clone(),
@@ -567,15 +561,15 @@ fn exact_manifest_package<'a>(
 
 fn validate_package_metadata(
     package: &CargoMetadataPackage,
-    expected_fleet: &str,
+    expected_app: &str,
     expected_role: &CanisterRole,
 ) -> Result<(), RoleContractFinding> {
     let canic = package
         .metadata
         .as_ref()
         .and_then(|metadata| metadata.get("canic"));
-    let actual_fleet = canic
-        .and_then(|metadata| metadata.get("fleet"))
+    let actual_app = canic
+        .and_then(|metadata| metadata.get("app"))
         .and_then(serde_json::Value::as_str)
         .map(ToString::to_string);
     let actual_role = canic
@@ -583,16 +577,16 @@ fn validate_package_metadata(
         .and_then(serde_json::Value::as_str)
         .map(ToString::to_string);
 
-    if actual_fleet.as_deref() == Some(expected_fleet)
+    if actual_app.as_deref() == Some(expected_app)
         && actual_role.as_deref() == Some(expected_role.as_str())
     {
         return Ok(());
     }
 
     Err(RoleContractFinding::PackageMetadataMismatch {
-        expected_fleet: expected_fleet.to_string(),
+        expected_app: expected_app.to_string(),
         expected_role: expected_role.clone(),
-        actual_fleet,
+        actual_app,
         actual_role,
     })
 }

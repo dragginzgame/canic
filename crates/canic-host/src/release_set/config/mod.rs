@@ -19,11 +19,11 @@ pub use error::{
     AppConfigTomlOperation,
 };
 pub use model::{
-    AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
-    LOCAL_ROOT_MIN_READY_CYCLES, RenamedFleetRole,
+    AttachedAppRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredAppRole,
+    LOCAL_ROOT_MIN_READY_CYCLES, RenamedAppRole,
 };
 pub(super) use mutation::{
-    attach_fleet_role_source, declare_fleet_role_source, rename_fleet_role_source,
+    attach_app_role_source, declare_app_role_source, rename_app_role_source,
 };
 pub use projection::configured_release_roles_from_config;
 pub(super) use projection::{
@@ -161,54 +161,54 @@ pub fn read_app_config_identity(path: &Path) -> Result<String, AppConfigError> {
 }
 
 // Validate a package-backed role declaration without writing `canic.toml`.
-pub fn plan_declare_fleet_role(
+pub fn plan_declare_app_role(
     config_path: &Path,
     expected_app: &str,
     role: &str,
     package: &str,
-) -> Result<DeclaredFleetRole, AppConfigError> {
+) -> Result<DeclaredAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = declare_fleet_role_source(&source, expected_app, role, package)
+    let updated = declare_app_role_source(&source, expected_app, role, package)
         .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
 }
 
 // Validate a package-backed role topology attachment without writing `canic.toml`.
-pub fn plan_attach_fleet_role(
+pub fn plan_attach_app_role(
     config_path: &Path,
     expected_app: &str,
     role: &str,
     subnet: &str,
     kind: &str,
-) -> Result<AttachedFleetRole, AppConfigError> {
+) -> Result<AttachedAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = attach_fleet_role_source(&source, expected_app, role, subnet, kind)
+    let updated = attach_app_role_source(&source, expected_app, role, subnet, kind)
         .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
 }
 
 // Validate a role rename and package metadata update without writing files.
-pub fn plan_rename_fleet_role(
+pub fn plan_rename_app_role(
     config_path: &Path,
     expected_app: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<RenamedFleetRole, AppConfigError> {
+) -> Result<RenamedAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = rename_fleet_role_source(&source, config_path, expected_app, old_role, new_role)
+    let updated = rename_app_role_source(&source, config_path, expected_app, old_role, new_role)
         .map_err(|error| error.at_config_path(config_path))?;
     Ok(updated.role)
 }
 
 // Declare a package-backed role without attaching it to topology.
-pub fn declare_fleet_role(
+pub fn declare_app_role(
     config_path: &Path,
     expected_app: &str,
     role: &str,
     package: &str,
-) -> Result<DeclaredFleetRole, AppConfigError> {
+) -> Result<DeclaredAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = declare_fleet_role_source(&source, expected_app, role, package)
+    let updated = declare_app_role_source(&source, expected_app, role, package)
         .map_err(|error| error.at_config_path(config_path))?;
     write_bytes(config_path, updated.source.as_bytes()).map_err(|source| {
         AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
@@ -217,15 +217,15 @@ pub fn declare_fleet_role(
 }
 
 // Attach a declared package-backed role directly to subnet topology.
-pub fn attach_fleet_role(
+pub fn attach_app_role(
     config_path: &Path,
     expected_app: &str,
     role: &str,
     subnet: &str,
     kind: &str,
-) -> Result<AttachedFleetRole, AppConfigError> {
+) -> Result<AttachedAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = attach_fleet_role_source(&source, expected_app, role, subnet, kind)
+    let updated = attach_app_role_source(&source, expected_app, role, subnet, kind)
         .map_err(|error| error.at_config_path(config_path))?;
     write_bytes(config_path, updated.source.as_bytes()).map_err(|source| {
         AppConfigError::io(AppConfigIoOperation::WriteConfig, config_path, source)
@@ -234,14 +234,14 @@ pub fn attach_fleet_role(
 }
 
 // Rename a declared role and its role-bearing topology references.
-pub fn rename_fleet_role(
+pub fn rename_app_role(
     config_path: &Path,
     expected_app: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<RenamedFleetRole, AppConfigError> {
+) -> Result<RenamedAppRole, AppConfigError> {
     let source = read_config_source(config_path)?;
-    let updated = rename_fleet_role_source(&source, config_path, expected_app, old_role, new_role)
+    let updated = rename_app_role_source(&source, config_path, expected_app, old_role, new_role)
         .map_err(|error| error.at_config_path(config_path))?;
     commit_role_rename_sources(
         config_path,

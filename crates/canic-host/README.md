@@ -1,6 +1,6 @@
 # canic-host
 
-Host-side build, install, deployment, fleet-template, and thin-root staging tooling for Canic workspaces.
+Host-side build, install, deployment, App-source, and thin-root staging tooling for Canic workspaces.
 
 ## When to use it
 
@@ -51,9 +51,9 @@ Public thin-root flow:
 
 Build profile selection:
 
-- `canic build <fleet> <role> --profile debug` builds raw debug wasm
-- `canic build <fleet> <role> --profile fast` builds the middle shrunk local/test/demo lane
-- `canic build <fleet> <role> --profile release` builds the shipping/install lane
+- `canic build <app> <role> --profile debug` builds raw debug wasm
+- `canic build <app> <role> --profile fast` builds the middle shrunk local/test/demo lane
+- `canic build <app> <role> --profile release` builds the shipping/install lane
 
 If omitted, CLI builds default to `release`.
 
@@ -61,17 +61,17 @@ When the Rust workspace root and ICP CLI/project root differ, pass
 `--workspace`, `--icp-root`, and `--config` to `canic build`. The low-level
 `build_artifact` example takes those three paths after its role and profile.
 
-If canister crates live outside the default `fleets/` directory, host
+If canister crates live outside the default `apps/` directory, host
 discovery first tries Cargo workspace metadata. Every Canic-managed canister
-package must declare the fleet-scoped role it implements in Cargo metadata:
+package must declare the App-scoped role it implements in Cargo metadata:
 
 ```toml
 [package.metadata.canic]
-fleet = "project"
+app = "project"
 role = "project_ledger"
 ```
 
 For `canic install`, the implicit environment default is always `local`; use
 `--environment <name>` for one command against another environment. The public CLI
 requires the fleet name as the first positional argument and uses
-`fleets/<name>/canic.toml`.
+`apps/<name>/canic.toml`.

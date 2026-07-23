@@ -192,7 +192,7 @@ fn sample_state(deployment: &str, fleet: &str, root: &str) -> InstallState {
         root_build_target: "root".to_string(),
         workspace_root: ".".to_string(),
         icp_root: ".".to_string(),
-        config_path: "fleets/demo/canic.toml".to_string(),
+        config_path: "apps/demo/canic.toml".to_string(),
         release_set_manifest_path: ".canic/local/release-set.json".to_string(),
     }
 }

@@ -1,6 +1,6 @@
 //! Module: canic_cli::scaffold
 //!
-//! Responsibility: create local fleet and declared canister source scaffolds.
+//! Responsibility: create local app and declared canister source scaffolds.
 //! Does not own: deployment execution, canister install/upgrade, or runtime
 //! state mutation.
 //! Boundary: validates CLI input and writes new local source/config files only.
@@ -22,10 +22,10 @@ use canic_host::{
     durable_io::write_bytes,
     install_root::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
-        select_discovered_fleet_config_path,
+        select_discovered_app_config_path,
     },
     release_set::{
-        AppConfigError, declare_fleet_role, display_workspace_path, plan_declare_fleet_role,
+        AppConfigError, declare_app_role, display_workspace_path, plan_declare_app_role,
     },
 };
 use clap::{Arg, Command as ClapCommand};
@@ -38,11 +38,11 @@ use std::{
 use thiserror::Error as ThisError;
 use toml::Value as TomlValue;
 
-const FLEET_CREATE_HELP_AFTER: &str = "\
+const APP_CREATE_HELP_AFTER: &str = "\
 Examples:
-  canic fleet create demo
-  canic fleet create demo --yes
-  canic fleet create demo --dry-run";
+  canic app create demo
+  canic app create demo --yes
+  canic app create demo --dry-run";
 const SCAFFOLD_HELP_AFTER: &str = "\
 Examples:
   canic scaffold canister demo store
@@ -68,17 +68,17 @@ pub enum ScaffoldCommandError {
     #[error("scaffold target already exists: {0}")]
     TargetExists(String),
 
-    #[error("fleet create cancelled")]
+    #[error("app create cancelled")]
     Cancelled,
 
-    #[error("no Canic fleet configs found under fleets; run canic fleet create <name>")]
+    #[error("no Canic app configs found under apps; run canic app create <name>")]
     NoConfigChoices,
 
-    #[error("unknown fleet {0}; run canic fleet list to inspect config-defined fleets")]
-    UnknownFleet(String),
+    #[error("unknown app {0}; run canic app list to inspect config-defined apps")]
+    UnknownApp(String),
 
-    #[error("fleet {0} config does not have a parent directory")]
-    MissingFleetDirectory(String),
+    #[error("app {0} config does not have a parent directory")]
+    MissingAppDirectory(String),
 
     #[error("failed to discover Canic project configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
@@ -116,7 +116,7 @@ struct ScaffoldOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CanisterScaffoldOptions {
-    fleet: String,
+    app: String,
     role: String,
     dry_run: bool,
 }
@@ -127,7 +127,7 @@ impl ScaffoldOptions {
     where
         I: IntoIterator<Item = OsString>,
     {
-        Self::parse_with(args, fleet_create_command(), fleet_create_usage)
+        Self::parse_with(args, app_create_command(), app_create_usage)
     }
 
     fn parse_with<I>(
@@ -168,7 +168,7 @@ impl CanisterScaffoldOptions {
         let matches =
             parse_matches(command, args).map_err(|_| ScaffoldCommandError::Usage(usage()))?;
         Ok(Self {
-            fleet: required_string(&matches, "fleet"),
+            app: required_string(&matches, "app"),
             role: required_string(&matches, "role"),
             dry_run: matches.get_flag("dry-run"),
         })
@@ -199,17 +199,17 @@ where
     }
 }
 
-/// Run the fleet create command.
-pub fn run_fleet_create<I>(args: I) -> Result<(), ScaffoldCommandError>
+/// Run the app create command.
+pub fn run_app_create<I>(args: I) -> Result<(), ScaffoldCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
     let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, fleet_create_usage, version_text()) {
+    if print_help_or_version(&args, app_create_usage, version_text()) {
         return Ok(());
     }
 
-    let options = ScaffoldOptions::parse_with(args, fleet_create_command(), fleet_create_usage)?;
+    let options = ScaffoldOptions::parse_with(args, app_create_command(), app_create_usage)?;
     run_scaffold(options)
 }
 
@@ -235,7 +235,7 @@ where
         scaffold_canister(&options)?
     };
     println!("Created Canic canister role:");
-    println!("  role: {}.{}", result.fleet, result.role);
+    println!("  role: {}.{}", result.app, result.role);
     println!("  package: {}", result.package);
     println!("  crate: {}", result.canister_dir.display());
     println!("  config: {}", result.config_path.display());
@@ -245,8 +245,8 @@ where
     println!("  cargo check -p {}", result.package_name);
     println!("  canic medic project --ci");
     println!(
-        "  canic fleet role attach {} {} --subnet <subnet>",
-        result.fleet, result.role
+        "  canic app role attach {} {} --subnet <subnet>",
+        result.app, result.role
     );
     println!(
         "  if medic reports required auth features, edit {} manually",
@@ -267,7 +267,7 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
     }
 
     let result = scaffold_project_at(&project_root, &options)?;
-    println!("Created Canic fleet:");
+    println!("Created Canic app:");
     println!("  {}", result.project_dir.display());
     println!("  {}", result.root_dir.display());
     println!("  {}", result.app_dir.display());
@@ -287,7 +287,7 @@ fn run_scaffold(options: ScaffoldOptions) -> Result<(), ScaffoldCommandError> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CanisterScaffoldResult {
-    fleet: String,
+    app: String,
     role: String,
     package: String,
     package_name: String,
@@ -334,7 +334,7 @@ fn plan_scaffold_project_at(
     project_root: &Path,
     options: &ScaffoldOptions,
 ) -> Result<ScaffoldProjectPlan, ScaffoldCommandError> {
-    let project_dir = project_root.join("fleets").join(&options.name);
+    let project_dir = project_root.join("apps").join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
@@ -404,7 +404,7 @@ fn scaffold_project_at(
     Ok(plan.result)
 }
 
-/// Create a declared-only canister crate under an existing fleet config.
+/// Create a declared-only canister crate under an existing app config.
 fn scaffold_canister(
     options: &CanisterScaffoldOptions,
 ) -> Result<CanisterScaffoldResult, ScaffoldCommandError> {
@@ -421,11 +421,11 @@ fn plan_scaffold_canister_at(
     project_root: &Path,
     options: &CanisterScaffoldOptions,
 ) -> Result<CanisterScaffoldPlan, ScaffoldCommandError> {
-    let config_path = selected_fleet_config_path(project_root, &options.fleet)?;
-    let fleet_dir = config_path
+    let config_path = selected_app_config_path(project_root, &options.app)?;
+    let app_dir = config_path
         .parent()
-        .ok_or_else(|| ScaffoldCommandError::MissingFleetDirectory(options.fleet.clone()))?;
-    let canister_dir = fleet_dir.join(&options.role);
+        .ok_or_else(|| ScaffoldCommandError::MissingAppDirectory(options.app.clone()))?;
+    let canister_dir = app_dir.join(&options.role);
     if canister_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             canister_dir.display().to_string(),
@@ -433,16 +433,16 @@ fn plan_scaffold_canister_at(
     }
 
     let package = options.role.clone();
-    plan_declare_fleet_role(&config_path, &options.fleet, &options.role, &package)
+    plan_declare_app_role(&config_path, &options.app, &options.role, &package)
         .map_err(|err| ScaffoldCommandError::Usage(err.to_string()))?;
     let workspace_member = display_workspace_path(project_root, &canister_dir);
     validate_workspace_member_update(project_root, &workspace_member)?;
     let workspace_manifest_path = workspace_manifest_path(project_root);
-    let package_name = canister_package_name(&options.fleet, &options.role);
+    let package_name = canister_package_name(&options.app, &options.role);
 
     Ok(CanisterScaffoldPlan {
         result: CanisterScaffoldResult {
-            fleet: options.fleet.clone(),
+            app: options.app.clone(),
             role: options.role.clone(),
             package,
             package_name,
@@ -470,14 +470,14 @@ fn scaffold_canister_at(
     let write_result = (|| {
         write_new_file(
             &plan.canister_dir.join("Cargo.toml"),
-            &canister_cargo_toml(&options.fleet, &options.role),
+            &canister_cargo_toml(&options.app, &options.role),
         )?;
         write_new_file(&plan.canister_dir.join("build.rs"), CANISTER_BUILD_RS)?;
         write_new_file(&src_dir.join("lib.rs"), CANISTER_LIB_RS)?;
         append_workspace_member(project_root, &plan.workspace_member)?;
-        declare_fleet_role(
+        declare_app_role(
             &plan.config_path,
-            &options.fleet,
+            &options.app,
             &options.role,
             &plan.result.package,
         )?;
@@ -740,30 +740,30 @@ fn scaffold_command() -> ClapCommand {
         .after_help(SCAFFOLD_HELP_AFTER)
 }
 
-fn fleet_create_command() -> ClapCommand {
+fn app_create_command() -> ClapCommand {
     ClapCommand::new("create")
-        .bin_name("canic fleet create")
-        .about("Create a minimal Canic fleet")
+        .bin_name("canic app create")
+        .about("Create a minimal Canic app")
         .disable_help_flag(true)
         .arg(
             Arg::new("name")
                 .value_name("name")
                 .required(true)
                 .value_parser(clap::builder::ValueParser::new(parse_project_name))
-                .help("Snake-case fleet name to create"),
+                .help("Snake-case app name to create"),
         )
         .arg(
             flag_arg("yes")
                 .long("yes")
                 .short('y')
-                .help("Create the fleet without prompting for confirmation"),
+                .help("Create the app without prompting for confirmation"),
         )
         .arg(
             flag_arg("dry-run")
                 .long("dry-run")
                 .help("Validate and print planned source files without writing them"),
         )
-        .after_help(FLEET_CREATE_HELP_AFTER)
+        .after_help(APP_CREATE_HELP_AFTER)
 }
 
 fn scaffold_canister_command() -> ClapCommand {
@@ -772,11 +772,11 @@ fn scaffold_canister_command() -> ClapCommand {
         .about("Create a declared-only canister role")
         .disable_help_flag(true)
         .arg(
-            Arg::new("fleet")
-                .value_name("fleet")
+            Arg::new("app")
+                .value_name("app")
                 .required(true)
                 .value_parser(clap::builder::ValueParser::new(parse_project_name))
-                .help("Config-defined fleet name"),
+                .help("Config-defined app name"),
         )
         .arg(
             Arg::new("role")
@@ -797,8 +797,8 @@ fn usage() -> String {
     render_usage(scaffold_command)
 }
 
-pub fn fleet_create_usage() -> String {
-    render_usage(fleet_create_command)
+pub fn app_create_usage() -> String {
+    render_usage(app_create_command)
 }
 
 fn scaffold_canister_usage() -> String {
@@ -807,7 +807,7 @@ fn scaffold_canister_usage() -> String {
 
 fn render_scaffold_project_plan(plan: &ScaffoldProjectPlan) -> String {
     let mut lines = vec![
-        "Planned Canic fleet scaffold:".to_string(),
+        "Planned Canic app scaffold:".to_string(),
         format!("  project: {}", plan.result.project_dir.display()),
         format!("  root: {}", plan.result.root_dir.display()),
         format!("  app: {}", plan.result.app_dir.display()),
@@ -831,7 +831,7 @@ fn render_canister_scaffold_plan(plan: &CanisterScaffoldPlan) -> String {
 
     let mut lines = vec![
         "Planned Canic canister role scaffold:".to_string(),
-        format!("  role: {}.{}", plan.result.fleet, plan.result.role),
+        format!("  role: {}.{}", plan.result.app, plan.result.role),
         format!("  package: {}", plan.result.package),
         format!("  crate: {}", plan.result.canister_dir.display()),
         format!("  config: {}", plan.result.config_path.display()),
@@ -853,14 +853,14 @@ where
     R: BufRead,
     W: Write,
 {
-    let project_dir = project_root.join("fleets").join(&options.name);
+    let project_dir = project_root.join("apps").join(&options.name);
     if project_dir.exists() {
         return Err(ScaffoldCommandError::TargetExists(
             project_dir.display().to_string(),
         ));
     }
 
-    writeln!(writer, "Create Canic fleet?")?;
+    writeln!(writer, "Create Canic app?")?;
     writeln!(writer, "  project: {}", options.name)?;
     writeln!(writer, "  target:  {}", project_dir.display())?;
     writeln!(writer, "  install: canic install {}", options.name)?;
@@ -880,17 +880,17 @@ fn scaffold_project_root() -> Result<PathBuf, ScaffoldCommandError> {
     current_canic_project_root().map_err(Into::into)
 }
 
-fn selected_fleet_config_path(
+fn selected_app_config_path(
     project_root: &Path,
-    fleet: &str,
+    app: &str,
 ) -> Result<PathBuf, ScaffoldCommandError> {
     let choices = discover_project_canic_config_choices(project_root)?;
     if choices.is_empty() {
         return Err(ScaffoldCommandError::NoConfigChoices);
     }
 
-    select_discovered_fleet_config_path(&choices, fleet)?
-        .ok_or_else(|| ScaffoldCommandError::UnknownFleet(fleet.to_string()))
+    select_discovered_app_config_path(&choices, app)?
+        .ok_or_else(|| ScaffoldCommandError::UnknownApp(app.to_string()))
 }
 
 fn parse_project_name(name: &str) -> Result<String, String> {
@@ -901,8 +901,8 @@ fn parse_project_name(name: &str) -> Result<String, String> {
     Ok(name.to_string())
 }
 
-fn canister_package_name(fleet: &str, role: &str) -> String {
-    format!("canister_{fleet}_{role}").replace('-', "_")
+fn canister_package_name(app: &str, role: &str) -> String {
+    format!("canister_{app}_{role}").replace('-', "_")
 }
 
 fn display_path(workspace_root: &Path, path: &Path) -> PathBuf {
@@ -937,9 +937,9 @@ fn write_new_file(path: &Path, contents: &str) -> Result<(), ScaffoldCommandErro
     fs::write(path, contents).map_err(ScaffoldCommandError::from)
 }
 
-fn canister_cargo_toml(fleet: &str, role: &str) -> String {
+fn canister_cargo_toml(app: &str, role: &str) -> String {
     let canic_version = env!("CARGO_PKG_VERSION");
-    let package_name = canister_package_name(fleet, role);
+    let package_name = canister_package_name(app, role);
     format!(
         r#"[package]
 name = "{package_name}"
@@ -949,7 +949,7 @@ version = "0.1.0"
 publish = false
 
 [package.metadata.canic]
-fleet = "{fleet}"
+app = "{app}"
 role = "{role}"
 
 [lib]
@@ -1009,7 +1009,7 @@ version = "0.1.0"
 publish = false
 
 [package.metadata.canic]
-fleet = "{name}"
+app = "{name}"
 role = "root"
 
 [lib]
@@ -1038,7 +1038,7 @@ version = "0.1.0"
 publish = false
 
 [package.metadata.canic]
-fleet = "{name}"
+app = "{name}"
 role = "app"
 
 [lib]

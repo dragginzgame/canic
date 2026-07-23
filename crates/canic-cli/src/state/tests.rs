@@ -200,12 +200,12 @@ fn state_command_preserves_project_discovery_causes() {
         StateCommandError::IcpRoot(IcpConfigError::NoIcpRoot { .. })
     ));
 
-    let discovery_error = StateCommandError::from(ConfigDiscoveryError::DuplicateFleet {
-        fleet: "duplicate".to_string(),
+    let discovery_error = StateCommandError::from(ConfigDiscoveryError::DuplicateApp {
+        app: "duplicate".to_string(),
         configs: "first/canic.toml, second/canic.toml".to_string(),
     });
     assert!(matches!(
         discovery_error,
-        StateCommandError::ConfigDiscovery(ConfigDiscoveryError::DuplicateFleet { .. })
+        StateCommandError::ConfigDiscovery(ConfigDiscoveryError::DuplicateApp { .. })
     ));
 }

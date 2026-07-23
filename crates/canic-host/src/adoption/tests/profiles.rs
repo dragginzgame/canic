@@ -186,7 +186,7 @@ fn standalone_fixture_keeps_compile_only_role_unattached() {
         None,
         vec![AdoptionPackageMetadataV1 {
             package: "worker".to_string(),
-            fleet: Some("demo".to_string()),
+            app: Some("demo".to_string()),
             role: Some("worker".to_string()),
         }],
     );
@@ -285,6 +285,6 @@ fn leaf_only_fixture_does_not_recommend_authority_hub_adoption() {
             .recommendations
             .iter()
             .any(|recommendation| recommendation.suggested_action.as_deref()
-                == Some("canic fleet role declare demo governance --package <path>"))
+                == Some("canic app role declare demo governance --package <path>"))
     );
 }

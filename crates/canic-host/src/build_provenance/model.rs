@@ -87,7 +87,7 @@ pub struct CargoProvenanceV1 {
     pub package_manifest_sha256: Option<String>,
     pub package_name: String,
     pub package_manifest: String,
-    pub package_metadata_fleet: String,
+    pub package_metadata_app: String,
     pub package_metadata_role: String,
     pub rustc_version: Option<String>,
     pub cargo_version: Option<String>,
@@ -118,7 +118,7 @@ pub enum BuildScriptInputStateV1 {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ArtifactProvenanceV1 {
     pub role: String,
-    pub fleet: String,
+    pub app: String,
     pub artifact_kind: ArtifactProvenanceKindV1,
     pub path: Option<String>,
     pub path_display: InputPathDisplayV1,
@@ -175,7 +175,7 @@ pub enum ArtifactTransformOutcomeV1 {
 ///
 #[derive(Clone, Debug)]
 pub struct BuildProvenanceRequest {
-    pub fleet: String,
+    pub app: String,
     pub role: String,
     pub environment: String,
     pub build_network: BuildNetwork,

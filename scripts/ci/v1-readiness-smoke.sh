@@ -48,7 +48,7 @@ EOF
   },
   "canic_version": "0.55.0",
   "command": {
-    "name": "canic fleet adoption report",
+    "name": "canic app adoption report",
     "argv_normalized": ["canic", "fleet", "adoption", "report", "demo"],
     "argv_redactions": [],
     "format": "envelope-json"

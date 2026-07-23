@@ -163,7 +163,7 @@ fn command_accepts_global_environment(command: &str, tail: &[OsString]) -> bool 
         "auth" => auth_leaf_accepts_globals(tail),
         "deploy" => deploy_leaf_accepts_global_environment(tail),
         "info" => info_leaf_accepts_globals(tail),
-        "fleet" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
+        "app" => tail.first().and_then(|arg| arg.to_str()) == Some("list"),
         "backup" => tail.first().and_then(|arg| arg.to_str()) == Some("create"),
         "restore" => tail.first().and_then(|arg| arg.to_str()) == Some("run"),
         _ => false,

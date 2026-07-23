@@ -43,5 +43,5 @@ built crate, run the host artifact builder from the Canic workspace with:
 
 ```bash
 CARGO_INCREMENTAL=0 cargo run -q --profile fast -p canic-host --example build_artifact -- \
-  wasm_store release . . fleets/test/canic.toml --refresh-wasm-store-did
+  wasm_store release . . apps/test/canic.toml --refresh-wasm-store-did
 ```

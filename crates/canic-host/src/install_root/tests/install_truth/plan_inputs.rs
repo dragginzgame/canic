@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn install_truth_artifact_gate_blocks_missing_built_artifacts() {
     let root = temp_dir("canic-install-truth-artifact-gate");
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(
         &config_path,
@@ -100,7 +100,7 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
         "canic-install-truth-supplied-deployment-plan-override",
     );
     check.plan.plan_id = "promoted-plan-1".to_string();
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
@@ -109,7 +109,7 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
@@ -135,7 +135,7 @@ fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
     let (root, mut check) =
         demo_install_deployment_truth_check("canic-install-truth-plan-environment-mismatch");
     check.plan.deployment_identity.environment = "ic".to_string();
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
@@ -144,7 +144,7 @@ fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
@@ -169,7 +169,7 @@ fn install_truth_check_rejects_supplied_plan_deployment_target_mismatch() {
     let (root, mut check) =
         demo_install_deployment_truth_check("canic-install-truth-plan-target-mismatch");
     check.plan.deployment_identity.deployment_name = "prod".to_string();
-    let config_path = root.join("fleets/demo/canic.toml");
+    let config_path = root.join("apps/demo/canic.toml");
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
@@ -178,7 +178,7 @@ fn install_truth_check_rejects_supplied_plan_deployment_target_mismatch() {
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
-        config_path: Some("fleets/demo/canic.toml".to_string()),
+        config_path: Some("apps/demo/canic.toml".to_string()),
         expected_fleet: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),

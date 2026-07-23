@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.1` hard-cuts source ownership from Fleet to App across the `apps/`
+  tree, package metadata, config discovery, role lifecycle, builds, adoption,
+  evidence, CLI commands, fixtures, scripts, and active guidance while leaving
+  installed Fleet behavior for the dedicated live-surface slice.
+
 - `0.99.0` begins the reinstall-only App/Fleet hard cut: source identity moves
   from `[fleet].name` to required `[app].name`, `app_index` authoring becomes
   `[services.fleet].roles`, `SubnetRole::PRIME` becomes

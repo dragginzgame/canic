@@ -467,7 +467,7 @@ mod tests {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
 
         for (config_path, role, expected_ids) in [
-            ("fleets/test/canic.toml", "user_hub", vec![49, 53, 54, 56]),
+            ("apps/test/canic.toml", "user_hub", vec![49, 53, 54, 56]),
             (
                 "canisters/audit/scaling_probe/canic.toml",
                 "scale_hub",

@@ -37,7 +37,7 @@ Examples:
   canic install test
   canic install --profile fast test
 
-canic install uses fleets/<fleet>/canic.toml.
+canic install uses apps/<fleet>/canic.toml.
 Use it for fresh local creation or recreating local state after the ICP CLI
 replica lost canisters. For an existing canister that only needs new Wasm,
 inspect with canic info list and canic medic deployment, then use the
@@ -172,7 +172,7 @@ where
 }
 
 fn default_fleet_config_path(fleet: &str) -> String {
-    format!("fleets/{fleet}/canic.toml")
+    format!("apps/{fleet}/canic.toml")
 }
 
 fn usage() -> String {

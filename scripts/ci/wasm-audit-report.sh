@@ -261,7 +261,7 @@ trap cleanup EXIT
 export CARGO_TARGET_DIR="${CANIC_AUDIT_CARGO_TARGET_DIR:-$RUN_TMP/target}"
 export CARGO_NET_OFFLINE="true"
 
-PRODUCT_CONFIG="$PRODUCT_ROOT/fleets/test/canic.toml"
+PRODUCT_CONFIG="$PRODUCT_ROOT/apps/test/canic.toml"
 mapfile -t CANISTERS < <(
     bash "$METHOD_ROOT/scripts/ci/list-config-canisters.sh" \
         --config "$PRODUCT_CONFIG" --ci-order
@@ -638,13 +638,13 @@ clean_worktree: true before; tracked-clean after; generated .icp only
 cargo_lock_hash: $CARGO_LOCK_HASH
 rust_toolchain: $RUSTC_VERSION; $CARGO_VERSION
 target_triple: wasm32-unknown-unknown
-feature_set: fleets/test attached six-role roster
+feature_set: apps/test attached six-role roster
 audit_method_id: $METHOD_ID
 audit_method_version: $METHOD_VERSION
 audit_method_fingerprint: $METHOD_FINGERPRINT
 audit_script_hashes: definition=$DEFINITION_FINGERPRINT; executable-composite=$METHOD_FINGERPRINT
 external_tool_versions: $ICP_VERSION; $IC_WASM_VERSION; $TWIGGY_VERSION
-fixture_or_seed: fleets/test/canic.toml@$PRODUCT_COMMIT; roster=$ROSTER_KEY
+fixture_or_seed: apps/test/canic.toml@$PRODUCT_COMMIT; roster=$ROSTER_KEY
 environment_class: isolated local linked-worktree execution_trace
 execution_path_key: $EXECUTION_PATH_KEY
 started_at: $STARTED_AT

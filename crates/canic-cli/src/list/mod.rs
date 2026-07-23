@@ -67,8 +67,8 @@ pub enum ListCommandError {
     #[error("failed to discover Canic project configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
-    #[error("fleet {0} is not declared by any config under fleets; run `canic fleet list`")]
-    UnknownFleet(String),
+    #[error("app {0} is not declared by any config under apps; run `canic app list`")]
+    UnknownApp(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -129,7 +129,7 @@ fn run_list_options(options: ListOptions) -> Result<(), ListCommandError> {
     Ok(())
 }
 
-/// Run the selected fleet config listing command.
+/// Run the selected App config listing command.
 pub fn run_config<I>(args: I) -> Result<(), ListCommandError>
 where
     I: IntoIterator<Item = OsString>,
@@ -148,7 +148,7 @@ where
 
 fn list_title(options: &ListOptions) -> ListTitle {
     let source = match options.source {
-        options::ListSource::Config => ListTitleSource::FleetTemplate,
+        options::ListSource::Config => ListTitleSource::App,
         options::ListSource::RootRegistry => ListTitleSource::Deployment,
     };
     ListTitle {

@@ -36,7 +36,7 @@ Examples:
   canic deploy plan demo-local
   canic deploy plan demo-local --json
   canic deploy plan demo-local --out deployment-plan.json
-  canic deploy plan demo-local --config fleets/demo/canic.toml
+  canic deploy plan demo-local --config apps/demo/canic.toml
 
 Builds a deterministic planning report from local project config. The command
 does not install, upgrade, create canisters, write deployment truth, update

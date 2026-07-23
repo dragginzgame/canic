@@ -61,8 +61,8 @@ run_installed_canic_in_workspace() {
 
 prepare_blob_storage_workspace() {
     mkdir -p \
-        "$DOWNSTREAM_ROOT/fleets/downstream/app" \
-        "$DOWNSTREAM_ROOT/fleets/downstream/root"
+        "$DOWNSTREAM_ROOT/apps/downstream/app" \
+        "$DOWNSTREAM_ROOT/apps/downstream/root"
 
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
 [workspace]
@@ -73,7 +73,7 @@ resolver = "2"
 version = "0.0.0"
 EOF
 
-    cat > "$DOWNSTREAM_ROOT/fleets/downstream/canic.toml" <<'EOF'
+    cat > "$DOWNSTREAM_ROOT/apps/downstream/canic.toml" <<'EOF'
 controllers = []
 [services.fleet]
 roles = ["app"]

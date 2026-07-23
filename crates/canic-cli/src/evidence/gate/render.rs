@@ -168,6 +168,7 @@ fn render_target(target: &EvidenceTargetV1) -> String {
             .deployment
             .as_ref()
             .map(|value| format!("deployment={value}")),
+        target.app.as_ref().map(|value| format!("app={value}")),
         target.fleet.as_ref().map(|value| format!("fleet={value}")),
         target.role.as_ref().map(|value| format!("role={value}")),
         target

@@ -34,7 +34,7 @@ pub(in crate::release_set) fn configured_role_kinds_from_config(
 pub(in crate::release_set) fn configured_role_lifecycle_from_config(
     config: &ConfigModel,
 ) -> Vec<ConfiguredRoleLifecycle> {
-    let fleet = config.app_id().to_string();
+    let app = config.app_id().to_string();
     let attached_roles = config.attached_roles();
     let mut topology = BTreeMap::<CanisterRole, Vec<String>>::new();
 
@@ -81,8 +81,8 @@ pub(in crate::release_set) fn configured_role_lifecycle_from_config(
             let role_name = role.as_str().to_string();
             let attached = attached_roles.contains(role);
             ConfiguredRoleLifecycle {
-                fleet: fleet.clone(),
-                display: format!("{fleet}.{role}"),
+                app: app.clone(),
+                display: format!("{app}.{role}"),
                 role: role_name,
                 declaration_kind: if role.is_root() { "root" } else { "canister" }.to_string(),
                 package: declaration.package.clone(),
