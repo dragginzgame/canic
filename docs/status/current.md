@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.21`.
-- The latest published release is `v0.98.21` at
-  `3c87da1aa5fd82e179ee37153681e4222a31fa17`.
-- The `v0.98.21` source tree is
-  `92da81dfb006994b1e4acb1b6643d75f56ebb68d`; its product-tree hash is
-  `cdab8b99f47f5d534addf5bb138780a1d8a275976678209ec0e47519d6c6fa64` and
+- The workspace package version is `0.98.22`.
+- The latest published release is `v0.98.22` at
+  `c5886d322cb09b81697f8811f3ce8118d54d074d`.
+- The `v0.98.22` source tree is
+  `8d4a9d6d33ea54625fd3c2fa4b4ca9a481a1d474`; its product-tree hash is
+  `b4219c3a996e7245f580ab037c9c3306c88a959f5b19b0266fdcb3f6cefe75e7` and
   its Cargo.lock SHA-256 is
-  `96b378394f0d72c0433f02271edc4e577553f4aa1d154a40b129536a7a5487f9`.
+  `2ae2be5a14c7251b7ae47f7ccde93562a2840ce2897e350c711ff41a47f87a8f`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -54,8 +54,8 @@ Historical detail is archived at:
 - Released `0.98.17` implements the original Slice O cut: generic application
   IC calls moved to upstream `ic-cdk`; the facade/prelude call, HTTP-outcall,
   and build-network helpers plus the orphan HTTP stack were removed while
-  active internal call and build-network authorities remained. Open `0.98.21`
-  corrects only the public instrumented Call-builder decision.
+  active internal call and build-network authorities remained. Released
+  `0.98.21` corrects only the public instrumented Call-builder decision.
 - Released `0.98.18` is design-only: it makes protected `FleetBinding`
   universal across every managed Canister in the proposed 0.99 hard cut and
   refines the proposed 0.100 Prime-owned Registry, mirror, Directory,
@@ -73,8 +73,10 @@ Historical detail is archived at:
   instrumented `canic::api::call::Call` builder and prelude entrypoint over the
   surviving single call transport; generic CDK, HTTP, and build-network
   facades remain removed.
-- Open `0.98.22` adds direct typed execution and decoding to that canonical
+- Released `0.98.22` adds direct typed execution and decoding to that canonical
   builder without changing or duplicating the underlying call authority.
+- Open `0.98.23` removes dead raw-response comparison and transparent generic
+  call/NNS error envelopes while retaining typed causes and behavior.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1110,10 +1112,12 @@ maintained call/build-network authorities remain. Released `v0.98.20` gives
 manual ICP refill one adapter-local ICRC-1 account shape and uses persisted CMC
 identity on resume. Released `v0.98.21` also removes the false ICRC-103
 configuration/advertisement path while retaining implemented ICRC-10/21
-behavior. Open `0.98.22` adds direct typed call completion only at the public
-API boundary; explicit `execute`/`CallResult` handling remains supported. It
-does not implement Fleet identity, a Fleet Registry, multi-subnet
-synchronization, or any other proposed 0.99/0.100 behavior. Preserve the
+behavior. Released `v0.98.22` adds direct typed call completion only at the
+public API boundary; explicit `execute`/`CallResult` handling remains
+supported. Open `0.98.23` removes only dead raw-response comparison and
+redundant transparent IC error envelopes. It does not implement Fleet
+identity, a Fleet Registry, multi-subnet synchronization, or any other
+proposed 0.99/0.100 behavior. Preserve the
 maintainer's active 0.99/0.100 design edits. Do not inspect or edit the stale
 local Toko repository, change Cargo package versions outside the
 maintainer-owned release flow, or commit, tag, publish, or push shared-worktree

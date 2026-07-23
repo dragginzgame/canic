@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.23` removes dead raw-response comparison and transparent one-variant
+  call/NNS error envelopes while preserving the canonical typed causes,
+  metrics, and public call behavior.
+
 - `0.98.22` lets the canonical instrumented call builder execute and decode
   single-value or tuple Candid responses in one typed operation while
   retaining explicit response handling for advanced callers.

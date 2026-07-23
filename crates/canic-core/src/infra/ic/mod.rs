@@ -12,7 +12,7 @@ pub mod mgmt;
 pub mod nns;
 
 use crate::cdk::candid::Error as CandidError;
-use ic_cdk::call::{CallFailed, CandidDecodeFailed, Error as CallError};
+use ic_cdk::call::{CallFailed, CandidDecodeFailed, Error as CdkCallError};
 use thiserror::Error as ThisError;
 
 ///
@@ -31,7 +31,7 @@ pub enum IcInfraError {
     MgmtInfra(#[from] mgmt::MgmtInfraError),
 
     #[error(transparent)]
-    NnsInfra(#[from] nns::NnsInfraError),
+    NnsRegistryInfra(#[from] nns::registry::NnsRegistryInfraError),
 
     // candid catch-all errors
     #[error(transparent)]
@@ -44,15 +44,15 @@ pub enum IcInfraError {
     CandidDecode(#[from] CandidDecodeFailed),
 }
 
-impl From<CallError> for IcInfraError {
-    fn from(err: CallError) -> Self {
+impl From<CdkCallError> for IcInfraError {
+    fn from(err: CdkCallError) -> Self {
         match err {
-            CallError::CandidDecodeFailed(err) => err.into(),
-            CallError::InsufficientLiquidCycleBalance(err) => {
+            CdkCallError::CandidDecodeFailed(err) => err.into(),
+            CdkCallError::InsufficientLiquidCycleBalance(err) => {
                 CallFailed::InsufficientLiquidCycleBalance(err).into()
             }
-            CallError::CallPerformFailed(err) => CallFailed::CallPerformFailed(err).into(),
-            CallError::CallRejected(err) => CallFailed::CallRejected(err).into(),
+            CdkCallError::CallPerformFailed(err) => CallFailed::CallPerformFailed(err).into(),
+            CdkCallError::CallRejected(err) => CallFailed::CallRejected(err).into(),
         }
     }
 }

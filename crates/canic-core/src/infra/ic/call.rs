@@ -145,11 +145,6 @@ pub struct CallResult {
 }
 
 impl CallResult {
-    /// Return whether the raw response bytes exactly match `expected`.
-    pub fn raw_equals(&self, expected: &[u8]) -> bool {
-        self.inner == expected
-    }
-
     /// Decode the response as a single Candid value.
     pub fn candid<R>(&self) -> Result<R, InfraError>
     where

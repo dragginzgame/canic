@@ -10,11 +10,8 @@ use crate::{
         PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
         PlatformCallMetricSurface,
     },
-    infra::{
-        InfraError,
-        ic::call::{
-            Call as InfraCall, CallBuilder as InfraCallBuilder, CallResult as InfraCallResult,
-        },
+    infra::ic::call::{
+        Call as InfraCall, CallBuilder as InfraCallBuilder, CallResult as InfraCallResult,
     },
     ops::{
         ic::IcOpsError,
@@ -30,23 +27,6 @@ use candid::{
 };
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
-use thiserror::Error as ThisError;
-
-///
-/// CallError
-///
-/// Typed IC call failure wrapper around infra errors.
-///
-
-#[derive(Debug, ThisError)]
-#[error(transparent)]
-pub struct CallError(#[from] InfraError);
-
-impl From<CallError> for InternalError {
-    fn from(err: CallError) -> Self {
-        IcOpsError::from(err).into()
-    }
-}
 
 ///
 /// CallOps
@@ -98,7 +78,7 @@ impl CallBuilder<'_> {
         A: CandidType,
     {
         let mode = self.mode;
-        let inner = match self.inner.with_arg(arg).map_err(CallError::from) {
+        let inner = match self.inner.with_arg(arg).map_err(IcOpsError::from) {
             Ok(inner) => inner,
             Err(err) => {
                 record_generic_call(
@@ -119,7 +99,7 @@ impl CallBuilder<'_> {
         A: ArgumentEncoder,
     {
         let mode = self.mode;
-        let inner = match self.inner.with_args(args).map_err(CallError::from) {
+        let inner = match self.inner.with_args(args).map_err(IcOpsError::from) {
             Ok(inner) => inner,
             Err(err) => {
                 record_generic_call(
@@ -154,7 +134,7 @@ impl CallBuilder<'_> {
             PlatformCallMetricOutcome::Started,
             PlatformCallMetricReason::Ok,
         );
-        let inner = match self.inner.execute().await.map_err(CallError::from) {
+        let inner = match self.inner.execute().await.map_err(IcOpsError::from) {
             Ok(inner) => inner,
             Err(err) => {
                 record_generic_call(
@@ -189,15 +169,11 @@ pub struct CallResult {
 }
 
 impl CallResult {
-    pub fn raw_equals(&self, expected: &[u8]) -> bool {
-        self.inner.raw_equals(expected)
-    }
-
     pub fn candid<R>(&self) -> Result<R, InternalError>
     where
         R: CandidType + DeserializeOwned,
     {
-        match self.inner.candid().map_err(CallError::from) {
+        match self.inner.candid().map_err(IcOpsError::from) {
             Ok(value) => {
                 record_generic_call(
                     self.mode,
@@ -221,7 +197,7 @@ impl CallResult {
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        match self.inner.candid_tuple().map_err(CallError::from) {
+        match self.inner.candid_tuple().map_err(IcOpsError::from) {
             Ok(value) => {
                 record_generic_call(
                     self.mode,
