@@ -5,4 +5,3 @@
 //! Boundary: groups spec-specific modules for Canic's internal adapters.
 
 pub mod icrc;
-pub mod xrc;
