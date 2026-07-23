@@ -90,8 +90,10 @@ targets, or compatibility modes are permitted.
 | CANIC-098-PACKAGE-002 project-protocol-stub has no consumer | P2 | fixed | Package/member/lock row deleted without replacement |
 | CANIC-098-TEST-003 LocalIntent external race contradicts receipt contract | P2 | fixed | Client/external/buy path deleted; focused receipt conformance retained |
 | CANIC-098-CLOSE-* consolidation ledger | 1 P1, 11 P2, 30 notes | resolved | All findings fixed and every candidate disposition proved |
+| CANIC-098-POST-IC-HELPERS-001 generic IC helper ownership | P2 | corrected in open 0.98.21 | Canonical instrumented Call builder restored; CDK/HTTP/build-network facades remain removed |
 | CANIC-098-POST-CDK-RELAY-001 redundant internal IC runtime relay | P2 | fixed in v0.98.19 | Direct upstream runtime/macro ownership; clock consolidated; unused stable exports removed |
-| CANIC-098-POST-ICP-ACCOUNT-001 global refill-only account helpers | P2 | fixed in open 0.98.20 | Adapter-local wire account; persisted CMC identity drives resume |
+| CANIC-098-POST-ICP-ACCOUNT-001 global refill-only account helpers | P2 | fixed in v0.98.20 | Adapter-local wire account; persisted CMC identity drives resume |
+| CANIC-098-POST-ICRC103-001 false supported-standard advertisement | P2 | fixed in open 0.98.21 | Unsupported config/render/query branch removed; implemented standards retained |
 
 ## Slice Order
 
@@ -139,10 +141,14 @@ Released `v0.98.18` changes only the proposed 0.99/0.100 design documents and
 normal release metadata; it adds no 0.98 product slice. Released `v0.98.19`
 removes the remaining Canic-core IC runtime API relay while preserving the
 hidden compiler namespace, active internal call transport, and build-network
-ops/infra authority. Open `0.98.20` localizes the refill-only ICRC-1 account
-shape and makes persisted CMC identity authoritative on resume. The immutable
-42-candidate accounting remains closed, and future Fleet/multi-subnet
-contracts are not implemented by this work.
+ops/infra authority. Released `v0.98.20` localizes the refill-only ICRC-1
+account shape and makes persisted CMC identity authoritative on resume. Open
+`0.98.21` removes the unsupported ICRC-103 configuration and advertisement
+path while retaining ICRC-10 and configured ICRC-21. It also corrects the
+over-broad Slice O deletion by restoring one public instrumented Call builder
+over the retained call authority; generic CDK, HTTP, and build-network facades
+remain absent. The immutable 42-candidate accounting remains closed, and
+future Fleet/multi-subnet contracts are not implemented by this work.
 
 ## Slice A Validation
 

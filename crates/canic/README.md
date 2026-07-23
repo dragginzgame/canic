@@ -87,6 +87,28 @@ Use `canic::build!("../canic.toml")` from `build.rs` and `canic::start!()` from
 `canic.toml`. `role = "root"` selects the root lifecycle and root endpoint
 bundle; ordinary roles select the non-root lifecycle and endpoint bundle.
 
+## Inter-Canister Calls
+
+Use the Canic call builder when application code benefits from concise Candid
+encoding, typed public errors, and Canic's inter-canister call metrics:
+
+```rust
+use candid::Principal;
+use canic::prelude::Call;
+
+async fn read_count(target: Principal) -> Result<u64, canic::Error> {
+    Call::bounded_wait(target, "read_count")
+        .execute()
+        .await?
+        .candid()
+}
+```
+
+`Call::unbounded_wait` is also available, as are `with_arg`, `with_args`,
+`with_raw_args`, and `with_cycles`. This is an ordinary IC call builder; it
+does not replace Canic's protected capability RPC used for framework-owned
+creation, upgrade, placement, recycling, or cycle operations.
+
 ## Application Timers
 
 `timer!` schedules one asynchronous invocation. `timer_interval!` schedules

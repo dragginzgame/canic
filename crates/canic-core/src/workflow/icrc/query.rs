@@ -2,12 +2,12 @@
 //!
 //! Responsibility: expose ICRC-10 supported standards and ICRC-21 consent-message queries.
 //! Does not own: endpoint authorization, dispatcher internals, or standards DTO schemas.
-//! Boundary: workflow query facade over ICRC registry and dispatcher services.
+//! Boundary: workflow query facade over the standards projection and dispatcher services.
 
 use crate::{
     config::Config,
     dispatch::icrc21::Icrc21Dispatcher,
-    domain::icrc::icrc10::Icrc10Registry,
+    domain::icrc::icrc10::supported_standards,
     dto::icrc21::{ConsentMessageRequest, ConsentMessageResponse},
     ops::runtime::env::EnvOps,
 };
@@ -21,7 +21,7 @@ pub struct Icrc10Query;
 impl Icrc10Query {
     #[must_use]
     pub fn supported_standards() -> Vec<(String, String)> {
-        let (icrc21_enabled, icrc103_enabled) = Config::try_get().map_or((false, false), |cfg| {
+        let icrc21_enabled = Config::try_get().is_some_and(|cfg| {
             let global_standards = cfg.standards.as_ref();
             let canister_standards = EnvOps::subnet_role().ok().and_then(|subnet_role| {
                 EnvOps::canister_role().ok().and_then(|canister_role| {
@@ -33,14 +33,11 @@ impl Icrc10Query {
                 })
             });
 
-            (
-                global_standards.is_some_and(|standards| standards.icrc21)
-                    && canister_standards.is_some_and(|standards| standards.icrc21),
-                global_standards.is_some_and(|standards| standards.icrc103),
-            )
+            global_standards.is_some_and(|standards| standards.icrc21)
+                && canister_standards.is_some_and(|standards| standards.icrc21)
         });
 
-        Icrc10Registry::supported_standards(icrc21_enabled, icrc103_enabled)
+        supported_standards(icrc21_enabled)
     }
 }
 

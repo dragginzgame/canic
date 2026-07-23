@@ -154,7 +154,6 @@ Root canister-signature role-attestation settings.
 Feature toggles tied to public standards.
 
 - `icrc21: bool` – enable the ICRC-21 consent endpoint (default `false`).
-- `icrc103: bool` – include ICRC-103 metadata (default `false`).
 
 ---
 

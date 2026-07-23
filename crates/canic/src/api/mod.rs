@@ -28,6 +28,11 @@ pub mod intent {
     };
 }
 
+/// Instrumented inter-canister call construction and response decoding.
+pub mod call {
+    pub use crate::__internal::core::api::call::{Call, CallBuilder, CallResult};
+}
+
 /// Environment queries
 pub mod env {
     pub use crate::__internal::core::api::env::EnvQuery;

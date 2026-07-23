@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.19`.
-- The latest published release is `v0.98.19` at
-  `9b7cff1f690dec18fe3e5e7737c85eae3594185d`.
-- The `v0.98.19` source tree is
-  `3e4829990341b9897d402e05ddda55b42f020f3e`; its product-tree hash is
-  `e43ff9f4f3b8bef636cd280a97a0ad27bc45c9213bc32953b78021a13780f247` and
+- The workspace package version is `0.98.20`.
+- The latest published release is `v0.98.20` at
+  `d13edb8598902b1607be86e774800c3cdc5c6878`.
+- The `v0.98.20` source tree is
+  `2a6cefd36de6349f810807ab8ca06697e3772d17`; its product-tree hash is
+  `4be9a3fd3aa161a3e342ef32d3aef1ea7b838e88aa0bd9381eb59530bfc7b1e6` and
   its Cargo.lock SHA-256 is
-  `644e0c56ba47a1c63b7e2e034ff22ae0bf27e3558ca94cff4e710ebdda78a353`.
+  `0d075ba4debba1f0dbf1ea0e04f8d1061cf123c8f10eaabc19d653e66e78d278`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -51,10 +51,11 @@ Historical detail is archived at:
 - Released `0.98.16` implements Slice N: the orphan generic ICRC-2 allowance and
   `transfer_from` stack is removed across API, workflow, ops, infra, wire
   bindings, known-ledger constants, and its unused platform metric dimension.
-- Released `0.98.17` implements Slice O: generic application IC calls move to
-  upstream `ic-cdk`; the unused facade/prelude call, HTTP-outcall, and
-  build-network helpers plus the orphan HTTP stack are removed while active
-  internal call and build-network authorities remain.
+- Released `0.98.17` implements the original Slice O cut: generic application
+  IC calls moved to upstream `ic-cdk`; the facade/prelude call, HTTP-outcall,
+  and build-network helpers plus the orphan HTTP stack were removed while
+  active internal call and build-network authorities remained. Open `0.98.21`
+  corrects only the public instrumented Call-builder decision.
 - Released `0.98.18` is design-only: it makes protected `FleetBinding`
   universal across every managed Canister in the proposed 0.99 hard cut and
   refines the proposed 0.100 Prime-owned Registry, mirror, Directory,
@@ -63,9 +64,15 @@ Historical detail is archived at:
   Runtime and hidden macro plumbing use upstream `ic-cdk` directly, time is
   owned by `IcOps`, and unused stable-structures exports are removed without
   changing runtime behavior or package versions.
-- Open `0.98.20` localizes the ICRC-1 account wire shape to the manual
+- Released `0.98.20` localizes the ICRC-1 account wire shape to the manual
   ICP-refill adapter, removes unused generic account/subaccount helpers, and
   makes resumed transfers consume the exact persisted CMC account identity.
+- Open `0.98.21` removes the unsupported global ICRC-103 configuration and
+  advertisement path. ICRC-10 reports only itself and configured ICRC-21,
+  whose maintained endpoint remains unchanged. It also restores the canonical
+  instrumented `canic::api::call::Call` builder and prelude entrypoint over the
+  surviving single call transport; generic CDK, HTTP, and build-network
+  facades remain removed.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1089,20 +1096,24 @@ First primary results:
 
 ## Next Action
 
-Released `v0.98.17` completes generic-IC-helper Slice O. Application-owned
-generic IC calls use upstream `ic-cdk`; Canic retains one shared internal call
-transport and the active build-network ops/infra authority. Released
-`v0.98.18` changes only the proposed 0.99/0.100 design documents and normal
-release metadata. Released `v0.98.19` removes the remaining internal IC
-runtime API relay and narrows the stable-structures export inventory; the
-hidden compiler namespace and maintained call/build-network authorities
-remain. Open `0.98.20` gives manual ICP refill one adapter-local ICRC-1 account
-shape and uses persisted CMC identity on resume. It does not implement Fleet
-identity, a Fleet Registry, multi-subnet synchronization, or any other
-proposed 0.99/0.100 behavior. Preserve the maintainer's active 0.99/0.100
-design edits. Do not inspect or edit the stale local Toko repository, change
-Cargo package versions outside the maintainer-owned release flow, or commit,
-tag, publish, or push shared-worktree changes without maintainer action.
+Released `v0.98.17` removed the generic CDK, HTTP, build-network, and call
+facades while retaining the internal call/build-network authorities. Open
+`0.98.21` corrects that cut for developer experience by restoring only one
+canonical instrumented `canic::api::call` builder over the existing transport;
+the other deleted facades remain absent. Released `v0.98.18` changes only the
+proposed 0.99/0.100 design documents and normal release metadata. Released
+`v0.98.19` removes the remaining internal IC runtime API relay and narrows the
+stable-structures export inventory; the hidden compiler namespace and
+maintained call/build-network authorities remain. Released `v0.98.20` gives
+manual ICP refill one adapter-local ICRC-1 account shape and uses persisted CMC
+identity on resume. Open `0.98.21` also removes the false ICRC-103
+configuration/advertisement path while retaining implemented ICRC-10/21
+behavior. It does not implement Fleet identity, a Fleet Registry, multi-subnet
+synchronization, or any other proposed 0.99/0.100 behavior. Preserve the
+maintainer's active 0.99/0.100 design edits. Do not inspect or edit the stale
+local Toko repository, change Cargo package versions outside the
+maintainer-owned release flow, or commit, tag, publish, or push shared-worktree
+changes without maintainer action.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with
