@@ -130,12 +130,14 @@ have the validated immutable `v0.98.0` anchor.
 
 ## Next Action
 
-The architectural-sediment line remains closed. The maintainer separately
-accepted an open `0.98.4` host/config authority cleanup: one parsed config
-snapshot, one optional-root replica query path, and removal of unused host
-surfaces. It does not reopen the 0.98 finding ledger or its excluded
-ICP-refill state machine. After targeted validation, exercise the resulting
-release in real deployments.
+The immutable `v0.98.2` closeout remains closed. The maintainer subsequently
+accepted bounded post-closeout hard-cut tails through released `v0.98.14`.
+Open `0.98.15` removes the unused ICRC-21 static-message registration
+convenience while retaining the typed handler registration and endpoint
+dispatch authority. It does not reopen the immutable 42-candidate accounting,
+the excluded ICP-refill state machine, or the app-registry work deferred to
+0.100. After targeted validation, exercise the resulting release in real
+deployments.
 
 ## Slice A Validation
 

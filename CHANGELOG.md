@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.15` hard-cuts the unused ICRC-21 static-message registration
+  convenience while retaining one typed handler registration and dispatch
+  surface.
+
 - `0.98.14` hard-cuts orphan repo-only PocketIC helpers: the never-consumed
   upgrade-scenario wrapper, the unused root+verifier attestation baseline, and
   a self-sustaining test-role constant. The active issuer baseline remains.

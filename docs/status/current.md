@@ -14,14 +14,14 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.13`.
-- The latest published release is `v0.98.13` at
-  `f511c41c2ade76e2c82c9048f466c029b3d9b186`.
-- The `v0.98.13` source tree is
-  `245602e05925258d6ec41d6babee74636bf9ab60`; its product-tree hash is
-  `30139cef86ff3134510a54eee00a50556c0a094871b311414c01fbb3915e52a8` and
+- The workspace package version is `0.98.14`.
+- The latest published release is `v0.98.14` at
+  `ecf6d22e5c285315d15041d054f66e1460e0b225`.
+- The `v0.98.14` source tree is
+  `31c25cf1abe5e5b3e41b8bae5b2db6e914eacaa2`; its product-tree hash is
+  `14a853b7bd4683cecfeca5055e3316fc7d55ae6279d87b0867f894bfd2c83e7f` and
   its Cargo.lock SHA-256 is
-  `c9e1880dad36547e12834fe7f3f829e7a203babb0eed6782d38da98bde839a85`.
+  `95e09240cb590fb033a92555ad76fb1fa1bc94ef0f4daf12ce5ed9bd6f585080`.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -41,10 +41,13 @@ Historical detail is archived at:
   hard-cut.
   The generic bounded-string invariant and its active 64- and 128-byte aliases
   remain because they reject oversized boundary and stable-memory input.
-- Open `0.98.14` implements Slice L: repo-only test support retains one cached
+- Released `0.98.14` implements Slice L: repo-only test support retains one cached
   issuer attestation baseline. The never-consumed upgrade wrapper, orphan
   verifier baseline, unused fixture projections, and self-sustaining minimal-
   role constant are removed.
+- Open `0.98.15` implements Slice M: the unused ICRC-21 static-message
+  registration convenience is removed. The typed handler registration and
+  consent-message dispatch path remain the sole public runtime authority.
 - D13 workspace-only release lock synchronization and the executable
   `v0.91.6` compatibility accounting are released in `v0.92.12`.
 - The immutable `v0.92.12` closeout recorded
@@ -1068,13 +1071,13 @@ First primary results:
 
 ## Next Action
 
-Open `0.98.14` implements repo-only test-support Slice L. The maintained
-issuer-only role-attestation baseline remains; its unused verifier alternative,
-never-consumed upgrade wrapper, unused projections, and self-sustaining role
-constant are removed. Focused test-support, role-attestation PocketIC, strict
-Clippy, formatting, changelog-governance, stale-symbol, and diff-hygiene
-evidence belongs with this open patch. The Canic app registry is explicitly
-deferred to 0.100; it is not part of this slice. Do not
+Open `0.98.15` implements ICRC-21 dispatcher Slice M. The typed
+`Icrc21Dispatcher::register` and `consent_message` path remains; the
+definition-only `register_static_with` convenience path is removed without an
+alias or replacement. Focused facade protocol, strict Clippy, formatting,
+changelog-governance, stale-symbol, and diff-hygiene evidence belongs with
+this open patch. The Canic app registry is explicitly deferred to 0.100; it is
+not part of this slice. Do not
 inspect or edit the stale local Toko
 repository, change Cargo package versions outside the maintainer-owned release
 flow, or commit, tag, publish, or push shared-worktree changes without
