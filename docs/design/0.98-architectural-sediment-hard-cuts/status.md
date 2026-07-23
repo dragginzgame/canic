@@ -147,10 +147,12 @@ Released `v0.98.21` removes the unsupported ICRC-103 configuration and
 advertisement path while retaining ICRC-10 and configured ICRC-21. It also
 corrects the over-broad Slice O deletion by restoring one public instrumented
 Call builder over the retained call authority; generic CDK, HTTP, and
-build-network facades remain absent. Open `0.98.22` composes direct typed
+build-network facades remain absent. Released `v0.98.22` composes direct typed
 execution and response decoding at that public boundary without adding a
-second authority. The immutable 42-candidate accounting remains closed, and
-future Fleet/multi-subnet contracts are not implemented by this work.
+second authority. Open `0.98.23` removes the dead raw-response comparison and
+transparent generic call/NNS error envelopes while retaining meaningful typed
+causes. The immutable 42-candidate accounting remains closed, and future
+Fleet/multi-subnet contracts are not implemented by this work.
 
 ## Slice A Validation
 

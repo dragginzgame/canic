@@ -26,9 +26,6 @@ pub enum IcOpsError {
     Infra(#[from] infra::InfraError),
 
     #[error(transparent)]
-    CallOps(#[from] call::CallError),
-
-    #[error(transparent)]
     IcpRefillOps(#[from] icp_refill::IcpRefillOpsError),
 }
 

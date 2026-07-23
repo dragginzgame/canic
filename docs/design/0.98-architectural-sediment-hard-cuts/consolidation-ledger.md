@@ -14,7 +14,9 @@ Slice L is published in `v0.98.14`; Slice M is published in `v0.98.15`; Slice
 N is published in `v0.98.16`; Slice O is published in `v0.98.17`; Slice P is
 published in `v0.98.19`; Slice Q is published in `v0.98.20`; Slice R and the
 call-builder correction are published in `v0.98.21`. Direct typed call
-completion is in implementation for `0.98.22`.
+completion is published in `v0.98.22`; the related IC error-authority
+refinement is in implementation for `0.98.23`. These refinements are not new
+rows in the immutable fifteen-finding supplement.
 They are not included in the immutable 0.98.2 totals.
 
 ## Counting rules

@@ -8,7 +8,7 @@ use crate::{
     cdk::types::Principal,
     infra::{
         InfraError,
-        ic::{call::Call, known::NNS_REGISTRY_CANISTER, nns::NnsInfraError},
+        ic::{IcInfraError, call::Call, known::NNS_REGISTRY_CANISTER},
     },
     log,
     log::Topic,
@@ -57,7 +57,7 @@ pub enum NnsRegistryInfraError {
 
 impl From<NnsRegistryInfraError> for InfraError {
     fn from(err: NnsRegistryInfraError) -> Self {
-        NnsInfraError::from(err).into()
+        IcInfraError::from(err).into()
     }
 }
 
@@ -96,5 +96,25 @@ impl NnsRegistryInfra {
                 Err(NnsRegistryInfraError::Rejected { reason: msg }.into())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn registry_rejection_preserves_its_typed_infra_cause() {
+        let error: InfraError = NnsRegistryInfraError::Rejected {
+            reason: "rejected".to_string(),
+        }
+        .into();
+
+        assert!(matches!(
+            error,
+            InfraError::IcInfra(IcInfraError::NnsRegistryInfra(
+                NnsRegistryInfraError::Rejected { reason }
+            )) if reason == "rejected"
+        ));
     }
 }
