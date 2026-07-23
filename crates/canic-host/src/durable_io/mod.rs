@@ -13,6 +13,7 @@ use std::{io, path::Path};
 enum FileCommitMode {
     Replace,
     CreateNew,
+    CreateNewWithParents,
 }
 
 /// Durably replace one file through atomic publication of complete bytes.
@@ -29,6 +30,12 @@ pub fn write_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// calling this helper.
 pub fn create_new_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
     commit_bytes(path, bytes, FileCommitMode::CreateNew)
+}
+
+/// Durably create one file and its missing parent hierarchy without replacing
+/// an existing destination.
+pub fn create_new_bytes_with_parents(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    commit_bytes(path, bytes, FileCommitMode::CreateNewWithParents)
 }
 
 fn commit_bytes(path: &Path, bytes: &[u8], mode: FileCommitMode) -> io::Result<()> {
@@ -89,7 +96,10 @@ mod supported {
         mut before: impl FnMut(FileCommitStep, &Path) -> io::Result<()>,
     ) -> io::Result<()> {
         let (parent, file_name) = split_target(path)?;
-        if mode == FileCommitMode::Replace {
+        if matches!(
+            mode,
+            FileCommitMode::Replace | FileCommitMode::CreateNewWithParents
+        ) {
             create_parent_hierarchy(parent, &mut before)?;
         }
         let parent_fd = open_directory(parent)?;
@@ -116,13 +126,15 @@ mod supported {
             FileCommitMode::Replace => {
                 unix_fs::renameat(&parent_fd, &temp_name, &parent_fd, file_name)
             }
-            FileCommitMode::CreateNew => unix_fs::renameat_with(
-                &parent_fd,
-                &temp_name,
-                &parent_fd,
-                file_name,
-                RenameFlags::NOREPLACE,
-            ),
+            FileCommitMode::CreateNew | FileCommitMode::CreateNewWithParents => {
+                unix_fs::renameat_with(
+                    &parent_fd,
+                    &temp_name,
+                    &parent_fd,
+                    file_name,
+                    RenameFlags::NOREPLACE,
+                )
+            }
         };
         if let Err(error) = published {
             remove_temp(&parent_fd, &temp_name);
@@ -154,7 +166,7 @@ mod supported {
         let mut missing = Vec::new();
         let mut current = parent;
         loop {
-            match fs::metadata(current) {
+            match fs::symlink_metadata(current) {
                 Ok(metadata) if metadata.is_dir() => break,
                 Ok(_) => {
                     return Err(io::Error::new(
@@ -178,7 +190,7 @@ mod supported {
             match fs::create_dir(&directory) {
                 Ok(()) => sync_created_directory(&directory, before)?,
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                    if !fs::metadata(&directory)?.is_dir() {
+                    if !fs::symlink_metadata(&directory)?.is_dir() {
                         return Err(io::Error::new(
                             io::ErrorKind::NotADirectory,
                             format!("output parent is not a directory: {}", directory.display()),
@@ -245,7 +257,7 @@ mod supported {
     fn open_directory(path: &Path) -> io::Result<OwnedFd> {
         unix_fs::open(
             path,
-            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
             Mode::empty(),
         )
         .map_err(errno_to_io)

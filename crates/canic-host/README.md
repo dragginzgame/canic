@@ -75,3 +75,10 @@ For `canic install`, the implicit environment default is always `local`; use
 `--environment <name>` for one command against another environment. The public CLI
 requires the fleet name as the first positional argument and uses
 `apps/<name>/canic.toml`.
+
+Canonical network identity is trust-derived rather than environment-derived.
+Public-IC profiles resolve from Canic's compiled DER root key. Pre-existing
+local and connected profiles resolve only through the exact root key and
+enrollment record under `.canic/networks/<canonical-network-id>/`; the
+environment profile is revalidated as a non-authoritative lookup on every
+resolution.

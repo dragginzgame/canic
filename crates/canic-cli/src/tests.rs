@@ -46,7 +46,8 @@ fn usage_lists_command_families() {
     assert!(plain.find("    state") < plain.find("    app"));
     assert!(plain.find("    app") < plain.find("    scaffold"));
     assert!(plain.find("    scaffold") < plain.find("    replica"));
-    assert!(plain.find("    replica") < plain.find("    install"));
+    assert!(plain.find("    replica") < plain.find("    network"));
+    assert!(plain.find("    network") < plain.find("    install"));
     assert!(plain.find("    install") < plain.find("    build"));
     assert!(plain.find("    build") < plain.find("    deploy"));
     assert!(plain.find("    deploy") < plain.find("    evidence"));
@@ -173,6 +174,9 @@ fn command_family_help_returns_ok() {
         &["replica", "start", "--help"],
         &["replica", "status", "--help"],
         &["replica", "stop", "--help"],
+        &["network"],
+        &["network", "--help"],
+        &["network", "enroll", "--help"],
         &["restore", "--help"],
         &["restore", "plan", "--help"],
         &["restore", "apply", "--help"],
@@ -276,6 +280,15 @@ fn version_flags_return_ok() {
     assert!(run([OsString::from("medic"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("app"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("replica"), OsString::from("--version")]).is_ok());
+    assert!(run([OsString::from("network"), OsString::from("--version")]).is_ok());
+    assert!(
+        run([
+            OsString::from("network"),
+            OsString::from("enroll"),
+            OsString::from("--version")
+        ])
+        .is_ok()
+    );
     assert!(run([OsString::from("state"), OsString::from("--version")]).is_ok());
     assert!(run([OsString::from("status"), OsString::from("--version")]).is_ok());
     assert!(

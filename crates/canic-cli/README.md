@@ -110,6 +110,24 @@ identity session only.
 For local installed-fleet workflows, the CLI also exposes install, registry,
 replica, backup, and restore commands.
 
+Before Fleet planning can use a pre-existing local or connected ICP network,
+enroll its exact DER root trust anchor:
+
+```bash
+sha256sum ./root-key.der
+canic network enroll local \
+  --root-key ./root-key.der \
+  --fingerprint <64-lowercase-hex>
+```
+
+Canic verifies the supplied fingerprint before writing anything. The root key
+and enrollment record are the durable authority under
+`.canic/networks/<canonical-network-id>/`; the environment profile is only a
+lookup pointer. Repeating the exact enrollment is idempotent, while changing
+the anchor for an existing profile is rejected. Public-IC environments such as
+`ic`, or named profiles backed by `ic`, use Canic's compiled pinned root key
+and are not enrolled.
+
 Show local test-fleet canisters that already have ids:
 
 ```bash

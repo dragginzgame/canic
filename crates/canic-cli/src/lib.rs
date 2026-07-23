@@ -16,6 +16,7 @@ mod install;
 mod list;
 mod medic;
 mod metrics;
+mod network;
 mod output;
 mod replica;
 mod restore;
@@ -82,6 +83,9 @@ pub enum CliError {
 
     #[error("medic: {0}")]
     Medic(#[from] medic::MedicCommandError),
+
+    #[error("network: {0}")]
+    Network(#[from] network::NetworkCommandError),
 
     #[error("app: {0}")]
     Apps(#[from] apps::AppCommandError),
@@ -160,6 +164,7 @@ where
         "install" => install::run(tail).map_err(CliError::from),
         "inspect" => inspect::run(tail).map_err(CliError::from),
         "medic" => medic::run(tail).map_err(CliError::from),
+        "network" => network::run(tail).map_err(CliError::from),
         "replica" => replica::run(tail).map_err(CliError::from),
         "scaffold" => scaffold::run(tail).map_err(CliError::from),
         "state" => state::run(tail).map_err(CliError::from),
