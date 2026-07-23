@@ -6,12 +6,12 @@ Status: all investigated candidates resolved; validation evidence is recorded
 in the supporting consolidation report and canonical 0.98 closeout audit.
 
 Post-closeout note: the resolved status and totals below apply to the original
-42 candidates published in `v0.98.2`. Eight later findings are recorded in the
+42 candidates published in `v0.98.2`. Nine later findings are recorded in the
 [post-closeout supplement](#post-closeout-supplement). They are accepted design
 scope; Slices D and E are published in `v0.98.10` and `v0.98.11`; Slices F
-through J are published in `v0.98.12`; Slice K is implemented in open
-`0.98.13`; no accepted tail remains pending. They are not included in the
-immutable 0.98.2 totals.
+through J are published in `v0.98.12`; Slice K is published in `v0.98.13`;
+Slice L is implemented in open `0.98.14`; no accepted tail remains pending.
+They are not included in the immutable 0.98.2 totals.
 
 ## Counting rules
 
@@ -105,7 +105,8 @@ were not exhaustive proofs against these newly traced tails.
 | CANIC-098-POST-COST-001 | Note | `CostGuardPermit` stores cost class, quota key, payer, and a private sentinel that no settlement or capability path reads; only the quota and reservation intent IDs are authoritative. | FIXED in `v0.98.12` — permit stores only the two durable intent identities and remains privately constructed |
 | CANIC-098-POST-ADOPTION-001 | P2 | The top-level adoption-report warnings vector has been empty at its sole production constructor since introduction, yet remains in JSON and evidence-summary projection. Finding-local warning producers are distinct and active. | FIXED in `v0.98.12` — dead top-level JSON field and envelope mapping removed; role and observed-canister warning producers retained |
 | CANIC-098-POST-CLI-001 | Note | Private auth CLI parsing wraps its sole renewal-status options in a one-variant enum and immediately unwraps it through one match arm. | FIXED in `v0.98.12` — parser returns renewal-status options directly with unchanged command behavior |
-| CANIC-098-POST-CDK-001 | P2 | Internal XRC wire bindings have no consumer after Canic stopped wrapping that protocol. The 8-, 16-, 32-, and 256-byte bounded-string aliases also have no consumer; the generic type and its 64-/128-byte aliases still enforce active state limits. | FIXED in open `0.98.13` — XRC module/export and unused aliases deleted; generic Serde/Candid/stable validation and active aliases retained |
+| CANIC-098-POST-CDK-001 | P2 | Internal XRC wire bindings have no consumer after Canic stopped wrapping that protocol. The 8-, 16-, 32-, and 256-byte bounded-string aliases also have no consumer; the generic type and its 64-/128-byte aliases still enforce active state limits. | FIXED in `v0.98.13` — XRC module/export and unused aliases deleted; generic Serde/Candid/stable validation and active aliases retained |
+| CANIC-098-POST-TEST-001 | P2 | Repo-only test support retains a never-consumed upgrade wrapper, an attestation verifier-cache alternative whose final test disappeared in `0.65.0`, unused fixture projections, and a role constant kept alive only by its own test. | FIXED in open `0.98.14` — orphan helpers and alternative deleted; sole issuer baseline and all behaviorally consumed role constants retained |
 
 ## Package coverage
 
