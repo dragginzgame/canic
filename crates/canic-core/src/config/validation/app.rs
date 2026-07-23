@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::candid::Principal,
-    config::schema::{AppConfig, ConfigSchemaError, Validate, Whitelist},
+    config::schema::{AppConfig, ConfigSchemaError, NAME_MAX_BYTES, Validate, Whitelist},
 };
 
 impl Validate for AppConfig {
@@ -19,6 +19,11 @@ impl Validate for AppConfig {
         if !valid {
             return Err(ConfigSchemaError::ValidationError(format!(
                 "invalid App name {name:?}; use letters, numbers, '-' or '_'"
+            )));
+        }
+        if name.len() > NAME_MAX_BYTES {
+            return Err(ConfigSchemaError::ValidationError(format!(
+                "invalid App name {name:?}; names must not exceed {NAME_MAX_BYTES} bytes"
             )));
         }
         if let Some(list) = &self.whitelist {

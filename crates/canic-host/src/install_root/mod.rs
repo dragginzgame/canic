@@ -64,11 +64,11 @@ use phase_receipts::InstallReceiptScope;
 use plan_artifacts::emit_manifest_with_deployment_truth_receipt;
 use preparation::prepare_install_deployment_truth;
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
+pub(crate) use state::validate_environment_name;
 pub use state::{
     InstallState, InstallStateError, RootVerificationStatus,
     read_named_deployment_install_state_from_root,
 };
-pub(crate) use state::{decode_install_state, validate_environment_name};
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
 pub use truth_check::{check_install_deployment_truth, check_install_execution_preflight};
 

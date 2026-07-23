@@ -12,7 +12,7 @@ fn deploy_catalog_options_parse_list_defaults_to_text() {
     ])
     .expect("parse catalog list");
 
-    assert_eq!(options.deployment, None);
+    assert_eq!(options.fleet, None);
     assert_eq!(options.environment, "local");
     assert_eq!(options.format, JsonTextOutputFormat::Text);
     assert_eq!(options.output, None);
@@ -28,7 +28,7 @@ fn deploy_catalog_options_parse_inspect_json_output() {
     ])
     .expect("parse catalog inspect");
 
-    assert_eq!(options.deployment.as_deref(), Some("demo-local"));
+    assert_eq!(options.fleet.as_deref(), Some("demo-local"));
     assert_eq!(options.environment, "local");
     assert_eq!(options.format, JsonTextOutputFormat::Json);
     assert_eq!(options.output, Some(PathBuf::from("catalog.json")));
@@ -41,25 +41,26 @@ fn deploy_catalog_command_dispatches_list_and_inspect() {
 }
 
 #[test]
-fn deploy_catalog_help_documents_passive_deployment_target_scope() {
+fn deploy_catalog_help_documents_network_scoped_fleet_authority() {
     let help = deploy_catalog::usage();
     let list_help = deploy_catalog::list_usage();
     let inspect_help = deploy_catalog::inspect_usage();
 
-    assert!(help.contains("deployment targets recorded under .canic/<environment>/deployments"));
+    assert!(help.contains(".canic/networks/<network-id>/fleets"));
     assert!(help.contains("canic deploy inspect catalog list"));
-    assert!(help.contains("do not query"));
-    assert!(help.contains("infer deployments from fleet-template names"));
+    assert!(help.contains("read-only local-state reports"));
+    assert!(help.contains("live Fleets"));
+    assert!(help.contains("infer Fleets from App names"));
     assert!(list_help.contains("--json"));
     assert!(list_help.contains("--output <path>"));
-    assert!(inspect_help.contains("deployment target, not a fleet template"));
+    assert!(inspect_help.contains("operator-facing label, not an App identity"));
 }
 
 #[test]
 fn writes_catalog_json_output_file() {
     let out = temp_json_path("deploy-catalog-output.json");
     let options = deploy_catalog::DeployCatalogOptions {
-        deployment: None,
+        fleet: None,
         environment: "local".to_string(),
         format: JsonTextOutputFormat::Json,
         output: Some(out.clone()),
@@ -72,7 +73,9 @@ fn writes_catalog_json_output_file() {
 
     fs::remove_file(out).expect("clean catalog");
     assert_eq!(value["schema_version"], 1);
-    assert_eq!(value["entries"][0]["deployment"], "demo-local");
+    assert_eq!(value["entries"][0]["fleet_name"], "demo-local");
+    assert_eq!(value["entries"][0]["app"], "demo");
+    assert_eq!(value["canonical_network_id"], "01".repeat(32));
     assert!(value.get("envelope_schema").is_none());
 }
 

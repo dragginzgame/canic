@@ -6,8 +6,10 @@ interfaces after the 0.33 ICP CLI hard cut.
 ## Project State
 
 - `.icp/` is the local ICP CLI project state root.
-- `.canic/` is Canic operator state. Deployment-target install state lives under
-  `.canic/<environment>/deployments/<deployment>.json`.
+- `.canic/` is Canic operator state. Canonical network authorities live under
+  `.canic/networks/<canonical-network-id>/`; the friendly Fleet catalog is
+  `fleets/catalog.json`, and installed Fleet state is keyed beneath
+  `fleets/<fleet-id>/`.
 
 ## Environment and Network Vocabulary
 

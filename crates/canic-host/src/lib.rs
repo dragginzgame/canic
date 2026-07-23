@@ -1,4 +1,4 @@
-//! Host-side build, install, deployment, fleet-template, and release-set helpers for Canic workspaces.
+//! Host-side App build, Fleet install, deployment, and release-set helpers for Canic workspaces.
 
 use std::process::Command;
 
@@ -13,10 +13,10 @@ pub mod canister_build;
 pub mod canister_ready;
 mod cargo_metadata;
 pub mod cycle_balance;
-pub mod deployment_catalog;
 pub mod deployment_truth;
 pub mod durable_io;
 pub mod evidence_envelope;
+pub mod fleet_catalog;
 pub mod format;
 pub mod icp;
 pub mod icp_config;

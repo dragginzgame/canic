@@ -8,7 +8,9 @@
 mod tests;
 
 use crate::{
-    durable_io::create_new_bytes_with_parents,
+    durable_io::{
+        RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
+    },
     icp_config::{IcpConfigError, resolve_icp_build_network_from_root},
 };
 use canic_core::ids::{BuildNetwork, CanonicalNetworkId};
@@ -16,8 +18,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha2::{Digest, Sha256};
 use std::{
     fmt::Write as _,
-    fs,
-    io::{self, Read},
+    io,
     path::{Path, PathBuf},
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
 };
@@ -366,7 +367,7 @@ fn validate_complete_authority(
     Ok(())
 }
 
-fn validate_environment_name(name: &str) -> Result<(), NetworkIdentityError> {
+pub(crate) fn validate_environment_name(name: &str) -> Result<(), NetworkIdentityError> {
     if !name.is_empty()
         && name
             .bytes()
@@ -571,53 +572,21 @@ enum FilePurpose {
 }
 
 fn read_regular_file(path: &Path, purpose: FilePurpose) -> Result<Vec<u8>, NetworkIdentityError> {
-    #[cfg(unix)]
-    {
-        use rustix::{
-            fd::OwnedFd,
-            fs::{FileType, Mode, OFlags},
-        };
-
-        let metadata = fs::symlink_metadata(path).map_err(|source| NetworkIdentityError::Io {
+    match read_optional_regular_bytes(path) {
+        Ok(Some(bytes)) => Ok(bytes),
+        Ok(None) => Err(NetworkIdentityError::Io {
+            path: path.to_path_buf(),
+            source: io::Error::from(io::ErrorKind::NotFound),
+        }),
+        Err(RegularFileReadError::NotRegular) => Err(non_regular_file_error(path, purpose)),
+        Err(RegularFileReadError::Io(source)) => Err(NetworkIdentityError::Io {
             path: path.to_path_buf(),
             source,
-        })?;
-        if !metadata.file_type().is_file() {
-            return Err(non_regular_file_error(path, purpose));
-        }
-
-        let fd: OwnedFd = rustix::fs::open(
-            path,
-            OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-            Mode::empty(),
-        )
-        .map_err(|error| NetworkIdentityError::Io {
-            path: path.to_path_buf(),
-            source: io::Error::from_raw_os_error(error.raw_os_error()),
-        })?;
-        let metadata = rustix::fs::fstat(&fd).map_err(|error| NetworkIdentityError::Io {
-            path: path.to_path_buf(),
-            source: io::Error::from_raw_os_error(error.raw_os_error()),
-        })?;
-        if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
-            return Err(non_regular_file_error(path, purpose));
-        }
-        let mut file = fs::File::from(fd);
-        let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes)
-            .map_err(|source| NetworkIdentityError::Io {
-                path: path.to_path_buf(),
-                source,
-            })?;
-        Ok(bytes)
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = (path, purpose);
-        Err(NetworkIdentityError::UnsupportedPlatform(
-            std::env::consts::OS,
-        ))
+        }),
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => Err(
+            NetworkIdentityError::UnsupportedPlatform(std::env::consts::OS),
+        ),
     }
 }
 

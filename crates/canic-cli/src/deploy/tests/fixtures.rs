@@ -247,22 +247,30 @@ pub(super) fn sample_sha256(seed: &str) -> String {
     seed.repeat(64)
 }
 
-pub(super) fn sample_catalog_report() -> canic_host::deployment_catalog::DeploymentCatalogReportV1 {
-    canic_host::deployment_catalog::DeploymentCatalogReportV1 {
+pub(super) fn sample_catalog_report() -> canic_host::fleet_catalog::FleetCatalogReportV1 {
+    use canic_core::ids::{AppId, CanonicalNetworkId, FleetId};
+    use canic_host::fleet_catalog::{FleetCatalogEntryV1, FleetCatalogRootVerificationV1};
+
+    let canonical_network_id = "01"
+        .repeat(32)
+        .parse::<CanonicalNetworkId>()
+        .expect("canonical network ID");
+    canic_host::fleet_catalog::FleetCatalogReportV1 {
         schema_version: 1,
         generated_at: "unix:54".to_string(),
         project_root: Some(".".to_string()),
-        entries: vec![canic_host::deployment_catalog::DeploymentCatalogEntryV1 {
-            deployment: "demo-local".to_string(),
-            fleet: Some("demo".to_string()),
-            environment: Some("local".to_string()),
-            root_principal: Some("aaaaa-aa".to_string()),
-            root_verification:
-                canic_host::deployment_catalog::DeploymentCatalogRootVerificationV1::Verified,
-            local_state_ref: None,
-            warnings: Vec::new(),
+        canonical_network_id,
+        environment: "local".to_string(),
+        entries: vec![FleetCatalogEntryV1 {
+            canonical_network_id,
+            fleet_id: FleetId::from_generated_bytes([2; 32]),
+            fleet_name: "demo-local".parse().expect("Fleet name"),
+            app: AppId::from("demo"),
+            environment: "local".to_string(),
+            deployed_at_unix_secs: 54,
+            root_principal: "aaaaa-aa".to_string(),
+            root_verification: FleetCatalogRootVerificationV1::Verified,
         }],
-        warnings: Vec::new(),
     }
 }
 

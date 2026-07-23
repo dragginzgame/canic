@@ -85,6 +85,15 @@ fn app_name_is_required() {
 }
 
 #[test]
+fn app_name_must_not_exceed_the_canonical_name_limit() {
+    let mut cfg = ConfigModel::test_default();
+    cfg.app.name = AppId::from("a".repeat(NAME_MAX_BYTES + 1));
+
+    cfg.validate()
+        .expect_err("App name over the canonical limit should fail");
+}
+
+#[test]
 fn canister_role_name_admission_accepts_canonical_segments() {
     for role in ["a", "app", "app2", "user_hub", "scale_replica", "role_2"] {
         validate_canister_role_name(role)
