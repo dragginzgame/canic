@@ -41,3 +41,13 @@ fn public_call_result_has_typed_candid_decoders() {
 
     let _: fn(&CallResult) = assert_decoder_contract;
 }
+
+#[test]
+fn public_call_builder_combines_execution_with_typed_candid_decoding() {
+    let single = Call::bounded_wait(Principal::anonymous(), "single").execute_candid::<u64>();
+    drop(single);
+
+    let tuple =
+        Call::bounded_wait(Principal::anonymous(), "tuple").execute_candid_tuple::<(u64, String)>();
+    drop(tuple);
+}

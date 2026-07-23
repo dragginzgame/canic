@@ -98,16 +98,17 @@ use canic::prelude::Call;
 
 async fn read_count(target: Principal) -> Result<u64, canic::Error> {
     Call::bounded_wait(target, "read_count")
-        .execute()
-        .await?
-        .candid()
+        .execute_candid()
+        .await
 }
 ```
 
 `Call::unbounded_wait` is also available, as are `with_arg`, `with_args`,
-`with_raw_args`, and `with_cycles`. This is an ordinary IC call builder; it
-does not replace Canic's protected capability RPC used for framework-owned
-creation, upgrade, placement, recycling, or cycle operations.
+`with_raw_args`, `with_cycles`, and `execute_candid_tuple`. Use `execute`
+directly when the response must be retained or decoded later. This is an
+ordinary IC call builder; it does not replace Canic's protected capability RPC
+used for framework-owned creation, upgrade, placement, recycling, or cycle
+operations.
 
 ## Application Timers
 

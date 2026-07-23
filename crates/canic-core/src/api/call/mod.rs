@@ -86,6 +86,22 @@ impl CallBuilder<'_> {
             inner: self.inner.execute().await.map_err(Error::from)?,
         })
     }
+
+    /// Execute the configured call and decode one Candid response value.
+    pub async fn execute_candid<R>(self) -> Result<R, Error>
+    where
+        R: CandidType + DeserializeOwned,
+    {
+        self.execute().await?.candid()
+    }
+
+    /// Execute the configured call and decode a Candid response tuple.
+    pub async fn execute_candid_tuple<R>(self) -> Result<R, Error>
+    where
+        R: for<'de> ArgumentDecoder<'de>,
+    {
+        self.execute().await?.candid_tuple()
+    }
 }
 
 /// Public response wrapper with typed Candid decoding.
