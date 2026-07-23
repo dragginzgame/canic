@@ -258,30 +258,36 @@ fn public_ic_trust_anchor_cannot_be_enrolled() {
 
 #[cfg(unix)]
 #[test]
-fn enrollment_rejects_symlink_and_special_root_key_inputs_without_writing() {
-    use std::os::unix::{fs::symlink, net::UnixListener};
+fn enrollment_rejects_symlinked_root_key_input_without_writing() {
+    use std::os::unix::fs::symlink;
 
-    let (root, root_key_path, _, fingerprint) = fixture("unsafe-input");
+    let (root, root_key_path, _, fingerprint) = fixture("symlink-input");
     let symlink_path = root.join("root-key-link.der");
     symlink(&root_key_path, &symlink_path).expect("create symlink");
 
     let symlink_error = enroll_network(enroll(&root, "local", &symlink_path, &fingerprint))
         .expect_err("symlink input must reject");
-    assert!(
-        matches!(
-            symlink_error,
-            NetworkIdentityError::Io { .. } | NetworkIdentityError::RootKeyNotRegular { .. }
-        ),
-        "unexpected symlink error: {symlink_error}"
+    std::assert_matches!(
+        symlink_error,
+        NetworkIdentityError::RootKeyNotRegular { .. }
     );
-
-    let socket_path = root.join("root-key.sock");
-    let socket = UnixListener::bind(&socket_path).expect("bind unix socket");
-    let socket_error = enroll_network(enroll(&root, "local", &socket_path, &fingerprint))
-        .expect_err("special input must reject");
-    std::assert_matches!(socket_error, NetworkIdentityError::RootKeyNotRegular { .. });
     assert!(!root.join(CANIC_STATE_DIRECTORY).exists());
-    drop(socket);
-    fs::remove_file(socket_path).expect("remove unix socket");
+    fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[cfg(unix)]
+#[test]
+fn enrollment_rejects_fifo_root_key_input_without_writing() {
+    use rustix::fs::{CWD, Mode, mkfifoat};
+
+    let (root, _, _, fingerprint) = fixture("fifo-input");
+    let fifo_path = root.join("root-key.fifo");
+    mkfifoat(CWD, &fifo_path, Mode::from_raw_mode(0o600)).expect("create FIFO");
+
+    let fifo_error = enroll_network(enroll(&root, "local", &fifo_path, &fingerprint))
+        .expect_err("special input must reject");
+    std::assert_matches!(fifo_error, NetworkIdentityError::RootKeyNotRegular { .. });
+    assert!(!root.join(CANIC_STATE_DIRECTORY).exists());
+    fs::remove_file(fifo_path).expect("remove FIFO");
     fs::remove_dir_all(root).expect("remove fixture");
 }
