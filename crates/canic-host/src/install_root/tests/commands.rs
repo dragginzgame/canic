@@ -165,7 +165,7 @@ fn root_init_args_include_wasm_module_hash() {
 fn local_root_create_adds_configured_cycle_funding() {
     let workspace_root = write_temp_workspace_config(
         r#"
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -208,10 +208,10 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
     );
@@ -245,7 +245,6 @@ kind = "service"
 fn nonlocal_root_create_does_not_add_cycle_funding() {
     let workspace_root = write_temp_workspace_config(
         r#"
-[fleet]
 name = "demo"
 
 [roles.root]
@@ -288,7 +287,7 @@ package = "role_baseline"
 kind = "canister"
 package = "worker"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     );

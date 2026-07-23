@@ -32,7 +32,7 @@ impl Validate for SubnetConfig {
             validate_icp_refill(cfg.icp_refill.as_ref(), role)?;
             validate_scaling(cfg, role, &self.canisters)?;
             validate_sharding(cfg, role, &self.canisters)?;
-            validate_directory(cfg, role, &self.canisters)?;
+            validate_binding(cfg, role, &self.canisters)?;
         }
 
         Ok(())
@@ -124,14 +124,14 @@ fn validate_kind(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), Co
         CanisterKind::Root => {
             if cfg.scaling.is_some()
                 || cfg.sharding.is_some()
-                || cfg.directory.is_some()
+                || cfg.binding.is_some()
                 || cfg.auth.delegated_token_issuer
                 || cfg.auth.delegated_token_verifier
                 || cfg.auth.role_attestation_cache
                 || cfg.standards.icrc21
             {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{canister}' kind = \"root\" cannot define scaling, sharding, directory, auth verifier/issuer/cache roles, or canister-local standards",
+                    "canister '{canister}' kind = \"root\" cannot define scaling, sharding, binding, auth verifier/issuer/cache roles, or canister-local standards",
                 )));
             }
         }
@@ -139,17 +139,17 @@ fn validate_kind(cfg: &CanisterConfig, canister: &CanisterRole) -> Result<(), Co
         CanisterKind::Service => {}
 
         CanisterKind::Singleton => {
-            if cfg.scaling.is_some() || cfg.sharding.is_some() || cfg.directory.is_some() {
+            if cfg.scaling.is_some() || cfg.sharding.is_some() || cfg.binding.is_some() {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{canister}' kind = \"singleton\" cannot define scaling, sharding, or directory",
+                    "canister '{canister}' kind = \"singleton\" cannot define scaling, sharding, or binding",
                 )));
             }
         }
 
         CanisterKind::Replica | CanisterKind::Shard | CanisterKind::Instance => {
-            if cfg.scaling.is_some() || cfg.sharding.is_some() || cfg.directory.is_some() {
+            if cfg.scaling.is_some() || cfg.sharding.is_some() || cfg.binding.is_some() {
                 return Err(ConfigSchemaError::ValidationError(format!(
-                    "canister '{canister}' kind = \"{}\" cannot define scaling, sharding, or directory",
+                    "canister '{canister}' kind = \"{}\" cannot define scaling, sharding, or binding",
                     cfg.kind,
                 )));
             }
@@ -253,38 +253,38 @@ fn validate_scaling(
     Ok(())
 }
 
-fn validate_directory(
+fn validate_binding(
     cfg: &CanisterConfig,
     role: &CanisterRole,
     all_roles: &BTreeMap<CanisterRole, CanisterConfig>,
 ) -> Result<(), ConfigSchemaError> {
-    let Some(directory) = &cfg.directory else {
+    let Some(binding) = &cfg.binding else {
         return Ok(());
     };
 
-    for (pool_name, pool) in &directory.pools {
+    for (pool_name, pool) in &binding.pools {
         if pool_name.len() > NAME_MAX_BYTES {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' directory pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
+                "canister '{role}' binding pool '{pool_name}' name exceeds {NAME_MAX_BYTES} bytes",
             )));
         }
 
         if pool.key_name.is_empty() {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' directory pool '{pool_name}' must define a non-empty key_name",
+                "canister '{role}' binding pool '{pool_name}' must define a non-empty key_name",
             )));
         }
 
         if pool.key_name.len() > NAME_MAX_BYTES {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' directory pool '{pool_name}' key_name '{}' exceeds {NAME_MAX_BYTES} bytes",
+                "canister '{role}' binding pool '{pool_name}' key_name '{}' exceeds {NAME_MAX_BYTES} bytes",
                 pool.key_name
             )));
         }
 
         if !all_roles.contains_key(&pool.canister_role) {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' directory pool '{pool_name}' references unknown canister role '{}'",
+                "canister '{role}' binding pool '{pool_name}' references unknown canister role '{}'",
                 pool.canister_role
             )));
         }
@@ -292,7 +292,7 @@ fn validate_directory(
         let target = &all_roles[&pool.canister_role];
         if target.kind != CanisterKind::Instance {
             return Err(ConfigSchemaError::ValidationError(format!(
-                "canister '{role}' directory pool '{pool_name}' references canister '{}' which is not kind = \"instance\"",
+                "canister '{role}' binding pool '{pool_name}' references canister '{}' which is not kind = \"instance\"",
                 pool.canister_role
             )));
         }

@@ -33,7 +33,7 @@ use canic_host::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
         InstalledDeploymentSource, resolve_installed_deployment_from_root,
     },
-    release_set::FleetConfigSnapshot,
+    release_set::AppConfigSnapshot,
 };
 
 ///
@@ -136,10 +136,10 @@ pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -
 
     let mut checks = Vec::new();
     for config in configs {
-        let Ok(snapshot) = FleetConfigSnapshot::load(&config) else {
+        let Ok(snapshot) = AppConfigSnapshot::load(&config) else {
             continue;
         };
-        let fleet = snapshot.fleet_name();
+        let fleet = snapshot.app_id();
         if fleet == deployment {
             checks.push(MedicCheck::warn(
                 MedicCategory::ProjectConfig,
@@ -156,7 +156,7 @@ pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -
                         "then run canic install {fleet}, or choose an installed deployment target"
                     ),
                 ),
-                MedicSource::FleetConfig,
+                MedicSource::AppConfig,
             ));
         }
 
@@ -172,7 +172,7 @@ pub(super) fn deployment_name_conflation_checks(root: &Path, deployment: &str) -
                         display_medic_path(root, &config)
                     ),
                     "pass an installed deployment target, not a role name",
-                    MedicSource::FleetConfig,
+                    MedicSource::AppConfig,
                 )
             })
         }));

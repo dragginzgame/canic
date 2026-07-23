@@ -14,9 +14,10 @@ mod serialization;
 
 const CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -31,33 +32,35 @@ package = "api"
 kind = "canister"
 package = "store"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.api]
+[subnets.default.canisters.api]
 kind = "service"
 "#;
 
 const BROWNFIELD_CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
 kind = "root"
 package = "root"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
 
 const STANDALONE_CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.worker]
@@ -67,9 +70,10 @@ package = "worker"
 
 const LEAF_ONLY_CONFIG: &str = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -80,10 +84,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#;
 

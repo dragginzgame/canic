@@ -9,7 +9,7 @@ fn install_truth_gate_persists_machine_readable_receipt() {
         &config_path,
         demo_config_source(
             r#"
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
         ),
@@ -79,10 +79,13 @@ fn install_truth_phase_receipt_records_emit_manifest_evidence() {
         &config_path,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -123,12 +126,9 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )

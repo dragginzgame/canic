@@ -7,7 +7,7 @@ use super::{
 };
 use crate::{
     config::schema::{
-        CanisterAuthConfig, CanisterConfig, CanisterKind, DirectoryConfig, ScalingConfig,
+        BindingConfig, CanisterAuthConfig, CanisterConfig, CanisterKind, ScalingConfig,
         ShardingConfig,
     },
     ids::CanisterRole,
@@ -268,7 +268,7 @@ fn placement_capabilities_select_only_their_placement_state() {
     );
 
     let mut directory = ConfigTestBuilder::canister_config(CanisterKind::Service);
-    directory.directory = Some(DirectoryConfig::default());
+    directory.binding = Some(BindingConfig::default());
     assert_eq!(
         placement_allocation_ids(
             &resolved_service_contract(directory, BTreeSet::new()).allocations

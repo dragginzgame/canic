@@ -1,8 +1,11 @@
 controllers = []
-app_index = ["scale_hub"]
+[services.fleet]
+roles = ["scale_hub"]
 
-[fleet]
+[app]
 name = "test"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -15,9 +18,6 @@ package = "../scale_hub"
 [roles.scale_replica]
 kind = "canister"
 package = "../scale"
-
-[app]
-init_mode = "enabled"
 
 [app.whitelist]
 
@@ -41,22 +41,22 @@ max_revocation_latency_ns = 60000000000
 [standards]
 icrc21 = true
 
-[subnets.prime]
+[subnets.default]
 pool.minimum_size = 3
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 topup = {}
 
-[subnets.prime.canisters.scale_hub.scaling.pools.scales]
+[subnets.default.canisters.scale_hub.scaling.pools.scales]
 canister_role = "scale_replica"
 policy.initial_workers = 1
 policy.min_workers = 2
 
-[subnets.prime.canisters.scale_replica]
+[subnets.default.canisters.scale_replica]
 kind = "replica"
 topup = {}
 

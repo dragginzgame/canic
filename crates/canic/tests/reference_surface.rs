@@ -49,7 +49,7 @@ fn test_root_subnet_canister_keys() -> Vec<String> {
     let parsed: toml::Value = toml::from_str(&source)
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()));
 
-    parsed["subnets"]["prime"]["canisters"]
+    parsed["subnets"]["default"]["canisters"]
         .as_table()
         .expect("test root subnet canisters must be a table")
         .keys()

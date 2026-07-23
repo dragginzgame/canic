@@ -48,7 +48,7 @@ Install removes its transient target/canic-wasm Cargo cache after canonical
 with the standard CARGO_TARGET_DIR input.
 
 The selected canic.toml must include:
-  [fleet]
+  [app]
   name = \"test\"";
 
 ///

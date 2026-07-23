@@ -5,7 +5,7 @@
 
 use crate::{
     domain::value::Principal,
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
 };
 
 ///
@@ -17,7 +17,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct ValidatedEnv {
     pub prime_root_pid: Principal,
-    pub subnet_role: SubnetRole,
+    pub subnet_role: SubnetSlotId,
     pub subnet_pid: Principal,
     pub root_pid: Principal,
     pub canister_role: CanisterRole,

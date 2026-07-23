@@ -134,7 +134,7 @@ pub fn derive_role_capabilities(
         if canister.scaling.is_some() {
             capabilities.insert(RoleCapabilityKey::Scaling);
         }
-        if canister.directory.is_some() {
+        if canister.binding.is_some() {
             capabilities.insert(RoleCapabilityKey::Directory);
         }
         if canister.standards.icrc21 {

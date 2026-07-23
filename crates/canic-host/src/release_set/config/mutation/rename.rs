@@ -3,9 +3,8 @@ use super::{
     support::{admit_canister_role_name, toml_assignment_key, toml_string_literal},
 };
 use crate::release_set::config::{
-    FleetConfigDeclaration, FleetConfigError, FleetConfigIoOperation, FleetConfigMutationConflict,
-    FleetConfigOperation, FleetConfigPackageIssue, FleetConfigTomlOperation,
-    model::RenamedFleetRole,
+    AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
+    AppConfigOperation, AppConfigPackageIssue, AppConfigTomlOperation, model::RenamedFleetRole,
 };
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 use std::{fs, path::Path};
@@ -14,39 +13,35 @@ use toml::Value as TomlValue;
 pub(in crate::release_set) fn rename_fleet_role_source(
     config_source: &str,
     config_path: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<RenamedFleetRoleSource, FleetConfigError> {
+) -> Result<RenamedFleetRoleSource, AppConfigError> {
     let old_role = old_role.trim();
     let new_role = new_role.trim();
     admit_canister_role_name(old_role)?;
     admit_canister_role_name(new_role)?;
     if old_role == "root" || new_role == "root" {
-        return Err(FleetConfigError::MutationConflict {
-            conflict: FleetConfigMutationConflict::RootRoleRename,
+        return Err(AppConfigError::MutationConflict {
+            conflict: AppConfigMutationConflict::RootRoleRename,
         });
     }
     if old_role == new_role {
-        return Err(FleetConfigError::MutationConflict {
-            conflict: FleetConfigMutationConflict::SameRoleRename,
+        return Err(AppConfigError::MutationConflict {
+            conflict: AppConfigMutationConflict::SameRoleRename,
         });
     }
 
     let config =
-        parse_config_model(config_source).map_err(|source| FleetConfigError::CoreConfig {
-            operation: FleetConfigOperation::RenameRole,
+        parse_config_model(config_source).map_err(|source| AppConfigError::CoreConfig {
+            operation: AppConfigOperation::RenameRole,
             source,
         })?;
-    let actual_fleet = config
-        .fleet_name()
-        .ok_or(FleetConfigError::DeclarationMissing {
-            declaration: FleetConfigDeclaration::FleetName,
-        })?;
-    if actual_fleet != expected_fleet {
-        return Err(FleetConfigError::FleetMismatch {
-            actual: actual_fleet.to_string(),
-            expected: expected_fleet.to_string(),
+    let actual_app = config.app_id().as_str();
+    if actual_app != expected_app {
+        return Err(AppConfigError::AppMismatch {
+            actual: actual_app.to_string(),
+            expected: expected_app.to_string(),
         });
     }
 
@@ -56,24 +51,24 @@ pub(in crate::release_set) fn rename_fleet_role_source(
         config
             .roles
             .get(&old_id)
-            .ok_or_else(|| FleetConfigError::DeclarationMissing {
-                declaration: FleetConfigDeclaration::Role {
-                    fleet: expected_fleet.to_string(),
+            .ok_or_else(|| AppConfigError::DeclarationMissing {
+                declaration: AppConfigDeclaration::Role {
+                    fleet: expected_app.to_string(),
                     role: old_role.to_string(),
                 },
             })?;
     if config.declares_role(&new_id) {
-        return Err(FleetConfigError::MutationConflict {
-            conflict: FleetConfigMutationConflict::RoleAlreadyDeclared {
-                fleet: expected_fleet.to_string(),
+        return Err(AppConfigError::MutationConflict {
+            conflict: AppConfigMutationConflict::RoleAlreadyDeclared {
+                fleet: expected_app.to_string(),
                 role: new_role.to_string(),
             },
         });
     }
 
     let source = rename_config_role_references(config_source, old_role, new_role)?;
-    parse_config_model(&source).map_err(|source| FleetConfigError::CoreConfig {
-        operation: FleetConfigOperation::RenameRole,
+    parse_config_model(&source).map_err(|source| AppConfigError::CoreConfig {
+        operation: AppConfigOperation::RenameRole,
         source,
     })?;
 
@@ -82,7 +77,7 @@ pub(in crate::release_set) fn rename_fleet_role_source(
             || (None, None, Some("config path has no parent".to_string())),
             |parent| {
                 let manifest = parent.join(&declaration.package).join("Cargo.toml");
-                match update_package_manifest_role(&manifest, expected_fleet, old_role, new_role) {
+                match update_package_manifest_role(&manifest, expected_app, old_role, new_role) {
                     Ok(Some(updated)) => (Some(manifest), Some(updated), None),
                     Ok(None) => (
                         None,
@@ -102,11 +97,11 @@ pub(in crate::release_set) fn rename_fleet_role_source(
         package_manifest: package_manifest.clone(),
         package_source,
         role: RenamedFleetRole {
-            fleet: expected_fleet.to_string(),
+            fleet: expected_app.to_string(),
             old_role: old_role.to_string(),
             new_role: new_role.to_string(),
-            old_display: format!("{expected_fleet}.{old_role}"),
-            new_display: format!("{expected_fleet}.{new_role}"),
+            old_display: format!("{expected_app}.{old_role}"),
+            new_display: format!("{expected_app}.{new_role}"),
             package_manifest,
             package_manifest_note,
         },
@@ -117,7 +112,7 @@ fn rename_config_role_references(
     source: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<String, FleetConfigError> {
+) -> Result<String, AppConfigError> {
     let old_literal = toml_string_literal(old_role);
     let new_literal = toml_string_literal(new_role);
     let mut updated = Vec::new();
@@ -126,7 +121,7 @@ fn rename_config_role_references(
         let mut line = rename_role_header(line, old_role, new_role)?;
         let trimmed = line.trim_start();
         if toml_assignment_key(trimmed) == Some("canister_role")
-            || toml_assignment_key(trimmed) == Some("app_index")
+            || toml_assignment_key(trimmed) == Some("roles")
         {
             line = line.replace(&old_literal, &new_literal);
         }
@@ -144,7 +139,7 @@ fn rename_role_header(
     line: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<String, FleetConfigError> {
+) -> Result<String, AppConfigError> {
     let trimmed = line.trim();
     if !trimmed.starts_with('[') || !trimmed.ends_with(']') || trimmed.starts_with("[[") {
         return Ok(line.to_string());
@@ -177,7 +172,7 @@ fn rename_role_header(
     ))
 }
 
-fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, FleetConfigError> {
+fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, AppConfigError> {
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut chars = path.chars();
@@ -189,7 +184,7 @@ fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, FleetConfigError> {
             '"' if in_quote => in_quote = false,
             '\\' if in_quote => {
                 let Some(escaped) = chars.next() else {
-                    return Err(FleetConfigError::InvalidTableHeader {
+                    return Err(AppConfigError::InvalidTableHeader {
                         detail: "unterminated TOML escape in table header",
                     });
                 };
@@ -204,7 +199,7 @@ fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, FleetConfigError> {
     }
 
     if in_quote {
-        return Err(FleetConfigError::InvalidTableHeader {
+        return Err(AppConfigError::InvalidTableHeader {
             detail: "unterminated quoted TOML table header",
         });
     }
@@ -214,24 +209,20 @@ fn parse_toml_dotted_path(path: &str) -> Result<Vec<String>, FleetConfigError> {
 
 fn update_package_manifest_role(
     manifest: &Path,
-    expected_fleet: &str,
+    expected_app: &str,
     old_role: &str,
     new_role: &str,
-) -> Result<Option<String>, FleetConfigError> {
+) -> Result<Option<String>, AppConfigError> {
     if !manifest.is_file() {
         return Ok(None);
     }
 
     let source = fs::read_to_string(manifest).map_err(|source| {
-        FleetConfigError::io(
-            FleetConfigIoOperation::ReadPackageManifest,
-            manifest,
-            source,
-        )
+        AppConfigError::io(AppConfigIoOperation::ReadPackageManifest, manifest, source)
     })?;
     let Some((fleet, role)) = package_canic_metadata(&source).map_err(|source| {
-        FleetConfigError::Toml {
-            operation: FleetConfigTomlOperation::ParsePackageManifest,
+        AppConfigError::Toml {
+            operation: AppConfigTomlOperation::ParsePackageManifest,
             source,
         }
         .at_config_path(manifest)
@@ -239,30 +230,30 @@ fn update_package_manifest_role(
     else {
         return Ok(None);
     };
-    if fleet != expected_fleet || role != old_role {
+    if fleet != expected_app || role != old_role {
         return Ok(None);
     }
 
     let updated = rename_package_metadata_role_source(&source, old_role, new_role);
     let Some((updated_fleet, updated_role)) =
         package_canic_metadata(&updated).map_err(|source| {
-            FleetConfigError::Toml {
-                operation: FleetConfigTomlOperation::ParsePackageManifest,
+            AppConfigError::Toml {
+                operation: AppConfigTomlOperation::ParsePackageManifest,
                 source,
             }
             .at_config_path(manifest)
         })?
     else {
-        return Err(FleetConfigError::PackageMetadataInvalid {
+        return Err(AppConfigError::PackageMetadataInvalid {
             path: manifest.to_path_buf(),
-            issue: FleetConfigPackageIssue::MetadataMissing,
+            issue: AppConfigPackageIssue::MetadataMissing,
         });
     };
-    if updated_fleet != expected_fleet || updated_role != new_role {
-        return Err(FleetConfigError::PackageMetadataInvalid {
+    if updated_fleet != expected_app || updated_role != new_role {
+        return Err(AppConfigError::PackageMetadataInvalid {
             path: manifest.to_path_buf(),
-            issue: FleetConfigPackageIssue::MetadataMismatch {
-                expected_fleet: expected_fleet.to_string(),
+            issue: AppConfigPackageIssue::MetadataMismatch {
+                expected_app: expected_app.to_string(),
                 expected_role: new_role.to_string(),
             },
         });

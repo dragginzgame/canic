@@ -34,7 +34,7 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
         cycles_funding: CyclesFundingPolicyConfig::default(),
         scaling: None,
         sharding: None,
-        directory: None,
+        binding: None,
         auth: CanisterAuthConfig::default(),
         standards: StandardsCanisterConfig::default(),
         diagnostics: DiagnosticsCanisterConfig::default(),
@@ -43,13 +43,9 @@ fn base_canister_config(kind: CanisterKind) -> CanisterConfig {
 }
 
 #[test]
-fn root_canister_must_exist_in_prime_subnet() {
-    let mut cfg = ConfigModel {
-        fleet: Some(FleetConfig {
-            name: Some("test".to_string()),
-        }),
-        ..Default::default()
-    };
+fn root_canister_must_exist_in_default_subnet_slot() {
+    let mut cfg = ConfigModel::default();
+    cfg.app.name = AppId::from("test");
     cfg.roles.insert(
         CanisterRole::ROOT,
         RoleDeclaration {
@@ -58,38 +54,34 @@ fn root_canister_must_exist_in_prime_subnet() {
         },
     );
     cfg.subnets
-        .insert(SubnetRole::PRIME, SubnetConfig::default());
+        .insert(SubnetSlotId::DEFAULT, SubnetConfig::default());
 
     cfg.validate()
         .expect_err("expected missing root canister to fail validation");
 }
 
 #[test]
-fn fleet_name_is_accepted_when_configured() {
+fn app_name_is_accepted_when_configured() {
     let mut cfg = ConfigModel::test_default();
-    cfg.fleet = Some(FleetConfig {
-        name: Some("demo".to_string()),
-    });
+    cfg.app.name = AppId::from("demo");
 
-    cfg.validate().expect("fleet name should be valid");
+    cfg.validate().expect("App name should be valid");
 }
 
 #[test]
-fn fleet_name_must_be_filesystem_safe() {
+fn app_name_must_be_filesystem_safe() {
     let mut cfg = ConfigModel::test_default();
-    cfg.fleet = Some(FleetConfig {
-        name: Some("demo fleet".to_string()),
-    });
+    cfg.app.name = AppId::from("demo fleet");
 
-    cfg.validate().expect_err("fleet name should fail");
+    cfg.validate().expect_err("App name should fail");
 }
 
 #[test]
-fn fleet_name_is_required() {
+fn app_name_is_required() {
     let mut cfg = ConfigModel::test_default();
-    cfg.fleet = None;
+    cfg.app.name = AppId::default();
 
-    cfg.validate().expect_err("fleet name should be required");
+    cfg.validate().expect_err("App name should be required");
 }
 
 #[test]
@@ -277,7 +269,7 @@ fn checked_in_active_configs_parse_and_validate() {
 fn topology_roles_must_be_declared() {
     let mut cfg = ConfigModel::test_default();
     cfg.subnets
-        .get_mut(&SubnetRole::PRIME)
+        .get_mut(&SubnetSlotId::DEFAULT)
         .unwrap()
         .canisters
         .insert(
@@ -352,7 +344,7 @@ fn topology_less_config_may_declare_only_non_root_roles() {
 }
 
 #[test]
-fn topology_less_config_rejects_root_and_app_index() {
+fn topology_less_config_rejects_root_and_fleet_services() {
     let mut root_cfg = ConfigModel::test_default();
     root_cfg.subnets.clear();
     root_cfg.roles.insert(
@@ -373,11 +365,15 @@ fn topology_less_config_rejects_root_and_app_index() {
         "expected root error, got: {root_err}"
     );
 
-    let mut app_index_cfg = ConfigModel::test_default();
-    app_index_cfg.subnets.clear();
-    app_index_cfg.roles.remove(&CanisterRole::ROOT);
-    app_index_cfg.app_index.insert(CanisterRole::from("store"));
-    app_index_cfg.roles.insert(
+    let mut services_cfg = ConfigModel::test_default();
+    services_cfg.subnets.clear();
+    services_cfg.roles.remove(&CanisterRole::ROOT);
+    services_cfg
+        .services
+        .fleet
+        .roles
+        .insert(CanisterRole::from("store"));
+    services_cfg.roles.insert(
         CanisterRole::from("store"),
         RoleDeclaration {
             kind: RoleDeclarationKind::Canister,
@@ -385,21 +381,24 @@ fn topology_less_config_rejects_root_and_app_index() {
         },
     );
 
-    let app_index_err = app_index_cfg
+    let services_err = services_cfg
         .validate()
-        .expect_err("topology-less app_index should fail");
+        .expect_err("topology-less Fleet services should fail");
     assert!(
-        app_index_err
+        services_err
             .to_string()
-            .contains("topology-less configs cannot define app_index entries"),
-        "expected app_index error, got: {app_index_err}"
+            .contains("topology-less configs cannot define services.fleet.roles entries"),
+        "expected Fleet services error, got: {services_err}"
     );
 }
 
 #[test]
-fn app_index_requires_prime_service_role() {
+fn fleet_services_require_default_slot_service_roles() {
     let mut cfg = ConfigModel::test_default();
-    cfg.app_index.insert(CanisterRole::from("project_hub"));
+    cfg.services
+        .fleet
+        .roles
+        .insert(CanisterRole::from("project_hub"));
     cfg.roles.insert(
         CanisterRole::from("project_hub"),
         RoleDeclaration {
@@ -408,7 +407,7 @@ fn app_index_requires_prime_service_role() {
         },
     );
     cfg.subnets
-        .get_mut(&SubnetRole::PRIME)
+        .get_mut(&SubnetSlotId::DEFAULT)
         .unwrap()
         .canisters
         .insert(
@@ -417,10 +416,10 @@ fn app_index_requires_prime_service_role() {
         );
 
     cfg.validate()
-        .expect_err("app_index singleton roles should be rejected");
+        .expect_err("Fleet service singleton roles should be rejected");
 
     cfg.subnets
-        .get_mut(&SubnetRole::PRIME)
+        .get_mut(&SubnetSlotId::DEFAULT)
         .unwrap()
         .canisters
         .insert(
@@ -428,12 +427,11 @@ fn app_index_requires_prime_service_role() {
             base_canister_config(CanisterKind::Service),
         );
 
-    cfg.validate()
-        .expect("app_index service role should validate");
+    cfg.validate().expect("Fleet service role should validate");
 }
 
 #[test]
-fn attached_fleet_roles_include_role_bearing_pool_targets() {
+fn attached_app_roles_include_role_bearing_pool_targets() {
     let mut cfg = ConfigModel::test_default();
     let mut hub = base_canister_config(CanisterKind::Service);
     let mut sharding = ShardingConfig::default();
@@ -446,9 +444,11 @@ fn attached_fleet_roles_include_role_bearing_pool_targets() {
     );
     hub.sharding = Some(sharding);
 
-    let prime = cfg.subnets.get_mut(&SubnetRole::PRIME).unwrap();
-    prime.canisters.insert(CanisterRole::from("user_hub"), hub);
-    prime.canisters.insert(
+    let default_slot = cfg.subnets.get_mut(&SubnetSlotId::DEFAULT).unwrap();
+    default_slot
+        .canisters
+        .insert(CanisterRole::from("user_hub"), hub);
+    default_slot.canisters.insert(
         CanisterRole::from("user_shard"),
         base_canister_config(CanisterKind::Shard),
     );
@@ -468,7 +468,7 @@ fn attached_fleet_roles_include_role_bearing_pool_targets() {
     );
 
     cfg.validate().expect("config should validate");
-    let attached = cfg.attached_fleet_roles();
+    let attached = cfg.attached_app_roles();
 
     assert!(
         attached
@@ -492,7 +492,10 @@ fn root_canister_must_be_kind_root() {
         base_canister_config(CanisterKind::Singleton),
     );
 
-    cfg.subnets.get_mut(&SubnetRole::PRIME).unwrap().canisters = canisters;
+    cfg.subnets
+        .get_mut(&SubnetSlotId::DEFAULT)
+        .unwrap()
+        .canisters = canisters;
 
     cfg.validate().expect_err("expected non-root kind to fail");
 }
@@ -502,7 +505,7 @@ fn multiple_root_canisters_are_rejected() {
     let mut cfg = ConfigModel::test_default();
 
     cfg.subnets.insert(
-        SubnetRole::new("aux"),
+        SubnetSlotId::new("aux"),
         SubnetConfig {
             canisters: {
                 let mut m = BTreeMap::new();

@@ -140,8 +140,9 @@ fn scaffold_project_writes_root_and_app_files() {
         fs::read_to_string(result.app_dir.join("Cargo.toml")).expect("read app manifest");
 
     assert!(config.contains("controllers = []"));
-    assert!(config.contains("app_index = []"));
-    assert!(config.contains("[fleet]"));
+    assert!(config.contains("[services.fleet]"));
+    assert!(config.contains("roles = []"));
+    assert!(config.contains("[app]"));
     assert!(config.contains("name = \"my_app\""));
     assert!(config.contains("[auth.delegated_tokens]"));
     assert!(config.contains("enabled = false"));
@@ -149,8 +150,8 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(config.contains("[roles.app]"));
     assert!(!config.contains("auto_create"));
     assert!(!config.contains("subnet_index"));
-    assert!(config.contains("[subnets.prime.canisters.root]"));
-    assert!(config.contains("[subnets.prime.canisters.app]"));
+    assert!(config.contains("[subnets.default.canisters.root]"));
+    assert!(config.contains("[subnets.default.canisters.app]"));
     assert!(!config.contains("app_directory"));
     assert!(!config.contains("topup_policy"));
     assert!(!config.contains("[[canisters]]"));
@@ -228,8 +229,7 @@ fn scaffold_canister_writes_declared_only_role_files() {
     assert_eq!(result.config_path, PathBuf::from("fleets/demo/canic.toml"));
     assert!(config.contains("[roles.\"store\"]"));
     assert!(config.contains("package = \"store\""));
-    assert!(!config.contains("[subnets.\"prime\".canisters.\"store\"]"));
-    assert!(!config.contains("[subnets.prime.canisters.store]"));
+    assert!(!config.contains("[subnets.default.canisters.store]"));
     assert!(workspace_manifest.contains("\"fleets/demo/store\""));
     assert!(manifest.contains("name = \"canister_demo_store\""));
     assert!(manifest.contains("fleet = \"demo\""));
@@ -380,7 +380,7 @@ fn scaffold_rollback_restores_documents_and_removes_new_directory() {
     let config = root.join("fleets/demo/canic.toml");
     let created_dir = root.join("fleets/demo/store");
     let workspace_before = b"[workspace]\nmembers = []\n".to_vec();
-    let config_before = b"[fleet]\nname = \"demo\"\n".to_vec();
+    let config_before = b"[app]\nname = \"demo\"\n".to_vec();
     fs::create_dir_all(&created_dir).expect("create partial scaffold");
     fs::write(created_dir.join("Cargo.toml"), "partial").expect("write partial scaffold");
     fs::create_dir_all(config.parent().expect("config parent")).expect("create config parent");

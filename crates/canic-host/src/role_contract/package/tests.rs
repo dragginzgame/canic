@@ -87,7 +87,7 @@ fn role_contract_rejection_does_not_expose_local_or_source_data() {
     let secret_like_value = "canic-closeout-secret";
     fs::write(
         &config_path,
-        format!("[fleet]\nname = \"{secret_like_value}\n"),
+        format!("[app]\nname = \"{secret_like_value}\n"),
     )
     .expect("write malformed config");
 

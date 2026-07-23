@@ -9,11 +9,11 @@ use crate::{
     config::{
         Config, ConfigError, ConfigModel,
         schema::{
-            AppInitMode, CanisterConfig, DelegatedTokenConfig, DirectoryConfig, LogConfig,
+            AppInitMode, BindingConfig, CanisterConfig, DelegatedTokenConfig, LogConfig,
             RoleAttestationConfig, ScalingConfig, SubnetConfig,
         },
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
     model::cycles_funding::FundingLimits,
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
     storage::stable::state::app::AppMode,
@@ -67,7 +67,7 @@ impl ConfigOps {
     // ---------------------------------------------------------------------
 
     /// Fetch a subnet configuration by role.
-    pub(crate) fn try_get_subnet(role: &SubnetRole) -> Result<SubnetConfig, InternalError> {
+    pub(crate) fn try_get_subnet(role: &SubnetSlotId) -> Result<SubnetConfig, InternalError> {
         let cfg = Config::get()?;
 
         cfg.get_subnet(role)
@@ -76,7 +76,7 @@ impl ConfigOps {
 
     /// Fetch a canister configuration within a specific subnet.
     pub(crate) fn try_get_canister(
-        subnet_role: &SubnetRole,
+        subnet_role: &SubnetSlotId,
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
         let subnet_cfg = Self::try_get_subnet(subnet_role)?;
@@ -150,8 +150,8 @@ impl ConfigOps {
     }
 
     /// Fetch the directory placement config for the *current* canister.
-    pub(crate) fn current_directory_config() -> Result<Option<DirectoryConfig>, InternalError> {
-        Ok(Self::current_canister()?.directory)
+    pub(crate) fn current_directory_config() -> Result<Option<BindingConfig>, InternalError> {
+        Ok(Self::current_canister()?.binding)
     }
 
     /// Fetch the configuration for a specific canister in the *current* subnet.

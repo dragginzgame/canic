@@ -287,7 +287,7 @@ mod tests {
     fn diagnostic_sort_order_is_deterministic() {
         let mut diagnostics = diagnostic_fixtures([
             "warning|config|z_config_gap|demo|deployment_plan_builder",
-            "warning|artifact|artifact_gap|beta|fleet_config",
+            "warning|artifact|artifact_gap|beta|app_config",
             "warning|artifact|artifact_gap|alpha|deployment_plan_builder",
             "blocked|config|plan_blocker|demo|deployment_plan_builder",
             "unsupported|unsupported_shape|unsupported_pool|demo|deployment_plan_builder",
@@ -305,7 +305,7 @@ mod tests {
                 "unsupported|unsupported_shape|unsupported_pool|demo|deployment_plan_builder",
                 "warning|artifact|artifact_gap|alpha|deployment_plan_builder",
                 "warning|artifact|artifact_gap|beta|deployment_plan_builder",
-                "warning|artifact|artifact_gap|beta|fleet_config",
+                "warning|artifact|artifact_gap|beta|app_config",
                 "warning|config|z_config_gap|demo|deployment_plan_builder",
                 "info|config|resolved_fact|demo|deployment_plan_builder",
             ]
@@ -459,7 +459,7 @@ mod tests {
             "cli_arg" => SOURCE_CLI_ARG,
             "deployment_config" => SOURCE_DEPLOYMENT_CONFIG,
             "deployment_plan_builder" => SOURCE_DEPLOYMENT_PLAN_BUILDER,
-            "fleet_config" => SOURCE_FLEET_CONFIG,
+            "app_config" => SOURCE_APP_CONFIG,
             "installed_deployment" => SOURCE_INSTALLED_DEPLOYMENT,
             "local_observation" => SOURCE_LOCAL_OBSERVATION,
             _ => panic!("unknown diagnostic source fixture {value}"),

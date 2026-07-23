@@ -25,7 +25,7 @@ use canic_host::{
         select_discovered_fleet_config_path,
     },
     release_set::{
-        FleetConfigError, declare_fleet_role, display_workspace_path, plan_declare_fleet_role,
+        AppConfigError, declare_fleet_role, display_workspace_path, plan_declare_fleet_role,
     },
 };
 use clap::{Arg, Command as ClapCommand};
@@ -84,7 +84,7 @@ pub enum ScaffoldCommandError {
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
-    FleetConfig(#[from] FleetConfigError),
+    AppConfig(#[from] AppConfigError),
 
     #[error(transparent)]
     Host(#[from] Box<dyn std::error::Error>),
@@ -969,12 +969,13 @@ canic = "{canic_version}"
 
 fn canic_toml(name: &str) -> String {
     format!(
-        r#"# Minimal Canic fleet config.
+        r#"# Minimal Canic App config.
 
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "{name}"
 
 [auth.delegated_tokens]
@@ -988,10 +989,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#
     )

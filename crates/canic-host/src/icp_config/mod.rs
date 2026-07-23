@@ -3,7 +3,7 @@ use crate::{
         ConfigDiscoveryError, current_canic_project_root, discover_project_canic_config_choices,
         project_fleet_roots,
     },
-    release_set::{FleetConfigError, FleetConfigSnapshot, WorkspaceDiscoveryError, icp_root},
+    release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
 use canic_core::ids::BuildNetwork;
@@ -33,7 +33,7 @@ pub enum IcpConfigError {
     ConfigDiscovery(#[from] ConfigDiscoveryError),
 
     #[error(transparent)]
-    FleetConfig(#[from] FleetConfigError),
+    AppConfig(#[from] AppConfigError),
 
     #[error(transparent)]
     WorkspaceDiscovery(#[from] WorkspaceDiscoveryError),
@@ -140,7 +140,7 @@ pub fn resolve_icp_build_network_from_root(
         .map_err(|message| IcpConfigError::Config(format!("{}: {message}", path.display())))
 }
 
-/// Inspect whether `icp.yaml` contains the entries implied by Canic fleet configs.
+/// Inspect whether `icp.yaml` contains the entries implied by Canic App configs.
 pub fn inspect_canic_icp_yaml(
     fleet_filter: Option<&str>,
 ) -> Result<IcpProjectConfigReport, IcpConfigError> {
@@ -226,7 +226,7 @@ fn discover_project_spec(
     let choices = discover_project_canic_config_choices(root)?;
     if choices.is_empty() {
         return Err(IcpConfigError::Config(format!(
-            "no Canic fleet configs found under {}\nCreate fleets/<fleet>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
+            "no Canic App configs found under {}\nCreate fleets/<app>/canic.toml, then add matching entries to icp.yaml and rerun `canic status`.",
             display_project_fleet_roots(root)
         )));
     }
@@ -237,10 +237,10 @@ fn discover_project_spec(
     let mut matched_filter = fleet_filter.is_none();
 
     for config_path in choices {
-        let config = FleetConfigSnapshot::load(&config_path)?;
-        let fleet = config.fleet_name().to_string();
+        let config = AppConfigSnapshot::load(&config_path)?;
+        let app = config.app_id().to_string();
         if let Some(filter) = fleet_filter {
-            if filter != fleet {
+            if filter != app {
                 continue;
             }
             matched_filter = true;
@@ -252,14 +252,14 @@ fn discover_project_spec(
                 canisters.push(role.clone());
             }
         }
-        environments.insert(fleet, roles);
+        environments.insert(app, roles);
     }
 
     if let Some(fleet) = fleet_filter
         && !matched_filter
     {
         return Err(IcpConfigError::Config(format!(
-            "no Canic fleet config found for {fleet}\nExpected a config under {} with `[fleet].name = \"{fleet}\"`.",
+            "no Canic App config found for {fleet}\nExpected a config under {} with `[app].name = \"{fleet}\"`.",
             display_project_fleet_roots(root)
         )));
     }

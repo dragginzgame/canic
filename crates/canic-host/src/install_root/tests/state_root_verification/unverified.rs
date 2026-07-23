@@ -10,10 +10,13 @@ fn unverified_registered_root_is_not_used_as_plan_authority() {
     fs::write(
         config_dir.join("canic.toml"),
         r#"
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -54,12 +57,9 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )
@@ -110,10 +110,13 @@ fn unverified_registered_root_blocks_install_truth_gate() {
         &config_path,
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -154,12 +157,9 @@ package = "role_baseline"
 [roles.worker]
 kind = "canister"
 package = "worker"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )

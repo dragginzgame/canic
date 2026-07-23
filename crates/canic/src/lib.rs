@@ -54,7 +54,7 @@ pub mod __build {
     pub use crate::build_support::{
         METRICS_TIER_CORE, METRICS_TIER_PLACEMENT, METRICS_TIER_PLATFORM, METRICS_TIER_RUNTIME,
         METRICS_TIER_SECURITY, METRICS_TIER_STORAGE, assert_canonical_role_contract_build,
-        config_attaches_role, config_contains_role, config_declares_role, config_fleet_name,
+        config_app_id, config_attaches_role, config_contains_role, config_declares_role,
         declared_package_metadata, declared_package_role,
         emit_root_wasm_store_bootstrap_release_set, manifest_declares_workspace,
         metrics_profile_tier_mask, read_config_source_or_default, required_package_metadata,

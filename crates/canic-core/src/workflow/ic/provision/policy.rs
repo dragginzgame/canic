@@ -68,7 +68,7 @@ const fn registry_canister_shape(cfg: &CanisterConfig) -> RegistryCanisterShape 
         kind: registry_canister_kind(cfg.kind),
         has_scaling: cfg.scaling.is_some(),
         has_sharding: cfg.sharding.is_some(),
-        has_directory: cfg.directory.is_some(),
+        has_directory: cfg.binding.is_some(),
     }
 }
 

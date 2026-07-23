@@ -9,7 +9,7 @@ pub mod mapper;
 use crate::{
     InternalError,
     dto::env::EnvSnapshotResponse,
-    ids::SubnetRole,
+    ids::SubnetSlotId,
     memory::runtime::is_memory_bootstrap_ready,
     model::env::ValidatedEnv,
     ops::runtime::env::mapper::EnvRecordMapper,
@@ -97,7 +97,7 @@ impl EnvOps {
 
     #[must_use]
     pub fn is_prime_subnet() -> bool {
-        Env::get_subnet_role().is_some_and(|role| role.is_prime())
+        Env::get_subnet_role().is_some_and(|slot| slot.is_default())
     }
 
     #[must_use]
@@ -131,7 +131,7 @@ impl EnvOps {
     // ---------------------------------------------------------------------
 
     /// SAFETY: Env must be initialized; do not call during init/post_upgrade.
-    pub fn subnet_role() -> Result<SubnetRole, InternalError> {
+    pub fn subnet_role() -> Result<SubnetSlotId, InternalError> {
         Env::get_subnet_role().ok_or_else(|| EnvOpsError::SubnetRoleUnavailable.into())
     }
 
@@ -344,7 +344,7 @@ fn ensure_root_pid_immutable(
 mod tests {
     use super::*;
     use crate::{
-        ids::{CanisterRole, SubnetRole},
+        ids::{CanisterRole, SubnetSlotId},
         storage::stable::env::Env,
         test::seams,
     };
@@ -365,7 +365,7 @@ mod tests {
         EnvData {
             record: EnvRecord {
                 prime_root_pid: Some(root_pid),
-                subnet_role: Some(SubnetRole::PRIME),
+                subnet_role: Some(SubnetSlotId::DEFAULT),
                 subnet_pid: Some(root_pid),
                 root_pid: Some(root_pid),
                 canister_role: Some(CanisterRole::ROOT),

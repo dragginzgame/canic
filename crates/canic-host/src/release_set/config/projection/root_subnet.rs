@@ -73,10 +73,10 @@ pub(in crate::release_set) fn configured_pool_expectations_from_config(
                 );
             }
         }
-        if let Some(directory) = &canister.directory {
-            for (pool_name, pool) in &directory.pools {
+        if let Some(binding) = &canister.binding {
+            for (pool_name, pool) in &binding.pools {
                 pools.insert(
-                    format!("directory:{pool_name}:{}", pool.canister_role.as_str()),
+                    format!("binding:{pool_name}:{}", pool.canister_role.as_str()),
                     ConfiguredPoolExpectation {
                         pool: pool_name.clone(),
                         canister_role: pool.canister_role.as_str().to_string(),

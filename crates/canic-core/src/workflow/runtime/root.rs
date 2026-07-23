@@ -8,7 +8,7 @@ use crate::{
     InternalError, InternalErrorOrigin, VERSION,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
     domain::subnet::SubnetIdentity,
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
     log::Topic,
     ops::{
         config::ConfigOps,
@@ -52,14 +52,19 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
 
     let self_pid = IcOps::canister_self();
     let (subnet_pid, subnet_role, prime_root_pid, module_hash) = match identity {
-        SubnetIdentity::Prime => (self_pid, SubnetRole::PRIME, self_pid, None),
+        SubnetIdentity::Prime => (self_pid, SubnetSlotId::DEFAULT, self_pid, None),
         SubnetIdentity::PrimeWithModuleHash(module_hash) => {
-            (self_pid, SubnetRole::PRIME, self_pid, Some(module_hash))
+            (self_pid, SubnetSlotId::DEFAULT, self_pid, Some(module_hash))
         }
         SubnetIdentity::Standard(params) => {
             (self_pid, params.subnet_type, params.prime_root_pid, None)
         }
-        SubnetIdentity::Manual => (IcOps::canister_self(), SubnetRole::PRIME, self_pid, None),
+        SubnetIdentity::Manual => (
+            IcOps::canister_self(),
+            SubnetSlotId::DEFAULT,
+            self_pid,
+            None,
+        ),
     };
 
     let input = EnvInput {

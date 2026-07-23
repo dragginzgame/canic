@@ -1,27 +1,27 @@
-use crate::release_set::config::{FleetConfigError, FleetConfigNameField, FleetConfigNameIssue};
+use crate::release_set::config::{AppConfigError, AppConfigNameField, AppConfigNameIssue};
 use canic_core::bootstrap::compiled::{CanisterRoleNameIssue, validate_canister_role_name};
 
-pub(super) fn admit_canister_role_name(role: &str) -> Result<(), FleetConfigError> {
-    validate_canister_role_name(role).map_err(|issue| FleetConfigError::InvalidName {
-        field: FleetConfigNameField::Role,
+pub(super) fn admit_canister_role_name(role: &str) -> Result<(), AppConfigError> {
+    validate_canister_role_name(role).map_err(|issue| AppConfigError::InvalidName {
+        field: AppConfigNameField::Role,
         issue: map_canister_role_name_issue(issue),
         value: role.to_string(),
     })
 }
 
-const fn map_canister_role_name_issue(issue: CanisterRoleNameIssue) -> FleetConfigNameIssue {
+const fn map_canister_role_name_issue(issue: CanisterRoleNameIssue) -> AppConfigNameIssue {
     match issue {
-        CanisterRoleNameIssue::Empty => FleetConfigNameIssue::Empty,
-        CanisterRoleNameIssue::InvalidSnakeCase => FleetConfigNameIssue::InvalidSnakeCase,
-        CanisterRoleNameIssue::TooLong { max_bytes } => FleetConfigNameIssue::TooLong { max_bytes },
+        CanisterRoleNameIssue::Empty => AppConfigNameIssue::Empty,
+        CanisterRoleNameIssue::InvalidSnakeCase => AppConfigNameIssue::InvalidSnakeCase,
+        CanisterRoleNameIssue::TooLong { max_bytes } => AppConfigNameIssue::TooLong { max_bytes },
     }
 }
 
-pub(super) fn validate_subnet_name(subnet: &str) -> Result<(), FleetConfigError> {
+pub(super) fn validate_subnet_name(subnet: &str) -> Result<(), AppConfigError> {
     if subnet.is_empty() {
-        return Err(FleetConfigError::InvalidName {
-            field: FleetConfigNameField::Subnet,
-            issue: FleetConfigNameIssue::Empty,
+        return Err(AppConfigError::InvalidName {
+            field: AppConfigNameField::Subnet,
+            issue: AppConfigNameIssue::Empty,
             value: subnet.to_string(),
         });
     }
@@ -29,16 +29,16 @@ pub(super) fn validate_subnet_name(subnet: &str) -> Result<(), FleetConfigError>
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
     {
-        return Err(FleetConfigError::InvalidName {
-            field: FleetConfigNameField::Subnet,
-            issue: FleetConfigNameIssue::InvalidCharacters,
+        return Err(AppConfigError::InvalidName {
+            field: AppConfigNameField::Subnet,
+            issue: AppConfigNameIssue::InvalidCharacters,
             value: subnet.to_string(),
         });
     }
     Ok(())
 }
 
-pub(super) fn validate_attach_kind(kind: &str) -> Result<(), FleetConfigError> {
+pub(super) fn validate_attach_kind(kind: &str) -> Result<(), AppConfigError> {
     if matches!(
         kind,
         "service" | "singleton" | "shard" | "replica" | "instance"
@@ -46,7 +46,7 @@ pub(super) fn validate_attach_kind(kind: &str) -> Result<(), FleetConfigError> {
         return Ok(());
     }
 
-    Err(FleetConfigError::InvalidKind {
+    Err(AppConfigError::InvalidKind {
         kind: kind.to_string(),
     })
 }

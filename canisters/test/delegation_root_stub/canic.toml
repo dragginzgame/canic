@@ -1,7 +1,8 @@
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "delegation_root_stub"
 
 [roles.root]
@@ -37,36 +38,36 @@ valid_from_ns = 0
 accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 
-[subnets.prime]
+[subnets.default]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.issuer]
+[subnets.default.canisters.issuer]
 kind = "service"
 initial_cycles = "1T"
 
-[subnets.prime.canisters.issuer.auth]
+[subnets.default.canisters.issuer.auth]
 delegated_token_issuer = true
 delegated_token_verifier = true
 role_attestation_cache = true
 
-[subnets.prime.canisters.project_hub]
+[subnets.default.canisters.project_hub]
 kind = "service"
 initial_cycles = "1T"
 
-[subnets.prime.canisters.project_hub.directory.pools.projects]
+[subnets.default.canisters.project_hub.binding.pools.projects]
 canister_role = "project_instance"
 key_name = "project"
 
-[subnets.prime.canisters.project_hub.auth]
+[subnets.default.canisters.project_hub.auth]
 delegated_token_verifier = true
 role_attestation_cache = true
 
-[subnets.prime.canisters.project_instance]
+[subnets.default.canisters.project_instance]
 kind = "instance"
 initial_cycles = "1T"
 
-[subnets.prime.canisters.project_instance.auth]
+[subnets.default.canisters.project_instance.auth]
 delegated_token_verifier = true
 role_attestation_cache = true

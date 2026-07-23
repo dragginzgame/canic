@@ -9,12 +9,12 @@ mod stage;
 
 pub(crate) use config::configured_release_roles_from_config;
 pub use config::{
-    AttachedFleetRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredFleetRole,
-    FleetConfigDeclaration, FleetConfigError, FleetConfigIoOperation, FleetConfigMutationConflict,
-    FleetConfigNameField, FleetConfigNameIssue, FleetConfigOperation, FleetConfigPackageIssue,
-    FleetConfigSnapshot, FleetConfigTomlOperation, LOCAL_ROOT_MIN_READY_CYCLES, RenamedFleetRole,
+    AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
+    AppConfigNameField, AppConfigNameIssue, AppConfigOperation, AppConfigPackageIssue,
+    AppConfigSnapshot, AppConfigTomlOperation, AttachedFleetRole, ConfiguredPoolExpectation,
+    ConfiguredRoleLifecycle, DeclaredFleetRole, LOCAL_ROOT_MIN_READY_CYCLES, RenamedFleetRole,
     attach_fleet_role, declare_fleet_role, plan_attach_fleet_role, plan_declare_fleet_role,
-    plan_rename_fleet_role, read_fleet_config_identity, rename_fleet_role,
+    plan_rename_fleet_role, read_app_config_identity, rename_fleet_role,
 };
 pub use manifest::{ReleaseSetEntry, RootReleaseSetManifest, load_root_release_set_manifest};
 pub(crate) use manifest::{

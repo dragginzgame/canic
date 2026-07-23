@@ -5,10 +5,13 @@ use canic_core::bootstrap::{ConfigError, parse_config_model};
 fn configured_release_roles_filters_root_and_wasm_store() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -21,18 +24,15 @@ package = "user_hub"
 [roles.scale_hub]
 kind = "canister"
 package = "scale_hub"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 
-[subnets.prime.canisters.scale_hub]
+[subnets.default.canisters.scale_hub]
 kind = "service"
 "#;
 
@@ -46,9 +46,10 @@ kind = "service"
 fn configured_deployable_surfaces_exclude_declared_only_roles() {
     let config = r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
 
 [roles.root]
@@ -63,10 +64,10 @@ package = "user_hub"
 kind = "canister"
 package = "store"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.user_hub]
+[subnets.default.canisters.user_hub]
 kind = "service"
 "#;
 

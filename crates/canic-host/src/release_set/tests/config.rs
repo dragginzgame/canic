@@ -2,31 +2,38 @@ use super::*;
 use canic_core::bootstrap::ConfigError;
 
 #[test]
-fn configured_fleet_name_reads_required_config_identity() {
+fn configured_app_name_reads_required_config_identity() {
     let config = parsed_config(REAL_CONFIG);
-    let name = config.fleet_name().expect("fleet name");
+    let name = config.app_id();
 
-    assert_eq!(name, "demo");
+    assert_eq!(name.as_str(), "demo");
 }
 
 #[test]
-fn configured_fleet_name_rejects_missing_config_identity() {
+fn configured_app_name_rejects_missing_config_identity() {
     let error = canic_core::bootstrap::parse_config_model(
         r#"
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
 [app]
 init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     )
-    .expect_err("missing fleet name must reject");
+    .expect_err("missing App name must reject");
 
-    assert!(matches!(error, ConfigError::ConfigSchema(_)));
+    assert!(matches!(
+        error,
+        ConfigError::CannotParseToml {
+            issue: canic_core::bootstrap::ConfigTomlIssue::InvalidValue { logical_path },
+            ..
+        } if logical_path == "app"
+    ));
 }
 
 #[test]
@@ -38,10 +45,13 @@ controllers = [
   "aaaaa-aa",
   "aaaaa-aa",
 ]
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "demo"
+init_mode = "enabled"
+
 
 [roles.root]
 kind = "root"
@@ -74,12 +84,9 @@ package = "scale"
 [roles.role_baseline]
 kind = "canister"
 package = "role_baseline"
-
-[app]
-init_mode = "enabled"
 [app.whitelist]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#,
     );

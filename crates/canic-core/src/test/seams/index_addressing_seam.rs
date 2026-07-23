@@ -97,9 +97,13 @@ fn install_index_service_test_config(service_role: &CanisterRole, singleton_role
     let _config = ConfigTestBuilder::new()
         .with_prime_canister_kind(service_role.clone(), CanisterKind::Service)
         .with_prime_canister_kind(singleton_role.clone(), CanisterKind::Singleton)
-        .with_app_index(service_role.clone())
+        .with_fleet_service(service_role.clone())
         .install();
-    import_test_env(service_role.clone(), crate::ids::SubnetRole::PRIME, p(20));
+    import_test_env(
+        service_role.clone(),
+        crate::ids::SubnetSlotId::DEFAULT,
+        p(20),
+    );
 }
 
 fn clear_app_and_subnet_indexes() {

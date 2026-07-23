@@ -18,7 +18,7 @@ use canic::{
         },
         state::AppStateResponse,
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
     protocol,
 };
 use ic_testkit::pic::Pic;
@@ -94,7 +94,7 @@ pub fn assert_child_env(
     );
     assert_eq!(
         env.subnet_role,
-        Some(SubnetRole::PRIME),
+        Some(SubnetSlotId::DEFAULT),
         "env subnet role for {role}"
     );
     assert!(

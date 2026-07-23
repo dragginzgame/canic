@@ -68,7 +68,7 @@ impl AppIndexOps {
     pub(crate) fn filter_args_for_local_config(
         args: AppIndexArgs,
     ) -> Result<AppIndexArgs, InternalError> {
-        let allowed = ConfigOps::get()?.app_index.clone();
+        let allowed = ConfigOps::get()?.services.fleet.roles.clone();
         Ok(AppIndexArgs(
             args.0
                 .into_iter()
@@ -80,7 +80,7 @@ impl AppIndexOps {
     pub(crate) fn import_args_allow_incomplete(args: AppIndexArgs) -> Result<(), InternalError> {
         let data = AppIndexDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "app")?;
-        let allowed = ConfigOps::get()?.app_index.clone();
+        let allowed = ConfigOps::get()?.services.fleet.roles.clone();
         ensure_allowed_roles(&data.entries, "app", &allowed)?;
         AppIndex::import(data);
 
@@ -89,7 +89,7 @@ impl AppIndexOps {
 
     pub(crate) fn import(data: AppIndexData) -> Result<(), InternalError> {
         ensure_unique_roles(&data.entries, "app")?;
-        let required = ConfigOps::get()?.app_index.clone();
+        let required = ConfigOps::get()?.services.fleet.roles.clone();
         ensure_allowed_roles(&data.entries, "app", &required)?;
         ensure_required_roles(&data.entries, "app", &required)?;
         AppIndex::import(data);

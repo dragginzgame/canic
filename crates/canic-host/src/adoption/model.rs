@@ -26,9 +26,6 @@ pub struct AdoptionReportRequest<'a> {
 pub enum AdoptionReportError {
     #[error("invalid config: {0}")]
     InvalidConfig(String),
-
-    #[error("missing required [fleet].name in canic.toml")]
-    MissingFleetName,
 }
 
 ///

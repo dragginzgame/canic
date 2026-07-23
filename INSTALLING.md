@@ -116,9 +116,9 @@ role = "app"
 ```
 
 Use `role = "root"` for the root canister. Ordinary child roles use their
-configured fleet role name, such as `app`, `hub`, or `registry`. The `fleet`
-value is the fleet template name from `[fleet] name = "..."`, not a deployment
-target name.
+configured Fleet role name, such as `app`, `hub`, or `registry`. The `fleet`
+metadata value currently matches the App source identity from `[app].name`; it
+is not a live deployment target name.
 Root canisters also need the `control-plane` feature on their runtime `canic`
 dependency. When delegated-token material is enabled, root issuers also need
 `auth-root-canister-sig-create`; canisters that issue delegated tokens need
@@ -221,9 +221,11 @@ Create `fleets/<fleet>/canic.toml`:
 
 ```toml
 controllers = []
-app_index = ["app"]
 
-[fleet]
+[services.fleet]
+roles = ["app"]
+
+[app]
 name = "test"
 
 [roles.root]
@@ -234,10 +236,10 @@ package = "root"
 kind = "canister"
 package = "app"
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 topup = {}
 ```

@@ -1,7 +1,8 @@
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "fixture_protected_sibling"
 
 [roles.root]
@@ -12,10 +13,10 @@ package = "role"
 kind = "canister"
 package = "role"
 
-[subnets.prime]
+[subnets.default]
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"

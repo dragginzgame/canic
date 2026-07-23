@@ -12,7 +12,7 @@ use canic_core::{
 use canic_host::table::{ColumnAlign, render_separator, render_table_row};
 use canic_host::{
     registry::parse_registry_entries,
-    release_set::{FleetConfigDeclaration, FleetConfigError},
+    release_set::{AppConfigDeclaration, AppConfigError},
 };
 use options::ListSource;
 use render::ReadyStatus;
@@ -102,14 +102,14 @@ fn list_preserves_icp_root_resolution_causes() {
 
 #[test]
 fn list_preserves_fleet_config_causes() {
-    let error = ListCommandError::from(FleetConfigError::DeclarationMissing {
-        declaration: FleetConfigDeclaration::FleetName,
+    let error = ListCommandError::from(AppConfigError::DeclarationMissing {
+        declaration: AppConfigDeclaration::AppName,
     });
 
     std::assert_matches!(
         error,
-        ListCommandError::FleetConfig(FleetConfigError::DeclarationMissing {
-            declaration: FleetConfigDeclaration::FleetName
+        ListCommandError::AppConfig(AppConfigError::DeclarationMissing {
+            declaration: AppConfigDeclaration::AppName
         })
     );
 }
@@ -492,7 +492,7 @@ fn renders_config_output_with_fleet_roles() {
             topup: "4.00 TC @ 10.00 TC".to_string(),
             metrics: "hub".to_string(),
             details: vec![
-                "app_index".to_string(),
+                "services.fleet".to_string(),
                 "metrics profile=hub tiers=core,placement,runtime,security (inferred)".to_string(),
                 "sharding user_shards->user_shard cap=100 initial=1 max=4".to_string(),
             ],
@@ -509,7 +509,7 @@ fn renders_config_output_with_fleet_roles() {
             "----   ---------   ----   --------------   -------   ------------------",
             "root   root        -      -                root      -",
             "app    singleton   yes    auth, sharding   hub       4.00 TC @ 10.00 TC",
-            "  - app_index",
+            "  - services.fleet",
             "  - metrics profile=hub tiers=core,placement,runtime,security (inferred)",
             "  - sharding user_shards->user_shard cap=100 initial=1 max=4",
         ]

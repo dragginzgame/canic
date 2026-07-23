@@ -1,15 +1,15 @@
 controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "wasm_store"
+init_mode = "enabled"
+
 
 [roles.wasm_store]
 kind = "canister"
 package = "."
-
-[app]
-init_mode = "enabled"
 
 [app.whitelist]
 

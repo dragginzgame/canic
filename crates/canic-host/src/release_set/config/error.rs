@@ -1,6 +1,6 @@
 //! Module: release_set::config::error
 //!
-//! Responsibility: classify fleet-configuration projection and mutation failures.
+//! Responsibility: classify App-configuration projection and mutation failures.
 //! Does not own: configuration policy, TOML mutation, rollback execution, or CLI exits.
 //! Boundary: retains typed core, TOML, I/O, mutation, and rollback causes for callers.
 
@@ -14,13 +14,13 @@ use canic_core::{bootstrap::ConfigError, role_contract::RoleContractFinding};
 use thiserror::Error as ThisError;
 
 ///
-/// FleetConfigOperation
+/// AppConfigOperation
 ///
 /// Bounded configuration operation attached to core parsing failures.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FleetConfigOperation {
+pub enum AppConfigOperation {
     AttachRole,
     DeclareRole,
     Project,
@@ -28,13 +28,13 @@ pub enum FleetConfigOperation {
 }
 
 ///
-/// FleetConfigIoOperation
+/// AppConfigIoOperation
 ///
 /// Filesystem operation retained with its path and original source.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FleetConfigIoOperation {
+pub enum AppConfigIoOperation {
     ReadConfig,
     ReadPackageManifest,
     RestoreConfig,
@@ -42,32 +42,32 @@ pub enum FleetConfigIoOperation {
     WritePackageManifest,
 }
 
-impl Display for FleetConfigIoOperation {
+impl Display for AppConfigIoOperation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
-            Self::ReadConfig => "read fleet config",
+            Self::ReadConfig => "read App config",
             Self::ReadPackageManifest => "read package manifest",
-            Self::RestoreConfig => "restore fleet config",
-            Self::WriteConfig => "write fleet config",
+            Self::RestoreConfig => "restore App config",
+            Self::WriteConfig => "write App config",
             Self::WritePackageManifest => "write package manifest",
         })
     }
 }
 
 ///
-/// FleetConfigNameField
+/// AppConfigNameField
 ///
 /// Input-name family used by typed fleet mutation validation.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FleetConfigNameField {
+pub enum AppConfigNameField {
     Package,
     Role,
     Subnet,
 }
 
-impl Display for FleetConfigNameField {
+impl Display for AppConfigNameField {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::Package => "package",
@@ -78,20 +78,20 @@ impl Display for FleetConfigNameField {
 }
 
 ///
-/// FleetConfigNameIssue
+/// AppConfigNameIssue
 ///
 /// Reason a bounded fleet mutation name is invalid.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FleetConfigNameIssue {
+pub enum AppConfigNameIssue {
     Empty,
     InvalidCharacters,
     InvalidSnakeCase,
     TooLong { max_bytes: usize },
 }
 
-impl Display for FleetConfigNameIssue {
+impl Display for AppConfigNameIssue {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Empty => formatter.write_str("must not be empty"),
@@ -109,34 +109,34 @@ impl Display for FleetConfigNameIssue {
 }
 
 ///
-/// FleetConfigDeclaration
+/// AppConfigDeclaration
 ///
-/// Required declaration absent from a fleet configuration operation.
+/// Required declaration absent from an App configuration operation.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FleetConfigDeclaration {
-    FleetName,
+pub enum AppConfigDeclaration {
+    AppName,
     Role { fleet: String, role: String },
 }
 
-impl Display for FleetConfigDeclaration {
+impl Display for AppConfigDeclaration {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FleetName => formatter.write_str("missing required [fleet].name in canic.toml"),
+            Self::AppName => formatter.write_str("missing required [app].name in canic.toml"),
             Self::Role { fleet, role } => write!(formatter, "role {fleet}.{role} is not declared"),
         }
     }
 }
 
 ///
-/// FleetConfigMutationConflict
+/// AppConfigMutationConflict
 ///
 /// Existing configuration state that blocks a requested role mutation.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FleetConfigMutationConflict {
+pub enum AppConfigMutationConflict {
     RoleAlreadyAttached { fleet: String, role: String },
     RoleAlreadyDeclared { fleet: String, role: String },
     RootRoleAttach,
@@ -145,7 +145,7 @@ pub enum FleetConfigMutationConflict {
     SameRoleRename,
 }
 
-impl Display for FleetConfigMutationConflict {
+impl Display for AppConfigMutationConflict {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::RoleAlreadyAttached { fleet, role } => {
@@ -168,57 +168,57 @@ impl Display for FleetConfigMutationConflict {
 }
 
 ///
-/// FleetConfigPackageIssue
+/// AppConfigPackageIssue
 ///
 /// Generated package metadata invariant violated by a role rename.
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum FleetConfigPackageIssue {
+pub enum AppConfigPackageIssue {
     MetadataMissing,
     MetadataMismatch {
-        expected_fleet: String,
+        expected_app: String,
         expected_role: String,
     },
 }
 
-impl Display for FleetConfigPackageIssue {
+impl Display for AppConfigPackageIssue {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::MetadataMissing => {
                 formatter.write_str("updated manifest would remove [package.metadata.canic]")
             }
             Self::MetadataMismatch {
-                expected_fleet,
+                expected_app,
                 expected_role,
             } => write!(
                 formatter,
-                "updated manifest would not contain expected Canic metadata fleet={expected_fleet:?} role={expected_role:?}"
+                "updated manifest would not contain expected Canic App identity {expected_app:?} and role {expected_role:?}"
             ),
         }
     }
 }
 
 ///
-/// FleetConfigTomlOperation
+/// AppConfigTomlOperation
 ///
 /// TOML document family whose parser returned the retained source error.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum FleetConfigTomlOperation {
-    ParseFleetIdentity,
+pub enum AppConfigTomlOperation {
+    ParseAppIdentity,
     ParsePackageManifest,
 }
 
 ///
-/// FleetConfigError
+/// AppConfigError
 ///
-/// Typed failure boundary for fleet configuration projections and mutations.
+/// Typed failure boundary for App configuration projections and mutations.
 ///
 
 #[derive(Debug, ThisError)]
-pub enum FleetConfigError {
+pub enum AppConfigError {
     #[error("invalid {}: {source}", path.display())]
     ConfigInvalid {
         path: PathBuf,
@@ -228,24 +228,24 @@ pub enum FleetConfigError {
 
     #[error("{source}")]
     CoreConfig {
-        operation: FleetConfigOperation,
+        operation: AppConfigOperation,
         #[source]
         source: ConfigError,
     },
 
     #[error("{declaration}")]
-    DeclarationMissing { declaration: FleetConfigDeclaration },
+    DeclarationMissing { declaration: AppConfigDeclaration },
 
-    #[error("selected config declares fleet {actual:?}, not {expected:?}")]
-    FleetMismatch { actual: String, expected: String },
+    #[error("selected config declares App {actual:?}, not {expected:?}")]
+    AppMismatch { actual: String, expected: String },
 
     #[error("kind must be one of: service, singleton, shard, replica, instance")]
     InvalidKind { kind: String },
 
     #[error("{field} {issue}")]
     InvalidName {
-        field: FleetConfigNameField,
-        issue: FleetConfigNameIssue,
+        field: AppConfigNameField,
+        issue: AppConfigNameIssue,
         value: String,
     },
 
@@ -254,21 +254,19 @@ pub enum FleetConfigError {
 
     #[error("failed to {operation} {}: {source}", path.display())]
     Io {
-        operation: FleetConfigIoOperation,
+        operation: AppConfigIoOperation,
         path: PathBuf,
         #[source]
         source: io::Error,
     },
 
     #[error("{conflict}")]
-    MutationConflict {
-        conflict: FleetConfigMutationConflict,
-    },
+    MutationConflict { conflict: AppConfigMutationConflict },
 
     #[error("updated {}: {issue}", path.display())]
     PackageMetadataInvalid {
         path: PathBuf,
-        issue: FleetConfigPackageIssue,
+        issue: AppConfigPackageIssue,
     },
 
     #[error("{}", format_role_contract_findings(.errors))]
@@ -282,13 +280,13 @@ pub enum FleetConfigError {
 
     #[error("{source}")]
     Toml {
-        operation: FleetConfigTomlOperation,
+        operation: AppConfigTomlOperation,
         #[source]
         source: toml::de::Error,
     },
 }
 
-impl FleetConfigError {
+impl AppConfigError {
     pub(super) fn at_config_path(self, path: &Path) -> Self {
         match self {
             Self::ConfigInvalid { .. } | Self::Io { .. } => self,
@@ -299,7 +297,7 @@ impl FleetConfigError {
         }
     }
 
-    pub(super) fn io(operation: FleetConfigIoOperation, path: &Path, source: io::Error) -> Self {
+    pub(super) fn io(operation: AppConfigIoOperation, path: &Path, source: io::Error) -> Self {
         Self::Io {
             operation,
             path: path.to_path_buf(),

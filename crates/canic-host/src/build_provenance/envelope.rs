@@ -4,7 +4,7 @@ use crate::evidence_envelope::{
     evidence_envelope_schema, file_input_fingerprint, json_payload_sha256,
 };
 use crate::{
-    release_set::FleetConfigSnapshot,
+    release_set::AppConfigSnapshot,
     role_contract::{declared_role_manifest_path, finding_detail},
 };
 use std::path::Path;
@@ -28,7 +28,7 @@ pub fn build_provenance_schema() -> PayloadSchemaRefV1 {
 pub fn build_provenance_envelope(
     request: &BuildProvenanceRequest,
 ) -> Result<EvidenceEnvelopeV1, Box<dyn std::error::Error>> {
-    let config = FleetConfigSnapshot::load(&request.config_path)?;
+    let config = AppConfigSnapshot::load(&request.config_path)?;
     let role = canic_core::ids::CanisterRole::owned(request.role.clone());
     let package_manifest = declared_role_manifest_path(&request.config_path, config.model(), &role)
         .map_err(|finding| finding_detail(&finding))?;

@@ -105,25 +105,25 @@ pub fn required_package_role(manifest_dir: &Path) -> String {
     required_package_metadata(manifest_dir).role
 }
 
-/// Return whether a validated config declares the requested fleet role.
+/// Return whether a validated config declares the requested App role.
 #[must_use]
-pub fn config_declares_role(config: &ConfigModel, fleet_name: &str, role_name: &str) -> bool {
-    config.fleet_name() == Some(fleet_name)
+pub fn config_declares_role(config: &ConfigModel, app_id: &str, role_name: &str) -> bool {
+    config.app_id().as_str() == app_id
         && config
             .roles
             .contains_key(&CanisterRole::owned(role_name.to_string()))
 }
 
-/// Return the fleet name declared by a validated config.
+/// Return the App identity declared by a validated config.
 #[must_use]
-pub fn config_fleet_name(config: &ConfigModel) -> Option<&str> {
-    config.fleet_name()
+pub const fn config_app_id(config: &ConfigModel) -> &str {
+    config.app_id().as_str()
 }
 
-/// Return whether a validated config attaches the requested fleet role.
+/// Return whether a validated config attaches the requested App role.
 #[must_use]
-pub fn config_attaches_role(config: &ConfigModel, fleet_name: &str, role_name: &str) -> bool {
-    if config.fleet_name() != Some(fleet_name) {
+pub fn config_attaches_role(config: &ConfigModel, app_id: &str, role_name: &str) -> bool {
+    if config.app_id().as_str() != app_id {
         return false;
     }
 
@@ -135,7 +135,7 @@ pub fn config_attaches_role(config: &ConfigModel, fleet_name: &str, role_name: &
 /// Return whether a validated config contains the requested canister role.
 #[must_use]
 pub fn config_contains_role(config: &ConfigModel, role_name: &str) -> bool {
-    config_declares_role(config, config.fleet_name().unwrap_or_default(), role_name)
+    config_declares_role(config, config.app_id().as_str(), role_name)
 }
 
 /// Render the minimal declared-only config needed by a standalone non-root canister.
@@ -152,17 +152,17 @@ pub fn standalone_config_source(role: &str) -> String {
 
     format!(
         r#"controllers = []
-app_index = []
+[services.fleet]
+roles = []
 
-[fleet]
+[app]
 name = "standalone"
+init_mode = "enabled"
+
 
 [roles.{role}]
 kind = "canister"
 package = "."
-
-[app]
-init_mode = "enabled"
 
 [app.whitelist]
 
@@ -198,7 +198,7 @@ mod tests {
         let source = standalone_config_source("sandbox_blank");
         let cfg = parse_config_model(&source).expect("generated standalone config parses");
 
-        assert_eq!(cfg.fleet_name(), Some("standalone"));
+        assert_eq!(cfg.app_id().as_str(), "standalone");
         assert!(cfg.roles.contains_key("sandbox_blank"));
         assert!(!cfg.roles.contains_key("root"));
         assert!(cfg.subnets.is_empty());
@@ -211,7 +211,7 @@ mod tests {
         let source = standalone_config_source("demo_role");
         let cfg = parse_config_model(&source).expect("generated standalone config parses");
 
-        assert_eq!(cfg.fleet_name(), Some("standalone"));
+        assert_eq!(cfg.app_id().as_str(), "standalone");
         assert!(source.contains("[roles.demo_role]"));
         assert!(cfg.roles.contains_key("demo_role"));
         assert!(cfg.subnets.is_empty());
@@ -299,10 +299,10 @@ edition = "2024"
     fn config_contains_role_accepts_exact_metadata_role() {
         let cfg = parse_config_model(
             r#"
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[fleet]
+[app]
 name = "test"
 
 [roles.root]
@@ -316,7 +316,7 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
         )
@@ -330,10 +330,10 @@ kind = "service"
     fn config_contains_role_rejects_role_typos() {
         let cfg = parse_config_model(
             r#"
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 
-[fleet]
+[app]
 name = "test"
 
 [roles.root]
@@ -347,7 +347,7 @@ package = "app"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.prime.canisters.app]
+[subnets.default.canisters.app]
 kind = "service"
 "#,
         )

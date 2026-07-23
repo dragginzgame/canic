@@ -9,7 +9,7 @@ use crate::{
     },
     bootstrap_store::build_bootstrap_wasm_store_artifact,
     cargo_command,
-    release_set::{FleetConfigSnapshot, artifact_root_path},
+    release_set::{AppConfigSnapshot, artifact_root_path},
     remove_optional_file,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
@@ -36,7 +36,7 @@ pub fn build_workspace_canister_artifact(
         return build_hidden_wasm_store_artifact(context);
     }
 
-    let config = FleetConfigSnapshot::load(&context.config_path)?;
+    let config = AppConfigSnapshot::load(&context.config_path)?;
     let spec = resolve_canister_artifact_build_spec(context, config.model())?;
     build_workspace_canister_artifact_from_spec(context, &spec)
 }
@@ -189,7 +189,7 @@ fn validate_artifact_role_attached(
         .into());
     }
     if !config.attached_roles().contains(&role) {
-        let fleet = config.fleet_name().unwrap_or("<unknown>");
+        let fleet = config.app_id().as_str();
         return Err(format!(
             "role {fleet}.{canister_name} is declared but not attached to topology; run `canic fleet role attach {fleet} {canister_name} --subnet <subnet>` before building an artifact"
         )

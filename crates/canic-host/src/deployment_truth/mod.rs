@@ -1,6 +1,6 @@
 //! Passive deployment-truth model types for host-side planning and safety checks.
 
-use crate::release_set::FleetConfigSnapshot;
+use crate::release_set::AppConfigSnapshot;
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -288,7 +288,7 @@ fn file_sha256_hex(path: &Path) -> std::io::Result<String> {
 }
 
 fn canonical_runtime_config_sha256_hex(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let config = FleetConfigSnapshot::load(path)?;
+    let config = AppConfigSnapshot::load(path)?;
     Ok(sha256_hex(&serde_json::to_vec(config.model())?))
 }
 

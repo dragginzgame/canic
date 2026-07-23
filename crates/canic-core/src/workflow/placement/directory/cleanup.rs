@@ -7,7 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    config::schema::DirectoryPool,
+    config::schema::BindingPool,
     dto::placement::directory::{DirectoryEntryStatusResponse, DirectoryRecoveryResponse},
     ops::{
         ic::IcOps,
@@ -37,7 +37,7 @@ impl DirectoryWorkflow {
     pub(super) async fn cleanup_stale_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &DirectoryPool,
+        pool_cfg: &BindingPool,
         claim_id: u64,
         owner_pid: Principal,
         provisional_pid: Principal,
@@ -93,7 +93,7 @@ impl DirectoryWorkflow {
     pub(super) async fn recover_cleanup_stale_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &DirectoryPool,
+        pool_cfg: &BindingPool,
         claim_id: u64,
         owner_pid: Principal,
         provisional_pid: Principal,
@@ -162,7 +162,7 @@ impl DirectoryWorkflow {
     pub(super) fn repair_stale_entry(
         pool: &str,
         key_value: &str,
-        pool_cfg: &DirectoryPool,
+        pool_cfg: &BindingPool,
         claim_id: u64,
         owner_pid: Principal,
         provisional_pid: Principal,

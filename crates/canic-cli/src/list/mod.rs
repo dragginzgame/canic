@@ -8,7 +8,7 @@ use canic_backup::discovery::DiscoveryError;
 use canic_host::{
     icp::IcpCommandError, icp_config::IcpConfigError, install_root::ConfigDiscoveryError,
     installed_deployment::InstalledDeploymentError, registry::RegistryParseError,
-    release_set::FleetConfigError,
+    release_set::AppConfigError,
 };
 use config::{load_config_role_rows, missing_config_roles};
 use live::{
@@ -62,7 +62,7 @@ pub enum ListCommandError {
     IcpRoot(#[from] IcpConfigError),
 
     #[error(transparent)]
-    FleetConfig(#[from] FleetConfigError),
+    AppConfig(#[from] AppConfigError),
 
     #[error("failed to discover Canic project configs: {0}")]
     ConfigDiscovery(#[from] ConfigDiscoveryError),

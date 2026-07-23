@@ -10,7 +10,7 @@ use canic_core::{
         placement::sharding::{ShardingPartitionKeysResponse, ShardingRegistryResponse},
         topology::{AppIndexArgs, SubnetIndexArgs},
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
 };
 use canic_testing_internal::pic::{
     CanicPicExt, CanicWasmBuildProfile, build_internal_test_wasm_canisters,
@@ -147,7 +147,7 @@ fn sharding_does_not_spawn_extra_shard_after_bootstrap() {
 fn user_hub_init_args(root_pid: Principal) -> Vec<u8> {
     let env = EnvBootstrapArgs {
         prime_root_pid: Some(root_pid),
-        subnet_role: Some(SubnetRole::PRIME),
+        subnet_role: Some(SubnetSlotId::DEFAULT),
         subnet_pid: Some(root_pid),
         root_pid: Some(root_pid),
         canister_role: Some(CanisterRole::from("user_hub")),

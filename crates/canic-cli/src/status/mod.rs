@@ -26,7 +26,7 @@ use canic_host::{
         read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
-    release_set::{FleetConfigSnapshot, display_workspace_path},
+    release_set::{AppConfigSnapshot, display_workspace_path},
     replica_query,
     table::{ColumnAlign, render_table},
 };
@@ -219,7 +219,7 @@ fn status_deployment_row(
     options: &StatusOptions,
     verify_local_root: bool,
 ) -> StatusDeploymentRow {
-    let Ok(config) = FleetConfigSnapshot::load(path) else {
+    let Ok(config) = AppConfigSnapshot::load(path) else {
         return StatusDeploymentRow {
             deployment: "invalid config".to_string(),
             deployed: "error".to_string(),
@@ -228,7 +228,7 @@ fn status_deployment_row(
             root: "-".to_string(),
         };
     };
-    let deployment = config.fleet_name().to_string();
+    let deployment = config.app_id().to_string();
     let install_state =
         read_installed_deployment_state_from_root(&options.environment, &deployment, icp_root);
     let configured_roles = config.deployable_roles();

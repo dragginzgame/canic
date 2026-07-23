@@ -7,15 +7,15 @@
 use crate::{
     cdk::candid::Principal,
     config::schema::{
-        AppConfig, AppInitMode, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-        CanisterPool, ChainKeyRootProofConfig, ConfigModel, CyclesFundingPolicyConfig,
-        DelegatedTokenConfig, DiagnosticsCanisterConfig, DirectoryConfig, DirectoryPool,
-        FleetConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile, PoolImport,
-        RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool, ScalePoolPolicy,
-        ScalingConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
-        StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
+        AppConfig, AppInitMode, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig,
+        CanisterConfig, CanisterKind, CanisterPool, ChainKeyRootProofConfig, ConfigModel,
+        CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig,
+        FleetServicesConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile,
+        PoolImport, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
+        ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
+        Standards, StandardsCanisterConfig, SubnetConfig, TopupPolicy, Whitelist,
     },
-    ids::{BuildNetwork, CanisterRole, SubnetRole},
+    ids::{AppId, BuildNetwork, CanisterRole, SubnetSlotId},
 };
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -31,13 +31,12 @@ pub fn config_model(config: &ConfigModel) -> String {
 
 // Render the top-level configuration model into a portable Rust expression.
 fn render_config_model(config: &ConfigModel) -> TokenStream {
-    let fleet = render_option(config.fleet.as_ref(), render_fleet_config);
     let controllers = render_vec(config.controllers.iter(), render_principal);
     let standards = render_option(config.standards.as_ref(), render_standards);
     let log = render_log_config(&config.log);
     let auth = render_auth_config(&config.auth);
     let app = render_app_config(&config.app);
-    let app_index = render_btree_set(config.app_index.iter(), render_canister_role);
+    let services = render_services_config(&config.services);
     let roles = render_btree_map(
         config.roles.iter(),
         render_canister_role,
@@ -45,31 +44,40 @@ fn render_config_model(config: &ConfigModel) -> TokenStream {
     );
     let subnets = render_btree_map(
         config.subnets.iter(),
-        render_subnet_role,
+        render_subnet_slot_id,
         render_subnet_config,
     );
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ConfigModel {
-            fleet: #fleet,
             controllers: #controllers,
             standards: #standards,
             log: #log,
             auth: #auth,
             app: #app,
-            app_index: #app_index,
+            services: #services,
             roles: #roles,
             subnets: #subnets,
         }
     }
 }
 
-// Render operator-facing fleet identity metadata.
-fn render_fleet_config(config: &FleetConfig) -> TokenStream {
-    let name = render_option(config.name.as_ref(), |name| render_owned_string(name));
+// Render App-declared service selections.
+fn render_services_config(config: &ServicesConfig) -> TokenStream {
+    let fleet = render_fleet_services_config(&config.fleet);
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::FleetConfig {
-            name: #name,
+        ::canic::__internal::core::bootstrap::compiled::ServicesConfig {
+            fleet: #fleet,
+        }
+    }
+}
+
+// Render Fleet-scoped service-role selections.
+fn render_fleet_services_config(config: &FleetServicesConfig) -> TokenStream {
+    let roles = render_btree_set(config.roles.iter(), render_canister_role);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::FleetServicesConfig {
+            roles: #roles,
         }
     }
 }
@@ -119,10 +127,10 @@ fn render_canister_role(role: &CanisterRole) -> TokenStream {
 }
 
 // Render a subnet role using constants where possible and literals otherwise.
-fn render_subnet_role(role: &SubnetRole) -> TokenStream {
-    match role.as_str() {
-        "prime" => quote!(::canic::__internal::core::bootstrap::compiled::SubnetRole::PRIME),
-        value => quote!(::canic::__internal::core::bootstrap::compiled::SubnetRole::from(#value)),
+fn render_subnet_slot_id(slot: &SubnetSlotId) -> TokenStream {
+    match slot.as_str() {
+        "default" => quote!(::canic::__internal::core::bootstrap::compiled::SubnetSlotId::DEFAULT),
+        value => quote!(::canic::__internal::core::bootstrap::compiled::SubnetSlotId::from(#value)),
     }
 }
 
@@ -355,15 +363,23 @@ fn render_role_attestation_config(config: &RoleAttestationConfig) -> TokenStream
 
 // Render the app-level configuration subtree.
 fn render_app_config(config: &AppConfig) -> TokenStream {
+    let name = render_app_id(&config.name);
     let init_mode = render_app_init_mode(config.init_mode);
     let whitelist = render_option(config.whitelist.as_ref(), render_whitelist);
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::AppConfig {
+            name: #name,
             init_mode: #init_mode,
             whitelist: #whitelist,
         }
     }
+}
+
+// Render an immutable App source identity.
+fn render_app_id(app: &AppId) -> TokenStream {
+    let value = render_owned_string(app.as_str());
+    quote!(::canic::__internal::core::bootstrap::compiled::AppId::owned(#value))
 }
 
 // Render the initial app mode enum.
@@ -450,7 +466,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
     let cycles_funding = render_cycles_funding_policy(&config.cycles_funding);
     let scaling = render_option(config.scaling.as_ref(), render_scaling_config);
     let sharding = render_option(config.sharding.as_ref(), render_sharding_config);
-    let directory = render_option(config.directory.as_ref(), render_directory_config);
+    let binding = render_option(config.binding.as_ref(), render_binding_config);
     let auth = render_canister_auth_config(&config.auth);
     let standards = render_standards_canister_config(&config.standards);
     let diagnostics = render_diagnostics_canister_config(config.diagnostics);
@@ -465,7 +481,7 @@ fn render_canister_config(config: &CanisterConfig) -> TokenStream {
             cycles_funding: #cycles_funding,
             scaling: #scaling,
             sharding: #sharding,
-            directory: #directory,
+            binding: #binding,
             auth: #auth,
             standards: #standards,
             diagnostics: #diagnostics,
@@ -727,16 +743,16 @@ fn render_sharding_config(config: &ShardingConfig) -> TokenStream {
     }
 }
 
-// Render the directory placement config subtree.
-fn render_directory_config(config: &DirectoryConfig) -> TokenStream {
+// Render the keyed placement binding config subtree.
+fn render_binding_config(config: &BindingConfig) -> TokenStream {
     let pools = render_btree_map(
         config.pools.iter(),
         |name| render_owned_string(name),
-        render_directory_pool,
+        render_binding_pool,
     );
 
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::DirectoryConfig {
+        ::canic::__internal::core::bootstrap::compiled::BindingConfig {
             pools: #pools,
         }
     }
@@ -771,12 +787,12 @@ fn render_shard_pool_policy(policy: &ShardPoolPolicy) -> TokenStream {
 }
 
 // Render one keyed-instance placement pool.
-fn render_directory_pool(pool: &DirectoryPool) -> TokenStream {
+fn render_binding_pool(pool: &BindingPool) -> TokenStream {
     let canister_role = render_canister_role(&pool.canister_role);
     let key_name = render_owned_string(&pool.key_name);
 
     quote! {
-        ::canic::__internal::core::bootstrap::compiled::DirectoryPool {
+        ::canic::__internal::core::bootstrap::compiled::BindingPool {
             canister_role: #canister_role,
             key_name: #key_name,
         }

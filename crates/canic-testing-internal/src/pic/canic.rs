@@ -12,7 +12,7 @@ use canic::{
         subnet::SubnetIdentity,
         topology::{AppIndexArgs, SubnetIndexArgs, SubnetRegistryResponse},
     },
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
     protocol,
 };
 use ic_testkit::{
@@ -303,7 +303,7 @@ fn standalone_init_args(role: CanisterRole) -> Vec<u8> {
     let payload = CanisterInitPayload {
         env: EnvBootstrapArgs {
             prime_root_pid: Some(root_pid),
-            subnet_role: Some(SubnetRole::PRIME),
+            subnet_role: Some(SubnetSlotId::DEFAULT),
             subnet_pid: Some(Fake::principal(2)),
             root_pid: Some(root_pid),
             canister_role: Some(role),

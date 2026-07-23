@@ -12,9 +12,8 @@ use crate::deploy::plan::{
         CATEGORY_ARTIFACT, CATEGORY_AUTHORITY, CATEGORY_CONFIG, CATEGORY_DEPLOYMENT_IDENTITY,
         CATEGORY_INVENTORY, CATEGORY_OBSERVATION, CATEGORY_TOPOLOGY, CATEGORY_TRUST_DOMAIN,
         CATEGORY_VERIFIER_READINESS, PlanDiagnostic, PlanDiagnosticCategory, PlanDiagnosticSource,
-        SEVERITY_INFO, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
-        SOURCE_DEPLOYMENT_PLAN_BUILDER, SOURCE_FLEET_CONFIG, SOURCE_INSTALLED_DEPLOYMENT,
-        SOURCE_LOCAL_OBSERVATION,
+        SEVERITY_INFO, SOURCE_APP_CONFIG, SOURCE_BUILD_PROFILE, SOURCE_DEPLOYMENT_CONFIG,
+        SOURCE_DEPLOYMENT_PLAN_BUILDER, SOURCE_INSTALLED_DEPLOYMENT, SOURCE_LOCAL_OBSERVATION,
     },
 };
 use std::path::Path;
@@ -42,7 +41,7 @@ pub(super) fn verified_facts(
             config_path.display()
         ),
         next: None,
-        source: SOURCE_FLEET_CONFIG,
+        source: SOURCE_APP_CONFIG,
     }];
 
     facts.push(PlanDiagnostic {
@@ -52,7 +51,7 @@ pub(super) fn verified_facts(
         subject: plan.deployment_identity.deployment_name.clone(),
         detail: format!("fleet template resolved: {}", plan.fleet_template),
         next: None,
-        source: SOURCE_FLEET_CONFIG,
+        source: SOURCE_APP_CONFIG,
     });
     facts.extend(plan_context_facts(options, config_path, plan));
     facts.extend(plan_identity_facts(plan));

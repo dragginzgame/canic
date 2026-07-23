@@ -7,7 +7,7 @@
 use crate::{
     InternalError, InternalErrorOrigin,
     cdk::types::Principal,
-    config::schema::DirectoryPool,
+    config::schema::BindingPool,
     dto::placement::directory::DirectoryEntryStatusResponse,
     model::placement::allocation::PlacementAllocationIdentity,
     ops::{
@@ -87,7 +87,7 @@ impl DirectoryWorkflow {
     pub(super) async fn claim_and_create_instance(
         pool: &str,
         key_value: &str,
-        pool_cfg: &DirectoryPool,
+        pool_cfg: &BindingPool,
         owner_pid: Principal,
     ) -> Result<Option<DirectoryEntryStatusResponse>, InternalError> {
         let now = IcOps::now_secs();
@@ -139,7 +139,7 @@ impl DirectoryWorkflow {
     pub(super) async fn resume_pending_instance(
         pool: &str,
         key_value: &str,
-        pool_cfg: &DirectoryPool,
+        pool_cfg: &BindingPool,
         claim: DirectoryPendingClaim,
     ) -> Result<Option<DirectoryEntryStatusResponse>, InternalError> {
         let request = directory_allocation_request(pool, key_value, pool_cfg, claim);
@@ -162,7 +162,7 @@ impl DirectoryWorkflow {
     async fn create_and_finalize_claim(
         pool: &str,
         key_value: &str,
-        pool_cfg: &DirectoryPool,
+        pool_cfg: &BindingPool,
         claim: DirectoryPendingClaim,
     ) -> Result<Option<DirectoryEntryStatusResponse>, InternalError> {
         let request = directory_allocation_request(pool, key_value, pool_cfg, claim);
@@ -186,7 +186,7 @@ impl DirectoryWorkflow {
 pub(super) fn directory_allocation_request(
     pool: &str,
     key_value: &str,
-    pool_cfg: &DirectoryPool,
+    pool_cfg: &BindingPool,
     claim: DirectoryPendingClaim,
 ) -> PlacementAllocationRequest {
     let identity = PlacementAllocationIdentity::directory(

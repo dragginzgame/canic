@@ -6,7 +6,7 @@ use super::{
 use canic_host::{
     install_root::{discover_current_canic_config_choices, select_discovered_fleet_config_path},
     registry::RegistryEntry,
-    release_set::FleetConfigSnapshot,
+    release_set::AppConfigSnapshot,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -17,7 +17,7 @@ pub(super) fn load_config_role_rows(
     options: &ListOptions,
 ) -> Result<Vec<ConfigRoleRow>, ListCommandError> {
     let config_path = selected_config_path(options)?;
-    let config = FleetConfigSnapshot::load(&config_path)?;
+    let config = AppConfigSnapshot::load(&config_path)?;
     let roles = config.deployable_roles();
     let kinds = config.role_kinds();
     let capabilities = config.role_capabilities()?;
@@ -76,7 +76,7 @@ pub(super) fn missing_config_roles(
     let Ok(config_path) = selected_config_path(options) else {
         return Vec::new();
     };
-    let Ok(config) = FleetConfigSnapshot::load(&config_path) else {
+    let Ok(config) = AppConfigSnapshot::load(&config_path) else {
         return Vec::new();
     };
     let expected = config.deployable_roles();

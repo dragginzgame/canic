@@ -8,7 +8,7 @@ use crate::{
     },
     domain::auth::MAINNET_IC_ROOT_PUBLIC_KEY_RAW,
     dto::error::ErrorCode,
-    ids::SubnetRole,
+    ids::SubnetSlotId,
     ops::auth::delegated::chain_key::ChainKeySignatureVerificationInput,
     storage::stable::env::{Env, EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
@@ -442,7 +442,7 @@ fn install_verifier_test_config(
     Env::import(EnvData {
         record: EnvRecord {
             prime_root_pid: Some(root_pid()),
-            subnet_role: Some(SubnetRole::PRIME),
+            subnet_role: Some(SubnetSlotId::DEFAULT),
             subnet_pid: Some(p(9)),
             root_pid: Some(root_pid()),
             canister_role: Some(CanisterRole::new("project_instance")),

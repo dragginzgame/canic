@@ -25,7 +25,7 @@ use canic_core::{
     },
 };
 use canic_host::{
-    release_set::{ConfiguredRoleLifecycle, FleetConfigSnapshot},
+    release_set::{AppConfigSnapshot, ConfiguredRoleLifecycle},
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
         materialize_state_manifest, resolve_declared_role_package_contract,
@@ -36,26 +36,26 @@ use canic_host::{
 pub(super) fn project_config_quality_checks(root: &Path, configs: &[PathBuf]) -> Vec<MedicCheck> {
     configs
         .iter()
-        .flat_map(|config| fleet_config_quality_checks(root, config))
+        .flat_map(|config| app_config_quality_checks(root, config))
         .collect()
 }
 
-fn fleet_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
+fn app_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
     let config_display = display_medic_path(root, config);
-    let snapshot = match FleetConfigSnapshot::load(config) {
+    let snapshot = match AppConfigSnapshot::load(config) {
         Ok(snapshot) => snapshot,
         Err(err) => {
             return vec![MedicCheck::fail(
                 MedicCategory::ProjectConfig,
-                "fleet_config_missing",
+                "app_config_missing",
                 config_display,
                 err.to_string(),
                 "repair the fleet config before running deployment checks",
-                MedicSource::FleetConfig,
+                MedicSource::AppConfig,
             )];
         }
     };
-    let fleet = snapshot.fleet_name().to_string();
+    let fleet = snapshot.app_id().to_string();
     let roles = snapshot.role_lifecycle();
     let required_features_by_role = required_canic_features_by_role(snapshot.model(), &roles);
     roles
@@ -133,7 +133,7 @@ fn check_role_package_metadata(
                 metadata.role
             ),
             "none",
-            MedicSource::FleetConfig,
+            MedicSource::AppConfig,
         ),
         Ok(metadata) => MedicCheck::fail(
             MedicCategory::ProjectConfig,
@@ -148,7 +148,7 @@ fn check_role_package_metadata(
                 role.role
             ),
             "update package metadata or repair the fleet role declaration",
-            MedicSource::FleetConfig,
+            MedicSource::AppConfig,
         ),
         Err(err) => MedicCheck::fail(
             MedicCategory::ProjectConfig,
@@ -156,7 +156,7 @@ fn check_role_package_metadata(
             role.display.clone(),
             err,
             "add matching [package.metadata.canic] fleet and role metadata",
-            MedicSource::FleetConfig,
+            MedicSource::AppConfig,
         ),
     }
 }
@@ -203,7 +203,7 @@ fn check_resolved_role_contract(
                     requirement.config_key
                 ),
                 "none",
-                MedicSource::FleetConfig,
+                MedicSource::AppConfig,
             )
         })
         .collect::<Vec<_>>();
@@ -244,7 +244,7 @@ fn check_role_resolution_finding(
                 &evidence.role_manifest_path,
                 requirement.feature.cargo_name(),
             ),
-            MedicSource::FleetConfig,
+            MedicSource::AppConfig,
         ));
     }
     check_role_package_contract(role, finding)
@@ -279,7 +279,7 @@ fn check_role_package_contract(
         role.display.clone(),
         finding_detail(finding),
         next,
-        MedicSource::FleetConfig,
+        MedicSource::AppConfig,
     ))
 }
 
@@ -308,6 +308,6 @@ fn check_declared_role_not_deployable(
             "run canic fleet role attach {} {} --subnet <subnet>, or remove the declaration",
             role.fleet, role.role
         ),
-        MedicSource::FleetConfig,
+        MedicSource::AppConfig,
     )
 }

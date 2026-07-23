@@ -14,18 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.98.23`.
-- The latest published release is `v0.98.23` at
-  `411e6598af0f3704ca11c83136bb08c80501a3f8`.
-- The `v0.98.23` source tree is
-  `0fa80dded513a112ecf5a4a7257d1882814c23a8`; its product-tree hash is
-  `89903340e6ea3506744281caec405ac7e6ffbaf6f5d9b5abe39496c7c9ac223e` and
-  its Cargo.lock SHA-256 is
-  `b923e37b9f01cde72b3c6f6e0283ef95845af68e7df918903ee7d4e90b2e0c8d`.
-- Open `0.98.24` is the maintainer-requested final Tier 2 architectural-
-  sediment closeout. It fixes all 3 P1 and 9 P2 findings with no deferral.
-  Package versions remain at the latest published `0.98.23` until the
-  maintainer-owned release flow.
+- The workspace package version is `0.98.24`.
+- The latest published release is `v0.98.24` at
+  `9bc0f016dadf99fb88c3f2fa28855eb666f5660c`.
+- The `v0.98.24` source tree is
+  `c4b124444d9db307efac4f4e2c45e8349f0f4c37`; its product-tree hash is
+  `f7ec3dc5ba5251037388aa22e080234b49280acd5eaf1875569041dab3517651`.
+  Its Cargo.lock SHA-256 is
+  `01f762bb8b70e52372cc817999d476f838d7124bca4b7b053634f6764e260ce5`.
+- Released `0.98.24` is the final Tier 2 architectural-sediment closeout. It
+  fixes all 3 P1 and 9 P2 findings with no deferral.
 - Released `0.98.10` implements post-closeout Slice D: the empty core subnet-
   state authority is removed across stable storage, DTOs, cascade, Candid,
   facade, probes, and tests. Memory ID 17 is permanently retired; the
@@ -81,7 +79,7 @@ Historical detail is archived at:
   builder without changing or duplicating the underlying call authority.
 - Released `0.98.23` removes dead raw-response comparison and transparent generic
   call/NNS error envelopes while retaining typed causes and behavior.
-- Open `0.98.24` removes the write-only App Registry and retires memory ID 14;
+- Released `0.98.24` removes the write-only App Registry and retires memory ID 14;
   collapses redundant error, empty response, fixed provenance, replay-marker,
   stable-compatibility, helper, and visibility surfaces; resets current
   Canic-owned pre-1.0 schemas/tags to 1; and repairs environment-bound CLI
@@ -1109,31 +1107,42 @@ First primary results:
 
 ## Next Action
 
-Released `v0.98.17` removed the generic CDK, HTTP, build-network, and call
-facades while retaining the internal call/build-network authorities. Released
-`v0.98.21` corrects that cut for developer experience by restoring only one
-canonical instrumented `canic::api::call` builder over the existing transport;
-the other deleted facades remain absent. Released `v0.98.18` changes only the
-proposed 0.99/0.100 design documents and normal release metadata. Released
-`v0.98.19` removes the remaining internal IC runtime API relay and narrows the
-stable-structures export inventory; the hidden compiler namespace and
-maintained call/build-network authorities remain. Released `v0.98.20` gives
-manual ICP refill one adapter-local ICRC-1 account shape and uses persisted CMC
-identity on resume. Released `v0.98.21` also removes the false ICRC-103
-configuration/advertisement path while retaining implemented ICRC-10/21
-behavior. Released `v0.98.22` adds direct typed call completion only at the
-public API boundary; explicit `execute`/`CallResult` handling remains
-supported. Released `v0.98.23` removes only dead raw-response comparison and
-redundant transparent IC error envelopes. It does not implement Fleet
-identity, a Fleet Registry, multi-subnet synchronization, or any other
-proposed 0.99/0.100 behavior. Open `0.98.24` now owns the final repository-wide
-Tier 2 sediment closeout and all twelve confirmed corrections. Do not extend
-the batch with unrelated redesign or pull forward 0.99/0.100 behavior.
-Preserve the
-maintainer's active 0.99/0.100 design edits. Do not inspect or edit the stale
-local Toko repository, change Cargo package versions outside the
-maintainer-owned release flow, or commit, tag, publish, or push shared-worktree
-changes without maintainer action.
+Released `v0.98.24` closes the repository-wide Tier 2 architectural-sediment
+line with all confirmed findings fixed and no deferral. It does not implement
+Fleet identity, a Fleet Registry, multi-subnet synchronization or any other
+0.99/0.100 behavior.
+
+0.99 implementation is approved under a fresh-install/reinstall-only release
+boundary. The completed pre-implementation contract and semantic inventory
+are recorded in the design and
+[`0.99-semantic-inventory.md`](../design/0.99-app-fleet-identity-and-terminology-hard-cut/0.99-semantic-inventory.md)
+against immutable `v0.98.24`. They resolve the release-build digest,
+canonical-network/environment, active Prime-surface, Prepared-fence, recovery,
+CLI/status and 0.100 Registry-handoff contradictions.
+
+The immutable v0.98.24 surface cannot prove the exact root replay,
+receipt-backed intent and durable retry owners terminal. The maintainer chose
+reinstall-only: 0.99 does not read, migrate or upgrade 0.98 Canister state,
+installed-state trees or deployment catalogs. The first mutating batch is
+0.99 **Implementation Slice 1 — Minimum Config Hard Cut**.
+
+Implementation Slice 1 is implemented in the working tree. Source identity is
+required at `[app].name`; `FleetConfig` is removed; top-level `app_index`
+authoring is `[services.fleet].roles`; source topology uses
+`SubnetSlotId::DEFAULT` and `subnets.default`; and keyed placement config uses
+`binding`. Parsing, validation, generated config, runtime config consumers,
+host mutation/diagnostics, tracked configs, CI fixtures, scaffolding and
+active guidance use only the new shapes. Runtime `AppIndex` and Directory
+authorities remain intentionally unchanged until their later live-topology
+slice. Focused Canic-core config/bootstrap, Canic-host release-set/ICP-config,
+Canic CLI scaffold, and Canic config/reference-surface tests pass. No package
+version has changed. Strict all-target Clippy passes for the six affected
+packages; formatting, shell syntax, changelog governance and diff hygiene also
+pass.
+
+Do not inspect or edit the stale local Toko repository, change Cargo package
+versions outside the maintainer-owned release flow, or commit, tag, publish
+or push shared-worktree changes without maintainer action.
 
 The [0.92 release-line closeout](../audits/release-lines/0.92-closeout.md) is
 preserved at its immutable `v0.92.12` anchor with

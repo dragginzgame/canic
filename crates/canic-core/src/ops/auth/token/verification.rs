@@ -75,7 +75,7 @@ pub(super) fn delegated_token_local_context() -> Result<DelegatedTokenLocalConte
         }
     };
     let local_project = match ConfigOps::get() {
-        Ok(cfg) => cfg.fleet_name().map(ToOwned::to_owned),
+        Ok(cfg) => Some(cfg.app_id().to_string()),
         Err(err) => {
             DelegatedAuthMetrics::record_verify_failed(DelegatedAuthMetricReason::InvalidState);
             return Err(err);

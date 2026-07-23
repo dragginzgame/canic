@@ -129,13 +129,13 @@ fn parses_role_attach_fleet_role_and_subnet() {
         OsString::from("demo"),
         OsString::from("store"),
         OsString::from("--subnet"),
-        OsString::from("prime"),
+        OsString::from("default"),
     ])
     .expect("parse role attach options");
 
     assert_eq!(options.fleet, "demo");
     assert_eq!(options.role, "store");
-    assert_eq!(options.subnet, "prime");
+    assert_eq!(options.subnet, "default");
     assert_eq!(options.kind, "singleton");
     assert!(!options.dry_run);
 }
@@ -147,7 +147,7 @@ fn parses_role_attach_kind() {
         OsString::from("demo"),
         OsString::from("worker"),
         OsString::from("--subnet"),
-        OsString::from("prime"),
+        OsString::from("default"),
         OsString::from("--kind"),
         OsString::from("replica"),
     ])
@@ -163,7 +163,7 @@ fn parses_role_attach_dry_run_option() {
         OsString::from("demo"),
         OsString::from("store"),
         OsString::from("--subnet"),
-        OsString::from("prime"),
+        OsString::from("default"),
         OsString::from("--dry-run"),
     ])
     .expect("parse role attach dry-run options");
@@ -574,7 +574,7 @@ fn renders_attached_role_output() {
             fleet: "demo".to_string(),
             role: "store".to_string(),
             display: "demo.store".to_string(),
-            subnet: "prime".to_string(),
+            subnet: "default".to_string(),
             kind: "singleton".to_string(),
             topology: "prime/store".to_string(),
         },
@@ -601,7 +601,7 @@ fn renders_planned_attached_role_output() {
             fleet: "demo".to_string(),
             role: "store".to_string(),
             display: "demo.store".to_string(),
-            subnet: "prime".to_string(),
+            subnet: "default".to_string(),
             kind: "singleton".to_string(),
             topology: "prime/store".to_string(),
         },
@@ -1445,7 +1445,7 @@ fn write_fleet_config(root: &Path, name: &str) -> PathBuf {
         dir.join("canic.toml"),
         format!(
             r#"
-[fleet]
+[app]
 name = "{name}"
 
 [roles.root]
@@ -1459,7 +1459,7 @@ package = "store"
 [auth.delegated_tokens]
 enabled = false
 
-[subnets.prime.canisters.root]
+[subnets.default.canisters.root]
 kind = "root"
 "#
         ),

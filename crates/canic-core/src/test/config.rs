@@ -8,7 +8,7 @@ use crate::{
         StandardsCanisterConfig,
     },
     config::{Config, ConfigModel},
-    ids::{CanisterRole, SubnetRole},
+    ids::{CanisterRole, SubnetSlotId},
 };
 use std::sync::Arc;
 
@@ -30,8 +30,8 @@ impl ConfigTestBuilder {
     }
 
     #[must_use]
-    pub fn with_app_index(mut self, role: impl Into<CanisterRole>) -> Self {
-        self.model.app_index.insert(role.into());
+    pub fn with_fleet_service(mut self, role: impl Into<CanisterRole>) -> Self {
+        self.model.services.fleet.roles.insert(role.into());
         self
     }
 
@@ -50,13 +50,13 @@ impl ConfigTestBuilder {
         role: impl Into<CanisterRole>,
         config: CanisterConfig,
     ) -> Self {
-        self.with_subnet_canister(SubnetRole::PRIME, role, config)
+        self.with_subnet_canister(SubnetSlotId::DEFAULT, role, config)
     }
 
     #[must_use]
     pub fn with_subnet_canister(
         mut self,
-        subnet: impl Into<SubnetRole>,
+        subnet: impl Into<SubnetSlotId>,
         role: impl Into<CanisterRole>,
         config: CanisterConfig,
     ) -> Self {
@@ -107,7 +107,7 @@ impl ConfigTestBuilder {
             cycles_funding: CyclesFundingPolicyConfig::default(),
             scaling: None,
             sharding: None,
-            directory: None,
+            binding: None,
             auth: CanisterAuthConfig::default(),
             standards: StandardsCanisterConfig::default(),
             diagnostics: DiagnosticsCanisterConfig::default(),
