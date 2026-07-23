@@ -439,7 +439,6 @@ pub enum ManagementCallMetricReason {
 pub enum PlatformCallMetricSurface {
     Generic,
     Http,
-    Ledger,
     Management,
 }
 
@@ -450,7 +449,6 @@ impl PlatformCallMetricSurface {
         match self {
             Self::Generic => "generic",
             Self::Http => "http",
-            Self::Ledger => "ledger",
             Self::Management => "management",
         }
     }

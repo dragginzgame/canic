@@ -8,7 +8,6 @@ pub mod build_network;
 pub mod call;
 pub mod http;
 pub mod icp_refill;
-pub mod ledger;
 pub mod mgmt;
 pub mod nns;
 
@@ -39,9 +38,6 @@ pub enum IcOpsError {
 
     #[error(transparent)]
     IcpRefillOps(#[from] icp_refill::IcpRefillOpsError),
-
-    #[error(transparent)]
-    LedgerOps(#[from] ledger::LedgerOpsError),
 }
 
 impl From<IcOpsError> for InternalError {

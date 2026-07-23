@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.16` hard-cuts the orphan generic ICRC-2 allowance and transfer stack
+  while retaining the separate root-only manual ICP-to-cycles workflow.
+
 - `0.98.15` hard-cuts the unused ICRC-21 static-message registration
   convenience while retaining one typed handler registration and dispatch
   surface.

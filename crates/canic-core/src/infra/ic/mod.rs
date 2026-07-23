@@ -1,6 +1,6 @@
 //! Module: infra::ic
 //!
-//! Responsibility: group raw IC call, ledger, HTTP, NNS, and management adapters.
+//! Responsibility: group raw IC call, HTTP, NNS, and management adapters.
 //! Does not own: ops conversion, workflow policy, or endpoint DTO shaping.
 //! Boundary: ops calls this namespace for low-level IC platform interactions.
 
@@ -9,7 +9,6 @@ pub mod call;
 pub mod http;
 pub mod icp_refill;
 pub mod known;
-pub mod ledger;
 pub mod mgmt;
 pub mod nns;
 
@@ -33,9 +32,6 @@ pub enum IcInfraError {
 
     #[error(transparent)]
     IcpRefillInfra(#[from] icp_refill::IcpRefillInfraError),
-
-    #[error(transparent)]
-    LedgerInfra(#[from] ledger::LedgerInfraError),
 
     #[error(transparent)]
     MgmtInfra(#[from] mgmt::MgmtInfraError),
