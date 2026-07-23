@@ -5,35 +5,8 @@
 //! Boundary: storage ops conversion layer for topology registry records.
 
 use crate::{
-    cdk::types::Principal,
-    dto::canister::CanisterInfo,
-    dto::topology::{AppRegistryEntry, AppRegistryResponse, SubnetRegistryEntry},
-    storage::stable::registry::app::AppRegistryData,
+    cdk::types::Principal, dto::canister::CanisterInfo, dto::topology::SubnetRegistryEntry,
 };
-
-///
-/// AppRegistryResponseMapper
-///
-/// Storage-ops mapper for app registry records and response views.
-///
-
-pub struct AppRegistryResponseMapper;
-
-impl AppRegistryResponseMapper {
-    #[must_use]
-    pub fn data_to_response(data: AppRegistryData) -> AppRegistryResponse {
-        let entries = data
-            .entries
-            .into_iter()
-            .map(|entry| AppRegistryEntry {
-                subnet_pid: entry.subnet_pid,
-                root_pid: entry.root_pid,
-            })
-            .collect();
-
-        AppRegistryResponse(entries)
-    }
-}
 
 ///
 /// SubnetRegistryResponseMapper

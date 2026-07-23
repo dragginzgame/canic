@@ -13,10 +13,8 @@ use crate::{
     domain::policy::pure::topology::TopologyPolicyError,
     dto::error::Error,
     dto::rpc::{
-        AcknowledgePlacementReceiptRequest, AcknowledgePlacementReceiptResponse,
-        CreateCanisterParent, CreateCanisterRequest, CreateCanisterResponse,
-        RecycleCanisterRequest, RecycleCanisterResponse, Response, UpgradeCanisterRequest,
-        UpgradeCanisterResponse,
+        AcknowledgePlacementReceiptRequest, CreateCanisterParent, CreateCanisterRequest,
+        CreateCanisterResponse, RecycleCanisterRequest, Response, UpgradeCanisterRequest,
     },
     log,
     log::Topic,
@@ -119,7 +117,7 @@ pub(super) fn execute_placement_receipt_acknowledgement(
         }
     }
 
-    let response = Response::AcknowledgePlacementReceipt(AcknowledgePlacementReceiptResponse {});
+    let response = Response::AcknowledgePlacementReceipt;
     Ok(response)
 }
 
@@ -347,7 +345,7 @@ async fn execute_upgrade(
     pending: &ReplayPending,
     req: &UpgradeCanisterRequest,
 ) -> Result<Response, InternalError> {
-    let response = Response::UpgradeCanister(UpgradeCanisterResponse {});
+    let response = Response::UpgradeCanister;
     replay::stage_response(pending, &response)?;
     let event = CanisterLifecycleEvent::Upgrade {
         cost_context: CanisterUpgradeCostContext {
@@ -368,7 +366,7 @@ async fn execute_recycle(
     pending: &ReplayPending,
     req: &RecycleCanisterRequest,
 ) -> Result<Response, InternalError> {
-    let response = Response::RecycleCanister(RecycleCanisterResponse {});
+    let response = Response::RecycleCanister;
     replay::stage_response(pending, &response)?;
     PoolWorkflow::pool_recycle_canister(req.canister_pid).await?;
 

@@ -31,7 +31,6 @@ fn build_state_audit_report(role: Option<&str>) -> StateAuditReport {
 fn root_contract() -> ResolvedRoleContract {
     let keys = [
         StateAllocationKey::CoreRuntimeTopology,
-        StateAllocationKey::CoreRootAppRegistry,
         StateAllocationKey::CoreRuntimeEnvironment,
         StateAllocationKey::CoreAuthState,
         StateAllocationKey::CoreReplayReceipts,
@@ -119,11 +118,11 @@ fn parses_supported_manifest_options() {
 }
 
 #[test]
-fn audit_json_uses_schema_version_two() {
+fn audit_json_uses_schema_version_one() {
     let report = build_state_audit_report(Some("root"));
     let json = serde_json::to_value(&report).expect("state audit report serializes");
 
-    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["schema_version"], 1);
     assert_eq!(json["command"], "canic state audit");
     assert_eq!(json["scope"], "role");
     assert_eq!(json["role"], "root");
@@ -149,7 +148,7 @@ fn manifest_json_is_manifest_directly() {
     let manifest = test_state_manifest(Some("root"));
     let json = serde_json::to_value(&manifest).expect("state manifest serializes");
 
-    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["schema_version"], 1);
     assert!(json.get("command").is_none());
     assert_eq!(json["roles"][0]["canister_role"], "root");
     assert!(
@@ -167,7 +166,7 @@ fn text_renderers_include_stable_fields() {
     let audit = render_audit_text(&report);
     let manifest = render_manifest_text(&test_state_manifest(Some("root")));
 
-    assert!(audit.contains("schema_version: 2"));
+    assert!(audit.contains("schema_version: 1"));
     assert!(audit.contains("scope: role"));
     assert!(audit.contains("memory_id [pass] memory_id_unique"));
     assert!(audit.contains("source: state_manifest"));

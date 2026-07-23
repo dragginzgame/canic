@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::candid::Principal,
-    infra::{InfraError, ic::IcInfraError, ic::call::Call},
+    infra::ic::{IcInfraError, call::Call},
 };
 use ic_cdk::api;
 
@@ -22,7 +22,7 @@ impl MgmtInfra {
     /// Fetch the caller-derived ECDSA public key for one root signing policy.
     pub async fn ecdsa_public_key(
         args: &InfraEcdsaPublicKeyArgs,
-    ) -> Result<InfraEcdsaPublicKeyResult, InfraError> {
+    ) -> Result<InfraEcdsaPublicKeyResult, IcInfraError> {
         let response = Call::bounded_wait(Principal::management_canister(), "ecdsa_public_key")
             .with_arg(args.clone())?
             .execute()
@@ -33,7 +33,7 @@ impl MgmtInfra {
     /// Sign one 32-byte ECDSA message hash through the management canister.
     pub async fn sign_with_ecdsa(
         args: &InfraSignWithEcdsaArgs,
-    ) -> Result<InfraSignWithEcdsaResult, InfraError> {
+    ) -> Result<InfraSignWithEcdsaResult, IcInfraError> {
         let cycles = api::cost_sign_with_ecdsa(&args.key_id.name, args.key_id.curve.into())
             .map_err(MgmtInfraError::from)
             .map_err(IcInfraError::from)?;

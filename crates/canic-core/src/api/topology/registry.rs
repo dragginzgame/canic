@@ -1,20 +1,6 @@
 use crate::{
-    dto::topology::{AppRegistryResponse, SubnetRegistryResponse},
-    workflow::topology::registry::query::{AppRegistryQuery, SubnetRegistryQuery},
+    dto::topology::SubnetRegistryResponse, workflow::topology::registry::query::SubnetRegistryQuery,
 };
-
-///
-/// AppRegistryApi
-///
-
-pub struct AppRegistryApi;
-
-impl AppRegistryApi {
-    #[must_use]
-    pub fn registry() -> AppRegistryResponse {
-        AppRegistryQuery::registry()
-    }
-}
 
 ///
 /// SubnetRegistryApi

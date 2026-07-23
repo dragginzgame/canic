@@ -387,8 +387,6 @@ fn hash_replay_actor(hasher: &mut Sha256, actor: &ReplayActor) {
             AuthKind::RoleAttestation => "RoleAttestation",
         },
     );
-    // Preserve the retired actor-extension marker in the payload-hash layout.
-    hash_bool(hasher, false);
 }
 
 fn hash_bool(hasher: &mut Sha256, value: bool) {

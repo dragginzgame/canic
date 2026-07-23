@@ -30,7 +30,7 @@ pub enum RuntimeOpsError {
     EnvOps(#[from] env::EnvOpsError),
 
     #[error(transparent)]
-    LogOps(#[from] log::LogOpsError),
+    LogStorage(#[from] crate::storage::StorageError),
 
     #[error(transparent)]
     MemoryRegistryOps(#[from] memory::MemoryRegistryOpsError),

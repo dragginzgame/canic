@@ -14,7 +14,6 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-pub const DEPLOYMENT_CATALOG_REPORT_SCHEMA_ID: &str = "canic.deployment_catalog_report.v1";
 const NO_DEPLOYMENT_STATE_WARNING_CODE: &str = "catalog.no_deployment_state";
 const LOCAL_STATE_FINGERPRINT_FAILED_WARNING_CODE: &str = "catalog.local_state_fingerprint_failed";
 const MALFORMED_DEPLOYMENT_STATE_WARNING_CODE: &str = "catalog.malformed_deployment_state";

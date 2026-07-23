@@ -94,6 +94,7 @@ targets, or compatibility modes are permitted.
 | CANIC-098-POST-CDK-RELAY-001 redundant internal IC runtime relay | P2 | fixed in v0.98.19 | Direct upstream runtime/macro ownership; clock consolidated; unused stable exports removed |
 | CANIC-098-POST-ICP-ACCOUNT-001 global refill-only account helpers | P2 | fixed in v0.98.20 | Adapter-local wire account; persisted CMC identity drives resume |
 | CANIC-098-POST-ICRC103-001 false supported-standard advertisement | P2 | fixed in v0.98.21 | Unsupported config/render/query branch removed; implemented standards retained |
+| CANIC-098-FINAL-* final Tier 2 sediment closeout | 3 P1, 9 P2 | fixed in open 0.98.24 | All confirmed residue removed or narrowed; zero deferred, unresolved, or blocked findings |
 
 ## Slice Order
 
@@ -149,10 +150,17 @@ corrects the over-broad Slice O deletion by restoring one public instrumented
 Call builder over the retained call authority; generic CDK, HTTP, and
 build-network facades remain absent. Released `v0.98.22` composes direct typed
 execution and response decoding at that public boundary without adding a
-second authority. Open `0.98.23` removes the dead raw-response comparison and
-transparent generic call/NNS error envelopes while retaining meaningful typed
-causes. The immutable 42-candidate accounting remains closed, and future
-Fleet/multi-subnet contracts are not implemented by this work.
+second authority. Released `v0.98.23` removes the dead raw-response comparison
+and transparent generic call/NNS error envelopes while retaining meaningful
+typed causes. Open `0.98.24` implements the maintainer-requested final Tier 2
+repository closeout: all twelve confirmed P1/P2 sediment findings are fixed,
+no finding is deferred, and a separate final audit records retained
+authorities. This retires the write-only App Registry and memory ID 14,
+collapses redundant error/response/provenance shapes, removes stable-record
+compatibility defaults and retired replay bytes, resets Canic-owned pre-1.0
+schema identities to 1, and repairs current CLI proof fixtures. The immutable
+42-candidate accounting remains closed, and future App/Fleet identity and
+multi-subnet behavior are not implemented by this work.
 
 ## Slice A Validation
 

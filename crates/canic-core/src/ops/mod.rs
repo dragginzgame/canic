@@ -63,7 +63,7 @@ pub enum OpsError {
     ConfigOps(#[from] config::ConfigOpsError),
 
     #[error(transparent)]
-    IcOps(#[from] ic::IcOpsError),
+    IcInfra(#[from] crate::infra::ic::IcInfraError),
 
     #[error(transparent)]
     RpcOps(#[from] rpc::RpcOpsError),

@@ -323,25 +323,18 @@ pub struct AuthStateRecord {
 
     pub delegated_session_bootstrap_bindings: Vec<DelegatedSessionBootstrapBindingRecord>,
 
-    #[serde(default)]
     pub active_delegation_proof: Option<ActiveDelegationProofRecord>,
 
-    #[serde(default)]
     pub root_issuers: Vec<RootIssuerRecord>,
 
-    #[serde(default)]
     pub delegated_auth_registry_epoch: u64,
 
-    #[serde(default)]
     pub delegated_auth_proof_epoch: u64,
 
-    #[serde(default)]
     pub root_issuer_renewal_templates: Vec<RootIssuerRenewalTemplateRecord>,
 
-    #[serde(default)]
     pub root_issuer_renewal_states: Vec<RootIssuerRenewalStateRecord>,
 
-    #[serde(default)]
     pub chain_key_root_delegation_batches: Vec<ChainKeyRootDelegationBatchRecord>,
 }
 
@@ -369,35 +362,4 @@ pub struct AuthStateData {
 
 impl AuthStateData {
     pub const STATE_CONTRACT_NAME: &'static str = "AuthStateData";
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ciborium::Value;
-    use std::collections::BTreeSet;
-
-    fn auth_state_keys(record: &AuthStateRecord) -> BTreeSet<String> {
-        let value = Value::serialized(record).expect("auth state should serialize to CBOR value");
-        let Value::Map(map) = value else {
-            panic!("auth state should serialize as a CBOR map");
-        };
-
-        map.into_iter()
-            .map(|(key, _)| {
-                let Value::Text(text) = key else {
-                    panic!("auth state keys should serialize as text");
-                };
-                text
-            })
-            .collect()
-    }
-
-    #[test]
-    fn historical_bridge_auth_state_fields_are_not_serialized() {
-        let keys = auth_state_keys(&AuthStateRecord::default());
-
-        assert!(!keys.contains("root_delegation_renewal_batches"));
-        assert!(!keys.contains("root_provisioners"));
-    }
 }

@@ -12,7 +12,7 @@ use crate::{
         },
         types::Principal,
     },
-    infra::{InfraError, ic::IcInfraError},
+    infra::ic::IcInfraError,
 };
 use candid::{encode_args, encode_one};
 use ic_cdk::call::Response;
@@ -89,7 +89,7 @@ impl CallBuilder<'_> {
     }
 
     /// Encode a single argument into Candid bytes (fallible).
-    pub fn with_arg<A>(self, arg: A) -> Result<Self, InfraError>
+    pub fn with_arg<A>(self, arg: A) -> Result<Self, IcInfraError>
     where
         A: CandidType,
     {
@@ -99,7 +99,7 @@ impl CallBuilder<'_> {
     }
 
     /// Encode multiple arguments into Candid bytes (fallible).
-    pub fn with_args<A>(self, args: A) -> Result<Self, InfraError>
+    pub fn with_args<A>(self, args: A) -> Result<Self, IcInfraError>
     where
         A: ArgumentEncoder,
     {
@@ -116,7 +116,7 @@ impl CallBuilder<'_> {
     }
 
     /// Execute the configured IC call and return the raw response wrapper.
-    pub async fn execute(self) -> Result<CallResult, InfraError> {
+    pub async fn execute(self) -> Result<CallResult, IcInfraError> {
         let mut call = match self.wait {
             WaitMode::Bounded => ic_cdk::call::Call::bounded_wait(self.canister_id, &self.method),
             WaitMode::Unbounded => {
@@ -146,25 +146,19 @@ pub struct CallResult {
 
 impl CallResult {
     /// Decode the response as a single Candid value.
-    pub fn candid<R>(&self) -> Result<R, InfraError>
+    pub fn candid<R>(&self) -> Result<R, IcInfraError>
     where
         R: CandidType + DeserializeOwned,
     {
-        self.inner
-            .candid()
-            .map_err(IcInfraError::from)
-            .map_err(InfraError::from)
+        self.inner.candid().map_err(IcInfraError::from)
     }
 
     /// Decode the response as a Candid tuple.
-    pub fn candid_tuple<R>(&self) -> Result<R, InfraError>
+    pub fn candid_tuple<R>(&self) -> Result<R, IcInfraError>
     where
         R: for<'de> ArgumentDecoder<'de>,
     {
-        self.inner
-            .candid_tuple()
-            .map_err(IcInfraError::from)
-            .map_err(InfraError::from)
+        self.inner.candid_tuple().map_err(IcInfraError::from)
     }
 }
 

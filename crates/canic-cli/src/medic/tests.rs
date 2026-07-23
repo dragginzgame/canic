@@ -1524,7 +1524,7 @@ fn sample_check(status: MedicStatus) -> MedicCheck {
 
 fn sample_install_state() -> InstallState {
     InstallState {
-        schema_version: 2,
+        schema_version: 1,
         deployment_name: "demo".to_string(),
         fleet_template: "demo".to_string(),
         created_at_unix_secs: 1,

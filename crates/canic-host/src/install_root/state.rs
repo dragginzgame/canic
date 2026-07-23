@@ -4,7 +4,7 @@ use std::{fs, io, path::Path, path::PathBuf};
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 
-pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 2;
+pub(super) const INSTALL_STATE_SCHEMA_VERSION: u32 = 1;
 
 /// Typed failure while locating, validating, decoding, or persisting install state.
 #[derive(Debug, ThisError)]

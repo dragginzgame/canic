@@ -88,7 +88,7 @@ impl From<ConfigError> for InternalError {
 /// Owned by config and used by bootstrap, ops, and tests.
 ///
 
-pub struct Config {}
+pub struct Config;
 
 impl Config {
     /// Return the installed configuration model or initialize a test default when allowed.

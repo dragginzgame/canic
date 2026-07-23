@@ -7,36 +7,17 @@
 use crate::{
     InternalError,
     ids::BuildNetwork,
-    infra::{
-        InfraError,
-        ic::icp_refill::{
+    infra::ic::{
+        IcInfraError,
+        icp_refill::{
             IcpRefillCanisterOverrides, IcpRefillCanisters, IcpRefillInfra,
             IcpXdrConversionRateResponse, NotifyTopUpArg, NotifyTopUpError, TransferArg,
             TransferError,
         },
     },
-    ops::{cost_guard::CostGuardPermit, ic::IcOpsError},
+    ops::{OpsError, cost_guard::CostGuardPermit},
 };
 use candid::{Nat, Principal};
-use thiserror::Error as ThisError;
-
-///
-/// IcpRefillOpsError
-///
-/// Typed failure surface for ICP refill IC operations.
-///
-
-#[derive(Debug, ThisError)]
-pub enum IcpRefillOpsError {
-    #[error(transparent)]
-    Infra(#[from] InfraError),
-}
-
-impl From<IcpRefillOpsError> for InternalError {
-    fn from(err: IcpRefillOpsError) -> Self {
-        IcOpsError::from(err).into()
-    }
-}
 
 ///
 /// IcpRefillOps
@@ -119,8 +100,6 @@ impl IcpRefillOps {
     }
 }
 
-fn map_infra<T>(result: Result<T, InfraError>) -> Result<T, InternalError> {
-    result
-        .map_err(IcpRefillOpsError::from)
-        .map_err(InternalError::from)
+fn map_infra<T>(result: Result<T, IcInfraError>) -> Result<T, InternalError> {
+    result.map_err(OpsError::from).map_err(InternalError::from)
 }

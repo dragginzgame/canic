@@ -1,23 +1,6 @@
 use crate::dto::{canister::CanisterInfo, prelude::*};
 
 //
-// AppRegistryResponse
-//
-
-#[derive(CandidType, Deserialize)]
-pub struct AppRegistryResponse(pub Vec<AppRegistryEntry>);
-
-//
-// AppRegistryEntry
-//
-
-#[derive(CandidType, Deserialize)]
-pub struct AppRegistryEntry {
-    pub subnet_pid: Principal,
-    pub root_pid: Principal,
-}
-
-//
 // SubnetRegistryResponse
 //
 // External subnet registry view.

@@ -6,9 +6,7 @@ use crate::{
             RootCapabilityEnvelopeV1, RootCapabilityResponseV1,
         },
         error::Error,
-        rpc::{
-            CreateCanisterParent, CreateCanisterResponse, CyclesResponse, UpgradeCanisterResponse,
-        },
+        rpc::{CreateCanisterParent, CreateCanisterResponse, CyclesResponse},
     },
     ids::CanisterRole,
     workflow::rpc::{capability, request::RpcRequestWorkflow},
@@ -76,9 +74,7 @@ impl RpcApi {
             .map_err(Error::from)
     }
 
-    pub async fn upgrade_canister_request(
-        canister_pid: Principal,
-    ) -> Result<UpgradeCanisterResponse, Error> {
+    pub async fn upgrade_canister_request(canister_pid: Principal) -> Result<(), Error> {
         RpcRequestWorkflow::upgrade_canister_request(canister_pid)
             .await
             .map_err(Error::from)

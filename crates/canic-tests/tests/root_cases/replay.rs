@@ -225,7 +225,7 @@ fn placement_retry_reuses_exact_root_receipt_and_acknowledgement_is_not_replayed
         assert!(matches!(
             root_response_as(&setup, caller, acknowledgement.clone())
                 .expect("placement acknowledgement must be response-idempotent"),
-            Response::AcknowledgePlacementReceipt(_)
+            Response::AcknowledgePlacementReceipt
         ));
     }
 
@@ -365,18 +365,17 @@ fn upgrade_routes_through_dispatcher_non_skip_path() {
         }
         Err(err) => panic!("upgrade through dispatcher must succeed: {err:?}"),
     };
-    let first = match first {
-        Response::UpgradeCanister(response) => response,
-        other => panic!("expected upgrade response, got: {other:?}"),
-    };
+    assert!(
+        matches!(first, Response::UpgradeCanister),
+        "expected upgrade response, got: {first:?}"
+    );
 
     let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
         .expect("identical replay should return cached response");
     match second {
-        Response::UpgradeCanister(_) => {}
+        Response::UpgradeCanister => {}
         other => panic!("expected cached upgrade response, got: {other:?}"),
     }
-    let _ = first;
 
     let metrics = root_capability_metrics(&setup);
     drop(setup);
@@ -404,7 +403,7 @@ fn replay_rejects_cross_variant_same_request_id() {
         metadata: Some(metadata),
     });
     match root_response_as(&setup, caller, first) {
-        Ok(Response::UpgradeCanister(_)) => {}
+        Ok(Response::UpgradeCanister) => {}
         Ok(other) => panic!("expected upgrade response, got: {other:?}"),
         Err(err) if is_canister_status_decode_failure(&err) => {
             // PocketIC canister-status decode mismatch path: upgrade does not commit replay.
@@ -769,18 +768,17 @@ fn upgrade_replay_returns_cached_response_and_rejects_conflict() {
         }
         Err(err) => panic!("first upgrade request must succeed: {err:?}"),
     };
-    let first = match first {
-        Response::UpgradeCanister(response) => response,
-        other => panic!("expected upgrade response, got: {other:?}"),
-    };
+    assert!(
+        matches!(first, Response::UpgradeCanister),
+        "expected upgrade response, got: {first:?}"
+    );
 
     let second = root_response_as(&setup, caller, Request::UpgradeCanister(request))
         .expect("identical replay should return cached response");
     match second {
-        Response::UpgradeCanister(_) => {}
+        Response::UpgradeCanister => {}
         other => panic!("expected cached upgrade response, got: {other:?}"),
     }
-    let _ = first;
 
     let conflict = UpgradeCanisterRequest {
         canister_pid: test,

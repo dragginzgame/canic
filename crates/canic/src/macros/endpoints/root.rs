@@ -18,12 +18,8 @@ macro_rules! canic_emit_root_admin_endpoints {
         #[$crate::canic_update(requires(caller::is_controller()))]
         async fn canic_canister_upgrade(
             canister_pid: ::canic::__internal::cdk::Principal,
-        ) -> Result<::canic::dto::rpc::UpgradeCanisterResponse, ::canic::Error> {
-            let res =
-                $crate::__internal::core::api::rpc::RpcApi::upgrade_canister_request(canister_pid)
-                    .await?;
-
-            Ok(res)
+        ) -> Result<(), ::canic::Error> {
+            $crate::__internal::core::api::rpc::RpcApi::upgrade_canister_request(canister_pid).await
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
@@ -43,14 +39,6 @@ macro_rules! canic_emit_root_admin_endpoints {
             request: ::canic::dto::icp_refill::IcpRefillRequest,
         ) -> Result<::canic::dto::icp_refill::IcpRefillEndpointResponse, ::canic::Error> {
             $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(request).await
-        }
-
-        // TBD: future app-level topology contract; keep private to controllers until
-        // host/backup semantics are designed.
-        #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_app_registry()
-        -> Result<::canic::dto::topology::AppRegistryResponse, ::canic::Error> {
-            Ok($crate::__internal::core::api::topology::registry::AppRegistryApi::registry())
         }
 
         #[$crate::canic_query(public)]

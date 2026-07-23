@@ -180,7 +180,7 @@ fn write_state(root: &Path, environment: &str, state: InstallState) {
 
 fn sample_state(deployment: &str, fleet: &str, root: &str) -> InstallState {
     InstallState {
-        schema_version: 2,
+        schema_version: 1,
         deployment_name: deployment.to_string(),
         fleet_template: fleet.to_string(),
         created_at_unix_secs: 1,

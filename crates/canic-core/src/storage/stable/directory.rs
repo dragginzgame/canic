@@ -79,7 +79,6 @@ impl DirectoryRegistryData {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DirectoryEntryRecord {
     Pending {
-        #[serde(default)]
         claim_id: u64,
         owner_pid: Principal,
         created_at: u64,

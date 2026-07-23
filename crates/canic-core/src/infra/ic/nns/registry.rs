@@ -6,10 +6,7 @@
 
 use crate::{
     cdk::types::Principal,
-    infra::{
-        InfraError,
-        ic::{IcInfraError, call::Call, known::NNS_REGISTRY_CANISTER},
-    },
+    infra::ic::{IcInfraError, call::Call, known::NNS_REGISTRY_CANISTER},
     log,
     log::Topic,
 };
@@ -45,7 +42,7 @@ pub struct GetSubnetForCanisterPayload {
 /// NnsRegistryInfraError
 ///
 /// Raw NNS registry adapter failure.
-/// Owned by NNS registry infra and converted into `InfraError`.
+/// Owned by NNS registry infra and converted into `IcInfraError`.
 ///
 
 #[derive(Debug, ThisError)]
@@ -53,12 +50,6 @@ pub enum NnsRegistryInfraError {
     /// The registry explicitly rejected the request
     #[error("NNS registry rejected the request: {reason}")]
     Rejected { reason: String },
-}
-
-impl From<NnsRegistryInfraError> for InfraError {
-    fn from(err: NnsRegistryInfraError) -> Self {
-        IcInfraError::from(err).into()
-    }
 }
 
 ///
@@ -76,7 +67,9 @@ impl NnsRegistryInfra {
     /// Infrastructure adapter:
     /// - normalizes string errors
     /// - never leaks protocol details
-    pub async fn get_subnet_for_canister(pid: Principal) -> Result<Option<Principal>, InfraError> {
+    pub async fn get_subnet_for_canister(
+        pid: Principal,
+    ) -> Result<Option<Principal>, IcInfraError> {
         let request = GetSubnetForCanisterRequest { principal: pid };
 
         let result = Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
@@ -105,16 +98,16 @@ mod tests {
 
     #[test]
     fn registry_rejection_preserves_its_typed_infra_cause() {
-        let error: InfraError = NnsRegistryInfraError::Rejected {
+        let error: IcInfraError = NnsRegistryInfraError::Rejected {
             reason: "rejected".to_string(),
         }
         .into();
 
         assert!(matches!(
             error,
-            InfraError::IcInfra(IcInfraError::NnsRegistryInfra(
+            IcInfraError::NnsRegistryInfra(
                 NnsRegistryInfraError::Rejected { reason }
-            )) if reason == "rejected"
+            ) if reason == "rejected"
         ));
     }
 }

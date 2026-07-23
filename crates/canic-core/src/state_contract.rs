@@ -30,13 +30,11 @@ use crate::role_contract::allocation::memory::{
         SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
-    topology::{
-        APP_INDEX_ID, APP_REGISTRY_ID, CANISTER_CHILDREN_ID, SUBNET_INDEX_ID, SUBNET_REGISTRY_ID,
-    },
+    topology::{APP_INDEX_ID, CANISTER_CHILDREN_ID, SUBNET_INDEX_ID, SUBNET_REGISTRY_ID},
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
-pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 2;
+pub const STATE_MANIFEST_SCHEMA_VERSION: u16 = 1;
 
 ///
 /// StateManifest
@@ -197,11 +195,6 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
         descriptor(
             StateAllocationKey::CoreRuntimeTopology,
             runtime_topology_domains(),
-            Vec::new(),
-        ),
-        descriptor(
-            StateAllocationKey::CoreRootAppRegistry,
-            root_app_registry_domains(),
             Vec::new(),
         ),
         descriptor(
@@ -448,19 +441,6 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
             "canister_children_projection_is_imported",
         ),
     ]
-}
-
-fn root_app_registry_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::stable::registry::app::{AppRegistryData, AppRegistryEntryRecord};
-
-    vec![state_domain(
-        "app_registry",
-        APP_REGISTRY_ID,
-        AppRegistryEntryRecord::STATE_CONTRACT_NAME,
-        AppRegistryData::STATE_CONTRACT_NAME,
-        20,
-        "app_registry_entries_have_root_principals",
-    )]
 }
 
 fn runtime_env_domains() -> Vec<StateDomainManifest> {
@@ -741,7 +721,6 @@ mod tests {
             CANISTER_CHILDREN_ID,
             APP_INDEX_ID,
             SUBNET_INDEX_ID,
-            APP_REGISTRY_ID,
             SUBNET_REGISTRY_ID,
             ENV_ID,
             APP_STATE_ID,
@@ -807,13 +786,7 @@ mod tests {
     fn topology_registry_descriptors_reference_canonical_data_types() {
         use crate::storage::{
             canister::CanisterEntryRecord,
-            stable::{
-                children::CanisterChildrenData,
-                registry::{
-                    app::{AppRegistryData, AppRegistryEntryRecord},
-                    subnet::SubnetRegistryData,
-                },
-            },
+            stable::{children::CanisterChildrenData, registry::subnet::SubnetRegistryData},
         };
 
         let descriptors = canic_state_descriptors();
@@ -830,12 +803,6 @@ mod tests {
                 "canister_children",
                 CanisterEntryRecord::STATE_CONTRACT_NAME,
                 CanisterChildrenData::STATE_CONTRACT_NAME,
-            ),
-            (
-                StateAllocationKey::CoreRootAppRegistry,
-                "app_registry",
-                AppRegistryEntryRecord::STATE_CONTRACT_NAME,
-                AppRegistryData::STATE_CONTRACT_NAME,
             ),
         ] {
             let descriptor = descriptors

@@ -26,7 +26,6 @@ eager_static! {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AppStateRecord {
     pub mode: AppMode,
-    #[serde(default = "default_cycles_funding_enabled")]
     pub cycles_funding_enabled: bool,
 }
 

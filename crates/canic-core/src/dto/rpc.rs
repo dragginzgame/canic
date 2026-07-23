@@ -77,7 +77,6 @@ impl Request {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct AcknowledgePlacementReceiptRequest {
     pub operation_id: [u8; 32],
-    #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
 
@@ -104,7 +103,6 @@ pub struct CreateCanisterRequest {
     pub canister_role: CanisterRole,
     pub parent: CreateCanisterParent,
     pub extra_arg: Option<Vec<u8>>,
-    #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
 
@@ -134,7 +132,6 @@ pub enum CreateCanisterParent {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct UpgradeCanisterRequest {
     pub canister_pid: Principal,
-    #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
 
@@ -147,7 +144,6 @@ pub struct UpgradeCanisterRequest {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RecycleCanisterRequest {
     pub canister_pid: Principal,
-    #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
 
@@ -160,7 +156,6 @@ pub struct RecycleCanisterRequest {
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CyclesRequest {
     pub cycles: u128,
-    #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
 
@@ -172,20 +167,12 @@ pub struct CyclesRequest {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
 pub enum Response {
-    AcknowledgePlacementReceipt(AcknowledgePlacementReceiptResponse),
+    AcknowledgePlacementReceipt,
     CreateCanister(CreateCanisterResponse),
-    UpgradeCanister(UpgradeCanisterResponse),
-    RecycleCanister(RecycleCanisterResponse),
+    UpgradeCanister,
+    RecycleCanister,
     Cycles(CyclesResponse),
 }
-
-//
-// AcknowledgePlacementReceiptResponse
-// Placement receipt acknowledgement result.
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct AcknowledgePlacementReceiptResponse {}
 
 //
 // CreateCanisterResponse
@@ -196,22 +183,6 @@ pub struct AcknowledgePlacementReceiptResponse {}
 pub struct CreateCanisterResponse {
     pub new_canister_pid: Principal,
 }
-
-//
-// UpgradeCanisterResponse
-// Result of an upgrade request (currently empty, reserved for metadata)
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct UpgradeCanisterResponse {}
-
-//
-// RecycleCanisterResponse
-// Result of recycling one canister back into the pool.
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Serialize)]
-pub struct RecycleCanisterResponse {}
 
 //
 // CyclesResponse

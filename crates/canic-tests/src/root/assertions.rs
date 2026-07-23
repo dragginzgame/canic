@@ -17,7 +17,6 @@ use canic::{
             TimerRegistrationStatus,
         },
         state::AppStateResponse,
-        topology::AppRegistryResponse,
     },
     ids::{CanisterRole, SubnetRole},
     protocol,
@@ -291,13 +290,6 @@ fn assert_root_runtime_introspection_reports(pic: &Pic, root_id: Principal) {
     );
     assert_eq!(pool_reset.condition, TimerProcessCondition::Idle);
     assert_eq!(pool_reset.executions_since_runtime_start, 0);
-    assert!(
-        runtime_status
-            .timers
-            .iter()
-            .all(|timer| timer.subsystem != "pool" || timer.name != "maintenance"),
-        "the removed pool maintenance interval must not survive in runtime status"
-    );
     assert_runtime_state_metadata(&runtime_status, true);
     assert!(
         runtime_status
@@ -310,10 +302,6 @@ fn assert_root_runtime_introspection_reports(pic: &Pic, root_id: Principal) {
 }
 
 fn assert_root_observability_queries(pic: &Pic, root_id: Principal) {
-    let app_registry: Result<AppRegistryResponse, canic::Error> =
-        pic.query_call_or_panic(root_id, protocol::CANIC_APP_REGISTRY, ());
-    app_registry.expect("root app registry application");
-
     let logs: Result<Page<LogEntry>, canic::Error> = pic.query_call_or_panic(
         root_id,
         protocol::CANIC_LOG,
@@ -363,13 +351,6 @@ fn assert_root_runtime_introspection_rejects_non_controller(pic: &Pic, root_id: 
 
 fn assert_root_observability_rejects_non_controller(pic: &Pic, root_id: Principal) {
     let non_controller = Principal::from_slice(&[252; 29]);
-    let denied_app_registry: Result<AppRegistryResponse, canic::Error> =
-        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_APP_REGISTRY, ());
-    let Err(denied_app_registry) = denied_app_registry else {
-        panic!("non-controller app registry query must be denied")
-    };
-    assert_eq!(denied_app_registry.code, ErrorCode::Unauthorized);
-
     let denied_log: Result<Page<LogEntry>, canic::Error> = pic.query_call_as_or_panic(
         root_id,
         non_controller,

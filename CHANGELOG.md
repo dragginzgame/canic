@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.98.md](docs/changelog/0.98.md)
 
+- `0.98.24` completes the final repository-wide architectural-sediment
+  closeout: it removes the write-only App Registry and redundant error,
+  response, provenance, replay, stable-compatibility, helper, and version
+  surfaces; repairs current environment and ICP 1.1 CLI proof fixtures; and
+  leaves no deferred finding.
+
 - `0.98.23` removes dead raw-response comparison and transparent one-variant
   call/NNS error envelopes while preserving the canonical typed causes,
   metrics, and public call behavior.

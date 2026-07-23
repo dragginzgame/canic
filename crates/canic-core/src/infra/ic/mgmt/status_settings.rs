@@ -6,7 +6,7 @@
 
 use crate::{
     cdk::candid::Principal,
-    infra::{InfraError, ic::call::Call},
+    infra::ic::{IcInfraError, call::Call},
 };
 
 use super::{
@@ -18,7 +18,7 @@ impl MgmtInfra {
     /// Query the management canister for a canister's status.
     pub async fn canister_status(
         canister_pid: Principal,
-    ) -> Result<InfraCanisterStatusResult, InfraError> {
+    ) -> Result<InfraCanisterStatusResult, IcInfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
         };
@@ -32,7 +32,7 @@ impl MgmtInfra {
     }
 
     /// Update canister settings through the management canister.
-    pub async fn update_settings(args: &InfraUpdateSettingsArgs) -> Result<(), InfraError> {
+    pub async fn update_settings(args: &InfraUpdateSettingsArgs) -> Result<(), IcInfraError> {
         Call::bounded_wait(Principal::management_canister(), "update_settings")
             .with_arg(args.clone())?
             .execute()

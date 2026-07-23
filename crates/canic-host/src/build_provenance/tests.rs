@@ -120,9 +120,12 @@ fn build_provenance_envelope_wraps_stable_payload() {
     assert!(payload.cargo.cargo_lock_sha256.is_some());
     assert_eq!(payload.artifacts.len(), 2);
     assert_eq!(payload.transforms.len(), 2);
-    assert!(payload.transforms.iter().all(|transform| transform.mode
-        == ArtifactTransformModeV1::Optional
-        && transform.tool == "ic-wasm"));
+    assert!(
+        payload
+            .transforms
+            .iter()
+            .all(|transform| transform.tool == "ic-wasm")
+    );
     assert_eq!(payload.transforms[0].role, "app");
     assert_eq!(
         payload.transforms[0].transform,

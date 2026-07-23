@@ -18,7 +18,7 @@ pub mod pool;
 pub mod topology;
 pub mod upgrade;
 
-use crate::{InternalError, domain::DomainError};
+use crate::{InternalError, InternalErrorOrigin};
 use thiserror::Error as ThisError;
 
 ///
@@ -45,6 +45,6 @@ pub enum PolicyError {
 
 impl From<PolicyError> for InternalError {
     fn from(err: PolicyError) -> Self {
-        DomainError::from(err).into()
+        Self::domain(InternalErrorOrigin::Domain, err.to_string())
     }
 }

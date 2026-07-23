@@ -73,7 +73,6 @@ pub enum PoolAdminCommand {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CreateEmptyPoolRequest {
-    #[serde(default)]
     pub metadata: Option<RootRequestMetadata>,
 }
 

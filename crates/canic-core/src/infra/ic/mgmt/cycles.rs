@@ -9,7 +9,7 @@ use crate::{
         candid::{Nat, Principal},
         types::Cycles,
     },
-    infra::{InfraError, ic::call::Call},
+    infra::ic::{IcInfraError, call::Call},
 };
 
 use super::{MgmtInfra, MgmtInfraError, types::InfraCanisterIdRecord};
@@ -22,7 +22,7 @@ impl MgmtInfra {
     }
 
     /// Deposit cycles into a canister through the management canister.
-    pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), InfraError> {
+    pub async fn deposit_cycles(canister_pid: Principal, cycles: u128) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecord {
             canister_id: canister_pid,
         };
@@ -36,10 +36,9 @@ impl MgmtInfra {
     }
 
     /// Get a canister's cycle balance by querying canister status.
-    pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InfraError> {
+    pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, IcInfraError> {
         let status = Self::canister_status(canister_pid).await?;
-        checked_canister_cycles(canister_pid, status.cycles)
-            .map_err(|err| InfraError::from(crate::infra::ic::IcInfraError::from(err)))
+        checked_canister_cycles(canister_pid, status.cycles).map_err(IcInfraError::from)
     }
 }
 
