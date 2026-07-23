@@ -321,7 +321,7 @@ fn deploy_check_builds_current_install_options() {
     assert_eq!(options.root_build_target, "root");
     assert_eq!(options.environment, "local");
     assert_eq!(options.build_profile, Some(CanisterBuildProfile::Fast));
-    assert_eq!(options.deployment_name.as_deref(), Some("demo"));
+    assert_eq!(options.fleet_name, "demo");
     assert_eq!(options.config_path, None);
-    assert_eq!(options.expected_fleet, None);
+    assert_eq!(options.expected_app, None);
 }

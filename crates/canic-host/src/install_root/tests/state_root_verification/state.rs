@@ -2,8 +2,25 @@ use super::*;
 
 #[test]
 fn install_rejects_config_identity_mismatch() {
-    validate_expected_fleet_name(Some("demo"), "test", Path::new("apps/demo/canic.toml"))
-        .expect_err("mismatched fleet identity should fail");
+    validate_expected_app_id(Some("demo"), "test", Path::new("apps/demo/canic.toml"))
+        .expect_err("mismatched App identity should fail");
+}
+
+#[test]
+fn install_keeps_fleet_label_separate_from_source_app_identity() {
+    let root = temp_dir("canic-install-distinct-fleet-app");
+    let mut options = local_demo_install_options(&root);
+    options.fleet_name = "demo-production".to_string();
+
+    let identity = resolve_install_identity(&options, Path::new("apps/demo/canic.toml"), "demo")
+        .expect("resolve distinct Fleet and App");
+
+    assert_eq!(
+        identity,
+        ("demo".to_string(), "demo-production".to_string())
+    );
+
+    let _ = fs::remove_dir_all(root);
 }
 
 #[test]

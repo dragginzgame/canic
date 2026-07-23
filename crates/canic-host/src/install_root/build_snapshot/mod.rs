@@ -33,7 +33,7 @@ pub(super) struct CompleteInstallBuildSnapshot {
 /// Configuration identity plus optional normal-build inputs for one install command.
 #[derive(Clone, Debug)]
 pub(super) struct ValidatedInstallSnapshot {
-    pub(super) fleet_name: String,
+    pub(super) app_id: String,
     pub(super) complete_build: Option<CompleteInstallBuildSnapshot>,
     pub(super) release_build: Option<PlannedReleaseBuild>,
 }
@@ -44,11 +44,11 @@ pub(super) fn resolve_install_snapshot(
     uses_deployment_plan: bool,
 ) -> Result<ValidatedInstallSnapshot, Box<dyn std::error::Error>> {
     let config = AppConfigSnapshot::load(&context.config_path)?;
-    let fleet_name = config.app_id().to_string();
+    let app_id = config.app_id().to_string();
 
     if uses_deployment_plan {
         return Ok(ValidatedInstallSnapshot {
-            fleet_name,
+            app_id,
             complete_build: None,
             release_build: None,
         });
@@ -85,7 +85,7 @@ pub(super) fn resolve_install_snapshot(
         .collect();
 
     Ok(ValidatedInstallSnapshot {
-        fleet_name,
+        app_id,
         complete_build: Some(CompleteInstallBuildSnapshot {
             targets,
             manifest: RootReleaseSetBuildSnapshot {

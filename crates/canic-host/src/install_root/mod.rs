@@ -154,7 +154,7 @@ pub struct InstallRootError {
 }
 
 struct InstallCompletion<'a> {
-    fleet_name: &'a str,
+    app_id: &'a str,
     root_canister_id: &'a str,
     execution_context: &'a crate::deployment_truth::DeploymentExecutionContextV1,
 }
@@ -222,8 +222,8 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     let (build_context, install_snapshot) =
         current_install_build_inputs(&workspace_root, &icp_root, &config_path, &options)
             .map_err(InstallRootError::in_phase(InstallRootPhase::BuildInputs))?;
-    let (fleet_name, deployment_name) =
-        resolve_install_identity(&options, &config_path, &install_snapshot.fleet_name)
+    let (app_id, fleet_name) =
+        resolve_install_identity(&options, &config_path, &install_snapshot.app_id)
             .map_err(InstallRootError::in_phase(InstallRootPhase::Identity))?;
     let total_started_at = Instant::now();
     let mut timings = CurrentInstallTimingSummary::default();
@@ -234,14 +234,14 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         options.artifact_environment(),
     );
 
-    println!("Installing deployment {deployment_name}");
-    println!("Fleet template {fleet_name}");
+    println!("Installing Fleet {fleet_name}");
+    println!("Source App {app_id}");
     println!();
     let prepared = prepare_install_deployment_truth(
         &options,
         &icp_root,
         &config_path,
-        &deployment_name,
+        &fleet_name,
         &execution_context,
         &build_context,
         &install_snapshot,
@@ -251,7 +251,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     let receipt_scope = InstallReceiptScope {
         icp_root: &icp_root,
         environment,
-        deployment_name: &deployment_name,
+        deployment_name: &fleet_name,
         check: &prepared.deployment_truth_check,
         execution_context: Some(&execution_context),
     };
@@ -296,7 +296,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         &config_path,
         &manifest_path,
         InstallCompletion {
-            fleet_name: &fleet_name,
+            app_id: &app_id,
             root_canister_id: &root_canister_id,
             execution_context: &execution_context,
         },
@@ -317,7 +317,7 @@ fn persist_install_result(
         receipt_scope.icp_root,
         config_path,
         manifest_path,
-        (receipt_scope.deployment_name, completion.fleet_name),
+        (receipt_scope.deployment_name, completion.app_id),
         completion.root_canister_id,
     )
     .map_err(InstallRootError::in_phase(

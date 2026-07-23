@@ -15,6 +15,7 @@ use super::deployment_truth_gate::{
     install_deployment_truth_gate_receipt,
 };
 use super::execution_preflight::write_current_install_execution_preflight_receipt;
+use super::identity::resolve_install_identity;
 use super::operations::{
     BuildInstallTargetsOperation, EmitRootManifestOperation, EnsureRootCyclesOperation,
     InstallPhaseLabel, InstallPhaseOperation, InstallRootWasmOperation,
@@ -40,7 +41,7 @@ use super::state::{
     write_install_state,
 };
 use super::timing::InstallTimingSummary;
-use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_fleet_name};
+use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_app_id};
 use super::{
     InstallRootBlockKind, InstallRootBlockedError, InstallRootError, InstallRootOptions,
     InstallRootPhase, InstallState, RegisterDeploymentStateOptions, RootVerificationStatus,
@@ -235,12 +236,12 @@ fn local_demo_install_options(root: &Path) -> InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         environment: "local".to_string(),
-        deployment_name: None,
+        fleet_name: "demo".to_string(),
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
-        expected_fleet: Some("demo".to_string()),
+        expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
         artifact_promotion_plan_override: None,
@@ -350,12 +351,12 @@ kind = "root"
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         environment: "local".to_string(),
-        deployment_name: None,
+        fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
-        expected_fleet: Some("demo".to_string()),
+        expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
         artifact_promotion_plan_override: None,
@@ -450,12 +451,12 @@ fn demo_registered_root_check_from_state(root: &Path) -> DeploymentCheckV1 {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
         environment: "local".to_string(),
-        deployment_name: Some("demo-local".to_string()),
+        fleet_name: "demo-local".to_string(),
         icp_root: Some(root.to_path_buf()),
         build_profile: Some(CanisterBuildProfile::Fast),
         ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
-        expected_fleet: Some("demo".to_string()),
+        expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
         artifact_promotion_plan_override: None,

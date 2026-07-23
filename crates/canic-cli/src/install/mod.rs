@@ -34,10 +34,10 @@ const DEFAULT_ROOT_TARGET: &str = "root";
 const DEFAULT_READY_TIMEOUT_SECONDS: u64 = 120;
 const INSTALL_HELP_AFTER: &str = "\
 Examples:
-  canic install test
-  canic install --profile fast test
+  canic install toko toko-local
+  canic install toko toko-local --profile fast
 
-canic install uses apps/<fleet>/canic.toml.
+canic install uses apps/<app>/canic.toml.
 Use it for fresh local creation or recreating local state after the ICP CLI
 replica lost canisters. For an existing canister that only needs new Wasm,
 inspect with canic info list and canic medic deployment, then use the
@@ -79,6 +79,7 @@ pub enum InstallCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct InstallOptions {
+    app: String,
     fleet: String,
     environment: String,
     profile: Option<CanisterBuildProfile>,
@@ -91,10 +92,9 @@ impl InstallOptions {
     {
         let matches = parse_matches(install_command(), args)
             .map_err(|_| InstallCommandError::Usage(usage()))?;
-        let fleet = required_string(&matches, "fleet");
-
         Ok(Self {
-            fleet,
+            app: required_string(&matches, "app"),
+            fleet: required_string(&matches, "fleet"),
             environment: string_option_or_else(&matches, "environment", local_environment),
             profile: typed_option(&matches, "profile"),
         })
@@ -106,22 +106,22 @@ impl InstallOptions {
     ) -> InstallRootOptions {
         let config_path = icp_root
             .as_deref()
-            .map(|root| root.join(default_fleet_config_path(&self.fleet)))
+            .map(|root| root.join(default_app_config_path(&self.app)))
             .filter(|path| path.is_file())
             .map_or_else(
-                || default_fleet_config_path(&self.fleet),
+                || default_app_config_path(&self.app),
                 |path| path.display().to_string(),
             );
         InstallRootOptions {
             root_canister: DEFAULT_ROOT_TARGET.to_string(),
             root_build_target: DEFAULT_ROOT_TARGET.to_string(),
             environment: self.environment,
-            deployment_name: None,
+            fleet_name: self.fleet,
             icp_root,
             build_profile: self.profile,
             ready_timeout_seconds: DEFAULT_READY_TIMEOUT_SECONDS,
             config_path: Some(config_path),
-            expected_fleet: Some(self.fleet),
+            expected_app: Some(self.app),
             interactive_config_selection: false,
             deployment_plan_override: None,
             artifact_promotion_plan_override: None,
@@ -134,12 +134,18 @@ fn install_command() -> ClapCommand {
         .bin_name("canic install")
         .about("Install and bootstrap a Canic fleet")
         .disable_help_flag(true)
-        .override_usage("canic install <fleet>")
+        .override_usage("canic install <app> <fleet>")
+        .arg(
+            value_arg("app")
+                .value_name("app")
+                .required(true)
+                .help("Source App identity under apps/<app>/canic.toml"),
+        )
         .arg(
             value_arg("fleet")
                 .value_name("fleet")
                 .required(true)
-                .help("Config-defined fleet name to install"),
+                .help("Operator-facing name for the installed Fleet"),
         )
         .arg(
             value_arg("profile")
@@ -171,8 +177,8 @@ where
         .map_err(|err| install_error_with_context(err, &fleet, &environment))
 }
 
-fn default_fleet_config_path(fleet: &str) -> String {
-    format!("apps/{fleet}/canic.toml")
+fn default_app_config_path(app: &str) -> String {
+    format!("apps/{app}/canic.toml")
 }
 
 fn usage() -> String {

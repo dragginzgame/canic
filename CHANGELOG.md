@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.5` hard-cuts fresh install to independent Fleet and App identity:
+  `canic install <app> <fleet>` makes both identities required operands,
+  selects source only by App and keeps the Fleet label as the installed
+  deployment target.
+
 - `0.99.4` gives complete source builds one durable, non-circular
   release-build identity: a cryptographic plan precedes every selected Wasm,
   the same ID is embedded throughout the build, and exact manifest evidence

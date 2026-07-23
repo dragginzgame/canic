@@ -11,6 +11,7 @@ use crate::deployment_truth::{
     validate_deployment_execution_preflight_for_check,
 };
 use crate::release_set::{AppConfigSnapshot, icp_root, workspace_root};
+use canic_core::ids::FleetName;
 use std::path::{Path, PathBuf};
 
 struct CurrentInstallTruthInputs {
@@ -135,7 +136,7 @@ pub(super) fn current_install_deployment_truth_check_at_with_plan(
     .map_err(Into::into)
 }
 
-pub(super) fn validate_expected_fleet_name(
+pub(super) fn validate_expected_app_id(
     expected: Option<&str>,
     actual: &str,
     config_path: &Path,
@@ -160,14 +161,11 @@ fn resolve_current_install_truth_inputs(
         Some(path) => path.canonicalize()?,
         None => icp_root()?,
     };
-    let state = match options.deployment_name.as_deref() {
-        Some(deployment) => read_named_deployment_install_state_from_root(
-            &icp_root,
-            &options.environment,
-            deployment,
-        )?,
-        None => None,
-    };
+    let state = read_named_deployment_install_state_from_root(
+        &icp_root,
+        &options.environment,
+        &options.fleet_name,
+    )?;
     let config_path = match (options.config_path.as_deref(), state.as_ref()) {
         (Some(path), _) => resolve_install_config_path(
             &icp_root,
@@ -181,9 +179,9 @@ fn resolve_current_install_truth_inputs(
         )?,
         (None, None) => {
             let default_config = options
-                .deployment_name
+                .expected_app
                 .as_ref()
-                .map(|deployment| default_config_path_for_deployment(deployment));
+                .map(|app| default_config_path_for_app(app));
             resolve_install_config_path(
                 &icp_root,
                 default_config.as_deref(),
@@ -192,28 +190,24 @@ fn resolve_current_install_truth_inputs(
         }
     };
     let workspace_root = workspace_root()?;
-    let fleet_template = AppConfigSnapshot::load(&config_path)?.app_id().to_string();
-    let expected_fleet = options
-        .expected_fleet
+    let app_id = AppConfigSnapshot::load(&config_path)?.app_id().to_string();
+    let expected_app = options
+        .expected_app
         .as_deref()
         .or_else(|| state.as_ref().map(|state| state.fleet_template.as_str()));
-    validate_expected_fleet_name(expected_fleet, &fleet_template, &config_path)?;
-    validate_state_name(&fleet_template)?;
-    let deployment_name = options
-        .deployment_name
-        .clone()
-        .unwrap_or_else(|| fleet_template.clone());
-    validate_state_name(&deployment_name)?;
+    validate_expected_app_id(expected_app, &app_id, &config_path)?;
+    validate_state_name(&app_id)?;
+    options.fleet_name.parse::<FleetName>()?;
     Ok(CurrentInstallTruthInputs {
         workspace_root,
         icp_root,
         config_path,
-        deployment_name,
+        deployment_name: options.fleet_name.clone(),
     })
 }
 
-fn default_config_path_for_deployment(deployment: &str) -> String {
-    format!("apps/{deployment}/canic.toml")
+fn default_config_path_for_app(app: &str) -> String {
+    format!("apps/{app}/canic.toml")
 }
 
 fn current_install_deployment_truth_check_for_plan(

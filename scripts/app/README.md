@@ -150,7 +150,7 @@ For normal fleet work, use the fleet-aware installer instead of a per-role
 builder command:
 
 ```bash
-canic install test
+canic install test test-local
 ```
 
 In split repos where the Rust workspace lives under `backend/` but `icp.yaml`
