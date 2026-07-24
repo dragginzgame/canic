@@ -4,9 +4,9 @@
 //! Does not own: cascade state application, delegated-token issuance, or proof storage.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.
 
-/// Emit the non-root sync endpoints used for state and topology propagation.
+/// Emit the managed non-root endpoints used during Fleet activation.
 #[macro_export]
-macro_rules! canic_emit_nonroot_sync_topology_endpoints {
+macro_rules! canic_emit_nonroot_fleet_activation_endpoints {
     () => {
         #[$crate::canic_update(internal, requires(caller::is_parent()))]
         async fn canic_prepare_fleet_credential_generation(
@@ -24,7 +24,13 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
             __canic_schedule_prepared_activation_init();
             Ok(transition.status)
         }
+    };
+}
 
+/// Emit the non-root sync endpoints used for state and topology propagation.
+#[macro_export]
+macro_rules! canic_emit_nonroot_sync_topology_endpoints {
+    () => {
         #[$crate::canic_update(
             internal,
             requires(caller::is_parent()),

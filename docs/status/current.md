@@ -1260,6 +1260,8 @@ children-first activation and post-activation bootstrap without admitting
 ordinary endpoints through the Prepared fence. The current activation path
 supports the credential-empty authority set and fails closed when issuer
 policy or renewal-template state requires the later credential-bundle slice.
+Standalone-local canisters retain their local lifecycle and topology surface
+without exporting the managed prepare/activate updates.
 The three controller-only template staging updates remain available while the
 root is Prepared so it can assemble the exact managed inventory; the former
 root bootstrap-resume endpoint is removed rather than retained as a competing
