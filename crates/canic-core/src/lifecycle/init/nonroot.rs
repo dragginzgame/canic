@@ -4,7 +4,11 @@ use crate::{
     },
     bootstrap,
     config::schema::ConfigModel,
-    dto::abi::v1::CanisterInitPayload,
+    dto::{
+        abi::v1::CanisterInitPayload,
+        env::EnvBootstrapArgs,
+        topology::{FleetDirectoryInput, SubnetDirectoryInput},
+    },
     ids::CanisterRole,
     lifecycle::{LifecyclePhase, lifecycle_trap},
     log,
@@ -20,6 +24,32 @@ pub fn init_nonroot_canister_before_bootstrap(
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
+) {
+    init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
+        workflow::runtime::init_nonroot_canister(role, payload)
+    });
+}
+
+pub fn init_local_nonroot_canister_before_bootstrap(
+    role: CanisterRole,
+    env: EnvBootstrapArgs,
+    fleet_directory: FleetDirectoryInput,
+    subnet_directory: SubnetDirectoryInput,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+) {
+    init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
+        workflow::runtime::init_local_nonroot_canister(role, env, fleet_directory, subnet_directory)
+    });
+}
+
+fn init_nonroot_before_bootstrap(
+    role: CanisterRole,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+    initialize: impl FnOnce(CanisterRole) -> Result<(), crate::InternalError>,
 ) {
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::Init,
@@ -39,7 +69,7 @@ pub fn init_nonroot_canister_before_bootstrap(
         );
     }
 
-    if let Err(err) = workflow::runtime::init_nonroot_canister(role, payload) {
+    if let Err(err) = initialize(role) {
         LifecycleMetricsApi::record_runtime(
             LifecycleMetricPhase::Init,
             LifecycleMetricRole::Nonroot,

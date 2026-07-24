@@ -3,21 +3,15 @@ use std::{
     sync::Mutex,
 };
 
-use candid::{Principal, encode_args, encode_one};
+use candid::{Principal, encode_one};
 use canic::{
     Error,
-    dto::{
-        abi::v1::CanisterInitPayload,
-        env::EnvBootstrapArgs,
-        fleet_activation::CurrentRootInstallIdentity,
-        topology::{AppIndexArgs, SubnetIndexArgs, SubnetRegistryResponse},
-    },
-    ids::{CanisterRole, SubnetSlotId},
+    dto::{fleet_activation::CurrentRootInstallIdentity, topology::SubnetRegistryResponse},
+    ids::CanisterRole,
     protocol,
 };
 use canic_core::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, ReleaseBuildId};
 use ic_testkit::{
-    Fake,
     artifacts::{read_wasm, test_target_dir, workspace_root_for},
     pic::{InstallSpec, Pic, StandaloneCanisterFixture, install_prebuilt_canister_from_spec},
 };
@@ -38,13 +32,6 @@ pub trait CanicPicExt {
     /// Install a root Canic canister with the default root init arguments.
     fn create_and_install_root_canister(&self, wasm: Vec<u8>) -> Result<Principal, Error>;
 
-    /// Install a non-root Canic canister with default standalone init arguments.
-    fn create_and_install_canister(
-        &self,
-        role: CanisterRole,
-        wasm: Vec<u8>,
-    ) -> Result<Principal, Error>;
-
     /// Wait until one Canic canister reports `canic_ready`.
     fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str);
 
@@ -60,21 +47,6 @@ impl CanicPicExt for Pic {
 
         Ok(self
             .create_and_install(InstallSpec::new(wasm, init_bytes, INSTALL_CYCLES).label("root")))
-    }
-
-    fn create_and_install_canister(
-        &self,
-        role: CanisterRole,
-        wasm: Vec<u8>,
-    ) -> Result<Principal, Error> {
-        let label = role.to_string();
-        let init_bytes = install_args(role)?;
-
-        Ok(
-            self.create_and_install(
-                InstallSpec::new(wasm, init_bytes, INSTALL_CYCLES).label(label),
-            ),
-        )
     }
 
     fn wait_for_ready(&self, canister_id: Principal, tick_limit: usize, context: &str) {
@@ -170,9 +142,8 @@ pub fn role_pid(pic: &Pic, root_id: Principal, role: &'static str, tick_limit: u
 
 /// Install one non-root Canic canister into a fresh PocketIC instance.
 ///
-/// The installed canister receives explicit local env bootstrap fields, empty
-/// topology indexes, and the internal test endpoint surface for that test
-/// build.
+/// The installed canister uses the explicit `start_local!` lifecycle and the
+/// internal test endpoint surface for that test build.
 ///
 /// # Panics
 ///
@@ -198,7 +169,7 @@ pub fn install_standalone_canister(
     let label = format!("standalone:{crate_name}:{role}");
     let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
     let fixture = install_prebuilt_canister_from_spec(
-        InstallSpec::new(wasm, standalone_init_args(role), 0).label(label),
+        InstallSpec::new(wasm, local_init_args(), 0).label(label),
     );
     let canister_id = fixture.canister_id();
     let pic = fixture.pic();
@@ -237,9 +208,8 @@ pub fn install_standalone_canister_on_pic(
     ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
 
     let wasm = read_wasm(&target_dir, crate_name, profile.target_dir_name());
-    let canister_id = pic.create_and_install(
-        InstallSpec::new(wasm, standalone_init_args(role), 0).label(label.to_string()),
-    );
+    let canister_id = pic
+        .create_and_install(InstallSpec::new(wasm, local_init_args(), 0).label(label.to_string()));
     pic.wait_for_ready(
         canister_id,
         STANDALONE_READY_TICK_LIMIT,
@@ -259,48 +229,9 @@ fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
     }
 }
 
-fn install_args(role: CanisterRole) -> Result<Vec<u8>, Error> {
-    if role.is_root() {
-        install_root_args()
-    } else {
-        let env = EnvBootstrapArgs {
-            prime_root_pid: None,
-            subnet_role: None,
-            subnet_pid: None,
-            root_pid: None,
-            canister_role: Some(role),
-            parent_pid: None,
-        };
-
-        let payload = CanisterInitPayload {
-            env,
-            app_index: AppIndexArgs(Vec::new()),
-            subnet_index: SubnetIndexArgs(Vec::new()),
-        };
-
-        encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
-            .map_err(|err| Error::internal(format!("encode_args failed: {err}")))
-    }
-}
-
 pub fn install_root_args() -> Result<Vec<u8>, Error> {
-    let release_build_id = INTERNAL_TEST_RELEASE_BUILD_ID
-        .1
-        .parse::<ReleaseBuildId>()
-        .map_err(|err| Error::internal(format!("parse release-build ID failed: {err}")))?;
-    encode_one(CurrentRootInstallIdentity {
-        fleet: FleetBinding {
-            fleet: FleetKey {
-                network: CanonicalNetworkId::public_ic(),
-                fleet_id: FleetId::from_generated_bytes([0x42; 32]),
-            },
-            app: AppId::from("canic-internal-test"),
-        },
-        install_id: [0x43; 32],
-        release_build_id,
-        expected_module_hash: None,
-    })
-    .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
+    encode_one(managed_test_init_identity())
+        .map_err(|err| Error::internal(format!("encode_one failed: {err}")))
 }
 
 fn ensure_canister_wasm_ready(
@@ -316,23 +247,33 @@ fn ensure_canister_wasm_ready(
     build_internal_test_wasm_canisters(workspace_root, target_dir, &[crate_name], profile);
 }
 
-fn standalone_init_args(role: CanisterRole) -> Vec<u8> {
-    let root_pid = Fake::principal(1);
-    let payload = CanisterInitPayload {
-        env: EnvBootstrapArgs {
-            prime_root_pid: Some(root_pid),
-            subnet_role: Some(SubnetSlotId::DEFAULT),
-            subnet_pid: Some(Fake::principal(2)),
-            root_pid: Some(root_pid),
-            canister_role: Some(role),
-            parent_pid: Some(root_pid),
-        },
-        app_index: AppIndexArgs(Vec::new()),
-        subnet_index: SubnetIndexArgs(Vec::new()),
-    };
+fn local_init_args() -> Vec<u8> {
+    encode_one(None::<Vec<u8>>).expect("encode standalone-local init args")
+}
 
-    encode_args::<(CanisterInitPayload, Option<Vec<u8>>)>((payload, None))
-        .expect("encode standalone init args")
+/// Return the deterministic Fleet activation identity embedded in internal test Wasms.
+///
+/// # Panics
+///
+/// Panics if the repository-owned release-build fixture is not a valid identity.
+#[must_use]
+pub fn managed_test_init_identity() -> CurrentRootInstallIdentity {
+    let release_build_id = INTERNAL_TEST_RELEASE_BUILD_ID
+        .1
+        .parse::<ReleaseBuildId>()
+        .expect("internal test release-build ID");
+    CurrentRootInstallIdentity {
+        fleet: FleetBinding {
+            fleet: FleetKey {
+                network: CanonicalNetworkId::public_ic(),
+                fleet_id: FleetId::from_generated_bytes([0x42; 32]),
+            },
+            app: AppId::from("canic-internal-test"),
+        },
+        install_id: [0x43; 32],
+        release_build_id,
+        expected_module_hash: None,
+    }
 }
 
 fn workspace_root() -> PathBuf {

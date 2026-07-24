@@ -13,9 +13,12 @@ type CanicMetadataResponse = record {
   package_name : text;
 };
 type CanisterInitPayload = record {
+  fleet : FleetBinding;
+  install_id : blob;
+  release_build_id : text;
   env : EnvBootstrapArgs;
-  subnet_index : vec IndexEntryInput;
-  app_index : vec IndexEntryInput;
+  fleet_directory : vec IndexEntryInput;
+  subnet_directory : vec IndexEntryInput;
 };
 type CapabilityProof = variant { Structural };
 type CapabilityRequestMetadata = record {

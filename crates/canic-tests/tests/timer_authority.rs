@@ -24,7 +24,7 @@ const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 #[test]
 fn application_timers_cancel_and_recur_only_after_completion() {
     let fixture = install_lifecycle_boundary_fixture();
-    let canister_id = fixture.install_canic_canister();
+    let canister_id = fixture.install_runtime_probe_canister();
     fixture
         .pic
         .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
@@ -107,7 +107,7 @@ fn application_timers_cancel_and_recur_only_after_completion() {
 #[test]
 fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() {
     let fixture = install_lifecycle_boundary_fixture();
-    let canister_id = fixture.install_canic_canister();
+    let canister_id = fixture.install_runtime_probe_canister();
     fixture
         .pic
         .wait_for_ready(canister_id, READY_TICK_LIMIT, "install");
@@ -140,7 +140,7 @@ fn finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work() 
                 .pic
                 .upgrade_canister(
                     canister_id,
-                    fixture.canic_wasm.clone(),
+                    fixture.runtime_probe_wasm.clone(),
                     upgrade_args(),
                     None,
                 )

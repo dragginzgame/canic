@@ -1,7 +1,7 @@
 #![expect(clippy::unused_async)]
 use canic::{Error, prelude::*};
 
-canic::start!();
+canic::start_local!();
 canic::finish!();
 
 // Provide an empty setup hook so `start!` can schedule user lifecycle work.

@@ -7,7 +7,9 @@
 use crate::{
     dto::{
         page::Page,
-        topology::{AppIndexArgs, IndexEntryInput, IndexEntryResponse, SubnetIndexArgs},
+        topology::{
+            FleetDirectoryInput, IndexEntryInput, IndexEntryResponse, SubnetDirectoryInput,
+        },
     },
     model::topology::TopologyIndexEntry,
     storage::stable::index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
@@ -50,12 +52,12 @@ pub struct AppIndexDataMapper;
 
 impl AppIndexDataMapper {
     #[must_use]
-    pub fn data_to_input(data: AppIndexData) -> AppIndexArgs {
-        AppIndexArgs(data_entries_to_input(data.entries))
+    pub fn data_to_input(data: AppIndexData) -> FleetDirectoryInput {
+        FleetDirectoryInput(data_entries_to_input(data.entries))
     }
 
     #[must_use]
-    pub fn input_to_data(input: AppIndexArgs) -> AppIndexData {
+    pub fn input_to_data(input: FleetDirectoryInput) -> AppIndexData {
         AppIndexData {
             entries: input_entries_to_data(input.0),
         }
@@ -72,12 +74,12 @@ pub struct SubnetIndexDataMapper;
 
 impl SubnetIndexDataMapper {
     #[must_use]
-    pub fn data_to_input(data: SubnetIndexData) -> SubnetIndexArgs {
-        SubnetIndexArgs(data_entries_to_input(data.entries))
+    pub fn data_to_input(data: SubnetIndexData) -> SubnetDirectoryInput {
+        SubnetDirectoryInput(data_entries_to_input(data.entries))
     }
 
     #[must_use]
-    pub fn input_to_data(input: SubnetIndexArgs) -> SubnetIndexData {
+    pub fn input_to_data(input: SubnetDirectoryInput) -> SubnetIndexData {
         SubnetIndexData {
             entries: input_entries_to_data(input.0),
         }

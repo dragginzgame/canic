@@ -103,3 +103,65 @@ fn managed_canisters_export_endpoints_only_through_canic_macros() {
         "managed Canister endpoints bypass the Canic activation dispatcher: {violations:#?}"
     );
 }
+
+#[test]
+fn prepared_managed_init_defers_application_work_while_standalone_local_starts_it() {
+    let macro_path = workspace_root().join("crates/canic/src/macros/start.rs");
+    let source = fs::read_to_string(&macro_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", macro_path.display()));
+    let managed = source
+        .split("macro_rules! __canic_start_nonroot_lifecycle_core")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! __canic_start_local_lifecycle_core")
+                .next()
+        })
+        .expect("managed non-root lifecycle macro");
+    let managed_init = managed
+        .split("#[$crate::__internal::cdk::init]")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("#[$crate::__internal::cdk::post_upgrade]")
+                .next()
+        })
+        .expect("managed non-root init body");
+
+    assert!(
+        managed_init.contains("LifecycleApi::init_nonroot_canister_before_bootstrap"),
+        "managed non-root init must enter the canonical Prepared lifecycle"
+    );
+    assert!(
+        !managed_init.contains("schedule_init_nonroot_bootstrap")
+            && !managed_init.contains("TimerApi::defer_lifecycle")
+            && !managed_init.contains("canic_install("),
+        "Prepared managed init must not schedule bootstrap, timers, or application hooks"
+    );
+
+    let local = source
+        .split("macro_rules! __canic_start_local_lifecycle_core")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! __canic_root_lifecycle_core")
+                .next()
+        })
+        .expect("standalone-local lifecycle macro");
+    let local_init = local
+        .split("#[$crate::__internal::cdk::init]")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("#[$crate::__internal::cdk::post_upgrade]")
+                .next()
+        })
+        .expect("standalone-local init body");
+
+    assert!(
+        local_init.contains("LifecycleApi::init_local_nonroot_canister_before_bootstrap")
+            && local_init.contains("schedule_init_nonroot_bootstrap")
+            && local_init.contains("canic_install(args)"),
+        "standalone-local init must retain its explicit local lifecycle and application startup"
+    );
+    assert!(
+        !local.contains("CanisterInitPayload") && !local.contains("FleetBinding"),
+        "standalone-local lifecycle must not fabricate managed Fleet identity"
+    );
+}

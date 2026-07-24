@@ -6,11 +6,14 @@
 
 use crate::{
     InternalError,
-    domain::policy::pure::{PolicyError, fleet_activation::require_prepared_root_endpoint},
+    domain::policy::pure::{
+        PolicyError,
+        fleet_activation::{require_prepared_nonroot_endpoint, require_prepared_root_endpoint},
+    },
     dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
     ids::EndpointCall,
     ops::{
-        runtime::env::EnvOps,
+        runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
         storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
 };
@@ -36,24 +39,29 @@ impl FleetActivationWorkflow {
 
     /// Enforce the activation phase before a managed endpoint handler runs.
     pub fn require_endpoint_allowed(call: EndpointCall) -> Result<(), InternalError> {
-        if !EnvOps::canister_role()?.is_root() {
+        let is_root = EnvOps::canister_role()?.is_root();
+        if !is_root && FleetActivationRuntimeOps::is_standalone_local() {
             return Ok(());
         }
-        let status = FleetActivationOps::status(true)
+        let status = FleetActivationOps::status(is_root)
             .map_err(StorageOpsError::from)
             .map_err(InternalError::from)?;
 
-        require_root_endpoint_for_phase(status.phase, call).map_err(InternalError::from)
+        require_endpoint_for_phase(is_root, status.phase, call).map_err(InternalError::from)
     }
 }
 
-fn require_root_endpoint_for_phase(
+fn require_endpoint_for_phase(
+    is_root: bool,
     phase: FleetActivationPhase,
     call: EndpointCall,
 ) -> Result<(), PolicyError> {
     match phase {
-        FleetActivationPhase::Prepared => {
+        FleetActivationPhase::Prepared if is_root => {
             require_prepared_root_endpoint(call).map_err(PolicyError::from)
+        }
+        FleetActivationPhase::Prepared => {
+            require_prepared_nonroot_endpoint(call).map_err(PolicyError::from)
         }
         FleetActivationPhase::Active => Ok(()),
     }
@@ -75,9 +83,13 @@ mod tests {
     fn active_admits_ordinary_handlers_but_prepared_delegates_to_exact_policy() {
         let ordinary = call("application_update", EndpointCallKind::Update);
 
-        assert!(require_root_endpoint_for_phase(FleetActivationPhase::Active, ordinary).is_ok());
+        assert!(require_endpoint_for_phase(true, FleetActivationPhase::Active, ordinary).is_ok());
         assert!(matches!(
-            require_root_endpoint_for_phase(FleetActivationPhase::Prepared, ordinary),
+            require_endpoint_for_phase(true, FleetActivationPhase::Prepared, ordinary),
+            Err(PolicyError::FleetActivationPolicy(_))
+        ));
+        assert!(matches!(
+            require_endpoint_for_phase(false, FleetActivationPhase::Prepared, ordinary),
             Err(PolicyError::FleetActivationPolicy(_))
         ));
     }

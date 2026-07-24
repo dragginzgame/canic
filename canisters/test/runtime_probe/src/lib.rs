@@ -15,7 +15,7 @@ thread_local! {
     static TIMER_CANCELLED_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
 }
 
-canic::start!();
+canic::start_local!();
 
 /// Run no-op setup for the runtime probe.
 async fn canic_setup() {}

@@ -5,7 +5,7 @@ use canic::{
 };
 use canic_testing_internal::{
     canister::{APP, SCALE_HUB, SCALE_REPLICA, TEST, USER_HUB, USER_SHARD, WASM_STORE},
-    pic::{invalid_init_args, upgrade_args},
+    pic::{invalid_init_args, managed_test_init_identity, upgrade_args},
 };
 
 // Verify canonical test role constants stay aligned with canister role names.
@@ -31,16 +31,20 @@ fn canister_role_constants_have_expected_names() {
 fn invalid_init_args_encode_missing_env_fields() {
     let (payload, user_payload): (CanisterInitPayload, Option<Vec<u8>>) =
         decode_args(&invalid_init_args()).expect("decode invalid init args");
+    let identity = managed_test_init_identity();
 
     assert!(user_payload.is_none());
+    assert_eq!(payload.fleet, identity.fleet);
+    assert_eq!(payload.install_id, identity.install_id);
+    assert_eq!(payload.release_build_id, identity.release_build_id);
     assert!(payload.env.prime_root_pid.is_none());
     assert!(payload.env.subnet_role.is_none());
     assert!(payload.env.subnet_pid.is_none());
     assert!(payload.env.root_pid.is_none());
     assert!(payload.env.canister_role.is_none());
     assert!(payload.env.parent_pid.is_none());
-    assert!(payload.app_index.0.is_empty());
-    assert!(payload.subnet_index.0.is_empty());
+    assert!(payload.fleet_directory.0.is_empty());
+    assert!(payload.subnet_directory.0.is_empty());
 }
 
 // Verify the upgrade fixture is the empty tuple expected by no-payload upgrades.

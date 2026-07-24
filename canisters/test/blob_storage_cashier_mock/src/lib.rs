@@ -42,7 +42,7 @@ struct MockTopUpRecord {
     attached_cycles: Nat,
 }
 
-canic::start!();
+canic::start_local!();
 
 /// Run no-op setup for the blob-storage Cashier mock.
 async fn canic_setup() {}

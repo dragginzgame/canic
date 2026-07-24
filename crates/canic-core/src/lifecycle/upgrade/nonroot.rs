@@ -21,7 +21,38 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
-) {
+) -> bool {
+    post_upgrade_nonroot_before_bootstrap(
+        role,
+        config,
+        config_source,
+        config_path,
+        workflow::runtime::post_upgrade_nonroot_canister_after_memory_init,
+    )
+}
+
+pub fn post_upgrade_local_nonroot_canister_before_bootstrap(
+    role: CanisterRole,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+) -> bool {
+    post_upgrade_nonroot_before_bootstrap(
+        role,
+        config,
+        config_source,
+        config_path,
+        workflow::runtime::post_upgrade_local_nonroot_canister_after_memory_init,
+    )
+}
+
+fn post_upgrade_nonroot_before_bootstrap(
+    role: CanisterRole,
+    config: ConfigModel,
+    config_source: &str,
+    config_path: &str,
+    restore: fn(CanisterRole) -> Result<bool, crate::InternalError>,
+) -> bool {
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricRole::Nonroot,
@@ -63,20 +94,24 @@ pub fn post_upgrade_nonroot_canister_before_bootstrap(
             format!("env restore failed (nonroot upgrade): {err}"),
         );
     }
-    if let Err(err) = workflow::runtime::post_upgrade_nonroot_canister_after_memory_init(role) {
-        LifecycleMetricsApi::record_runtime(
-            LifecycleMetricPhase::PostUpgrade,
-            LifecycleMetricRole::Nonroot,
-            LifecycleMetricOutcome::Failed,
-        );
-        lifecycle_trap(LifecyclePhase::PostUpgrade, err);
-    }
+    let active = match restore(role) {
+        Ok(active) => active,
+        Err(err) => {
+            LifecycleMetricsApi::record_runtime(
+                LifecycleMetricPhase::PostUpgrade,
+                LifecycleMetricRole::Nonroot,
+                LifecycleMetricOutcome::Failed,
+            );
+            lifecycle_trap(LifecyclePhase::PostUpgrade, err);
+        }
+    };
 
     LifecycleMetricsApi::record_runtime(
         LifecycleMetricPhase::PostUpgrade,
         LifecycleMetricRole::Nonroot,
         LifecycleMetricOutcome::Completed,
     );
+    active
 }
 
 pub fn schedule_post_upgrade_nonroot_bootstrap() {

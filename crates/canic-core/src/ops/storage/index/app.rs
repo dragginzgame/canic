@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    dto::topology::AppIndexArgs,
+    dto::topology::FleetDirectoryInput,
     model::topology::TopologyIndexEntry,
     ops::{
         config::ConfigOps,
@@ -61,15 +61,15 @@ impl AppIndexOps {
     }
 
     #[must_use]
-    pub fn snapshot_args() -> AppIndexArgs {
+    pub fn snapshot_args() -> FleetDirectoryInput {
         AppIndexDataMapper::data_to_input(AppIndex::export())
     }
 
     pub(crate) fn filter_args_for_local_config(
-        args: AppIndexArgs,
-    ) -> Result<AppIndexArgs, InternalError> {
+        args: FleetDirectoryInput,
+    ) -> Result<FleetDirectoryInput, InternalError> {
         let allowed = ConfigOps::get()?.services.fleet.roles.clone();
-        Ok(AppIndexArgs(
+        Ok(FleetDirectoryInput(
             args.0
                 .into_iter()
                 .filter(|entry| allowed.contains(&entry.role))
@@ -77,7 +77,9 @@ impl AppIndexOps {
         ))
     }
 
-    pub(crate) fn import_args_allow_incomplete(args: AppIndexArgs) -> Result<(), InternalError> {
+    pub(crate) fn import_args_allow_incomplete(
+        args: FleetDirectoryInput,
+    ) -> Result<(), InternalError> {
         let data = AppIndexDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "app")?;
         let allowed = ConfigOps::get()?.services.fleet.roles.clone();
