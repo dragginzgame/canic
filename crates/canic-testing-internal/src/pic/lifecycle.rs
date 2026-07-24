@@ -134,8 +134,8 @@ pub fn invalid_init_args() -> Vec<u8> {
         install_id: identity.install_id,
         release_build_id: identity.release_build_id,
         env: EnvBootstrapArgs {
-            prime_root_pid: None,
-            subnet_role: None,
+            fleet_root_pid: None,
+            subnet_slot: None,
             subnet_pid: None,
             root_pid: None,
             canister_role: None,
@@ -189,8 +189,8 @@ fn init_payload(canister_id: Principal) -> CanisterInitPayload {
     let subnet_directory = subnet_directory_input(canister_id, provenance);
 
     let env = EnvBootstrapArgs {
-        prime_root_pid: Some(root_pid),
-        subnet_role: Some(SubnetSlotId::DEFAULT),
+        fleet_root_pid: Some(root_pid),
+        subnet_slot: Some(SubnetSlotId::DEFAULT),
         subnet_pid: Some(Fake::principal(2)),
         root_pid: Some(root_pid),
         canister_role: Some(TEST),

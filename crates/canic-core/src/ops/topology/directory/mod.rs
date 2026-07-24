@@ -88,13 +88,13 @@ impl SubnetDirectoryResolver {
 pub fn current_provenance() -> Result<DirectoryProvenance, InternalError> {
     Ok(DirectoryProvenance {
         fleet: FleetActivationOps::fleet_binding().map_err(StorageOpsError::from)?,
-        source_root: EnvOps::prime_root_pid()?,
+        source_root: EnvOps::fleet_root_pid()?,
     })
 }
 
 pub fn validate_provenance(provenance: &DirectoryProvenance) -> Result<(), InternalError> {
     let expected_fleet = FleetActivationOps::fleet_binding().map_err(StorageOpsError::from)?;
-    let expected_source_root = EnvOps::prime_root_pid()?;
+    let expected_source_root = EnvOps::fleet_root_pid()?;
     ensure_provenance(provenance, &expected_fleet, expected_source_root)?;
     Ok(())
 }

@@ -64,7 +64,7 @@ pub fn assert_registry_parents(
 /// # Panics
 ///
 /// Panics if the env query fails or if the returned environment fields do not
-/// match the expected role, parent, root, prime root, or subnet data.
+/// match the expected role, parent, Fleet root, or subnet data.
 pub fn assert_child_env(
     pic: &Pic,
     child_pid: Principal,
@@ -88,14 +88,14 @@ pub fn assert_child_env(
     );
     assert_eq!(env.root_pid, Some(root_id), "env root for {role}");
     assert_eq!(
-        env.prime_root_pid,
+        env.fleet_root_pid,
         Some(root_id),
-        "env prime root for {role}"
+        "env Fleet root for {role}"
     );
     assert_eq!(
-        env.subnet_role,
+        env.subnet_slot,
         Some(SubnetSlotId::DEFAULT),
-        "env subnet role for {role}"
+        "env Subnet Slot for {role}"
     );
     assert!(
         env.subnet_pid.is_some(),

@@ -34,10 +34,10 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
 
 - Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `ICP_ENVIRONMENT` is baked in (`local` or `ic`), defaulting to `local` when unset.
 - Init/post-upgrade: generated lifecycle code loads the embedded TOML and parsed config model; `ConfigOps::current_*` is infallible.
-- Root env: `root_init(identity)` sets base env fields directly from `SubnetIdentity` (no registry lookup).
-  - `Prime` means root == subnet == prime root.
-  - `Standard` carries the `subnet_type` and `prime_root_pid` from the prime subnet.
-  - `Manual` is a test/support override that pins the subnet principal.
+- Root env: fresh root installation sets base fields from
+  `CurrentRootInstallIdentity` without a registry lookup.
+  - `default` is the App-declared workload slot used by the current one-member Fleet.
+  - `fleet_root_pid` identifies that Fleet's current root.
 - Non-root env: children must receive a complete `EnvBootstrapArgs` in `CanisterInitPayload` from root.
   - Missing env fields always trap (no local fallback).
 

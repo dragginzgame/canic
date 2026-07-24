@@ -212,7 +212,7 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
     };
     app.sharding = Some(ShardingConfig::default());
     let config = ConfigTestBuilder::new()
-        .with_prime_canister("app", app)
+        .with_default_canister("app", app)
         .build();
     let role = CanisterRole::owned("app".to_string());
 
@@ -233,7 +233,7 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
 #[test]
 fn root_inherently_selects_icp_refill_state() {
     let config = ConfigTestBuilder::new()
-        .with_prime_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
+        .with_default_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
         .build();
 
     let RoleContractResolution::Resolved { contract } = resolve_role_contract(RoleContractInput {
@@ -317,7 +317,7 @@ fn feature_implication_closure_is_idempotent() {
 #[test]
 fn missing_required_feature_rejects_without_a_contract() {
     let config = ConfigTestBuilder::new()
-        .with_prime_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
+        .with_default_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
         .build();
     let resolution = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::Declared {
@@ -362,7 +362,7 @@ fn unknown_role_rejects_without_a_contract() {
 #[test]
 fn surplus_state_feature_allocates_normally() {
     let config = ConfigTestBuilder::new()
-        .with_prime_canister_kind("app", CanisterKind::Service)
+        .with_default_canister_kind("app", CanisterKind::Service)
         .build();
     let role = CanisterRole::owned("app".to_string());
     let resolution = resolve_role_contract(RoleContractInput {
@@ -389,7 +389,7 @@ fn surplus_state_feature_allocates_normally() {
 #[test]
 fn repeated_selection_merges_allocation_provenance() {
     let config = ConfigTestBuilder::new()
-        .with_prime_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
+        .with_default_canister_kind(CanisterRole::ROOT, CanisterKind::Root)
         .build();
     let resolution = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::Declared {
@@ -471,7 +471,7 @@ fn resolved_service_contract(
 ) -> super::ResolvedRoleContract {
     let role = CanisterRole::owned("service".to_string());
     let config = ConfigTestBuilder::new()
-        .with_prime_canister(role.clone(), canister)
+        .with_default_canister(role.clone(), canister)
         .build();
     let RoleContractResolution::Resolved { contract } = resolve_role_contract(RoleContractInput {
         source: RoleContractSource::Declared {

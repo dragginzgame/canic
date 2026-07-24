@@ -61,17 +61,17 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
 
     let self_pid = IcOps::canister_self();
     let subnet_pid = self_pid;
-    let subnet_role = SubnetSlotId::DEFAULT;
-    let prime_root_pid = self_pid;
+    let subnet_slot = SubnetSlotId::DEFAULT;
+    let fleet_root_pid = self_pid;
     let module_hash = identity.expected_module_hash.map(|hash| hash.to_vec());
 
     let input = EnvInput {
-        prime_root_pid: Some(prime_root_pid),
-        subnet_role: Some(subnet_role),
+        fleet_root_pid: Some(fleet_root_pid),
+        subnet_slot: Some(subnet_slot),
         subnet_pid: Some(subnet_pid),
         root_pid: Some(self_pid),
         canister_role: Some(CanisterRole::ROOT),
-        parent_pid: Some(prime_root_pid),
+        parent_pid: Some(fleet_root_pid),
     };
 
     let build_network = BuildNetworkOps::build_network().ok_or_else(|| {

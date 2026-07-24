@@ -294,11 +294,11 @@ mod tests {
         };
 
         let cfg = ConfigTestBuilder::new()
-            .with_prime_canister(
+            .with_default_canister(
                 CanisterRole::ROOT,
                 ConfigTestBuilder::canister_config(CanisterKind::Root),
             )
-            .with_prime_canister("user_shard", issuer_cfg)
+            .with_default_canister("user_shard", issuer_cfg)
             .build();
 
         assert!(!root_requires_role_attestation_proofs(&cfg));
@@ -315,11 +315,11 @@ mod tests {
         };
 
         let mut cfg = ConfigTestBuilder::new()
-            .with_prime_canister(
+            .with_default_canister(
                 CanisterRole::ROOT,
                 ConfigTestBuilder::canister_config(CanisterKind::Root),
             )
-            .with_prime_canister("project_hub", verifier_cfg)
+            .with_default_canister("project_hub", verifier_cfg)
             .build();
         cfg.auth.delegated_tokens.enabled = false;
 
@@ -336,11 +336,11 @@ mod tests {
         };
 
         let mut cfg = ConfigTestBuilder::new()
-            .with_prime_canister(
+            .with_default_canister(
                 CanisterRole::ROOT,
                 ConfigTestBuilder::canister_config(CanisterKind::Root),
             )
-            .with_prime_canister("user_shard", issuer_cfg)
+            .with_default_canister("user_shard", issuer_cfg)
             .build();
         cfg.auth.delegated_tokens.enabled = false;
 

@@ -36,16 +36,16 @@ impl ConfigTestBuilder {
     }
 
     #[must_use]
-    pub fn with_prime_canister_kind(
+    pub fn with_default_canister_kind(
         self,
         role: impl Into<CanisterRole>,
         kind: CanisterKind,
     ) -> Self {
-        self.with_prime_canister(role, Self::canister_config(kind))
+        self.with_default_canister(role, Self::canister_config(kind))
     }
 
     #[must_use]
-    pub fn with_prime_canister(
+    pub fn with_default_canister(
         self,
         role: impl Into<CanisterRole>,
         config: CanisterConfig,

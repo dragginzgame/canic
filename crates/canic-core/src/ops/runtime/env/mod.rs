@@ -33,8 +33,8 @@ pub enum EnvOpsError {
     #[error("env missing required fields: {0}")]
     MissingFields(String),
 
-    #[error("failed to determine current prime root principal")]
-    PrimeRootPidUnavailable,
+    #[error("failed to determine current Fleet root principal")]
+    FleetRootPidUnavailable,
 
     #[error("failed to determine current root principal")]
     RootPidUnavailable,
@@ -42,8 +42,8 @@ pub enum EnvOpsError {
     #[error("failed to determine current subnet principal")]
     SubnetPidUnavailable,
 
-    #[error("failed to determine current subnet role")]
-    SubnetRoleUnavailable,
+    #[error("failed to determine current Subnet Slot")]
+    SubnetSlotUnavailable,
 
     #[error("failed to determine current parent principal")]
     ParentPidUnavailable,
@@ -84,20 +84,20 @@ impl EnvOps {
     // ---------------------------------------------------------------------
 
     #[must_use]
-    pub fn is_prime_root() -> bool {
-        let Some(prime_root) = Env::get_prime_root_pid() else {
+    pub fn is_fleet_root() -> bool {
+        let Some(fleet_root) = Env::get_fleet_root_pid() else {
             return false;
         };
         let Some(root_pid) = Env::get_root_pid() else {
             return false;
         };
 
-        prime_root == root_pid
+        fleet_root == root_pid
     }
 
     #[must_use]
-    pub fn is_prime_subnet() -> bool {
-        Env::get_subnet_role().is_some_and(|slot| slot.is_default())
+    pub fn is_default_subnet() -> bool {
+        Env::get_subnet_slot().is_some_and(|slot| slot.is_default())
     }
 
     #[must_use]
@@ -131,8 +131,8 @@ impl EnvOps {
     // ---------------------------------------------------------------------
 
     /// SAFETY: Env must be initialized; do not call during init/post_upgrade.
-    pub fn subnet_role() -> Result<SubnetSlotId, InternalError> {
-        Env::get_subnet_role().ok_or_else(|| EnvOpsError::SubnetRoleUnavailable.into())
+    pub fn subnet_slot() -> Result<SubnetSlotId, InternalError> {
+        Env::get_subnet_slot().ok_or_else(|| EnvOpsError::SubnetSlotUnavailable.into())
     }
 
     pub fn canister_role() -> Result<CanisterRole, InternalError> {
@@ -151,8 +151,8 @@ impl EnvOps {
         Env::get_parent_pid().ok_or_else(|| EnvOpsError::ParentPidUnavailable.into())
     }
 
-    pub fn prime_root_pid() -> Result<Principal, InternalError> {
-        Env::get_prime_root_pid().ok_or_else(|| EnvOpsError::PrimeRootPidUnavailable.into())
+    pub fn fleet_root_pid() -> Result<Principal, InternalError> {
+        Env::get_fleet_root_pid().ok_or_else(|| EnvOpsError::FleetRootPidUnavailable.into())
     }
 
     // ---------------------------------------------------------------------
@@ -267,11 +267,11 @@ impl EnvOps {
         if Env::get_subnet_pid().is_none() {
             missing.push("subnet_pid");
         }
-        if Env::get_prime_root_pid().is_none() {
-            missing.push("prime_root_pid");
+        if Env::get_fleet_root_pid().is_none() {
+            missing.push("fleet_root_pid");
         }
-        if Env::get_subnet_role().is_none() {
-            missing.push("subnet_role");
+        if Env::get_subnet_slot().is_none() {
+            missing.push("subnet_slot");
         }
         if Env::get_parent_pid().is_none() {
             missing.push("parent_pid");
@@ -305,11 +305,11 @@ impl EnvOps {
 fn required_fields_missing(data: &EnvRecord) -> Vec<&'static str> {
     let mut missing = Vec::new();
 
-    if data.prime_root_pid.is_none() {
-        missing.push("prime_root_pid");
+    if data.fleet_root_pid.is_none() {
+        missing.push("fleet_root_pid");
     }
-    if data.subnet_role.is_none() {
-        missing.push("subnet_role");
+    if data.subnet_slot.is_none() {
+        missing.push("subnet_slot");
     }
     if data.subnet_pid.is_none() {
         missing.push("subnet_pid");
@@ -364,8 +364,8 @@ mod tests {
     fn env_data(root_pid: Principal) -> EnvData {
         EnvData {
             record: EnvRecord {
-                prime_root_pid: Some(root_pid),
-                subnet_role: Some(SubnetSlotId::DEFAULT),
+                fleet_root_pid: Some(root_pid),
+                subnet_slot: Some(SubnetSlotId::DEFAULT),
                 subnet_pid: Some(root_pid),
                 root_pid: Some(root_pid),
                 canister_role: Some(CanisterRole::ROOT),

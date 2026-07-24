@@ -25,11 +25,11 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
             "caller_is_registered_to_subnet"
         }
         BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => "caller_is_whitelisted",
-        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsPrimeSubnet) => {
-            "self_is_prime_subnet"
+        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsDefaultSubnet) => {
+            "self_is_default_subnet"
         }
-        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsPrimeRoot) => {
-            "self_is_prime_root"
+        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetRoot) => {
+            "self_is_fleet_root"
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildIcOnly) => "build_ic_only",
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => "build_local_only",
@@ -44,7 +44,7 @@ pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
             AccessMetricKind::Auth
         }
         BuiltinPredicate::Environment(
-            EnvironmentPredicate::SelfIsPrimeSubnet | EnvironmentPredicate::SelfIsPrimeRoot,
+            EnvironmentPredicate::SelfIsDefaultSubnet | EnvironmentPredicate::SelfIsFleetRoot,
         ) => AccessMetricKind::Env,
         BuiltinPredicate::Environment(
             EnvironmentPredicate::BuildIcOnly | EnvironmentPredicate::BuildLocalOnly,
@@ -82,11 +82,11 @@ pub(super) async fn evaluate(
         BuiltinPredicate::Caller(CallerPredicate::IsWhitelisted) => {
             access::auth::is_whitelisted(ctx.caller).await
         }
-        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsPrimeSubnet) => {
-            access::env::is_prime_subnet()
+        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsDefaultSubnet) => {
+            access::env::is_default_subnet()
         }
-        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsPrimeRoot) => {
-            access::env::is_prime_root()
+        BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetRoot) => {
+            access::env::is_fleet_root()
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildIcOnly) => {
             access::env::build_network_ic()

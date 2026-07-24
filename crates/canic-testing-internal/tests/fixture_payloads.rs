@@ -37,8 +37,8 @@ fn invalid_init_args_encode_missing_env_fields() {
     assert_eq!(payload.fleet, identity.fleet);
     assert_eq!(payload.install_id, identity.install_id);
     assert_eq!(payload.release_build_id, identity.release_build_id);
-    assert!(payload.env.prime_root_pid.is_none());
-    assert!(payload.env.subnet_role.is_none());
+    assert!(payload.env.fleet_root_pid.is_none());
+    assert!(payload.env.subnet_slot.is_none());
     assert!(payload.env.subnet_pid.is_none());
     assert!(payload.env.root_pid.is_none());
     assert!(payload.env.canister_role.is_none());

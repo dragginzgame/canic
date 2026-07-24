@@ -107,7 +107,7 @@ fn configure_root_env(root_pid: Principal) -> EnvRestore {
     Env::import(EnvData {
         record: EnvRecord {
             root_pid: Some(root_pid),
-            subnet_role: Some(crate::ids::SubnetSlotId::DEFAULT),
+            subnet_slot: Some(crate::ids::SubnetSlotId::DEFAULT),
             ..EnvRecord::default()
         },
     });
@@ -729,7 +729,7 @@ fn authorize_request_cycles_uses_configured_child_funding_policy() {
         cooldown_secs: 60,
     };
     let _config = ConfigTestBuilder::new()
-        .with_prime_canister(child_role.clone(), child_cfg)
+        .with_default_canister(child_role.clone(), child_cfg)
         .install();
 
     SubnetRegistryOps::register_root(self_pid, 1);
@@ -785,7 +785,7 @@ fn authorize_request_cycles_rejects_a_competing_pending_child_operation() {
         cooldown_secs: 1,
     };
     let _config = ConfigTestBuilder::new()
-        .with_prime_canister(child_role.clone(), child_cfg)
+        .with_default_canister(child_role.clone(), child_cfg)
         .install();
 
     SubnetRegistryOps::register_root(self_pid, 1);

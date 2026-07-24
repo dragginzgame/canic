@@ -21,7 +21,7 @@ eager_static! {
 ///
 /// EnvRecord
 ///
-/// `prime_root_pid` : passed to the root during install arguments.
+/// `fleet_root_pid` : passed to the root during install arguments.
 /// `parent_pid`     : passed to the root during install arguments.
 ///
 /// All other fields are derived during install/upgrade and cached locally so
@@ -31,11 +31,11 @@ eager_static! {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct EnvRecord {
-    // app
-    pub prime_root_pid: Option<Principal>,
+    // fleet
+    pub fleet_root_pid: Option<Principal>,
 
     // subnet
-    pub subnet_role: Option<SubnetSlotId>,
+    pub subnet_slot: Option<SubnetSlotId>,
     pub subnet_pid: Option<Principal>,
     pub root_pid: Option<Principal>,
 
@@ -73,13 +73,13 @@ pub struct Env;
 
 impl Env {
     #[must_use]
-    pub(crate) fn get_prime_root_pid() -> Option<Principal> {
-        ENV.with_borrow(|cell| cell.get().prime_root_pid)
+    pub(crate) fn get_fleet_root_pid() -> Option<Principal> {
+        ENV.with_borrow(|cell| cell.get().fleet_root_pid)
     }
 
     #[must_use]
-    pub(crate) fn get_subnet_role() -> Option<SubnetSlotId> {
-        ENV.with_borrow(|cell| cell.get().subnet_role.clone())
+    pub(crate) fn get_subnet_slot() -> Option<SubnetSlotId> {
+        ENV.with_borrow(|cell| cell.get().subnet_slot.clone())
     }
 
     #[must_use]

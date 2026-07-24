@@ -128,8 +128,8 @@ macro_rules! __canic_start_local_lifecycle_core {
             let root_pid = __canic_local_principal(1);
             let subnet_pid = __canic_local_principal(2);
             ::canic::dto::env::EnvBootstrapArgs {
-                prime_root_pid: Some(root_pid),
-                subnet_role: Some($crate::__internal::core::ids::SubnetSlotId::DEFAULT),
+                fleet_root_pid: Some(root_pid),
+                subnet_slot: Some($crate::__internal::core::ids::SubnetSlotId::DEFAULT),
                 subnet_pid: Some(subnet_pid),
                 root_pid: Some(root_pid),
                 canister_role: Some(role),

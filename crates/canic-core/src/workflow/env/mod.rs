@@ -33,8 +33,8 @@ impl EnvWorkflow {
         })?;
 
         let input = EnvInput {
-            prime_root_pid: env_args.prime_root_pid,
-            subnet_role: env_args.subnet_role,
+            fleet_root_pid: env_args.fleet_root_pid,
+            subnet_slot: env_args.subnet_slot,
             subnet_pid: env_args.subnet_pid,
             root_pid: env_args.root_pid,
             canister_role: Some(role),

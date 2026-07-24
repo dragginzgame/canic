@@ -16,8 +16,8 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct ValidatedEnv {
-    pub prime_root_pid: Principal,
-    pub subnet_role: SubnetSlotId,
+    pub fleet_root_pid: Principal,
+    pub subnet_slot: SubnetSlotId,
     pub subnet_pid: Principal,
     pub root_pid: Principal,
     pub canister_role: CanisterRole,

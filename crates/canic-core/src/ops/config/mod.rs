@@ -66,23 +66,23 @@ impl ConfigOps {
     // Explicit / fallible lookups
     // ---------------------------------------------------------------------
 
-    /// Fetch a subnet configuration by role.
-    pub(crate) fn try_get_subnet(role: &SubnetSlotId) -> Result<SubnetConfig, InternalError> {
+    /// Fetch a Subnet configuration by logical slot.
+    pub(crate) fn try_get_subnet(slot: &SubnetSlotId) -> Result<SubnetConfig, InternalError> {
         let cfg = Config::get()?;
 
-        cfg.get_subnet(role)
-            .ok_or_else(|| ConfigOpsError::SubnetNotFound(role.to_string()).into())
+        cfg.get_subnet(slot)
+            .ok_or_else(|| ConfigOpsError::SubnetNotFound(slot.to_string()).into())
     }
 
     /// Fetch a canister configuration within a specific subnet.
     pub(crate) fn try_get_canister(
-        subnet_role: &SubnetSlotId,
+        subnet_slot: &SubnetSlotId,
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
-        let subnet_cfg = Self::try_get_subnet(subnet_role)?;
+        let subnet_cfg = Self::try_get_subnet(subnet_slot)?;
 
         subnet_cfg.get_canister(canister_role).ok_or_else(|| {
-            ConfigOpsError::CanisterNotFound(canister_role.to_string(), subnet_role.to_string())
+            ConfigOpsError::CanisterNotFound(canister_role.to_string(), subnet_slot.to_string())
                 .into()
         })
     }
@@ -131,17 +131,17 @@ impl ConfigOps {
     ///
     /// Requires that environment initialization has completed.
     pub fn current_subnet() -> Result<SubnetConfig, InternalError> {
-        let subnet_role = EnvOps::subnet_role()?;
+        let subnet_slot = EnvOps::subnet_slot()?;
 
-        Self::try_get_subnet(&subnet_role)
+        Self::try_get_subnet(&subnet_slot)
     }
 
     /// Fetch the configuration record for the *current* canister.
     pub(crate) fn current_canister() -> Result<CanisterConfig, InternalError> {
-        let subnet_role = EnvOps::subnet_role()?;
+        let subnet_slot = EnvOps::subnet_slot()?;
         let canister_role = EnvOps::canister_role()?;
 
-        Self::try_get_canister(&subnet_role, &canister_role)
+        Self::try_get_canister(&subnet_slot, &canister_role)
     }
 
     /// Fetch the scaling configuration for the *current* canister.
@@ -158,9 +158,9 @@ impl ConfigOps {
     pub(crate) fn current_subnet_canister(
         canister_role: &CanisterRole,
     ) -> Result<CanisterConfig, InternalError> {
-        let subnet_role = EnvOps::subnet_role()?;
+        let subnet_slot = EnvOps::subnet_slot()?;
 
-        Self::try_get_canister(&subnet_role, canister_role)
+        Self::try_get_canister(&subnet_slot, canister_role)
     }
 
     /// Resolve parent funding limits for a child role in the current subnet.

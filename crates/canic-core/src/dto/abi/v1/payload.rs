@@ -47,8 +47,8 @@ mod tests {
             install_id: [4; 32],
             release_build_id,
             env: EnvBootstrapArgs {
-                prime_root_pid: Some(principal),
-                subnet_role: Some(SubnetSlotId::DEFAULT),
+                fleet_root_pid: Some(principal),
+                subnet_slot: Some(SubnetSlotId::DEFAULT),
                 subnet_pid: Some(principal),
                 root_pid: Some(principal),
                 canister_role: Some(CanisterRole::new("app")),
