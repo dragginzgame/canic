@@ -35,8 +35,8 @@ pub enum AuthScopeArg {
 
 #[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
-    AppAllowsUpdates,
-    AppIsQueryable,
+    FleetAllowsUpdates,
+    FleetIsQueryable,
     SelfIsPrimeSubnet,
     SelfIsPrimeRoot,
     CallerIsController,
@@ -537,8 +537,8 @@ fn builtin_from_path_tail(path: &Path) -> Option<BuiltinPredicate> {
     let last = last.to_string();
 
     match (module.as_str(), last.as_str()) {
-        ("app", "allows_updates") => Some(BuiltinPredicate::AppAllowsUpdates),
-        ("app", "is_queryable") => Some(BuiltinPredicate::AppIsQueryable),
+        ("fleet", "allows_updates") => Some(BuiltinPredicate::FleetAllowsUpdates),
+        ("fleet", "is_queryable") => Some(BuiltinPredicate::FleetIsQueryable),
         ("env", "is_prime_subnet") => Some(BuiltinPredicate::SelfIsPrimeSubnet),
         ("env", "is_prime_root") => Some(BuiltinPredicate::SelfIsPrimeRoot),
         ("caller", "is_controller") => Some(BuiltinPredicate::CallerIsController),

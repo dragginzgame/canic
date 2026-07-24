@@ -95,8 +95,8 @@ mod tests {
     fn access_metrics_track_endpoint_kind_and_predicate() {
         AccessMetrics::reset();
 
-        AccessMetrics::increment("foo", AccessMetricKind::Guard, "app_allows_updates");
-        AccessMetrics::increment("foo", AccessMetricKind::Guard, "app_allows_updates");
+        AccessMetrics::increment("foo", AccessMetricKind::Guard, "fleet_allows_updates");
+        AccessMetrics::increment("foo", AccessMetricKind::Guard, "fleet_allows_updates");
         AccessMetrics::increment("foo", AccessMetricKind::Auth, "caller_is_root");
         AccessMetrics::increment("bar", AccessMetricKind::Rule, "build_ic_only");
 
@@ -106,7 +106,7 @@ mod tests {
             map.remove(&(
                 "foo".to_string(),
                 AccessMetricKind::Guard,
-                "app_allows_updates".to_string()
+                "fleet_allows_updates".to_string()
             )),
             Some(2)
         );

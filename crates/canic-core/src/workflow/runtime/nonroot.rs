@@ -21,7 +21,7 @@ use crate::{
         storage::{
             fleet_activation::FleetActivationOps,
             index::{app::AppIndexOps, subnet::SubnetIndexOps},
-            state::app::AppStateOps,
+            state::fleet::FleetStateOps,
         },
     },
     workflow::{
@@ -144,7 +144,7 @@ fn register_nonroot_payload(
             format!("app mode init failed: {err}"),
         )
     })?;
-    AppStateOps::init_mode(app_mode);
+    FleetStateOps::init_mode(app_mode);
     let canister_cfg = ConfigOps::current_canister()?;
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(canister_role, &canister_cfg)?;
     Ok(())

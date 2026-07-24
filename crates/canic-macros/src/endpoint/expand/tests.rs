@@ -53,7 +53,7 @@ fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
 }
 
 #[test]
-fn default_app_guard_keeps_sync_wrapper_sync() {
+fn default_fleet_guard_keeps_sync_wrapper_sync() {
     let sig: Signature = syn::parse_quote!(fn ping() -> Result<(), ::canic::Error>);
     let args = make_args(Vec::new());
     let plan = build_access_plan(EndpointKind::Update, &args, &sig).expect("access plan");
@@ -75,9 +75,9 @@ fn explicit_requires_forces_async_wrapper() {
 }
 
 #[test]
-fn app_command_endpoints_skip_app_guard_and_reject_gating() {
+fn fleet_command_endpoints_skip_fleet_guard_and_reject_gating() {
     let sig: Signature = syn::parse_quote!(
-        fn apply(cmd: ::canic::dto::state::AppCommand) -> Result<(), ::canic::Error>
+        fn apply(cmd: ::canic::dto::state::FleetCommand) -> Result<(), ::canic::Error>
     );
 
     let args = make_args(Vec::new());
@@ -85,12 +85,12 @@ fn app_command_endpoints_skip_app_guard_and_reject_gating() {
     std::assert_matches!(plan, AccessPlan::None);
 
     let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
-        BuiltinPredicate::AppAllowsUpdates,
+        BuiltinPredicate::FleetAllowsUpdates,
     ))]);
     let err = build_access_plan(EndpointKind::Update, &args, &sig).unwrap_err();
     assert!(
         err.to_string()
-            .contains("AppCommand endpoints must never be gated on application state.")
+            .contains("FleetCommand endpoints must never be gated on Fleet state.")
     );
 }
 

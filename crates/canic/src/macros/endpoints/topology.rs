@@ -4,15 +4,15 @@
 //! Does not own: topology state, placement policy, or authorization policy.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.
 
-/// Emit the root-only application-state snapshot endpoint.
+/// Emit the root-only Fleet-state snapshot endpoint.
 #[macro_export]
 macro_rules! canic_emit_topology_state_endpoints {
     () => {
         #[cfg(canic_is_root)]
         #[$crate::canic_query(requires(caller::is_controller()))]
-        async fn canic_app_state() -> Result<::canic::dto::state::AppStateResponse, ::canic::Error>
-        {
-            Ok($crate::__internal::core::api::state::AppStateQuery::snapshot())
+        async fn canic_fleet_state()
+        -> Result<::canic::dto::state::FleetStateResponse, ::canic::Error> {
+            Ok($crate::__internal::core::api::state::FleetStateQuery::snapshot())
         }
     };
 }

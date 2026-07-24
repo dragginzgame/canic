@@ -60,7 +60,7 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
 
     match plan {
         AccessPlan::None => quote!(),
-        AccessPlan::DefaultApp(guard) => {
+        AccessPlan::DefaultFleet(guard) => {
             let guard_expr = guard_tokens(*guard);
             quote! {
                 let #caller = ::canic::__internal::cdk::api::msg_caller();
@@ -70,7 +70,7 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
                     identity_source: ::canic::__internal::core::access::auth::AuthenticatedIdentitySource::RawCaller,
                     call: #call,
                 };
-                if let Err(err) = ::canic::__internal::core::access::expr::eval_default_app_guard(
+                if let Err(err) = ::canic::__internal::core::access::expr::eval_default_fleet_guard(
                     #guard_expr,
                     &#ctx,
                 ) {
@@ -100,11 +100,11 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
 }
 
 ///
-/// DefaultAppGuard
+/// DefaultFleetGuard
 ///
 
 #[derive(Clone, Copy, Debug)]
-pub(super) enum DefaultAppGuard {
+pub(super) enum DefaultFleetGuard {
     AllowsUpdates,
     IsQueryable,
 }
@@ -116,7 +116,7 @@ pub(super) enum DefaultAppGuard {
 #[derive(Debug)]
 pub(super) enum AccessPlan {
     None,
-    DefaultApp(DefaultAppGuard),
+    DefaultFleet(DefaultFleetGuard),
     Expr(TokenStream2),
 }
 
@@ -126,13 +126,13 @@ impl AccessPlan {
     }
 }
 
-fn guard_tokens(guard: DefaultAppGuard) -> TokenStream2 {
+fn guard_tokens(guard: DefaultFleetGuard) -> TokenStream2 {
     match guard {
-        DefaultAppGuard::AllowsUpdates => {
-            quote!(::canic::__internal::core::access::expr::DefaultAppGuard::AllowsUpdates)
+        DefaultFleetGuard::AllowsUpdates => {
+            quote!(::canic::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates)
         }
-        DefaultAppGuard::IsQueryable => {
-            quote!(::canic::__internal::core::access::expr::DefaultAppGuard::IsQueryable)
+        DefaultFleetGuard::IsQueryable => {
+            quote!(::canic::__internal::core::access::expr::DefaultFleetGuard::IsQueryable)
         }
     }
 }
@@ -142,33 +142,33 @@ pub(super) fn build_access_plan(
     args: &ValidatedArgs,
     sig: &Signature,
 ) -> syn::Result<AccessPlan> {
-    let is_app_command = is_app_command_endpoint(sig);
-    let is_internal = args.internal || is_app_command;
-    let has_app_state = exprs_have_app_state_predicate(&args.requires);
+    let is_fleet_command = is_fleet_command_endpoint(sig);
+    let is_internal = args.internal || is_fleet_command;
+    let has_fleet_state = exprs_have_fleet_state_predicate(&args.requires);
 
-    if is_internal && has_app_state {
-        let message = if is_app_command {
-            "AppCommand endpoints must never be gated on application state."
+    if is_internal && has_fleet_state {
+        let message = if is_fleet_command {
+            "FleetCommand endpoints must never be gated on Fleet state."
         } else {
-            "Internal protocol endpoints must never be gated on application state."
+            "Internal protocol endpoints must never be gated on Fleet state."
         };
         return Err(syn::Error::new_spanned(&sig.ident, message));
     }
 
     let mut exprs = args.requires.clone();
 
-    if !is_internal && !has_app_state {
+    if !is_internal && !has_fleet_state {
         if exprs.is_empty() {
             let default_guard = match kind {
-                EndpointKind::Update => DefaultAppGuard::AllowsUpdates,
-                EndpointKind::Query => DefaultAppGuard::IsQueryable,
+                EndpointKind::Update => DefaultFleetGuard::AllowsUpdates,
+                EndpointKind::Query => DefaultFleetGuard::IsQueryable,
             };
-            return Ok(AccessPlan::DefaultApp(default_guard));
+            return Ok(AccessPlan::DefaultFleet(default_guard));
         }
 
         let injected = match kind {
-            EndpointKind::Update => BuiltinPredicate::AppAllowsUpdates,
-            EndpointKind::Query => BuiltinPredicate::AppIsQueryable,
+            EndpointKind::Update => BuiltinPredicate::FleetAllowsUpdates,
+            EndpointKind::Query => BuiltinPredicate::FleetIsQueryable,
         };
         exprs.push(AccessExprAst::Pred(AccessPredicateAst::Builtin(injected)));
     }
@@ -213,11 +213,11 @@ fn expr_from_ast(expr: &AccessExprAst) -> TokenStream2 {
 
 fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
     match pred {
-        BuiltinPredicate::AppAllowsUpdates => {
-            quote!(::canic::__internal::core::access::expr::app::allows_updates())
+        BuiltinPredicate::FleetAllowsUpdates => {
+            quote!(::canic::__internal::core::access::expr::fleet::allows_updates())
         }
-        BuiltinPredicate::AppIsQueryable => {
-            quote!(::canic::__internal::core::access::expr::app::is_queryable())
+        BuiltinPredicate::FleetIsQueryable => {
+            quote!(::canic::__internal::core::access::expr::fleet::is_queryable())
         }
         BuiltinPredicate::SelfIsPrimeSubnet => {
             quote!(::canic::__internal::core::access::expr::env::is_prime_subnet())
@@ -272,8 +272,8 @@ fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
     }
 }
 
-fn exprs_have_app_state_predicate(exprs: &[AccessExprAst]) -> bool {
-    exprs.iter().any(expr_has_app_state_predicate)
+fn exprs_have_fleet_state_predicate(exprs: &[AccessExprAst]) -> bool {
+    exprs.iter().any(expr_has_fleet_state_predicate)
 }
 
 pub(super) fn requires_authenticated(exprs: &[AccessExprAst]) -> bool {
@@ -295,46 +295,46 @@ fn expr_has_authenticated_predicate(expr: &AccessExprAst) -> bool {
     }
 }
 
-fn expr_has_app_state_predicate(expr: &AccessExprAst) -> bool {
+fn expr_has_fleet_state_predicate(expr: &AccessExprAst) -> bool {
     match expr {
         AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
-            exprs.iter().any(expr_has_app_state_predicate)
+            exprs.iter().any(expr_has_fleet_state_predicate)
         }
-        AccessExprAst::Not(expr) => expr_has_app_state_predicate(expr),
+        AccessExprAst::Not(expr) => expr_has_fleet_state_predicate(expr),
         AccessExprAst::Pred(pred) => match pred {
-            AccessPredicateAst::Builtin(builtin) => builtin_is_app_state(builtin),
-            AccessPredicateAst::Custom(tokens) => custom_has_app_state_is(tokens),
+            AccessPredicateAst::Builtin(builtin) => builtin_is_fleet_state(builtin),
+            AccessPredicateAst::Custom(tokens) => custom_has_fleet_state_is(tokens),
         },
     }
 }
 
-const fn builtin_is_app_state(pred: &BuiltinPredicate) -> bool {
+const fn builtin_is_fleet_state(pred: &BuiltinPredicate) -> bool {
     matches!(
         pred,
-        BuiltinPredicate::AppAllowsUpdates | BuiltinPredicate::AppIsQueryable
+        BuiltinPredicate::FleetAllowsUpdates | BuiltinPredicate::FleetIsQueryable
     )
 }
 
-fn custom_has_app_state_is(tokens: &TokenStream2) -> bool {
+fn custom_has_fleet_state_is(tokens: &TokenStream2) -> bool {
     let Ok(expr) = syn::parse2::<syn::Expr>(tokens.clone()) else {
         return false;
     };
-    let mut visitor = AppStateVisitor { found: false };
+    let mut visitor = FleetStateVisitor { found: false };
     visitor.visit_expr(&expr);
     visitor.found
 }
 
 ///
-/// AppStateVisitor
+/// FleetStateVisitor
 ///
 
-struct AppStateVisitor {
+struct FleetStateVisitor {
     found: bool,
 }
 
-impl Visit<'_> for AppStateVisitor {
+impl Visit<'_> for FleetStateVisitor {
     fn visit_path(&mut self, path: &syn::Path) {
-        if path.segments.iter().any(|seg| seg.ident == "AppStateIs") {
+        if path.segments.iter().any(|seg| seg.ident == "FleetStateIs") {
             self.found = true;
             return;
         }
@@ -342,33 +342,33 @@ impl Visit<'_> for AppStateVisitor {
     }
 }
 
-fn is_app_command_endpoint(sig: &Signature) -> bool {
+fn is_fleet_command_endpoint(sig: &Signature) -> bool {
     sig.inputs.iter().any(|input| match input {
-        syn::FnArg::Typed(pat) => type_has_app_command(&pat.ty),
+        syn::FnArg::Typed(pat) => type_has_fleet_command(&pat.ty),
         syn::FnArg::Receiver(_) => true,
     })
 }
 
-fn type_has_app_command(ty: &Type) -> bool {
+fn type_has_fleet_command(ty: &Type) -> bool {
     match ty {
-        Type::Path(path) => path_has_app_command(&path.path),
-        Type::Reference(reference) => type_has_app_command(&reference.elem),
-        Type::Group(group) => type_has_app_command(&group.elem),
-        Type::Paren(paren) => type_has_app_command(&paren.elem),
-        Type::Tuple(tuple) => tuple.elems.iter().any(type_has_app_command),
+        Type::Path(path) => path_has_fleet_command(&path.path),
+        Type::Reference(reference) => type_has_fleet_command(&reference.elem),
+        Type::Group(group) => type_has_fleet_command(&group.elem),
+        Type::Paren(paren) => type_has_fleet_command(&paren.elem),
+        Type::Tuple(tuple) => tuple.elems.iter().any(type_has_fleet_command),
         _ => false,
     }
 }
 
-fn path_has_app_command(path: &syn::Path) -> bool {
+fn path_has_fleet_command(path: &syn::Path) -> bool {
     path.segments.iter().any(|seg| {
-        if seg.ident == "AppCommand" {
+        if seg.ident == "FleetCommand" {
             return true;
         }
 
         match &seg.arguments {
             PathArguments::AngleBracketed(args) => args.args.iter().any(|arg| match arg {
-                GenericArgument::Type(ty) => type_has_app_command(ty),
+                GenericArgument::Type(ty) => type_has_fleet_command(ty),
                 _ => false,
             }),
             _ => false,

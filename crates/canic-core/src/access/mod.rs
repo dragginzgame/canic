@@ -4,11 +4,11 @@
 //! Does not own: endpoint response mapping, workflow authorization, or runtime metrics storage.
 //! Boundary: endpoint macros call access predicates before delegating to workflow.
 
-pub mod app;
 pub mod auth;
 pub mod env;
 #[doc(hidden)]
 pub mod expr;
+pub mod fleet;
 pub mod metrics;
 
 use thiserror::Error as ThisError;

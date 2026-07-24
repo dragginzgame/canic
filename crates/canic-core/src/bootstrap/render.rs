@@ -7,9 +7,9 @@
 use crate::{
     cdk::candid::Principal,
     config::schema::{
-        AppConfig, AppInitMode, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig,
-        CanisterConfig, CanisterKind, CanisterPool, ChainKeyRootProofConfig, ConfigModel,
-        CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig,
+        AppConfig, AuthConfig, BindingConfig, BindingPool, CanisterAuthConfig, CanisterConfig,
+        CanisterKind, CanisterPool, ChainKeyRootProofConfig, ConfigModel,
+        CyclesFundingPolicyConfig, DelegatedTokenConfig, DiagnosticsCanisterConfig, FleetInitMode,
         FleetServicesConfig, IcpRefillPolicy, LogConfig, MetricsCanisterConfig, MetricsProfile,
         PoolImport, RoleAttestationConfig, RoleDeclaration, RoleDeclarationKind, ScalePool,
         ScalePoolPolicy, ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig,
@@ -364,7 +364,7 @@ fn render_role_attestation_config(config: &RoleAttestationConfig) -> TokenStream
 // Render the app-level configuration subtree.
 fn render_app_config(config: &AppConfig) -> TokenStream {
     let name = render_app_id(&config.name);
-    let init_mode = render_app_init_mode(config.init_mode);
+    let init_mode = render_fleet_init_mode(config.init_mode);
     let whitelist = render_option(config.whitelist.as_ref(), render_whitelist);
 
     quote! {
@@ -383,16 +383,16 @@ fn render_app_id(app: &AppId) -> TokenStream {
 }
 
 // Render the initial app mode enum.
-fn render_app_init_mode(mode: AppInitMode) -> TokenStream {
+fn render_fleet_init_mode(mode: FleetInitMode) -> TokenStream {
     match mode {
-        AppInitMode::Enabled => {
-            quote!(::canic::__internal::core::bootstrap::compiled::AppInitMode::Enabled)
+        FleetInitMode::Enabled => {
+            quote!(::canic::__internal::core::bootstrap::compiled::FleetInitMode::Enabled)
         }
-        AppInitMode::Readonly => {
-            quote!(::canic::__internal::core::bootstrap::compiled::AppInitMode::Readonly)
+        FleetInitMode::Readonly => {
+            quote!(::canic::__internal::core::bootstrap::compiled::FleetInitMode::Readonly)
         }
-        AppInitMode::Disabled => {
-            quote!(::canic::__internal::core::bootstrap::compiled::AppInitMode::Disabled)
+        FleetInitMode::Disabled => {
+            quote!(::canic::__internal::core::bootstrap::compiled::FleetInitMode::Disabled)
         }
     }
 }

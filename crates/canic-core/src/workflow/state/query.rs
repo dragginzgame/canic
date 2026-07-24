@@ -1,20 +1,20 @@
 //! Module: workflow::state::query
 //!
-//! Responsibility: expose the read-only app-state workflow snapshot.
+//! Responsibility: expose the read-only Fleet-state workflow snapshot.
 //! Does not own: state storage mutation, endpoint authorization, or DTO schemas.
 //! Boundary: workflow query facade over state storage ops.
 
-use crate::{dto::state::AppStateResponse, ops::storage::state::app::AppStateOps};
+use crate::{dto::state::FleetStateResponse, ops::storage::state::fleet::FleetStateOps};
 
 ///
-/// AppStateQuery
+/// FleetStateQuery
 ///
 
-pub struct AppStateQuery;
+pub struct FleetStateQuery;
 
-impl AppStateQuery {
+impl FleetStateQuery {
     #[must_use]
-    pub fn snapshot() -> AppStateResponse {
-        AppStateOps::snapshot_response()
+    pub fn snapshot() -> FleetStateResponse {
+        FleetStateOps::snapshot_response()
     }
 }

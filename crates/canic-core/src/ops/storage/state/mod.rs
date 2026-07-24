@@ -4,5 +4,5 @@
 //! Does not own: stable state schemas, workflow orchestration, or endpoint DTOs.
 //! Boundary: storage ops between state workflows and stable state records.
 
-pub mod app;
+pub mod fleet;
 pub mod mapper;

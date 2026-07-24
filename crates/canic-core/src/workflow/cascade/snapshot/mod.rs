@@ -14,13 +14,13 @@ use crate::{
     cdk::types::Principal,
     dto::{
         cascade::StateSnapshotInput,
-        state::AppStateInput,
+        state::FleetStateInput,
         topology::{FleetDirectoryInput, SubnetDirectoryInput},
     },
     ids::CanisterRole,
     ops::{
         runtime::env::EnvOps,
-        storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
+        storage::{registry::subnet::SubnetRegistryOps, state::fleet::FleetStateOps},
         topology::index::{AppIndexResolver, SubnetIndexResolver},
     },
 };
@@ -33,9 +33,9 @@ use std::collections::HashMap;
 
 #[derive(Default)]
 pub struct StateSnapshot {
-    pub app_state: Option<AppStateInput>,
-    pub app_index: Option<FleetDirectoryInput>,
-    pub subnet_index: Option<SubnetDirectoryInput>,
+    pub fleet_state: Option<FleetStateInput>,
+    pub fleet_directory: Option<FleetDirectoryInput>,
+    pub subnet_directory: Option<SubnetDirectoryInput>,
 }
 
 ///
@@ -60,18 +60,18 @@ impl StateSnapshotBuilder {
     }
 
     #[must_use]
-    pub fn with_app_state(mut self) -> Self {
-        self.snapshot.app_state = Some(AppStateOps::snapshot_input());
+    pub fn with_fleet_state(mut self) -> Self {
+        self.snapshot.fleet_state = Some(FleetStateOps::snapshot_input());
         self
     }
 
-    pub fn with_app_index(mut self) -> Result<Self, InternalError> {
-        self.snapshot.app_index = Some(AppIndexResolver::resolve_input()?);
+    pub fn with_fleet_directory(mut self) -> Result<Self, InternalError> {
+        self.snapshot.fleet_directory = Some(AppIndexResolver::resolve_input()?);
         Ok(self)
     }
 
-    pub fn with_subnet_index(mut self) -> Result<Self, InternalError> {
-        self.snapshot.subnet_index = Some(SubnetIndexResolver::resolve_input()?);
+    pub fn with_subnet_directory(mut self) -> Result<Self, InternalError> {
+        self.snapshot.subnet_directory = Some(SubnetIndexResolver::resolve_input()?);
         Ok(self)
     }
 
@@ -84,9 +84,9 @@ impl StateSnapshotBuilder {
 impl From<StateSnapshotInput> for StateSnapshot {
     fn from(snapshot: StateSnapshotInput) -> Self {
         Self {
-            app_state: snapshot.app_state,
-            app_index: snapshot.app_index,
-            subnet_index: snapshot.subnet_index,
+            fleet_state: snapshot.fleet_state,
+            fleet_directory: snapshot.fleet_directory,
+            subnet_directory: snapshot.subnet_directory,
         }
     }
 }
@@ -184,7 +184,9 @@ impl TopologySnapshotBuilder {
 
 #[must_use]
 pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
-    snapshot.app_state.is_none() && snapshot.app_index.is_none() && snapshot.subnet_index.is_none()
+    snapshot.fleet_state.is_none()
+        && snapshot.fleet_directory.is_none()
+        && snapshot.subnet_directory.is_none()
 }
 
 #[must_use]
@@ -195,28 +197,28 @@ pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
 
     format!(
         "[{} {} {}]",
-        fmt(snapshot.app_state.is_some(), "as"),
-        fmt(snapshot.app_index.is_some(), "ai"),
-        fmt(snapshot.subnet_index.is_some(), "si"),
+        fmt(snapshot.fleet_state.is_some(), "fs"),
+        fmt(snapshot.fleet_directory.is_some(), "fd"),
+        fmt(snapshot.subnet_directory.is_some(), "sd"),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::StateSnapshot;
-    use crate::dto::state::{AppMode, AppStateInput};
+    use crate::dto::state::{FleetMode, FleetStateInput};
 
     #[test]
     fn state_snapshot_debug_reports_current_slots() {
         let snapshot = StateSnapshot {
-            app_state: Some(AppStateInput {
-                mode: AppMode::Enabled,
+            fleet_state: Some(FleetStateInput {
+                mode: FleetMode::Enabled,
                 cycles_funding_enabled: true,
             }),
-            app_index: None,
-            subnet_index: None,
+            fleet_directory: None,
+            subnet_directory: None,
         };
 
-        assert_eq!(super::state_snapshot_debug(&snapshot), "[as .. ..]");
+        assert_eq!(super::state_snapshot_debug(&snapshot), "[fs .. ..]");
     }
 }

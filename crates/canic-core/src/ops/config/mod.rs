@@ -9,14 +9,14 @@ use crate::{
     config::{
         Config, ConfigError, ConfigModel,
         schema::{
-            AppInitMode, BindingConfig, CanisterConfig, DelegatedTokenConfig, LogConfig,
+            BindingConfig, CanisterConfig, DelegatedTokenConfig, FleetInitMode, LogConfig,
             RoleAttestationConfig, ScalingConfig, SubnetConfig,
         },
     },
     ids::{CanisterRole, SubnetSlotId},
     model::cycles_funding::FundingLimits,
     ops::{OpsError, prelude::*, runtime::env::EnvOps},
-    storage::stable::state::app::AppMode,
+    storage::stable::state::fleet::FleetMode,
 };
 use std::sync::Arc;
 use thiserror::Error as ThisError;
@@ -117,11 +117,11 @@ impl ConfigOps {
         Ok(Config::get()?.auth.role_attestation.clone())
     }
 
-    pub(crate) fn app_init_mode() -> Result<AppMode, InternalError> {
+    pub(crate) fn app_init_mode() -> Result<FleetMode, InternalError> {
         let mode = match Config::get()?.app.init_mode {
-            AppInitMode::Enabled => AppMode::Enabled,
-            AppInitMode::Readonly => AppMode::Readonly,
-            AppInitMode::Disabled => AppMode::Disabled,
+            FleetInitMode::Enabled => FleetMode::Enabled,
+            FleetInitMode::Readonly => FleetMode::Readonly,
+            FleetInitMode::Disabled => FleetMode::Disabled,
         };
 
         Ok(mode)

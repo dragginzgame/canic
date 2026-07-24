@@ -31,6 +31,7 @@ use canic::{
         RootIssuerRenewalTemplateView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
+    dto::cascade::StateSnapshotInput,
     dto::cycles::Cycles,
     dto::fleet_activation::FleetActivationStatusResponse,
     dto::icp_refill::{IcpRefillDryRun, IcpRefillRequest},
@@ -44,6 +45,7 @@ use canic::{
         CanicHealthStatus, CanicReadinessStatus, CanicRuntimeStatus, RecentFailure,
         RuntimeFieldVisibility,
     },
+    dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
     ids::CanisterRole,
 };
 
@@ -76,6 +78,30 @@ fn candid_type_env<T: candid::CandidType>() -> String {
     let mut types = TypeContainer::new();
     types.add::<T>();
     types.env.to_string()
+}
+
+#[test]
+fn fleet_state_and_cascade_candid_shapes_use_the_current_contract() {
+    assert_eq!(canic::protocol::CANIC_FLEET_ADMIN, "canic_fleet_admin");
+    assert_eq!(canic::protocol::CANIC_FLEET_STATE, "canic_fleet_state");
+
+    let command_env = candid_type_env::<FleetCommand>();
+    assert!(command_env.contains("FleetCommand"));
+    let response_env = candid_type_env::<FleetCommandResponse>();
+    assert!(response_env.contains("FleetCommandResponse"));
+    let state_env = candid_type_env::<FleetStateResponse>();
+    assert!(state_env.contains("FleetStateResponse"));
+    assert!(state_env.contains("FleetMode"));
+
+    let cascade_env = candid_type_env::<StateSnapshotInput>();
+    for field in ["fleet_state", "fleet_directory", "subnet_directory"] {
+        assert!(
+            cascade_env.contains(field),
+            "state cascade Candid must contain {field}"
+        );
+    }
+
+    assert_candid_roundtrip(FleetMode::Readonly);
 }
 
 #[test]

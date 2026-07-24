@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.13`.
-- The latest published release is `v0.99.13` at
-  `fa8bbb767b99da1c968d33bab010e3772129abfc`.
-- The `v0.99.13` source tree is
-  `3442808d00dfd7390f65885175d9d9b607483c8a`. Its Cargo.lock SHA-256 is
-  `ee74ee57f3df1676bedc9af66966aa3f9260ac3eda672e12681a5d1daa2690e1`.
+- The workspace package version is `0.99.14`.
+- The latest published release is `v0.99.14` at
+  `13bf60ef6f2be19fa567e50561d655fcc9424635`.
+- The `v0.99.14` source tree is
+  `1bcfd251930269db639b605784ddfc9516ea51f5`. Its Cargo.lock SHA-256 is
+  `bf768dc42fbe4a40e2d7c41422943c176fb9549105be03bc4305ac76aa2bcea8`.
+- Released `0.99.14` gives every managed non-root one exact Fleet-bound
+  `Prepared` init path and keeps runtime work stopped behind its endpoint
+  fence.
 - Released `0.99.13` makes the root's `Prepared` endpoint fence canonical
   before access evaluation and rejects raw CDK endpoint bypasses in managed
   packages.
@@ -1225,16 +1228,26 @@ Every managed macro endpoint preflights ID 21 before access evaluation; a
 while absent or invalid protected root state fails closed. A structural gate
 rejects raw query/update bypasses in managed packages.
 
-The open `0.99.14` batch applies that authority to fresh managed non-roots.
+Released `0.99.14` applies that authority to fresh managed non-roots.
 Their hard-cut init payload carries exact Fleet, install and release-build
 identity, initializes the same ID-21 `Prepared` record and admits only its
 role-specific activation-status inspection. Init and Prepared restart do not
 schedule runtime services, bootstrap, timers or application hooks.
 `start_local!` now uses an explicit standalone-local lifecycle rather than a
 fabricated Fleet payload, and standalone PocketIC probes retain their prior
-runtime behavior. Current cascade/credential preparation, final activation
-and the provenance-bearing Directory topology hard cut remain the next
-bounded work.
+runtime behavior.
+
+The open `0.99.15` batch hard-cuts the live state owner from App to Fleet.
+`FleetMode`, `FleetStatus`, `FleetCommand`, `FleetState`, the
+`fleet::allows_updates`/`fleet::is_queryable` access predicates,
+`canic_fleet_admin`, `canic_fleet_state` and the
+`StateSnapshotInput.fleet_state` label are the sole current surfaces. The
+state cascade's other two fields are now `fleet_directory` and
+`subnet_directory`; no old endpoint, DTO, storage module, access predicate or
+field-label alias remains. Stable allocation 18 retains its number but uses
+the reinstall-only Fleet-state contract. Provenance-bearing Directory
+envelopes, current cascade activation evidence, credentials and final
+activation remain the next bounded work.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

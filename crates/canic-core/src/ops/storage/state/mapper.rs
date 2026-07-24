@@ -1,13 +1,13 @@
 //! Module: ops::storage::state::mapper
 //!
-//! Responsibility: convert app-state records to boundary inputs and views.
+//! Responsibility: convert Fleet-state records to boundary inputs and views.
 //! Does not own: stable state mutation, workflow orchestration, or DTO definitions.
 //! Boundary: storage ops conversion layer for state records.
 
 use crate::{
-    dto::state::{AppCommand, AppStateInput, AppStateResponse},
-    ops::storage::state::app::AppStateCommand,
-    storage::stable::state::app::AppStateRecord,
+    dto::state::{FleetCommand, FleetStateInput, FleetStateResponse},
+    ops::storage::state::fleet::FleetStateCommand,
+    storage::stable::state::fleet::FleetStateRecord,
 };
 
 // -----------------------------------------------------------------------------
@@ -15,37 +15,37 @@ use crate::{
 // -----------------------------------------------------------------------------
 
 ///
-/// AppStateMapper
+/// FleetStateMapper
 ///
-/// Storage-ops mapper for app-state records and boundary state shapes.
+/// Storage-ops mapper for Fleet-state records and boundary state shapes.
 ///
 
-pub struct AppStateMapper;
+pub struct FleetStateMapper;
 
-impl AppStateMapper {
-    // Map a stored app-state snapshot into the DTO input shape.
+impl FleetStateMapper {
+    // Map a stored Fleet-state snapshot into the DTO input shape.
     #[must_use]
-    pub const fn record_to_input(data: AppStateRecord) -> AppStateInput {
-        AppStateInput {
+    pub const fn record_to_input(data: FleetStateRecord) -> FleetStateInput {
+        FleetStateInput {
             mode: data.mode,
             cycles_funding_enabled: data.cycles_funding_enabled,
         }
     }
 
-    // Map a stored app-state snapshot into the public response shape.
+    // Map a stored Fleet-state snapshot into the public response shape.
     #[must_use]
-    pub const fn record_to_response(data: AppStateRecord) -> AppStateResponse {
-        AppStateResponse {
+    pub const fn record_to_response(data: FleetStateRecord) -> FleetStateResponse {
+        FleetStateResponse {
             mode: data.mode,
             cycles_funding_enabled: data.cycles_funding_enabled,
         }
     }
 
-    // Map a DTO input snapshot back into the stored app-state record.
+    // Map a DTO input snapshot back into the stored Fleet-state record.
     #[must_use]
-    pub const fn input_to_record(view: AppStateInput) -> AppStateRecord {
+    pub const fn input_to_record(view: FleetStateInput) -> FleetStateRecord {
         // Keep DTO-to-record conversion in ops so workflow never mutates storage records.
-        AppStateRecord {
+        FleetStateRecord {
             mode: view.mode,
             cycles_funding_enabled: view.cycles_funding_enabled,
         }
@@ -53,20 +53,20 @@ impl AppStateMapper {
 }
 
 ///
-/// AppStateCommandMapper
+/// FleetStateCommandMapper
 ///
-/// Storage-ops mapper for app-state commands.
+/// Storage-ops mapper for Fleet-state commands.
 ///
 
-pub struct AppStateCommandMapper;
+pub struct FleetStateCommandMapper;
 
-impl AppStateCommandMapper {
+impl FleetStateCommandMapper {
     #[must_use]
-    pub const fn dto_to_record(cmd: AppCommand) -> AppStateCommand {
+    pub const fn dto_to_record(cmd: FleetCommand) -> FleetStateCommand {
         match cmd {
-            AppCommand::SetStatus(status) => AppStateCommand::SetStatus(status),
-            AppCommand::SetCyclesFundingEnabled(enabled) => {
-                AppStateCommand::SetCyclesFundingEnabled(enabled)
+            FleetCommand::SetStatus(status) => FleetStateCommand::SetStatus(status),
+            FleetCommand::SetCyclesFundingEnabled(enabled) => {
+                FleetStateCommand::SetCyclesFundingEnabled(enabled)
             }
         }
     }

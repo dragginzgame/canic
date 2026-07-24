@@ -29,13 +29,13 @@ use crate::{
         },
         storage::{
             intent::IntentStoreOps, registry::subnet::SubnetRegistryOps, replay::ReplayReceiptOps,
-            state::app::AppStateOps,
+            state::fleet::FleetStateOps,
         },
     },
     replay_policy::CostClass,
     storage::stable::env::{Env, EnvData, EnvRecord},
     storage::stable::replay::ReplayReceiptRecord,
-    storage::stable::state::app::{AppMode, AppStateData, AppStateRecord},
+    storage::stable::state::fleet::{FleetMode, FleetStateData, FleetStateRecord},
     test::config::ConfigTestBuilder,
 };
 use candid::encode_one;
@@ -651,9 +651,9 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
     SubnetRegistryOps::register_unchecked(child, &CanisterRole::new("test"), self_pid, vec![], 2)
         .expect("register child");
 
-    AppStateOps::import(AppStateData {
-        record: AppStateRecord {
-            mode: AppMode::Enabled,
+    FleetStateOps::import(FleetStateData {
+        record: FleetStateRecord {
+            mode: FleetMode::Enabled,
             cycles_funding_enabled: false,
         },
     });
@@ -704,9 +704,9 @@ fn authorize_request_cycles_records_kill_switch_denial_metrics() {
         Some(&33)
     );
 
-    AppStateOps::import(AppStateData {
-        record: AppStateRecord {
-            mode: AppMode::Enabled,
+    FleetStateOps::import(FleetStateData {
+        record: FleetStateRecord {
+            mode: FleetMode::Enabled,
             cycles_funding_enabled: true,
         },
     });
@@ -736,9 +736,9 @@ fn authorize_request_cycles_uses_configured_child_funding_policy() {
     SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
         .expect("register child");
 
-    AppStateOps::import(AppStateData {
-        record: AppStateRecord {
-            mode: AppMode::Enabled,
+    FleetStateOps::import(FleetStateData {
+        record: FleetStateRecord {
+            mode: FleetMode::Enabled,
             cycles_funding_enabled: true,
         },
     });
@@ -791,9 +791,9 @@ fn authorize_request_cycles_rejects_a_competing_pending_child_operation() {
     SubnetRegistryOps::register_root(self_pid, 1);
     SubnetRegistryOps::register_unchecked(child, &child_role, self_pid, vec![], 2)
         .expect("register child");
-    AppStateOps::import(AppStateData {
-        record: AppStateRecord {
-            mode: AppMode::Enabled,
+    FleetStateOps::import(FleetStateData {
+        record: FleetStateRecord {
+            mode: FleetMode::Enabled,
             cycles_funding_enabled: true,
         },
     });

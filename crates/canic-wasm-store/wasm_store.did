@@ -1,5 +1,5 @@
-type AppMode = variant { Enabled; Disabled; Readonly };
-type AppStateInput = record { mode : AppMode; cycles_funding_enabled : bool };
+type FleetMode = variant { Enabled; Disabled; Readonly };
+type FleetStateInput = record { mode : FleetMode; cycles_funding_enabled : bool };
 type BootstrapStatusResponse = record {
   last_error : opt text;
   phase : text;
@@ -157,9 +157,9 @@ type Result_8 = variant { Ok : WasmStoreStatusResponse; Err : Error };
 type Result_9 = variant { Ok : FleetActivationStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
 type StateSnapshotInput = record {
-  app_state : opt AppStateInput;
-  subnet_index : opt vec IndexEntryInput;
-  app_index : opt vec IndexEntryInput;
+  fleet_state : opt FleetStateInput;
+  fleet_directory : opt vec IndexEntryInput;
+  subnet_directory : opt vec IndexEntryInput;
 };
 type TemplateChunkInput = record {
   chunk_index : nat32;

@@ -103,7 +103,7 @@ fi
 
 if find crates/canic-core/src/access -name '*.rs' -print0 \
     | xargs -0 awk 'FNR == 1 { in_test = 0 } /^#\[cfg\(test\)\]/ { in_test = 1 } !in_test { print FILENAME ":" FNR ":" $0 }' \
-    | rg "stable::|storage::.*Record|AppMode|EnvRecord|AppStateRecord"; then
+    | rg "stable::|storage::.*Record|FleetMode|EnvRecord|FleetStateRecord"; then
     echo "access must use ops boundaries, not storage records or stable types" >&2
     failed=1
 fi

@@ -16,7 +16,7 @@ use canic::{
             RuntimeStateDomainStatus, RuntimeStatus, TimerProcessCondition,
             TimerRegistrationStatus,
         },
-        state::AppStateResponse,
+        state::FleetStateResponse,
     },
     ids::{CanisterRole, SubnetSlotId},
     protocol,
@@ -186,31 +186,35 @@ pub fn assert_children_match_registry(pic: &Pic, root_id: Principal) {
     );
 }
 
-/// Assert that root serves application state and ordinary children do not export it.
+/// Assert that root serves Fleet state and ordinary children do not export it.
 ///
 /// # Panics
 ///
 /// Panics if the root state query fails, if a non-controller root query is
 /// accepted, or if an ordinary child exposes the root-only endpoint.
-pub fn assert_app_state_endpoint_is_root_only(pic: &Pic, root_id: Principal, child_pid: Principal) {
-    let app_state: Result<AppStateResponse, canic::Error> =
-        pic.query_call_or_panic(root_id, protocol::CANIC_APP_STATE, ());
-    app_state.expect("root app state application");
+pub fn assert_fleet_state_endpoint_is_root_only(
+    pic: &Pic,
+    root_id: Principal,
+    child_pid: Principal,
+) {
+    let fleet_state: Result<FleetStateResponse, canic::Error> =
+        pic.query_call_or_panic(root_id, protocol::CANIC_FLEET_STATE, ());
+    fleet_state.expect("root Fleet state query");
 
     let non_controller = Principal::from_slice(&[251; 29]);
-    let denied_app_state: Result<AppStateResponse, canic::Error> =
-        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_APP_STATE, ());
-    let Err(denied_app_state) = denied_app_state else {
-        panic!("non-controller app state query must be denied")
+    let denied_fleet_state: Result<FleetStateResponse, canic::Error> =
+        pic.query_call_as_or_panic(root_id, non_controller, protocol::CANIC_FLEET_STATE, ());
+    let Err(denied_fleet_state) = denied_fleet_state else {
+        panic!("non-controller Fleet state query must be denied")
     };
-    assert_eq!(denied_app_state.code, ErrorCode::Unauthorized);
+    assert_eq!(denied_fleet_state.code, ErrorCode::Unauthorized);
 
-    let child_app_state: Result<Result<AppStateResponse, canic::Error>, _> =
-        pic.query_call(child_pid, protocol::CANIC_APP_STATE, ());
-    let Err(err) = child_app_state else {
-        panic!("child app state endpoint should be absent")
+    let child_fleet_state: Result<Result<FleetStateResponse, canic::Error>, _> =
+        pic.query_call(child_pid, protocol::CANIC_FLEET_STATE, ());
+    let Err(err) = child_fleet_state else {
+        panic!("child Fleet state endpoint should be absent")
     };
-    assert_missing_method(&err, protocol::CANIC_APP_STATE);
+    assert_missing_method(&err, protocol::CANIC_FLEET_STATE);
 }
 
 /// Assert default root diagnostic endpoint exposure and controller gating.

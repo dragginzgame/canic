@@ -4,7 +4,9 @@
 //! Does not own: expression tree construction, custom predicates, or metrics storage.
 //! Boundary: `access::expr` calls this while interpreting builtin predicate leaves.
 
-use super::{AccessContext, AppPredicate, BuiltinPredicate, CallerPredicate, EnvironmentPredicate};
+use super::{
+    AccessContext, BuiltinPredicate, CallerPredicate, EnvironmentPredicate, FleetPredicate,
+};
 use crate::{
     access::{self, AccessError, metrics::DelegatedAuthMetrics},
     ids::AccessMetricKind,
@@ -12,8 +14,8 @@ use crate::{
 
 pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
     match pred {
-        BuiltinPredicate::App(AppPredicate::AllowsUpdates) => "app_allows_updates",
-        BuiltinPredicate::App(AppPredicate::IsQueryable) => "app_is_queryable",
+        BuiltinPredicate::Fleet(FleetPredicate::AllowsUpdates) => "fleet_allows_updates",
+        BuiltinPredicate::Fleet(FleetPredicate::IsQueryable) => "fleet_is_queryable",
         BuiltinPredicate::Caller(CallerPredicate::IsController) => "caller_is_controller",
         BuiltinPredicate::Caller(CallerPredicate::IsParent) => "caller_is_parent",
         BuiltinPredicate::Caller(CallerPredicate::IsChild) => "caller_is_child",
@@ -37,7 +39,7 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
 
 pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
     match pred {
-        BuiltinPredicate::App(_) => AccessMetricKind::Guard,
+        BuiltinPredicate::Fleet(_) => AccessMetricKind::Guard,
         BuiltinPredicate::Caller(_) | BuiltinPredicate::Authenticated { .. } => {
             AccessMetricKind::Auth
         }
@@ -55,8 +57,10 @@ pub(super) async fn evaluate(
     ctx: &AccessContext,
 ) -> Result<(), AccessError> {
     match pred {
-        BuiltinPredicate::App(AppPredicate::AllowsUpdates) => access::app::guard_app_update(),
-        BuiltinPredicate::App(AppPredicate::IsQueryable) => access::app::guard_app_query(),
+        BuiltinPredicate::Fleet(FleetPredicate::AllowsUpdates) => {
+            access::fleet::guard_fleet_update()
+        }
+        BuiltinPredicate::Fleet(FleetPredicate::IsQueryable) => access::fleet::guard_fleet_query(),
         BuiltinPredicate::Caller(CallerPredicate::IsController) => {
             access::auth::is_controller(ctx.caller).await
         }

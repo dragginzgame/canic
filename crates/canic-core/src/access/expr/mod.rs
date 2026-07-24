@@ -47,13 +47,13 @@ impl AccessContext {
 }
 
 ///
-/// DefaultAppGuard
+/// DefaultFleetGuard
 ///
-/// Synchronous app-mode guards used for implicit gating.
+/// Synchronous Fleet-mode guards used for implicit gating.
 /// Owned by access expressions and evaluated before custom predicate trees.
 ///
 
-pub enum DefaultAppGuard {
+pub enum DefaultFleetGuard {
     AllowsUpdates,
     IsQueryable,
 }
@@ -89,13 +89,13 @@ pub enum AccessPredicate {
 ///
 /// BuiltinPredicate
 ///
-/// Builtin predicate selector for app, caller, environment, and auth checks.
+/// Builtin predicate selector for Fleet, caller, environment, and auth checks.
 /// Owned by access expressions and mapped to concrete access modules.
 ///
 
 #[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
-    App(AppPredicate),
+    Fleet(FleetPredicate),
     Caller(CallerPredicate),
     Environment(EnvironmentPredicate),
     Authenticated {
@@ -120,14 +120,14 @@ impl BuiltinPredicate {
 }
 
 ///
-/// AppPredicate
+/// FleetPredicate
 ///
-/// Application-mode predicate selector.
-/// Owned by access expressions and evaluated by `access::app`.
+/// Fleet-mode predicate selector.
+/// Owned by access expressions and evaluated by `access::fleet`.
 ///
 
 #[derive(Clone, Copy, Debug)]
-pub enum AppPredicate {
+pub enum FleetPredicate {
     AllowsUpdates,
     IsQueryable,
 }
@@ -170,7 +170,7 @@ pub trait AsyncAccessPredicate: Send + Sync {
     ///
     /// Custom predicate contract:
     /// - May be async and perform I/O.
-    /// - May depend on application state.
+    /// - May depend on Fleet state.
     /// - Must be side-effect free, idempotent, and must not panic.
     ///
     async fn eval(&self, ctx: &AccessContext) -> Result<(), AccessError>;
@@ -215,17 +215,17 @@ where
     AccessExpr::Pred(AccessPredicate::Custom(Arc::new(pred)))
 }
 
-pub mod app {
-    use super::{AccessExpr, AppPredicate, BuiltinPredicate, builtin};
+pub mod fleet {
+    use super::{AccessExpr, BuiltinPredicate, FleetPredicate, builtin};
 
     #[must_use]
     pub const fn allows_updates() -> AccessExpr {
-        builtin(BuiltinPredicate::App(AppPredicate::AllowsUpdates))
+        builtin(BuiltinPredicate::Fleet(FleetPredicate::AllowsUpdates))
     }
 
     #[must_use]
     pub const fn is_queryable() -> AccessExpr {
-        builtin(BuiltinPredicate::App(AppPredicate::IsQueryable))
+        builtin(BuiltinPredicate::Fleet(FleetPredicate::IsQueryable))
     }
 }
 
@@ -328,26 +328,28 @@ pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), A
 
 type AccessEvalFuture<'a> = Pin<Box<dyn Future<Output = Result<(), AccessFailure>> + Send + 'a>>;
 
-/// eval_default_app_guard
+/// eval_default_fleet_guard
 ///
-/// Evaluate an implicit app guard and record a normalized denial on failure.
-pub fn eval_default_app_guard(
-    guard: DefaultAppGuard,
+/// Evaluate an implicit Fleet guard and record a normalized denial on failure.
+pub fn eval_default_fleet_guard(
+    guard: DefaultFleetGuard,
     ctx: &AccessContext,
 ) -> Result<(), AccessError> {
     let result = match guard {
-        DefaultAppGuard::AllowsUpdates => access::app::guard_app_update(),
-        DefaultAppGuard::IsQueryable => access::app::guard_app_query(),
+        DefaultFleetGuard::AllowsUpdates => access::fleet::guard_fleet_update(),
+        DefaultFleetGuard::IsQueryable => access::fleet::guard_fleet_query(),
     };
 
     match result {
         Ok(()) => Ok(()),
         Err(err) => {
             let predicate = match guard {
-                DefaultAppGuard::AllowsUpdates => {
-                    BuiltinPredicate::App(AppPredicate::AllowsUpdates)
+                DefaultFleetGuard::AllowsUpdates => {
+                    BuiltinPredicate::Fleet(FleetPredicate::AllowsUpdates)
                 }
-                DefaultAppGuard::IsQueryable => BuiltinPredicate::App(AppPredicate::IsQueryable),
+                DefaultFleetGuard::IsQueryable => {
+                    BuiltinPredicate::Fleet(FleetPredicate::IsQueryable)
+                }
             };
             Err(record_access_failure(
                 ctx,
@@ -485,7 +487,7 @@ mod tests {
         access,
         ids::{EndpointCall, EndpointCallKind, EndpointId},
         storage::stable::env::{Env, EnvData, EnvRecord},
-        storage::stable::state::app::{AppMode, AppState, AppStateData, AppStateRecord},
+        storage::stable::state::fleet::{FleetMode, FleetState, FleetStateData, FleetStateRecord},
         test::seams,
     };
 
@@ -502,14 +504,14 @@ mod tests {
     }
 
     ///
-    /// AppRestore
+    /// FleetRestore
     ///
 
-    struct AppRestore(AppStateData);
+    struct FleetRestore(FleetStateData);
 
-    impl Drop for AppRestore {
+    impl Drop for FleetRestore {
         fn drop(&mut self) {
-            AppState::import(self.0);
+            FleetState::import(self.0);
         }
     }
 
@@ -553,11 +555,11 @@ mod tests {
     }
 
     #[test]
-    fn app_allows_updates_matches_access_app_guard() {
+    fn fleet_allows_updates_matches_access_fleet_guard() {
         let _guard = seams::lock();
-        let original = AppState::export();
-        let _restore = AppRestore(original);
-        let expr = app::allows_updates();
+        let original = FleetState::export();
+        let _restore = FleetRestore(original);
+        let expr = fleet::allows_updates();
         let ctx = AccessContext {
             caller: seams::p(1),
             authenticated_caller: seams::p(1),
@@ -565,29 +567,29 @@ mod tests {
             call: test_call(),
         };
 
-        for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
-            AppState::import(AppStateData {
-                record: AppStateRecord {
+        for mode in [FleetMode::Enabled, FleetMode::Readonly, FleetMode::Disabled] {
+            FleetState::import(FleetStateData {
+                record: FleetStateRecord {
                     mode,
-                    ..AppStateRecord::default()
+                    ..FleetStateRecord::default()
                 },
             });
             let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
-            let direct_result = access::app::guard_app_update();
+            let direct_result = access::fleet::guard_fleet_update();
             assert_eq!(
                 expr_result.is_ok(),
                 direct_result.is_ok(),
-                "app::allows_updates parity mismatch for mode={mode:?}"
+                "fleet::allows_updates parity mismatch for mode={mode:?}"
             );
         }
     }
 
     #[test]
-    fn app_is_queryable_matches_access_app_guard() {
+    fn fleet_is_queryable_matches_access_fleet_guard() {
         let _guard = seams::lock();
-        let original = AppState::export();
-        let _restore = AppRestore(original);
-        let expr = app::is_queryable();
+        let original = FleetState::export();
+        let _restore = FleetRestore(original);
+        let expr = fleet::is_queryable();
         let ctx = AccessContext {
             caller: seams::p(1),
             authenticated_caller: seams::p(1),
@@ -595,19 +597,19 @@ mod tests {
             call: test_call(),
         };
 
-        for mode in [AppMode::Enabled, AppMode::Readonly, AppMode::Disabled] {
-            AppState::import(AppStateData {
-                record: AppStateRecord {
+        for mode in [FleetMode::Enabled, FleetMode::Readonly, FleetMode::Disabled] {
+            FleetState::import(FleetStateData {
+                record: FleetStateRecord {
                     mode,
-                    ..AppStateRecord::default()
+                    ..FleetStateRecord::default()
                 },
             });
             let expr_result = futures::executor::block_on(eval_access(&expr, &ctx));
-            let direct_result = access::app::guard_app_query();
+            let direct_result = access::fleet::guard_fleet_query();
             assert_eq!(
                 expr_result.is_ok(),
                 direct_result.is_ok(),
-                "app::is_queryable parity mismatch for mode={mode:?}"
+                "fleet::is_queryable parity mismatch for mode={mode:?}"
             );
         }
     }

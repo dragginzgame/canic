@@ -12,18 +12,18 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display};
 
 ///
-/// AppMode
+/// FleetMode
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub enum AppMode {
+pub enum FleetMode {
     #[default]
     Enabled,
     Readonly,
     Disabled,
 }
 
-impl Display for AppMode {
+impl Display for FleetMode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = match self {
             Self::Enabled => "Enabled",
@@ -36,11 +36,11 @@ impl Display for AppMode {
 }
 
 ///
-/// AppStatus
+/// FleetStatus
 ///
 
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-pub enum AppStatus {
+pub enum FleetStatus {
     Active,
     Readonly,
     Stopped,

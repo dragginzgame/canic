@@ -253,7 +253,7 @@ mod tests {
 
     #[test]
     fn rejects_canic_framework_namespaces_outside_owned_ranges() {
-        let err = validate("canic.core.app_state.v1", CANIC_CONTROL_PLANE_MIN_ID)
+        let err = validate("canic.core.fleet_state.v1", CANIC_CONTROL_PLANE_MIN_ID)
             .expect_err("core key cannot claim control-plane range");
         std::assert_matches!(err, MemoryRegistryError::RangeAuthorityViolation { .. });
 

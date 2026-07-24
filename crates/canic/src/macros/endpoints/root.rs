@@ -9,10 +9,10 @@
 macro_rules! canic_emit_root_admin_endpoints {
     () => {
         #[$crate::canic_update(internal, requires(caller::is_controller()))]
-        async fn canic_app(
-            cmd: ::canic::dto::state::AppCommand,
-        ) -> Result<::canic::dto::state::AppCommandResponse, ::canic::Error> {
-            $crate::__internal::core::api::state::AppStateApi::execute_command(cmd).await
+        async fn canic_fleet_admin(
+            cmd: ::canic::dto::state::FleetCommand,
+        ) -> Result<::canic::dto::state::FleetCommandResponse, ::canic::Error> {
+            $crate::__internal::core::api::state::FleetStateApi::execute_command(cmd).await
         }
 
         #[$crate::canic_update(requires(caller::is_controller()))]
