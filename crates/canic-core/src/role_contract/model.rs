@@ -84,7 +84,7 @@ pub enum StateAllocationKey {
     CoreRuntimeIntent,
     CoreRuntimeObservability,
     CoreRuntimeTopology,
-    DirectoryRegistry,
+    PlacementBindingRegistry,
     ScalingRegistry,
     ShardingActiveSet,
     ShardingAssignments,

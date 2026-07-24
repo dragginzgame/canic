@@ -62,9 +62,9 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 ## Executable Composite Identities
 
 - `CANIC-INSTRUCTION-001/v1`: `c79f7027f3629bcbe4dbf4680005d3a9b37104c7ba6d4956a5a3c789c5b5cfab`
-- `CANIC-INSTRUCTION-001/v2`: `385ea065d337781828a10a9167948309d9bafb9e126434142aeb0104eacfc584`
+- `CANIC-INSTRUCTION-001/v2`: `f48e99ac68c74e5c967b65be26df9fe93d4147725002696b7947281c194dc6b1`
 - `CANIC-WASM-001/v1`: `e8c58213d9301d66d4adac4bd92e4aa702fd887b8adb55e2e602a70f29e9c505`
-- `CANIC-WASM-001/v2`: `c88cdf0ef4e79b3c1702ef9c00777f5a7940c4771ab51dbf8442fabd71396bc5`
+- `CANIC-WASM-001/v2`: `7e6bd9d57f7791ff2a6fa4b3a2d2cbd153f56d1c9a5c4269a869ff72a7675f18`
 
 The runtime runners calculate these composites from their definition, script,
 and executable fixture inputs and record the resulting value in each run.
@@ -73,12 +73,12 @@ and executable fixture inputs and record the resulting value in each run.
 
 | SHA-256 | Input |
 | --- | --- |
-| `113b55a44dda0e0780fc3dca5743eaec3949c99456594de5fe10e2a3469487c2` | `crates/canic-host/examples/build_artifact.rs` |
+| `0767cd4548ff6f3c29afa410078699636dc6c6aabf330c2095ec5410b36c4f44` | `crates/canic-host/examples/build_artifact.rs` |
 | `9bde640ebb6f70c0649a2ef862d32e29b0af20fb0a4a52e3c6a0fc74fac488c2` | `crates/canic-tests/tests/instruction_audit.rs` |
 | `4b096319516ee6526ec4e97d2ccd58d6c36bc875cd9e4d91635ee9232dd2db5f` | `crates/canic-tests/tests/instruction_audit_support/estimates/mod.rs` |
-| `f25fe2996fca7869c3a43bfaba08918f7137adea535b79b3831fcd4d84870b11` | `crates/canic-tests/tests/instruction_audit_support/execution.rs` |
-| `f4fba7b003f14d952d6af5c7f9e8c0e50c707648188b5201275ede2e69cbdff3` | `crates/canic-tests/tests/instruction_audit_support/mod.rs` |
-| `c6d2340247e17d83ae95c42d795339a8d9d7317dfad089008d41f78c2dab3483` | `crates/canic-tests/tests/instruction_audit_support/report.rs` |
+| `479f0659b838459661c6068ca2e9143bab9e5d8a53e3e0c4886f1f63ebf72478` | `crates/canic-tests/tests/instruction_audit_support/execution.rs` |
+| `59194c6c3029d402c0faae7421dbe6cb334b42e9b854f916995dffeeefd319f2` | `crates/canic-tests/tests/instruction_audit_support/mod.rs` |
+| `4b27a4c4cbbeec2097e690ae6c1c178c60317d92b1fee611bfd50967a2725add` | `crates/canic-tests/tests/instruction_audit_support/report.rs` |
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `5d7e2f15bdd195c63276d37beffce6a88fea2b593abfd7a1d6ede7274e6aa3c6` | `docs/audits/META-AUDIT.md` |
@@ -97,8 +97,8 @@ and executable fixture inputs and record the resulting value in each run.
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
 | `08fd9421a891e118ace74392580cceb0c82a5c5c3aa194ac5011b497d3bba845` | `scripts/ci/check-audit-method-catalog.sh` |
 | `960e8d64eef1b260f38ccc16fa65a517ecbcb2e026a00acb66282172f57af34d` | `scripts/ci/instruction-audit-report.sh` |
-| `52df94a63cb469a29912bbd68ad9917a8bf0190645d5de5d9306e589e2aca10d` | `scripts/ci/run-layering-guards.sh` |
-| `c7581d1805f8791766104d36422b8522c182d10fae906ec8c479bc4f63529969` | `scripts/ci/list-config-canisters.sh` |
-| `61528bae974ed53e7b05a62626b3b086506bf70fb113006c38534f361a26e45a` | `scripts/ci/require_icp.sh` |
-| `00e8aff1970563a39d9f21c52fc3d0bb80c72e2a3cea8e07ece685c8272069c6` | `scripts/ci/wasm-audit-report.sh` |
-| `2500adbcaa4c0c8e3c53a2d9202caf5d44c38833b31b5c21a6f7db461a9e580a` | `tool-versions.env` |
+| `6986f3624cae4a48374fe110dd0a1c0f8fb91445e27d7f0f22f6eadad31fbc29` | `scripts/ci/run-layering-guards.sh` |
+| `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |
+| `089e5408ede48b45d95813d96ed7ad9bfa9814453a0630af7eff3fa80b5636b2` | `scripts/ci/require_icp.sh` |
+| `07e524196c5e98d1e68e9506cb7ea971cc3637006061a45b25358f30eb12856a` | `scripts/ci/wasm-audit-report.sh` |
+| `f6ca09847622c05bef0dbb5df19c3f28e44a159a0dc8394629d8db7dc1f7829b` | `tool-versions.env` |

@@ -85,9 +85,9 @@ impl SubnetConfig {
         self.service_roles()
     }
 
-    /// Roles exposed through the subnet index.
+    /// Roles exposed through the local Subnet Directory.
     #[must_use]
-    pub fn subnet_index_roles(&self) -> BTreeSet<CanisterRole> {
+    pub fn subnet_directory_roles(&self) -> BTreeSet<CanisterRole> {
         self.service_roles()
     }
 

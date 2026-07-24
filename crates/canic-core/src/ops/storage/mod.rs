@@ -7,9 +7,9 @@
 pub mod auth;
 pub mod children;
 pub mod cycles;
+pub mod directory;
 pub mod fleet_activation;
 pub mod icp_refill;
-pub mod index;
 pub mod intent;
 pub mod placement;
 pub mod pool;
@@ -32,7 +32,7 @@ pub enum StorageOpsError {
     FleetActivationOps(#[from] fleet_activation::FleetActivationOpsError),
 
     #[error(transparent)]
-    IndexOps(#[from] index::IndexOpsError),
+    DirectoryOps(#[from] directory::DirectoryOpsError),
 
     #[error(transparent)]
     IntentStoreOps(#[from] intent::IntentStoreOpsError),
@@ -41,7 +41,7 @@ pub enum StorageOpsError {
     IcpRefillRecordOps(#[from] icp_refill::IcpRefillRecordOpsError),
 
     #[error(transparent)]
-    DirectoryRegistryOps(#[from] placement::directory::DirectoryRegistryOpsError),
+    PlacementBindingRegistryOps(#[from] placement::binding::PlacementBindingRegistryOpsError),
 
     #[cfg(feature = "sharding")]
     #[error(transparent)]

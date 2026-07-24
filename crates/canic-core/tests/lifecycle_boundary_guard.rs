@@ -90,7 +90,6 @@ fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() 
         "root lifecycle must retain the application install-hook contract without executing it"
     );
     for forbidden in [
-        "schedule_init_root_bootstrap",
         "TimerApi::defer_lifecycle",
         "canic_setup().await",
         "canic_install().await",
@@ -171,17 +170,6 @@ const SCHEDULE_HELPERS: &[ScheduleHelper] = &[
             "TimerWorkflow::set_application_once",
             "canic:bootstrap:post_upgrade_nonroot_canister",
             "bootstrap_post_upgrade_nonroot_canister().await",
-        ],
-    },
-    ScheduleHelper {
-        path: "crates/canic-control-plane/src/api/lifecycle.rs",
-        function: "schedule_init_root_bootstrap",
-        required_fragments: &[
-            "FleetActivationApi::require_active()?",
-            "Duration::ZERO",
-            "TimerApi::defer_lifecycle",
-            "canic:bootstrap:init_root_canister",
-            "bootstrap_init_root_canister().await",
         ],
     },
     ScheduleHelper {

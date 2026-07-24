@@ -32,7 +32,7 @@ pub fn restore_root_cached_baseline(
 
     progress(spec, "waiting for restored child canisters ready");
     let child_wait_started_at = Instant::now();
-    wait_for_children_ready(spec, baseline.pic(), &baseline.metadata().subnet_index);
+    wait_for_children_ready(spec, baseline.pic(), &baseline.metadata().subnet_directory);
     wait_for_snapshot_pids_ready(spec, baseline.pic(), &baseline.metadata().snapshot_pids);
     progress_elapsed(
         spec,

@@ -26,11 +26,11 @@ fn user_hub_sharding_profile_prewarms_first_user_shard() {
     let setup = setup_cached_root(RootSetupProfile::Sharding);
 
     assert!(
-        !setup.subnet_index.contains_key(&canister::APP),
+        !setup.subnet_directory.contains_key(&canister::APP),
         "sharding profile should not boot app",
     );
     assert!(
-        !setup.subnet_index.contains_key(&canister::SCALE_HUB),
+        !setup.subnet_directory.contains_key(&canister::SCALE_HUB),
         "sharding profile should not boot scale_hub",
     );
 
@@ -142,7 +142,7 @@ fn user_hub_pid(setup: &RootSetup) -> Principal {
 
 fn sharding_profile_pid(setup: &RootSetup, role: &CanisterRole, label: &str) -> Principal {
     setup
-        .subnet_index
+        .subnet_directory
         .get(role)
         .copied()
         .unwrap_or_else(|| panic!("{label} must exist in sharding profile"))

@@ -165,3 +165,57 @@ fn prepared_managed_init_defers_application_work_while_standalone_local_starts_i
         "standalone-local lifecycle must not fabricate managed Fleet identity"
     );
 }
+
+#[test]
+fn prepared_activation_schedules_each_current_application_install_hook_once() {
+    let workspace = workspace_root();
+    let macro_path = workspace.join("crates/canic/src/macros/start.rs");
+    let source = fs::read_to_string(&macro_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", macro_path.display()));
+    let nonroot = source
+        .split("macro_rules! __canic_start_nonroot_lifecycle_core")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("macro_rules! __canic_start_local_lifecycle_core")
+                .next()
+        })
+        .expect("managed non-root lifecycle macro");
+    let root = source
+        .split("macro_rules! __canic_root_lifecycle_core")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("// Run the optional init block from a lifecycle timer")
+                .next()
+        })
+        .expect("managed root lifecycle macro");
+
+    assert!(
+        nonroot.contains("__CANIC_PREPARED_APPLICATION_INIT_ARGS")
+            && nonroot.contains("canic_install(args).await;"),
+        "managed non-root activation must retain and deliver its application init bytes"
+    );
+    assert!(
+        root.contains("canic_setup().await;") && root.contains("canic_install().await;"),
+        "managed root activation must schedule its current application install hooks"
+    );
+    assert_eq!(
+        source
+            .matches("__CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true)")
+            .count(),
+        2,
+        "root and non-root activation adapters must each suppress duplicate hook scheduling"
+    );
+
+    for relative in [
+        "crates/canic/src/macros/endpoints/nonroot.rs",
+        "crates/canic/src/macros/endpoints/root.rs",
+    ] {
+        let path = workspace.join(relative);
+        let endpoints = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        assert!(
+            endpoints.contains("__canic_schedule_prepared_activation_init();"),
+            "{relative} must hand successful activation to the lifecycle adapter"
+        );
+    }
+}

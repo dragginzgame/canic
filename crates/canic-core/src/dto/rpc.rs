@@ -120,7 +120,7 @@ pub enum CreateCanisterParent {
     // Use the caller's parent.
     Parent,
     Canister(Principal),
-    Index(CanisterRole),
+    Directory(CanisterRole),
 }
 
 //

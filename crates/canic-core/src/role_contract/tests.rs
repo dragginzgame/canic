@@ -111,7 +111,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         ),
         (StateAllocationKey::CanisterPool, vec![49]),
         (StateAllocationKey::ScalingRegistry, vec![52]),
-        (StateAllocationKey::DirectoryRegistry, vec![55]),
+        (StateAllocationKey::PlacementBindingRegistry, vec![55]),
         (StateAllocationKey::ShardingRegistry, vec![53]),
         (StateAllocationKey::ShardingAssignments, vec![54]),
         (StateAllocationKey::ShardingActiveSet, vec![56]),

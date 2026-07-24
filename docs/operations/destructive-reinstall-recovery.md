@@ -21,8 +21,8 @@ authority or placement state was owned by that target.
   `AuthApi::provision_chain_key_delegation_proof_for_issuer_root` after the
   install/reinstall completes.
 
-Do not retain an old child and inject its principal through `subnet_index`.
-That index contains service discovery entries, not placement ownership,
+Do not retain an old child and inject its principal through the Subnet
+Directory. That Directory contains service discovery entries, not placement ownership,
 pool/slot/capacity records, controller evidence, or an adoption authorization.
 
 ## ic-memory 0.11 Format Boundary

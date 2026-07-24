@@ -107,22 +107,22 @@ fn observe_bootstrap_scenario(
 fn scenario_target_pid(
     root_id: Principal,
     scenario: &AuditScenario,
-    subnet_index: &std::collections::HashMap<canic::ids::CanisterRole, Principal>,
+    subnet_directory: &std::collections::HashMap<canic::ids::CanisterRole, Principal>,
 ) -> Principal {
     match scenario.canister {
         "root" => root_id,
-        "app" => *subnet_index
+        "app" => *subnet_directory
             .get(&APP)
-            .expect("app must exist in subnet index"),
-        "scale_hub" => *subnet_index
+            .expect("app must exist in Subnet Directory"),
+        "scale_hub" => *subnet_directory
             .get(&SCALE_HUB)
-            .expect("scale_hub must exist in subnet index"),
-        "user_hub" => *subnet_index
+            .expect("scale_hub must exist in Subnet Directory"),
+        "user_hub" => *subnet_directory
             .get(&USER_HUB)
-            .expect("user_hub must exist in subnet index"),
-        "test" => *subnet_index
+            .expect("user_hub must exist in Subnet Directory"),
+        "test" => *subnet_directory
             .get(&TEST)
-            .expect("test must exist in subnet index"),
+            .expect("test must exist in Subnet Directory"),
         other => panic!("unsupported audit canister: {other}"),
     }
 }
@@ -135,7 +135,7 @@ fn prepare_scenario(
     let target_pid = match scenario.key {
         "scale:request_cycles_from_parent:fresh" => {
             let scale_hub_pid = *setup
-                .subnet_index
+                .subnet_directory
                 .get(&SCALE_HUB)
                 .expect("scale_hub must exist for scale child scenario");
             let worker_pid = root::workers::create_worker(&setup.pic, scale_hub_pid)
@@ -144,7 +144,7 @@ fn prepare_scenario(
             worker_pid
         }
         _ if scenario.canister == "issuer" => setup.root_id,
-        _ => scenario_target_pid(setup.root_id, scenario, &setup.subnet_index),
+        _ => scenario_target_pid(setup.root_id, scenario, &setup.subnet_directory),
     };
 
     match scenario.key {
@@ -296,7 +296,7 @@ fn execute_scenario(
 
 fn prepare_issuer(setup: &root::harness::RootSetup, subject_byte: u8) -> (Principal, Principal) {
     let user_hub_pid = *setup
-        .subnet_index
+        .subnet_directory
         .get(&USER_HUB)
         .expect("user_hub must exist for delegated auth audit scenarios");
     let subject = Principal::from_slice(&[subject_byte; 29]);
@@ -411,7 +411,7 @@ fn upsert_delegation_renewal_template(setup: &root::harness::RootSetup, issuer_p
 // Execute the fresh root cycles request scenario through the root dispatcher.
 fn execute_root_cycles_scenario(setup: &root::harness::RootSetup, target_pid: Principal) {
     let caller = *setup
-        .subnet_index
+        .subnet_directory
         .get(&TEST)
         .expect("test canister must exist for root capability request");
     let request = Request::Cycles(CyclesRequest {

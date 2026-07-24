@@ -8,6 +8,26 @@
 #[macro_export]
 macro_rules! canic_emit_root_admin_endpoints {
     () => {
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_prepare_fleet_activation(
+        ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
+            __canic_run_prepared_root_init_block().await;
+            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_fleet_activation()
+                .await
+        }
+
+        #[$crate::canic_update(requires(caller::is_controller()))]
+        async fn canic_resume_fleet_activation(
+            request: ::canic::dto::fleet_activation::FleetActivationResumeRequest,
+        ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
+            let transition = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::resume_fleet_activation(
+                request,
+            )
+            .await?;
+            __canic_schedule_prepared_activation_init();
+            Ok(transition.status)
+        }
+
         #[$crate::canic_update(internal, requires(caller::is_controller()))]
         async fn canic_fleet_admin(
             cmd: ::canic::dto::state::FleetCommand,
@@ -116,11 +136,6 @@ macro_rules! canic_emit_root_auth_attestation_endpoints {
 #[macro_export]
 macro_rules! canic_emit_root_wasm_store_endpoints {
     () => {
-        #[$crate::canic_update(requires(caller::is_controller()))]
-        async fn canic_wasm_store_bootstrap_resume_root_admin() -> Result<(), ::canic::Error> {
-            $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_init_root_bootstrap()
-        }
-
         #[$crate::canic_query(requires(caller::is_controller()))]
         async fn canic_wasm_store_bootstrap_debug(
         ) -> Result<::canic::dto::template::WasmStoreBootstrapDebugResponse, ::canic::Error> {

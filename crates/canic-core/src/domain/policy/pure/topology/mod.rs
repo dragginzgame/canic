@@ -4,7 +4,7 @@ use crate::{
     InternalError,
     domain::value::Principal,
     ids::CanisterRole,
-    model::topology::{TopologyEntry, TopologyIndexEntry, TopologyRegistry},
+    model::topology::{TopologyDirectoryEntry, TopologyEntry, TopologyRegistry},
 };
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
@@ -15,15 +15,15 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum TopologyPolicyError {
-    #[error("index entry role mismatch for pid {pid}: expected {expected}, got {found}")]
-    IndexRoleMismatch {
+    #[error("Directory entry role mismatch for pid {pid}: expected {expected}, got {found}")]
+    DirectoryRoleMismatch {
         pid: Principal,
         expected: CanisterRole,
         found: CanisterRole,
     },
 
-    #[error("index role {0} appears more than once")]
-    DuplicateIndexRole(CanisterRole),
+    #[error("Directory role {0} appears more than once")]
+    DuplicateDirectoryRole(CanisterRole),
 
     #[error("immediate-parent mismatch: canister {pid} expects parent {expected}, got {found:?}")]
     ImmediateParentMismatch {
@@ -114,9 +114,9 @@ impl TopologyPolicy {
         }
     }
 
-    pub fn assert_index_consistent_with_registry(
+    pub fn assert_directory_consistent_with_registry(
         registry: &TopologyRegistry,
-        entries: &[TopologyIndexEntry],
+        entries: &[TopologyDirectoryEntry],
     ) -> Result<(), TopologyPolicyError> {
         let mut seen_roles = BTreeSet::new();
 
@@ -124,7 +124,7 @@ impl TopologyPolicy {
             let record = Self::registry_record(registry, entry.pid)?;
 
             if record.role != entry.role {
-                return Err(TopologyPolicyError::IndexRoleMismatch {
+                return Err(TopologyPolicyError::DirectoryRoleMismatch {
                     pid: entry.pid,
                     expected: record.role.clone(),
                     found: entry.role.clone(),
@@ -132,7 +132,9 @@ impl TopologyPolicy {
             }
 
             if !seen_roles.insert(entry.role.clone()) {
-                return Err(TopologyPolicyError::DuplicateIndexRole(entry.role.clone()));
+                return Err(TopologyPolicyError::DuplicateDirectoryRole(
+                    entry.role.clone(),
+                ));
             }
         }
 

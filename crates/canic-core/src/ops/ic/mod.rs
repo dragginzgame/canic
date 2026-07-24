@@ -109,6 +109,11 @@ impl IcOps {
         ic_cdk::println!("{message}");
     }
 
+    /// Abort the current IC message so partially established runtime state is rolled back.
+    pub fn trap(message: impl Into<String>) -> ! {
+        ic_cdk::api::trap(message.into())
+    }
+
     /// Spawn a task on the IC runtime.
     pub fn spawn<F>(future: F)
     where

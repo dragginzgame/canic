@@ -23,7 +23,7 @@ pub struct CanisterInitPayload {
 mod tests {
     use super::*;
     use crate::{
-        dto::topology::IndexEntryInput,
+        dto::topology::{DirectoryEntryInput, DirectoryProvenance},
         ids::{
             AppId, CanisterRole, CanonicalNetworkId, FleetId, FleetKey, ReleaseBuildNonce,
             SubnetSlotId,
@@ -54,11 +54,23 @@ mod tests {
                 canister_role: Some(CanisterRole::new("app")),
                 parent_pid: Some(principal),
             },
-            fleet_directory: FleetDirectoryInput(vec![IndexEntryInput {
-                role: CanisterRole::new("app"),
-                pid: principal,
-            }]),
-            subnet_directory: SubnetDirectoryInput(Vec::new()),
+            fleet_directory: FleetDirectoryInput {
+                provenance: DirectoryProvenance {
+                    fleet: fleet.clone(),
+                    source_root: principal,
+                },
+                entries: vec![DirectoryEntryInput {
+                    role: CanisterRole::new("app"),
+                    pid: principal,
+                }],
+            },
+            subnet_directory: SubnetDirectoryInput {
+                provenance: DirectoryProvenance {
+                    fleet: fleet.clone(),
+                    source_root: principal,
+                },
+                entries: Vec::new(),
+            },
         };
 
         let bytes = candid::encode_one(&payload).expect("encode managed non-root init payload");
@@ -68,7 +80,7 @@ mod tests {
         assert_eq!(decoded.fleet, fleet);
         assert_eq!(decoded.install_id, [4; 32]);
         assert_eq!(decoded.release_build_id, release_build_id);
-        assert_eq!(decoded.fleet_directory.0.len(), 1);
-        assert!(decoded.subnet_directory.0.is_empty());
+        assert_eq!(decoded.fleet_directory.entries.len(), 1);
+        assert!(decoded.subnet_directory.entries.is_empty());
     }
 }

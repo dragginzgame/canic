@@ -21,6 +21,7 @@ use crate::{
         ic::IcOps,
         runtime::{
             env::EnvOps,
+            fleet_activation::FleetActivationRuntimeOps,
             metrics::cascade::{
                 CascadeMetricOperation as MetricOperation, CascadeMetricOutcome as MetricOutcome,
                 CascadeMetricReason as MetricReason, CascadeMetricSnapshot as MetricSnapshot,
@@ -29,10 +30,12 @@ use crate::{
         },
         storage::{
             children::CanisterChildrenOps,
-            index::{app::AppIndexOps, subnet::SubnetIndexOps},
+            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
+            fleet_activation::FleetActivationOps,
             registry::subnet::SubnetRegistryOps,
             state::fleet::FleetStateOps,
         },
+        topology::directory::validate_provenance,
     },
     workflow::cascade::{
         snapshot::{
@@ -69,6 +72,15 @@ impl FanoutFailures {
     fn into_error(self) -> Option<InternalError> {
         self.first
     }
+}
+
+fn prepared_state_snapshot_hash(
+    view: &StateSnapshotInput,
+) -> Result<Option<[u8; 32]>, InternalError> {
+    if FleetActivationRuntimeOps::is_standalone_local() {
+        return Ok(None);
+    }
+    crate::ops::fleet_activation::FleetActivationEvidenceOps::state_snapshot_hash(view).map(Some)
 }
 
 impl StateCascadeWorkflow {
@@ -161,6 +173,7 @@ impl StateCascadeWorkflow {
     /// - forward it to direct children using the children cache
     pub async fn nonroot_cascade_state(view: StateSnapshotInput) -> Result<(), InternalError> {
         EnvOps::deny_root()?;
+        let activation_hash = prepared_state_snapshot_hash(&view)?;
 
         let snapshot = StateSnapshotAdapter::from_input(view);
 
@@ -221,6 +234,10 @@ impl StateCascadeWorkflow {
             MetricOutcome::Completed,
             MetricReason::Ok,
         );
+        if let Some(hash) = activation_hash {
+            FleetActivationOps::record_applied_state_snapshot(hash)
+                .map_err(crate::ops::storage::StorageOpsError::from)?;
+        }
 
         // Cascade using children cache only (never registry).
         let child_pids = CanisterChildrenOps::pids();
@@ -274,18 +291,25 @@ impl StateCascadeWorkflow {
     fn apply_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
         EnvOps::deny_root()?;
 
+        if let Some(directory) = &snapshot.fleet_directory {
+            validate_provenance(&directory.provenance)?;
+        }
+        if let Some(directory) = &snapshot.subnet_directory {
+            validate_provenance(&directory.provenance)?;
+        }
+
         if let Some(fleet) = snapshot.fleet_state {
             FleetStateOps::import_input(fleet);
         }
 
-        if let Some(index) = &snapshot.fleet_directory {
-            let filtered = AppIndexOps::filter_args_for_local_config(index.clone())?;
-            AppIndexOps::import_args_allow_incomplete(filtered)?;
+        if let Some(directory) = &snapshot.fleet_directory {
+            let filtered = FleetDirectoryOps::filter_args_for_local_config(directory.clone())?;
+            FleetDirectoryOps::import_args_allow_incomplete(filtered)?;
         }
 
-        if let Some(index) = &snapshot.subnet_directory {
-            let filtered = SubnetIndexOps::filter_args_for_local_config(index.clone())?;
-            SubnetIndexOps::import_args_allow_incomplete(filtered)?;
+        if let Some(directory) = &snapshot.subnet_directory {
+            let filtered = SubnetDirectoryOps::filter_args_for_local_config(directory.clone())?;
+            SubnetDirectoryOps::import_args_allow_incomplete(filtered)?;
         }
 
         Ok(())

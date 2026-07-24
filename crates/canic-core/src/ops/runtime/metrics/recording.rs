@@ -7,9 +7,9 @@
 use crate::{
     InternalError,
     ops::runtime::metrics::{
-        directory::{
-            DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason,
-            DirectoryMetrics,
+        placement_binding::{
+            PlacementBindingMetricOperation, PlacementBindingMetricOutcome,
+            PlacementBindingMetricReason, PlacementBindingMetrics,
         },
         pool::{PoolMetricOperation, PoolMetricOutcome, PoolMetricReason, PoolMetrics},
         scaling::{
@@ -24,54 +24,63 @@ use crate::ops::runtime::metrics::sharding::{
 };
 
 ///
-/// DirectoryMetricEvent
+/// PlacementBindingMetricEvent
 ///
-/// Typed recording adapter for directory metric events.
+/// Typed recording adapter for binding metric events.
 ///
 
-pub struct DirectoryMetricEvent;
+pub struct PlacementBindingMetricEvent;
 
-impl DirectoryMetricEvent {
-    /// Record one directory metric row with an explicit outcome and reason.
+impl PlacementBindingMetricEvent {
+    /// Record one binding metric row with an explicit outcome and reason.
     pub fn record(
-        operation: DirectoryMetricOperation,
-        outcome: DirectoryMetricOutcome,
-        reason: DirectoryMetricReason,
+        operation: PlacementBindingMetricOperation,
+        outcome: PlacementBindingMetricOutcome,
+        reason: PlacementBindingMetricReason,
     ) {
-        DirectoryMetrics::record(operation, outcome, reason);
+        PlacementBindingMetrics::record(operation, outcome, reason);
     }
 
-    /// Record a started directory metric row.
-    pub fn started(operation: DirectoryMetricOperation) {
+    /// Record a started binding metric row.
+    pub fn started(operation: PlacementBindingMetricOperation) {
         Self::record(
             operation,
-            DirectoryMetricOutcome::Started,
-            DirectoryMetricReason::Ok,
+            PlacementBindingMetricOutcome::Started,
+            PlacementBindingMetricReason::Ok,
         );
     }
 
-    /// Record a completed directory metric row.
-    pub fn completed(operation: DirectoryMetricOperation, reason: DirectoryMetricReason) {
-        Self::record(operation, DirectoryMetricOutcome::Completed, reason);
+    /// Record a completed binding metric row.
+    pub fn completed(
+        operation: PlacementBindingMetricOperation,
+        reason: PlacementBindingMetricReason,
+    ) {
+        Self::record(operation, PlacementBindingMetricOutcome::Completed, reason);
     }
 
-    /// Record a skipped directory metric row.
-    pub fn skipped(operation: DirectoryMetricOperation, reason: DirectoryMetricReason) {
-        Self::record(operation, DirectoryMetricOutcome::Skipped, reason);
+    /// Record a skipped binding metric row.
+    pub fn skipped(
+        operation: PlacementBindingMetricOperation,
+        reason: PlacementBindingMetricReason,
+    ) {
+        Self::record(operation, PlacementBindingMetricOutcome::Skipped, reason);
     }
 
-    /// Record a failed directory metric row classified from an internal error.
-    pub fn failed(operation: DirectoryMetricOperation, err: &InternalError) {
+    /// Record a failed binding metric row classified from an internal error.
+    pub fn failed(operation: PlacementBindingMetricOperation, err: &InternalError) {
         Self::record(
             operation,
-            DirectoryMetricOutcome::Failed,
-            DirectoryMetricReason::from_error(err),
+            PlacementBindingMetricOutcome::Failed,
+            PlacementBindingMetricReason::from_error(err),
         );
     }
 
-    /// Record a failed directory metric row with an explicit bounded reason.
-    pub fn failed_reason(operation: DirectoryMetricOperation, reason: DirectoryMetricReason) {
-        Self::record(operation, DirectoryMetricOutcome::Failed, reason);
+    /// Record a failed binding metric row with an explicit bounded reason.
+    pub fn failed_reason(
+        operation: PlacementBindingMetricOperation,
+        reason: PlacementBindingMetricReason,
+    ) {
+        Self::record(operation, PlacementBindingMetricOutcome::Failed, reason);
     }
 }
 

@@ -1,8 +1,8 @@
 //! Module: workflow::ic::provision::payload
 //!
 //! Responsibility: build non-root canister initialization payloads.
-//! Does not own: environment storage, index schemas, or install execution.
-//! Boundary: snapshots current environment and indexes into init payload DTOs.
+//! Does not own: environment storage, Directory schemas, or install execution.
+//! Boundary: snapshots current environment and Directories into init payload DTOs.
 
 use crate::{
     InternalError,
@@ -13,9 +13,10 @@ use crate::{
         runtime::env::EnvOps,
         storage::{
             StorageOpsError,
+            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
             fleet_activation::FleetActivationOps,
-            index::{app::AppIndexOps, subnet::SubnetIndexOps},
         },
+        topology::directory::current_provenance,
     },
     workflow::ic::provision::ProvisionWorkflow,
 };
@@ -34,8 +35,9 @@ impl ProvisionWorkflow {
             parent_pid: Some(parent_pid),
         };
 
-        let fleet_directory = AppIndexOps::snapshot_args();
-        let subnet_directory = SubnetIndexOps::snapshot_args();
+        let provenance = current_provenance()?;
+        let fleet_directory = FleetDirectoryOps::snapshot_args(provenance.clone());
+        let subnet_directory = SubnetDirectoryOps::snapshot_args(provenance);
         let identity = FleetActivationOps::status(EnvOps::is_root())
             .map_err(StorageOpsError::from)?
             .identity;

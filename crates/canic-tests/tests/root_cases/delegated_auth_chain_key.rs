@@ -1047,7 +1047,7 @@ const fn metric_entry_count(entry: &MetricEntry) -> u64 {
 
 fn sharding_profile_pid(setup: &RootSetup, role: &CanisterRole, label: &str) -> Principal {
     setup
-        .subnet_index
+        .subnet_directory
         .get(role)
         .copied()
         .unwrap_or_else(|| panic!("{label} must exist in sharding profile"))

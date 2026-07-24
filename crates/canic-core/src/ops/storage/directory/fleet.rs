@@ -1,0 +1,114 @@
+//! Module: ops::storage::directory::fleet
+//!
+//! Responsibility: provide deterministic access to the Fleet Directory stable record.
+//! Does not own: stable schema, topology workflow, or endpoint DTOs.
+//! Boundary: storage ops facade used by topology workflows and queries.
+
+use crate::{
+    InternalError,
+    dto::topology::{DirectoryProvenance, FleetDirectoryInput},
+    model::topology::TopologyDirectoryEntry,
+    ops::{
+        config::ConfigOps,
+        prelude::*,
+        storage::directory::{
+            ensure_allowed_roles, ensure_required_roles, ensure_unique_roles,
+            mapper::{DirectoryEntryMapper, FleetDirectoryDataMapper},
+        },
+    },
+    storage::stable::directory::fleet::{FleetDirectory, FleetDirectoryData},
+    view::topology::DirectoryEntryView,
+};
+
+///
+/// FleetDirectoryOps
+///
+/// Storage-ops facade for the Fleet Directory stable record.
+///
+
+pub struct FleetDirectoryOps;
+
+impl FleetDirectoryOps {
+    // -------------------------------------------------------------------------
+    // Getters
+    // -------------------------------------------------------------------------
+
+    #[must_use]
+    pub fn get(role: &CanisterRole) -> Option<Principal> {
+        FleetDirectory::export()
+            .entries
+            .iter()
+            .find_map(|entry| (&entry.role == role).then_some(entry.pid))
+    }
+
+    // -------------------------------------------------------------------------
+    // Canonical data access
+    // -------------------------------------------------------------------------
+
+    #[must_use]
+    pub(crate) fn data() -> FleetDirectoryData {
+        FleetDirectory::export()
+    }
+
+    #[must_use]
+    pub fn entry_projections() -> Vec<DirectoryEntryView> {
+        DirectoryEntryMapper::records_to_projections(FleetDirectory::export().entries)
+    }
+
+    #[must_use]
+    pub(crate) fn topology_entries() -> Vec<TopologyDirectoryEntry> {
+        DirectoryEntryMapper::records_to_topology_entries(&FleetDirectory::export().entries)
+    }
+
+    #[must_use]
+    pub fn snapshot_args(provenance: DirectoryProvenance) -> FleetDirectoryInput {
+        FleetDirectoryDataMapper::data_to_input(FleetDirectory::export(), provenance)
+    }
+
+    pub(crate) fn filter_args_for_local_config(
+        args: FleetDirectoryInput,
+    ) -> Result<FleetDirectoryInput, InternalError> {
+        let allowed = ConfigOps::get()?.services.fleet.roles.clone();
+        Ok(FleetDirectoryInput {
+            provenance: args.provenance,
+            entries: args
+                .entries
+                .into_iter()
+                .filter(|entry| allowed.contains(&entry.role))
+                .collect(),
+        })
+    }
+
+    pub(crate) fn import_args_allow_incomplete(
+        args: FleetDirectoryInput,
+    ) -> Result<(), InternalError> {
+        let data = FleetDirectoryDataMapper::input_to_data(args);
+        ensure_unique_roles(&data.entries, "Fleet")?;
+        let allowed = ConfigOps::get()?.services.fleet.roles.clone();
+        ensure_allowed_roles(&data.entries, "Fleet", &allowed)?;
+        FleetDirectory::import(data);
+
+        Ok(())
+    }
+
+    pub(crate) fn import(data: FleetDirectoryData) -> Result<(), InternalError> {
+        ensure_unique_roles(&data.entries, "Fleet")?;
+        let required = ConfigOps::get()?.services.fleet.roles.clone();
+        ensure_allowed_roles(&data.entries, "Fleet", &required)?;
+        ensure_required_roles(&data.entries, "Fleet", &required)?;
+        FleetDirectory::import(data);
+
+        Ok(())
+    }
+
+    /// Import a root-built partial Directory snapshot.
+    ///
+    /// External/propagated DTO snapshots must use `import_args_allow_incomplete`
+    /// so they are checked against the configured FleetDirectory role set.
+    pub(crate) fn import_trusted_partial(data: FleetDirectoryData) -> Result<(), InternalError> {
+        ensure_unique_roles(&data.entries, "Fleet")?;
+        FleetDirectory::import(data);
+
+        Ok(())
+    }
+}

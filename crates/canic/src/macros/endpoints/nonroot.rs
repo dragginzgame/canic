@@ -9,6 +9,27 @@
 macro_rules! canic_emit_nonroot_sync_topology_endpoints {
     () => {
         #[$crate::canic_update(internal, requires(caller::is_parent()))]
+        async fn canic_prepare_fleet_credential_generation(
+            request: ::canic::dto::fleet_activation::FleetCredentialGenerationRequest,
+        ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
+            $crate::__internal::core::api::fleet_activation::FleetActivationApi::prepare_nonroot_credential_generation(request)
+        }
+
+        #[$crate::canic_update(internal, requires(caller::is_parent()))]
+        async fn canic_activate_fleet(
+            request: ::canic::dto::fleet_activation::FleetActivationRequest,
+        ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
+            let transition =
+                $crate::__internal::core::api::fleet_activation::FleetActivationApi::activate_nonroot(request)?;
+            __canic_schedule_prepared_activation_init();
+            Ok(transition.status)
+        }
+
+        #[$crate::canic_update(
+            internal,
+            requires(caller::is_parent()),
+            payload(max_bytes = ::canic::__internal::core::dto::topology::DIRECTORY_CASCADE_MAX_BYTES)
+        )]
         async fn canic_sync_state(
             snapshot: ::canic::dto::cascade::StateSnapshotInput,
         ) -> Result<(), ::canic::Error> {

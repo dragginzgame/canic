@@ -123,6 +123,25 @@ pub struct FleetActivationStatusResponse {
     pub activated_at_ns: Option<u64>,
 }
 
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetActivationResumeRequest {
+    pub operation_id: [u8; 32],
+    pub credential: FleetCredentialGenerationRef,
+}
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetCredentialGenerationRequest {
+    pub operation_id: [u8; 32],
+    pub credential: FleetCredentialGenerationRef,
+}
+
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetActivationRequest {
+    pub operation_id: [u8; 32],
+    pub credential: FleetCredentialGenerationRef,
+    pub activation_evidence_hash: [u8; 32],
+}
+
 ///
 /// FleetHostCanisterActivationEvidence
 ///

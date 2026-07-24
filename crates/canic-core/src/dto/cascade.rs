@@ -3,7 +3,6 @@ use crate::dto::{
     state::FleetStateInput,
     topology::{FleetDirectoryInput, SubnetDirectoryInput},
 };
-
 //
 // StateSnapshotInput
 //

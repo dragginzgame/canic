@@ -8,7 +8,9 @@ mod mapper;
 
 use crate::{
     dto::fleet_activation::{
-        CurrentRootInstallIdentity, FleetActivationIdentity, FleetActivationStatusResponse,
+        CurrentRootInstallIdentity, FleetActivationIdentity, FleetActivationRequest,
+        FleetActivationStatusResponse, FleetCascadeActivationEvidence, FleetCascadeManifestEntry,
+        FleetCredentialGenerationRef, FleetCredentialGenerationRequest, FleetCredentialManifest,
     },
     ids::{FleetBinding, ReleaseBuildId},
     model::fleet_activation::{
@@ -18,8 +20,11 @@ use crate::{
     storage::stable::fleet_activation::{
         FleetActivation, FleetActivationData, FleetActivationEvidenceRecord,
         FleetActivationIdentityRecord, FleetActivationRecord, FleetActivationStateRecord,
-        MAX_FLEET_ACTIVATION_RECORD_BYTES,
+        FleetCascadeActivationEvidenceRecord, FleetCascadeManifestEntryRecord,
+        FleetCredentialGenerationRefRecord, FleetCredentialManifestEntryRecord,
+        FleetCredentialManifestRecord, MAX_FLEET_ACTIVATION_RECORD_BYTES,
     },
+    view::fleet_activation::FleetActivationTransition,
 };
 use thiserror::Error as ThisError;
 
@@ -49,6 +54,15 @@ pub enum FleetActivationOpsError {
 
     #[error("protected Fleet activation is not Active")]
     NotActive,
+
+    #[error("Fleet activation identity does not match the protected operation")]
+    IdentityMismatch,
+
+    #[error("Fleet activation evidence does not match protected state")]
+    EvidenceMismatch,
+
+    #[error("Fleet activation transition is invalid: {reason}")]
+    InvalidTransition { reason: String },
 }
 
 ///
@@ -109,12 +123,198 @@ impl FleetActivationOps {
         mapper::record_to_status(record, is_root)
     }
 
+    pub(crate) fn fleet_binding() -> Result<FleetBinding, FleetActivationOpsError> {
+        let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let identity = match record.state {
+            FleetActivationStateRecord::Prepared { identity, .. }
+            | FleetActivationStateRecord::Active { identity, .. } => identity,
+        };
+        Ok(identity.fleet)
+    }
+
     pub(crate) fn require_active(is_root: bool) -> Result<(), FleetActivationOpsError> {
         let status = Self::status(is_root)?;
         if status.phase != crate::dto::fleet_activation::FleetActivationPhase::Active {
             return Err(FleetActivationOpsError::NotActive);
         }
         Ok(())
+    }
+
+    pub(crate) fn prepare_root(
+        cascade_manifest: Vec<FleetCascadeManifestEntry>,
+        cascade_manifest_hash: [u8; 32],
+        credential: FleetCredentialGenerationRef,
+        credential_manifest: FleetCredentialManifest,
+    ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
+        let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let FleetActivationStateRecord::Prepared { identity, evidence } = &mut record.state else {
+            return Self::status(true);
+        };
+        if credential.generation == 0
+            || credential_manifest.fleet != identity.fleet.fleet
+            || credential_manifest.activation_id != identity.operation_id
+            || credential_manifest.generation != credential.generation
+        {
+            return Err(FleetActivationOpsError::IdentityMismatch);
+        }
+
+        let source = FleetCascadeActivationEvidenceRecord::Source {
+            cascade_manifest_hash,
+        };
+        let credential_record = FleetCredentialGenerationRefRecord {
+            generation: credential.generation,
+            manifest_hash: credential.manifest_hash,
+        };
+        let manifest_records = cascade_manifest
+            .into_iter()
+            .map(|entry| FleetCascadeManifestEntryRecord {
+                principal: entry.principal,
+                state_snapshot_hash: entry.state_snapshot_hash,
+                topology_snapshot_hash: entry.topology_snapshot_hash,
+            })
+            .collect::<Vec<_>>();
+        let credential_manifest_record = credential_manifest_to_record(credential_manifest);
+
+        if let Some(existing) = &evidence.cascade
+            && existing != &source
+        {
+            return Err(FleetActivationOpsError::EvidenceMismatch);
+        }
+        if let Some(existing) = &evidence.credential
+            && existing != &credential_record
+        {
+            return Err(FleetActivationOpsError::EvidenceMismatch);
+        }
+        if let Some(existing) = &record.cascade_manifest
+            && existing != &manifest_records
+        {
+            return Err(FleetActivationOpsError::EvidenceMismatch);
+        }
+        if !record.credential_manifests.is_empty()
+            && record.credential_manifests != [credential_manifest_record.clone()]
+        {
+            return Err(FleetActivationOpsError::EvidenceMismatch);
+        }
+
+        evidence.cascade = Some(source);
+        evidence.credential = Some(credential_record);
+        record.cascade_manifest = Some(manifest_records);
+        record.credential_manifests = vec![credential_manifest_record];
+        replace_record(record)?;
+        Self::status(true)
+    }
+
+    pub(crate) fn record_applied_state_snapshot(
+        hash: [u8; 32],
+    ) -> Result<(), FleetActivationOpsError> {
+        record_applied_snapshot(Some(hash), None)
+    }
+
+    pub(crate) fn record_applied_topology_snapshot(
+        hash: [u8; 32],
+    ) -> Result<(), FleetActivationOpsError> {
+        record_applied_snapshot(None, Some(hash))
+    }
+
+    pub(crate) fn prepare_credential_generation(
+        request: FleetCredentialGenerationRequest,
+    ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
+        let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let (identity, evidence) = match &mut record.state {
+            FleetActivationStateRecord::Prepared { identity, evidence } => (identity, evidence),
+            FleetActivationStateRecord::Active {
+                identity, evidence, ..
+            } => {
+                if identity.operation_id != request.operation_id
+                    || evidence.credential.as_ref()
+                        != Some(&credential_dto_to_record(request.credential))
+                {
+                    return Err(FleetActivationOpsError::IdentityMismatch);
+                }
+                return Self::status(false);
+            }
+        };
+        if identity.operation_id != request.operation_id || request.credential.generation == 0 {
+            return Err(FleetActivationOpsError::IdentityMismatch);
+        }
+
+        let next = credential_dto_to_record(request.credential);
+        match &evidence.credential {
+            None if next.generation == 1 => {}
+            Some(existing) if existing == &next => return Self::status(false),
+            Some(existing) if existing.generation.checked_add(1) == Some(next.generation) => {}
+            _ => {
+                return Err(FleetActivationOpsError::InvalidTransition {
+                    reason: "credential generation must be exact-idempotent or advance by one"
+                        .to_string(),
+                });
+            }
+        }
+        evidence.credential = Some(next);
+        replace_record(record)?;
+        Self::status(false)
+    }
+
+    pub(crate) fn activate(
+        request: FleetActivationRequest,
+        is_root: bool,
+        activated_at_ns: u64,
+    ) -> Result<FleetActivationTransition, FleetActivationOpsError> {
+        let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+        let (identity, evidence) = match &record.state {
+            FleetActivationStateRecord::Prepared { identity, evidence }
+            | FleetActivationStateRecord::Active {
+                identity, evidence, ..
+            } => (identity.clone(), evidence.clone()),
+        };
+        if identity.operation_id != request.operation_id
+            || evidence.credential.as_ref() != Some(&credential_dto_to_record(request.credential))
+        {
+            return Err(FleetActivationOpsError::IdentityMismatch);
+        }
+        let cascade =
+            evidence
+                .cascade
+                .clone()
+                .ok_or_else(|| FleetActivationOpsError::InvalidTransition {
+                    reason: "cascade evidence is incomplete".to_string(),
+                })?;
+        if is_root != matches!(cascade, FleetCascadeActivationEvidenceRecord::Source { .. }) {
+            return Err(FleetActivationOpsError::InvalidTransition {
+                reason: "cascade evidence does not match the runtime role".to_string(),
+            });
+        }
+        let expected_hash =
+            crate::ops::fleet_activation::FleetActivationEvidenceOps::activation_evidence_hash(
+                &identity_record_to_dto(&identity),
+                &cascade_record_to_dto(&cascade),
+                request.credential,
+            )
+            .map_err(|error| FleetActivationOpsError::InvalidTransition {
+                reason: error.to_string(),
+            })?;
+        if expected_hash != request.activation_evidence_hash {
+            return Err(FleetActivationOpsError::EvidenceMismatch);
+        }
+        if matches!(record.state, FleetActivationStateRecord::Active { .. }) {
+            return Ok(FleetActivationTransition {
+                status: Self::status(is_root)?,
+                transitioned: false,
+            });
+        }
+
+        record.state = FleetActivationStateRecord::Active {
+            identity,
+            evidence,
+            activated_at_ns,
+        };
+        record.prepared_state_snapshot_hash = None;
+        record.prepared_topology_snapshot_hash = None;
+        replace_record(record)?;
+        Ok(FleetActivationTransition {
+            status: Self::status(is_root)?,
+            transitioned: true,
+        })
     }
 
     #[cfg(test)]
@@ -138,6 +338,8 @@ fn initialize_prepared(
                 credential: None,
             },
         },
+        prepared_state_snapshot_hash: None,
+        prepared_topology_snapshot_hash: None,
         cascade_manifest: None,
         credential_manifests: Vec::new(),
     };
@@ -163,6 +365,110 @@ fn validate_record_bound(record: &FleetActivationRecord) -> Result<(), FleetActi
         });
     }
     Ok(())
+}
+
+fn record_applied_snapshot(
+    state_hash: Option<[u8; 32]>,
+    topology_hash: Option<[u8; 32]>,
+) -> Result<(), FleetActivationOpsError> {
+    let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
+    let FleetActivationStateRecord::Prepared { evidence, .. } = &mut record.state else {
+        return Ok(());
+    };
+    if matches!(
+        evidence.cascade,
+        Some(FleetCascadeActivationEvidenceRecord::Source { .. })
+    ) {
+        return Err(FleetActivationOpsError::InvalidTransition {
+            reason: "non-root applied snapshot cannot replace root source evidence".to_string(),
+        });
+    }
+    if let Some(hash) = state_hash {
+        record.prepared_state_snapshot_hash = Some(hash);
+    }
+    if let Some(hash) = topology_hash {
+        record.prepared_topology_snapshot_hash = Some(hash);
+    }
+    if let (Some(state_snapshot_hash), Some(topology_snapshot_hash)) = (
+        record.prepared_state_snapshot_hash,
+        record.prepared_topology_snapshot_hash,
+    ) {
+        evidence.cascade = Some(FleetCascadeActivationEvidenceRecord::Applied {
+            state_snapshot_hash,
+            topology_snapshot_hash,
+        });
+    }
+    replace_record(record)
+}
+
+fn replace_record(record: FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
+    validate_record_bound(&record)?;
+    if !FleetActivation::replace(record) {
+        return Err(FleetActivationOpsError::NotInitialized);
+    }
+    Ok(())
+}
+
+const fn credential_dto_to_record(
+    credential: FleetCredentialGenerationRef,
+) -> FleetCredentialGenerationRefRecord {
+    FleetCredentialGenerationRefRecord {
+        generation: credential.generation,
+        manifest_hash: credential.manifest_hash,
+    }
+}
+
+fn credential_manifest_to_record(
+    manifest: FleetCredentialManifest,
+) -> FleetCredentialManifestRecord {
+    FleetCredentialManifestRecord {
+        fleet: manifest.fleet,
+        activation_id: manifest.activation_id,
+        generation: manifest.generation,
+        root_policy_set_hash: manifest.root_policy_set_hash,
+        renewal_template_set_hash: manifest.renewal_template_set_hash,
+        entries: manifest
+            .entries
+            .into_iter()
+            .map(|entry| FleetCredentialManifestEntryRecord {
+                root_issuer: entry.root_issuer,
+                subject_canister: entry.subject_canister,
+                not_before_ns: entry.not_before_ns,
+                expires_at_ns: entry.expires_at_ns,
+                key_identity_hash: entry.key_identity_hash,
+                cert_hash: entry.cert_hash,
+                proof_hash: entry.proof_hash,
+                bundle_hash: entry.bundle_hash,
+            })
+            .collect(),
+    }
+}
+
+fn identity_record_to_dto(record: &FleetActivationIdentityRecord) -> FleetActivationIdentity {
+    FleetActivationIdentity {
+        fleet: record.fleet.clone(),
+        operation_id: record.operation_id,
+        release_build_id: record.release_build_id,
+    }
+}
+
+const fn cascade_record_to_dto(
+    record: &FleetCascadeActivationEvidenceRecord,
+) -> FleetCascadeActivationEvidence {
+    match record {
+        FleetCascadeActivationEvidenceRecord::Source {
+            cascade_manifest_hash,
+        } => FleetCascadeActivationEvidence::Source {
+            cascade_manifest_hash: *cascade_manifest_hash,
+        },
+        FleetCascadeActivationEvidenceRecord::Applied {
+            state_snapshot_hash,
+            topology_snapshot_hash,
+        } => FleetCascadeActivationEvidence::Applied {
+            state_snapshot_hash: *state_snapshot_hash,
+            topology_snapshot_hash: *topology_snapshot_hash,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -475,6 +781,109 @@ mod tests {
         );
         assert_eq!(status.cascade_manifest, None);
         assert_eq!(status.credential_manifest, None);
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn nonroot_activation_commits_once_and_exact_replay_is_observational() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(35);
+        let root_input = input(release_build_id);
+        FleetActivationOps::initialize_nonroot_prepared(
+            root_input.fleet,
+            root_input.install_id,
+            root_input.release_build_id,
+            release_build_id,
+        )
+        .expect("initialize non-root Prepared");
+        FleetActivationOps::record_applied_state_snapshot([36; 32]).expect("record state evidence");
+        FleetActivationOps::record_applied_topology_snapshot([37; 32])
+            .expect("record topology evidence");
+        let credential = FleetCredentialGenerationRef {
+            generation: 1,
+            manifest_hash: [38; 32],
+        };
+        FleetActivationOps::prepare_credential_generation(FleetCredentialGenerationRequest {
+            operation_id: [12; 32],
+            credential,
+        })
+        .expect("prepare credential generation");
+
+        let prepared = FleetActivationOps::status(false).expect("prepared status");
+        let activation_evidence_hash =
+            crate::ops::fleet_activation::FleetActivationEvidenceOps::activation_evidence_hash(
+                &prepared.identity,
+                prepared.cascade.as_ref().expect("applied cascade evidence"),
+                credential,
+            )
+            .expect("hash activation evidence");
+        let request = FleetActivationRequest {
+            operation_id: [12; 32],
+            credential,
+            activation_evidence_hash,
+        };
+
+        let first =
+            FleetActivationOps::activate(request, false, 39).expect("activate non-root once");
+        assert!(first.transitioned);
+        assert_eq!(
+            first.status.phase,
+            crate::dto::fleet_activation::FleetActivationPhase::Active
+        );
+        assert_eq!(first.status.activated_at_ns, Some(39));
+
+        let replay =
+            FleetActivationOps::activate(request, false, 40).expect("replay exact activation");
+        assert!(!replay.transitioned);
+        assert_eq!(replay.status.activated_at_ns, Some(39));
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn nonroot_activation_rejects_mismatched_evidence_without_transition() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(41);
+        let root_input = input(release_build_id);
+        FleetActivationOps::initialize_nonroot_prepared(
+            root_input.fleet,
+            root_input.install_id,
+            root_input.release_build_id,
+            release_build_id,
+        )
+        .expect("initialize non-root Prepared");
+        FleetActivationOps::record_applied_state_snapshot([42; 32]).expect("record state evidence");
+        FleetActivationOps::record_applied_topology_snapshot([43; 32])
+            .expect("record topology evidence");
+        let credential = FleetCredentialGenerationRef {
+            generation: 1,
+            manifest_hash: [44; 32],
+        };
+        FleetActivationOps::prepare_credential_generation(FleetCredentialGenerationRequest {
+            operation_id: [12; 32],
+            credential,
+        })
+        .expect("prepare credential generation");
+
+        assert_eq!(
+            FleetActivationOps::activate(
+                FleetActivationRequest {
+                    operation_id: [12; 32],
+                    credential,
+                    activation_evidence_hash: [45; 32],
+                },
+                false,
+                46,
+            ),
+            Err(FleetActivationOpsError::EvidenceMismatch)
+        );
+        assert_eq!(
+            FleetActivationOps::status(false)
+                .expect("status remains readable")
+                .phase,
+            crate::dto::fleet_activation::FleetActivationPhase::Prepared
+        );
 
         FleetActivationOps::reset_for_tests();
     }

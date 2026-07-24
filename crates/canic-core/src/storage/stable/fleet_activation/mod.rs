@@ -142,6 +142,8 @@ pub struct FleetCredentialManifestRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FleetActivationRecord {
     pub state: FleetActivationStateRecord,
+    pub prepared_state_snapshot_hash: Option<[u8; 32]>,
+    pub prepared_topology_snapshot_hash: Option<[u8; 32]>,
     pub cascade_manifest: Option<Vec<FleetCascadeManifestEntryRecord>>,
     pub credential_manifests: Vec<FleetCredentialManifestRecord>,
 }
@@ -188,6 +190,16 @@ impl FleetActivation {
             }
             let previous = store.insert(FLEET_ACTIVATION_RECORD_KEY, record);
             debug_assert!(previous.is_none());
+            true
+        })
+    }
+
+    pub(crate) fn replace(record: FleetActivationRecord) -> bool {
+        FLEET_ACTIVATION.with_borrow_mut(|store| {
+            if store.get(&FLEET_ACTIVATION_RECORD_KEY).is_none() {
+                return false;
+            }
+            store.insert(FLEET_ACTIVATION_RECORD_KEY, record);
             true
         })
     }
@@ -239,6 +251,8 @@ mod tests {
                     credential: None,
                 },
             },
+            prepared_state_snapshot_hash: None,
+            prepared_topology_snapshot_hash: None,
             cascade_manifest: None,
             credential_manifests: Vec::new(),
         }

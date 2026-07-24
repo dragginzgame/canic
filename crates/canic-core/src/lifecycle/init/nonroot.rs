@@ -4,11 +4,7 @@ use crate::{
     },
     bootstrap,
     config::schema::ConfigModel,
-    dto::{
-        abi::v1::CanisterInitPayload,
-        env::EnvBootstrapArgs,
-        topology::{FleetDirectoryInput, SubnetDirectoryInput},
-    },
+    dto::{abi::v1::CanisterInitPayload, env::EnvBootstrapArgs},
     ids::CanisterRole,
     lifecycle::{LifecyclePhase, lifecycle_trap},
     log,
@@ -33,14 +29,12 @@ pub fn init_nonroot_canister_before_bootstrap(
 pub fn init_local_nonroot_canister_before_bootstrap(
     role: CanisterRole,
     env: EnvBootstrapArgs,
-    fleet_directory: FleetDirectoryInput,
-    subnet_directory: SubnetDirectoryInput,
     config: ConfigModel,
     config_source: &str,
     config_path: &str,
 ) {
     init_nonroot_before_bootstrap(role, config, config_source, config_path, move |role| {
-        workflow::runtime::init_local_nonroot_canister(role, env, fleet_directory, subnet_directory)
+        workflow::runtime::init_local_nonroot_canister(role, env)
     });
 }
 

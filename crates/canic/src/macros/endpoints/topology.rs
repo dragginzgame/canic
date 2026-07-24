@@ -1,6 +1,6 @@
 //! Module: macros::endpoints::topology
 //!
-//! Responsibility: emit topology state, index, children, and placement views.
+//! Responsibility: emit topology state, Directory, children, and placement views.
 //! Does not own: topology state, placement policy, or authorization policy.
 //! Boundary: exposes facade macros that delegate immediately to core APIs.
 
@@ -17,28 +17,24 @@ macro_rules! canic_emit_topology_state_endpoints {
     };
 }
 
-/// Emit shared topology index query endpoints.
+/// Emit shared topology Directory query endpoints.
 #[macro_export]
-macro_rules! canic_emit_topology_index_endpoints {
+macro_rules! canic_emit_topology_directory_endpoints {
     () => {
         #[$crate::canic_query(public)]
-        fn canic_app_index(
+        fn canic_fleet_directory(
             page: ::canic::dto::page::PageRequest,
-        ) -> Result<
-            ::canic::dto::page::Page<::canic::dto::topology::IndexEntryResponse>,
-            ::canic::Error,
-        > {
-            Ok($crate::__internal::core::api::topology::index::AppIndexApi::page(page))
+        ) -> Result<::canic::dto::topology::FleetDirectoryPageResponse, ::canic::Error> {
+            $crate::__internal::core::api::topology::directory::FleetDirectoryApi::page(page)
+                .map_err(::canic::Error::from)
         }
 
         #[$crate::canic_query(public)]
-        fn canic_subnet_index(
+        fn canic_subnet_directory(
             page: ::canic::dto::page::PageRequest,
-        ) -> Result<
-            ::canic::dto::page::Page<::canic::dto::topology::IndexEntryResponse>,
-            ::canic::Error,
-        > {
-            Ok($crate::__internal::core::api::topology::index::SubnetIndexApi::page(page))
+        ) -> Result<::canic::dto::topology::SubnetDirectoryPageResponse, ::canic::Error> {
+            $crate::__internal::core::api::topology::directory::SubnetDirectoryApi::page(page)
+                .map_err(::canic::Error::from)
         }
     };
 }
@@ -92,8 +88,8 @@ macro_rules! canic_bundle_topology_views_endpoints {
     () => {
         #[cfg(not(canic_disable_bundle_topology_state))]
         $crate::canic_emit_topology_state_endpoints!();
-        #[cfg(not(canic_disable_bundle_topology_index))]
-        $crate::canic_emit_topology_index_endpoints!();
+        #[cfg(not(canic_disable_bundle_topology_directory))]
+        $crate::canic_emit_topology_directory_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_children))]
         $crate::canic_emit_topology_children_endpoints!();
         #[cfg(not(canic_disable_bundle_topology_placement))]

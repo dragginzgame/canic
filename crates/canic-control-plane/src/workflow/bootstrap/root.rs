@@ -29,12 +29,12 @@ use canic_core::control_plane_support::{
             ready::ReadyOps,
         },
         storage::{
-            index::{app::AppIndexOps, subnet::SubnetIndexOps},
+            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
             pool::PoolOps,
             registry::subnet::SubnetRegistryOps,
         },
     },
-    view::topology::IndexEntryView,
+    view::topology::DirectoryEntryView,
     workflow::{
         ic::{IcWorkflow, provision::ProvisionWorkflow},
         pool::{PoolWorkflow, query::PoolQuery},
@@ -42,7 +42,10 @@ use canic_core::control_plane_support::{
     },
 };
 use canic_core::{
-    dto::validation::{ValidationIssue, ValidationReport},
+    dto::{
+        fleet_activation::FleetActivationPhase,
+        validation::{ValidationIssue, ValidationReport},
+    },
     log,
     log::Topic,
 };
@@ -163,6 +166,32 @@ fn mark_root_bootstrap_failed(phase: LifecycleMetricPhase, message: String) {
     BootstrapStatusOps::mark_failed(message);
 }
 
+#[must_use]
+pub fn activation_preparation_complete() -> bool {
+    BootstrapStatusOps::snapshot().phase
+        == BootstrapPhaseLabel::ROOT_INIT_ACTIVATION_PREPARED.as_str()
+}
+
+fn complete_or_wait_for_root_activation() {
+    if fleet_is_prepared() {
+        record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Waiting);
+        BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_ACTIVATION_PREPARED);
+        log!(
+            Topic::Init,
+            Info,
+            "bootstrap (root:init) prepared managed inventory for Fleet activation"
+        );
+        return;
+    }
+
+    log!(Topic::Init, Info, "bootstrap (root:init) complete");
+    record_root_bootstrap_metric(
+        LifecycleMetricPhase::Init,
+        LifecycleMetricOutcome::Completed,
+    );
+    ReadyOps::mark_ready();
+}
+
 pub async fn bootstrap_init_root_canister() {
     record_root_bootstrap_metric(LifecycleMetricPhase::Init, LifecycleMetricOutcome::Started);
 
@@ -244,14 +273,14 @@ pub async fn bootstrap_init_root_canister() {
     }
     canic_core::perf!("bootstrap_create_canisters");
 
-    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_REBUILD_INDEXES);
-    if let Err(err) = root_rebuild_indexes_from_registry() {
-        let message = format!("index materialization failed: {err}");
+    BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_REBUILD_DIRECTORIES);
+    if let Err(err) = root_rebuild_directories_from_registry() {
+        let message = format!("Directory materialization failed: {err}");
         log!(Topic::Init, Error, "{message}");
         mark_root_bootstrap_failed(LifecycleMetricPhase::Init, message);
         return;
     }
-    canic_core::perf!("bootstrap_rebuild_indexes");
+    canic_core::perf!("bootstrap_rebuild_directories");
 
     BootstrapStatusOps::set_phase(BootstrapPhaseLabel::ROOT_INIT_VALIDATE);
     let report = root_validate_state();
@@ -270,12 +299,7 @@ pub async fn bootstrap_init_root_canister() {
         return;
     }
 
-    log!(Topic::Init, Info, "bootstrap (root:init) complete");
-    record_root_bootstrap_metric(
-        LifecycleMetricPhase::Init,
-        LifecycleMetricOutcome::Completed,
-    );
-    ReadyOps::mark_ready();
+    complete_or_wait_for_root_activation();
 }
 
 /// Bootstrap workflow for the root canister after upgrade.
@@ -436,8 +460,16 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
 
     ensure_required_wasm_store_canister().await?;
     canic_core::perf!("bootstrap_ensure_wasm_store");
-    WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store().await?;
-    canic_core::perf!("bootstrap_publish_release_set");
+    if fleet_is_prepared() {
+        log!(
+            Topic::Init,
+            Info,
+            "ws: defer ordinary store publication until Fleet activation completes"
+        );
+    } else {
+        WasmStorePublicationWorkflow::publish_staged_release_set_to_current_store().await?;
+        canic_core::perf!("bootstrap_publish_release_set");
+    }
 
     // Publication already mirrors each selected managed-store binding back into
     // root-owned manifest state. Re-importing the full fleet catalog here is
@@ -447,8 +479,15 @@ pub async fn root_create_canisters() -> Result<(), InternalError> {
     ensure_required_canisters(&data).await
 }
 
-pub fn root_rebuild_indexes_from_registry() -> Result<(), InternalError> {
-    let _ = ProvisionWorkflow::rebuild_indexes_from_registry(None)?;
+fn fleet_is_prepared() -> bool {
+    matches!(
+        canic_core::api::fleet_activation::FleetActivationApi::status(),
+        Ok(status) if status.phase == FleetActivationPhase::Prepared
+    )
+}
+
+pub fn root_rebuild_directories_from_registry() -> Result<(), InternalError> {
+    let _ = ProvisionWorkflow::rebuild_directories_from_registry(None)?;
 
     Ok(())
 }
@@ -804,8 +843,8 @@ async fn import_default_wasm_store_catalog() -> Result<(), InternalError> {
 }
 
 pub fn root_validate_state() -> ValidationReport {
-    let app_entries = AppIndexOps::entry_projections();
-    let subnet_entries = SubnetIndexOps::entry_projections();
+    let fleet_entries = FleetDirectoryOps::entry_projections();
+    let subnet_entries = SubnetDirectoryOps::entry_projections();
 
     let mut issues = Vec::new();
 
@@ -818,33 +857,37 @@ pub fn root_validate_state() -> ValidationReport {
         });
     }
 
-    let registry_roles = SubnetRegistryOps::direct_root_role_index();
+    let registry_roles = SubnetRegistryOps::direct_root_roles();
 
-    let (app_unique, app_consistent) =
-        check_index("app_index", &app_entries, &registry_roles, &mut issues);
-    let (subnet_unique, subnet_consistent) = check_index(
-        "subnet_index",
+    let (fleet_unique, fleet_consistent) = check_directory(
+        "fleet_directory",
+        &fleet_entries,
+        &registry_roles,
+        &mut issues,
+    );
+    let (subnet_unique, subnet_consistent) = check_directory(
+        "subnet_directory",
         &subnet_entries,
         &registry_roles,
         &mut issues,
     );
 
-    let unique_index_roles = app_unique && subnet_unique;
-    let registry_index_consistent = app_consistent && subnet_consistent;
-    let ok = env_complete && unique_index_roles && registry_index_consistent;
+    let unique_directory_roles = fleet_unique && subnet_unique;
+    let registry_directory_consistent = fleet_consistent && subnet_consistent;
+    let ok = env_complete && unique_directory_roles && registry_directory_consistent;
 
     ValidationReport {
         ok,
-        registry_index_consistent,
-        unique_index_roles,
+        registry_directory_consistent,
+        unique_directory_roles,
         env_complete,
         issues,
     }
 }
 
-fn check_index(
+fn check_directory(
     label: &str,
-    entries: &[IndexEntryView],
+    entries: &[DirectoryEntryView],
     registry_roles: &BTreeMap<CanisterRole, Vec<Principal>>,
     issues: &mut Vec<ValidationIssue>,
 ) -> (bool, bool) {
@@ -858,7 +901,7 @@ fn check_index(
         if *count > 1 {
             unique = false;
             issues.push(ValidationIssue {
-                code: "index_role_duplicate".to_string(),
+                code: "directory_role_duplicate".to_string(),
                 message: format!("{label} has duplicate role {}", entry.role),
             });
         }
@@ -867,14 +910,14 @@ fn check_index(
             None => {
                 consistent = false;
                 issues.push(ValidationIssue {
-                    code: "index_role_missing_in_registry".to_string(),
+                    code: "directory_role_missing_in_registry".to_string(),
                     message: format!("{label} role {} not present in registry", entry.role),
                 });
             }
             Some(pids) if pids.len() > 1 => {
                 consistent = false;
                 issues.push(ValidationIssue {
-                    code: "index_role_duplicate_in_registry".to_string(),
+                    code: "directory_role_duplicate_in_registry".to_string(),
                     message: format!(
                         "{label} role {} has multiple registry entries ({})",
                         entry.role,
@@ -886,7 +929,7 @@ fn check_index(
                 if pids[0] != entry.pid {
                     consistent = false;
                     issues.push(ValidationIssue {
-                        code: "index_role_pid_mismatch".to_string(),
+                        code: "directory_role_pid_mismatch".to_string(),
                         message: format!(
                             "{label} role {} points to {}, registry has {}",
                             entry.role, entry.pid, pids[0]

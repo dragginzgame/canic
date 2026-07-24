@@ -149,10 +149,8 @@ fn scaffold_project_writes_root_and_app_files() {
     assert!(config.contains("[roles.root]"));
     assert!(config.contains("[roles.app]"));
     assert!(!config.contains("auto_create"));
-    assert!(!config.contains("subnet_index"));
     assert!(config.contains("[subnets.default.canisters.root]"));
     assert!(config.contains("[subnets.default.canisters.app]"));
-    assert!(!config.contains("app_directory"));
     assert!(!config.contains("topup_policy"));
     assert!(!config.contains("[[canisters]]"));
     assert!(root_manifest.contains("version = \"0.1.0\""));

@@ -23,10 +23,10 @@ fn scale_hub_bootstraps_initial_worker_then_manual_create_reaches_min() {
     let setup = setup_root(RootSetupProfile::Scaling);
 
     let scale_hub_pid = setup
-        .subnet_index
+        .subnet_directory
         .get(&canister::SCALE_HUB)
         .copied()
-        .expect("scale_hub must exist in subnet index");
+        .expect("scale_hub must exist in Subnet Directory");
 
     let before = count_workers(&setup.pic, setup.root_id, scale_hub_pid);
     assert_eq!(

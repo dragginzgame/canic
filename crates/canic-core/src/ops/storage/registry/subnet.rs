@@ -203,6 +203,31 @@ impl SubnetRegistryOps {
         SubnetRegistry::children(pid)
     }
 
+    /// Return read-only registration views for one canister's direct children.
+    #[must_use]
+    pub fn direct_child_registrations(pid: Principal) -> Vec<RegisteredCanisterView> {
+        Self::children(pid)
+            .into_iter()
+            .map(|entry| RegisteredCanisterView {
+                pid: entry.pid,
+                created_at: entry.record.created_at,
+            })
+            .collect()
+    }
+
+    /// Return read-only registration views for the complete local registry.
+    #[must_use]
+    pub fn registrations() -> Vec<RegisteredCanisterView> {
+        let mut registrations = Vec::with_capacity(SubnetRegistry::len());
+        SubnetRegistry::for_each(|pid, record| {
+            registrations.push(RegisteredCanisterView {
+                pid,
+                created_at: record.created_at,
+            });
+        });
+        registrations
+    }
+
     #[must_use]
     pub(crate) fn find_pid_for_role(role: &CanisterRole) -> Option<Principal> {
         SubnetRegistry::find_pid_for_role(role)
@@ -253,9 +278,9 @@ impl SubnetRegistryOps {
         SubnetRegistryResponse(entries)
     }
 
-    /// Group direct root children by role for root-owned index validation.
+    /// Group direct root children by role for root-owned Directory validation.
     #[must_use]
-    pub fn direct_root_role_index() -> BTreeMap<CanisterRole, Vec<Principal>> {
+    pub fn direct_root_roles() -> BTreeMap<CanisterRole, Vec<Principal>> {
         let mut root_pid = None;
         SubnetRegistry::for_each(|pid, record| {
             if root_pid.is_none()
@@ -401,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_root_role_index_excludes_nested_matching_roles() {
+    fn direct_root_roles_excludes_nested_matching_roles() {
         seed_registry();
         SubnetRegistry::register(
             p(89),
@@ -411,7 +436,7 @@ mod tests {
             5,
         );
 
-        let roles = SubnetRegistryOps::direct_root_role_index();
+        let roles = SubnetRegistryOps::direct_root_roles();
 
         assert_eq!(
             roles.get(&CanisterRole::new("alpha_registry_test")),

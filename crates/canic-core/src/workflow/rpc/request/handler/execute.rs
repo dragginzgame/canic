@@ -28,7 +28,7 @@ use crate::{
             guard::{ReplayPending, secs_to_ns},
             receipt::PlacementReceiptAcknowledgementDecision,
         },
-        storage::{index::subnet::SubnetIndexOps, registry::subnet::SubnetRegistryOps},
+        storage::{directory::subnet::SubnetDirectoryOps, registry::subnet::SubnetRegistryOps},
     },
     replay_policy::CostClass,
     workflow::{
@@ -224,7 +224,7 @@ fn resolve_provision_parent(
         CreateCanisterParent::ThisCanister => Ok(ctx.caller),
         CreateCanisterParent::Parent => SubnetRegistryOps::get_parent(ctx.caller)
             .ok_or_else(|| RpcWorkflowError::ParentNotFound(ctx.caller).into()),
-        CreateCanisterParent::Index(role) => SubnetIndexOps::get(role)
+        CreateCanisterParent::Directory(role) => SubnetDirectoryOps::get(role)
             .ok_or_else(|| RpcWorkflowError::CanisterRoleNotFound(role.clone()).into()),
     }
 }

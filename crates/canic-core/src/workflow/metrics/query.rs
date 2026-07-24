@@ -109,13 +109,13 @@ mod tests {
                 CascadeMetricOperation, CascadeMetricOutcome, CascadeMetricReason,
                 CascadeMetricSnapshot, CascadeMetrics,
             },
-            directory::{
-                DirectoryMetricOperation, DirectoryMetricOutcome, DirectoryMetricReason,
-                DirectoryMetrics,
-            },
             intent::{
                 IntentMetricOperation, IntentMetricOutcome, IntentMetricReason,
                 IntentMetricSurface, IntentMetrics,
+            },
+            placement_binding::{
+                PlacementBindingMetricOperation, PlacementBindingMetricOutcome,
+                PlacementBindingMetricReason, PlacementBindingMetrics,
             },
             platform_call::{
                 PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
@@ -270,15 +270,15 @@ mod tests {
             CascadeMetricOutcome::Failed,
             CascadeMetricReason::SendFailed,
         );
-        DirectoryMetrics::record(
-            DirectoryMetricOperation::Resolve,
-            DirectoryMetricOutcome::Started,
-            DirectoryMetricReason::Ok,
+        PlacementBindingMetrics::record(
+            PlacementBindingMetricOperation::Resolve,
+            PlacementBindingMetricOutcome::Started,
+            PlacementBindingMetricReason::Ok,
         );
-        DirectoryMetrics::record(
-            DirectoryMetricOperation::Classify,
-            DirectoryMetricOutcome::Completed,
-            DirectoryMetricReason::PendingFresh,
+        PlacementBindingMetrics::record(
+            PlacementBindingMetricOperation::Classify,
+            PlacementBindingMetricOutcome::Completed,
+            PlacementBindingMetricReason::PendingFresh,
         );
         PoolMetrics::record(
             PoolMetricOperation::ImportQueued,

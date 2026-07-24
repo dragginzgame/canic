@@ -250,19 +250,6 @@ fn publish_chunk(pic: &Pic, root_id: Principal, chunk: TemplateChunkInput) {
     published.expect("publish release chunk application");
 }
 
-// Resume the root bootstrap flow once the ordinary release set is staged.
-pub(super) fn resume_root_bootstrap(pic: &Pic, root_id: Principal) {
-    let resumed: Result<(), Error> = pic
-        .update_call(
-            root_id,
-            protocol::CANIC_WASM_STORE_BOOTSTRAP_RESUME_ROOT_ADMIN,
-            (),
-        )
-        .expect("resume root bootstrap transport");
-
-    resumed.expect("resume root bootstrap application");
-}
-
 // Read the current PocketIC wall clock in whole seconds.
 fn root_time_secs(pic: &Pic, _root_id: Principal) -> u64 {
     pic.current_time_nanos() / 1_000_000_000

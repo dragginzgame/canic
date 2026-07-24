@@ -184,9 +184,9 @@ impl From<TopologyPolicyError> for InternalError {
         let message = err.to_string();
         let public_code = match &err {
             TopologyPolicyError::RegistryPolicy(err) => registry_policy_error_code(err),
-            TopologyPolicyError::DuplicateIndexRole(_)
+            TopologyPolicyError::DuplicateDirectoryRole(_)
             | TopologyPolicyError::ImmediateParentMismatch { .. }
-            | TopologyPolicyError::IndexRoleMismatch { .. }
+            | TopologyPolicyError::DirectoryRoleMismatch { .. }
             | TopologyPolicyError::ModuleHashMismatch(_)
             | TopologyPolicyError::ParentNotFound(_)
             | TopologyPolicyError::RegistryEntryMissing(_) => None,

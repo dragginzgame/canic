@@ -18,8 +18,8 @@ pub const CANIC_CONTROL_PLANE_MAX_ID: u8 = 99;
 pub mod memory {
     pub mod topology {
         pub const CANISTER_CHILDREN_ID: u8 = 11;
-        pub const APP_INDEX_ID: u8 = 12;
-        pub const SUBNET_INDEX_ID: u8 = 13;
+        pub const FLEET_DIRECTORY_ID: u8 = 12;
+        pub const SUBNET_DIRECTORY_ID: u8 = 13;
         pub const RETIRED_APP_REGISTRY_ID: u8 = 14;
         pub const SUBNET_REGISTRY_ID: u8 = 15;
     }
@@ -67,7 +67,7 @@ pub mod memory {
         pub const SCALING_REGISTRY_ID: u8 = 52;
         pub const SHARDING_REGISTRY_ID: u8 = 53;
         pub const SHARDING_ASSIGNMENT_ID: u8 = 54;
-        pub const DIRECTORY_REGISTRY_ID: u8 = 55;
+        pub const PLACEMENT_BINDING_REGISTRY_ID: u8 = 55;
         pub const SHARDING_ACTIVE_SET_ID: u8 = 56;
     }
 
@@ -106,8 +106,8 @@ use memory::{
         LOG_ENTRIES_ID,
     },
     placement::{
-        DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENT_ID,
-        SHARDING_REGISTRY_ID,
+        PLACEMENT_BINDING_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
+        SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
     template::{
@@ -115,15 +115,15 @@ use memory::{
         TEMPLATE_CHUNK_SETS_ID, TEMPLATE_MANIFESTS_ID, WASM_STORE_GC_STATE_ID,
     },
     topology::{
-        APP_INDEX_ID, CANISTER_CHILDREN_ID, RETIRED_APP_REGISTRY_ID, SUBNET_INDEX_ID,
+        CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, RETIRED_APP_REGISTRY_ID, SUBNET_DIRECTORY_ID,
         SUBNET_REGISTRY_ID,
     },
 };
 
 const CORE_RUNTIME_TOPOLOGY_IDS: &[MemoryId] = &[
     MemoryId::new(CANISTER_CHILDREN_ID),
-    MemoryId::new(APP_INDEX_ID),
-    MemoryId::new(SUBNET_INDEX_ID),
+    MemoryId::new(FLEET_DIRECTORY_ID),
+    MemoryId::new(SUBNET_DIRECTORY_ID),
     MemoryId::new(SUBNET_REGISTRY_ID),
 ];
 const CORE_RUNTIME_ENVIRONMENT_IDS: &[MemoryId] =
@@ -155,7 +155,7 @@ const CORE_RUNTIME_INTENT_IDS: &[MemoryId] = &[
 ];
 const CANISTER_POOL_IDS: &[MemoryId] = &[MemoryId::new(CANISTER_POOL_ID)];
 const SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SCALING_REGISTRY_ID)];
-const DIRECTORY_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(DIRECTORY_REGISTRY_ID)];
+const PLACEMENT_BINDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_BINDING_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
 const SHARDING_ASSIGNMENT_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ASSIGNMENT_ID)];
 const SHARDING_ACTIVE_SET_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ACTIVE_SET_ID)];
@@ -222,9 +222,9 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         SCALING_REGISTRY_IDS,
     ),
     definition(
-        StateAllocationKey::DirectoryRegistry,
+        StateAllocationKey::PlacementBindingRegistry,
         AllocationOwner::CanicCore,
-        DIRECTORY_REGISTRY_IDS,
+        PLACEMENT_BINDING_REGISTRY_IDS,
     ),
     definition(
         StateAllocationKey::ShardingRegistry,

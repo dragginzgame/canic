@@ -27,11 +27,11 @@ use crate::role_contract::allocation::memory::{
         LOG_ENTRIES_ID,
     },
     placement::{
-        DIRECTORY_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID, SHARDING_ASSIGNMENT_ID,
-        SHARDING_REGISTRY_ID,
+        PLACEMENT_BINDING_REGISTRY_ID, SCALING_REGISTRY_ID, SHARDING_ACTIVE_SET_ID,
+        SHARDING_ASSIGNMENT_ID, SHARDING_REGISTRY_ID,
     },
     pool::CANISTER_POOL_ID,
-    topology::{APP_INDEX_ID, CANISTER_CHILDREN_ID, SUBNET_INDEX_ID, SUBNET_REGISTRY_ID},
+    topology::{CANISTER_CHILDREN_ID, FLEET_DIRECTORY_ID, SUBNET_DIRECTORY_ID, SUBNET_REGISTRY_ID},
 };
 use crate::role_contract::{AllocationOwner, StateAllocationKey};
 
@@ -238,7 +238,7 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
 
 fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
     use crate::storage::stable::{
-        directory::{DirectoryRegistryData, DirectoryRegistryEntryRecord},
+        placement_binding::{PlacementBindingRegistryData, PlacementBindingRegistryEntryRecord},
         pool::{CanisterPoolData, CanisterPoolEntryRecord},
         scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
     };
@@ -269,14 +269,14 @@ fn placement_capacity_descriptors() -> Vec<StateAllocationDescriptor> {
             Vec::new(),
         ),
         descriptor(
-            StateAllocationKey::DirectoryRegistry,
+            StateAllocationKey::PlacementBindingRegistry,
             vec![state_domain(
-                "directory_registry",
-                DIRECTORY_REGISTRY_ID,
-                DirectoryRegistryEntryRecord::STATE_CONTRACT_NAME,
-                DirectoryRegistryData::STATE_CONTRACT_NAME,
+                "placement_binding_registry",
+                PLACEMENT_BINDING_REGISTRY_ID,
+                PlacementBindingRegistryEntryRecord::STATE_CONTRACT_NAME,
+                PlacementBindingRegistryData::STATE_CONTRACT_NAME,
                 150,
-                "directory_registry_entries_restore_bindings",
+                "placement_binding_registry_entries_restore_bindings",
             )],
             Vec::new(),
         ),
@@ -408,27 +408,29 @@ fn runtime_topology_domains() -> Vec<StateDomainManifest> {
         canister::CanisterEntryRecord,
         stable::{
             children::CanisterChildrenData,
-            index::{IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData},
+            directory::{
+                DirectoryEntryRecord, fleet::FleetDirectoryData, subnet::SubnetDirectoryData,
+            },
             registry::subnet::SubnetRegistryData,
         },
     };
 
     vec![
         state_domain(
-            "app_index",
-            APP_INDEX_ID,
-            IndexEntryRecord::STATE_CONTRACT_NAME,
-            AppIndexData::STATE_CONTRACT_NAME,
+            "fleet_directory",
+            FLEET_DIRECTORY_ID,
+            DirectoryEntryRecord::STATE_CONTRACT_NAME,
+            FleetDirectoryData::STATE_CONTRACT_NAME,
             10,
-            "app_index_import_restores_unique_roles",
+            "fleet_directory_import_restores_unique_roles",
         ),
         state_domain(
-            "subnet_index",
-            SUBNET_INDEX_ID,
-            IndexEntryRecord::STATE_CONTRACT_NAME,
-            SubnetIndexData::STATE_CONTRACT_NAME,
+            "subnet_directory",
+            SUBNET_DIRECTORY_ID,
+            DirectoryEntryRecord::STATE_CONTRACT_NAME,
+            SubnetDirectoryData::STATE_CONTRACT_NAME,
             15,
-            "subnet_index_import_restores_unique_roles",
+            "subnet_directory_import_restores_unique_roles",
         ),
         state_domain(
             "subnet_registry",
@@ -738,8 +740,8 @@ mod tests {
 
         for expected in [
             CANISTER_CHILDREN_ID,
-            APP_INDEX_ID,
-            SUBNET_INDEX_ID,
+            FLEET_DIRECTORY_ID,
+            SUBNET_DIRECTORY_ID,
             SUBNET_REGISTRY_ID,
             ENV_ID,
             FLEET_STATE_ID,
@@ -760,7 +762,7 @@ mod tests {
             APPLICATION_RECEIPT_REPLAY_ID,
             CANISTER_POOL_ID,
             SCALING_REGISTRY_ID,
-            DIRECTORY_REGISTRY_ID,
+            PLACEMENT_BINDING_REGISTRY_ID,
             SHARDING_REGISTRY_ID,
             SHARDING_ASSIGNMENT_ID,
             SHARDING_ACTIVE_SET_ID,
@@ -777,9 +779,9 @@ mod tests {
     }
 
     #[test]
-    fn topology_index_descriptors_reference_canonical_data_types() {
-        use crate::storage::stable::index::{
-            IndexEntryRecord, app::AppIndexData, subnet::SubnetIndexData,
+    fn topology_directory_descriptors_reference_canonical_data_types() {
+        use crate::storage::stable::directory::{
+            DirectoryEntryRecord, fleet::FleetDirectoryData, subnet::SubnetDirectoryData,
         };
 
         let descriptors = canic_state_descriptors();
@@ -789,15 +791,18 @@ mod tests {
             .expect("runtime topology descriptor");
 
         for (domain, snapshot) in [
-            ("app_index", AppIndexData::STATE_CONTRACT_NAME),
-            ("subnet_index", SubnetIndexData::STATE_CONTRACT_NAME),
+            ("fleet_directory", FleetDirectoryData::STATE_CONTRACT_NAME),
+            ("subnet_directory", SubnetDirectoryData::STATE_CONTRACT_NAME),
         ] {
             let declaration = topology
                 .state
                 .iter()
                 .find(|declaration| declaration.domain == domain)
-                .expect("topology index declaration");
-            assert_eq!(declaration.record, IndexEntryRecord::STATE_CONTRACT_NAME);
+                .expect("topology Directory declaration");
+            assert_eq!(
+                declaration.record,
+                DirectoryEntryRecord::STATE_CONTRACT_NAME
+            );
             assert_eq!(declaration.snapshot, snapshot);
         }
     }
@@ -1054,7 +1059,9 @@ mod tests {
     #[test]
     fn placement_descriptors_reference_canonical_data_types() {
         use crate::storage::stable::{
-            directory::{DirectoryRegistryData, DirectoryRegistryEntryRecord},
+            placement_binding::{
+                PlacementBindingRegistryData, PlacementBindingRegistryEntryRecord,
+            },
             pool::{CanisterPoolData, CanisterPoolEntryRecord},
             scaling::{ScalingRegistryData, ScalingRegistryEntryRecord},
         };
@@ -1075,10 +1082,10 @@ mod tests {
                 ScalingRegistryData::STATE_CONTRACT_NAME,
             ),
             (
-                StateAllocationKey::DirectoryRegistry,
-                "directory_registry",
-                DirectoryRegistryEntryRecord::STATE_CONTRACT_NAME,
-                DirectoryRegistryData::STATE_CONTRACT_NAME,
+                StateAllocationKey::PlacementBindingRegistry,
+                "placement_binding_registry",
+                PlacementBindingRegistryEntryRecord::STATE_CONTRACT_NAME,
+                PlacementBindingRegistryData::STATE_CONTRACT_NAME,
             ),
         ] {
             let descriptor = descriptors

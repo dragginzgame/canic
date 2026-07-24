@@ -21,7 +21,7 @@ use crate::{
     ops::{
         runtime::env::EnvOps,
         storage::{registry::subnet::SubnetRegistryOps, state::fleet::FleetStateOps},
-        topology::index::{AppIndexResolver, SubnetIndexResolver},
+        topology::directory::{FleetDirectoryResolver, SubnetDirectoryResolver},
     },
 };
 use std::collections::HashMap;
@@ -66,12 +66,12 @@ impl StateSnapshotBuilder {
     }
 
     pub fn with_fleet_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.fleet_directory = Some(AppIndexResolver::resolve_input()?);
+        self.snapshot.fleet_directory = Some(FleetDirectoryResolver::resolve_input()?);
         Ok(self)
     }
 
     pub fn with_subnet_directory(mut self) -> Result<Self, InternalError> {
-        self.snapshot.subnet_directory = Some(SubnetIndexResolver::resolve_input()?);
+        self.snapshot.subnet_directory = Some(SubnetDirectoryResolver::resolve_input()?);
         Ok(self)
     }
 

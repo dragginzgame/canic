@@ -257,7 +257,7 @@ const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     ),
     capability_allocation(
         RoleCapabilityKey::Directory,
-        StateAllocationKey::DirectoryRegistry,
+        StateAllocationKey::PlacementBindingRegistry,
     ),
     capability_allocation(RoleCapabilityKey::Scaling, StateAllocationKey::CanisterPool),
     capability_allocation(

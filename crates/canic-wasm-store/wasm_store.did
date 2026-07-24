@@ -17,8 +17,8 @@ type CanisterInitPayload = record {
   install_id : blob;
   release_build_id : text;
   env : EnvBootstrapArgs;
-  fleet_directory : vec IndexEntryInput;
-  subnet_directory : vec IndexEntryInput;
+  fleet_directory : FleetDirectoryInput;
+  subnet_directory : SubnetDirectoryInput;
 };
 type CapabilityProof = variant { Structural };
 type CapabilityRequestMetadata = record {
@@ -88,6 +88,11 @@ type FleetActivationIdentity = record {
   operation_id : blob;
 };
 type FleetActivationPhase = variant { Active; Prepared };
+type FleetActivationRequest = record {
+  credential : FleetCredentialGenerationRef;
+  operation_id : blob;
+  activation_evidence_hash : blob;
+};
 type FleetActivationStatusResponse = record {
   credential_manifest : opt FleetCredentialManifest;
   phase : FleetActivationPhase;
@@ -114,6 +119,10 @@ type FleetCredentialGenerationRef = record {
   manifest_hash : blob;
   generation : nat64;
 };
+type FleetCredentialGenerationRequest = record {
+  credential : FleetCredentialGenerationRef;
+  operation_id : blob;
+};
 type FleetCredentialManifest = record {
   fleet : FleetKey;
   entries : vec FleetCredentialManifestEntry;
@@ -133,7 +142,15 @@ type FleetCredentialManifestEntry = record {
   not_before_ns : nat64;
 };
 type FleetKey = record { network : text; fleet_id : text };
-type IndexEntryInput = record { pid : principal; role : text };
+type DirectoryEntryInput = record { pid : principal; role : text };
+type DirectoryProvenance = record {
+  fleet : FleetBinding;
+  source_root : principal;
+};
+type FleetDirectoryInput = record {
+  provenance : DirectoryProvenance;
+  entries : vec DirectoryEntryInput;
+};
 type NonrootCyclesCapabilityEnvelopeV1 = record {
   "service" : CapabilityService;
   metadata : CapabilityRequestMetadata;
@@ -158,8 +175,12 @@ type Result_9 = variant { Ok : FleetActivationStatusResponse; Err : Error };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
 type StateSnapshotInput = record {
   fleet_state : opt FleetStateInput;
-  fleet_directory : opt vec IndexEntryInput;
-  subnet_directory : opt vec IndexEntryInput;
+  fleet_directory : opt FleetDirectoryInput;
+  subnet_directory : opt SubnetDirectoryInput;
+};
+type SubnetDirectoryInput = record {
+  provenance : DirectoryProvenance;
+  entries : vec DirectoryEntryInput;
 };
 type TemplateChunkInput = record {
   chunk_index : nat32;
@@ -197,9 +218,10 @@ type TemplateManifestInput = record {
 //
 type TemplateManifestState = variant { Blocked; Staged; Approved };
 type TopologyChildren = record {
-  children : vec IndexEntryInput;
+  children : vec TopologyDirectChild;
   parent_pid : principal;
 };
+type TopologyDirectChild = record { pid : principal; role : text };
 type TopologyPathNode = record {
   pid : principal;
   role : text;
@@ -250,12 +272,14 @@ type WasmStoreTemplateStatusResponse = record {
   versions : nat16;
 };
 service : (CanisterInitPayload, opt blob) -> {
+  canic_activate_fleet : (FleetActivationRequest) -> (Result_9);
   canic_bootstrap_status : () -> (BootstrapStatusResponse) query;
   canic_cycle_balance : () -> (Result) query;
   canic_fleet_activation_status : () -> (Result_9) query;
   canic_cycle_topups : (PageRequest) -> (Result_1) query;
   canic_cycle_tracker : (PageRequest) -> (Result_2) query;
   canic_metadata : () -> (CanicMetadataResponse) query;
+  canic_prepare_fleet_credential_generation : (FleetCredentialGenerationRequest) -> (Result_9);
   canic_ready : () -> (bool) query;
   canic_response_capability_v1 : (NonrootCyclesCapabilityEnvelopeV1) -> (
       Result_3,

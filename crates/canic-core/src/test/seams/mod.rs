@@ -1,6 +1,6 @@
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 
-mod index_addressing_seam;
+mod directory_addressing_seam;
 mod pool_selection_seam;
 mod registry_policy_seam;
 mod retention_seam;

@@ -15,13 +15,14 @@ use crate::{
         ic::IcOps,
         runtime::{
             env::EnvOps,
+            fleet_activation::FleetActivationRuntimeOps,
             metrics::cascade::{
                 CascadeMetricOperation as MetricOperation, CascadeMetricOutcome as MetricOutcome,
                 CascadeMetricReason as MetricReason, CascadeMetricSnapshot as MetricSnapshot,
                 CascadeMetrics,
             },
         },
-        storage::children::CanisterChildrenOps,
+        storage::{children::CanisterChildrenOps, fleet_activation::FleetActivationOps},
     },
     workflow::{
         cascade::{
@@ -41,6 +42,15 @@ use std::collections::HashMap;
 /// Orchestrates topology snapshot propagation across the canister tree.
 ///
 pub struct TopologyCascadeWorkflow;
+
+fn prepared_topology_snapshot_hash(
+    view: &TopologySnapshotInput,
+) -> Result<Option<[u8; 32]>, InternalError> {
+    if FleetActivationRuntimeOps::is_standalone_local() {
+        return Ok(None);
+    }
+    crate::ops::fleet_activation::FleetActivationEvidenceOps::topology_snapshot_hash(view).map(Some)
+}
 
 impl TopologyCascadeWorkflow {
     // ───────────────────────── Root cascades ─────────────────────────
@@ -145,6 +155,15 @@ impl TopologyCascadeWorkflow {
         }
     }
 
+    pub(crate) fn root_snapshot_input_for_target(
+        target_pid: Principal,
+    ) -> Result<TopologySnapshotInput, InternalError> {
+        EnvOps::require_root()?;
+        let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
+        let target_snapshot = Self::slice_snapshot_for_child(target_pid, &snapshot)?;
+        Ok(TopologySnapshotAdapter::to_input(&target_snapshot))
+    }
+
     // ──────────────────────── Non-root cascades ──────────────────────
 
     /// Continues a topology cascade on a non-root canister.
@@ -152,6 +171,7 @@ impl TopologyCascadeWorkflow {
         view: TopologySnapshotInput,
     ) -> Result<(), InternalError> {
         EnvOps::deny_root()?;
+        let activation_hash = prepared_topology_snapshot_hash(&view)?;
 
         let snapshot = TopologySnapshotAdapter::from_input(view);
 
@@ -199,6 +219,10 @@ impl TopologyCascadeWorkflow {
             .collect();
 
         CanisterChildrenOps::import_direct_children(self_pid, children_entries);
+        if let Some(hash) = activation_hash {
+            FleetActivationOps::record_applied_topology_snapshot(hash)
+                .map_err(crate::ops::storage::StorageOpsError::from)?;
+        }
 
         Self::record(
             MetricOperation::LocalApply,
