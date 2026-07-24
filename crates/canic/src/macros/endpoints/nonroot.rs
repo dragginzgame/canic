@@ -42,7 +42,11 @@ macro_rules! canic_emit_nonroot_sync_topology_endpoints {
             $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot).await
         }
 
-        #[$crate::canic_update(internal, requires(caller::is_parent()))]
+        #[$crate::canic_update(
+            internal,
+            requires(caller::is_parent()),
+            payload(max_bytes = ::canic::__internal::core::dto::topology::DIRECTORY_CASCADE_MAX_BYTES)
+        )]
         async fn canic_sync_topology(
             snapshot: ::canic::dto::cascade::TopologySnapshotInput,
         ) -> Result<(), ::canic::Error> {

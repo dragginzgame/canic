@@ -35,20 +35,9 @@ impl FleetStateWorkflow {
     pub async fn execute_command(cmd: FleetCommand) -> Result<FleetCommandResponse, InternalError> {
         EnvOps::require_root()?;
         let response = FleetStateOps::apply_command(cmd);
-        if !fleet_command_response_changed(response) {
-            return Ok(response);
-        }
-
         let snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
         Ok(response)
-    }
-}
-
-const fn fleet_command_response_changed(response: FleetCommandResponse) -> bool {
-    match response {
-        FleetCommandResponse::Status(status) => status.changed,
-        FleetCommandResponse::CyclesFundingEnabled(enabled) => enabled.changed,
     }
 }

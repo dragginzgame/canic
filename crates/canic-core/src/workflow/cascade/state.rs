@@ -213,7 +213,7 @@ impl StateCascadeWorkflow {
             MetricOutcome::Started,
             MetricReason::Ok,
         );
-        if let Err(err) = Self::apply_state(&snapshot) {
+        if let Err(err) = Self::apply_state_with_activation(&snapshot, activation_hash) {
             CascadeMetrics::record(
                 MetricOperation::LocalApply,
                 MetricSnapshot::State,
@@ -234,11 +234,6 @@ impl StateCascadeWorkflow {
             MetricOutcome::Completed,
             MetricReason::Ok,
         );
-        if let Some(hash) = activation_hash {
-            FleetActivationOps::record_applied_state_snapshot(hash)
-                .map_err(crate::ops::storage::StorageOpsError::from)?;
-        }
-
         // Cascade using children cache only (never registry).
         let child_pids = CanisterChildrenOps::pids();
         warn_if_large("non-root state cascade", child_pids.len());
@@ -285,31 +280,57 @@ impl StateCascadeWorkflow {
 
     // ─────────────────────── Local application ──────────────────────
 
-    /// Apply a received state snapshot locally.
-    ///
-    /// Valid only on non-root canisters.
-    fn apply_state(snapshot: &StateSnapshot) -> Result<(), InternalError> {
-        EnvOps::deny_root()?;
+    /// Prepare and apply one received non-root snapshot with exact activation evidence.
+    fn apply_state_with_activation(
+        snapshot: &StateSnapshot,
+        activation_hash: Option<[u8; 32]>,
+    ) -> Result<(), InternalError> {
+        let activation_evidence = activation_hash
+            .map(FleetActivationOps::prepare_applied_state_snapshot)
+            .transpose()
+            .map_err(crate::ops::storage::StorageOpsError::from)?;
+        Self::apply_state_replacements(snapshot)?;
+        if let Some(prepared) = activation_evidence {
+            FleetActivationOps::commit_prepared_snapshot(prepared);
+        }
+        Ok(())
+    }
 
+    fn apply_state_replacements(snapshot: &StateSnapshot) -> Result<(), InternalError> {
         if let Some(directory) = &snapshot.fleet_directory {
             validate_provenance(&directory.provenance)?;
         }
         if let Some(directory) = &snapshot.subnet_directory {
             validate_provenance(&directory.provenance)?;
         }
+
+        let fleet_directory = snapshot
+            .fleet_directory
+            .as_ref()
+            .map(|directory| {
+                let filtered = FleetDirectoryOps::filter_args_for_local_config(directory.clone())?;
+                FleetDirectoryOps::prepare_args_allow_incomplete(filtered)
+            })
+            .transpose()?;
+        let subnet_directory = snapshot
+            .subnet_directory
+            .as_ref()
+            .map(|directory| {
+                let filtered = SubnetDirectoryOps::filter_args_for_local_config(directory.clone())?;
+                SubnetDirectoryOps::prepare_args_allow_incomplete(filtered)
+            })
+            .transpose()?;
 
         if let Some(fleet) = snapshot.fleet_state {
             FleetStateOps::import_input(fleet);
         }
 
-        if let Some(directory) = &snapshot.fleet_directory {
-            let filtered = FleetDirectoryOps::filter_args_for_local_config(directory.clone())?;
-            FleetDirectoryOps::import_args_allow_incomplete(filtered)?;
+        if let Some(directory) = fleet_directory {
+            FleetDirectoryOps::commit_prepared(directory);
         }
 
-        if let Some(directory) = &snapshot.subnet_directory {
-            let filtered = SubnetDirectoryOps::filter_args_for_local_config(directory.clone())?;
-            SubnetDirectoryOps::import_args_allow_incomplete(filtered)?;
+        if let Some(directory) = subnet_directory {
+            SubnetDirectoryOps::commit_prepared(directory);
         }
 
         Ok(())
@@ -350,6 +371,123 @@ impl StateCascadeWorkflow {
                 Err(err.with_diagnostic_context(format!("state cascade rejected by child {pid}")))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod state_apply_tests {
+    use super::{StateCascadeWorkflow, StateSnapshot};
+    use crate::{
+        config::schema::CanisterKind,
+        dto::{
+            state::{FleetMode, FleetStateInput},
+            topology::{
+                DirectoryEntryInput, DirectoryProvenance, FleetDirectoryInput, SubnetDirectoryInput,
+            },
+        },
+        ids::{
+            AppId, CanisterRole, CanonicalNetworkId, FleetBinding, FleetId, FleetKey,
+            ReleaseBuildId, ReleaseBuildNonce, SubnetSlotId,
+        },
+        ops::storage::{
+            directory::{fleet::FleetDirectoryOps, subnet::SubnetDirectoryOps},
+            fleet_activation::FleetActivationOps,
+            state::fleet::FleetStateOps,
+        },
+        test::{
+            config::ConfigTestBuilder,
+            seams::{lock, p},
+            support::import_test_env,
+        },
+    };
+
+    #[test]
+    fn state_apply_prepares_every_replacement_before_mutating_local_state() {
+        let _guard = lock();
+        let service = CanisterRole::new("service");
+        let root = p(1);
+        let original = p(2);
+        let replacement = p(3);
+        let missing_subnet = SubnetSlotId::from("missing");
+        let fleet = FleetBinding {
+            fleet: FleetKey {
+                network: CanonicalNetworkId::public_ic(),
+                fleet_id: FleetId::from_generated_bytes([4; 32]),
+            },
+            app: AppId::from("test"),
+        };
+
+        let _config = ConfigTestBuilder::new()
+            .with_prime_canister_kind(service.clone(), CanisterKind::Service)
+            .with_fleet_service(service.clone())
+            .install();
+        import_test_env(service.clone(), SubnetSlotId::DEFAULT, root);
+
+        FleetActivationOps::reset_for_tests();
+        let release = ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([5; 32]));
+        FleetActivationOps::initialize_nonroot_prepared(
+            fleet.clone(),
+            [6; 32],
+            release,
+            release,
+            None,
+        )
+        .expect("initialize protected Fleet binding");
+
+        let original_state = FleetStateInput {
+            mode: FleetMode::Disabled,
+            cycles_funding_enabled: false,
+        };
+        FleetStateOps::import_input(original_state);
+        let provenance = DirectoryProvenance {
+            fleet,
+            source_root: root,
+        };
+        FleetDirectoryOps::import_args_allow_incomplete(FleetDirectoryInput {
+            provenance: provenance.clone(),
+            entries: vec![DirectoryEntryInput {
+                role: service.clone(),
+                pid: original,
+            }],
+        })
+        .expect("seed Fleet Directory");
+        SubnetDirectoryOps::import_args_allow_incomplete(SubnetDirectoryInput {
+            provenance: provenance.clone(),
+            entries: vec![DirectoryEntryInput {
+                role: service.clone(),
+                pid: original,
+            }],
+        })
+        .expect("seed Subnet Directory");
+        import_test_env(service.clone(), missing_subnet, root);
+        let snapshot = StateSnapshot {
+            fleet_state: Some(FleetStateInput {
+                mode: FleetMode::Enabled,
+                cycles_funding_enabled: true,
+            }),
+            fleet_directory: Some(FleetDirectoryInput {
+                provenance: provenance.clone(),
+                entries: vec![DirectoryEntryInput {
+                    role: service.clone(),
+                    pid: replacement,
+                }],
+            }),
+            subnet_directory: Some(SubnetDirectoryInput {
+                provenance,
+                entries: Vec::new(),
+            }),
+        };
+
+        StateCascadeWorkflow::apply_state_with_activation(&snapshot, Some([7; 32]))
+            .expect_err("unknown local Subnet Slot must reject the complete snapshot");
+
+        assert_eq!(FleetStateOps::snapshot_input(), original_state);
+        assert_eq!(FleetDirectoryOps::get(&service), Some(original));
+        assert_eq!(SubnetDirectoryOps::get(&service), Some(original));
+        assert_eq!(
+            FleetActivationOps::prepared_snapshot_hashes_for_tests(),
+            Some((None, None))
+        );
     }
 }
 

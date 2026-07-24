@@ -71,6 +71,9 @@ pub enum FleetActivationOpsError {
 
 pub struct FleetActivationOps;
 
+/// Fully validated activation-evidence replacement ready for an infallible commit.
+pub struct PreparedFleetActivationSnapshot(Option<FleetActivationRecord>);
+
 impl FleetActivationOps {
     pub(crate) fn initialize_root_prepared(
         input: CurrentRootInstallIdentity,
@@ -208,16 +211,26 @@ impl FleetActivationOps {
         Self::status(true)
     }
 
-    pub(crate) fn record_applied_state_snapshot(
+    pub(crate) fn prepare_applied_state_snapshot(
         hash: [u8; 32],
-    ) -> Result<(), FleetActivationOpsError> {
-        record_applied_snapshot(Some(hash), None)
+    ) -> Result<PreparedFleetActivationSnapshot, FleetActivationOpsError> {
+        prepare_applied_snapshot(Some(hash), None)
     }
 
-    pub(crate) fn record_applied_topology_snapshot(
+    pub(crate) fn prepare_applied_topology_snapshot(
         hash: [u8; 32],
-    ) -> Result<(), FleetActivationOpsError> {
-        record_applied_snapshot(None, Some(hash))
+    ) -> Result<PreparedFleetActivationSnapshot, FleetActivationOpsError> {
+        prepare_applied_snapshot(None, Some(hash))
+    }
+
+    pub(crate) fn commit_prepared_snapshot(prepared: PreparedFleetActivationSnapshot) {
+        let Some(record) = prepared.0 else {
+            return;
+        };
+        assert!(
+            FleetActivation::replace(record),
+            "prepared Fleet activation snapshot requires initialized protected state"
+        );
     }
 
     pub(crate) fn prepare_credential_generation(
@@ -340,8 +353,19 @@ impl FleetActivationOps {
     }
 
     #[cfg(test)]
-    fn reset_for_tests() {
+    pub(crate) fn reset_for_tests() {
         FleetActivation::import(FleetActivationData::default());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn prepared_snapshot_hashes_for_tests()
+    -> Option<(Option<[u8; 32]>, Option<[u8; 32]>)> {
+        FleetActivation::get().map(|record| {
+            (
+                record.prepared_state_snapshot_hash,
+                record.prepared_topology_snapshot_hash,
+            )
+        })
     }
 }
 
@@ -391,13 +415,13 @@ fn validate_record_bound(record: &FleetActivationRecord) -> Result<(), FleetActi
     Ok(())
 }
 
-fn record_applied_snapshot(
+fn prepare_applied_snapshot(
     state_hash: Option<[u8; 32]>,
     topology_hash: Option<[u8; 32]>,
-) -> Result<(), FleetActivationOpsError> {
+) -> Result<PreparedFleetActivationSnapshot, FleetActivationOpsError> {
     let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
     let FleetActivationStateRecord::Prepared { evidence, .. } = &mut record.state else {
-        return Ok(());
+        return Ok(PreparedFleetActivationSnapshot(None));
     };
     if matches!(
         evidence.cascade,
@@ -422,7 +446,8 @@ fn record_applied_snapshot(
             topology_snapshot_hash,
         });
     }
-    replace_record(record)
+    validate_record_bound(&record)?;
+    Ok(PreparedFleetActivationSnapshot(Some(record)))
 }
 
 fn replace_record(record: FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
@@ -524,6 +549,18 @@ mod tests {
             release_build_id,
             expected_module_hash: Some([13; 32]),
         }
+    }
+
+    fn record_state_snapshot(hash: [u8; 32]) {
+        let prepared = FleetActivationOps::prepare_applied_state_snapshot(hash)
+            .expect("prepare state evidence");
+        FleetActivationOps::commit_prepared_snapshot(prepared);
+    }
+
+    fn record_topology_snapshot(hash: [u8; 32]) {
+        let prepared = FleetActivationOps::prepare_applied_topology_snapshot(hash)
+            .expect("prepare topology evidence");
+        FleetActivationOps::commit_prepared_snapshot(prepared);
     }
 
     #[test]
@@ -851,9 +888,8 @@ mod tests {
             Some(vec![35, 36]),
         )
         .expect("initialize non-root Prepared");
-        FleetActivationOps::record_applied_state_snapshot([36; 32]).expect("record state evidence");
-        FleetActivationOps::record_applied_topology_snapshot([37; 32])
-            .expect("record topology evidence");
+        record_state_snapshot([36; 32]);
+        record_topology_snapshot([37; 32]);
         let credential = FleetCredentialGenerationRef {
             generation: 1,
             manifest_hash: [38; 32],
@@ -910,9 +946,8 @@ mod tests {
             None,
         )
         .expect("initialize non-root Prepared");
-        FleetActivationOps::record_applied_state_snapshot([42; 32]).expect("record state evidence");
-        FleetActivationOps::record_applied_topology_snapshot([43; 32])
-            .expect("record topology evidence");
+        record_state_snapshot([42; 32]);
+        record_topology_snapshot([43; 32]);
         let credential = FleetCredentialGenerationRef {
             generation: 1,
             manifest_hash: [44; 32],

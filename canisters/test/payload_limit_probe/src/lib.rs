@@ -1,4 +1,5 @@
 #![expect(clippy::unused_async)]
+use candid::Principal;
 use canic::{Error, prelude::*};
 
 canic::start_local!();
@@ -12,6 +13,15 @@ async fn canic_install(_: Option<Vec<u8>>) {}
 
 // Provide an empty upgrade hook for the required Canic lifecycle surface.
 async fn canic_upgrade() {}
+
+/// Relay a generated payload through a real inter-canister update.
+#[canic_update(public)]
+async fn relay_explicit_echo(target: Principal, len: usize) -> Result<usize, Error> {
+    Call::unbounded_wait(target, "explicit_echo")
+        .with_arg("x".repeat(len))?
+        .execute_candid::<Result<usize, Error>>()
+        .await?
+}
 
 /// Echo payload length under the default update ingress limit.
 #[canic_update(public)]
