@@ -10,10 +10,14 @@ use crate::{
         PolicyError,
         fleet_activation::{require_prepared_nonroot_endpoint, require_prepared_root_endpoint},
     },
-    dto::fleet_activation::{
-        FleetActivationPhase, FleetActivationRequest, FleetActivationResumeRequest,
-        FleetActivationStatusResponse, FleetCascadeManifestEntry, FleetCredentialGenerationRef,
-        FleetCredentialGenerationRequest, FleetCredentialManifest,
+    dto::{
+        cascade::{StateSnapshotInput, TopologySnapshotInput},
+        fleet_activation::{
+            FleetActivationPhase, FleetActivationRequest, FleetActivationResumeRequest,
+            FleetActivationStatusResponse, FleetCascadeActivationEvidence,
+            FleetCascadeManifestEntry, FleetCredentialGenerationRef,
+            FleetCredentialGenerationRequest, FleetCredentialManifest,
+        },
     },
     ids::EndpointCall,
     ops::{
@@ -254,6 +258,94 @@ impl FleetActivationWorkflow {
         Ok(transition)
     }
 
+    /// Complete activation handling for one newly provisioned managed non-root.
+    ///
+    /// Initial bootstrap children remain Prepared for the root's complete
+    /// activation manifest. Once the root is Active, the root validates the
+    /// exact cascade payloads it just propagated, advances the new child to the
+    /// Fleet's frozen credential generation, and observes uncertain call
+    /// outcomes through the controller status surface.
+    pub(crate) async fn complete_provisioned_nonroot_activation(
+        pid: crate::cdk::types::Principal,
+        state: StateSnapshotInput,
+        topology: TopologySnapshotInput,
+    ) -> Result<(), InternalError> {
+        EnvOps::require_root()?;
+        let root_status = Self::status()?;
+        if root_status.phase == FleetActivationPhase::Prepared {
+            return Ok(());
+        }
+        let credential = root_status.credential.ok_or_else(|| {
+            InternalError::invariant(
+                InternalErrorOrigin::Workflow,
+                "active root Fleet is missing its credential generation",
+            )
+        })?;
+        let expected_cascade = FleetCascadeActivationEvidence::Applied {
+            state_snapshot_hash: FleetActivationEvidenceOps::state_snapshot_hash(&state)?,
+            topology_snapshot_hash: FleetActivationEvidenceOps::topology_snapshot_hash(&topology)?,
+        };
+        let generation_request = FleetCredentialGenerationRequest {
+            operation_id: root_status.identity.operation_id,
+            credential,
+        };
+
+        let prepared = match RpcOps::call_rpc_result(
+            pid,
+            protocol::CANIC_PREPARE_FLEET_CREDENTIAL_GENERATION,
+            generation_request,
+        )
+        .await
+        {
+            Ok(status) => status,
+            Err(error) => {
+                reconcile_provisioned_nonroot_status_after_call_error(
+                    pid,
+                    &root_status,
+                    &expected_cascade,
+                    None,
+                    "credential-generation preparation",
+                    error,
+                )
+                .await?
+            }
+        };
+        validate_provisioned_nonroot_status(&root_status, &prepared, &expected_cascade, None)?;
+
+        let activation_evidence_hash = FleetActivationEvidenceOps::activation_evidence_hash(
+            &prepared.identity,
+            &expected_cascade,
+            credential,
+        )?;
+        let request = FleetActivationRequest {
+            operation_id: root_status.identity.operation_id,
+            credential,
+            activation_evidence_hash,
+        };
+        let activated =
+            match RpcOps::call_rpc_result(pid, protocol::CANIC_ACTIVATE_FLEET, request).await {
+                Ok(status) => status,
+                Err(error) => {
+                    reconcile_provisioned_nonroot_status_after_call_error(
+                        pid,
+                        &root_status,
+                        &expected_cascade,
+                        Some(FleetActivationPhase::Active),
+                        "activation",
+                        error,
+                    )
+                    .await?
+                }
+            };
+        validate_provisioned_nonroot_status(
+            &root_status,
+            &activated,
+            &expected_cascade,
+            Some(FleetActivationPhase::Active),
+        )?;
+        Ok(())
+    }
+
     /// Enforce the activation phase before a managed endpoint handler runs.
     pub fn require_endpoint_allowed(call: EndpointCall) -> Result<(), InternalError> {
         let is_root = EnvOps::canister_role()?.is_root();
@@ -266,6 +358,62 @@ impl FleetActivationWorkflow {
 
         require_endpoint_for_phase(is_root, status.phase, call).map_err(InternalError::from)
     }
+}
+
+async fn reconcile_provisioned_nonroot_status_after_call_error(
+    pid: crate::cdk::types::Principal,
+    root_status: &FleetActivationStatusResponse,
+    expected_cascade: &FleetCascadeActivationEvidence,
+    required_phase: Option<FleetActivationPhase>,
+    operation: &str,
+    call_error: InternalError,
+) -> Result<FleetActivationStatusResponse, InternalError> {
+    let observed: FleetActivationStatusResponse = match RpcOps::call_rpc_result(
+        pid,
+        protocol::CANIC_FLEET_ACTIVATION_STATUS,
+        (),
+    )
+    .await
+    {
+        Ok(status) => status,
+        Err(observation_error) => {
+            return Err(call_error.with_diagnostic_context(format!(
+                "could not reconcile uncertain child {operation} outcome for {pid}: {observation_error}"
+            )));
+        }
+    };
+    if let Err(observation_error) = validate_provisioned_nonroot_status(
+        root_status,
+        &observed,
+        expected_cascade,
+        required_phase,
+    ) {
+        return Err(call_error.with_diagnostic_context(format!(
+            "child {operation} outcome for {pid} was not established by status: {observation_error}"
+        )));
+    }
+    Ok(observed)
+}
+
+fn validate_provisioned_nonroot_status(
+    root_status: &FleetActivationStatusResponse,
+    child_status: &FleetActivationStatusResponse,
+    expected_cascade: &FleetCascadeActivationEvidence,
+    required_phase: Option<FleetActivationPhase>,
+) -> Result<(), InternalError> {
+    if child_status.identity != root_status.identity
+        || child_status.cascade.as_ref() != Some(expected_cascade)
+        || child_status.credential != root_status.credential
+        || child_status.cascade_manifest.is_some()
+        || child_status.credential_manifest.is_some()
+        || required_phase.is_some_and(|phase| child_status.phase != phase)
+    {
+        return Err(InternalError::invariant(
+            InternalErrorOrigin::Workflow,
+            "provisioned non-root status does not match the active root Fleet and propagated evidence",
+        ));
+    }
+    Ok(())
 }
 
 fn require_empty_prepared_credential_authority() -> Result<(), InternalError> {
@@ -321,7 +469,10 @@ fn require_endpoint_for_phase(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{EndpointCallKind, EndpointId};
+    use crate::ids::{
+        AppId, CanonicalNetworkId, EndpointCallKind, EndpointId, FleetBinding, FleetId, FleetKey,
+        ReleaseBuildId, ReleaseBuildNonce,
+    };
 
     fn call(name: &'static str, kind: EndpointCallKind) -> EndpointCall {
         EndpointCall {
@@ -343,5 +494,93 @@ mod tests {
             require_endpoint_for_phase(false, FleetActivationPhase::Prepared, ordinary),
             Err(PolicyError::FleetActivationPolicy(_))
         ));
+    }
+
+    fn root_status() -> FleetActivationStatusResponse {
+        FleetActivationStatusResponse {
+            phase: FleetActivationPhase::Active,
+            identity: crate::dto::fleet_activation::FleetActivationIdentity {
+                fleet: FleetBinding {
+                    fleet: FleetKey {
+                        network: CanonicalNetworkId::public_ic(),
+                        fleet_id: FleetId::from_generated_bytes([1; 32]),
+                    },
+                    app: AppId::from("toko"),
+                },
+                operation_id: [2; 32],
+                release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                    [3; 32],
+                )),
+            },
+            cascade: Some(FleetCascadeActivationEvidence::Source {
+                cascade_manifest_hash: [4; 32],
+            }),
+            cascade_manifest: Some(Vec::new()),
+            credential: Some(FleetCredentialGenerationRef {
+                generation: 1,
+                manifest_hash: [5; 32],
+            }),
+            credential_manifest: Some(FleetCredentialManifest {
+                fleet: FleetKey {
+                    network: CanonicalNetworkId::public_ic(),
+                    fleet_id: FleetId::from_generated_bytes([1; 32]),
+                },
+                activation_id: [2; 32],
+                generation: 1,
+                root_policy_set_hash: [6; 32],
+                renewal_template_set_hash: [7; 32],
+                entries: Vec::new(),
+            }),
+            activated_at_ns: Some(8),
+        }
+    }
+
+    fn child_status(
+        root: &FleetActivationStatusResponse,
+        phase: FleetActivationPhase,
+        cascade: FleetCascadeActivationEvidence,
+    ) -> FleetActivationStatusResponse {
+        FleetActivationStatusResponse {
+            phase,
+            identity: root.identity.clone(),
+            cascade: Some(cascade),
+            cascade_manifest: None,
+            credential: root.credential,
+            credential_manifest: None,
+            activated_at_ns: (phase == FleetActivationPhase::Active).then_some(9),
+        }
+    }
+
+    #[test]
+    fn provisioned_nonroot_requires_exact_root_identity_cascade_and_generation() {
+        let root = root_status();
+        let expected_cascade = FleetCascadeActivationEvidence::Applied {
+            state_snapshot_hash: [10; 32],
+            topology_snapshot_hash: [11; 32],
+        };
+        let prepared = child_status(
+            &root,
+            FleetActivationPhase::Prepared,
+            expected_cascade.clone(),
+        );
+
+        validate_provisioned_nonroot_status(&root, &prepared, &expected_cascade, None)
+            .expect("exact prepared child");
+        assert!(
+            validate_provisioned_nonroot_status(
+                &root,
+                &prepared,
+                &expected_cascade,
+                Some(FleetActivationPhase::Active),
+            )
+            .is_err()
+        );
+
+        let mut wrong_identity = prepared;
+        wrong_identity.identity.operation_id = [12; 32];
+        assert!(
+            validate_provisioned_nonroot_status(&root, &wrong_identity, &expected_cascade, None,)
+                .is_err()
+        );
     }
 }

@@ -8,6 +8,7 @@ use crate::{
     InternalError,
     cdk::types::Principal,
     domain::policy::pure::topology::TopologyPolicy,
+    dto::cascade::{StateSnapshotInput, TopologySnapshotInput},
     ids::CanisterRole,
     ops::{
         storage::{
@@ -17,7 +18,10 @@ use crate::{
         topology::input::mapper::TopologyRegistryMapper,
     },
     workflow::{
-        cascade::{state::StateCascadeWorkflow, topology::TopologyCascadeWorkflow},
+        cascade::{
+            snapshot::adapter::StateSnapshotAdapter, state::StateCascadeWorkflow,
+            topology::TopologyCascadeWorkflow,
+        },
         ic::provision::ProvisionWorkflow,
     },
 };
@@ -33,7 +37,9 @@ impl PropagationWorkflow {
     ///
     /// Used after structural mutations (create/adopt) to update
     /// parent/child relationships and derived topology views.
-    pub async fn propagate_topology(target: Principal) -> Result<(), InternalError> {
+    pub async fn propagate_topology(
+        target: Principal,
+    ) -> Result<TopologySnapshotInput, InternalError> {
         TopologyCascadeWorkflow::root_cascade_topology_for_pid(target).await
     }
 
@@ -42,19 +48,13 @@ impl PropagationWorkflow {
     /// This rebuilds Directory snapshots from the registry, applies current
     /// Fleet state, cascades it to root children, and finally re-asserts
     /// Directory ↔ Registry consistency.
-    pub async fn propagate_state(role: &CanisterRole) -> Result<(), InternalError> {
-        // The implicit wasm_store receives the normal topology cascade, but its
-        // publication inventory is synchronized in root-owned subnet state after
-        // creation rather than via the immediate create-time state cascade.
-        if role.is_wasm_store() {
-            return Ok(());
-        }
-
+    pub async fn propagate_state(role: &CanisterRole) -> Result<StateSnapshotInput, InternalError> {
         // Shared Directory/Fleet-state changes are sibling-visible, so create/adopt
         // state propagation must refresh all root children, not only the target branch.
         let snapshot = ProvisionWorkflow::rebuild_directories_from_registry(Some(role))?
             .with_fleet_state()
             .build();
+        let input = StateSnapshotAdapter::to_input(&snapshot);
 
         StateCascadeWorkflow::root_cascade_state(&snapshot).await?;
 
@@ -75,6 +75,6 @@ impl PropagationWorkflow {
         )
         .map_err(InternalError::from)?;
 
-        Ok(())
+        Ok(input)
     }
 }

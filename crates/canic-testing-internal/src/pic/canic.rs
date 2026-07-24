@@ -263,6 +263,19 @@ fn fetch_ready(pic: &Pic, canister_id: Principal) -> bool {
     match pic.query_call(canister_id, protocol::CANIC_READY, ()) {
         Ok(ready) => ready,
         Err(err) => {
+            let activation: Result<
+                Result<FleetActivationStatusResponse, Error>,
+                ic_testkit::pic::PicCallError,
+            > = pic.query_call(canister_id, protocol::CANIC_FLEET_ACTIVATION_STATUS, ());
+            if matches!(
+                activation,
+                Ok(Ok(FleetActivationStatusResponse {
+                    phase: FleetActivationPhase::Prepared,
+                    ..
+                }))
+            ) {
+                return false;
+            }
             pic.dump_canister_debug(canister_id, "query canic_ready failed");
             panic!("query canic_ready failed: {err:?}");
         }

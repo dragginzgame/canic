@@ -53,8 +53,18 @@ fi
 # can emit once the full root-subnet ordinary artifact set exists. Root itself builds the
 # implicit bootstrap `wasm_store` artifact internally.
 for canister in "${BUILD_CANISTERS[@]}"; do
+    BUILD_ARTIFACT_ARGS=(
+        "$canister"
+        "$BUILD_WASM_PROFILE"
+        "$ROOT_DIR"
+        "$ROOT_DIR"
+        "$BUILD_CONFIG"
+    )
+    if [ -n "${CANIC_RELEASE_BUILD_ID:-}" ]; then
+        BUILD_ARTIFACT_ARGS+=(--release-build-id "$CANIC_RELEASE_BUILD_ID")
+    fi
     cargo run -q --profile fast -p canic-host --example build_artifact --locked -- \
-        "$canister" "$BUILD_WASM_PROFILE" "$ROOT_DIR" "$ROOT_DIR" "$BUILD_CONFIG"
+        "${BUILD_ARTIFACT_ARGS[@]}"
 
     if [ "$canister" = "root" ]; then
         ROOT_WASM_GZ_PATH=".icp/local/canisters/root/root.wasm.gz"

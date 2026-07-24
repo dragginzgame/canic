@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.19` makes active-Fleet provisioning finish each new managed child’s
+  exact cascade and credential evidence plus root-authorized activation before
+  the replay-protected create operation completes.
+
 - `0.99.18` hard-cuts delegated-auth audience identity to the exact protected
   `FleetKey` across public, canonical, runtime and stable authorities; issuer
   configuration for another Fleet fails before mutation.

@@ -14,14 +14,17 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.17`.
-- The latest published release is `v0.99.17` at
-  `878feebf5dd827b7982f1a6fb21169c224b1afc4`.
-- The `v0.99.17` source tree is
-  `f0e783e00fb3a3294ceb7196da27c554c59d95a5`. Its Cargo.lock SHA-256 is
-  `014c32ba2283eea7e0b91d0aba64e4547ec95d8ee122a5bab3a196c1a7a8ab5b`.
-- The open `0.99.18` draft hard-cuts delegated-auth audience identity to the
-  exact protected `FleetKey` before implementing prepared credential bundles.
+- The workspace package version is `0.99.18`.
+- The latest published release is `v0.99.18` at
+  `e1cd23dfaba88a65ed095169ee2fa26e02bcf532`.
+- The `v0.99.18` source tree is
+  `c9590adc99a578fef4d99ca86fbd0a2a9f08201e`. Its Cargo.lock SHA-256 is
+  `f40ca6f287c3eb0be70156a5cc1ab8cd8682531848711d52bc56f755ab8824ca`.
+- The open `0.99.19` draft makes active-Fleet provisioning finish the exact
+  cascade, credential-generation and activation evidence for every new
+  managed child before its replay-protected create operation completes.
+- Released `0.99.18` hard-cuts delegated-auth audience identity to the exact
+  protected `FleetKey`.
 - Released `0.99.17` keeps Prepared roots inert across upgrade and gives
   non-root application init bytes one durable activation owner.
 - Released `0.99.16` completes the one-member Directory/Placement Binding

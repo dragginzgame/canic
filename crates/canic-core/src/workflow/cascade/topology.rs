@@ -56,7 +56,9 @@ impl TopologyCascadeWorkflow {
     // ───────────────────────── Root cascades ─────────────────────────
 
     /// Initiates a topology cascade from the root canister toward `target_pid`.
-    pub async fn root_cascade_topology_for_pid(target_pid: Principal) -> Result<(), InternalError> {
+    pub async fn root_cascade_topology_for_pid(
+        target_pid: Principal,
+    ) -> Result<TopologySnapshotInput, InternalError> {
         EnvOps::require_root()?;
 
         Self::record(
@@ -76,6 +78,7 @@ impl TopologyCascadeWorkflow {
                 return Err(err);
             }
         };
+        let target_input = Self::snapshot_input_for_target(target_pid, &snapshot)?;
 
         let root_pid = IcOps::canister_self();
         let first_child = match Self::next_child_on_path(root_pid, &snapshot.parents) {
@@ -96,7 +99,7 @@ impl TopologyCascadeWorkflow {
                     Warn,
                     "sync.topology: no branch path to {target_pid}, skipping cascade"
                 );
-                return Ok(());
+                return Ok(target_input);
             }
             Err(err) => {
                 Self::record(
@@ -142,7 +145,7 @@ impl TopologyCascadeWorkflow {
                     MetricOutcome::Completed,
                     MetricReason::Ok,
                 );
-                Ok(())
+                Ok(target_input)
             }
             Err(err) => {
                 Self::record(
@@ -160,7 +163,14 @@ impl TopologyCascadeWorkflow {
     ) -> Result<TopologySnapshotInput, InternalError> {
         EnvOps::require_root()?;
         let snapshot = TopologySnapshotBuilder::for_target(target_pid)?.build();
-        let target_snapshot = Self::slice_snapshot_for_child(target_pid, &snapshot)?;
+        Self::snapshot_input_for_target(target_pid, &snapshot)
+    }
+
+    fn snapshot_input_for_target(
+        target_pid: Principal,
+        snapshot: &TopologySnapshot,
+    ) -> Result<TopologySnapshotInput, InternalError> {
+        let target_snapshot = Self::slice_snapshot_for_child(target_pid, snapshot)?;
         Ok(TopologySnapshotAdapter::to_input(&target_snapshot))
     }
 

@@ -14,7 +14,8 @@ use ic_testkit::{artifacts::WatchedInputSnapshot, pic::Pic};
 use std::{fs, io};
 
 use crate::pic::artifacts::{
-    INTERNAL_TEST_ENDPOINTS_ENV, build_icp_all_with_env, icp_artifact_ready_with_snapshot,
+    INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID, build_icp_all_with_env,
+    icp_artifact_ready_with_snapshot,
 };
 
 use super::{RootBaselineSpec, progress, progress_elapsed};
@@ -187,8 +188,8 @@ fn root_release_artifacts_ready(spec: &RootBaselineSpec<'_>) -> bool {
     })
 }
 
-// Ensure internal PocketIC root baselines keep the extra introspection surface
-// even though production canister builds now omit those test-only queries.
+// Ensure internal PocketIC root baselines retain their explicit qualified-build
+// identity and extra introspection surface.
 fn effective_build_env<'a>(spec: &'a RootBaselineSpec<'a>) -> Vec<(&'a str, &'a str)> {
     let mut env = spec
         .build_extra_env
@@ -201,6 +202,12 @@ fn effective_build_env<'a>(spec: &'a RootBaselineSpec<'a>) -> Vec<(&'a str, &'a 
         .all(|(key, _)| *key != INTERNAL_TEST_ENDPOINTS_ENV.0)
     {
         env.push(INTERNAL_TEST_ENDPOINTS_ENV);
+    }
+    if env
+        .iter()
+        .all(|(key, _)| *key != INTERNAL_TEST_RELEASE_BUILD_ID.0)
+    {
+        env.push(INTERNAL_TEST_RELEASE_BUILD_ID);
     }
 
     env
