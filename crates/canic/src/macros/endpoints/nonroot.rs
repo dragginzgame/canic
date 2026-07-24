@@ -8,14 +8,14 @@
 #[macro_export]
 macro_rules! canic_emit_nonroot_fleet_activation_endpoints {
     () => {
-        #[$crate::canic_update(internal, requires(caller::is_parent()))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_prepare_fleet_credential_generation(
             request: ::canic::dto::fleet_activation::FleetCredentialGenerationRequest,
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
             $crate::__internal::core::api::fleet_activation::FleetActivationApi::prepare_nonroot_credential_generation(request)
         }
 
-        #[$crate::canic_update(internal, requires(caller::is_parent()))]
+        #[$crate::canic_update(internal, requires(caller::is_root()))]
         async fn canic_activate_fleet(
             request: ::canic::dto::fleet_activation::FleetActivationRequest,
         ) -> Result<::canic::dto::fleet_activation::FleetActivationStatusResponse, ::canic::Error> {
