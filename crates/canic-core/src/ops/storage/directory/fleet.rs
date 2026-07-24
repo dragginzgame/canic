@@ -28,6 +28,9 @@ use crate::{
 
 pub struct FleetDirectoryOps;
 
+/// Fully validated Fleet Directory replacement ready for an infallible commit.
+pub struct PreparedFleetDirectoryImport(FleetDirectoryData);
+
 impl FleetDirectoryOps {
     // -------------------------------------------------------------------------
     // Getters
@@ -82,13 +85,25 @@ impl FleetDirectoryOps {
     pub(crate) fn import_args_allow_incomplete(
         args: FleetDirectoryInput,
     ) -> Result<(), InternalError> {
+        let prepared = Self::prepare_args_allow_incomplete(args)?;
+        Self::commit_prepared(prepared);
+
+        Ok(())
+    }
+
+    pub(crate) fn prepare_args_allow_incomplete(
+        args: FleetDirectoryInput,
+    ) -> Result<PreparedFleetDirectoryImport, InternalError> {
         let data = FleetDirectoryDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "Fleet")?;
         let allowed = ConfigOps::get()?.services.fleet.roles.clone();
         ensure_allowed_roles(&data.entries, "Fleet", &allowed)?;
-        FleetDirectory::import(data);
 
-        Ok(())
+        Ok(PreparedFleetDirectoryImport(data))
+    }
+
+    pub(crate) fn commit_prepared(prepared: PreparedFleetDirectoryImport) {
+        FleetDirectory::import(prepared.0);
     }
 
     pub(crate) fn import(data: FleetDirectoryData) -> Result<(), InternalError> {

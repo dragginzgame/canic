@@ -34,6 +34,39 @@ fn update_expansion_registers_payload_limit_for_exported_name() {
 }
 
 #[test]
+fn explicit_update_payload_limit_uses_raw_predecode_adapter() {
+    let mut args = make_args(Vec::new());
+    args.payload_max_bytes = Some(quote!(16 * 1024));
+    let func: ItemFn = syn::parse_quote!(
+        fn ping(payload: String) -> Result<usize, ::canic::Error> {
+            Ok(payload.len())
+        }
+    );
+
+    let expanded = expand(EndpointKind::Update, args, func).to_string();
+    let compact = expanded.split_whitespace().collect::<String>();
+    let size = compact
+        .find("msg_arg_data_size")
+        .expect("scalar size check");
+    let allocation = compact
+        .find("vec![0_u8;__canic_payload_len]")
+        .expect("bounded allocation");
+    let copy = compact
+        .find("msg_arg_data_copy")
+        .expect("argument copy after size check");
+    let decode = compact
+        .find("decode_args_with_config")
+        .expect("Candid decode after copy");
+
+    assert!(compact.contains("candid_method(update,rename=\"ping\")"));
+    assert!(compact.contains("export_name=\"canister_updateping\""));
+    assert!(size < allocation);
+    assert!(allocation < copy);
+    assert!(copy < decode);
+    assert!(!compact.contains("::canic::__internal::cdk::update"));
+}
+
+#[test]
 fn composite_query_expansion_forwards_cdk_attr_and_call_kind() {
     let mut args = make_args(Vec::new());
     args.forwarded.push(quote!(composite = true));

@@ -18,6 +18,11 @@ struct TestEcdsaPublicKeyArgs {
 }
 
 #[derive(CandidType)]
+struct TestCanisterIdArgs {
+    canister_id: Principal,
+}
+
+#[derive(CandidType)]
 struct TestEcdsaKeyId {
     curve: TestEcdsaCurve,
     name: String,
@@ -64,6 +69,21 @@ async fn test_provision_chain_key_delegation_proof_for_issuer(
     issuer_pid: Principal,
 ) -> Result<(), Error> {
     AuthApi::provision_chain_key_delegation_proof_for_issuer_root(issuer_pid).await
+}
+
+#[canic_update(internal, requires(caller::is_controller()))]
+async fn test_set_canister_running(canister_id: Principal, running: bool) -> Result<(), Error> {
+    let method = if running {
+        "start_canister"
+    } else {
+        "stop_canister"
+    };
+    Call::unbounded_wait(Principal::management_canister(), method)
+        .with_arg(TestCanisterIdArgs { canister_id })
+        .await
+        .map_err(|err| Error::internal(format!("{method} failed: {err}")))?;
+
+    Ok(())
 }
 
 canic::finish!();

@@ -1,4 +1,9 @@
-use canic::ids::CanisterRole;
+use canic::{
+    Error,
+    dto::state::{FleetCommand, FleetCommandResponse, FleetStatus},
+    ids::CanisterRole,
+    protocol,
+};
 use canic_testing_internal::canister;
 use canic_tests::root::{
     RootSetupProfile,
@@ -7,7 +12,7 @@ use canic_tests::root::{
         assert_children_match_registry, assert_fleet_state_endpoint_is_root_only,
         assert_registry_parents, assert_root_diagnostics_are_controller_gated,
     },
-    harness::setup_root,
+    harness::{setup_cached_root, setup_root},
 };
 use std::io::Write;
 
@@ -85,4 +90,56 @@ fn root_reference_topology_is_consistent() {
     );
     drop(setup);
     test_progress("root_reference_topology_is_consistent", "done");
+}
+
+#[test]
+fn exact_fleet_command_retry_repairs_a_failed_child_cascade() {
+    let setup = setup_cached_root(RootSetupProfile::Topology);
+    let user_hub = setup
+        .subnet_directory
+        .get(&canister::USER_HUB)
+        .copied()
+        .expect("user hub must exist");
+    let command = FleetCommand::SetStatus(FleetStatus::Readonly);
+
+    let stopped: Result<(), Error> = setup.pic.update_call_or_panic(
+        setup.root_id,
+        "test_set_canister_running",
+        (user_hub, false),
+    );
+    stopped.expect("root controller must stop user hub");
+    let first: Result<FleetCommandResponse, Error> =
+        setup
+            .pic
+            .update_call_or_panic(setup.root_id, protocol::CANIC_FLEET_ADMIN, (command,));
+    assert!(
+        first.is_err(),
+        "failed child fanout must reject the root command"
+    );
+
+    let started: Result<(), Error> = setup.pic.update_call_or_panic(
+        setup.root_id,
+        "test_set_canister_running",
+        (user_hub, true),
+    );
+    started.expect("root controller must restart user hub");
+    let retried: Result<FleetCommandResponse, Error> =
+        setup
+            .pic
+            .update_call_or_panic(setup.root_id, protocol::CANIC_FLEET_ADMIN, (command,));
+    assert!(matches!(
+        retried,
+        Ok(FleetCommandResponse::Status(response)) if !response.changed
+    ));
+
+    let child_update: Result<(), Error> = setup.pic.update_call_or_panic(
+        user_hub,
+        "test_set_recovery_generation",
+        ("must-not-run".to_string(),),
+    );
+    assert!(
+        child_update.is_err(),
+        "the restarted child must receive the retried Readonly state"
+    );
+    drop(setup);
 }

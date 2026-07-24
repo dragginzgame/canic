@@ -34,12 +34,19 @@ pub mod __internal {
 
     pub mod cdk {
         pub use candid::Principal;
-        pub use ic_cdk::{export_candid, init, inspect_message, post_upgrade, query, update};
+        pub use ic_cdk::{
+            export_candid, futures, init, inspect_message, post_upgrade, query, trap, update,
+        };
 
         pub mod api {
             pub use ic_cdk::api::{
-                canister_cycle_balance, canister_version, is_controller, msg_caller, time,
+                canister_cycle_balance, canister_version, is_controller, msg_caller, msg_reply,
+                time,
             };
+        }
+
+        pub mod raw {
+            pub use ic0::{msg_arg_data_copy, msg_arg_data_size};
         }
     }
 

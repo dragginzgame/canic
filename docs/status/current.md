@@ -14,15 +14,19 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.18`.
-- The latest published release is `v0.99.18` at
-  `e1cd23dfaba88a65ed095169ee2fa26e02bcf532`.
-- The `v0.99.18` source tree is
-  `c9590adc99a578fef4d99ca86fbd0a2a9f08201e`. Its Cargo.lock SHA-256 is
-  `f40ca6f287c3eb0be70156a5cc1ab8cd8682531848711d52bc56f755ab8824ca`.
-- The open `0.99.19` draft makes active-Fleet provisioning finish the exact
-  cascade, credential-generation and activation evidence for every new
-  managed child before its replay-protected create operation completes.
+- The workspace package version is `0.99.19`.
+- The latest published release is `v0.99.19` at
+  `0e0ef8b9f914daffa648824e8a455e5089a4a25e`.
+- The `v0.99.19` source tree is
+  `52bae1fa8f2f2a36c5a21617a5f49deb55ffbf39`. Its Cargo.lock SHA-256 is
+  `c7ca79db61ae6dd388ff264b9e93751f2f0f7668152fa20e412004f8d5c53530`.
+- The open `0.99.20` draft makes the surviving one-Subnet cascade convergent
+  and fail closed: exact Fleet-state retry repairs incomplete fanout, received
+  state validates fully before mutation, contradictory topology branches
+  reject before acceptance and raw limits cover inter-Canister decoding.
+- Released `0.99.19` makes active-Fleet provisioning finish the exact cascade,
+  credential-generation and activation evidence for every new managed child
+  before its replay-protected create operation completes.
 - Released `0.99.18` hard-cuts delegated-auth audience identity to the exact
   protected `FleetKey`.
 - Released `0.99.17` keeps Prepared roots inert across upgrade and gives

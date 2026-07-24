@@ -33,6 +33,8 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
     }
 
     let wrapper_async = impl_async || access_plan.requires_async();
+    let uses_raw_update_adapter =
+        matches!(kind, EndpointKind::Update) && args.payload_max_bytes.is_some();
 
     let impl_name = format_ident!("__canic_impl_{}", orig_name);
     func.sig.ident = impl_name.clone();
@@ -45,7 +47,18 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         func.block.stmts.insert(0, keepalive);
     }
 
-    let cdk_attr = cdk_attr(kind, &args.forwarded);
+    let cdk_attr = if uses_raw_update_adapter {
+        quote!()
+    } else {
+        cdk_attr(kind, &args.forwarded)
+    };
+    let candid_attr = uses_raw_update_adapter.then(|| {
+        let method_name = args
+            .export_name
+            .clone()
+            .unwrap_or_else(|| syn::LitStr::new(&orig_name.to_string(), orig_name.span()));
+        quote!(#[::candid::candid_method(update, rename = #method_name)])
+    });
     let payload_registration = payload_registration(kind, &args, &orig_name);
     let dispatch_fn = dispatch(kind, wrapper_async);
 
@@ -80,11 +93,28 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         impl_name,
         &call_args,
     );
+    let raw_update_adapter = if uses_raw_update_adapter {
+        match raw_update_adapter(
+            &orig_sig,
+            &orig_name,
+            args.export_name.as_ref(),
+            args.payload_max_bytes
+                .as_ref()
+                .expect("raw update adapter requires explicit payload limit"),
+            wrapper_async,
+        ) {
+            Ok(adapter) => adapter,
+            Err(err) => return err.to_compile_error(),
+        }
+    } else {
+        quote!()
+    };
 
     quote! {
         #payload_registration
 
         #(#attrs)*
+        #candid_attr
         #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
         #cdk_attr
         #vis #wrapper_sig {
@@ -96,6 +126,8 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
 
         #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
         #func
+
+        #raw_update_adapter
     }
 }
 
@@ -300,6 +332,131 @@ fn cdk_attr(kind: EndpointKind, forwarded: &[TokenStream2]) -> TokenStream2 {
             }
         }
     }
+}
+
+fn raw_update_adapter(
+    signature: &Signature,
+    name: &syn::Ident,
+    export_name: Option<&syn::LitStr>,
+    max_bytes: &TokenStream2,
+    wrapper_async: bool,
+) -> syn::Result<TokenStream2> {
+    let method_name = export_name.map_or_else(|| name.to_string(), syn::LitStr::value);
+    let wasm_export = syn::LitStr::new(
+        &format!("canister_update {method_name}"),
+        proc_macro2::Span::call_site(),
+    );
+    let host_export = syn::LitStr::new(
+        &format!("canister_update.{method_name}").replace(['-', '<', '>'], "_"),
+        proc_macro2::Span::call_site(),
+    );
+    let adapter_name = format_ident!("__canic_raw_update_{}", name);
+
+    let (names, types) = raw_update_arguments(signature)?;
+
+    let decode = if names.is_empty() {
+        quote!()
+    } else {
+        quote! {
+            let mut __canic_decoder_config = ::candid::DecoderConfig::new();
+            __canic_decoder_config.set_skipping_quota(10_000);
+            let (#(#names,)*): (#(#types,)*) =
+                ::candid::utils::decode_args_with_config(
+                    &__canic_arg_bytes,
+                    &__canic_decoder_config,
+                )
+                .unwrap_or_else(|error| {
+                    ::canic::__internal::cdk::trap(format!(
+                        "failed to decode update payload: {error}"
+                    ))
+                });
+        }
+    };
+
+    let invoke = if wrapper_async {
+        quote!(#name(#(#names),*).await)
+    } else {
+        quote!(#name(#(#names),*))
+    };
+    let encode = match &signature.output {
+        syn::ReturnType::Default => {
+            quote!(::candid::utils::encode_one(()))
+        }
+        syn::ReturnType::Type(_, ty) => match &**ty {
+            syn::Type::Tuple(tuple) if tuple.elems.len() > 1 => {
+                quote!(::candid::utils::encode_args(__canic_result))
+            }
+            _ => quote!(::candid::utils::encode_one(__canic_result)),
+        },
+    };
+    let execute = quote! {
+        let __canic_payload_len =
+            ::canic::__internal::cdk::raw::msg_arg_data_size();
+        if __canic_payload_len > #max_bytes {
+            ::canic::__internal::cdk::trap(format!(
+                "update payload is {__canic_payload_len} bytes; maximum is {}",
+                #max_bytes,
+            ));
+        }
+        let mut __canic_arg_bytes = vec![0_u8; __canic_payload_len];
+        ::canic::__internal::cdk::raw::msg_arg_data_copy(
+            &mut __canic_arg_bytes,
+            0,
+        );
+        #decode
+        let __canic_result = #invoke;
+        let __canic_reply = #encode.unwrap_or_else(|error| {
+            ::canic::__internal::cdk::trap(format!(
+                "failed to encode update response: {error}"
+            ))
+        });
+        ::canic::__internal::cdk::api::msg_reply(__canic_reply);
+    };
+    let body = if wrapper_async {
+        quote! {
+            ::canic::__internal::cdk::futures::internals::in_executor_context(|| {
+                ::canic::__internal::cdk::futures::spawn(async {
+                    #execute
+                });
+            });
+        }
+    } else {
+        quote! {
+            ::canic::__internal::cdk::futures::internals::in_executor_context(|| {
+                #execute
+            });
+        }
+    };
+
+    Ok(quote! {
+        #[cfg_attr(target_family = "wasm", unsafe(export_name = #wasm_export))]
+        #[cfg_attr(not(target_family = "wasm"), unsafe(export_name = #host_export))]
+        fn #adapter_name() {
+            #body
+        }
+    })
+}
+
+fn raw_update_arguments(signature: &Signature) -> syn::Result<(Vec<syn::Ident>, Vec<syn::Type>)> {
+    let mut names = Vec::new();
+    let mut types = Vec::new();
+    for input in &signature.inputs {
+        let syn::FnArg::Typed(input) = input else {
+            return Err(syn::Error::new_spanned(
+                input,
+                "`self` is unsupported on canic endpoints",
+            ));
+        };
+        let syn::Pat::Ident(ident) = &*input.pat else {
+            return Err(syn::Error::new_spanned(
+                &input.pat,
+                "destructuring parameters not supported",
+            ));
+        };
+        names.push(ident.ident.clone());
+        types.push(input.ty.as_ref().clone());
+    }
+    Ok((names, types))
 }
 
 #[cfg(test)]

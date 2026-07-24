@@ -28,6 +28,9 @@ use crate::{
 
 pub struct SubnetDirectoryOps;
 
+/// Fully validated Subnet Directory replacement ready for an infallible commit.
+pub struct PreparedSubnetDirectoryImport(SubnetDirectoryData);
+
 impl SubnetDirectoryOps {
     // -------------------------------------------------------------------------
     // Getters
@@ -84,6 +87,15 @@ impl SubnetDirectoryOps {
     pub(crate) fn import_args_allow_incomplete(
         args: SubnetDirectoryInput,
     ) -> Result<(), InternalError> {
+        let prepared = Self::prepare_args_allow_incomplete(args)?;
+        Self::commit_prepared(prepared);
+
+        Ok(())
+    }
+
+    pub(crate) fn prepare_args_allow_incomplete(
+        args: SubnetDirectoryInput,
+    ) -> Result<PreparedSubnetDirectoryImport, InternalError> {
         let data = SubnetDirectoryDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "Subnet")?;
         let subnet_cfg = ConfigOps::current_subnet()?;
@@ -92,9 +104,12 @@ impl SubnetDirectoryOps {
             "Subnet",
             &subnet_cfg.subnet_directory_roles(),
         )?;
-        SubnetDirectory::import(data);
 
-        Ok(())
+        Ok(PreparedSubnetDirectoryImport(data))
+    }
+
+    pub(crate) fn commit_prepared(prepared: PreparedSubnetDirectoryImport) {
+        SubnetDirectory::import(prepared.0);
     }
 
     // -------------------------------------------------------------------------

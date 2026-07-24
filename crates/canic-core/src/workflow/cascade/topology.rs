@@ -27,7 +27,7 @@ use crate::{
     workflow::{
         cascade::{
             snapshot::{
-                TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
+                TopologyDirectChild, TopologyPathNode, TopologySnapshot, TopologySnapshotBuilder,
                 adapter::TopologySnapshotAdapter,
             },
             warn_if_large,
@@ -50,6 +50,19 @@ fn prepared_topology_snapshot_hash(
         return Ok(None);
     }
     crate::ops::fleet_activation::FleetActivationEvidenceOps::topology_snapshot_hash(view).map(Some)
+}
+
+fn prepared_topology_activation_evidence(
+    activation_hash: Option<[u8; 32]>,
+) -> Result<
+    Option<crate::ops::storage::fleet_activation::PreparedFleetActivationSnapshot>,
+    InternalError,
+> {
+    activation_hash
+        .map(FleetActivationOps::prepare_applied_topology_snapshot)
+        .transpose()
+        .map_err(crate::ops::storage::StorageOpsError::from)
+        .map_err(InternalError::from)
 }
 
 impl TopologyCascadeWorkflow {
@@ -181,11 +194,18 @@ impl TopologyCascadeWorkflow {
         view: TopologySnapshotInput,
     ) -> Result<(), InternalError> {
         EnvOps::deny_root()?;
+        let self_pid = IcOps::canister_self();
+        CascadeOps::validate_topology_snapshot(
+            &view,
+            self_pid,
+            EnvOps::parent_pid()?,
+            &EnvOps::canister_role()?,
+        )?;
         let activation_hash = prepared_topology_snapshot_hash(&view)?;
+        let activation_evidence = prepared_topology_activation_evidence(activation_hash)?;
 
         let snapshot = TopologySnapshotAdapter::from_input(view);
 
-        let self_pid = IcOps::canister_self();
         Self::record(
             MetricOperation::NonrootFanout,
             MetricOutcome::Started,
@@ -223,16 +243,7 @@ impl TopologyCascadeWorkflow {
             MetricReason::Ok,
         );
 
-        let children_entries = children
-            .into_iter()
-            .map(|child| (child.pid, child.role))
-            .collect();
-
-        CanisterChildrenOps::import_direct_children(self_pid, children_entries);
-        if let Some(hash) = activation_hash {
-            FleetActivationOps::record_applied_topology_snapshot(hash)
-                .map_err(crate::ops::storage::StorageOpsError::from)?;
-        }
+        Self::apply_local_topology(self_pid, children, activation_evidence);
 
         Self::record(
             MetricOperation::LocalApply,
@@ -291,6 +302,23 @@ impl TopologyCascadeWorkflow {
     }
 
     // ───────────────────────── Internal helpers ──────────────────────
+
+    fn apply_local_topology(
+        self_pid: Principal,
+        children: Vec<TopologyDirectChild>,
+        activation_evidence: Option<
+            crate::ops::storage::fleet_activation::PreparedFleetActivationSnapshot,
+        >,
+    ) {
+        let entries = children
+            .into_iter()
+            .map(|child| (child.pid, child.role))
+            .collect();
+        CanisterChildrenOps::import_direct_children(self_pid, entries);
+        if let Some(prepared) = activation_evidence {
+            FleetActivationOps::commit_prepared_snapshot(prepared);
+        }
+    }
 
     // Record one topology cascade metric row using the fixed topology snapshot label.
     fn record(operation: MetricOperation, outcome: MetricOutcome, reason: MetricReason) {

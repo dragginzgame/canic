@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.20` makes same-Subnet cascade retry convergent, applies received state
+  atomically after complete validation, rejects contradictory topology
+  branches and enforces raw payload limits before inter-Canister decoding.
+
 - `0.99.19` makes active-Fleet provisioning finish each new managed child’s
   exact cascade and credential evidence plus root-authorized activation before
   the replay-protected create operation completes.
