@@ -2,7 +2,7 @@
 
 use crate::{
     config::schema::CanisterKind,
-    dto::topology::{AppIndexArgs, IndexEntryInput, SubnetIndexArgs},
+    dto::topology::{FleetDirectoryInput, IndexEntryInput, SubnetDirectoryInput},
     ids::CanisterRole,
     ops::storage::{
         index::{app::AppIndexOps, subnet::SubnetIndexOps},
@@ -129,24 +129,24 @@ fn incomplete_index_imports_reject_roles_outside_configured_service_sets() {
     install_index_service_test_config(&service_role, &singleton_role);
     clear_app_and_subnet_indexes();
 
-    AppIndexOps::import_args_allow_incomplete(AppIndexArgs(vec![IndexEntryInput {
+    AppIndexOps::import_args_allow_incomplete(FleetDirectoryInput(vec![IndexEntryInput {
         role: service_role.clone(),
         pid: service_pid,
     }]))
     .expect("configured app service role should import");
-    SubnetIndexOps::import_args_allow_incomplete(SubnetIndexArgs(vec![IndexEntryInput {
+    SubnetIndexOps::import_args_allow_incomplete(SubnetDirectoryInput(vec![IndexEntryInput {
         role: service_role.clone(),
         pid: service_pid,
     }]))
     .expect("configured subnet service role should import");
 
-    AppIndexOps::import_args_allow_incomplete(AppIndexArgs(vec![IndexEntryInput {
+    AppIndexOps::import_args_allow_incomplete(FleetDirectoryInput(vec![IndexEntryInput {
         role: singleton_role.clone(),
         pid: singleton_pid,
     }]))
     .expect_err("app index should reject roles outside explicit app_index");
 
-    SubnetIndexOps::import_args_allow_incomplete(SubnetIndexArgs(vec![IndexEntryInput {
+    SubnetIndexOps::import_args_allow_incomplete(SubnetDirectoryInput(vec![IndexEntryInput {
         role: singleton_role.clone(),
         pid: singleton_pid,
     }]))
@@ -210,7 +210,7 @@ fn local_index_filters_drop_roles_outside_configured_service_sets() {
 
     install_index_service_test_config(&service_role, &singleton_role);
 
-    let filtered_app = AppIndexOps::filter_args_for_local_config(AppIndexArgs(vec![
+    let filtered_app = AppIndexOps::filter_args_for_local_config(FleetDirectoryInput(vec![
         IndexEntryInput {
             role: service_role.clone(),
             pid: service_pid,
@@ -224,7 +224,7 @@ fn local_index_filters_drop_roles_outside_configured_service_sets() {
     assert_eq!(filtered_app.0.len(), 1);
     assert_eq!(&filtered_app.0[0].role, &service_role);
 
-    let filtered_subnet = SubnetIndexOps::filter_args_for_local_config(SubnetIndexArgs(vec![
+    let filtered_subnet = SubnetIndexOps::filter_args_for_local_config(SubnetDirectoryInput(vec![
         IndexEntryInput {
             role: service_role.clone(),
             pid: service_pid,

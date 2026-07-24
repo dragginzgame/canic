@@ -23,18 +23,18 @@ pub struct SubnetRegistryEntry {
 }
 
 //
-// AppIndexArgs
+// FleetDirectoryInput
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct AppIndexArgs(pub Vec<IndexEntryInput>);
+pub struct FleetDirectoryInput(pub Vec<IndexEntryInput>);
 
 //
-// SubnetIndexArgs
+// SubnetDirectoryInput
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct SubnetIndexArgs(pub Vec<IndexEntryInput>);
+pub struct SubnetDirectoryInput(pub Vec<IndexEntryInput>);
 
 //
 // IndexEntryInput

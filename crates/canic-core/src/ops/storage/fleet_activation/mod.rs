@@ -10,9 +10,10 @@ use crate::{
     dto::fleet_activation::{
         CurrentRootInstallIdentity, FleetActivationIdentity, FleetActivationStatusResponse,
     },
-    ids::ReleaseBuildId,
+    ids::{FleetBinding, ReleaseBuildId},
     model::fleet_activation::{
-        PrepareFleetActivationError, RootInstallIdentity, prepare_root_install,
+        NonrootInstallIdentity, PrepareFleetActivationError, PreparedFleetActivation,
+        RootInstallIdentity, prepare_nonroot_install, prepare_root_install,
     },
     storage::stable::fleet_activation::{
         FleetActivation, FleetActivationData, FleetActivationEvidenceRecord,
@@ -66,34 +67,27 @@ impl FleetActivationOps {
                 fleet: input.fleet,
                 install_id: input.install_id,
                 release_build_id: input.release_build_id,
-                expected_module_hash: input.expected_module_hash,
             },
             embedded_release_build_id,
         )?;
-        let record = FleetActivationRecord {
-            state: FleetActivationStateRecord::Prepared {
-                identity: FleetActivationIdentityRecord {
-                    fleet: prepared.identity.fleet.clone(),
-                    operation_id: prepared.identity.operation_id,
-                    release_build_id: prepared.identity.release_build_id,
-                },
-                evidence: FleetActivationEvidenceRecord {
-                    cascade: None,
-                    credential: None,
-                },
+        initialize_prepared(prepared)
+    }
+
+    pub(crate) fn initialize_nonroot_prepared(
+        fleet: FleetBinding,
+        install_id: [u8; 32],
+        release_build_id: ReleaseBuildId,
+        embedded_release_build_id: ReleaseBuildId,
+    ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+        let prepared = prepare_nonroot_install(
+            NonrootInstallIdentity {
+                fleet,
+                install_id,
+                release_build_id,
             },
-            cascade_manifest: None,
-            credential_manifests: Vec::new(),
-        };
-        validate_record_bound(&record)?;
-        if !FleetActivation::initialize(record) {
-            return Err(FleetActivationOpsError::AlreadyInitialized);
-        }
-        Ok(FleetActivationIdentity {
-            fleet: prepared.identity.fleet,
-            operation_id: prepared.identity.operation_id,
-            release_build_id: prepared.identity.release_build_id,
-        })
+            embedded_release_build_id,
+        )?;
+        initialize_prepared(prepared)
     }
 
     #[must_use]
@@ -127,6 +121,35 @@ impl FleetActivationOps {
     fn reset_for_tests() {
         FleetActivation::import(FleetActivationData::default());
     }
+}
+
+fn initialize_prepared(
+    prepared: PreparedFleetActivation,
+) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+    let record = FleetActivationRecord {
+        state: FleetActivationStateRecord::Prepared {
+            identity: FleetActivationIdentityRecord {
+                fleet: prepared.identity.fleet.clone(),
+                operation_id: prepared.identity.operation_id,
+                release_build_id: prepared.identity.release_build_id,
+            },
+            evidence: FleetActivationEvidenceRecord {
+                cascade: None,
+                credential: None,
+            },
+        },
+        cascade_manifest: None,
+        credential_manifests: Vec::new(),
+    };
+    validate_record_bound(&record)?;
+    if !FleetActivation::initialize(record) {
+        return Err(FleetActivationOpsError::AlreadyInitialized);
+    }
+    Ok(FleetActivationIdentity {
+        fleet: prepared.identity.fleet,
+        operation_id: prepared.identity.operation_id,
+        release_build_id: prepared.identity.release_build_id,
+    })
 }
 
 fn validate_record_bound(record: &FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
@@ -217,6 +240,61 @@ mod tests {
 
         assert!(matches!(
             FleetActivationOps::initialize_root_prepared(input(supplied), embedded),
+            Err(FleetActivationOpsError::Admission(
+                PrepareFleetActivationError::ReleaseBuildMismatch { .. }
+            ))
+        ));
+        assert_eq!(
+            FleetActivationOps::snapshot(),
+            FleetActivationData::default()
+        );
+    }
+
+    #[test]
+    fn nonroot_init_commits_the_exact_empty_prepared_identity_once() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(32);
+        let root_input = input(release_build_id);
+        let identity = FleetActivationOps::initialize_nonroot_prepared(
+            root_input.fleet,
+            root_input.install_id,
+            root_input.release_build_id,
+            release_build_id,
+        )
+        .expect("initialize non-root Prepared");
+        let stored = FleetActivationOps::snapshot()
+            .record
+            .expect("protected activation record");
+
+        assert_eq!(identity.operation_id, [12; 32]);
+        assert!(matches!(
+            stored.state,
+            FleetActivationStateRecord::Prepared {
+                evidence: FleetActivationEvidenceRecord {
+                    cascade: None,
+                    credential: None,
+                },
+                ..
+            }
+        ));
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn nonroot_init_mismatch_writes_no_activation_record() {
+        FleetActivationOps::reset_for_tests();
+        let supplied = release_build(33);
+        let embedded = release_build(34);
+        let root_input = input(supplied);
+
+        assert!(matches!(
+            FleetActivationOps::initialize_nonroot_prepared(
+                root_input.fleet,
+                root_input.install_id,
+                root_input.release_build_id,
+                embedded,
+            ),
             Err(FleetActivationOpsError::Admission(
                 PrepareFleetActivationError::ReleaseBuildMismatch { .. }
             ))

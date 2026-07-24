@@ -16,15 +16,28 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum FleetActivationEndpointPolicyError {
-    #[error("endpoint {endpoint} ({kind:?}) is fenced while the root Canister is Prepared")]
+    #[error("endpoint {endpoint} ({kind:?}) is fenced while the managed Canister is Prepared")]
     Fenced {
         endpoint: &'static str,
         kind: EndpointCallKind,
     },
 }
 
+/// Require one exact recovery endpoint admitted for a Prepared non-root.
+pub fn require_prepared_nonroot_endpoint(
+    call: EndpointCall,
+) -> Result<(), FleetActivationEndpointPolicyError> {
+    require_prepared_status_query(call)
+}
+
 /// Require one exact recovery endpoint admitted for a Prepared root.
 pub fn require_prepared_root_endpoint(
+    call: EndpointCall,
+) -> Result<(), FleetActivationEndpointPolicyError> {
+    require_prepared_status_query(call)
+}
+
+fn require_prepared_status_query(
     call: EndpointCall,
 ) -> Result<(), FleetActivationEndpointPolicyError> {
     if call.kind == EndpointCallKind::Query && call.endpoint.name == CANIC_FLEET_ACTIVATION_STATUS {
@@ -74,6 +87,32 @@ mod tests {
         ] {
             assert_eq!(
                 require_prepared_root_endpoint(call(endpoint, kind)),
+                Err(FleetActivationEndpointPolicyError::Fenced { endpoint, kind })
+            );
+        }
+    }
+
+    #[test]
+    fn prepared_nonroot_uses_its_own_exact_recovery_allowlist() {
+        assert_eq!(
+            require_prepared_nonroot_endpoint(call(
+                CANIC_FLEET_ACTIVATION_STATUS,
+                EndpointCallKind::Query,
+            )),
+            Ok(())
+        );
+
+        for (endpoint, kind) in [
+            ("application_update", EndpointCallKind::Update),
+            ("canic_sync_state", EndpointCallKind::Update),
+            (
+                "canic_active_delegation_proof_status",
+                EndpointCallKind::Query,
+            ),
+            (CANIC_FLEET_ACTIVATION_STATUS, EndpointCallKind::Update),
+        ] {
+            assert_eq!(
+                require_prepared_nonroot_endpoint(call(endpoint, kind)),
                 Err(FleetActivationEndpointPolicyError::Fenced { endpoint, kind })
             );
         }

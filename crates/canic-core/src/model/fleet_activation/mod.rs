@@ -4,6 +4,8 @@
 //! Does not own: Candid decoding, stable-record conversion, storage access, or lifecycle traps.
 //! Boundary: workflows supply the embedded build identity before ops persists `Prepared`.
 
+pub mod endpoint_mode;
+
 use crate::ids::{FleetBinding, ReleaseBuildId};
 use thiserror::Error as ThisError;
 
@@ -14,7 +16,6 @@ use thiserror::Error as ThisError;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedFleetActivation {
     pub identity: FleetActivationIdentity,
-    pub expected_module_hash: Option<[u8; 32]>,
 }
 
 ///
@@ -37,7 +38,17 @@ pub struct RootInstallIdentity {
     pub fleet: FleetBinding,
     pub install_id: [u8; 32],
     pub release_build_id: ReleaseBuildId,
-    pub expected_module_hash: Option<[u8; 32]>,
+}
+
+///
+/// NonrootInstallIdentity
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NonrootInstallIdentity {
+    pub fleet: FleetBinding,
+    pub install_id: [u8; 32],
+    pub release_build_id: ReleaseBuildId,
 }
 
 ///
@@ -60,12 +71,7 @@ pub fn prepare_root_install(
     input: RootInstallIdentity,
     embedded_release_build_id: ReleaseBuildId,
 ) -> Result<PreparedFleetActivation, PrepareFleetActivationError> {
-    if input.release_build_id != embedded_release_build_id {
-        return Err(PrepareFleetActivationError::ReleaseBuildMismatch {
-            supplied: input.release_build_id,
-            embedded: embedded_release_build_id,
-        });
-    }
+    require_release_build_match(input.release_build_id, embedded_release_build_id)?;
 
     Ok(PreparedFleetActivation {
         identity: FleetActivationIdentity {
@@ -73,8 +79,33 @@ pub fn prepare_root_install(
             operation_id: input.install_id,
             release_build_id: input.release_build_id,
         },
-        expected_module_hash: input.expected_module_hash,
     })
+}
+
+/// Validate and normalize fresh non-root input into the sole internal activation identity.
+pub fn prepare_nonroot_install(
+    input: NonrootInstallIdentity,
+    embedded_release_build_id: ReleaseBuildId,
+) -> Result<PreparedFleetActivation, PrepareFleetActivationError> {
+    require_release_build_match(input.release_build_id, embedded_release_build_id)?;
+
+    Ok(PreparedFleetActivation {
+        identity: FleetActivationIdentity {
+            fleet: input.fleet,
+            operation_id: input.install_id,
+            release_build_id: input.release_build_id,
+        },
+    })
+}
+
+fn require_release_build_match(
+    supplied: ReleaseBuildId,
+    embedded: ReleaseBuildId,
+) -> Result<(), PrepareFleetActivationError> {
+    if supplied != embedded {
+        return Err(PrepareFleetActivationError::ReleaseBuildMismatch { supplied, embedded });
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -99,7 +130,15 @@ mod tests {
             },
             install_id: [3; 32],
             release_build_id,
-            expected_module_hash: Some([4; 32]),
+        }
+    }
+
+    fn nonroot_input(release_build_id: ReleaseBuildId) -> NonrootInstallIdentity {
+        let root = input(release_build_id);
+        NonrootInstallIdentity {
+            fleet: root.fleet,
+            install_id: root.install_id,
+            release_build_id: root.release_build_id,
         }
     }
 
@@ -111,7 +150,6 @@ mod tests {
 
         assert_eq!(prepared.identity.operation_id, [3; 32]);
         assert_eq!(prepared.identity.release_build_id, release_build_id);
-        assert_eq!(prepared.expected_module_hash, Some([4; 32]));
     }
 
     #[test]
@@ -121,6 +159,27 @@ mod tests {
 
         assert_eq!(
             prepare_root_install(input(supplied), embedded),
+            Err(PrepareFleetActivationError::ReleaseBuildMismatch { supplied, embedded })
+        );
+    }
+
+    #[test]
+    fn nonroot_install_normalizes_the_same_exact_identity() {
+        let release_build_id = release_build(8);
+        let prepared = prepare_nonroot_install(nonroot_input(release_build_id), release_build_id)
+            .expect("prepare");
+
+        assert_eq!(prepared.identity.operation_id, [3; 32]);
+        assert_eq!(prepared.identity.release_build_id, release_build_id);
+    }
+
+    #[test]
+    fn nonroot_install_rejects_release_build_mismatch() {
+        let supplied = release_build(9);
+        let embedded = release_build(10);
+
+        assert_eq!(
+            prepare_nonroot_install(nonroot_input(supplied), embedded),
             Err(PrepareFleetActivationError::ReleaseBuildMismatch { supplied, embedded })
         );
     }

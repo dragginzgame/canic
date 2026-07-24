@@ -11,7 +11,11 @@ use crate::{
     ids::CanisterRole,
     ops::{
         runtime::env::EnvOps,
-        storage::index::{app::AppIndexOps, subnet::SubnetIndexOps},
+        storage::{
+            StorageOpsError,
+            fleet_activation::FleetActivationOps,
+            index::{app::AppIndexOps, subnet::SubnetIndexOps},
+        },
     },
     workflow::ic::provision::ProvisionWorkflow,
 };
@@ -30,13 +34,19 @@ impl ProvisionWorkflow {
             parent_pid: Some(parent_pid),
         };
 
-        let app_index = AppIndexOps::snapshot_args();
-        let subnet_index = SubnetIndexOps::snapshot_args();
+        let fleet_directory = AppIndexOps::snapshot_args();
+        let subnet_directory = SubnetIndexOps::snapshot_args();
+        let identity = FleetActivationOps::status(EnvOps::is_root())
+            .map_err(StorageOpsError::from)?
+            .identity;
 
         Ok(CanisterInitPayload {
+            fleet: identity.fleet,
+            install_id: identity.operation_id,
+            release_build_id: identity.release_build_id,
             env,
-            app_index,
-            subnet_index,
+            fleet_directory,
+            subnet_directory,
         })
     }
 }

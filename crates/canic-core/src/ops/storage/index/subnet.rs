@@ -6,7 +6,7 @@
 
 use crate::{
     InternalError,
-    dto::topology::SubnetIndexArgs,
+    dto::topology::SubnetDirectoryInput,
     model::topology::TopologyIndexEntry,
     ops::{
         config::ConfigOps,
@@ -63,15 +63,15 @@ impl SubnetIndexOps {
     }
 
     #[must_use]
-    pub fn snapshot_args() -> SubnetIndexArgs {
+    pub fn snapshot_args() -> SubnetDirectoryInput {
         SubnetIndexDataMapper::data_to_input(SubnetIndex::export())
     }
 
     pub(crate) fn filter_args_for_local_config(
-        args: SubnetIndexArgs,
-    ) -> Result<SubnetIndexArgs, InternalError> {
+        args: SubnetDirectoryInput,
+    ) -> Result<SubnetDirectoryInput, InternalError> {
         let allowed = ConfigOps::current_subnet()?.subnet_index_roles();
-        Ok(SubnetIndexArgs(
+        Ok(SubnetDirectoryInput(
             args.0
                 .into_iter()
                 .filter(|entry| allowed.contains(&entry.role))
@@ -79,7 +79,9 @@ impl SubnetIndexOps {
         ))
     }
 
-    pub(crate) fn import_args_allow_incomplete(args: SubnetIndexArgs) -> Result<(), InternalError> {
+    pub(crate) fn import_args_allow_incomplete(
+        args: SubnetDirectoryInput,
+    ) -> Result<(), InternalError> {
         let data = SubnetIndexDataMapper::input_to_data(args);
         ensure_unique_roles(&data.entries, "subnet")?;
         let subnet_cfg = ConfigOps::current_subnet()?;

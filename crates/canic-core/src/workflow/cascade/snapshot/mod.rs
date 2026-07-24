@@ -15,7 +15,7 @@ use crate::{
     dto::{
         cascade::StateSnapshotInput,
         state::AppStateInput,
-        topology::{AppIndexArgs, SubnetIndexArgs},
+        topology::{FleetDirectoryInput, SubnetDirectoryInput},
     },
     ids::CanisterRole,
     ops::{
@@ -34,8 +34,8 @@ use std::collections::HashMap;
 #[derive(Default)]
 pub struct StateSnapshot {
     pub app_state: Option<AppStateInput>,
-    pub app_index: Option<AppIndexArgs>,
-    pub subnet_index: Option<SubnetIndexArgs>,
+    pub app_index: Option<FleetDirectoryInput>,
+    pub subnet_index: Option<SubnetDirectoryInput>,
 }
 
 ///

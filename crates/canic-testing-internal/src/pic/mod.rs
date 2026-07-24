@@ -15,8 +15,8 @@ pub use audit::{
     install_audit_scaling_probe,
 };
 pub use canic::{
-    CanicPicExt, install_standalone_canister, install_standalone_canister_on_pic, role_pid,
-    wait_until_ready,
+    CanicPicExt, install_standalone_canister, install_standalone_canister_on_pic,
+    managed_test_init_identity, role_pid, wait_until_ready,
 };
 pub use delegation::{
     create_user_shard, issue_delegated_token_from_active_proof,

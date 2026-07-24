@@ -8,7 +8,7 @@ pub mod builder;
 
 use crate::{
     InternalError,
-    dto::topology::{AppIndexArgs, SubnetIndexArgs},
+    dto::topology::{FleetDirectoryInput, SubnetDirectoryInput},
     ops::{
         config::ConfigOps,
         runtime::env::EnvOps,
@@ -46,7 +46,7 @@ impl AppIndexResolver {
         }
     }
 
-    pub fn resolve_input() -> Result<AppIndexArgs, InternalError> {
+    pub fn resolve_input() -> Result<FleetDirectoryInput, InternalError> {
         Self::resolve().map(AppIndexDataMapper::data_to_input)
     }
 }
@@ -71,7 +71,7 @@ impl SubnetIndexResolver {
         }
     }
 
-    pub fn resolve_input() -> Result<SubnetIndexArgs, InternalError> {
+    pub fn resolve_input() -> Result<SubnetDirectoryInput, InternalError> {
         Self::resolve().map(SubnetIndexDataMapper::data_to_input)
     }
 }

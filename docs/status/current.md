@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.12`.
-- The latest published release is `v0.99.12` at
-  `b1c8a92ec517fa59b384b96b80160de481216917`.
-- The `v0.99.12` source tree is
-  `d90bfb867e76a59917e821bf6150a32152f48056`. Its Cargo.lock SHA-256 is
-  `d3473831d1a1948e20b62048a3584ab1bb303b94453eb11ec880e2ebec71087c`.
+- The workspace package version is `0.99.13`.
+- The latest published release is `v0.99.13` at
+  `fa8bbb767b99da1c968d33bab010e3772129abfc`.
+- The `v0.99.13` source tree is
+  `3442808d00dfd7390f65885175d9d9b607483c8a`. Its Cargo.lock SHA-256 is
+  `ee74ee57f3df1676bedc9af66966aa3f9260ac3eda672e12681a5d1daa2690e1`.
+- Released `0.99.13` makes the root's `Prepared` endpoint fence canonical
+  before access evaluation and rejects raw CDK endpoint bypasses in managed
+  packages.
 - Released `0.99.12` connects fresh root installation to the sole activation
   authority, reconciles exact `Prepared` installs and stops durably at
   `RootInstalled` without publishing the unfinished Fleet as operational.
@@ -1216,15 +1219,22 @@ admission, non-root preparation, current cascades and credentials, final
 activation, installed Fleet state and catalog commitment remain the next
 bounded work.
 
-The open `0.99.13` batch closes the installed root's `Prepared` endpoint
-boundary before adding those mutations. Every managed macro endpoint now
-preflights ID 21 before access evaluation; a `Prepared` root admits only its
-exact controller activation-status query, while absent or invalid protected
-root state fails closed. The repository's one managed raw-CDK fixture now
-uses `canic_update` without changing its external protocol, and a structural
-gate rejects future raw query/update bypasses in managed packages. Non-root
-preparation and its role-specific recovery allowlist remain the next bounded
-activation work.
+Released `0.99.13` closes the installed root's `Prepared` endpoint boundary.
+Every managed macro endpoint preflights ID 21 before access evaluation; a
+`Prepared` root admits only its exact controller activation-status query,
+while absent or invalid protected root state fails closed. A structural gate
+rejects raw query/update bypasses in managed packages.
+
+The open `0.99.14` batch applies that authority to fresh managed non-roots.
+Their hard-cut init payload carries exact Fleet, install and release-build
+identity, initializes the same ID-21 `Prepared` record and admits only its
+role-specific activation-status inspection. Init and Prepared restart do not
+schedule runtime services, bootstrap, timers or application hooks.
+`start_local!` now uses an explicit standalone-local lifecycle rather than a
+fabricated Fleet payload, and standalone PocketIC probes retain their prior
+runtime behavior. Current cascade/credential preparation, final activation
+and the provenance-bearing Directory topology hard cut remain the next
+bounded work.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

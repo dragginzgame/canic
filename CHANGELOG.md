@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.14` gives every managed non-root one exact Fleet-bound fresh-install
+  payload and ID-21 `Prepared` authority, keeps application work and timers
+  stopped behind the role-specific endpoint fence, and separates standalone
+  local lifecycle without fabricated Fleet identity.
+
 - `0.99.13` makes the installed `Prepared` root fail closed at the shared
   managed-endpoint boundary: only exact activation-status inspection reaches
   a handler, and managed packages may no longer bypass that fence through raw

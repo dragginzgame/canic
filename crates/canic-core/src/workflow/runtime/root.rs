@@ -13,7 +13,9 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, build_network::BuildNetworkOps, release_build::ReleaseBuildOps},
-        runtime::{env::EnvOps, memory::MemoryRegistryOps},
+        runtime::{
+            env::EnvOps, fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps,
+        },
         storage::{
             fleet_activation::FleetActivationOps, registry::subnet::SubnetRegistryOps,
             state::app::AppStateOps,
@@ -39,6 +41,7 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
         )
     })?;
     rebuild_root_derived_storage_indexes()?;
+    FleetActivationRuntimeOps::set_managed();
     crate::log::set_ready();
     let embedded_release_build_id = ReleaseBuildOps::embedded_release_build_id()?;
     FleetActivationOps::initialize_root_prepared(identity.clone(), embedded_release_build_id)
@@ -116,6 +119,7 @@ pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), In
 
 pub fn post_upgrade_root_canister_after_memory_init() -> Result<(), InternalError> {
     rebuild_root_derived_storage_indexes()?;
+    FleetActivationRuntimeOps::set_managed();
     require_no_resumable_refill_for_upgrade()?;
     crate::log::set_ready();
     crate::log!(Topic::Init, Info, "🏁 post_upgrade_root_canister");

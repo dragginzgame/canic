@@ -7,6 +7,25 @@
 #[macro_export]
 macro_rules! __canic_start_nonroot_lifecycle_core {
     ($canister_role:expr $(, $init:block)?) => {
+        // The activation adapter owns execution of this application hook.
+        // Keep the contract bound without polling or scheduling it in Prepared.
+        #[doc(hidden)]
+        const _: () = {
+            let _ = canic_install;
+        };
+
+        $(
+            #[doc(hidden)]
+            async fn __canic_prepared_user_init_block() {
+                $init
+            }
+
+            #[doc(hidden)]
+            const _: () = {
+                let _ = __canic_prepared_user_init_block;
+            };
+        )?
+
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
             $crate::__internal::core::bootstrap::compiled::ConfigModel,
@@ -20,7 +39,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         }
 
         #[$crate::__internal::cdk::init]
-        fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
+        fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, _args: Option<Vec<u8>>) {
             let (config, config_source, config_path) = __canic_compiled_config();
 
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
@@ -30,50 +49,36 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 config_source,
                 config_path,
             );
-
-            $crate::__canic_after_optional_start_init_hook!(
-                "canic:user:init_block",
-                {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
-                        ::std::time::Duration::ZERO,
-                        "canic:user:init",
-                        async move {
-                            canic_setup().await;
-                            canic_install(args).await;
-                        },
-                    );
-                }
-                $(, $init)?
-            );
         }
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
+            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $canister_role,
                 config,
                 config_source,
                 config_path,
             );
 
-            $crate::__canic_after_optional_start_init_hook!(
-                "canic:user:post_upgrade_block",
-                {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
-                        ::core::time::Duration::ZERO,
-                        "canic:user:post_upgrade",
-                        async move {
-                            canic_setup().await;
-                            canic_upgrade().await;
-                        },
-                    );
-                }
-                $(, $init)?
-            );
+            if active {
+                $crate::__canic_after_optional_start_init_hook!(
+                    "canic:user:post_upgrade_block",
+                    {
+                        $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
+                        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle(
+                            ::core::time::Duration::ZERO,
+                            "canic:user:post_upgrade",
+                            async move {
+                                canic_setup().await;
+                                canic_upgrade().await;
+                            },
+                        );
+                    }
+                    $(, $init)?
+                );
+            }
         }
     };
 }
@@ -101,22 +106,18 @@ macro_rules! __canic_start_local_lifecycle_core {
         }
 
         #[doc(hidden)]
-        fn __canic_local_init_payload(
+        fn __canic_local_env(
             role: $crate::__internal::core::ids::CanisterRole,
-        ) -> ::canic::dto::abi::v1::CanisterInitPayload {
+        ) -> ::canic::dto::env::EnvBootstrapArgs {
             let root_pid = __canic_local_principal(1);
             let subnet_pid = __canic_local_principal(2);
-            ::canic::dto::abi::v1::CanisterInitPayload {
-                env: ::canic::dto::env::EnvBootstrapArgs {
-                    prime_root_pid: Some(root_pid),
-                    subnet_role: Some($crate::__internal::core::ids::SubnetSlotId::DEFAULT),
-                    subnet_pid: Some(subnet_pid),
-                    root_pid: Some(root_pid),
-                    canister_role: Some(role),
-                    parent_pid: Some(root_pid),
-                },
-                app_index: ::canic::dto::topology::AppIndexArgs(Vec::new()),
-                subnet_index: ::canic::dto::topology::SubnetIndexArgs(Vec::new()),
+            ::canic::dto::env::EnvBootstrapArgs {
+                prime_root_pid: Some(root_pid),
+                subnet_role: Some($crate::__internal::core::ids::SubnetSlotId::DEFAULT),
+                subnet_pid: Some(subnet_pid),
+                root_pid: Some(root_pid),
+                canister_role: Some(role),
+                parent_pid: Some(root_pid),
             }
         }
 
@@ -124,11 +125,13 @@ macro_rules! __canic_start_local_lifecycle_core {
         fn init(args: Option<Vec<u8>>) {
             let (config, config_source, config_path) = __canic_compiled_config();
             let role = $canister_role;
-            let payload = __canic_local_init_payload(role.clone());
+            let env = __canic_local_env(role.clone());
 
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_before_bootstrap(
                 role,
-                payload,
+                env,
+                ::canic::dto::topology::FleetDirectoryInput(Vec::new()),
+                ::canic::dto::topology::SubnetDirectoryInput(Vec::new()),
                 config,
                 config_source,
                 config_path,
@@ -155,7 +158,7 @@ macro_rules! __canic_start_local_lifecycle_core {
         fn post_upgrade() {
             let (config, config_source, config_path) = __canic_compiled_config();
 
-            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
+            let _active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_before_bootstrap(
                 $canister_role,
                 config,
                 config_source,

@@ -11,7 +11,7 @@ use canic::{
 };
 use ic_cdk::api::time;
 
-canic::start!();
+canic::start_local!();
 
 /// Run no-op setup for the blob-storage probe.
 async fn canic_setup() {}

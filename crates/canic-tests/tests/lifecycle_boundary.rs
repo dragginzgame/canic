@@ -1,12 +1,18 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use canic_testing_internal::pic::{
-    CanicPicExt, install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
+use candid::Principal;
+use canic::{
+    Error,
+    dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
+    protocol::{CANIC_FLEET_ACTIVATION_STATUS, CANIC_READY},
 };
+use canic_testing_internal::pic::{
+    install_lifecycle_boundary_fixture, invalid_init_args, upgrade_args,
+};
+use ic_testkit::pic::Pic;
 use std::time::Duration;
 
-const READY_TICK_LIMIT: usize = 120;
 const INSTALL_CODE_RETRY_LIMIT: usize = 4;
 const INSTALL_CODE_COOLDOWN: Duration = Duration::from_mins(5);
 
@@ -89,12 +95,10 @@ fn lifecycle_boundary_traps_are_phase_correct() {
 }
 
 #[test]
-fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
+fn prepared_non_root_remains_fenced_across_repeated_upgrades() {
     let fixture = install_lifecycle_boundary_fixture();
     let canic_id = fixture.install_canic_canister();
-    fixture
-        .pic
-        .wait_for_ready(canic_id, READY_TICK_LIMIT, "install");
+    assert_prepared_and_not_ready(&fixture.pic, canic_id);
     fixture
         .pic
         .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
@@ -110,13 +114,26 @@ fn non_root_post_upgrade_remains_ready_across_repeated_upgrades() {
             })
             .unwrap_or_else(|err| panic!("upgrade attempt {attempt} should succeed: {err}"));
 
-        fixture
-            .pic
-            .wait_for_ready(canic_id, READY_TICK_LIMIT, "post_upgrade");
+        assert_prepared_and_not_ready(&fixture.pic, canic_id);
         fixture
             .pic
             .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
     }
+}
+
+fn assert_prepared_and_not_ready(pic: &Pic, canister_id: Principal) {
+    let status: Result<FleetActivationStatusResponse, Error> = pic
+        .query_call(canister_id, CANIC_FLEET_ACTIVATION_STATUS, ())
+        .expect("query Prepared Fleet activation status");
+    assert_eq!(
+        status.expect("Prepared activation status").phase,
+        FleetActivationPhase::Prepared
+    );
+    assert!(
+        pic.query_call::<bool, _>(canister_id, CANIC_READY, ())
+            .is_err(),
+        "Prepared managed Canister must fence readiness observation"
+    );
 }
 
 #[test]
