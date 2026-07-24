@@ -1,33 +1,13 @@
-use super::{
-    decode_bootstrap_status_response, decode_cycle_balance_response,
-    decode_subnet_registry_response,
-};
+use super::{decode_cycle_balance_response, decode_subnet_registry_response};
 use candid::{Encode, Principal};
 use canic_core::{
     dto::{
         canister::CanisterInfo,
         error::Error as CanicError,
-        state::BootstrapStatusResponse,
         topology::{SubnetRegistryEntry, SubnetRegistryResponse},
     },
     ids::CanisterRole,
 };
-
-#[test]
-fn decodes_bootstrap_status_response_bytes() {
-    let bytes = Encode!(&BootstrapStatusResponse {
-        ready: false,
-        phase: "root:init:create_canisters".to_string(),
-        last_error: Some("registry phase failed".to_string()),
-    })
-    .expect("encode bootstrap status");
-
-    let status = decode_bootstrap_status_response(&bytes).expect("decode bootstrap status");
-
-    assert!(!status.ready);
-    assert_eq!(status.phase, "root:init:create_canisters");
-    assert_eq!(status.last_error.as_deref(), Some("registry phase failed"));
-}
 
 #[test]
 fn decodes_cycle_balance_response_bytes() {

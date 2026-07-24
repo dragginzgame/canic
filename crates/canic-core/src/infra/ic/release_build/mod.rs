@@ -4,11 +4,6 @@
 //! Does not own: release-build planning, artifact hashing, or install admission.
 //! Boundary: qualified release builds supply one canonical ID through the build script.
 
-#![expect(
-    dead_code,
-    reason = "the embedded identity is staged with ID-21 admission before root lifecycle wiring"
-)]
-
 use crate::ids::{ReleaseBuildId, ReleaseBuildIdParseError};
 use thiserror::Error as ThisError;
 

@@ -45,6 +45,9 @@ pub enum FleetActivationOpsError {
 
     #[error("protected Fleet activation record is invalid: {reason}")]
     InvalidRecord { reason: String },
+
+    #[error("protected Fleet activation is not Active")]
+    NotActive,
 }
 
 ///
@@ -54,13 +57,6 @@ pub enum FleetActivationOpsError {
 pub struct FleetActivationOps;
 
 impl FleetActivationOps {
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "root initialization remains staged until the live lifecycle handoff"
-        )
-    )]
     pub(crate) fn initialize_root_prepared(
         input: CurrentRootInstallIdentity,
         embedded_release_build_id: ReleaseBuildId,
@@ -117,6 +113,14 @@ impl FleetActivationOps {
     ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
         let record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
         mapper::record_to_status(record, is_root)
+    }
+
+    pub(crate) fn require_active(is_root: bool) -> Result<(), FleetActivationOpsError> {
+        let status = Self::status(is_root)?;
+        if status.phase != crate::dto::fleet_activation::FleetActivationPhase::Active {
+            return Err(FleetActivationOpsError::NotActive);
+        }
+        Ok(())
     }
 
     #[cfg(test)]
@@ -241,6 +245,10 @@ mod tests {
         assert_eq!(status.cascade, None);
         assert_eq!(status.credential, None);
         assert_eq!(status.activated_at_ns, None);
+        assert_eq!(
+            FleetActivationOps::require_active(true),
+            Err(FleetActivationOpsError::NotActive)
+        );
 
         FleetActivationOps::reset_for_tests();
     }
@@ -337,6 +345,7 @@ mod tests {
                 .map(|manifest| manifest.generation),
             Some(1)
         );
+        FleetActivationOps::require_active(true).expect("complete Active root");
 
         FleetActivationOps::reset_for_tests();
     }

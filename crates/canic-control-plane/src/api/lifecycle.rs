@@ -3,7 +3,7 @@ use canic_core::{
         LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole, LifecycleMetricsApi,
     },
     bootstrap::{EmbeddedRootBootstrapEntry, compiled::ConfigModel},
-    dto::subnet::SubnetIdentity,
+    dto::fleet_activation::CurrentRootInstallIdentity,
 };
 use std::time::Duration;
 
@@ -16,7 +16,7 @@ pub struct LifecycleApi;
 impl LifecycleApi {
     /// Delegate root init-time runtime seeding to the current core implementation.
     pub fn init_root_canister_before_bootstrap(
-        identity: SubnetIdentity,
+        identity: CurrentRootInstallIdentity,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -38,7 +38,8 @@ impl LifecycleApi {
     }
 
     /// Delegate root init-time bootstrap scheduling to the current core implementation.
-    pub fn schedule_init_root_bootstrap() {
+    pub fn schedule_init_root_bootstrap() -> Result<(), canic_core::dto::error::Error> {
+        canic_core::api::fleet_activation::FleetActivationApi::require_active()?;
         LifecycleMetricsApi::record_bootstrap(
             LifecycleMetricPhase::Init,
             LifecycleMetricRole::Root,
@@ -52,6 +53,7 @@ impl LifecycleApi {
                 crate::workflow::bootstrap::root::bootstrap_init_root_canister().await;
             },
         );
+        Ok(())
     }
 
     /// Delegate root post-upgrade runtime restore to the current core implementation.

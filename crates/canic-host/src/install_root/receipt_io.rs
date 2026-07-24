@@ -1,8 +1,5 @@
 use super::state::{validate_environment_name, validate_state_name};
-use crate::{
-    deployment_truth::{ArtifactPromotionExecutionReceiptV1, DeploymentReceiptV1},
-    durable_io::write_bytes,
-};
+use crate::{deployment_truth::DeploymentReceiptV1, durable_io::write_bytes};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -20,53 +17,6 @@ pub(super) fn write_install_deployment_truth_receipt(
     bytes.push(b'\n');
     write_bytes(&path, &bytes)?;
     Ok(path)
-}
-
-pub(super) fn write_artifact_promotion_execution_receipt(
-    icp_root: &Path,
-    environment: &str,
-    deployment_name: &str,
-    receipt: &ArtifactPromotionExecutionReceiptV1,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let path =
-        artifact_promotion_execution_receipt_path(icp_root, environment, deployment_name, receipt)?;
-    let mut bytes = serde_json::to_vec_pretty(receipt)?;
-    bytes.push(b'\n');
-    write_bytes(&path, &bytes)?;
-    Ok(path)
-}
-
-fn artifact_promotion_execution_receipt_path(
-    icp_root: &Path,
-    environment: &str,
-    deployment_name: &str,
-    receipt: &ArtifactPromotionExecutionReceiptV1,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_environment_name(environment)?;
-    validate_state_name(deployment_name)?;
-    let file_stem = format!(
-        "{}-{}",
-        safe_deployment_truth_path_label(&receipt.started_at),
-        safe_deployment_truth_path_label(&receipt.receipt_id)
-    );
-    Ok(
-        artifact_promotion_execution_receipts_dir(icp_root, environment, deployment_name)?
-            .join(format!("{file_stem}.json")),
-    )
-}
-
-fn artifact_promotion_execution_receipts_dir(
-    icp_root: &Path,
-    environment: &str,
-    deployment_name: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_environment_name(environment)?;
-    validate_state_name(deployment_name)?;
-    Ok(icp_root
-        .join(".canic")
-        .join(environment)
-        .join("artifact-promotion-execution-receipts")
-        .join(deployment_name))
 }
 
 pub(super) fn install_deployment_truth_receipt_path(

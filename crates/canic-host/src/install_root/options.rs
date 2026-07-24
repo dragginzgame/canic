@@ -1,7 +1,4 @@
-use crate::{
-    canister_build::CanisterBuildProfile,
-    deployment_truth::{ArtifactPromotionPlanV1, DeploymentPlanV1},
-};
+use crate::{canister_build::CanisterBuildProfile, deployment_truth::DeploymentPlanV1};
 use std::path::PathBuf;
 
 ///
@@ -16,12 +13,10 @@ pub struct InstallRootOptions {
     pub fleet_name: String,
     pub icp_root: Option<PathBuf>,
     pub build_profile: Option<CanisterBuildProfile>,
-    pub ready_timeout_seconds: u64,
     pub config_path: Option<String>,
     pub expected_app: Option<String>,
     pub interactive_config_selection: bool,
     pub deployment_plan_override: Option<DeploymentPlanV1>,
-    pub artifact_promotion_plan_override: Option<ArtifactPromotionPlanV1>,
 }
 
 impl InstallRootOptions {

@@ -182,12 +182,10 @@ kind = "root"
         fleet_name: "demo-local".to_string(),
         icp_root: Some(icp_root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some(config_path.display().to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
     };
 
     let check = current_install_deployment_truth_check_at(

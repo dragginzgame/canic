@@ -207,14 +207,6 @@ struct PhaseReceiptInput<'a> {
 }
 
 impl InstallReceiptScope<'_> {
-    pub(super) fn run_operation(
-        self,
-        operation: &impl InstallPhaseOperation,
-    ) -> Result<Duration, Box<dyn std::error::Error>> {
-        self.run_operation_with_receipt(operation, None)
-            .map(|completed| completed.duration)
-    }
-
     pub(super) fn run_operation_with_receipt(
         self,
         operation: &impl InstallPhaseOperation,
@@ -226,27 +218,8 @@ impl InstallReceiptScope<'_> {
             operation.attempted_action(),
             attempted_evidence,
             root_principal,
-            || {
-                operation.execute()?;
-                operation.verified_evidence()
-            },
+            || operation.execute_and_verify(),
         )
-    }
-
-    #[cfg(test)]
-    pub(super) fn run_phase(
-        self,
-        phase: InstallPhaseLabel,
-        attempted_action: &str,
-        evidence: Vec<String>,
-        run: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
-    ) -> Result<Duration, Box<dyn std::error::Error>> {
-        let verified_evidence = evidence.clone();
-        self.run_phase_with_receipt(phase, attempted_action, evidence, None, || {
-            run()?;
-            Ok(verified_evidence)
-        })
-        .map(|completed| completed.duration)
     }
 
     fn run_phase_with_receipt(

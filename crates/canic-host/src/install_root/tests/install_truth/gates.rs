@@ -109,12 +109,10 @@ fn install_truth_gate_blocks_observed_controller_drift() {
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(
@@ -205,12 +203,10 @@ kind = "root"
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: None,
-        artifact_promotion_plan_override: None,
     };
 
     let mut check = current_install_deployment_truth_check_at(

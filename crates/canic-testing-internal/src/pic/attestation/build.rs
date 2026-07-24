@@ -9,8 +9,8 @@ use std::{
 };
 
 use super::super::artifacts::{
-    CanicWasmBuildProfile, INTERNAL_TEST_ENDPOINTS_ENV, build_internal_test_wasm_canisters,
-    build_internal_test_wasm_canisters_with_env,
+    CanicWasmBuildProfile, INTERNAL_TEST_ENDPOINTS_ENV, INTERNAL_TEST_RELEASE_BUILD_ID,
+    build_internal_test_wasm_canisters, build_internal_test_wasm_canisters_with_env,
 };
 use super::fixture::progress;
 
@@ -124,6 +124,10 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path) {
         .env("CARGO_TARGET_DIR", target_dir)
         .env("ICP_ENVIRONMENT", "local")
         .env(INTERNAL_TEST_ENDPOINTS_ENV.0, INTERNAL_TEST_ENDPOINTS_ENV.1)
+        .env(
+            INTERNAL_TEST_RELEASE_BUILD_ID.0,
+            INTERNAL_TEST_RELEASE_BUILD_ID.1,
+        )
         .args([
             "run",
             "-q",

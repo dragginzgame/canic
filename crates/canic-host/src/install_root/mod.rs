@@ -1,5 +1,6 @@
 use crate::{
     canister_build::cache::DefaultCanisterBuildCacheCleanup,
+    network::resolve_canonical_network_id_from_root,
     release_set::{icp_root, workspace_root},
 };
 use config_selection::resolve_install_config_path;
@@ -11,7 +12,6 @@ use std::{
 use thiserror::Error as ThisError;
 
 mod activation;
-mod artifact_promotion;
 mod build_network;
 mod build_snapshot;
 mod build_targets;
@@ -25,26 +25,22 @@ mod deployment_truth_gate;
 mod execution_preflight;
 mod fleet_activation_journal;
 mod identity;
-mod install_state;
 mod operations;
 mod options;
 mod output;
 mod phase_receipts;
 mod plan_artifacts;
 mod preparation;
-mod readiness;
 mod receipt_io;
 mod root_canister;
 mod root_cycles;
 mod root_verification;
-mod staging;
 mod state;
 mod timing;
 mod truth_check;
 
 use crate::release_build::{ReleaseBuildPlanError, plan_release_build};
-use activation::run_root_activation_phases;
-use artifact_promotion::write_artifact_promotion_execution_receipt_for_install;
+use activation::{PreparedRootInstall, install_root_prepared};
 use build_network::resolve_install_build_context;
 use build_snapshot::resolve_install_snapshot;
 pub use config_selection::{
@@ -58,10 +54,12 @@ pub use deployment_registration::{
     verify_registered_deployment_root,
 };
 use identity::resolve_install_identity;
-use install_state::{build_install_state, write_install_state_with_deployment_truth_receipt};
-pub use operations::InstallRootModuleVerificationError;
+pub use operations::{
+    InstallRootActivationStatusError, InstallRootExecutionReconciliationError,
+    InstallRootModuleVerificationError,
+};
 pub use options::InstallRootOptions;
-use output::{print_install_result_summary, print_install_timing_summary};
+use output::print_install_timing_summary;
 pub use phase_receipts::InstallPhaseFailureError;
 use phase_receipts::InstallReceiptScope;
 use plan_artifacts::emit_manifest_with_deployment_truth_receipt;
@@ -125,8 +123,6 @@ pub enum InstallRootPhase {
     Preparation,
     Manifest,
     Activation,
-    StatePersistence,
-    ArtifactPromotion,
 }
 
 impl fmt::Display for InstallRootPhase {
@@ -140,8 +136,6 @@ impl fmt::Display for InstallRootPhase {
             Self::Preparation => "deployment preparation",
             Self::Manifest => "manifest emission",
             Self::Activation => "root activation",
-            Self::StatePersistence => "install-state persistence",
-            Self::ArtifactPromotion => "artifact-promotion receipt persistence",
         })
     }
 }
@@ -155,10 +149,47 @@ pub struct InstallRootError {
     source: Box<dyn std::error::Error>,
 }
 
-struct InstallCompletion<'a> {
-    app_id: &'a str,
-    root_canister_id: &'a str,
-    execution_context: &'a crate::deployment_truth::DeploymentExecutionContextV1,
+/// Typed terminal outcome while the next activation phase is not yet admitted.
+#[derive(Debug, ThisError)]
+#[error(
+    "root {root_canister_id} is durably Prepared at activation journal {} sequence {sequence}; no operational Fleet state was published",
+    journal_path.display()
+)]
+pub struct FleetActivationContinuationRequired {
+    root_canister_id: String,
+    journal_path: PathBuf,
+    sequence: u64,
+}
+
+impl FleetActivationContinuationRequired {
+    #[must_use]
+    pub fn root_canister_id(&self) -> &str {
+        &self.root_canister_id
+    }
+
+    #[must_use]
+    pub fn journal_path(&self) -> &Path {
+        &self.journal_path
+    }
+
+    #[must_use]
+    pub const fn sequence(&self) -> u64 {
+        self.sequence
+    }
+}
+
+fn continuation_required(
+    root_canister_id: String,
+    prepared_root: &PreparedRootInstall,
+) -> InstallRootError {
+    InstallRootError::new(
+        InstallRootPhase::Activation,
+        FleetActivationContinuationRequired {
+            root_canister_id,
+            journal_path: prepared_root.activation.path.clone(),
+            sequence: prepared_root.activation.journal.sequence,
+        },
+    )
 }
 
 impl InstallRootError {
@@ -258,7 +289,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         execution_context: Some(&execution_context),
     };
 
-    let (manifest_path, emit_manifest_duration, finalized_release_build) =
+    let (_manifest_path, emit_manifest_duration, finalized_release_build) =
         emit_manifest_with_deployment_truth_receipt(
             receipt_scope,
             &options,
@@ -268,89 +299,43 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         )
         .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;
     timings.emit_manifest = emit_manifest_duration;
-    if prepared.plan_artifacts.is_none() && finalized_release_build.is_none() {
-        return Err(InstallRootError::new(
+    let finalized_release_build = finalized_release_build.ok_or_else(|| {
+        InstallRootError::new(
             InstallRootPhase::Manifest,
             ReleaseBuildPlanError::MissingFinalizedAuthority,
-        ));
-    }
+        )
+    })?;
+    let canonical_network_id = resolve_canonical_network_id_from_root(&icp_root, environment)
+        .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
+    let activation = fleet_activation_journal::plan_fleet_install_activation(
+        fleet_activation_journal::PlanFleetInstallActivationRequest {
+            root: &icp_root,
+            canonical_network_id,
+            fleet_name: fleet_name
+                .parse()
+                .map_err(|source| InstallRootError::new(InstallRootPhase::Identity, source))?,
+            app: app_id.into(),
+            finalized_release_build: &finalized_release_build,
+        },
+    )
+    .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
     let (root_canister_id, create_duration) =
         resolve_root_canister_after_manifest(receipt_scope, &options, &config_path, &build_context)
             .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     timings.create_canisters = create_duration;
-    let activation_timings = run_root_activation_phases(
+    let prepared_root = install_root_prepared(
         receipt_scope,
         &options,
         &root_canister_id,
-        &manifest_path,
-        total_started_at,
         &build_context,
         prepared.plan_artifacts.as_ref(),
+        &activation,
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
-    timings.record_activation(activation_timings);
+    timings.record_activation(prepared_root.timings);
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
-    persist_install_result(
-        receipt_scope,
-        &options,
-        &workspace_root,
-        &config_path,
-        &manifest_path,
-        InstallCompletion {
-            app_id: &app_id,
-            root_canister_id: &root_canister_id,
-            execution_context: &execution_context,
-        },
-    )
-}
-
-fn persist_install_result(
-    receipt_scope: InstallReceiptScope<'_>,
-    options: &InstallRootOptions,
-    workspace_root: &Path,
-    config_path: &Path,
-    manifest_path: &Path,
-    completion: InstallCompletion<'_>,
-) -> Result<(), InstallRootError> {
-    let state = build_install_state(
-        options,
-        workspace_root,
-        receipt_scope.icp_root,
-        config_path,
-        manifest_path,
-        (receipt_scope.deployment_name, completion.app_id),
-        completion.root_canister_id,
-    )
-    .map_err(InstallRootError::in_phase(
-        InstallRootPhase::StatePersistence,
-    ))?;
-    let state_path = write_install_state_with_deployment_truth_receipt(
-        receipt_scope,
-        &options.environment,
-        &state,
-    )
-    .map_err(InstallRootError::in_phase(
-        InstallRootPhase::StatePersistence,
-    ))?;
-    write_artifact_promotion_execution_receipt_for_install(
-        options,
-        receipt_scope.icp_root,
-        receipt_scope.environment,
-        receipt_scope.deployment_name,
-        receipt_scope.check,
-        completion.execution_context,
-    )
-    .map_err(InstallRootError::in_phase(
-        InstallRootPhase::ArtifactPromotion,
-    ))?;
-    print_install_result_summary(
-        receipt_scope.environment,
-        &state.deployment_name,
-        &state.fleet_template,
-        &state_path,
-    );
-    Ok(())
+    Err(continuation_required(root_canister_id, &prepared_root))
 }
 
 fn current_install_build_inputs(

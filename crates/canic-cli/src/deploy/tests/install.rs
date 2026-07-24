@@ -35,7 +35,6 @@ fn deploy_install_plan_builds_current_install_options_with_plan_override() {
     let plan = sample_deployment_plan(identity);
     let input = deploy_install::DeployInstallPlanInput {
         deployment_plan: plan,
-        artifact_promotion_plan: None,
     };
     let options = deploy_install::DeployInstallPlanOptions {
         deployment: "demo-local".to_string(),
@@ -64,7 +63,6 @@ fn deploy_install_plan_reader_accepts_raw_deployment_plan() {
     let decoded = deploy_install::read_plan(&path).expect("decode deployment plan");
 
     assert_eq!(decoded.deployment_plan.plan_id, "plan-1");
-    assert_eq!(decoded.artifact_promotion_plan, None);
     fs::remove_file(path).expect("clean temp plan");
 }
 
@@ -77,13 +75,6 @@ fn deploy_install_plan_reader_accepts_ready_promotion_envelope() {
     let decoded = deploy_install::read_plan(&path).expect("decode promotion plan");
 
     assert_eq!(decoded.deployment_plan.plan_id, "promoted-plan-1");
-    assert_eq!(
-        decoded
-            .artifact_promotion_plan
-            .as_ref()
-            .map(|plan| plan.plan_id.as_str()),
-        Some("artifact-promotion-plan-1")
-    );
     fs::remove_file(path).expect("clean temp plan");
 }
 

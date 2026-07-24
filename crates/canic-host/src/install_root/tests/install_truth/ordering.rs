@@ -10,7 +10,7 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "prepare_install_deployment_truth(",
-        "run_root_activation_phases(",
+        "plan_fleet_install_activation(",
     );
 
     let prepare = include_str!("../../preparation/mod.rs");
@@ -22,6 +22,11 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         install,
         "emit_manifest_with_deployment_truth_receipt(",
+        "plan_fleet_install_activation(",
+    );
+    assert_before(
+        install,
+        "plan_fleet_install_activation(",
         "resolve_root_canister_after_manifest(",
     );
 
@@ -49,11 +54,9 @@ fn current_install_check_paths_do_not_write_or_mutate_state() {
 
     for forbidden in [
         "write_install_state(",
-        "write_install_state_with_deployment_truth_receipt(",
         "write_install_deployment_truth_receipt(",
         "write_current_install_execution_preflight_receipt(",
         "register_deployment_state(",
-        "run_root_activation_phases(",
         "install_root(",
     ] {
         assert!(

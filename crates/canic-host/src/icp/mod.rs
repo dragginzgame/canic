@@ -9,7 +9,7 @@ mod run;
 mod snapshot;
 mod version;
 
-pub(crate) use command::{add_output_arg, default_command_in, ensure_command_compatible};
+pub(crate) use command::default_command_in;
 pub use command::{
     add_target_args, command_display, existing_local_canister_candid_path,
     local_canister_candid_path,

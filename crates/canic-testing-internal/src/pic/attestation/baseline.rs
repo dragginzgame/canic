@@ -1,11 +1,13 @@
-use candid::{Principal, encode_one};
-use canic_core::dto::subnet::SubnetIdentity;
+use candid::Principal;
 use ic_testkit::pic::{
     CachedPicBaseline, InstallSpec, Pic, restore_or_rebuild_cached_pic_baseline,
 };
 use std::sync::{Mutex, OnceLock};
 
-use crate::pic::{role_pid as lookup_role_pid, wait_until_ready as wait_for_ready_canister};
+use crate::pic::{
+    canic::install_root_args, role_pid as lookup_role_pid,
+    wait_until_ready as wait_for_ready_canister,
+};
 
 use super::{
     build::{build_pic, build_test_root_wasm},
@@ -118,12 +120,12 @@ fn install_root_fixture(root_wasm: Vec<u8>) -> InstalledRoot {
     InstalledRoot { pic, root_id }
 }
 
-// Install the root canister under PocketIC with the manual subnet identity.
+// Install the root canister under PocketIC with the current exact Fleet identity.
 fn install_root_canister(pic: &Pic, wasm: Vec<u8>) -> Principal {
     pic.create_and_install(
         InstallSpec::new(
             wasm,
-            encode_one(SubnetIdentity::Manual).expect("encode args"),
+            install_root_args().expect("encode root install identity"),
             ROOT_INSTALL_CYCLES,
         )
         .label("role_attestation_root"),

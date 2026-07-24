@@ -1,4 +1,6 @@
-use crate::{config::schema::ConfigModel, dto::subnet::SubnetIdentity, lifecycle};
+use crate::{
+    config::schema::ConfigModel, dto::fleet_activation::CurrentRootInstallIdentity, lifecycle,
+};
 
 ///
 /// LifecycleApi
@@ -8,7 +10,7 @@ pub struct LifecycleApi;
 
 impl LifecycleApi {
     pub fn init_root_canister_before_bootstrap(
-        identity: SubnetIdentity,
+        identity: CurrentRootInstallIdentity,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,

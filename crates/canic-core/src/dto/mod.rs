@@ -48,7 +48,6 @@ pub mod pool;
 pub mod rpc;
 pub mod runtime;
 pub mod state;
-pub mod subnet;
 pub mod topology;
 pub mod validation;
 

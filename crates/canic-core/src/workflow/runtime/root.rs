@@ -7,14 +7,17 @@
 use crate::{
     InternalError, InternalErrorOrigin, VERSION,
     domain::policy::pure::env::{EnvInput, EnvPolicyError, validate_or_default},
-    domain::subnet::SubnetIdentity,
+    dto::fleet_activation::CurrentRootInstallIdentity,
     ids::{CanisterRole, SubnetSlotId},
     log::Topic,
     ops::{
         config::ConfigOps,
-        ic::{IcOps, build_network::BuildNetworkOps},
+        ic::{IcOps, build_network::BuildNetworkOps, release_build::ReleaseBuildOps},
         runtime::{env::EnvOps, memory::MemoryRegistryOps},
-        storage::{registry::subnet::SubnetRegistryOps, state::app::AppStateOps},
+        storage::{
+            fleet_activation::FleetActivationOps, registry::subnet::SubnetRegistryOps,
+            state::app::AppStateOps,
+        },
     },
     workflow::runtime::{
         RuntimeWorkflow, auth::RuntimeAuthWorkflow, log_memory_summary,
@@ -27,7 +30,7 @@ use crate::{
 /// Bootstraps the root canister runtime and environment.
 ///
 
-pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError> {
+pub fn init_root_canister(identity: CurrentRootInstallIdentity) -> Result<(), InternalError> {
     // --- Phase 1: Init base systems ---
     MemoryRegistryOps::bootstrap_registry().map_err(|err| {
         InternalError::invariant(
@@ -37,6 +40,9 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
     })?;
     rebuild_root_derived_storage_indexes()?;
     crate::log::set_ready();
+    let embedded_release_build_id = ReleaseBuildOps::embedded_release_build_id()?;
+    FleetActivationOps::initialize_root_prepared(identity.clone(), embedded_release_build_id)
+        .map_err(crate::ops::storage::StorageOpsError::from)?;
 
     // --- Phase 2: Runtime header and env registration ---
     IcOps::println("");
@@ -51,21 +57,10 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
     log_memory_summary();
 
     let self_pid = IcOps::canister_self();
-    let (subnet_pid, subnet_role, prime_root_pid, module_hash) = match identity {
-        SubnetIdentity::Prime => (self_pid, SubnetSlotId::DEFAULT, self_pid, None),
-        SubnetIdentity::PrimeWithModuleHash(module_hash) => {
-            (self_pid, SubnetSlotId::DEFAULT, self_pid, Some(module_hash))
-        }
-        SubnetIdentity::Standard(params) => {
-            (self_pid, params.subnet_type, params.prime_root_pid, None)
-        }
-        SubnetIdentity::Manual => (
-            IcOps::canister_self(),
-            SubnetSlotId::DEFAULT,
-            self_pid,
-            None,
-        ),
-    };
+    let subnet_pid = self_pid;
+    let subnet_role = SubnetSlotId::DEFAULT;
+    let prime_root_pid = self_pid;
+    let module_hash = identity.expected_module_hash.map(|hash| hash.to_vec());
 
     let input = EnvInput {
         prime_root_pid: Some(prime_root_pid),
@@ -111,14 +106,6 @@ pub fn init_root_canister(identity: SubnetIdentity) -> Result<(), InternalError>
 
     let created_at = IcOps::now_secs();
     SubnetRegistryOps::register_root_with_module_hash(self_pid, created_at, module_hash);
-
-    // --- Phase 3: Service startup ---
-    RuntimeWorkflow::start_all_root().map_err(|err| {
-        InternalError::invariant(
-            InternalErrorOrigin::Workflow,
-            format!("root service startup failed: {err}"),
-        )
-    })?;
 
     Ok(())
 }

@@ -1,7 +1,8 @@
 use crate::icp::{self, IcpCommandError, LocalReplicaTarget};
-use canic_core::cdk::{types::Principal, utils::hash::wasm_hash};
+use candid::IDLValue;
+use canic_core::{cdk::types::Principal, dto::fleet_activation::CurrentRootInstallIdentity};
 use serde_json::Value as JsonValue;
-use std::{fs, path::Path, process::Command};
+use std::{path::Path, process::Command};
 
 pub(super) fn parse_created_canister_id(output: &str) -> Option<String> {
     if let Ok(value) = serde_json::from_str::<JsonValue>(output) {
@@ -39,22 +40,11 @@ pub(super) fn add_create_root_target(
     }
 }
 
-pub(super) fn root_init_args(root_wasm: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let wasm = fs::read(root_wasm)?;
-    Ok(format!(
-        "(variant {{ PrimeWithModuleHash = {} }})",
-        idl_blob(&wasm_hash(&wasm))
-    ))
-}
-
-fn idl_blob(bytes: &[u8]) -> String {
-    let mut encoded = String::from("blob \"");
-    for byte in bytes {
-        use std::fmt::Write as _;
-        let _ = write!(encoded, "\\{byte:02X}");
-    }
-    encoded.push('"');
-    encoded
+pub(super) fn root_init_args(
+    identity: &CurrentRootInstallIdentity,
+) -> Result<String, candid::Error> {
+    let value = IDLValue::try_from_candid_type(identity)?;
+    Ok(format!("({value})"))
 }
 
 pub(super) fn run_command(command: &mut Command) -> Result<(), Box<dyn std::error::Error>> {

@@ -108,12 +108,10 @@ fn install_truth_check_uses_supplied_deployment_plan_override() {
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
-        artifact_promotion_plan_override: None,
     };
 
     let supplied_check = current_install_deployment_truth_check_at(
@@ -143,12 +141,10 @@ fn install_truth_check_rejects_supplied_plan_environment_mismatch() {
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
-        artifact_promotion_plan_override: None,
     };
 
     current_install_deployment_truth_check_at(
@@ -177,12 +173,10 @@ fn install_truth_check_rejects_supplied_plan_deployment_target_mismatch() {
         fleet_name: "demo".to_string(),
         icp_root: Some(root.clone()),
         build_profile: Some(CanisterBuildProfile::Fast),
-        ready_timeout_seconds: 30,
         config_path: Some("apps/demo/canic.toml".to_string()),
         expected_app: Some("demo".to_string()),
         interactive_config_selection: false,
         deployment_plan_override: Some(check.plan),
-        artifact_promotion_plan_override: None,
     };
 
     current_install_deployment_truth_check_at(

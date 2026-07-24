@@ -163,15 +163,11 @@ impl CurrentInstallExecutionPhaseLabel {
     const BUILD_ARTIFACTS: Self = Self("build_artifacts");
     const EMIT_MANIFEST: Self = Self("emit_manifest");
     const EXECUTION_PREFLIGHT: Self = Self("execution_preflight");
-    const FUND_ROOT_POST_READY: Self = Self("fund_root_post_ready");
-    const FUND_ROOT_PRE_BOOTSTRAP: Self = Self("fund_root_pre_bootstrap");
     const INSTALL_ROOT: Self = Self("install_root");
     const MATERIALIZE_ARTIFACTS: Self = Self("materialize_artifacts");
+    const PLAN_FLEET_ACTIVATION: Self = Self("plan_fleet_activation");
+    const RECORD_ROOT_INSTALLED: Self = Self("record_root_installed");
     const RESOLVE_ROOT_CANISTER: Self = Self("resolve_root_canister");
-    const RESUME_BOOTSTRAP: Self = Self("resume_bootstrap");
-    const STAGE_RELEASE_SET: Self = Self("stage_release_set");
-    const WAIT_READY: Self = Self("wait_ready");
-    const WRITE_INSTALL_STATE: Self = Self("write_install_state");
 
     #[must_use]
     const fn as_str(self) -> &'static str {
@@ -196,18 +192,14 @@ impl DeploymentExecutionPreflightFieldLabel {
 }
 
 const CURRENT_INSTALL_EXECUTION_PHASES: &[CurrentInstallExecutionPhaseLabel] = &[
-    CurrentInstallExecutionPhaseLabel::RESOLVE_ROOT_CANISTER,
     CurrentInstallExecutionPhaseLabel::BUILD_ARTIFACTS,
     CurrentInstallExecutionPhaseLabel::MATERIALIZE_ARTIFACTS,
     CurrentInstallExecutionPhaseLabel::EXECUTION_PREFLIGHT,
     CurrentInstallExecutionPhaseLabel::EMIT_MANIFEST,
+    CurrentInstallExecutionPhaseLabel::PLAN_FLEET_ACTIVATION,
+    CurrentInstallExecutionPhaseLabel::RESOLVE_ROOT_CANISTER,
     CurrentInstallExecutionPhaseLabel::INSTALL_ROOT,
-    CurrentInstallExecutionPhaseLabel::FUND_ROOT_PRE_BOOTSTRAP,
-    CurrentInstallExecutionPhaseLabel::STAGE_RELEASE_SET,
-    CurrentInstallExecutionPhaseLabel::RESUME_BOOTSTRAP,
-    CurrentInstallExecutionPhaseLabel::WAIT_READY,
-    CurrentInstallExecutionPhaseLabel::FUND_ROOT_POST_READY,
-    CurrentInstallExecutionPhaseLabel::WRITE_INSTALL_STATE,
+    CurrentInstallExecutionPhaseLabel::RECORD_ROOT_INSTALLED,
 ];
 
 #[must_use]

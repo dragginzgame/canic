@@ -2,38 +2,6 @@ use super::*;
 use canic_core::ids::BuildNetwork;
 
 #[test]
-fn current_install_staging_evidence_records_release_set_transport_facts() {
-    let manifest = RootReleaseSetManifest {
-        release_version: "0.43.4".to_string(),
-        entries: vec![ReleaseSetEntry {
-            role: "user_hub".to_string(),
-            template_id: "embedded:user_hub".to_string(),
-            artifact_relative_path: "local/canisters/user_hub/user_hub.wasm.gz".to_string(),
-            payload_size_bytes: 42,
-            payload_sha256_hex: "payload-hash".to_string(),
-            chunk_size_bytes: 1_048_576,
-            chunk_sha256_hex: vec!["chunk-a".to_string(), "chunk-b".to_string()],
-        }],
-    };
-
-    let evidence = current_install_staging_evidence(
-        "aaaaa-aa",
-        Path::new("/workspace/.icp/local/canisters/root.release-set.json"),
-        &manifest,
-    );
-
-    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
-    assert!(evidence.contains(&"release_version:0.43.4".to_string()));
-    assert!(evidence.contains(&"staging_receipts:1".to_string()));
-    assert!(evidence.contains(&"staging_role:user_hub".to_string()));
-    assert!(evidence.contains(&"staging_transport:WasmStore".to_string()));
-    assert!(evidence.contains(&"staging_chunks_prepared:2".to_string()));
-    assert!(evidence.contains(&"staging_chunks_published:2".to_string()));
-    assert!(evidence.contains(&"staging_postcondition:Observed".to_string()));
-    assert!(evidence.contains(&"staging_wasm_store:root:aaaaa-aa:bootstrap".to_string()));
-}
-
-#[test]
 fn resolve_root_canister_operation_owns_current_install_evidence() {
     let operation = ResolveRootCanisterOperation::new(
         Path::new("/workspace/.icp"),
@@ -100,47 +68,20 @@ fn build_target(role: &str) -> InstallBuildTarget {
 }
 
 #[test]
-fn stage_release_set_operation_owns_current_install_staging_evidence() {
-    let manifest = RootReleaseSetManifest {
-        release_version: "0.43.6".to_string(),
-        entries: vec![ReleaseSetEntry {
-            role: "root".to_string(),
-            template_id: "embedded:root".to_string(),
-            artifact_relative_path: "local/canisters/root/root.wasm.gz".to_string(),
-            payload_size_bytes: 84,
-            payload_sha256_hex: "payload-hash".to_string(),
-            chunk_size_bytes: 1_048_576,
-            chunk_sha256_hex: vec!["chunk-a".to_string()],
-        }],
-    };
-    let operation = StageReleaseSetOperation::new(
-        Path::new("/workspace/.icp"),
-        "local",
-        "aaaaa-aa",
-        Path::new("/workspace/.icp/local/canisters/root.release-set.json"),
-        manifest,
-        None,
-    );
-
-    let evidence = operation.evidence();
-
-    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
-    assert!(evidence.contains(&"release_version:0.43.6".to_string()));
-    assert!(evidence.contains(&"staging_role:root".to_string()));
-    assert!(evidence.contains(&"staging_transport:WasmStore".to_string()));
-    assert!(evidence.contains(&"staging_chunks_prepared:1".to_string()));
-    assert!(evidence.contains(&"staging_chunks_published:1".to_string()));
-}
-
-#[test]
 fn install_root_wasm_operation_owns_current_install_evidence() {
     let root = temp_dir("canic-install-root-operation-evidence");
     fs::create_dir_all(&root).expect("create temp root");
     let root_wasm = root.join("root.wasm");
     fs::write(&root_wasm, b"root wasm").expect("write root Wasm");
-    let operation =
-        InstallRootWasmOperation::new(&root, "local", "aaaaa-aa", root_wasm.clone(), None)
-            .expect("prepare root install operation");
+    let operation = InstallRootWasmOperation::new(
+        &root,
+        "local",
+        "aaaaa-aa",
+        root_wasm.clone(),
+        &sample_fleet_activation_identity(),
+        None,
+    )
+    .expect("prepare root install operation");
 
     let evidence = operation.evidence();
 
@@ -152,46 +93,6 @@ fn install_root_wasm_operation_owns_current_install_evidence() {
     }));
 
     fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[test]
-fn ensure_root_cycles_operation_owns_current_install_evidence() {
-    let operation = EnsureRootCyclesOperation::new(
-        Path::new("/workspace/.icp"),
-        "local",
-        "aaaaa-aa",
-        InstallPhaseLabel::FUND_ROOT_PRE_BOOTSTRAP,
-        "ensure local root minimum cycles before bootstrap",
-        "pre-bootstrap",
-        None,
-    );
-
-    let evidence = operation.evidence();
-
-    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
-    assert!(evidence.contains(&"minimum_cycles:100000000000000".to_string()));
-    assert!(evidence.contains(&"funding_phase:pre-bootstrap".to_string()));
-}
-
-#[test]
-fn resume_bootstrap_operation_owns_current_install_evidence() {
-    let operation =
-        ResumeBootstrapOperation::new(Path::new("/workspace/.icp"), "local", "aaaaa-aa", None);
-
-    let evidence = operation.evidence();
-
-    assert_eq!(evidence, ["root_canister:aaaaa-aa"]);
-}
-
-#[test]
-fn wait_root_ready_operation_owns_current_install_evidence() {
-    let operation =
-        WaitRootReadyOperation::new(Path::new("/workspace/.icp"), "local", "aaaaa-aa", 30, None);
-
-    let evidence = operation.evidence();
-
-    assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
-    assert!(evidence.contains(&"timeout_seconds:30".to_string()));
 }
 
 fn test_build_context() -> WorkspaceBuildContext {
@@ -210,28 +111,17 @@ fn test_build_context() -> WorkspaceBuildContext {
 }
 
 #[test]
-fn current_install_activation_phases_use_operation_runner() {
+fn current_install_activation_records_verified_root_before_advancing_the_journal() {
     let activation = include_str!("../../activation/mod.rs");
 
-    for operation in [
-        "pre_bootstrap_funding",
-        "stage_operation",
-        "resume_operation",
-        "wait_ready_operation",
-        "post_ready_funding",
-    ] {
-        assert!(
-            activation.contains(&format!("run_operation(&{operation})")),
-            "activation phase must run through operation runner: {operation}"
-        );
-    }
-    assert!(
-        activation
-            .contains("run_operation_with_receipt(&install_operation, Some(root_canister_id))"),
-        "root installation must return its verified durable receipt"
+    assert_before(
+        activation,
+        "run_operation_with_receipt(&install_operation, Some(root_canister_id))",
+        "admit_root_install_receipt(&completed_root_install.receipt_path)",
     );
-    assert!(
-        !activation.contains("run_phase("),
-        "activation phases must not manually wire receipt_scope.run_phase"
+    assert_before(
+        activation,
+        "admit_root_install_receipt(&completed_root_install.receipt_path)",
+        "record_root_installed(receipt_scope.icp_root, activation, &receipt)",
     );
 }
