@@ -146,7 +146,7 @@ fn deployment_comparison_report_blocks_stale_input_report() {
     left_plan
         .unresolved_assumptions
         .push(DeploymentAssumptionV1 {
-            key: DeploymentAssumptionKindV1::LocalStateMissing
+            key: DeploymentAssumptionKindV1::FleetCatalogMissing
                 .key()
                 .to_string(),
             description: "root identity is unknown until install".to_string(),
@@ -215,7 +215,7 @@ fn deployment_comparison_report_preserves_warning_input_status() {
     left_plan
         .unresolved_assumptions
         .push(DeploymentAssumptionV1 {
-            key: DeploymentAssumptionKindV1::LocalStateMissing
+            key: DeploymentAssumptionKindV1::FleetCatalogMissing
                 .key()
                 .to_string(),
             description: "root identity is unknown until install".to_string(),

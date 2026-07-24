@@ -66,6 +66,7 @@ kind = "root"
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_local_network_authority(&root, "local");
 
     let options = local_demo_install_options(&root);
 
@@ -184,6 +185,7 @@ kind = "root"
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_local_network_authority(&root, "local");
 
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
@@ -422,8 +424,12 @@ fn install_truth_phase_preserves_operation_and_failure_receipt_errors() {
     let (root, check) =
         demo_install_deployment_truth_check("canic-install-truth-failed-receipt-write");
     let execution_context = current_install_execution_context(&root, &root, "local");
-    fs::write(root.join(".canic"), b"blocks receipt directory")
-        .expect("create receipt directory blocker");
+    fs::create_dir_all(root.join(".canic/local")).expect("create receipt parent");
+    fs::write(
+        root.join(".canic/local/deployment-receipts"),
+        b"blocks receipt directory",
+    )
+    .expect("create receipt directory blocker");
     let scope = InstallReceiptScope {
         icp_root: &root,
         environment: "local",

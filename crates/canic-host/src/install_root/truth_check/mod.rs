@@ -1,6 +1,5 @@
 use super::config_selection::resolve_install_config_path;
 use super::current_execution::current_install_execution_context;
-use super::state::{read_named_deployment_install_state_from_root, validate_state_name};
 use super::{capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, options::InstallRootOptions};
 use crate::canister_build::CanisterBuildProfile;
 use crate::deployment_truth::{
@@ -161,42 +160,22 @@ fn resolve_current_install_truth_inputs(
         Some(path) => path.canonicalize()?,
         None => icp_root()?,
     };
-    let state = read_named_deployment_install_state_from_root(
-        &icp_root,
-        &options.environment,
-        &options.fleet_name,
-    )?;
-    let config_path = match (options.config_path.as_deref(), state.as_ref()) {
-        (Some(path), _) => resolve_install_config_path(
+    let config_path = if let Some(path) = options.config_path.as_deref() {
+        resolve_install_config_path(&icp_root, Some(path), options.interactive_config_selection)?
+    } else {
+        let default_config = options
+            .expected_app
+            .as_ref()
+            .map(|app| default_config_path_for_app(app));
+        resolve_install_config_path(
             &icp_root,
-            Some(path),
+            default_config.as_deref(),
             options.interactive_config_selection,
-        )?,
-        (None, Some(state)) => resolve_install_config_path(
-            &icp_root,
-            Some(&state.config_path),
-            options.interactive_config_selection,
-        )?,
-        (None, None) => {
-            let default_config = options
-                .expected_app
-                .as_ref()
-                .map(|app| default_config_path_for_app(app));
-            resolve_install_config_path(
-                &icp_root,
-                default_config.as_deref(),
-                options.interactive_config_selection,
-            )?
-        }
+        )?
     };
     let workspace_root = workspace_root()?;
     let app_id = AppConfigSnapshot::load(&config_path)?.app_id().to_string();
-    let expected_app = options
-        .expected_app
-        .as_deref()
-        .or_else(|| state.as_ref().map(|state| state.fleet_template.as_str()));
-    validate_expected_app_id(expected_app, &app_id, &config_path)?;
-    validate_state_name(&app_id)?;
+    validate_expected_app_id(options.expected_app.as_deref(), &app_id, &config_path)?;
     options.fleet_name.parse::<FleetName>()?;
     Ok(CurrentInstallTruthInputs {
         workspace_root,

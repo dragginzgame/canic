@@ -8,6 +8,11 @@ fn normal_named_environment_install_checks_fresh_local_build_artifacts() {
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
     let mut options = local_demo_install_options(&root);
+    fs::write(
+        root.join("icp.yaml"),
+        "environments:\n  - name: staging\n    network: ic\n",
+    )
+    .expect("write ICP config");
     options.environment = "staging".to_string();
 
     let check = current_install_deployment_truth_check_at(
@@ -101,6 +106,7 @@ fn install_truth_gate_blocks_observed_controller_drift() {
     let config_path = root.join("apps/demo/canic.toml");
     write_demo_root_only_config(&config_path);
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_local_network_authority(&root, "local");
 
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
@@ -195,6 +201,7 @@ kind = "root"
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_local_network_authority(&root, "local");
 
     let options = InstallRootOptions {
         root_canister: "root".to_string(),

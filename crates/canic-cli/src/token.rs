@@ -308,7 +308,7 @@ fn transfer_receiver(
     resolve_canister_or_role(
         deployment,
         canister_or_role,
-        &installed.state.root_canister_id,
+        &installed.fleet.root_principal,
         &installed.registry.entries,
     )
 }

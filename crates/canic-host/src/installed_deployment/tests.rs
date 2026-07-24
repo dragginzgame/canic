@@ -1,25 +1,27 @@
 use super::*;
 use crate::{registry::RegistryEntry, test_support::temp_dir};
+use canic_core::ids::CanonicalNetworkId;
 use std::fs;
 
-// Ensure installed-deployment lookup retains the install-state path and JSON source.
+// Ensure installed-deployment lookup retains the Fleet-catalog path and JSON source.
 #[test]
-fn retains_install_state_decode_error() {
+fn retains_fleet_catalog_decode_error() {
     let root = temp_dir("canic-installed-deployment-decode");
+    fs::create_dir_all(&root).expect("create project root");
     let path = root
         .join(".canic")
-        .join("local")
-        .join("deployments")
-        .join("demo.json");
-    fs::create_dir_all(path.parent().expect("deployment state parent"))
-        .expect("create deployment state parent");
-    fs::write(&path, b"{").expect("write malformed deployment state");
+        .join("networks")
+        .join(CanonicalNetworkId::public_ic().to_string())
+        .join("fleets/catalog.json");
+    fs::create_dir_all(path.parent().expect("Fleet catalog parent"))
+        .expect("create Fleet catalog parent");
+    fs::write(&path, b"{").expect("write malformed Fleet catalog");
 
-    let error = read_installed_deployment_state_from_root("local", "demo", &root)
-        .expect_err("malformed deployment state must fail");
+    let error = read_installed_fleet_from_root("ic", "demo", &root)
+        .expect_err("malformed Fleet catalog must fail");
 
     match error {
-        InstalledDeploymentError::InstallState(InstallStateError::Decode {
+        InstalledDeploymentError::FleetCatalog(FleetCatalogError::Decode {
             path: error_path,
             source,
         }) => {

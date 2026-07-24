@@ -8,7 +8,6 @@
 #[cfg(test)]
 mod tests;
 
-use super::state::validate_state_name;
 use crate::{
     deployment_truth::{
         DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
@@ -1166,12 +1165,18 @@ fn root_installed_result(
 }
 
 fn validate_app(app: &AppId) -> Result<(), FleetInstallActivationJournalError> {
-    validate_state_name(app.as_str()).map_err(|error| {
-        FleetInstallActivationJournalError::InvalidApp {
+    let value = app.as_str();
+    if value.is_empty()
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(FleetInstallActivationJournalError::InvalidApp {
             app: app.to_string(),
-            reason: error.to_string(),
-        }
-    })
+            reason: "must use only ASCII letters, numbers, '-' or '_'".to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn random_identity_bytes() -> Result<[u8; 32], FleetInstallActivationJournalError> {

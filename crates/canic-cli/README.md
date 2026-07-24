@@ -173,13 +173,12 @@ The selected install config must include an App source identity:
 name = "test"
 ```
 
-Successful installs write
-`.canic/<environment>/deployments/<deployment>.json` with the deployment name, fleet
-template, root target, resolved root principal, build target, config path, root
-verification state, and staging manifest path. `canic app config <name>` shows the
-selected fleet declaration, including opt-in role features such as auth,
-sharding, and scaling, while `canic info list <name>` queries the deployed root
-registry for that target.
+Successful installs commit one Fleet row under
+`.canic/networks/<canonical-network-id>/fleets/catalog.json`. The row binds the
+generated Fleet ID, Fleet name, App, installation-environment provenance and
+verified root principal. `canic app config <name>` shows the selected App
+declaration, including opt-in role features such as auth, sharding, and
+scaling, while `canic info list <fleet>` queries that Fleet's root registry.
 Commands use environment `local` unless you pass
 `--environment <name>`.
 
@@ -206,11 +205,10 @@ Create a new root-plus-app source App:
 
 ```bash
 canic app create my_app --yes
-canic install my_app
+canic install my_app my-local
 ```
 
-Diagnose project-level setup, or explicitly diagnose one installed deployment
-target:
+Diagnose project-level setup, or explicitly diagnose one installed Fleet:
 
 ```bash
 canic medic

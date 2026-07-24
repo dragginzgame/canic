@@ -1,5 +1,8 @@
-use super::state::{validate_environment_name, validate_state_name};
-use crate::{deployment_truth::DeploymentReceiptV1, durable_io::write_bytes};
+use crate::{
+    deployment_truth::DeploymentReceiptV1, durable_io::write_bytes,
+    network::validate_environment_name,
+};
+use canic_core::ids::FleetName;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -26,7 +29,7 @@ pub(super) fn install_deployment_truth_receipt_path(
     receipt: &DeploymentReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_environment_name(environment)?;
-    validate_state_name(deployment_name)?;
+    deployment_name.parse::<FleetName>()?;
     let file_stem = format!(
         "{}-{}",
         safe_deployment_truth_path_label(&receipt.started_at),
@@ -72,7 +75,7 @@ fn install_deployment_truth_receipts_dir(
     deployment_name: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     validate_environment_name(environment)?;
-    validate_state_name(deployment_name)?;
+    deployment_name.parse::<FleetName>()?;
     Ok(icp_root
         .join(".canic")
         .join(environment)

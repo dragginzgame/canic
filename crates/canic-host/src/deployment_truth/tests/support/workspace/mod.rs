@@ -71,42 +71,52 @@ pub(in crate::deployment_truth::tests) fn write_release_set_manifest(icp_root: &
     .expect("write manifest");
 }
 
-pub(in crate::deployment_truth::tests) fn write_deployment_state_json(
+pub(in crate::deployment_truth::tests) fn write_fleet_catalog_json(
     icp_root: &Path,
     environment: &str,
-    state: InstallState,
+    fleet: FleetCatalogEntryV1,
 ) {
+    let network = write_local_network_authority(icp_root, environment);
     let path = icp_root
         .join(".canic")
-        .join(environment)
-        .join("deployments")
-        .join(format!("{}.json", state.deployment_name));
-    fs::create_dir_all(path.parent().expect("state parent")).expect("create state dir");
+        .join("networks")
+        .join(network.to_string())
+        .join("fleets/catalog.json");
+    fs::create_dir_all(path.parent().expect("catalog parent")).expect("create catalog dir");
     fs::write(
         path,
-        serde_json::to_vec_pretty(&state).expect("encode install state"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "canonical_network_id": network,
+            "entries": [fleet],
+        }))
+        .expect("encode Fleet catalog"),
     )
-    .expect("write install state");
+    .expect("write Fleet catalog");
 }
 
-pub(in crate::deployment_truth::tests) fn sample_install_state(
-    deployment_name: &str,
-    root_canister_id: &str,
-) -> InstallState {
-    InstallState {
-        schema_version: 1,
-        deployment_name: deployment_name.to_string(),
-        fleet_template: "demo".to_string(),
-        created_at_unix_secs: 1,
-        updated_at_unix_secs: 1,
+pub(in crate::deployment_truth::tests) fn sample_fleet_catalog_entry(
+    fleet_name: &str,
+    root_principal: &str,
+) -> FleetCatalogEntryV1 {
+    FleetCatalogEntryV1 {
+        canonical_network_id: test_local_network_id(),
+        fleet_id: FleetId::from_generated_bytes([7; 32]),
+        fleet_name: fleet_name.parse().expect("Fleet name"),
+        app: AppId::from("demo"),
         environment: "local".to_string(),
-        root_target: "root".to_string(),
-        root_canister_id: root_canister_id.to_string(),
-        root_verification: RootVerificationStatus::Verified,
-        root_build_target: "root".to_string(),
-        workspace_root: "/workspace".to_string(),
-        icp_root: "/workspace".to_string(),
-        config_path: "apps/canic.toml".to_string(),
-        release_set_manifest_path: ".icp/local/canisters/root/release-set.json".to_string(),
+        deployed_at_unix_secs: 1,
+        root_principal: root_principal.to_string(),
     }
+}
+
+pub(in crate::deployment_truth::tests) fn write_local_network_authority(
+    root: &Path,
+    environment: &str,
+) -> CanonicalNetworkId {
+    crate::test_support::write_local_network_authority(root, environment)
+}
+
+fn test_local_network_id() -> CanonicalNetworkId {
+    crate::test_support::local_network_id()
 }

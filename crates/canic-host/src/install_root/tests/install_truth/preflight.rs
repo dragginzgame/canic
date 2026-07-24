@@ -55,7 +55,10 @@ kind = "service"
         DeploymentExecutionPreflightStatusV1::Ready
     );
     assert!(execution_preflight.blockers.is_empty());
-    assert!(!root.join(".canic").exists());
+    assert!(
+        !root.join(".canic/local/deployment-receipts").exists(),
+        "read-only preflight must not write deployment receipts"
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

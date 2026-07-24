@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-07-24
+Last updated: 2026-07-25
 
 ## Purpose
 
@@ -14,15 +14,20 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.21`.
-- The latest published release is `v0.99.21` at
-  `69bc6c0be3c71d77eb182f839c9cc44c42755ec3`.
-- The `v0.99.21` source tree is
-  `d7921e249da62c00bbf214740635ef99694e6aa7`. Its Cargo.lock SHA-256 is
-  `1ddd7db9779a11c4de0e55165f4b66abf2d61436bb398b5cb9276416b2949e6f`.
-- The open `0.99.22` draft deletes manual deployment registration and its
-  paired root-verification command family, public host API, report/receipt
-  contracts and obsolete operator proof.
+- The workspace package version is `0.99.22`.
+- The latest published release is `v0.99.22` at
+  `87967199f19b082fd2b95f64d116a22d2de4934c`.
+- The `v0.99.22` source tree is
+  `791b747aa86c649800ba32af2094040ac36a9e5c`. Its Cargo.lock SHA-256 is
+  `ca97ae4b97d31b8370d69b0959c94549f70f0cf7a940687208d03d1dd3872803`.
+- The open `0.99.23` draft deletes the environment-scoped install-state model
+  and makes the canonical-network Fleet catalog the sole host authority for
+  installed Fleet identity, root and App resolution. The redundant catalog
+  root-verification flag is removed because only completed activation
+  publishes a row.
+- Released `0.99.22` removes manual deployment registration and its paired
+  root-verification command family, public host API, report/receipt contracts
+  and obsolete operator proof.
 - Released `0.99.21` completes the runtime Prime hard cut:
   environment/stable/Candid state uses `fleet_root_pid` and `subnet_slot`,
   and the sole access predicates use `is_fleet_root` and

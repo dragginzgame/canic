@@ -201,7 +201,7 @@ fn inventory(observed_canisters: Vec<ObservedCanisterV1>) -> DeploymentInventory
             fleet_template: "demo".to_string(),
             root_principal: "aaaaa-aa".to_string(),
             observed_canister_id: "aaaaa-aa".to_string(),
-            observation_source: DeploymentRootObservationSourceV1::LocalDeploymentState,
+            observation_source: DeploymentRootObservationSourceV1::FleetCatalog,
             control_class: CanisterControlClassV1::DeploymentControlled,
             controllers: vec!["aaaaa-aa".to_string()],
             module_hash: None,

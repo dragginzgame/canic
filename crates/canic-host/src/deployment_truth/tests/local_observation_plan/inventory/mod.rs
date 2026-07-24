@@ -9,6 +9,7 @@ fn local_check_builds_plan_inventory_diff_and_report() {
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_local_network_authority(&icp_root, "local");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_release_set_manifest(&icp_root);
 
@@ -48,6 +49,7 @@ fn local_inventory_collects_configured_roles_and_artifacts_without_live_queries(
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_local_network_authority(&icp_root, "local");
 
     let artifact_path = icp_root
         .join(".icp")
@@ -122,7 +124,11 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
-    write_deployment_state_json(&icp_root, "local", sample_install_state("prod", "aaaaa-aa"));
+    write_fleet_catalog_json(
+        &icp_root,
+        "local",
+        sample_fleet_catalog_entry("prod", "aaaaa-aa"),
+    );
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "prod".to_string(),
@@ -150,7 +156,7 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     assert_eq!(observed_root.observed_canister_id, "aaaaa-aa");
     assert_eq!(
         observed_root.observation_source,
-        DeploymentRootObservationSourceV1::LocalDeploymentState
+        DeploymentRootObservationSourceV1::FleetCatalog
     );
     assert_eq!(
         observed_root.control_class,
@@ -158,11 +164,7 @@ fn local_inventory_records_explicit_root_evidence_for_deployment_target() {
     );
     assert_eq!(
         observed_root.role_assignment_source,
-        Some(
-            RoleAssignmentSourceV1::LocalInstallState
-                .label()
-                .to_string()
-        )
+        Some(RoleAssignmentSourceV1::FleetCatalog.label().to_string())
     );
 }
 
@@ -171,7 +173,11 @@ fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
     let temp = TempWorkspace::new("canic-host-local-root-evidence-missing-config");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    write_deployment_state_json(&icp_root, "local", sample_install_state("prod", "aaaaa-aa"));
+    write_fleet_catalog_json(
+        &icp_root,
+        "local",
+        sample_fleet_catalog_entry("prod", "aaaaa-aa"),
+    );
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "prod".to_string(),
@@ -196,17 +202,18 @@ fn local_inventory_does_not_use_deployment_name_as_missing_fleet_template() {
 }
 
 #[test]
-fn local_inventory_retains_install_state_decode_source() {
+fn local_inventory_retains_fleet_catalog_decode_source() {
     let temp = TempWorkspace::new("canic-host-local-state-error");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
-    let state_path = icp_root
+    let network = write_local_network_authority(&icp_root, "local");
+    let catalog_path = icp_root
         .join(".canic")
-        .join("local")
-        .join("deployments")
-        .join("demo.json");
-    fs::create_dir_all(state_path.parent().expect("state parent")).expect("create state dir");
-    fs::write(&state_path, b"not-json").expect("write malformed state");
+        .join("networks")
+        .join(network.to_string())
+        .join("fleets/catalog.json");
+    fs::create_dir_all(catalog_path.parent().expect("catalog parent")).expect("create catalog dir");
+    fs::write(&catalog_path, b"not-json").expect("write malformed catalog");
 
     let error = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "demo".to_string(),
@@ -217,13 +224,13 @@ fn local_inventory_retains_install_state_decode_source() {
         config_path: None,
         observed_at: "2026-05-27T00:00:00Z".to_string(),
     })
-    .expect_err("malformed install state must fail");
+    .expect_err("malformed Fleet catalog must fail");
 
     assert!(matches!(
         error,
-        DeploymentTruthError::LocalState(InstallStateError::Decode {
+        DeploymentTruthError::FleetCatalog(FleetCatalogError::Decode {
             path,
             source: _
-        }) if path == state_path
+        }) if path == catalog_path
     ));
 }

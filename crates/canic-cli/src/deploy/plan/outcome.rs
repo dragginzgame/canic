@@ -6,7 +6,6 @@
 
 use crate::deploy::plan::{
     command::DeployPlanOptions,
-    diagnostics::is_observed_state_drift_assumption,
     evidence::verifier_readiness_required,
     report::{
         CATEGORY_ARTIFACT, ComparisonStatus, FUTURE_APPLY_PREVIEW_PHASE, OP_APPLY_POLICY,
@@ -177,10 +176,6 @@ pub(super) fn comparison_status(
         return ComparisonStatus::NotRequested;
     }
 
-    if has_observed_state_drift(plan) {
-        return ComparisonStatus::ComparedWithDrift;
-    }
-
     if has_missing_observed_state(plan) {
         return ComparisonStatus::NotAvailable;
     }
@@ -196,16 +191,10 @@ pub(super) fn comparison_status(
     }
 }
 
-fn has_observed_state_drift(plan: &DeploymentPlanV1) -> bool {
-    plan.unresolved_assumptions
-        .iter()
-        .any(is_observed_state_drift_assumption)
-}
-
 fn has_missing_observed_state(plan: &DeploymentPlanV1) -> bool {
     plan.unresolved_assumptions.iter().any(|assumption| {
-        assumption.has_kind(DeploymentAssumptionKindV1::LocalStateMissing)
-            || assumption.has_kind(DeploymentAssumptionKindV1::LocalStateReadFailed)
+        assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogMissing)
+            || assumption.has_kind(DeploymentAssumptionKindV1::FleetCatalogReadFailed)
     })
 }
 

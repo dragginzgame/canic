@@ -2,7 +2,7 @@ use super::super::*;
 
 #[test]
 fn live_root_status_observation_maps_status_controllers_and_module_hash() {
-    let state = sample_install_state("demo", "aaaaa-aa");
+    let state = sample_fleet_catalog_entry("demo", "aaaaa-aa");
     let report = IcpCanisterStatusReport {
         id: "aaaaa-aa".to_string(),
         name: Some("root".to_string()),

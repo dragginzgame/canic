@@ -15,10 +15,9 @@ docs/architecture/v1-operator-walkthrough.md
 
 - `app`: the source definition identified by `[app].name` in `canic.toml`;
 - `role`: the package-backed canister role declared for that App;
-- `deployment`: the deployment target recorded in local deployment-target
-  state.
+- `fleet`: one live installed App identified within a canonical network.
 
-An App source identity is not a live deployment target.
+An App source identity is not a live Fleet identity.
 
 ## Required Project Files
 
@@ -85,9 +84,9 @@ canic build <app> <role> --provenance <path>
 Inspect the desired deployment shape without mutation:
 
 ```text
-canic deploy plan <deployment>
-canic deploy plan <deployment> --json
-canic deploy plan <deployment> --out <path>
+canic deploy plan <fleet>
+canic deploy plan <fleet> --json
+canic deploy plan <fleet> --out <path>
 ```
 
 `canic deploy plan` emits a no-mutation `DeploymentPlanReport` with
@@ -95,10 +94,10 @@ canic deploy plan <deployment> --out <path>
 deployment truth. `--out` writes JSON only and does not create parent
 directories.
 
-Check a deployment target and save stable evidence:
+Check a Fleet and save stable deployment evidence:
 
 ```text
-canic deploy check <deployment> --evidence-envelope
+canic deploy check <fleet> --evidence-envelope
 ```
 
 Evaluate saved evidence against a project policy:

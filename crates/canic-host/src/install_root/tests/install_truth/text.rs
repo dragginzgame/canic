@@ -65,6 +65,7 @@ kind = "root"
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
     write_wasm_gz_artifact(&root, "wasm_store", b"wasm-store-artifact");
+    write_local_network_authority(&root, "local");
 
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
@@ -184,6 +185,7 @@ kind = "root"
     )
     .expect("write config");
     write_wasm_gz_artifact(&root, "root", b"root-artifact");
+    write_local_network_authority(&root, "local");
 
     let options = InstallRootOptions {
         root_canister: "root".to_string(),
@@ -221,7 +223,7 @@ kind = "root"
 
     assert!(lines.iter().any(|line| {
         line.contains(
-            "Deployment truth warning: plan:plan_assumption:local_state.root_canister_id.missing",
+            "Deployment truth warning: plan:plan_assumption:fleet_catalog.root_principal.missing",
         )
     }));
 

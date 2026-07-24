@@ -15,7 +15,6 @@ use super::deployment_truth_gate::{
     install_deployment_truth_gate_receipt,
 };
 use super::execution_preflight::write_current_install_execution_preflight_receipt;
-use super::identity::resolve_install_identity;
 use super::operations::{
     BuildInstallTargetsOperation, EmitRootManifestOperation, InstallPhaseLabel,
     InstallPhaseOperation, InstallRootWasmOperation, ResolveRootCanisterOperation,
@@ -32,17 +31,12 @@ use super::receipt_io::{
     install_deployment_truth_receipt_path, write_install_deployment_truth_receipt,
 };
 use super::root_cycles::add_local_root_create_cycles_arg;
-use super::state::{
-    INSTALL_STATE_SCHEMA_VERSION, InstallStateError, deployment_install_state_path,
-    read_deployment_install_state, validate_environment_name, validate_state_name,
-};
 use super::timing::InstallTimingSummary;
-use super::truth_check::{current_install_deployment_truth_check_at, validate_expected_app_id};
+use super::truth_check::current_install_deployment_truth_check_at;
 use super::{
     FleetActivationContinuationRequired, InstallRootBlockKind, InstallRootBlockedError,
-    InstallRootError, InstallRootOptions, InstallRootPhase, InstallState, RootVerificationStatus,
-    check_install_deployment_truth, check_install_execution_preflight,
-    latest_deployment_truth_receipt_path_from_root,
+    InstallRootError, InstallRootOptions, InstallRootPhase, check_install_deployment_truth,
+    check_install_execution_preflight, latest_deployment_truth_receipt_path_from_root,
 };
 use crate::canister_build::{
     CanisterArtifactBuildSpec, CanisterBuildProfile, WorkspaceBuildContext,
@@ -56,7 +50,7 @@ use crate::deployment_truth::{
 };
 use crate::icp::LocalReplicaTarget;
 use crate::release_set::RootReleaseSetBuildSnapshot;
-use crate::test_support::temp_dir;
+use crate::test_support::{temp_dir, write_local_network_authority};
 use canic_core::{
     dto::fleet_activation::FleetActivationIdentity,
     ids::{
@@ -73,7 +67,6 @@ use std::{
 mod commands;
 mod config_selection;
 mod install_truth;
-mod state_root_verification;
 
 #[test]
 fn public_install_error_preserves_phase_and_typed_source() {
@@ -157,42 +150,6 @@ fn assert_before(source: &str, before: &str, after: &str) {
     );
 }
 
-fn sample_install_state(root: &Path, deployment_name: &str, fleet_template: &str) -> InstallState {
-    InstallState {
-        schema_version: INSTALL_STATE_SCHEMA_VERSION,
-        deployment_name: deployment_name.to_string(),
-        fleet_template: fleet_template.to_string(),
-        created_at_unix_secs: 42,
-        updated_at_unix_secs: 42,
-        environment: "local".to_string(),
-        root_target: "root".to_string(),
-        root_canister_id: "uxrrr-q7777-77774-qaaaq-cai".to_string(),
-        root_verification: RootVerificationStatus::Verified,
-        root_build_target: "root".to_string(),
-        workspace_root: root.display().to_string(),
-        icp_root: root.display().to_string(),
-        config_path: root
-            .join(format!("apps/{fleet_template}/canic.toml"))
-            .display()
-            .to_string(),
-        release_set_manifest_path: root
-            .join(".icp/local/canisters/root/root.release-set.json")
-            .display()
-            .to_string(),
-    }
-}
-
-fn write_install_state(
-    icp_root: &Path,
-    environment: &str,
-    state: &InstallState,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let path = deployment_install_state_path(icp_root, environment, &state.deployment_name);
-    fs::create_dir_all(path.parent().expect("deployment state parent"))?;
-    fs::write(&path, serde_json::to_vec_pretty(state)?)?;
-    Ok(path)
-}
-
 fn write_temp_workspace_config(config_source: &str) -> PathBuf {
     let root = temp_dir("canic-install-test");
     fs::create_dir_all(root.join("apps")).expect("temp apps dir must be created");
@@ -256,6 +213,7 @@ package = "worker"
 }
 
 fn local_demo_install_options(root: &Path) -> InstallRootOptions {
+    write_local_network_authority(root, "local");
     InstallRootOptions {
         root_canister: "root".to_string(),
         root_build_target: "root".to_string(),
@@ -307,6 +265,7 @@ fn write_wasm_gz_artifact(root: &Path, role: &str, bytes: &[u8]) {
 
 fn demo_install_deployment_truth_check(root_name: &str) -> (PathBuf, DeploymentCheckV1) {
     let root = temp_dir(root_name);
+    write_local_network_authority(&root, "local");
     let config_path = root.join("apps/demo/canic.toml");
     fs::create_dir_all(config_path.parent().expect("config parent")).expect("create config dir");
     fs::write(

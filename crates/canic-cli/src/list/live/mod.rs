@@ -11,7 +11,7 @@ use canic_host::{
     icp_config::resolve_current_canic_icp_root,
     installed_deployment::{
         InstalledDeploymentError, InstalledDeploymentRequest, InstalledDeploymentResolution,
-        read_installed_deployment_state_from_root, resolve_installed_deployment_from_root,
+        resolve_installed_deployment_from_root,
     },
     registry::RegistryEntry,
     release_set::artifact_root_path,
@@ -253,16 +253,8 @@ fn live_icp(icp: &str, environment: Option<String>, icp_root: Option<&Path>) -> 
     }
 }
 
-fn resolve_icp_artifact_root(options: &ListOptions) -> Result<PathBuf, ListCommandError> {
-    let icp_root = resolve_live_icp_root()?;
-    if let Ok(state) = read_installed_deployment_state_from_root(
-        &state_environment(options),
-        &options.target,
-        &icp_root,
-    ) {
-        return Ok(PathBuf::from(state.icp_root));
-    }
-    Ok(icp_root)
+fn resolve_icp_artifact_root(_options: &ListOptions) -> Result<PathBuf, ListCommandError> {
+    resolve_live_icp_root()
 }
 
 fn resolve_list_deployment(

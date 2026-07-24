@@ -1,8 +1,6 @@
 use super::*;
 use crate::{
-    install_root::{
-        InstallStateError, RootVerificationStatus, read_named_deployment_install_state_from_root,
-    },
+    fleet_catalog::read_fleet_catalog_entry_from_root,
     release_set::{AppConfigSnapshot, ConfiguredPoolExpectation},
 };
 use std::path::PathBuf;
@@ -163,53 +161,28 @@ fn local_root_canister_id(
     request: &LocalDeploymentPlanRequest,
     assumptions: &mut Vec<DeploymentAssumptionV1>,
 ) -> Option<String> {
-    match read_named_deployment_install_state_from_root(
+    match read_fleet_catalog_entry_from_root(
         &request.icp_root,
         &request.environment,
         &request.deployment_name,
     ) {
-        Ok(Some(state)) if state.root_verification == RootVerificationStatus::Verified => {
-            Some(state.root_canister_id)
-        }
-        Ok(Some(state)) => {
-            assumptions.push(assumption(
-                "local_state.unverified_root_canister_id",
-                format!(
-                    "deployment state for {} records root {}, but root verification is {:?}; run deploy check/verification before mutation authority is trusted",
-                    request.deployment_name, state.root_canister_id, state.root_verification
-                ),
-            ));
-            None
-        }
-        Err(InstallStateError::EnvironmentMismatch {
-            state_environment,
-            requested_environment,
-        }) => {
-            assumptions.push(assumption(
-                DeploymentAssumptionKindV1::LocalStateEnvironmentMismatch.key(),
-                format!(
-                    "deployment state for {} has environment {}, expected {}",
-                    request.deployment_name, state_environment, requested_environment
-                ),
-            ));
-            None
-        }
+        Ok(Some(fleet)) => Some(fleet.root_principal),
         Ok(None) => {
             assumptions.push(assumption(
-                DeploymentAssumptionKindV1::LocalStateMissing.key(),
+                DeploymentAssumptionKindV1::FleetCatalogMissing.key(),
                 format!(
-                    "no local deployment state exists for {}; root identity is unknown until install",
+                    "no installed Fleet catalog entry exists for {}; root identity is unknown until installation completes",
                     request.deployment_name
                 ),
             ));
             None
         }
-        Err(err) => {
+        Err(error) => {
             assumptions.push(assumption(
-                DeploymentAssumptionKindV1::LocalStateReadFailed.key(),
+                DeploymentAssumptionKindV1::FleetCatalogReadFailed.key(),
                 format!(
-                    "could not read deployment state for {}: {err}",
-                    request.deployment_name
+                    "could not read Fleet catalog for {}: {error}",
+                    request.deployment_name,
                 ),
             ));
             None

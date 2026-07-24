@@ -19,15 +19,14 @@ Canic keeps three names separate:
 
 - `app`: the source definition identified by `[app].name` in `canic.toml`;
 - `role`: the package-backed canister role declared for that App;
-- `deployment`: the deployment target recorded in local deployment-target
-  state.
+- `fleet`: one live installed App identified within a canonical network.
 
 For example:
 
 ```text
 app:        demo
 role:       app
-deployment: demo-staging
+fleet:      demo-staging
 ```
 
 The App and role answer:
@@ -36,14 +35,14 @@ The App and role answer:
 What am I building?
 ```
 
-The deployment target answers:
+The Fleet answers:
 
 ```text
-What installed deployment am I checking?
+What live installation am I checking?
 ```
 
-Canic does not treat an App source identity as a deployment target. The names
-may be similar in a project, but the command surfaces keep them separate.
+Canic does not treat an App source identity as a Fleet identity. The names may
+be similar in a project, but the command surfaces keep them separate.
 
 ## Setup Contract
 
@@ -107,14 +106,14 @@ preview labels, and next actions.
 
 The command is diagnostic and planning-only. It does not install Wasm, create
 canisters, change controllers, query live mainnet by default, write deployment
-truth, create installed deployment records, sign evidence, or authorize apply.
+truth, create Fleet-catalog rows, sign evidence, or authorize apply.
 `--out` writes JSON only and fails if the target file already exists or the
 parent directory does not exist.
 
 ## Check Deployment Evidence
 
-When a deployment target exists, run a passive deployment check and save a
-stable evidence envelope:
+When a Fleet exists, run a passive deployment check and save a stable evidence
+envelope:
 
 ```text
 canic deploy check demo-staging \
@@ -203,13 +202,12 @@ artifacts, acquire locks, sign evidence, add groups, or scan saved evidence
 files.
 
 An empty catalog is valid when no Fleet has committed host authority on that
-network. The command never falls back to removed environment-scoped deployment
-state.
+network.
 
 ## Useful Local Smoke Checks
 
-From a fleet directory, these checks should be safe because they do not query a
-live deployment or mutate project state:
+From an App workspace, these checks should be safe because they do not query a
+live Fleet or mutate project state:
 
 ```text
 canic deploy inspect catalog list
@@ -221,7 +219,6 @@ Expected behavior in a fresh checkout without a Fleet catalog:
 
 - the catalog has zero entries;
 - the canonical network identity and selected environment are still reported;
-- removed environment-scoped deployment state, if present, is ignored;
 - `inspect <fleet>` fails clearly until that Fleet is known.
 
 The maintained temporary-project smoke path is:

@@ -3,13 +3,15 @@ use super::super::*;
 #[test]
 fn local_inventory_reports_missing_config_as_observation_gap() {
     let temp = TempWorkspace::new("canic-host-local-inventory-missing-config");
+    let icp_root = temp.path().join("icp");
+    write_local_network_authority(&icp_root, "local");
 
     let inventory = collect_local_deployment_inventory(&LocalInventoryRequest {
         deployment_name: "demo".to_string(),
         environment: "local".to_string(),
         artifact_environment: "local".to_string(),
         workspace_root: temp.path().join("workspace"),
-        icp_root: temp.path().join("icp"),
+        icp_root,
         config_path: None,
         observed_at: "2026-05-21T00:00:00Z".to_string(),
     })
@@ -35,9 +37,11 @@ fn local_artifact_manifest_collects_roles_and_release_set_hashes() {
     let temp = TempWorkspace::new("canic-host-local-artifact-manifest");
     let workspace_root = temp.path().join("workspace");
     let icp_root = temp.path().join("icp");
+    write_local_network_authority(&icp_root, "local");
     let config_dir = workspace_root.join("apps");
     fs::create_dir_all(&config_dir).expect("create config dir");
     fs::write(config_dir.join("canic.toml"), SAMPLE_CONFIG).expect("write config");
+    write_local_network_authority(&icp_root, "local");
     write_artifact(&icp_root, "root", b"root-artifact");
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
@@ -186,6 +190,11 @@ fn local_deployment_check_separates_target_environment_from_artifact_environment
     write_artifact(&icp_root, "wasm_store", b"wasm-store-artifact");
     write_artifact(&icp_root, "user_hub", b"user-hub-artifact");
     write_release_set_manifest(&icp_root);
+    fs::write(
+        icp_root.join("icp.yaml"),
+        "environments:\n  - name: staging\n    network: ic\n",
+    )
+    .expect("write ICP config");
 
     let check = check_local_deployment(&LocalDeploymentCheckRequest {
         deployment_name: "demo".to_string(),

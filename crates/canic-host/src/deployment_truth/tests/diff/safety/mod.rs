@@ -25,11 +25,7 @@ fn deployment_diff_is_safe_when_checked_facts_match() {
             status: None,
             root_trust_anchor: Some("aaaaa-aa".to_string()),
             canonical_embedded_config_digest: None,
-            role_assignment_source: Some(
-                RoleAssignmentSourceV1::LocalInstallState
-                    .label()
-                    .to_string(),
-            ),
+            role_assignment_source: Some(RoleAssignmentSourceV1::FleetCatalog.label().to_string()),
         }],
         observed_pool: Vec::new(),
         observed_artifacts: vec![ObservedArtifactV1 {

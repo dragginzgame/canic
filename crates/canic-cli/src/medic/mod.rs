@@ -1,7 +1,7 @@
 //! Module: canic_cli::medic
 //!
 //! Responsibility: diagnose Canic project and installed-deployment readiness.
-//! Does not own: deployment mutation, recovery, install-state persistence, or
+//! Does not own: deployment mutation, recovery, Fleet catalog persistence, or
 //! canister control-plane changes.
 //! Boundary: reads local project/deployment state and renders diagnostic-only
 //! medic reports.
@@ -25,7 +25,7 @@ use canic_host::{
     icp::{IcpCli, IcpCommandError},
     icp_config::resolve_current_canic_icp_root,
     install_root::discover_project_canic_config_choices,
-    installed_deployment::{InstalledDeploymentError, read_installed_deployment_state_from_root},
+    installed_deployment::{InstalledDeploymentError, read_installed_fleet_from_root},
     state_manifest::{StateManifestResolution, resolve_project_state_manifest},
 };
 
@@ -35,7 +35,7 @@ use command::MedicOptions;
 pub use command::{MedicCommandError, run};
 use deployment::{
     DeploymentMedicContext, deploy_plan_then, deployment_medic_context,
-    deployment_name_conflation_checks, installed_deployment_state_checks,
+    deployment_name_conflation_checks, installed_fleet_checks,
 };
 use project::{project_config_checks, state_audit_project_check};
 use report::{MedicCategory, MedicCheck, MedicReport, MedicScope, MedicSource};
@@ -139,10 +139,8 @@ fn run_deployment_checks(
     checks.push(context.environment_check.clone());
 
     let state_result = match icp_root {
-        Some(root) => {
-            read_installed_deployment_state_from_root(environment, options.deployment_name(), root)
-                .map_err(Some)
-        }
+        Some(root) => read_installed_fleet_from_root(environment, options.deployment_name(), root)
+            .map_err(Some),
         None => Err(None),
     };
     let state = match state_result {
@@ -151,7 +149,7 @@ fn run_deployment_checks(
                 MedicCategory::DeploymentState,
                 "deployment_target_found",
                 "deployment",
-                format!("{} installed", state.deployment_name),
+                format!("{} installed", state.fleet_name),
                 "run canic info list",
                 MedicSource::InstalledDeployment,
             ));
@@ -198,7 +196,7 @@ fn run_deployment_checks(
     };
 
     if let Some(state) = state.as_ref() {
-        checks.extend(installed_deployment_state_checks(
+        checks.extend(installed_fleet_checks(
             options,
             icp_root,
             state,

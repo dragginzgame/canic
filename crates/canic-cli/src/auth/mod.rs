@@ -124,7 +124,7 @@ impl AuthCommandError {
             | Self::InstalledDeployment(
                 InstalledDeploymentError::Icp(IcpCommandError::Io(_))
                 | InstalledDeploymentError::NoInstalledDeployment { .. }
-                | InstalledDeploymentError::InstallState(_)
+                | InstalledDeploymentError::FleetCatalog(_)
                 | InstalledDeploymentError::Registry(_)
                 | InstalledDeploymentError::Io(_),
             )
@@ -638,7 +638,7 @@ fn resolve_auth_root_call_target(
         target: AuthRootTarget {
             input: ROOT_ROLE.to_string(),
             role: ROOT_ROLE.to_string(),
-            canister_id: installed.state.root_canister_id,
+            canister_id: installed.fleet.root_principal,
             candid_source: AuthRenewalCandidSource::InstalledDeployment,
         },
         candid_path,
