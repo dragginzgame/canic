@@ -1,5 +1,35 @@
 use super::*;
 
+struct VerifiedInstallOperation;
+
+impl InstallPhaseOperation for VerifiedInstallOperation {
+    fn phase(&self) -> InstallPhaseLabel {
+        InstallPhaseLabel::INSTALL_ROOT
+    }
+
+    fn attempted_action(&self) -> &'static str {
+        "install root wasm"
+    }
+
+    fn evidence(&self) -> Vec<String> {
+        vec![
+            "root_canister:aaaaa-aa".to_string(),
+            "root_wasm:/tmp/root.wasm".to_string(),
+            format!("expected_module_hash:{}", "11".repeat(32)),
+        ]
+    }
+
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
+
+    fn verified_evidence(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let mut evidence = self.evidence();
+        evidence.push(format!("observed_module_hash:{}", "11".repeat(32)));
+        Ok(evidence)
+    }
+}
+
 #[test]
 fn install_truth_gate_persists_machine_readable_receipt() {
     let root = temp_dir("canic-install-truth-receipt-json");
@@ -341,6 +371,46 @@ fn install_truth_receipted_phase_records_success_and_failure() {
         wait.phase_receipts[0].verified_postcondition.status,
         ObservationStatusV1::Observed
     );
+
+    fs::remove_dir_all(root).expect("clean temp dir");
+}
+
+#[test]
+fn install_operation_returns_exact_durable_verified_receipt() {
+    let (root, check) =
+        demo_install_deployment_truth_check("canic-install-truth-verified-operation");
+    let execution_context = current_install_execution_context(&root, &root, "local");
+    let scope = InstallReceiptScope {
+        icp_root: &root,
+        environment: "local",
+        deployment_name: "demo",
+        check: &check,
+        execution_context: Some(&execution_context),
+    };
+
+    let completed = scope
+        .run_operation_with_receipt(&VerifiedInstallOperation, Some("aaaaa-aa"))
+        .expect("verified operation receipt");
+    let receipt: DeploymentReceiptV1 =
+        serde_json::from_slice(&fs::read(&completed.receipt_path).expect("read receipt"))
+            .expect("decode receipt");
+
+    assert_eq!(receipt.root_principal.as_deref(), Some("aaaaa-aa"));
+    assert_eq!(
+        receipt.phase_receipts[0].verified_postcondition.evidence,
+        [
+            "root_canister:aaaaa-aa".to_string(),
+            "root_wasm:/tmp/root.wasm".to_string(),
+            format!("expected_module_hash:{}", "11".repeat(32)),
+            format!("observed_module_hash:{}", "11".repeat(32)),
+        ]
+    );
+    let admitted = crate::install_root::fleet_activation_journal::admit_root_install_receipt(
+        &completed.receipt_path,
+    )
+    .expect("journal admission");
+    assert_eq!(admitted.root_canister.to_text(), "aaaaa-aa");
+    assert_eq!(admitted.module_hash, [0x11; 32]);
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }

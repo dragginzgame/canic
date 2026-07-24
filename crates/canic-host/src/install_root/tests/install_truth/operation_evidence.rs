@@ -134,20 +134,24 @@ fn stage_release_set_operation_owns_current_install_staging_evidence() {
 
 #[test]
 fn install_root_wasm_operation_owns_current_install_evidence() {
-    let operation = InstallRootWasmOperation::new(
-        Path::new("/workspace/.icp"),
-        "local",
-        "aaaaa-aa",
-        PathBuf::from("/workspace/.icp/local/canisters/root/root.wasm"),
-        None,
-    );
+    let root = temp_dir("canic-install-root-operation-evidence");
+    fs::create_dir_all(&root).expect("create temp root");
+    let root_wasm = root.join("root.wasm");
+    fs::write(&root_wasm, b"root wasm").expect("write root Wasm");
+    let operation =
+        InstallRootWasmOperation::new(&root, "local", "aaaaa-aa", root_wasm.clone(), None)
+            .expect("prepare root install operation");
 
     let evidence = operation.evidence();
 
     assert!(evidence.contains(&"root_canister:aaaaa-aa".to_string()));
-    assert!(
-        evidence.contains(&"root_wasm:/workspace/.icp/local/canisters/root/root.wasm".to_string())
-    );
+    assert!(evidence.contains(&format!("root_wasm:{}", root_wasm.display())));
+    assert!(evidence.iter().any(|item| {
+        item.strip_prefix("expected_module_hash:")
+            .is_some_and(|hash| hash.len() == 64)
+    }));
+
+    fs::remove_dir_all(root).expect("remove temp root");
 }
 
 #[test]
@@ -210,7 +214,6 @@ fn current_install_activation_phases_use_operation_runner() {
     let activation = include_str!("../../activation/mod.rs");
 
     for operation in [
-        "install_operation",
         "pre_bootstrap_funding",
         "stage_operation",
         "resume_operation",
@@ -222,6 +225,11 @@ fn current_install_activation_phases_use_operation_runner() {
             "activation phase must run through operation runner: {operation}"
         );
     }
+    assert!(
+        activation
+            .contains("run_operation_with_receipt(&install_operation, Some(root_canister_id))"),
+        "root installation must return its verified durable receipt"
+    );
     assert!(
         !activation.contains("run_phase("),
         "activation phases must not manually wire receipt_scope.run_phase"

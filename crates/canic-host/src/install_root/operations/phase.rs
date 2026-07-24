@@ -28,4 +28,8 @@ pub(in crate::install_root) trait InstallPhaseOperation {
     fn attempted_action(&self) -> &'static str;
     fn evidence(&self) -> Vec<String>;
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>>;
+
+    fn verified_evidence(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        Ok(self.evidence())
+    }
 }
