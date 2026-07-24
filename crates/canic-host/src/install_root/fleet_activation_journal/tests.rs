@@ -1,5 +1,6 @@
 use super::*;
 use crate::{
+    deployment_truth::{DEPLOYMENT_TRUTH_SCHEMA_VERSION, PhaseReceiptV1, VerifiedPostconditionV1},
     release_build::{
         ReleaseBuildPlanRecord, finalize_release_build_from_manifest, plan_release_build,
     },
@@ -29,6 +30,50 @@ fn request<'a>(
         app: AppId::from("toko"),
         finalized_release_build,
     }
+}
+
+fn write_root_install_receipt(
+    root: &Path,
+    module_hash: [u8; 32],
+) -> (PathBuf, DeploymentReceiptV1) {
+    fs::create_dir_all(root).expect("create receipt root");
+    let root_canister = Principal::from_slice(&[42; 29]);
+    let hash = hex_digest(module_hash);
+    let receipt = DeploymentReceiptV1 {
+        schema_version: DEPLOYMENT_TRUTH_SCHEMA_VERSION,
+        operation_id: "local:local:toko-local:check:install_root".to_string(),
+        plan_id: "plan".to_string(),
+        execution_context: None,
+        operation_status: DeploymentExecutionStatusV1::Complete,
+        started_at: "unix:1".to_string(),
+        finished_at: Some("unix:2".to_string()),
+        operator_principal: None,
+        root_principal: Some(root_canister.to_text()),
+        previous_observed_deployment_epoch: None,
+        phase_receipts: vec![PhaseReceiptV1 {
+            phase: "install_root".to_string(),
+            started_at: "unix:1".to_string(),
+            finished_at: Some("unix:2".to_string()),
+            attempted_action: "install root wasm".to_string(),
+            verified_postcondition: VerifiedPostconditionV1 {
+                status: ObservationStatusV1::Observed,
+                evidence: vec![
+                    format!("root_canister:{root_canister}"),
+                    "root_wasm:/tmp/root.wasm".to_string(),
+                    format!("expected_module_hash:{hash}"),
+                    format!("observed_module_hash:{hash}"),
+                ],
+            },
+        }],
+        role_phase_receipts: Vec::new(),
+        final_inventory_id: Some("inventory".to_string()),
+        command_result: DeploymentCommandResultV1::Succeeded,
+    };
+    let path = root.join(format!("root-install-{}.json", module_hash[0]));
+    let mut bytes = serde_json::to_vec_pretty(&receipt).expect("encode root-install receipt");
+    bytes.push(b'\n');
+    fs::write(&path, bytes).expect("write root-install receipt");
+    (path, receipt)
 }
 
 #[test]
@@ -77,6 +122,183 @@ fn planned_journal_is_canonical_durable_and_bound_to_every_path_identity() {
         planned.journal
     );
     assert_eq!(fs::read(&planned.path).expect("read journal")[0], 0x88);
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn root_installed_transition_is_canonical_monotonic_and_idempotent() {
+    let root = temp_dir("fleet-install-activation-root-installed");
+    let finalized = finalized_release(&root, b"manifest");
+    let planned =
+        plan_fleet_install_activation(request(&root, &finalized)).expect("plan activation");
+    let (receipt_path, _) = write_root_install_receipt(&root, [12; 32]);
+    let receipt = admit_root_install_receipt(&receipt_path).expect("admit root-install receipt");
+    let expected_receipt_hash: [u8; 32] =
+        Sha256::digest(fs::read(&receipt_path).expect("read receipt")).into();
+
+    assert_eq!(receipt.receipt_hash, expected_receipt_hash);
+    assert_eq!(receipt.root_canister, Principal::from_slice(&[42; 29]));
+    assert_eq!(receipt.module_hash, [12; 32]);
+
+    let installed = record_root_installed(&root, &planned, &receipt).expect("record RootInstalled");
+    assert!(installed.advanced);
+    assert_eq!(installed.journal.sequence, 1);
+    assert_eq!(
+        installed.journal.phase,
+        FleetInstallActivationPhase::RootInstalled
+    );
+    assert_eq!(
+        installed.journal.root_install_receipt_hash,
+        Some(receipt.receipt_hash)
+    );
+    assert_eq!(
+        installed.journal_hash,
+        fleet_install_activation_journal_hash(&installed.journal)
+    );
+    assert_eq!(
+        load_fleet_install_activation_journal(
+            &root,
+            installed.journal.activation.identity.fleet.fleet.network,
+            installed.journal.activation.identity.fleet.fleet.fleet_id,
+            installed.journal.activation.identity.operation_id,
+        )
+        .expect("load RootInstalled"),
+        installed.journal
+    );
+
+    let resumed =
+        plan_fleet_install_activation(request(&root, &finalized)).expect("rediscover activation");
+    assert!(!resumed.created);
+    assert_eq!(
+        resumed.journal.phase,
+        FleetInstallActivationPhase::RootInstalled
+    );
+    let repeated = record_root_installed(&root, &resumed, &receipt).expect("repeat RootInstalled");
+    assert!(!repeated.advanced);
+    assert_eq!(repeated.journal, installed.journal);
+    assert_eq!(repeated.journal_hash, installed.journal_hash);
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn root_installed_transition_rejects_stale_journal_and_receipt_conflicts() {
+    let root = temp_dir("fleet-install-activation-root-conflict");
+    let finalized = finalized_release(&root, b"manifest");
+    let planned =
+        plan_fleet_install_activation(request(&root, &finalized)).expect("plan activation");
+    let (receipt_path, _) = write_root_install_receipt(&root, [13; 32]);
+    let receipt = admit_root_install_receipt(&receipt_path).expect("admit receipt");
+
+    let mut changed = planned.journal.clone();
+    changed.release_set_manifest_digest = [0xee; 32];
+    fs::write(
+        &planned.path,
+        encode_journal(&changed).expect("encode changed journal"),
+    )
+    .expect("write changed journal");
+    std::assert_matches!(
+        record_root_installed(&root, &planned, &receipt),
+        Err(FleetInstallActivationJournalError::JournalChanged { .. })
+    );
+    assert_eq!(
+        fs::read(&planned.path).expect("read unchanged conflicting journal"),
+        encode_journal(&changed).expect("encode changed journal")
+    );
+
+    fs::write(
+        &planned.path,
+        encode_journal(&planned.journal).expect("encode original journal"),
+    )
+    .expect("restore planned journal");
+    let installed = record_root_installed(&root, &planned, &receipt).expect("record RootInstalled");
+    let resumed =
+        plan_fleet_install_activation(request(&root, &finalized)).expect("resume RootInstalled");
+    let (other_path, _) = write_root_install_receipt(&root, [14; 32]);
+    let other = admit_root_install_receipt(&other_path).expect("admit other receipt");
+    std::assert_matches!(
+        record_root_installed(&root, &resumed, &other),
+        Err(FleetInstallActivationJournalError::RootInstallReceiptMismatch)
+    );
+    assert_eq!(
+        fs::read(&installed.path).expect("read RootInstalled journal"),
+        encode_journal(&installed.journal).expect("encode RootInstalled journal")
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[test]
+fn root_install_receipt_admission_requires_canonical_verified_module_evidence() {
+    let root = temp_dir("fleet-install-activation-root-receipt");
+    let (path, receipt) = write_root_install_receipt(&root, [15; 32]);
+
+    let mut mismatch = receipt.clone();
+    mismatch.phase_receipts[0].verified_postcondition.evidence[3] =
+        format!("observed_module_hash:{}", hex_digest([16; 32]));
+    let mut bytes = serde_json::to_vec_pretty(&mismatch).expect("encode mismatch");
+    bytes.push(b'\n');
+    fs::write(&path, bytes).expect("write mismatch");
+    std::assert_matches!(
+        admit_root_install_receipt(&path),
+        Err(FleetInstallActivationJournalError::InvalidRootInstallReceipt { .. })
+    );
+
+    let mut principal_mismatch = receipt.clone();
+    principal_mismatch.root_principal = Some(Principal::from_slice(&[43; 29]).to_text());
+    let mut bytes =
+        serde_json::to_vec_pretty(&principal_mismatch).expect("encode principal mismatch");
+    bytes.push(b'\n');
+    fs::write(&path, bytes).expect("write principal mismatch");
+    std::assert_matches!(
+        admit_root_install_receipt(&path),
+        Err(FleetInstallActivationJournalError::InvalidRootInstallReceipt { .. })
+    );
+
+    let mut missing_principal = receipt.clone();
+    missing_principal.root_principal = None;
+    let mut bytes =
+        serde_json::to_vec_pretty(&missing_principal).expect("encode missing principal");
+    bytes.push(b'\n');
+    fs::write(&path, bytes).expect("write missing principal");
+    std::assert_matches!(
+        admit_root_install_receipt(&path),
+        Err(FleetInstallActivationJournalError::InvalidRootInstallReceipt { .. })
+    );
+
+    let mut bytes = serde_json::to_vec(&receipt).expect("encode noncanonical");
+    bytes.push(b'\n');
+    fs::write(&path, bytes).expect("write noncanonical");
+    std::assert_matches!(
+        admit_root_install_receipt(&path),
+        Err(FleetInstallActivationJournalError::InvalidRootInstallReceipt { .. })
+    );
+
+    fs::remove_file(&path).expect("remove receipt");
+    std::assert_matches!(
+        admit_root_install_receipt(&path),
+        Err(FleetInstallActivationJournalError::MissingRootInstallReceipt { .. })
+    );
+
+    fs::remove_dir_all(root).expect("remove temp root");
+}
+
+#[cfg(unix)]
+#[test]
+fn root_install_receipt_symlinks_are_rejected() {
+    use std::os::unix::fs::symlink;
+
+    let root = temp_dir("fleet-install-activation-root-receipt-symlink");
+    let (path, _) = write_root_install_receipt(&root, [17; 32]);
+    let real = root.join("real-root-install.json");
+    fs::rename(&path, &real).expect("move receipt");
+    symlink(&real, &path).expect("link receipt");
+
+    std::assert_matches!(
+        admit_root_install_receipt(&path),
+        Err(FleetInstallActivationJournalError::UnsafeRootInstallReceipt { .. })
+    );
 
     fs::remove_dir_all(root).expect("remove temp root");
 }
@@ -463,16 +685,41 @@ fn corrupt_noncanonical_and_path_mismatched_journals_fail_closed() {
 }
 
 #[test]
-fn planned_phase_rejects_post_mutation_evidence() {
+fn phase_validation_enforces_exact_planned_and_root_installed_evidence() {
     let root = temp_dir("fleet-install-activation-phase");
     let finalized = finalized_release(&root, b"manifest");
     let planned = plan_fleet_install_activation(request(&root, &finalized))
         .expect("plan Fleet install activation");
-    let mut invalid = planned.journal;
+    let mut invalid = planned.journal.clone();
     invalid.root_install_receipt_hash = Some([1; 32]);
 
     std::assert_matches!(
         encode_journal(&invalid),
+        Err(FleetInstallActivationJournalError::InvalidDocument { .. })
+    );
+
+    let mut root_installed = planned.journal.clone();
+    root_installed.phase = FleetInstallActivationPhase::RootInstalled;
+    root_installed.sequence = 1;
+    std::assert_matches!(
+        encode_journal(&root_installed),
+        Err(FleetInstallActivationJournalError::InvalidDocument { .. })
+    );
+    root_installed.root_install_receipt_hash = Some([1; 32]);
+    assert!(encode_journal(&root_installed).is_ok());
+
+    root_installed.sequence = 0;
+    std::assert_matches!(
+        encode_journal(&root_installed),
+        Err(FleetInstallActivationJournalError::InvalidDocument { .. })
+    );
+
+    let mut reserved = planned.journal;
+    reserved.phase = FleetInstallActivationPhase::CanistersPrepared;
+    reserved.sequence = 2;
+    reserved.root_install_receipt_hash = Some([1; 32]);
+    std::assert_matches!(
+        encode_journal(&reserved),
         Err(FleetInstallActivationJournalError::InvalidDocument { .. })
     );
 

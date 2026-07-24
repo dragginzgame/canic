@@ -15,8 +15,13 @@ mod tests;
 
 use super::state::validate_state_name;
 use crate::{
+    deployment_truth::{
+        DeploymentCommandResultV1, DeploymentExecutionStatusV1, DeploymentReceiptV1,
+        ObservationStatusV1,
+    },
     durable_io::{
         RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
+        write_bytes,
     },
     entropy::{EntropyError, random_bytes_32},
     release_build::{
@@ -25,6 +30,7 @@ use crate::{
     },
 };
 use canic_core::{
+    cdk::types::Principal,
     dto::fleet_activation::{FleetActivationHostRecord, FleetActivationIdentity},
     ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, FleetName},
 };
@@ -70,15 +76,39 @@ pub(super) struct FleetInstallActivationJournal {
 }
 
 ///
-/// PlannedFleetInstallActivation
+/// ResolvedFleetInstallActivation
 ///
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct PlannedFleetInstallActivation {
+pub(super) struct ResolvedFleetInstallActivation {
     pub journal: FleetInstallActivationJournal,
     pub journal_hash: [u8; 32],
     pub path: PathBuf,
     pub created: bool,
+}
+
+///
+/// RootInstalledFleetInstallActivation
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct RootInstalledFleetInstallActivation {
+    pub journal: FleetInstallActivationJournal,
+    pub journal_hash: [u8; 32],
+    pub path: PathBuf,
+    pub advanced: bool,
+}
+
+///
+/// RootInstallReceiptEvidence
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct RootInstallReceiptEvidence {
+    pub receipt_hash: [u8; 32],
+    pub path: PathBuf,
+    pub root_canister: Principal,
+    pub module_hash: [u8; 32],
 }
 
 ///
@@ -109,17 +139,37 @@ pub(super) enum FleetInstallActivationJournalError {
     #[error("Fleet install activation journal is not a regular no-follow file: {path}")]
     UnsafeFile { path: PathBuf },
 
+    #[error("root-install receipt is not a regular no-follow file: {path}")]
+    UnsafeRootInstallReceipt { path: PathBuf },
+
     #[error("Fleet install activation journal is missing: {path}")]
     Missing { path: PathBuf },
 
+    #[error("root-install receipt is missing: {path}")]
+    MissingRootInstallReceipt { path: PathBuf },
+
     #[error("invalid Fleet install activation journal {path}: {reason}")]
     InvalidDocument { path: PathBuf, reason: String },
+
+    #[error("invalid root-install receipt {path}: {reason}")]
+    InvalidRootInstallReceipt { path: PathBuf, reason: String },
 
     #[error("source App identity {app:?} is invalid: {reason}")]
     InvalidApp { app: String, reason: String },
 
     #[error("finalized release-build evidence changed before Fleet activation planning")]
     FinalizedReleaseBuildMismatch,
+
+    #[error(
+        "Fleet install activation journal changed before transition: expected {expected}, observed {observed}"
+    )]
+    JournalChanged { expected: String, observed: String },
+
+    #[error("RootInstalled transition conflicts with the durable root-install receipt hash")]
+    RootInstallReceiptMismatch,
+
+    #[error("Fleet install activation journal cannot transition from {phase:?} to RootInstalled")]
+    InvalidRootInstalledTransition { phase: FleetInstallActivationPhase },
 
     #[error(
         "active Fleet {fleet_name} at {path} belongs to App {existing_app}, not requested App {requested_app}"
@@ -174,7 +224,7 @@ pub(super) enum FleetInstallActivationJournalError {
 /// Create and durably publish one new `Planned` activation journal.
 pub(super) fn plan_fleet_install_activation(
     request: PlanFleetInstallActivationRequest<'_>,
-) -> Result<PlannedFleetInstallActivation, FleetInstallActivationJournalError> {
+) -> Result<ResolvedFleetInstallActivation, FleetInstallActivationJournalError> {
     validate_app(&request.app)?;
     let _lock = lock_fleet_install_activation(
         request.root,
@@ -222,7 +272,7 @@ pub(super) fn plan_fleet_install_activation(
                 },
             );
         }
-        return Ok(PlannedFleetInstallActivation {
+        return Ok(ResolvedFleetInstallActivation {
             journal_hash: fleet_install_activation_journal_hash(&existing.journal),
             journal: existing.journal,
             path: existing.path,
@@ -309,13 +359,202 @@ pub(super) fn fleet_install_activation_journal_hash(
     domain_hash(JOURNAL_HASH_DOMAIN, &bytes)
 }
 
+/// Admit one exact durable root-install receipt with verified module evidence.
+pub(super) fn admit_root_install_receipt(
+    path: &Path,
+) -> Result<RootInstallReceiptEvidence, FleetInstallActivationJournalError> {
+    let bytes = read_root_install_receipt_bytes(path)?;
+    let receipt = serde_json::from_slice::<DeploymentReceiptV1>(&bytes)
+        .map_err(|error| invalid_root_install_receipt(path, error.to_string()))?;
+    let mut canonical = serde_json::to_vec_pretty(&receipt)
+        .map_err(|error| invalid_root_install_receipt(path, error.to_string()))?;
+    canonical.push(b'\n');
+    if canonical != bytes {
+        return Err(invalid_root_install_receipt(
+            path,
+            "JSON bytes are not the canonical durable receipt encoding",
+        ));
+    }
+    if receipt.operation_status != DeploymentExecutionStatusV1::Complete
+        || receipt.command_result != DeploymentCommandResultV1::Succeeded
+        || !receipt.operation_id.ends_with(":install_root")
+        || receipt.finished_at.is_none()
+        || receipt.phase_receipts.len() != 1
+    {
+        return Err(invalid_root_install_receipt(
+            path,
+            "receipt is not one completed successful install_root operation",
+        ));
+    }
+    let phase = &receipt.phase_receipts[0];
+    if phase.phase != "install_root"
+        || phase.finished_at.is_none()
+        || phase.verified_postcondition.status != ObservationStatusV1::Observed
+    {
+        return Err(invalid_root_install_receipt(
+            path,
+            "install_root phase lacks a completed observed postcondition",
+        ));
+    }
+    let root_canister_text = exact_receipt_evidence(
+        path,
+        &phase.verified_postcondition.evidence,
+        "root_canister:",
+    )?;
+    let root_canister = root_canister_text.parse().map_err(|error| {
+        invalid_root_install_receipt(path, format!("root_canister is invalid: {error}"))
+    })?;
+    if receipt.root_principal.as_deref() != Some(root_canister_text) {
+        return Err(invalid_root_install_receipt(
+            path,
+            "root_principal must exactly match root_canister evidence",
+        ));
+    }
+    let root_wasm =
+        exact_receipt_evidence(path, &phase.verified_postcondition.evidence, "root_wasm:")?;
+    if root_wasm.is_empty() {
+        return Err(invalid_root_install_receipt(
+            path,
+            "root_wasm evidence must not be empty",
+        ));
+    }
+    let expected_module_hash = parse_receipt_digest(
+        path,
+        exact_receipt_evidence(
+            path,
+            &phase.verified_postcondition.evidence,
+            "expected_module_hash:",
+        )?,
+        "expected_module_hash",
+    )?;
+    let observed_module_hash = parse_receipt_digest(
+        path,
+        exact_receipt_evidence(
+            path,
+            &phase.verified_postcondition.evidence,
+            "observed_module_hash:",
+        )?,
+        "observed_module_hash",
+    )?;
+    if observed_module_hash != expected_module_hash {
+        return Err(invalid_root_install_receipt(
+            path,
+            "observed module hash does not match the installed Wasm",
+        ));
+    }
+
+    Ok(RootInstallReceiptEvidence {
+        receipt_hash: Sha256::digest(&bytes).into(),
+        path: path.to_path_buf(),
+        root_canister,
+        module_hash: observed_module_hash,
+    })
+}
+
+/// Advance one exact `Planned` journal from durable root-install evidence.
+pub(super) fn record_root_installed(
+    root: &Path,
+    resolved: &ResolvedFleetInstallActivation,
+    receipt: &RootInstallReceiptEvidence,
+) -> Result<RootInstalledFleetInstallActivation, FleetInstallActivationJournalError> {
+    let identity = &resolved.journal.activation.identity;
+    let expected_path = fleet_install_activation_journal_path(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    );
+    if resolved.path != expected_path {
+        return Err(invalid(
+            &resolved.path,
+            "resolved journal path is not canonical for its activation identity",
+        ));
+    }
+    let _lock = lock_fleet_install_activation(
+        root,
+        identity.fleet.fleet.network,
+        &resolved.journal.fleet_name,
+    )?;
+    let observed = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+
+    if observed.phase == FleetInstallActivationPhase::RootInstalled {
+        if observed.root_install_receipt_hash == Some(receipt.receipt_hash) {
+            return Ok(root_installed_result(
+                observed,
+                resolved.path.clone(),
+                false,
+            ));
+        }
+        return Err(FleetInstallActivationJournalError::RootInstallReceiptMismatch);
+    }
+    if observed.phase != FleetInstallActivationPhase::Planned {
+        return Err(
+            FleetInstallActivationJournalError::InvalidRootInstalledTransition {
+                phase: observed.phase,
+            },
+        );
+    }
+    let observed_hash = fleet_install_activation_journal_hash(&observed);
+    if observed_hash != resolved.journal_hash || observed != resolved.journal {
+        return Err(FleetInstallActivationJournalError::JournalChanged {
+            expected: hex_digest(resolved.journal_hash),
+            observed: hex_digest(observed_hash),
+        });
+    }
+
+    let mut next = observed;
+    next.sequence = next
+        .sequence
+        .checked_add(1)
+        .expect("validated Planned sequence zero advances to one");
+    next.phase = FleetInstallActivationPhase::RootInstalled;
+    next.root_install_receipt_hash = Some(receipt.receipt_hash);
+    let bytes = encode_journal(&next)?;
+    if let Err(source) = write_bytes(&resolved.path, &bytes) {
+        match load_fleet_install_activation_journal(
+            root,
+            identity.fleet.fleet.network,
+            identity.fleet.fleet.fleet_id,
+            identity.operation_id,
+        ) {
+            Ok(observed) if observed == next => {
+                return Ok(root_installed_result(next, resolved.path.clone(), true));
+            }
+            _ => {
+                return Err(FleetInstallActivationJournalError::Io {
+                    path: resolved.path.clone(),
+                    source,
+                });
+            }
+        }
+    }
+    let durable = load_fleet_install_activation_journal(
+        root,
+        identity.fleet.fleet.network,
+        identity.fleet.fleet.fleet_id,
+        identity.operation_id,
+    )?;
+    if durable != next {
+        return Err(invalid(
+            &resolved.path,
+            "published RootInstalled journal differs from the transition record",
+        ));
+    }
+    Ok(root_installed_result(next, resolved.path.clone(), true))
+}
+
 fn plan_fleet_install_activation_with_ids(
     request: &PlanFleetInstallActivationRequest<'_>,
     finalized_release_build: &FinalizedReleaseBuild,
     release_set_manifest_digest: [u8; 32],
     fleet_id: FleetId,
     operation_id: [u8; 32],
-) -> Result<PlannedFleetInstallActivation, FleetInstallActivationJournalError> {
+) -> Result<ResolvedFleetInstallActivation, FleetInstallActivationJournalError> {
     let canonical_network_id = request.canonical_network_id;
     let journal = FleetInstallActivationJournal {
         sequence: 0,
@@ -369,7 +608,7 @@ fn plan_fleet_install_activation_with_ids(
         ));
     }
     let journal_hash = fleet_install_activation_journal_hash(&journal);
-    Ok(PlannedFleetInstallActivation {
+    Ok(ResolvedFleetInstallActivation {
         journal,
         journal_hash,
         path,
@@ -639,15 +878,15 @@ fn encode_journal(
     journal: &FleetInstallActivationJournal,
 ) -> Result<Vec<u8>, FleetInstallActivationJournalError> {
     let path = Path::new("<candidate Fleet install activation journal>");
-    validate_planned_journal(path, journal)?;
+    validate_journal(path, journal)?;
     Ok(encode_value(&Value::Array(vec![
         integer(journal.sequence),
         integer(phase_discriminant(journal.phase)),
         Value::Text(journal.fleet_name.to_string()),
         digest(journal.release_build_plan_hash),
         digest(journal.release_set_manifest_digest),
-        Value::Null,
-        encode_planned_activation(&journal.activation),
+        optional_digest(journal.root_install_receipt_hash),
+        encode_initial_activation(&journal.activation),
         Value::Null,
     ])))
 }
@@ -667,33 +906,27 @@ fn decode_journal(
             .map_err(|error| invalid(path, format!("invalid fleet_name: {error}")))?,
         release_build_plan_hash: exact_digest(path, &fields[3], "release_build_plan_hash")?,
         release_set_manifest_digest: exact_digest(path, &fields[4], "release_set_manifest_digest")?,
-        root_install_receipt_hash: exact_null(path, &fields[5], "root_install_receipt_hash")?,
-        activation: decode_planned_activation(path, &fields[6])?,
+        root_install_receipt_hash: exact_optional_digest(
+            path,
+            &fields[5],
+            "root_install_receipt_hash",
+        )?,
+        activation: decode_initial_activation(path, &fields[6])?,
         committed_fleet_catalog_hash: exact_null(path, &fields[7], "committed_fleet_catalog_hash")?,
     };
-    validate_planned_journal(path, &journal)?;
+    validate_journal(path, &journal)?;
     if encode_journal(&journal)? != bytes {
         return Err(invalid(path, "CBOR bytes are not canonical"));
     }
     Ok(journal)
 }
 
-fn validate_planned_journal(
+fn validate_journal(
     path: &Path,
     journal: &FleetInstallActivationJournal,
 ) -> Result<(), FleetInstallActivationJournalError> {
     validate_app(&journal.activation.identity.fleet.app)?;
-    if journal.phase != FleetInstallActivationPhase::Planned {
-        return Err(invalid(
-            path,
-            "only the Planned phase is admitted by the current implementation",
-        ));
-    }
-    if journal.sequence != 0 {
-        return Err(invalid(path, "Planned phase requires sequence 0"));
-    }
-    if journal.root_install_receipt_hash.is_some()
-        || journal.committed_fleet_catalog_hash.is_some()
+    if journal.committed_fleet_catalog_hash.is_some()
         || journal.activation.cascade_manifest.is_some()
         || journal.activation.credential.is_some()
         || journal.activation.credential_manifest.is_some()
@@ -701,13 +934,36 @@ fn validate_planned_journal(
     {
         return Err(invalid(
             path,
-            "Planned phase contains evidence legal only after Canister mutation",
+            "journal contains evidence legal only after RootInstalled",
         ));
     }
-    Ok(())
+    match journal.phase {
+        FleetInstallActivationPhase::Planned
+            if journal.sequence == 0 && journal.root_install_receipt_hash.is_none() =>
+        {
+            Ok(())
+        }
+        FleetInstallActivationPhase::RootInstalled
+            if journal.sequence == 1 && journal.root_install_receipt_hash.is_some() =>
+        {
+            Ok(())
+        }
+        FleetInstallActivationPhase::Planned => Err(invalid(
+            path,
+            "Planned requires sequence 0 and no root-install receipt",
+        )),
+        FleetInstallActivationPhase::RootInstalled => Err(invalid(
+            path,
+            "RootInstalled requires sequence 1 and one root-install receipt",
+        )),
+        phase => Err(invalid(
+            path,
+            format!("{phase:?} is reserved until its transition is implemented"),
+        )),
+    }
 }
 
-fn encode_planned_activation(record: &FleetActivationHostRecord) -> Value {
+fn encode_initial_activation(record: &FleetActivationHostRecord) -> Value {
     Value::Array(vec![
         encode_activation_identity(&record.identity),
         Value::Null,
@@ -717,7 +973,7 @@ fn encode_planned_activation(record: &FleetActivationHostRecord) -> Value {
     ])
 }
 
-fn decode_planned_activation(
+fn decode_initial_activation(
     path: &Path,
     value: &Value,
 ) -> Result<FleetActivationHostRecord, FleetInstallActivationJournalError> {
@@ -833,6 +1089,87 @@ fn read_journal_bytes(path: &Path) -> Result<Vec<u8>, FleetInstallActivationJour
     }
 }
 
+fn read_root_install_receipt_bytes(
+    path: &Path,
+) -> Result<Vec<u8>, FleetInstallActivationJournalError> {
+    match read_optional_regular_bytes(path) {
+        Ok(Some(bytes)) => Ok(bytes),
+        Ok(None) => Err(
+            FleetInstallActivationJournalError::MissingRootInstallReceipt {
+                path: path.to_path_buf(),
+            },
+        ),
+        Err(RegularFileReadError::NotRegular) => Err(
+            FleetInstallActivationJournalError::UnsafeRootInstallReceipt {
+                path: path.to_path_buf(),
+            },
+        ),
+        Err(RegularFileReadError::Io(source)) => Err(FleetInstallActivationJournalError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+        #[cfg(not(unix))]
+        Err(RegularFileReadError::UnsupportedPlatform) => {
+            Err(FleetInstallActivationJournalError::Io {
+                path: path.to_path_buf(),
+                source: io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "no-follow root-install receipt reads are unsupported on this platform",
+                ),
+            })
+        }
+    }
+}
+
+fn exact_receipt_evidence<'a>(
+    path: &Path,
+    evidence: &'a [String],
+    prefix: &str,
+) -> Result<&'a str, FleetInstallActivationJournalError> {
+    let mut matches = evidence
+        .iter()
+        .filter_map(|entry| entry.strip_prefix(prefix));
+    let Some(value) = matches.next() else {
+        return Err(invalid_root_install_receipt(
+            path,
+            format!("missing {prefix} evidence"),
+        ));
+    };
+    if matches.next().is_some() {
+        return Err(invalid_root_install_receipt(
+            path,
+            format!("duplicate {prefix} evidence"),
+        ));
+    }
+    Ok(value)
+}
+
+fn parse_receipt_digest(
+    path: &Path,
+    value: &str,
+    field: &str,
+) -> Result<[u8; 32], FleetInstallActivationJournalError> {
+    parse_operation_id(value).ok_or_else(|| {
+        invalid_root_install_receipt(
+            path,
+            format!("{field} must be exactly 64 lowercase hexadecimal characters"),
+        )
+    })
+}
+
+fn root_installed_result(
+    journal: FleetInstallActivationJournal,
+    path: PathBuf,
+    advanced: bool,
+) -> RootInstalledFleetInstallActivation {
+    RootInstalledFleetInstallActivation {
+        journal_hash: fleet_install_activation_journal_hash(&journal),
+        journal,
+        path,
+        advanced,
+    }
+}
+
 fn validate_app(app: &AppId) -> Result<(), FleetInstallActivationJournalError> {
     validate_state_name(app.as_str()).map_err(|error| {
         FleetInstallActivationJournalError::InvalidApp {
@@ -925,6 +1262,18 @@ fn exact_digest(
         .map_err(|_| invalid(path, format!("{field} must contain exactly 32 bytes")))
 }
 
+fn exact_optional_digest(
+    path: &Path,
+    value: &Value,
+    field: &str,
+) -> Result<Option<[u8; 32]>, FleetInstallActivationJournalError> {
+    if matches!(value, Value::Null) {
+        Ok(None)
+    } else {
+        exact_digest(path, value, field).map(Some)
+    }
+}
+
 fn exact_null<T>(
     path: &Path,
     value: &Value,
@@ -933,7 +1282,10 @@ fn exact_null<T>(
     if matches!(value, Value::Null) {
         Ok(None)
     } else {
-        Err(invalid(path, format!("{field} must be null in Planned")))
+        Err(invalid(
+            path,
+            format!("{field} must be null before CanistersPrepared"),
+        ))
     }
 }
 
@@ -964,6 +1316,10 @@ fn integer(value: u64) -> Value {
 
 fn digest(value: [u8; 32]) -> Value {
     Value::Bytes(value.to_vec())
+}
+
+fn optional_digest(value: Option<[u8; 32]>) -> Value {
+    value.map_or(Value::Null, digest)
 }
 
 fn hex_digest(bytes: [u8; 32]) -> String {
@@ -997,6 +1353,16 @@ fn invalid(path: &Path, reason: impl Into<String>) -> FleetInstallActivationJour
 
 fn invalid_directory(path: &Path, reason: impl Into<String>) -> FleetInstallActivationJournalError {
     FleetInstallActivationJournalError::InvalidDirectory {
+        path: path.to_path_buf(),
+        reason: reason.into(),
+    }
+}
+
+fn invalid_root_install_receipt(
+    path: &Path,
+    reason: impl Into<String>,
+) -> FleetInstallActivationJournalError {
+    FleetInstallActivationJournalError::InvalidRootInstallReceipt {
         path: path.to_path_buf(),
         reason: reason.into(),
     }

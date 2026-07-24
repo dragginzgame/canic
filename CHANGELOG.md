@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.8` implements the monotonic `Planned → RootInstalled` journal
+  transition and admits only canonical durable root-install receipts whose
+  exact root identity and expected/observed module hashes agree.
+
 - `0.99.7` gives fresh-install planning one network/Fleet-scoped single-writer
   boundary and deterministic journal discovery: exact retries resume one
   authority while unsafe entries, identity conflicts and competing active

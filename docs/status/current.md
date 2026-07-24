@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.6`.
-- The latest published release is `v0.99.6` at
-  `20e8c05a81a661f5a220aa3165e6c7d757fa1086`.
-- The `v0.99.6` source tree is
-  `27002244844d9bb9361a9d616ff1b93cbe805138`. Its Cargo.lock SHA-256 is
-  `bd8d2df8891afe90878ac35cd3f0911ad9284c23dcae5b85c728b985e746a974`.
+- The workspace package version is `0.99.7`.
+- The latest published release is `v0.99.7` at
+  `491615ed8e6d486a63de2b7646edcc3441a3de80`.
+- The `v0.99.7` source tree is
+  `81804cc86d4fed208061aa71de625be80132a70f`. Its Cargo.lock SHA-256 is
+  `8540dc88a4507008c9de48802027bb9830a915d9e109a9d143b5fc9cccb55717`.
+- Released `0.99.7` serializes activation planning per canonical network and
+  Fleet name and deterministically discovers the one journal authority.
+  Exact retries resume; unsafe or competing authority fails closed.
 - Released `0.99.6` establishes one shared passive Fleet-activation evidence
   shape and one private canonical sequence-zero `Planned` journal admitted
   only from unchanged finalized release-build evidence. Live installation
@@ -1159,22 +1162,23 @@ command family, and discovery fallback do not survive. Live
 install/deployment behavior and runtime topology authorities remain for their
 explicit later slices.
 
-The open `0.99.7` batch gives planned Fleet activation one single-writer
-admission boundary without admitting live mutation. A close-on-exec kernel
-lock serializes one canonical-network/Fleet-name plan but is not durable
-authority. Under it, deterministic network-scoped discovery validates every
-published journal, resumes one exact App/release-build match, and rejects
-unsafe directories, contradictions, competing Fleet names and duplicate
-Fleet-ID claims. An operation directory missing its atomically published
-journal remains inert.
+The open `0.99.8` batch implements the exact sequence-one `RootInstalled`
+journal boundary without falsely wiring the pre-cut installer. A transition
+revalidates `Planned` under the existing lock, atomically publishes and
+re-reads the next record, and resumes idempotently only from the same receipt.
+Receipt admission requires canonical durable JSON, one completed successful
+root-install phase, an exact valid root principal and matching canonical
+expected/observed module hashes. Command success alone is insufficient.
 
-Live pre-mutation commitment, `RootInstalled` and later
-transition/reconciliation logic, supplied deployment-plan release-build
-admission, the installed Fleet tree, complete plan/receipt/host-state identity
-propagation and post-activation Fleet catalog commitment remain the next
-bounded Slice 3 and Slice 4 work. No standalone Fleet-ID generator, catalog
-writer or second durable active pointer is exposed ahead of that recovery
-authority.
+The next bounded work is the root init hard cut: replace
+`PrimeWithModuleHash` with the exact Fleet activation input, install protected
+`FleetBinding`, operation and release-build identity atomically as
+`Prepared`, and make verified module observation produce the receipt admitted
+above. Only then may live install publish `Planned` before root resolution and
+advance `RootInstalled`. Supplied deployment-plan release-build admission,
+later activation phases, installed Fleet state and final catalog commitment
+remain after that prerequisite. No standalone Fleet-ID generator, catalog
+writer or second durable active pointer is exposed.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish
