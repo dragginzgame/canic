@@ -28,13 +28,76 @@ fn deploy_leaf_commands_parse_like_check() {
 }
 
 #[test]
-fn deploy_resume_report_allows_latest_local_receipt_lookup() {
+fn deploy_resume_report_allows_catalog_resolved_receipt_lookup() {
     let resume_report =
         deploy_resume_report::DeployResumeReportOptions::parse([OsString::from("demo")])
             .expect("parse deploy resume-report");
 
     assert_eq!(resume_report.truth.deployment, "demo");
     assert_eq!(resume_report.receipt, None);
+}
+
+#[test]
+fn deploy_resume_report_resolves_latest_receipt_by_canonical_fleet_identity() {
+    let root = super::fixtures::temp_json_path("canonical-fleet-receipt");
+    fs::create_dir_all(&root).expect("create ICP root");
+    let network = canic_core::ids::CanonicalNetworkId::public_ic();
+    let fleet_id = canic_core::ids::FleetId::from_generated_bytes([7; 32]);
+    let catalog_path = root
+        .join(".canic")
+        .join("networks")
+        .join(network.to_string())
+        .join("fleets/catalog.json");
+    fs::create_dir_all(catalog_path.parent().expect("catalog parent"))
+        .expect("create catalog parent");
+    fs::write(
+        &catalog_path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "canonical_network_id": network,
+            "entries": [{
+                "canonical_network_id": network,
+                "fleet_id": fleet_id,
+                "fleet_name": "demo",
+                "app": "demo",
+                "environment": "ic",
+                "deployed_at_unix_secs": 1,
+                "root_principal": "aaaaa-aa",
+            }],
+        }))
+        .expect("encode Fleet catalog"),
+    )
+    .expect("write Fleet catalog");
+    let receipt_dir = root
+        .join(".canic")
+        .join("networks")
+        .join(network.to_string())
+        .join("fleets")
+        .join(fleet_id.to_string())
+        .join("deployment-receipts");
+    fs::create_dir_all(&receipt_dir).expect("create receipt directory");
+    let older = receipt_dir.join("unix_1-check.json");
+    let latest = receipt_dir.join("unix_2-check.json");
+    fs::write(&older, "{}").expect("write older receipt");
+    fs::write(&latest, "{}").expect("write latest receipt");
+
+    let options = deploy_resume_report::DeployResumeReportOptions {
+        truth: DeployTruthOptions {
+            deployment: "demo".to_string(),
+            environment: "ic".to_string(),
+            profile: None,
+        },
+        receipt: None,
+    };
+
+    assert_eq!(
+        options
+            .receipt_path_from_root(&root)
+            .expect("resolve latest receipt"),
+        latest
+    );
+
+    fs::remove_dir_all(root).expect("remove fixture");
 }
 
 type TruthCommandFactory = fn() -> ClapCommand;

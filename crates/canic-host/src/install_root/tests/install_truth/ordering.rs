@@ -21,7 +21,7 @@ fn current_install_records_gates_before_activation_mutation() {
     );
     assert_before(
         install,
-        "emit_manifest_with_deployment_truth_receipt(",
+        "emit_manifest_with_phase(",
         "plan_fleet_install_activation(",
     );
     assert_before(
@@ -34,12 +34,17 @@ fn current_install_records_gates_before_activation_mutation() {
     assert_before(
         gate,
         "enforce_install_deployment_truth_gate(&deployment_truth_check)?",
-        "write_current_install_execution_preflight_receipt(",
+        "current_install_execution_preflight_receipt(",
     );
     assert_before(
         gate,
-        "write_current_install_execution_preflight_receipt(",
-        "Ok(deployment_truth_check)",
+        "current_install_execution_preflight_receipt(",
+        "Ok(PreparedInstallSafetyGate",
+    );
+    assert_before(
+        install,
+        "plan_fleet_install_activation(",
+        ".write_receipt(receipt)",
     );
 }
 
@@ -52,11 +57,7 @@ fn current_install_check_paths_do_not_write_or_mutate_state() {
         "fn resolve_current_install_truth_inputs(",
     );
 
-    for forbidden in [
-        "write_install_deployment_truth_receipt(",
-        "write_current_install_execution_preflight_receipt(",
-        "install_root(",
-    ] {
+    for forbidden in ["write_install_deployment_truth_receipt(", "install_root("] {
         assert!(
             !check_paths.contains(forbidden),
             "read-only install check/preflight paths must not contain {forbidden}"

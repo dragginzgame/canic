@@ -14,12 +14,7 @@ use crate::{
         build_snapshot::ValidatedInstallSnapshot,
         clock::current_unix_timestamp_label,
         operations::{EmitRootManifestOperation, InstallPhaseLabel},
-        options::InstallRootOptions,
-        phase_receipts::{
-            CompletedInstallPhase, InstallReceiptScope, install_deployment_truth_phase_receipt,
-            receipt_with_execution_context,
-        },
-        receipt_io::write_install_deployment_truth_receipt,
+        phase_receipts::CompletedInstallPhase,
     },
     release_build::{FinalizedReleaseBuild, finalize_release_build_from_manifest},
     release_set::artifact_root_path,
@@ -33,6 +28,12 @@ pub(super) use prepared::PreparedPlanArtifacts;
 
 #[cfg(test)]
 pub(super) use error::PlanArtifactError;
+
+pub(super) struct EmittedInstallManifest {
+    pub(super) phase: CompletedInstallPhase,
+    pub(super) duration: Duration,
+    pub(super) finalized_release_build: Option<FinalizedReleaseBuild>,
+}
 
 pub(super) fn prepare_plan_artifacts_with_phase(
     plan: &DeploymentPlanV1,
@@ -60,13 +61,12 @@ pub(super) fn prepare_plan_artifacts_with_phase(
     Ok((prepared, phase, duration))
 }
 
-pub(super) fn emit_manifest_with_deployment_truth_receipt(
-    receipt_scope: InstallReceiptScope<'_>,
-    options: &InstallRootOptions,
+pub(super) fn emit_manifest_with_phase(
+    icp_root: &Path,
     install_snapshot: &ValidatedInstallSnapshot,
     build_outputs: &[CurrentCanisterArtifactBuildOutput],
     plan_artifacts: Option<&PreparedPlanArtifacts>,
-) -> Result<(PathBuf, Duration, Option<FinalizedReleaseBuild>), Box<dyn std::error::Error>> {
+) -> Result<EmittedInstallManifest, Box<dyn std::error::Error>> {
     let emit_manifest_started_at_label = current_unix_timestamp_label()?;
     let emit_manifest_started_at = Instant::now();
     let manifest_path = if let Some(plan_artifacts) = plan_artifacts {
@@ -85,42 +85,25 @@ pub(super) fn emit_manifest_with_deployment_truth_receipt(
         .as_ref()
         .map(|planned| {
             finalize_release_build_from_manifest(
-                receipt_scope.icp_root,
+                icp_root,
                 planned.record.release_build_id,
                 &manifest_path,
             )
         })
         .transpose()?;
-    let execution_context = receipt_scope
-        .execution_context
-        .ok_or_else(|| "manifest receipt requires an execution context".to_string())?;
-    let emit_manifest_receipt = receipt_with_execution_context(
-        install_deployment_truth_phase_receipt(
-            receipt_scope.check,
-            InstallPhaseLabel::EMIT_MANIFEST,
-            emit_manifest_started_at_label,
-            Some(current_unix_timestamp_label()?),
-            "emit root release-set manifest",
-            crate::deployment_truth::ObservationStatusV1::Observed,
-            EmitRootManifestOperation::evidence(&manifest_path),
-        ),
-        execution_context,
-    );
-    let emit_manifest_receipt_path = write_install_deployment_truth_receipt(
-        receipt_scope.icp_root,
-        &options.environment,
-        receipt_scope.deployment_name,
-        &emit_manifest_receipt,
-    )?;
-    println!(
-        "Deployment truth receipt JSON: {}",
-        emit_manifest_receipt_path.display()
-    );
-    Ok((
-        manifest_path,
-        emit_manifest_duration,
+    let phase = CompletedInstallPhase {
+        phase: InstallPhaseLabel::EMIT_MANIFEST,
+        attempted_action: "emit root release-set manifest",
+        started_at: emit_manifest_started_at_label,
+        finished_at: Some(current_unix_timestamp_label()?),
+        evidence: EmitRootManifestOperation::evidence(&manifest_path),
+        role_names: Vec::new(),
+    };
+    Ok(EmittedInstallManifest {
+        phase,
+        duration: emit_manifest_duration,
         finalized_release_build,
-    ))
+    })
 }
 
 pub(super) fn normal_install_root_wasm(icp_root: &Path, root_build_target: &str) -> PathBuf {

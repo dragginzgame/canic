@@ -146,6 +146,11 @@ impl<'a> InstallRootWasmOperation<'a> {
         let status = decode_json_result_response::<FleetActivationStatusResponse>(&output)?;
         validate_initial_prepared_status(&self.init_identity, &status)?;
         evidence.extend([
+            format!(
+                "canonical_network_id:{}",
+                status.identity.fleet.fleet.network
+            ),
+            format!("app:{}", status.identity.fleet.app),
             format!("fleet_id:{}", status.identity.fleet.fleet.fleet_id),
             format!(
                 "activation_operation_id:{}",

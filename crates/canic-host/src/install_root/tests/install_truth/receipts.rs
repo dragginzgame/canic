@@ -26,6 +26,15 @@ impl InstallPhaseOperation for VerifiedInstallOperation {
     fn verified_evidence(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let mut evidence = self.evidence();
         evidence.push(format!("observed_module_hash:{}", "11".repeat(32)));
+        let identity = sample_fleet_activation_identity();
+        evidence.extend([
+            format!("canonical_network_id:{}", identity.fleet.fleet.network),
+            format!("app:{}", identity.fleet.app),
+            format!("fleet_id:{}", identity.fleet.fleet.fleet_id),
+            format!("activation_operation_id:{}", "08".repeat(32)),
+            format!("release_build_id:{}", identity.release_build_id),
+            "fleet_activation_phase:prepared".to_string(),
+        ]);
         Ok(evidence)
     }
 }
@@ -90,17 +99,15 @@ kind = "root"
         artifact_gate_role_phase_receipts(&check),
     );
 
-    let path = write_install_deployment_truth_receipt(&root, "local", "demo", &receipt)
+    let fleet = sample_fleet_key();
+    let path = write_install_deployment_truth_receipt(&root, fleet, &receipt)
         .expect("write deployment truth receipt");
-    let expected_path = install_deployment_truth_receipt_path(&root, "local", "demo", &receipt)
-        .expect("receipt path");
+    let expected_path = install_deployment_truth_receipt_path(&root, fleet, &receipt);
 
     assert_eq!(path, expected_path);
     assert_eq!(
-        path.parent()
-            .and_then(Path::file_name)
-            .and_then(|name| name.to_str()),
-        Some("demo")
+        path.parent(),
+        Some(sample_fleet_receipt_dir(&root).as_path())
     );
     assert!(
         path.file_name()
@@ -245,7 +252,7 @@ fn install_truth_completed_phase_receipt_records_pre_gate_evidence() {
     let scope = InstallReceiptScope {
         icp_root: &root,
         environment: "local",
-        deployment_name: "demo",
+        fleet: sample_fleet_key(),
         check: &check,
         execution_context: Some(&execution_context),
     };
@@ -309,7 +316,7 @@ fn install_truth_receipted_operation_records_success_and_failure() {
     let scope = InstallReceiptScope {
         icp_root: &root,
         environment: "local",
-        deployment_name: "demo",
+        fleet: sample_fleet_key(),
         check: &check,
         execution_context: Some(&execution_context),
     };
@@ -329,7 +336,7 @@ fn install_truth_receipted_operation_records_success_and_failure() {
         std::io::ErrorKind::Other
     );
 
-    let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
+    let receipt_dir = sample_fleet_receipt_dir(&root);
     let receipts = fs::read_dir(&receipt_dir)
         .expect("read receipts")
         .map(|entry| {
@@ -387,7 +394,7 @@ fn install_operation_returns_exact_durable_verified_receipt() {
     let scope = InstallReceiptScope {
         icp_root: &root,
         environment: "local",
-        deployment_name: "demo",
+        fleet: sample_fleet_key(),
         check: &check,
         execution_context: Some(&execution_context),
     };
@@ -407,6 +414,15 @@ fn install_operation_returns_exact_durable_verified_receipt() {
             "root_wasm:/tmp/root.wasm".to_string(),
             format!("expected_module_hash:{}", "11".repeat(32)),
             format!("observed_module_hash:{}", "11".repeat(32)),
+            format!("canonical_network_id:{}", sample_fleet_key().network),
+            "app:demo".to_string(),
+            format!("fleet_id:{}", sample_fleet_key().fleet_id),
+            format!("activation_operation_id:{}", "08".repeat(32)),
+            format!(
+                "release_build_id:{}",
+                sample_fleet_activation_identity().release_build_id
+            ),
+            "fleet_activation_phase:prepared".to_string(),
         ]
     );
     let admitted = crate::install_root::fleet_activation_journal::admit_root_install_receipt(
@@ -415,6 +431,10 @@ fn install_operation_returns_exact_durable_verified_receipt() {
     .expect("journal admission");
     assert_eq!(admitted.root_canister.to_text(), "aaaaa-aa");
     assert_eq!(admitted.module_hash, [0x11; 32]);
+    assert_eq!(
+        admitted.activation_identity,
+        sample_fleet_activation_identity()
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
@@ -424,16 +444,14 @@ fn install_truth_phase_preserves_operation_and_failure_receipt_errors() {
     let (root, check) =
         demo_install_deployment_truth_check("canic-install-truth-failed-receipt-write");
     let execution_context = current_install_execution_context(&root, &root, "local");
-    fs::create_dir_all(root.join(".canic/local")).expect("create receipt parent");
-    fs::write(
-        root.join(".canic/local/deployment-receipts"),
-        b"blocks receipt directory",
-    )
-    .expect("create receipt directory blocker");
+    let receipt_dir = sample_fleet_receipt_dir(&root);
+    fs::create_dir_all(receipt_dir.parent().expect("receipt parent"))
+        .expect("create receipt parent");
+    fs::write(&receipt_dir, b"blocks receipt directory").expect("create receipt directory blocker");
     let scope = InstallReceiptScope {
         icp_root: &root,
         environment: "local",
-        deployment_name: "demo",
+        fleet: sample_fleet_key(),
         check: &check,
         execution_context: Some(&execution_context),
     };
@@ -468,7 +486,7 @@ fn install_truth_phase_preserves_operation_and_failure_receipt_errors() {
 #[test]
 fn install_truth_latest_receipt_uses_newest_persisted_receipt() {
     let root = temp_dir("canic-install-truth-latest-receipt");
-    let receipt_dir = root.join(".canic/local/deployment-receipts/demo");
+    let receipt_dir = sample_fleet_receipt_dir(&root);
     fs::create_dir_all(&receipt_dir).expect("create receipt dir");
     let older = receipt_dir.join("unix_100-local_demo_check_materialize_artifacts.json");
     let newer = receipt_dir.join("unix_200-local_demo_check_materialize_artifacts.json");
@@ -477,7 +495,7 @@ fn install_truth_latest_receipt_uses_newest_persisted_receipt() {
     fs::write(&newer, "{}").expect("write newer receipt");
     fs::write(ignored, "{}").expect("write ignored file");
 
-    let latest = latest_deployment_truth_receipt_path_from_root(&root, "local", "demo")
+    let latest = latest_deployment_truth_receipt_path_from_root(&root, sample_fleet_key())
         .expect("latest receipt")
         .expect("receipt exists");
 
