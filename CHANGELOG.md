@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.7` gives fresh-install planning one network/Fleet-scoped single-writer
+  boundary and deterministic journal discovery: exact retries resume one
+  authority while unsafe entries, identity conflicts and competing active
+  journals fail closed.
+
 - `0.99.6` establishes the private fresh-install recovery foundation: one
   shared Fleet-activation evidence shape and one canonical, create-new
   `Planned` journal admitted only from unchanged finalized release-build

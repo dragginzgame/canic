@@ -14,12 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.5`.
-- The latest published release is `v0.99.5` at
-  `032d0866a4d170173c591e0ff713ca3591d02e29`.
-- The `v0.99.5` source tree is
-  `3c73cd9b924adc11acab55f9f5d09c4559a83e08`. Its Cargo.lock SHA-256 is
-  `ffeb0204f1bc5c55a24dd7b3e2d38a51953207d09507ff2ac71cbc913308314e`.
+- The workspace package version is `0.99.6`.
+- The latest published release is `v0.99.6` at
+  `20e8c05a81a661f5a220aa3165e6c7d757fa1086`.
+- The `v0.99.6` source tree is
+  `27002244844d9bb9361a9d616ff1b93cbe805138`. Its Cargo.lock SHA-256 is
+  `bd8d2df8891afe90878ac35cd3f0911ad9284c23dcae5b85c728b985e746a974`.
+- Released `0.99.6` establishes one shared passive Fleet-activation evidence
+  shape and one private canonical sequence-zero `Planned` journal admitted
+  only from unchanged finalized release-build evidence. Live installation
+  does not publish it yet.
 - Released `0.99.5` separates fresh-install source and target operands. The
   sole command is `canic install <app> <fleet>`; the removed one-argument and
   `--app` forms have no alias or inferred fallback.
@@ -1155,20 +1159,21 @@ command family, and discovery fallback do not survive. Live
 install/deployment behavior and runtime topology authorities remain for their
 explicit later slices.
 
-The open `0.99.6` batch establishes the private fresh-install recovery
-foundation without admitting live mutation. Shared passive activation shapes
-prevent a later host/runtime identity fork. The host can generate Fleet and
-operation identities, create and validate the exact canonical sequence-zero
-`Planned` journal, and admit it only from unchanged finalized release-build
-evidence. Later phase discriminants fail closed until their transitions
-exist; the live install workflow does not publish a journal in this batch.
+The open `0.99.7` batch gives planned Fleet activation one single-writer
+admission boundary without admitting live mutation. A close-on-exec kernel
+lock serializes one canonical-network/Fleet-name plan but is not durable
+authority. Under it, deterministic network-scoped discovery validates every
+published journal, resumes one exact App/release-build match, and rejects
+unsafe directories, contradictions, competing Fleet names and duplicate
+Fleet-ID claims. An operation directory missing its atomically published
+journal remains inert.
 
-Journal discovery/concurrency ownership, live pre-mutation commitment,
-`RootInstalled` and later transition/reconciliation logic, supplied
-deployment-plan release-build admission, the installed Fleet tree, complete
-plan/receipt/host-state identity propagation and post-activation Fleet catalog
-commitment remain the next bounded Slice 3 and Slice 4 work. No standalone
-Fleet-ID generator or catalog writer is exposed ahead of that recovery
+Live pre-mutation commitment, `RootInstalled` and later
+transition/reconciliation logic, supplied deployment-plan release-build
+admission, the installed Fleet tree, complete plan/receipt/host-state identity
+propagation and post-activation Fleet catalog commitment remain the next
+bounded Slice 3 and Slice 4 work. No standalone Fleet-ID generator, catalog
+writer or second durable active pointer is exposed ahead of that recovery
 authority.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
