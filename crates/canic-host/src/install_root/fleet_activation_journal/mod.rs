@@ -31,7 +31,8 @@ use canic_core::{
 use ciborium::Value;
 use sha2::{Digest, Sha256};
 use std::{
-    io,
+    collections::BTreeMap,
+    fs, io,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
@@ -77,6 +78,7 @@ pub(super) struct PlannedFleetInstallActivation {
     pub journal: FleetInstallActivationJournal,
     pub journal_hash: [u8; 32],
     pub path: PathBuf,
+    pub created: bool,
 }
 
 ///
@@ -119,6 +121,44 @@ pub(super) enum FleetInstallActivationJournalError {
     #[error("finalized release-build evidence changed before Fleet activation planning")]
     FinalizedReleaseBuildMismatch,
 
+    #[error(
+        "active Fleet {fleet_name} at {path} belongs to App {existing_app}, not requested App {requested_app}"
+    )]
+    ActiveAppMismatch {
+        fleet_name: FleetName,
+        existing_app: AppId,
+        requested_app: AppId,
+        path: PathBuf,
+    },
+
+    #[error(
+        "active Fleet {fleet_name} at {path} belongs to different finalized release-build evidence"
+    )]
+    ActiveReleaseBuildMismatch {
+        fleet_name: FleetName,
+        path: PathBuf,
+    },
+
+    #[error("Fleet {fleet_name} has competing active activation journals at {first} and {second}")]
+    CompetingFleetNameAuthorities {
+        fleet_name: FleetName,
+        first: PathBuf,
+        second: PathBuf,
+    },
+
+    #[error("Fleet ID {fleet_id} has competing active activation journals at {first} and {second}")]
+    CompetingFleetIdAuthorities {
+        fleet_id: FleetId,
+        first: PathBuf,
+        second: PathBuf,
+    },
+
+    #[error("unsafe Fleet install activation recovery directory entry: {path}")]
+    UnsafeDirectoryEntry { path: PathBuf },
+
+    #[error("invalid Fleet install activation recovery directory {path}: {reason}")]
+    InvalidDirectory { path: PathBuf, reason: String },
+
     #[error("cryptographic random source returned only {actual} of 32 required bytes")]
     ShortRandomRead { actual: usize },
 
@@ -136,6 +176,11 @@ pub(super) fn plan_fleet_install_activation(
     request: PlanFleetInstallActivationRequest<'_>,
 ) -> Result<PlannedFleetInstallActivation, FleetInstallActivationJournalError> {
     validate_app(&request.app)?;
+    let _lock = lock_fleet_install_activation(
+        request.root,
+        request.canonical_network_id,
+        &request.fleet_name,
+    )?;
     let finalized = load_finalized_release_build(
         request.root,
         request.finalized_release_build.record.release_build_id,
@@ -151,6 +196,39 @@ pub(super) fn plan_fleet_install_activation(
     else {
         unreachable!("load_finalized_release_build admits only finalized records");
     };
+
+    if let Some(existing) = discover_fleet_install_activation(
+        request.root,
+        request.canonical_network_id,
+        &request.fleet_name,
+    )? {
+        let identity = &existing.journal.activation.identity;
+        if identity.fleet.app != request.app {
+            return Err(FleetInstallActivationJournalError::ActiveAppMismatch {
+                fleet_name: request.fleet_name,
+                existing_app: identity.fleet.app.clone(),
+                requested_app: request.app,
+                path: existing.path,
+            });
+        }
+        if identity.release_build_id != finalized.record.release_build_id
+            || existing.journal.release_build_plan_hash != finalized.plan_hash
+            || existing.journal.release_set_manifest_digest != release_set_manifest_digest
+        {
+            return Err(
+                FleetInstallActivationJournalError::ActiveReleaseBuildMismatch {
+                    fleet_name: request.fleet_name,
+                    path: existing.path,
+                },
+            );
+        }
+        return Ok(PlannedFleetInstallActivation {
+            journal_hash: fleet_install_activation_journal_hash(&existing.journal),
+            journal: existing.journal,
+            path: existing.path,
+            created: false,
+        });
+    }
 
     for _ in 0..RANDOM_ATTEMPTS {
         let fleet_id = FleetId::from_generated_bytes(random_identity_bytes()?);
@@ -295,7 +373,266 @@ fn plan_fleet_install_activation_with_ids(
         journal,
         journal_hash,
         path,
+        created: true,
     })
+}
+
+struct DiscoveredFleetInstallActivation {
+    journal: FleetInstallActivationJournal,
+    path: PathBuf,
+}
+
+fn discover_fleet_install_activation(
+    root: &Path,
+    canonical_network_id: CanonicalNetworkId,
+    fleet_name: &FleetName,
+) -> Result<Option<DiscoveredFleetInstallActivation>, FleetInstallActivationJournalError> {
+    let network_directory = fleet_install_activation_network_directory(root, canonical_network_id);
+    let mut fleet_ids = BTreeMap::new();
+    let mut matching = Vec::new();
+
+    for fleet_entry in canonical_directory_entries(&network_directory, true)? {
+        let fleet_path = fleet_entry.path();
+        let fleet_file_name = fleet_entry.file_name();
+        let fleet_text = canonical_entry_text(&fleet_path, &fleet_file_name)?;
+        let fleet_id = fleet_text.parse().map_err(|error| {
+            invalid_directory(
+                &fleet_path,
+                format!("Fleet ID directory name is invalid: {error}"),
+            )
+        })?;
+
+        for operation_entry in canonical_directory_entries(&fleet_path, false)? {
+            let operation_path = operation_entry.path();
+            let operation_file_name = operation_entry.file_name();
+            let operation_text = canonical_entry_text(&operation_path, &operation_file_name)?;
+            let operation_id = parse_operation_id(operation_text).ok_or_else(|| {
+                invalid_directory(
+                    &operation_path,
+                    "operation ID directory name must be exactly 64 lowercase hexadecimal characters",
+                )
+            })?;
+            let journal = match load_fleet_install_activation_journal(
+                root,
+                canonical_network_id,
+                fleet_id,
+                operation_id,
+            ) {
+                Ok(journal) => journal,
+                Err(FleetInstallActivationJournalError::Missing { .. }) => continue,
+                Err(error) => return Err(error),
+            };
+            let journal_path = fleet_install_activation_journal_path(
+                root,
+                canonical_network_id,
+                fleet_id,
+                operation_id,
+            );
+            if let Some(first) = fleet_ids.insert(fleet_id, journal_path.clone()) {
+                return Err(
+                    FleetInstallActivationJournalError::CompetingFleetIdAuthorities {
+                        fleet_id,
+                        first,
+                        second: journal_path,
+                    },
+                );
+            }
+            if journal.fleet_name == *fleet_name {
+                matching.push(DiscoveredFleetInstallActivation {
+                    journal,
+                    path: journal_path,
+                });
+            }
+        }
+    }
+
+    match matching.as_slice() {
+        [] => Ok(None),
+        [_] => Ok(matching.pop()),
+        [first, second, ..] => Err(
+            FleetInstallActivationJournalError::CompetingFleetNameAuthorities {
+                fleet_name: fleet_name.clone(),
+                first: first.path.clone(),
+                second: second.path.clone(),
+            },
+        ),
+    }
+}
+
+fn fleet_install_activation_network_directory(
+    root: &Path,
+    canonical_network_id: CanonicalNetworkId,
+) -> PathBuf {
+    root.join(".canic")
+        .join("recovery")
+        .join("fleet-install-activations")
+        .join(canonical_network_id.to_string())
+}
+
+fn fleet_install_activation_lock_path(
+    root: &Path,
+    canonical_network_id: CanonicalNetworkId,
+    fleet_name: &FleetName,
+) -> PathBuf {
+    root.join(".canic")
+        .join("recovery")
+        .join("fleet-install-activation-locks")
+        .join(canonical_network_id.to_string())
+        .join(format!("{fleet_name}.lock"))
+}
+
+fn lock_fleet_install_activation(
+    root: &Path,
+    canonical_network_id: CanonicalNetworkId,
+    fleet_name: &FleetName,
+) -> Result<fs::File, FleetInstallActivationJournalError> {
+    let path = fleet_install_activation_lock_path(root, canonical_network_id, fleet_name);
+    match create_new_bytes_with_parents(&path, &[]) {
+        Ok(()) => {}
+        Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
+        Err(source) => {
+            return Err(FleetInstallActivationJournalError::Io {
+                path: path.clone(),
+                source,
+            });
+        }
+    }
+    let metadata =
+        fs::symlink_metadata(&path).map_err(|source| FleetInstallActivationJournalError::Io {
+            path: path.clone(),
+            source,
+        })?;
+    if !metadata.file_type().is_file() {
+        return Err(FleetInstallActivationJournalError::UnsafeFile { path });
+    }
+
+    #[cfg(not(windows))]
+    {
+        use rustix::{
+            fd::OwnedFd,
+            fs::{FileType, FlockOperation, Mode, OFlags, flock, fstat, open},
+        };
+
+        let fd: OwnedFd = open(
+            &path,
+            OFlags::RDWR | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|source| FleetInstallActivationJournalError::Io {
+            path: path.clone(),
+            source: io::Error::from_raw_os_error(source.raw_os_error()),
+        })?;
+        let metadata = fstat(&fd).map_err(|source| FleetInstallActivationJournalError::Io {
+            path: path.clone(),
+            source: io::Error::from_raw_os_error(source.raw_os_error()),
+        })?;
+        if FileType::from_raw_mode(metadata.st_mode) != FileType::RegularFile {
+            return Err(FleetInstallActivationJournalError::UnsafeFile { path });
+        }
+        let file = fs::File::from(fd);
+        flock(&file, FlockOperation::LockExclusive).map_err(|source| {
+            FleetInstallActivationJournalError::Io {
+                path,
+                source: io::Error::from_raw_os_error(source.raw_os_error()),
+            }
+        })?;
+        Ok(file)
+    }
+
+    #[cfg(windows)]
+    {
+        Err(FleetInstallActivationJournalError::Io {
+            path,
+            source: io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Fleet install activation locking is unsupported on Windows",
+            ),
+        })
+    }
+}
+
+fn canonical_directory_entries(
+    path: &Path,
+    missing_is_empty: bool,
+) -> Result<Vec<fs::DirEntry>, FleetInstallActivationJournalError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if missing_is_empty && source.kind() == io::ErrorKind::NotFound => {
+            return Ok(Vec::new());
+        }
+        Err(source) => {
+            return Err(FleetInstallActivationJournalError::Io {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+    };
+    if !metadata.file_type().is_dir() {
+        return Err(FleetInstallActivationJournalError::UnsafeDirectoryEntry {
+            path: path.to_path_buf(),
+        });
+    }
+
+    let entries = fs::read_dir(path).map_err(|source| FleetInstallActivationJournalError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let mut entries = entries
+        .map(|entry| {
+            entry.map_err(|source| FleetInstallActivationJournalError::Io {
+                path: path.to_path_buf(),
+                source,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    for entry in &entries {
+        let entry_path = entry.path();
+        let file_type =
+            entry
+                .file_type()
+                .map_err(|source| FleetInstallActivationJournalError::Io {
+                    path: entry_path.clone(),
+                    source,
+                })?;
+        if !file_type.is_dir() {
+            return Err(FleetInstallActivationJournalError::UnsafeDirectoryEntry {
+                path: entry_path,
+            });
+        }
+    }
+    Ok(entries)
+}
+
+fn canonical_entry_text<'a>(
+    path: &Path,
+    name: &'a std::ffi::OsStr,
+) -> Result<&'a str, FleetInstallActivationJournalError> {
+    name.to_str()
+        .ok_or_else(|| invalid_directory(path, "directory name is not valid UTF-8"))
+}
+
+fn parse_operation_id(value: &str) -> Option<[u8; 32]> {
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return None;
+    }
+    let mut bytes = [0; 32];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        bytes[index] = (decode_hex_nibble(pair[0]) << 4) | decode_hex_nibble(pair[1]);
+    }
+    Some(bytes)
+}
+
+fn decode_hex_nibble(byte: u8) -> u8 {
+    match byte {
+        b'0'..=b'9' => byte - b'0',
+        b'a'..=b'f' => byte - b'a' + 10,
+        _ => unreachable!("hexadecimal operation identity was validated before decoding"),
+    }
 }
 
 fn encode_journal(
@@ -653,6 +990,13 @@ fn domain_hash(domain: &[u8], bytes: &[u8]) -> [u8; 32] {
 
 fn invalid(path: &Path, reason: impl Into<String>) -> FleetInstallActivationJournalError {
     FleetInstallActivationJournalError::InvalidDocument {
+        path: path.to_path_buf(),
+        reason: reason.into(),
+    }
+}
+
+fn invalid_directory(path: &Path, reason: impl Into<String>) -> FleetInstallActivationJournalError {
+    FleetInstallActivationJournalError::InvalidDirectory {
         path: path.to_path_buf(),
         reason: reason.into(),
     }
