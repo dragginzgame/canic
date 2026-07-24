@@ -131,7 +131,7 @@ fn access_stage_default_guard_marks_identity_source_raw_caller() {
 }
 
 #[test]
-fn authenticated_endpoint_expansion_evaluates_access_before_dispatch() {
+fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
     let args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
         BuiltinPredicate::Authenticated {
             required_scope: Some(AuthScopeArg::Literal(String::from("write"))),
@@ -145,6 +145,9 @@ fn authenticated_endpoint_expansion_evaluates_access_before_dispatch() {
 
     let expanded = expand(EndpointKind::Update, args, func).to_string();
 
+    let fence = expanded
+        .find("preflight_endpoint")
+        .expect("expanded endpoint must enforce the activation fence");
     let access = expanded
         .find("eval_access")
         .expect("expanded endpoint must evaluate access");
@@ -155,6 +158,7 @@ fn authenticated_endpoint_expansion_evaluates_access_before_dispatch() {
         .find("__canic_impl_write")
         .expect("expanded endpoint must call implementation");
 
+    assert!(fence < access);
     assert!(access < dispatch);
     assert!(dispatch < impl_call);
 }

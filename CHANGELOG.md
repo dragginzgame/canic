@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.13` makes the installed `Prepared` root fail closed at the shared
+  managed-endpoint boundary: only exact activation-status inspection reaches
+  a handler, and managed packages may no longer bypass that fence through raw
+  CDK query or update exports.
+
 - `0.99.12` connects fresh root installation to the sole Fleet-activation
   authority: planning is durable before creation, exact installs reconcile
   through `Prepared`, and the host records `RootInstalled` without publishing

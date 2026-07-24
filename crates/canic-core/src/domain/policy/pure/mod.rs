@@ -10,6 +10,7 @@ pub mod blob_storage;
 pub mod cycles;
 pub mod cycles_funding;
 pub mod env;
+pub mod fleet_activation;
 pub mod icp_refill;
 pub mod intent;
 pub mod log;
@@ -32,6 +33,9 @@ pub enum PolicyError {
 
     #[error(transparent)]
     EnvPolicy(#[from] env::EnvPolicyError),
+
+    #[error(transparent)]
+    FleetActivationPolicy(#[from] fleet_activation::FleetActivationEndpointPolicyError),
 
     #[error(transparent)]
     PoolPolicy(#[from] pool::PoolPolicyError),
