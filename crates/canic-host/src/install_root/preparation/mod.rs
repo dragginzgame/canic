@@ -12,7 +12,9 @@ use super::plan_artifacts::{PreparedPlanArtifacts, prepare_plan_artifacts_with_p
 use super::timing::InstallTimingSummary;
 use super::{clock::current_unix_timestamp_label, options::InstallRootOptions};
 use crate::canister_build::{CurrentCanisterArtifactBuildOutput, WorkspaceBuildContext};
-use crate::deployment_truth::{DeploymentCheckV1, DeploymentExecutionContextV1};
+use crate::deployment_truth::{
+    DeploymentCheckV1, DeploymentExecutionContextV1, DeploymentReceiptV1,
+};
 use std::{
     path::Path,
     time::{Duration, Instant},
@@ -20,6 +22,8 @@ use std::{
 
 pub(super) struct PreparedInstallTruth {
     pub(super) deployment_truth_check: DeploymentCheckV1,
+    pub(super) pre_activation_receipts: Vec<DeploymentReceiptV1>,
+    pub(super) build_phase: CompletedInstallPhase,
     pub(super) timings: InstallTimingSummary,
     pub(super) build_outputs: Vec<CurrentCanisterArtifactBuildOutput>,
     pub(super) plan_artifacts: Option<PreparedPlanArtifacts>,
@@ -48,7 +52,7 @@ pub(super) fn prepare_install_deployment_truth(
         build_install_targets_with_phase(options, build_context, icp_root, install_snapshot)?;
     timings.build_all = build.duration;
 
-    let deployment_truth_check = run_install_deployment_truth_safety_gate(
+    let safety_gate = run_install_deployment_truth_safety_gate(
         options,
         &build_context.workspace_root,
         icp_root,
@@ -60,17 +64,10 @@ pub(super) fn prepare_install_deployment_truth(
             .as_ref()
             .map(PreparedPlanArtifacts::plan),
     )?;
-    let receipt_scope = InstallReceiptScope {
-        icp_root,
-        environment: &options.environment,
-        deployment_name,
-        check: &deployment_truth_check,
-        execution_context: Some(execution_context),
-    };
-    write_completed_install_phase_receipt(receipt_scope, build.phase)?;
-
     Ok(PreparedInstallTruth {
-        deployment_truth_check,
+        deployment_truth_check: safety_gate.check,
+        pre_activation_receipts: safety_gate.receipts,
+        build_phase: build.phase,
         timings,
         build_outputs: build.outputs,
         plan_artifacts: build.plan_artifacts,

@@ -14,7 +14,7 @@ use super::deployment_truth_gate::{
     enforce_install_deployment_truth_gate, install_deployment_truth_gate_lines,
     install_deployment_truth_gate_receipt,
 };
-use super::execution_preflight::write_current_install_execution_preflight_receipt;
+use super::execution_preflight::current_install_execution_preflight_receipt;
 use super::operations::{
     BuildInstallTargetsOperation, EmitRootManifestOperation, InstallPhaseLabel,
     InstallPhaseOperation, InstallRootWasmOperation, ResolveRootCanisterOperation,
@@ -355,13 +355,27 @@ kind = "root"
 fn sample_fleet_activation_identity() -> FleetActivationIdentity {
     FleetActivationIdentity {
         fleet: FleetBinding {
-            fleet: FleetKey {
-                network: CanonicalNetworkId::public_ic(),
-                fleet_id: FleetId::from_generated_bytes([7; 32]),
-            },
+            fleet: sample_fleet_key(),
             app: AppId::from("demo"),
         },
         operation_id: [8; 32],
         release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([9; 32])),
     }
+}
+
+fn sample_fleet_key() -> FleetKey {
+    FleetKey {
+        network: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([7; 32]),
+    }
+}
+
+fn sample_fleet_receipt_dir(root: &Path) -> PathBuf {
+    let fleet = sample_fleet_key();
+    root.join(".canic")
+        .join("networks")
+        .join(fleet.network.to_string())
+        .join("fleets")
+        .join(fleet.fleet_id.to_string())
+        .join("deployment-receipts")
 }

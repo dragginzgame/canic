@@ -56,7 +56,7 @@ kind = "service"
     );
     assert!(execution_preflight.blockers.is_empty());
     assert!(
-        !root.join(".canic/local/deployment-receipts").exists(),
+        !sample_fleet_receipt_dir(&root).exists(),
         "read-only preflight must not write deployment receipts"
     );
 
@@ -73,16 +73,8 @@ fn install_truth_execution_preflight_receipt_records_ready_state() {
     check.report.hard_failures.clear();
     let execution_context = current_install_execution_context(&root, &root, "local");
 
-    let path = write_current_install_execution_preflight_receipt(
-        &root,
-        "local",
-        "demo",
-        &check,
-        &execution_context,
-    )
-    .expect("write execution preflight receipt");
-    let receipt: DeploymentReceiptV1 =
-        serde_json::from_slice(&fs::read(path).expect("read receipt")).expect("decode receipt");
+    let receipt = current_install_execution_preflight_receipt(&check, &execution_context)
+        .expect("prepare execution preflight receipt");
 
     assert_eq!(
         receipt.operation_id,
@@ -106,12 +98,16 @@ fn install_truth_execution_preflight_receipt_records_ready_state() {
             .contains(&"blockers:0".to_string())
     );
     assert!(receipt.execution_context.is_some());
+    assert!(
+        !sample_fleet_receipt_dir(&root).exists(),
+        "pre-Fleet preflight must not persist an ambiguously keyed receipt"
+    );
 
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
 #[test]
-fn install_truth_execution_preflight_receipt_records_blocked_state_before_error() {
+fn install_truth_execution_preflight_blocks_without_ambiguous_receipt_persistence() {
     let (root, mut check) =
         demo_install_deployment_truth_check("canic-install-truth-execution-preflight-blocked");
     check.report.status = SafetyStatusV1::Blocked;
@@ -123,14 +119,8 @@ fn install_truth_execution_preflight_receipt_records_blocked_state_before_error(
     });
     let execution_context = current_install_execution_context(&root, &root, "local");
 
-    let err = write_current_install_execution_preflight_receipt(
-        &root,
-        "local",
-        "demo",
-        &check,
-        &execution_context,
-    )
-    .expect_err("blocked execution preflight should stop install");
+    let err = current_install_execution_preflight_receipt(&check, &execution_context)
+        .expect_err("blocked execution preflight should stop install");
 
     let blocked = err
         .downcast_ref::<InstallRootBlockedError>()
@@ -139,27 +129,9 @@ fn install_truth_execution_preflight_receipt_records_blocked_state_before_error(
         blocked.kind(),
         InstallRootBlockKind::DeploymentExecutionPreflight
     );
-    let path = latest_deployment_truth_receipt_path_from_root(&root, "local", "demo")
-        .expect("find latest receipt")
-        .expect("blocked preflight receipt should be written");
-    let receipt: DeploymentReceiptV1 =
-        serde_json::from_slice(&fs::read(path).expect("read receipt")).expect("decode receipt");
-    assert_eq!(
-        receipt.operation_status,
-        DeploymentExecutionStatusV1::FailedBeforeMutation
-    );
     assert!(
-        receipt.phase_receipts[0]
-            .verified_postcondition
-            .evidence
-            .contains(&"execution_preflight_status:Blocked".to_string())
-    );
-    assert!(
-        receipt.phase_receipts[0]
-            .verified_postcondition
-            .evidence
-            .iter()
-            .any(|line| line.starts_with("blocker:deployment_artifact_missing:"))
+        !sample_fleet_receipt_dir(&root).exists(),
+        "a blocked pre-Fleet check must not create a receipt under invented Fleet identity"
     );
 
     fs::remove_dir_all(root).expect("clean temp dir");

@@ -9,8 +9,10 @@ use crate::{
     },
     version_text,
 };
+use canic_core::ids::FleetKey;
 use canic_host::{
     deployment_truth::{DeploymentReceiptV1, compare_plan_inventory_and_receipt},
+    fleet_catalog::read_fleet_catalog_entry_from_root,
     icp_config::resolve_current_canic_icp_root,
     install_root::latest_deployment_truth_receipt_path_from_root,
 };
@@ -25,8 +27,10 @@ Examples:
 
 Prints the passive ResumeSafetyV1 JSON for the current deployment truth check
 and a prior DeploymentReceiptV1. When --receipt is omitted, Canic uses the
-latest local receipt under .canic/<environment>/deployment-receipts/<deployment>. It
-does not resume, install, or mutate state.";
+latest receipt under
+.canic/networks/<canonical-network-id>/fleets/<fleet-id>/deployment-receipts/.
+The Fleet name is resolved through the canonical catalog. It does not resume,
+install, or mutate state.";
 
 const RECEIPT_ARG: &str = "receipt";
 
@@ -80,25 +84,46 @@ impl DeployResumeReportOptions {
                 "could not discover current Canic project root for latest deployment receipt: {err}; pass --receipt <file>"
             ))
         })?;
+        self.receipt_path_from_root(&icp_root)
+    }
 
-        latest_deployment_truth_receipt_path_from_root(
-            &icp_root,
+    pub(super) fn receipt_path_from_root(
+        &self,
+        icp_root: &std::path::Path,
+    ) -> Result<PathBuf, DeployCommandError> {
+        let fleet = read_fleet_catalog_entry_from_root(
+            icp_root,
             &self.truth.environment,
             &self.truth.deployment,
         )
-        .map_err(DeployCommandError::from)?
+        .map_err(|error| DeployCommandError::Check(Box::new(error)))?
         .ok_or_else(|| {
             DeployCommandError::Usage(format!(
-                "no deployment receipt found under {} for deployment {}; pass --receipt <file>",
-                icp_root
-                    .join(".canic")
-                    .join(&self.truth.environment)
-                    .join("deployment-receipts")
-                    .join(&self.truth.deployment)
-                    .display(),
-                self.truth.deployment
+                "Fleet {} is not present in the canonical catalog for environment profile {}; pass --receipt <file>",
+                self.truth.deployment, self.truth.environment
             ))
-        })
+        })?;
+        let fleet = FleetKey {
+            network: fleet.canonical_network_id,
+            fleet_id: fleet.fleet_id,
+        };
+
+        latest_deployment_truth_receipt_path_from_root(icp_root, fleet)
+            .map_err(DeployCommandError::from)?
+            .ok_or_else(|| {
+                DeployCommandError::Usage(format!(
+                    "no deployment receipt found under {} for Fleet {}; pass --receipt <file>",
+                    icp_root
+                        .join(".canic")
+                        .join("networks")
+                        .join(fleet.network.to_string())
+                        .join("fleets")
+                        .join(fleet.fleet_id.to_string())
+                        .join("deployment-receipts")
+                        .display(),
+                    self.truth.deployment
+                ))
+            })
     }
 }
 

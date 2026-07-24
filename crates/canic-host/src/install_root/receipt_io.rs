@@ -1,21 +1,16 @@
-use crate::{
-    deployment_truth::DeploymentReceiptV1, durable_io::write_bytes,
-    network::validate_environment_name,
-};
-use canic_core::ids::FleetName;
+use crate::{deployment_truth::DeploymentReceiptV1, durable_io::write_bytes};
+use canic_core::ids::FleetKey;
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
 pub(super) fn write_install_deployment_truth_receipt(
     icp_root: &Path,
-    environment: &str,
-    deployment_name: &str,
+    fleet: FleetKey,
     receipt: &DeploymentReceiptV1,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let path =
-        install_deployment_truth_receipt_path(icp_root, environment, deployment_name, receipt)?;
+    let path = install_deployment_truth_receipt_path(icp_root, fleet, receipt);
     let mut bytes = serde_json::to_vec_pretty(receipt)?;
     bytes.push(b'\n');
     write_bytes(&path, &bytes)?;
@@ -24,38 +19,41 @@ pub(super) fn write_install_deployment_truth_receipt(
 
 pub(super) fn install_deployment_truth_receipt_path(
     icp_root: &Path,
-    environment: &str,
-    deployment_name: &str,
+    fleet: FleetKey,
     receipt: &DeploymentReceiptV1,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_environment_name(environment)?;
-    deployment_name.parse::<FleetName>()?;
+) -> PathBuf {
     let file_stem = format!(
         "{}-{}",
         safe_deployment_truth_path_label(&receipt.started_at),
         safe_deployment_truth_path_label(&receipt.operation_id)
     );
-    Ok(
-        install_deployment_truth_receipts_dir(icp_root, environment, deployment_name)?
-            .join(format!("{file_stem}.json")),
-    )
+    install_deployment_truth_receipts_dir(icp_root, fleet).join(format!("{file_stem}.json"))
 }
 
-/// Find the latest persisted deployment-truth receipt for one local deployment target.
+/// Find the latest persisted deployment-truth receipt for one exact Fleet.
 pub fn latest_deployment_truth_receipt_path_from_root(
     icp_root: &Path,
-    environment: &str,
-    deployment_name: &str,
+    fleet: FleetKey,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let dir = install_deployment_truth_receipts_dir(icp_root, environment, deployment_name)?;
-    if !dir.is_dir() {
-        return Ok(None);
+    let dir = install_deployment_truth_receipts_dir(icp_root, fleet);
+    match fs::symlink_metadata(&dir) {
+        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => {
+            return Err(format!(
+                "Fleet deployment-receipt path is not a regular directory: {}",
+                dir.display()
+            )
+            .into());
+        }
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => return Err(source.into()),
     }
 
     let mut latest = None;
     for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
-        if !path.is_file()
+        let entry = entry?;
+        let path = entry.path();
+        if !entry.file_type()?.is_file()
             || path
                 .extension()
                 .is_none_or(|ext| !ext.eq_ignore_ascii_case("json"))
@@ -69,18 +67,14 @@ pub fn latest_deployment_truth_receipt_path_from_root(
     Ok(latest)
 }
 
-fn install_deployment_truth_receipts_dir(
-    icp_root: &Path,
-    environment: &str,
-    deployment_name: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    validate_environment_name(environment)?;
-    deployment_name.parse::<FleetName>()?;
-    Ok(icp_root
+fn install_deployment_truth_receipts_dir(icp_root: &Path, fleet: FleetKey) -> PathBuf {
+    icp_root
         .join(".canic")
-        .join(environment)
+        .join("networks")
+        .join(fleet.network.to_string())
+        .join("fleets")
+        .join(fleet.fleet_id.to_string())
         .join("deployment-receipts")
-        .join(deployment_name))
 }
 
 fn safe_deployment_truth_path_label(value: &str) -> String {

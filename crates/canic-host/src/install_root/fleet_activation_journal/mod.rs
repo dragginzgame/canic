@@ -26,7 +26,7 @@ use crate::{
 use canic_core::{
     cdk::types::Principal,
     dto::fleet_activation::{FleetActivationHostRecord, FleetActivationIdentity},
-    ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, FleetName},
+    ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey, FleetName, ReleaseBuildId},
 };
 use ciborium::Value;
 use sha2::{Digest, Sha256};
@@ -100,9 +100,9 @@ pub(super) struct RootInstalledFleetInstallActivation {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct RootInstallReceiptEvidence {
     pub receipt_hash: [u8; 32],
-    pub path: PathBuf,
     pub root_canister: Principal,
     pub module_hash: [u8; 32],
+    pub activation_identity: FleetActivationIdentity,
 }
 
 ///
@@ -161,6 +161,9 @@ pub(super) enum FleetInstallActivationJournalError {
 
     #[error("RootInstalled transition conflicts with the durable root-install receipt hash")]
     RootInstallReceiptMismatch,
+
+    #[error("root-install receipt belongs to a different Fleet activation identity")]
+    RootInstallReceiptIdentityMismatch,
 
     #[error("Fleet install activation journal cannot transition from {phase:?} to RootInstalled")]
     InvalidRootInstalledTransition { phase: FleetInstallActivationPhase },
@@ -436,12 +439,14 @@ pub(super) fn admit_root_install_receipt(
             "observed module hash does not match the installed Wasm",
         ));
     }
+    let activation_identity =
+        root_install_activation_identity(path, &phase.verified_postcondition.evidence)?;
 
     Ok(RootInstallReceiptEvidence {
         receipt_hash: Sha256::digest(&bytes).into(),
-        path: path.to_path_buf(),
         root_canister,
         module_hash: observed_module_hash,
+        activation_identity,
     })
 }
 
@@ -463,6 +468,9 @@ pub(super) fn record_root_installed(
             &resolved.path,
             "resolved journal path is not canonical for its activation identity",
         ));
+    }
+    if receipt.activation_identity != *identity {
+        return Err(FleetInstallActivationJournalError::RootInstallReceiptIdentityMismatch);
     }
     let _lock = lock_fleet_install_activation(
         root,
@@ -1136,6 +1144,52 @@ fn exact_receipt_evidence<'a>(
         ));
     }
     Ok(value)
+}
+
+fn root_install_activation_identity(
+    path: &Path,
+    evidence: &[String],
+) -> Result<FleetActivationIdentity, FleetInstallActivationJournalError> {
+    let canonical_network_id = exact_receipt_evidence(path, evidence, "canonical_network_id:")?
+        .parse::<CanonicalNetworkId>()
+        .map_err(|error| {
+            invalid_root_install_receipt(path, format!("canonical_network_id is invalid: {error}"))
+        })?;
+    let app = AppId::from(exact_receipt_evidence(path, evidence, "app:")?);
+    validate_app(&app)
+        .map_err(|error| invalid_root_install_receipt(path, format!("app is invalid: {error}")))?;
+    let fleet_id = exact_receipt_evidence(path, evidence, "fleet_id:")?
+        .parse::<FleetId>()
+        .map_err(|error| {
+            invalid_root_install_receipt(path, format!("fleet_id is invalid: {error}"))
+        })?;
+    let operation_id = parse_receipt_digest(
+        path,
+        exact_receipt_evidence(path, evidence, "activation_operation_id:")?,
+        "activation_operation_id",
+    )?;
+    let release_build_id = exact_receipt_evidence(path, evidence, "release_build_id:")?
+        .parse::<ReleaseBuildId>()
+        .map_err(|error| {
+            invalid_root_install_receipt(path, format!("release_build_id is invalid: {error}"))
+        })?;
+    if exact_receipt_evidence(path, evidence, "fleet_activation_phase:")? != "prepared" {
+        return Err(invalid_root_install_receipt(
+            path,
+            "fleet_activation_phase must be prepared",
+        ));
+    }
+    Ok(FleetActivationIdentity {
+        fleet: FleetBinding {
+            fleet: FleetKey {
+                network: canonical_network_id,
+                fleet_id,
+            },
+            app,
+        },
+        operation_id,
+        release_build_id,
+    })
 }
 
 fn parse_receipt_digest(

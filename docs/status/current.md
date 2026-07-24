@@ -14,14 +14,18 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.22`.
-- The latest published release is `v0.99.22` at
-  `87967199f19b082fd2b95f64d116a22d2de4934c`.
-- The `v0.99.22` source tree is
-  `791b747aa86c649800ba32af2094040ac36a9e5c`. Its Cargo.lock SHA-256 is
-  `ca97ae4b97d31b8370d69b0959c94549f70f0cf7a940687208d03d1dd3872803`.
-- The open `0.99.23` draft deletes the environment-scoped install-state model
-  and makes the canonical-network Fleet catalog the sole host authority for
+- The workspace package version is `0.99.23`.
+- The latest published release is `v0.99.23` at
+  `ee1364697ef0fc1b4ee048f0ee53f948e16af1ed`.
+- The `v0.99.23` source tree is
+  `51fe662cedef3a3d7e063ad6014ac618c716be6c`. Its Cargo.lock SHA-256 is
+  `a0aa51b4cc0f816d13044b5aa4bf3198f7a75f724eb34c870073b65c7586c7ae`.
+- The open `0.99.24` draft makes `(CanonicalNetworkId, FleetId)` the sole
+  deployment-receipt namespace, resolves default CLI receipt lookup through
+  the canonical Fleet catalog and requires a successful root-install receipt
+  to prove the complete activation identity before the journal can advance.
+- Released `0.99.23` deletes the environment-scoped install-state model and
+  makes the canonical-network Fleet catalog the sole host authority for
   installed Fleet identity, root and App resolution. The redundant catalog
   root-verification flag is removed because only completed activation
   publishes a row.

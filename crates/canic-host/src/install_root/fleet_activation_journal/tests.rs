@@ -6,6 +6,7 @@ use crate::{
     },
     test_support::temp_dir,
 };
+use canic_core::ids::ReleaseBuildNonce;
 use std::{
     fs,
     sync::{Arc, Barrier},
@@ -35,6 +36,7 @@ fn request<'a>(
 fn write_root_install_receipt(
     root: &Path,
     module_hash: [u8; 32],
+    activation_identity: &FleetActivationIdentity,
 ) -> (PathBuf, DeploymentReceiptV1) {
     fs::create_dir_all(root).expect("create receipt root");
     let root_canister = Principal::from_slice(&[42; 29]);
@@ -62,6 +64,18 @@ fn write_root_install_receipt(
                     "root_wasm:/tmp/root.wasm".to_string(),
                     format!("expected_module_hash:{hash}"),
                     format!("observed_module_hash:{hash}"),
+                    format!(
+                        "canonical_network_id:{}",
+                        activation_identity.fleet.fleet.network
+                    ),
+                    format!("app:{}", activation_identity.fleet.app),
+                    format!("fleet_id:{}", activation_identity.fleet.fleet.fleet_id),
+                    format!(
+                        "activation_operation_id:{}",
+                        hex_digest(activation_identity.operation_id)
+                    ),
+                    format!("release_build_id:{}", activation_identity.release_build_id),
+                    "fleet_activation_phase:prepared".to_string(),
                 ],
             },
         }],
@@ -74,6 +88,20 @@ fn write_root_install_receipt(
     bytes.push(b'\n');
     fs::write(&path, bytes).expect("write root-install receipt");
     (path, receipt)
+}
+
+fn sample_activation_identity() -> FleetActivationIdentity {
+    FleetActivationIdentity {
+        fleet: FleetBinding {
+            fleet: FleetKey {
+                network: CanonicalNetworkId::public_ic(),
+                fleet_id: FleetId::from_generated_bytes([3; 32]),
+            },
+            app: AppId::from("toko"),
+        },
+        operation_id: [4; 32],
+        release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([5; 32])),
+    }
 }
 
 #[test]
@@ -132,7 +160,8 @@ fn root_installed_transition_is_canonical_monotonic_and_idempotent() {
     let finalized = finalized_release(&root, b"manifest");
     let planned =
         plan_fleet_install_activation(request(&root, &finalized)).expect("plan activation");
-    let (receipt_path, _) = write_root_install_receipt(&root, [12; 32]);
+    let (receipt_path, _) =
+        write_root_install_receipt(&root, [12; 32], &planned.journal.activation.identity);
     let receipt = admit_root_install_receipt(&receipt_path).expect("admit root-install receipt");
     let expected_receipt_hash: [u8; 32] =
         Sha256::digest(fs::read(&receipt_path).expect("read receipt")).into();
@@ -140,6 +169,10 @@ fn root_installed_transition_is_canonical_monotonic_and_idempotent() {
     assert_eq!(receipt.receipt_hash, expected_receipt_hash);
     assert_eq!(receipt.root_canister, Principal::from_slice(&[42; 29]));
     assert_eq!(receipt.module_hash, [12; 32]);
+    assert_eq!(
+        receipt.activation_identity,
+        planned.journal.activation.identity
+    );
 
     let installed = record_root_installed(&root, &planned, &receipt).expect("record RootInstalled");
     assert!(installed.advanced);
@@ -188,8 +221,23 @@ fn root_installed_transition_rejects_stale_journal_and_receipt_conflicts() {
     let finalized = finalized_release(&root, b"manifest");
     let planned =
         plan_fleet_install_activation(request(&root, &finalized)).expect("plan activation");
-    let (receipt_path, _) = write_root_install_receipt(&root, [13; 32]);
+    let (receipt_path, _) =
+        write_root_install_receipt(&root, [13; 32], &planned.journal.activation.identity);
     let receipt = admit_root_install_receipt(&receipt_path).expect("admit receipt");
+    let mut wrong_identity = planned.journal.activation.identity.clone();
+    wrong_identity.operation_id = [0xdd; 32];
+    let (wrong_identity_path, _) = write_root_install_receipt(&root, [18; 32], &wrong_identity);
+    let wrong_identity_receipt =
+        admit_root_install_receipt(&wrong_identity_path).expect("admit wrong-identity receipt");
+
+    std::assert_matches!(
+        record_root_installed(&root, &planned, &wrong_identity_receipt),
+        Err(FleetInstallActivationJournalError::RootInstallReceiptIdentityMismatch)
+    );
+    assert_eq!(
+        fs::read(&planned.path).expect("read unchanged Planned journal"),
+        encode_journal(&planned.journal).expect("encode Planned journal")
+    );
 
     let mut changed = planned.journal.clone();
     changed.release_set_manifest_digest = [0xee; 32];
@@ -215,7 +263,8 @@ fn root_installed_transition_rejects_stale_journal_and_receipt_conflicts() {
     let installed = record_root_installed(&root, &planned, &receipt).expect("record RootInstalled");
     let resumed =
         plan_fleet_install_activation(request(&root, &finalized)).expect("resume RootInstalled");
-    let (other_path, _) = write_root_install_receipt(&root, [14; 32]);
+    let (other_path, _) =
+        write_root_install_receipt(&root, [14; 32], &planned.journal.activation.identity);
     let other = admit_root_install_receipt(&other_path).expect("admit other receipt");
     std::assert_matches!(
         record_root_installed(&root, &resumed, &other),
@@ -232,7 +281,8 @@ fn root_installed_transition_rejects_stale_journal_and_receipt_conflicts() {
 #[test]
 fn root_install_receipt_admission_requires_canonical_verified_module_evidence() {
     let root = temp_dir("fleet-install-activation-root-receipt");
-    let (path, receipt) = write_root_install_receipt(&root, [15; 32]);
+    let (path, receipt) =
+        write_root_install_receipt(&root, [15; 32], &sample_activation_identity());
 
     let mut mismatch = receipt.clone();
     mismatch.phase_receipts[0].verified_postcondition.evidence[3] =
@@ -290,7 +340,7 @@ fn root_install_receipt_symlinks_are_rejected() {
     use std::os::unix::fs::symlink;
 
     let root = temp_dir("fleet-install-activation-root-receipt-symlink");
-    let (path, _) = write_root_install_receipt(&root, [17; 32]);
+    let (path, _) = write_root_install_receipt(&root, [17; 32], &sample_activation_identity());
     let real = root.join("real-root-install.json");
     fs::rename(&path, &real).expect("move receipt");
     symlink(&real, &path).expect("link receipt");

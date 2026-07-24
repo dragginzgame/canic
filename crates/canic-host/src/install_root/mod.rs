@@ -1,5 +1,6 @@
 use crate::{
     canister_build::cache::DefaultCanisterBuildCacheCleanup,
+    deployment_truth::DeploymentReceiptV1,
     network::resolve_canonical_network_id_from_root,
     release_set::{icp_root, workspace_root},
 };
@@ -54,8 +55,10 @@ pub use operations::{
 pub use options::InstallRootOptions;
 use output::print_install_timing_summary;
 pub use phase_receipts::InstallPhaseFailureError;
-use phase_receipts::InstallReceiptScope;
-use plan_artifacts::emit_manifest_with_deployment_truth_receipt;
+use phase_receipts::{
+    CompletedInstallPhase, InstallReceiptScope, write_completed_install_phase_receipt,
+};
+use plan_artifacts::emit_manifest_with_phase;
 use preparation::{prepare_install_deployment_truth, resolve_root_canister_after_manifest};
 pub use receipt_io::latest_deployment_truth_receipt_path_from_root;
 use timing::InstallTimingSummary as CurrentInstallTimingSummary;
@@ -255,9 +258,7 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         options.artifact_environment(),
     );
 
-    println!("Installing Fleet {fleet_name}");
-    println!("Source App {app_id}");
-    println!();
+    print_install_identity(&app_id, &fleet_name);
     let prepared = prepare_install_deployment_truth(
         &options,
         &icp_root,
@@ -269,25 +270,15 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
     )
     .map_err(InstallRootError::in_phase(InstallRootPhase::Preparation))?;
     timings.build_all = prepared.timings.build_all;
-    let receipt_scope = InstallReceiptScope {
-        icp_root: &icp_root,
-        environment,
-        deployment_name: &fleet_name,
-        check: &prepared.deployment_truth_check,
-        execution_context: Some(&execution_context),
-    };
-
-    let (_manifest_path, emit_manifest_duration, finalized_release_build) =
-        emit_manifest_with_deployment_truth_receipt(
-            receipt_scope,
-            &options,
-            &install_snapshot,
-            &prepared.build_outputs,
-            prepared.plan_artifacts.as_ref(),
-        )
-        .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;
-    timings.emit_manifest = emit_manifest_duration;
-    let finalized_release_build = finalized_release_build.ok_or_else(|| {
+    let emitted_manifest = emit_manifest_with_phase(
+        &icp_root,
+        &install_snapshot,
+        &prepared.build_outputs,
+        prepared.plan_artifacts.as_ref(),
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Manifest))?;
+    timings.emit_manifest = emitted_manifest.duration;
+    let finalized_release_build = emitted_manifest.finalized_release_build.ok_or_else(|| {
         InstallRootError::new(
             InstallRootPhase::Manifest,
             ReleaseBuildPlanError::MissingFinalizedAuthority,
@@ -307,6 +298,20 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
         },
     )
     .map_err(|source| InstallRootError::new(InstallRootPhase::Activation, source))?;
+    let receipt_scope = InstallReceiptScope {
+        icp_root: &icp_root,
+        environment,
+        fleet: activation.journal.activation.identity.fleet.fleet,
+        check: &prepared.deployment_truth_check,
+        execution_context: Some(&execution_context),
+    };
+    persist_pre_root_receipts(
+        receipt_scope,
+        &prepared.pre_activation_receipts,
+        prepared.build_phase,
+        emitted_manifest.phase,
+    )
+    .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
     let (root_canister_id, create_duration) =
         resolve_root_canister_after_manifest(receipt_scope, &options, &config_path, &build_context)
             .map_err(InstallRootError::in_phase(InstallRootPhase::Activation))?;
@@ -324,6 +329,26 @@ pub fn install_root(options: InstallRootOptions) -> Result<(), InstallRootError>
 
     print_install_timing_summary(&timings, total_started_at.elapsed());
     Err(continuation_required(root_canister_id, &prepared_root))
+}
+
+fn print_install_identity(app: &str, fleet_name: &str) {
+    println!("Installing Fleet {fleet_name}");
+    println!("Source App {app}");
+    println!();
+}
+
+fn persist_pre_root_receipts(
+    receipt_scope: InstallReceiptScope<'_>,
+    prepared_receipts: &[DeploymentReceiptV1],
+    build_phase: CompletedInstallPhase,
+    manifest_phase: CompletedInstallPhase,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for receipt in prepared_receipts {
+        receipt_scope.write_receipt(receipt)?;
+    }
+    write_completed_install_phase_receipt(receipt_scope, build_phase)?;
+    write_completed_install_phase_receipt(receipt_scope, manifest_phase)?;
+    Ok(())
 }
 
 fn current_install_build_inputs(

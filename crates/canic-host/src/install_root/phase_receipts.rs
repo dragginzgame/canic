@@ -6,6 +6,7 @@ use crate::deployment_truth::{
     DeploymentExecutionStatusV1, DeploymentReceiptV1, ObservationStatusV1, RolePhaseReceiptV1,
     RolePhaseResultV1, deployment_receipt_from_check_with_status, phase_receipt,
 };
+use canic_core::ids::FleetKey;
 use std::{
     error::Error,
     path::{Path, PathBuf},
@@ -48,7 +49,7 @@ impl InstallPhaseFailureError {
 pub(super) struct InstallReceiptScope<'a> {
     pub(super) icp_root: &'a Path,
     pub(super) environment: &'a str,
-    pub(super) deployment_name: &'a str,
+    pub(super) fleet: FleetKey,
     pub(super) check: &'a DeploymentCheckV1,
     pub(super) execution_context: Option<&'a DeploymentExecutionContextV1>,
 }
@@ -282,16 +283,11 @@ impl InstallReceiptScope<'_> {
         }
     }
 
-    fn write_receipt(
+    pub(super) fn write_receipt(
         self,
         receipt: &DeploymentReceiptV1,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let path = write_install_deployment_truth_receipt(
-            self.icp_root,
-            self.environment,
-            self.deployment_name,
-            receipt,
-        )?;
+        let path = write_install_deployment_truth_receipt(self.icp_root, self.fleet, receipt)?;
         println!("Deployment truth receipt JSON: {}", path.display());
         Ok(path)
     }

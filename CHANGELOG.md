@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.24` gives deployment receipts one canonical network/Fleet-ID
+  namespace and binds successful root-install evidence to the complete
+  activation identity before the journal can advance.
+
 - `0.99.23` makes the canonical-network Fleet catalog the sole installed-Fleet
   authority across live CLI resolution, deployment truth and status/medic,
   deleting the environment-scoped install-state model and its redundant

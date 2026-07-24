@@ -2,20 +2,24 @@ use super::deployment_truth_gate::{
     enforce_install_deployment_truth_gate, install_deployment_truth_gate_receipt,
     print_install_deployment_truth_gate,
 };
-use super::execution_preflight::write_current_install_execution_preflight_receipt;
+use super::execution_preflight::current_install_execution_preflight_receipt;
 use super::phase_receipts::receipt_with_execution_context;
-use super::receipt_io::write_install_deployment_truth_receipt;
 use super::{
     capabilities::CURRENT_INSTALL_REQUIRED_CAPABILITIES, clock::current_unix_timestamp_label,
     options::InstallRootOptions,
 };
 use crate::deployment_truth::{
     CurrentCliDeploymentExecutor, DeploymentCheckV1, DeploymentExecutionContextV1,
-    DeploymentExecutor, DeploymentExecutorCapabilityV1, artifact_gate_phase_receipt,
-    artifact_gate_role_phase_receipts, missing_executor_capabilities,
+    DeploymentExecutor, DeploymentExecutorCapabilityV1, DeploymentReceiptV1,
+    artifact_gate_phase_receipt, artifact_gate_role_phase_receipts, missing_executor_capabilities,
 };
 use crate::release_set::artifact_root_path;
 use std::path::Path;
+
+pub(super) struct PreparedInstallSafetyGate {
+    pub(super) check: DeploymentCheckV1,
+    pub(super) receipts: Vec<DeploymentReceiptV1>,
+}
 
 pub(super) fn current_install_execution_context(
     workspace_root: &Path,
@@ -66,7 +70,7 @@ pub(super) fn run_install_deployment_truth_safety_gate(
     deployment_name: &str,
     execution_context: &DeploymentExecutionContextV1,
     prepared_plan: Option<&crate::deployment_truth::DeploymentPlanV1>,
-) -> Result<DeploymentCheckV1, Box<dyn std::error::Error>> {
+) -> Result<PreparedInstallSafetyGate, Box<dyn std::error::Error>> {
     let truth_gate_started_at = current_unix_timestamp_label()?;
     let deployment_truth_check =
         super::truth_check::current_install_deployment_truth_check_at_with_plan(
@@ -93,25 +97,12 @@ pub(super) fn run_install_deployment_truth_safety_gate(
         ),
         execution_context,
     );
-    let receipt_write = write_install_deployment_truth_receipt(
-        icp_root,
-        &options.environment,
-        deployment_name,
-        &deployment_receipt,
-    );
-    match &receipt_write {
-        Ok(path) => println!("Deployment truth receipt JSON: {}", path.display()),
-        Err(err) => eprintln!("Deployment truth receipt JSON write failed: {err}"),
-    }
     print_install_deployment_truth_gate(&deployment_truth_check, &deployment_receipt);
     enforce_install_deployment_truth_gate(&deployment_truth_check)?;
-    receipt_write?;
-    write_current_install_execution_preflight_receipt(
-        icp_root,
-        &options.environment,
-        deployment_name,
-        &deployment_truth_check,
-        execution_context,
-    )?;
-    Ok(deployment_truth_check)
+    let preflight_receipt =
+        current_install_execution_preflight_receipt(&deployment_truth_check, execution_context)?;
+    Ok(PreparedInstallSafetyGate {
+        check: deployment_truth_check,
+        receipts: vec![deployment_receipt, preflight_receipt],
+    })
 }
