@@ -85,6 +85,10 @@ fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() 
         ),
         "root init must accept the exact current install identity"
     );
+    assert!(
+        body.contains("let _ = canic_install;"),
+        "root lifecycle must retain the application install-hook contract without executing it"
+    );
     for forbidden in [
         "schedule_init_root_bootstrap",
         "TimerApi::defer_lifecycle",

@@ -186,6 +186,13 @@ macro_rules! __canic_start_local_lifecycle_core {
 #[macro_export]
 macro_rules! __canic_root_lifecycle_core {
     ($( $init:block )?) => {
+        // The activation adapter owns execution of this application hook.
+        // Keep the contract bound without polling or scheduling it in Prepared.
+        #[doc(hidden)]
+        const _: () = {
+            let _ = canic_install;
+        };
+
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
             $crate::__internal::core::bootstrap::compiled::ConfigModel,
