@@ -484,10 +484,7 @@ mod state_apply_tests {
         assert_eq!(FleetStateOps::snapshot_input(), original_state);
         assert_eq!(FleetDirectoryOps::get(&service), Some(original));
         assert_eq!(SubnetDirectoryOps::get(&service), Some(original));
-        assert_eq!(
-            FleetActivationOps::prepared_snapshot_hashes_for_tests(),
-            Some((None, None))
-        );
+        assert!(!FleetActivationOps::has_partial_snapshot_evidence_for_tests());
     }
 }
 
