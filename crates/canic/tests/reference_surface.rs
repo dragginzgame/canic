@@ -94,17 +94,19 @@ fn hidden_macro_cdk_boundary_matches_the_frozen_inventory() {
         .expect("hidden CDK module should precede hidden instructions");
 
     for required in [
-        "export_candid, init, inspect_message, post_upgrade, query, update",
+        "export_candid, futures, init, inspect_message, post_upgrade, query, trap, update",
         "candid::Principal",
         "ic_cdk::",
-        "canister_cycle_balance, canister_version, is_controller, msg_caller, time",
+        "canister_cycle_balance, canister_version, is_controller, msg_caller, msg_reply",
+        "ic0::{msg_arg_data_copy, msg_arg_data_size}",
+        "time,",
     ] {
         assert!(
             hidden.contains(required),
             "hidden CDK inventory is missing `{required}`"
         );
     }
-    for forbidden in [" call,", " eprintln,", " futures,", " println,", " trap,"] {
+    for forbidden in [" call,", " eprintln,", " println,"] {
         assert!(
             !hidden.contains(forbidden),
             "hidden CDK inventory unexpectedly exposes `{forbidden}`"
