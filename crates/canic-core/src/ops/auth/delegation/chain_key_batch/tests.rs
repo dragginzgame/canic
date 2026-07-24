@@ -57,7 +57,9 @@ fn policy(issuer_pid: Principal) -> RootIssuerPolicy {
     RootIssuerPolicy {
         issuer_pid,
         enabled: true,
-        allowed_audiences: vec![RootDelegationAudiencePolicy::Project("test".to_string())],
+        allowed_audiences: vec![RootDelegationAudiencePolicy::Fleet(
+            crate::test::support::fleet_key(1),
+        )],
         allowed_grants: vec![RootDelegatedRoleGrantPolicy {
             target: CanisterRole::owned("project_instance".to_string()),
             scopes: vec!["read".to_string()],
@@ -71,7 +73,7 @@ fn template(issuer_pid: Principal, cert_ttl_ns: u64) -> RootIssuerRenewalTemplat
     RootIssuerRenewalTemplate {
         issuer_pid,
         enabled: true,
-        audience: RootDelegationAudiencePolicy::Project("test".to_string()),
+        audience: RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
         grants: vec![RootDelegatedRoleGrantPolicy {
             target: CanisterRole::owned("project_instance".to_string()),
             scopes: vec!["read".to_string()],

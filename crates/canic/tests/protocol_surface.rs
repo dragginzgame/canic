@@ -47,8 +47,15 @@ use canic::{
     },
     dto::state::{FleetCommand, FleetCommandResponse, FleetMode, FleetStateResponse},
     dto::topology::{FleetDirectoryInput, SubnetDirectoryInput},
-    ids::CanisterRole,
+    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
+
+fn test_fleet() -> FleetKey {
+    FleetKey {
+        network: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([1; 32]),
+    }
+}
 
 // Returns the repository root so wire-surface fixtures can be read from disk.
 fn workspace_root() -> PathBuf {
@@ -946,7 +953,7 @@ fn root_delegation_proof_dtos_roundtrip_through_candid() {
 fn assert_root_issuer_policy_dtos_roundtrip() {
     let issuer_pid = Principal::from_slice(&[17; 29]);
     let grant = test_delegated_role_grant();
-    let audience = DelegationAudience::Project("test".to_string());
+    let audience = DelegationAudience::Fleet(test_fleet());
     let issuer_policy_request =
         root_issuer_policy_upsert_request(issuer_pid, audience.clone(), grant.clone());
     let issuer_policy_response = root_issuer_policy_response(issuer_pid, audience, grant);
@@ -973,7 +980,7 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
     let renewal_template = RootIssuerRenewalTemplateView {
         issuer_pid,
         enabled: true,
-        aud: DelegationAudience::Project("test".to_string()),
+        aud: DelegationAudience::Fleet(test_fleet()),
         grants: vec![test_delegated_role_grant()],
         cert_ttl_ns: 60,
     };
@@ -1013,7 +1020,7 @@ fn assert_root_delegation_proof_dtos_roundtrip() {
     let root_pid = Principal::from_slice(&[18; 29]);
     let cert_hash = [20; 32];
     let grant = test_delegated_role_grant();
-    let audience = DelegationAudience::Project("test".to_string());
+    let audience = DelegationAudience::Fleet(test_fleet());
     let proof = root_delegation_proof(root_pid, issuer_pid, audience, grant);
     let chain_key_proof =
         RootProof::IcChainKeyBatchSignatureV1(chain_key_root_proof(root_pid, issuer_pid));
@@ -1144,7 +1151,7 @@ fn chain_key_root_proof(
                 seed_hash: [36; 32],
             },
             max_token_ttl_ns: 60,
-            audience: DelegationAudience::Project("test".to_string()),
+            audience: DelegationAudience::Fleet(test_fleet()),
             grants: vec![grant],
             not_before_ns: 10,
             expires_at_ns: 110,

@@ -14,7 +14,9 @@ mod root_provisioning;
 
 pub use root_provisioning::{
     RootDelegationProofPreparePolicyInput, validate_root_delegation_proof_prepare_policy,
-    validate_root_issuer_policy_upsert, validate_root_issuer_renewal_template_upsert,
+    validate_root_issuer_policy_fleet_binding, validate_root_issuer_policy_upsert,
+    validate_root_issuer_renewal_template_fleet_binding,
+    validate_root_issuer_renewal_template_upsert,
 };
 
 ///
@@ -40,6 +42,9 @@ pub enum AuthPolicyError {
 
     #[error("root issuer audience is not allowed for issuer {issuer_pid}")]
     RootIssuerAudienceNotAllowed { issuer_pid: Principal },
+
+    #[error("root issuer audience must match the protected Fleet")]
+    RootIssuerFleetMismatch,
 
     #[error("enabled root issuer policy must allow at least one audience")]
     RootIssuerAudienceRequired,
@@ -142,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn public_prepare_allows_login_scopes_for_subnet_wide_tokens() {
+    fn public_prepare_allows_login_scopes_for_fleet_wide_tokens() {
         validate_public_delegated_token_prepare(
             p(7),
             p(7),

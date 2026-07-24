@@ -6,9 +6,8 @@
 
 use super::canonical::{CanonicalAuthError, role_hash, validate_scope_label};
 use crate::{
-    cdk::types::Principal,
     dto::auth::{DelegatedRoleGrant, DelegationAudience},
-    ids::CanisterRole,
+    ids::{CanisterRole, FleetKey},
 };
 use thiserror::Error;
 
@@ -22,10 +21,8 @@ pub const MAX_SCOPES_PER_ROLE_GRANT: usize = 32;
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct AudienceAcceptanceContext<'a> {
-    pub local_canister: Principal,
-    pub local_canic_subnet: Option<Principal>,
-    pub local_project: Option<&'a str>,
+pub struct AudienceAcceptanceContext {
+    pub local_fleet: FleetKey,
 }
 
 ///
@@ -36,10 +33,6 @@ pub struct AudienceAcceptanceContext<'a> {
 
 #[derive(Debug, Eq, Error, PartialEq)]
 pub enum AudienceError {
-    #[error("delegated auth project audience is empty")]
-    EmptyProject,
-    #[error("delegated auth project audience contains invalid characters: {project}")]
-    InvalidProject { project: String },
     #[error("delegated auth role grants must not be empty")]
     GrantsEmpty,
     #[error("delegated auth role grants exceed max {max}: {found}")]
@@ -58,13 +51,6 @@ pub enum AudienceError {
     GrantScopeRejected { scope: String },
     #[error(transparent)]
     Canonical(#[from] CanonicalAuthError),
-}
-
-pub fn validate_audience_shape(audience: &DelegationAudience) -> Result<(), AudienceError> {
-    match audience {
-        DelegationAudience::Canister(_) | DelegationAudience::CanicSubnet(_) => Ok(()),
-        DelegationAudience::Project(project) => validate_project(project),
-    }
 }
 
 pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), AudienceError> {
@@ -106,27 +92,11 @@ pub fn validate_role_grants(grants: &[DelegatedRoleGrant]) -> Result<(), Audienc
 }
 
 pub fn audience_subset(child: &DelegationAudience, parent: &DelegationAudience) -> bool {
-    match (child, parent) {
-        (DelegationAudience::Canister(child), DelegationAudience::Canister(parent))
-        | (DelegationAudience::CanicSubnet(child), DelegationAudience::CanicSubnet(parent)) => {
-            child == parent
-        }
-        (DelegationAudience::Project(child), DelegationAudience::Project(parent)) => {
-            child == parent
-        }
-        _ => false,
-    }
+    child == parent
 }
 
-pub fn audience_accepted(
-    ctx: AudienceAcceptanceContext<'_>,
-    audience: &DelegationAudience,
-) -> bool {
-    match audience {
-        DelegationAudience::Canister(canister) => *canister == ctx.local_canister,
-        DelegationAudience::CanicSubnet(subnet) => ctx.local_canic_subnet == Some(*subnet),
-        DelegationAudience::Project(project) => ctx.local_project == Some(project.as_str()),
-    }
+pub fn audience_accepted(ctx: AudienceAcceptanceContext, audience: &DelegationAudience) -> bool {
+    matches!(audience, DelegationAudience::Fleet(fleet) if *fleet == ctx.local_fleet)
 }
 
 pub fn role_grants_subset(child: &[DelegatedRoleGrant], parent: &[DelegatedRoleGrant]) -> bool {
@@ -146,18 +116,6 @@ pub fn scopes_for_role(
         .iter()
         .find(|grant| &grant.target == local_role)
         .map(|grant| grant.scopes.clone())
-}
-
-fn validate_project(project: &str) -> Result<(), AudienceError> {
-    if project.is_empty() {
-        return Err(AudienceError::EmptyProject);
-    }
-    if !project.bytes().all(is_canonical_label_byte) {
-        return Err(AudienceError::InvalidProject {
-            project: project.to_string(),
-        });
-    }
-    Ok(())
 }
 
 fn validate_grant_scopes(scopes: &[String]) -> Result<(), AudienceError> {
@@ -184,10 +142,6 @@ fn scopes_subset(child: &[String], parent: &[String]) -> bool {
     child.iter().all(|scope| parent.contains(scope))
 }
 
-const fn is_canonical_label_byte(byte: u8) -> bool {
-    byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b':' | b'-' | b'.')
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -195,6 +149,7 @@ const fn is_canonical_label_byte(byte: u8) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test::support::fleet_key;
 
     fn grant(role: &str, scopes: &[&str]) -> DelegatedRoleGrant {
         DelegatedRoleGrant {
@@ -203,63 +158,31 @@ mod tests {
         }
     }
 
-    fn p(id: u8) -> Principal {
-        Principal::from_slice(&[id; 29])
-    }
-
     #[test]
-    fn audience_subset_requires_matching_kind_and_value() {
+    fn audience_subset_requires_matching_fleet() {
         assert!(audience_subset(
-            &DelegationAudience::Project("demo".to_string()),
-            &DelegationAudience::Project("demo".to_string())
-        ));
-        assert!(audience_subset(
-            &DelegationAudience::Canister(p(1)),
-            &DelegationAudience::Canister(p(1))
-        ));
-        assert!(audience_subset(
-            &DelegationAudience::CanicSubnet(p(2)),
-            &DelegationAudience::CanicSubnet(p(2))
+            &DelegationAudience::Fleet(fleet_key(1)),
+            &DelegationAudience::Fleet(fleet_key(1))
         ));
         assert!(!audience_subset(
-            &DelegationAudience::Project("demo".to_string()),
-            &DelegationAudience::CanicSubnet(p(2))
-        ));
-        assert!(!audience_subset(
-            &DelegationAudience::Canister(p(1)),
-            &DelegationAudience::Project("demo".to_string())
+            &DelegationAudience::Fleet(fleet_key(1)),
+            &DelegationAudience::Fleet(fleet_key(2))
         ));
     }
 
     #[test]
-    fn audience_acceptance_requires_matching_local_context() {
+    fn audience_acceptance_requires_the_protected_local_fleet() {
         let ctx = AudienceAcceptanceContext {
-            local_canister: p(1),
-            local_canic_subnet: Some(p(2)),
-            local_project: Some("demo"),
+            local_fleet: fleet_key(1),
         };
 
-        assert!(audience_accepted(ctx, &DelegationAudience::Canister(p(1))));
         assert!(audience_accepted(
             ctx,
-            &DelegationAudience::CanicSubnet(p(2))
+            &DelegationAudience::Fleet(fleet_key(1))
         ));
-        assert!(audience_accepted(
-            ctx,
-            &DelegationAudience::Project("demo".to_string())
-        ));
-        assert!(!audience_accepted(ctx, &DelegationAudience::Canister(p(9))));
         assert!(!audience_accepted(
             ctx,
-            &DelegationAudience::CanicSubnet(p(9))
-        ));
-        let wrong_project = AudienceAcceptanceContext {
-            local_project: Some("other"),
-            ..ctx
-        };
-        assert!(!audience_accepted(
-            wrong_project,
-            &DelegationAudience::Project("demo".to_string())
+            &DelegationAudience::Fleet(fleet_key(2))
         ));
     }
 

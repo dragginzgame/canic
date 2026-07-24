@@ -130,17 +130,15 @@ fn issue_token_request_metadata(
 
 fn mix_audience(request_id: &mut [u8; 32], offset: usize, aud: &DelegationAudience) {
     match aud {
-        DelegationAudience::Canister(canister) => {
+        DelegationAudience::Fleet(fleet) => {
             request_id[offset % request_id.len()] ^= 1;
-            mix_principal(request_id, offset + 1, *canister);
-        }
-        DelegationAudience::CanicSubnet(subnet) => {
-            request_id[offset % request_id.len()] ^= 2;
-            mix_principal(request_id, offset + 1, *subnet);
-        }
-        DelegationAudience::Project(project) => {
-            request_id[offset % request_id.len()] ^= 3;
-            for (index, byte) in project.as_bytes().iter().enumerate() {
+            for (index, byte) in fleet
+                .network
+                .as_bytes()
+                .iter()
+                .chain(fleet.fleet_id.as_bytes())
+                .enumerate()
+            {
                 request_id[(index + offset + 1) % request_id.len()] ^= *byte;
             }
         }

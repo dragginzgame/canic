@@ -116,17 +116,10 @@ fn normalize_audiences(audiences: &mut Vec<DelegationAudience>) {
 fn audience_sort_key(audience: &DelegationAudience) -> Vec<u8> {
     let mut out = Vec::with_capacity(64);
     match audience {
-        DelegationAudience::Canister(canister) => {
+        DelegationAudience::Fleet(fleet) => {
             out.push(1);
-            encode_sort_bytes(&mut out, canister.as_slice());
-        }
-        DelegationAudience::CanicSubnet(subnet) => {
-            out.push(2);
-            encode_sort_bytes(&mut out, subnet.as_slice());
-        }
-        DelegationAudience::Project(project) => {
-            out.push(3);
-            encode_sort_bytes(&mut out, project.as_bytes());
+            encode_sort_bytes(&mut out, fleet.network.as_bytes());
+            encode_sort_bytes(&mut out, fleet.fleet_id.as_bytes());
         }
     }
     out
@@ -206,8 +199,8 @@ mod tests {
             issuer_pid,
             enabled: true,
             allowed_audiences: vec![
-                RootDelegationAudiencePolicy::Project("zeta".to_string()),
-                RootDelegationAudiencePolicy::Project("alpha".to_string()),
+                RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(2)),
+                RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
             ],
             allowed_grants: vec![RootDelegatedRoleGrantPolicy {
                 target: CanisterRole::owned("project_instance".to_string()),
@@ -222,7 +215,7 @@ mod tests {
         RootIssuerRenewalTemplate {
             issuer_pid,
             enabled: true,
-            audience: RootDelegationAudiencePolicy::Project("alpha".to_string()),
+            audience: RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![RootDelegatedRoleGrantPolicy {
                 target: CanisterRole::owned("project_instance".to_string()),
                 scopes: vec!["read".to_string()],
@@ -259,8 +252,8 @@ mod tests {
         assert_eq!(
             registry.snapshot.issuer_policies[0].allowed_audiences,
             vec![
-                DelegationAudience::Project("zeta".to_string()),
-                DelegationAudience::Project("alpha".to_string()),
+                DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
+                DelegationAudience::Fleet(crate::test::support::fleet_key(2)),
             ]
         );
         assert_eq!(

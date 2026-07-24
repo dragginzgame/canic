@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-AUTH-EQUIVALENCE-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: equivalence between supported auth abstractions and generated paths
 - Kind/profile: security `invariant`
@@ -28,10 +28,8 @@ Current Canic auth surface:
   ingress argument
 - generated endpoint access dispatch routes through
   `access::auth::delegated_token_verified(...)`
-- delegated-token audience is a stable acceptor boundary:
-  `DelegationAudience::Canister(canister_id)`,
-  `DelegationAudience::CanicSubnet(subnet_id)`, or
-  `DelegationAudience::Project(project_id)`
+- delegated-token audience is the exact protected Fleet boundary:
+  `DelegationAudience::Fleet(fleet_key)`
 - signed role grants carry the local canister-role scopes authorized by the
   token
 - signed role-attestation verification remains an explicit auth surface that
@@ -100,9 +98,9 @@ remain part of the generated/helper boundary. Replay-sensitive mutations must
 use domain operation receipts rather than verifier-local token-use state.
 
 This audit must keep signed role-attestation verification separate from
-delegated-token audience policy. Delegated-token audience selects the accepting
-canister, Canic subnet, or project boundary; signed role grants determine what
-the token may do after that acceptance check passes.
+delegated-token audience policy. Delegated-token audience selects the exact
+network-qualified Fleet; signed role grants determine what the token may do
+after that acceptance check passes.
 
 ## Run This Audit After
 
@@ -160,8 +158,8 @@ Confirm:
 
 - generated handlers route through canonical verification
 - no branch omits subject binding
-- every `DelegationAudience` branch preserves the exact current variants and
-  verifier-local target binding
+- the sole `DelegationAudience::Fleet` branch preserves exact matching against
+  the immutable Fleet activation binding
 - no branch authorizes from audience without checking the local-role grant
 - no convenience path weakens failure behavior
 - the generated `AccessContext` preserves separate transport-caller and
@@ -214,10 +212,11 @@ delegated session resolution tests.
 
 Audience-focused checks must also prove:
 
-- `DelegationAudience` is limited to `Canister(canister_id)`,
-  `CanicSubnet(subnet_id)`, and `Project(project_id)`
-- canister, subnet, and project audience verification uses the verifier-local
-  target identity
+- `DelegationAudience` contains only `Fleet(fleet_key)`
+- Fleet audience verification uses the immutable protected
+  `FleetActivation` binding
+- root issuer policy and renewal-template admission reject a Fleet other than
+  that protected binding before mutation
 - token audience must be a subset of cert audience
 - token grants must be a subset of cert grants
 - local canister role must be present in token grants before required-scope
@@ -232,13 +231,13 @@ List concrete files/modules/structs that carry abstraction-equivalence risk.
 Detection commands (run and record output references):
 
 ```bash
-rg -l 'access::expr|eval_access|AccessExpr|AccessPredicate|BuiltinPredicate' crates canisters fleets -g '*.rs'
-rg -l 'access::auth|delegated_token_verified|resolve_authenticated_identity|AuthenticatedIdentitySource|ResolvedAuthenticatedIdentity' crates canisters fleets -g '*.rs'
-rg -l 'DelegationProof' crates canisters fleets -g '*.rs'
-rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates canisters fleets -g '*.rs'
-rg -l 'canic_emit_root_auth_attestation_endpoints|canic_emit_nonroot_auth_attestation_endpoints|canic_emit_blob_storage_endpoints|canic_emit_blob_storage_billing_endpoints' crates canisters fleets -g '*.rs'
-rg -n 'DelegationAudience::Canister|DelegationAudience::CanicSubnet|DelegationAudience::Project|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters fleets docs -g '*.rs' -g '*.md'
-rg -n 'SignedRoleAttestation|verify_role_attestation' crates canisters fleets docs -g '*.rs' -g '*.md'
+rg -l 'access::expr|eval_access|AccessExpr|AccessPredicate|BuiltinPredicate' crates canisters apps -g '*.rs'
+rg -l 'access::auth|delegated_token_verified|resolve_authenticated_identity|AuthenticatedIdentitySource|ResolvedAuthenticatedIdentity' crates canisters apps -g '*.rs'
+rg -l 'DelegationProof' crates canisters apps -g '*.rs'
+rg -l 'DelegatedTokenClaims|VerifiedDelegatedToken|VerifyDelegatedToken' crates canisters apps -g '*.rs'
+rg -l 'canic_emit_root_auth_attestation_endpoints|canic_emit_nonroot_auth_attestation_endpoints|canic_emit_blob_storage_endpoints|canic_emit_blob_storage_billing_endpoints' crates canisters apps -g '*.rs'
+rg -n 'DelegationAudience::Fleet|FleetActivationOps::fleet_binding|DelegatedRoleGrant|claims\\.grants|cert\\.grants' crates canisters apps docs -g '*.rs' -g '*.md'
+rg -n 'SignedRoleAttestation|verify_role_attestation' crates canisters apps docs -g '*.rs' -g '*.md'
 git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access crates/canic-core/src/api/auth crates/canic-core/src/ops/auth crates/canic-core/src/dto/auth
 ```
 
@@ -250,7 +249,8 @@ git log --name-only -n 20 -- crates/canic-macros crates/canic-core/src/access cr
 | `crates/canic-core/src/access/expr/evaluators.rs` | `AuthenticatedEvaluator` | dispatch from abstraction evaluator to canonical auth verifier | High |
 | `crates/canic-core/src/access/auth/token.rs` | `delegated_token_verified`, `verify_token` | canonical verifier behavior baseline | High |
 | `crates/canic-core/src/api/auth/session/mod.rs` | delegated session bootstrap | convenience path that must not replace endpoint auth semantics | Medium |
-| `crates/canic-core/src/ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | canister/subnet/project audience validation and local-role grant binding | High |
+| `crates/canic-core/src/ops/auth/delegated/audience.rs` | `audience_accepted`, `audience_subset`, `role_grants_subset`, `scopes_for_role` | exact protected-Fleet matching and local-role grant binding | High |
+| `crates/canic-core/src/workflow/runtime/auth/root_issuer/mod.rs` | issuer policy and renewal-template upsert | rejects cross-Fleet issuer configuration before mutation | High |
 | `crates/canic-core/src/dto/auth/mod.rs` | `DelegationAudience`, `DelegatedRoleGrant`, `DelegatedToken`, `DelegationProof` | passive DTO shape; must remain behavior-free and grant-authorized | Medium |
 | `crates/canic/src/macros/endpoints/root.rs` | `canic_emit_root_auth_attestation_endpoints!` | root proof provisioning and attestation generated endpoint guards | High |
 | `crates/canic/src/macros/endpoints/nonroot.rs` | `canic_emit_nonroot_auth_attestation_endpoints!` | issuer-local delegated-token prepare/get and active-proof install generated endpoints | High |

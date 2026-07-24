@@ -599,7 +599,7 @@ mod tests {
             not_before_ns: 100,
             expires_at_ns: 500,
             max_token_ttl_ns: 120,
-            aud: DelegationAudience::Project("test".to_string()),
+            aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![grant("project_instance", &["read", "write"])],
         }
     }
@@ -730,7 +730,8 @@ mod tests {
         let policy = policy();
         let mut proof = proof_for_cert(&cert, &policy);
         mutate_proof(&mut proof, |proof| {
-            proof.delegation_cert.audience = DelegationAudience::Project("other".to_string());
+            proof.delegation_cert.audience =
+                DelegationAudience::Fleet(crate::test::support::fleet_key(2));
             proof.header.tree_root =
                 chain_key_delegation_cert_hash(&proof.delegation_cert).unwrap();
         });
@@ -976,15 +977,15 @@ mod tests {
         assert_eq!(
             leaf_hash,
             [
-                153, 26, 229, 175, 151, 99, 103, 193, 39, 115, 15, 221, 247, 160, 5, 134, 10, 209,
-                107, 150, 79, 65, 245, 135, 211, 49, 98, 6, 150, 89, 145, 238,
+                234, 10, 226, 67, 151, 247, 200, 82, 134, 47, 125, 22, 77, 221, 130, 86, 136, 190,
+                90, 23, 133, 137, 48, 221, 175, 77, 81, 232, 85, 11, 198, 2,
             ]
         );
         assert_eq!(
             chain_key_batch_witness_root(leaf_hash, &witness),
             [
-                220, 227, 136, 35, 77, 43, 39, 161, 214, 210, 239, 199, 239, 248, 96, 164, 231, 48,
-                194, 190, 203, 40, 147, 159, 24, 9, 250, 229, 250, 148, 219, 81,
+                73, 50, 92, 95, 67, 117, 166, 33, 181, 113, 62, 57, 56, 186, 157, 136, 114, 178,
+                138, 96, 76, 13, 198, 150, 46, 236, 37, 154, 55, 237, 163, 44,
             ]
         );
     }

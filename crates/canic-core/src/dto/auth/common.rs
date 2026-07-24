@@ -5,6 +5,7 @@
 //! Boundary: passive fields reused by auth proof, token, and renewal DTOs.
 
 use crate::dto::prelude::*;
+use crate::ids::FleetKey;
 
 //
 // DelegationAudience
@@ -12,9 +13,7 @@ use crate::dto::prelude::*;
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationAudience {
-    Canister(Principal),
-    CanicSubnet(Principal),
-    Project(String),
+    Fleet(FleetKey),
 }
 
 //

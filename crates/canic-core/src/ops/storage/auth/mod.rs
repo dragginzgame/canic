@@ -399,7 +399,7 @@ mod tests {
                     not_before_ns: 20,
                     expires_at_ns: 100,
                     max_token_ttl_ns: 30,
-                    aud: DelegationAudience::CanicSubnet(p(7)),
+                    aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
                     grants: vec![DelegatedRoleGrant {
                         target: CanisterRole::owned("project_instance".to_string()),
                         scopes: vec!["read".to_string(), "write".to_string()],
@@ -450,7 +450,7 @@ mod tests {
                     seed_hash: [36; 32],
                 },
                 max_token_ttl_ns: 30,
-                audience: DelegationAudience::CanicSubnet(p(7)),
+                audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
                 grants: vec![DelegatedRoleGrant {
                     target: CanisterRole::owned("project_instance".to_string()),
                     scopes: vec!["read".to_string(), "write".to_string()],
@@ -523,11 +523,9 @@ mod tests {
         let policy = RootIssuerPolicy {
             issuer_pid: p(31),
             enabled: true,
-            allowed_audiences: vec![
-                RootDelegationAudiencePolicy::Canister(p(32)),
-                RootDelegationAudiencePolicy::CanicSubnet(p(33)),
-                RootDelegationAudiencePolicy::Project("test".to_string()),
-            ],
+            allowed_audiences: vec![RootDelegationAudiencePolicy::Fleet(
+                crate::test::support::fleet_key(1),
+            )],
             allowed_grants: vec![RootDelegatedRoleGrantPolicy {
                 target: CanisterRole::owned("project_instance".to_string()),
                 scopes: vec!["canic.issue".to_string(), "canic.read".to_string()],
@@ -547,7 +545,7 @@ mod tests {
         let template = RootIssuerRenewalTemplate {
             issuer_pid: p(41),
             enabled: true,
-            audience: RootDelegationAudiencePolicy::Project("test".to_string()),
+            audience: RootDelegationAudiencePolicy::Fleet(crate::test::support::fleet_key(1)),
             grants: vec![RootDelegatedRoleGrantPolicy {
                 target: CanisterRole::owned("project_instance".to_string()),
                 scopes: vec!["canic.read".to_string()],

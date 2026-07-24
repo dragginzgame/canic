@@ -21,15 +21,9 @@ pub(super) fn commit_root_issuer_policy(policy: RootIssuerPolicy) -> RootIssuerP
     }
 }
 
-pub(super) fn audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolicy {
+pub(super) const fn audience_policy(audience: &DelegationAudience) -> RootDelegationAudiencePolicy {
     match audience {
-        DelegationAudience::Canister(canister) => RootDelegationAudiencePolicy::Canister(*canister),
-        DelegationAudience::CanicSubnet(subnet) => {
-            RootDelegationAudiencePolicy::CanicSubnet(*subnet)
-        }
-        DelegationAudience::Project(project) => {
-            RootDelegationAudiencePolicy::Project(project.clone())
-        }
+        DelegationAudience::Fleet(fleet) => RootDelegationAudiencePolicy::Fleet(*fleet),
     }
 }
 
@@ -37,17 +31,11 @@ pub(super) fn grant_policies(grants: &[DelegatedRoleGrant]) -> Vec<RootDelegated
     grants.iter().map(grant_policy).collect()
 }
 
-pub(super) fn delegation_audience_view(
+pub(super) const fn delegation_audience_view(
     policy: &RootDelegationAudiencePolicy,
 ) -> DelegationAudience {
     match policy {
-        RootDelegationAudiencePolicy::Canister(canister) => DelegationAudience::Canister(*canister),
-        RootDelegationAudiencePolicy::CanicSubnet(subnet) => {
-            DelegationAudience::CanicSubnet(*subnet)
-        }
-        RootDelegationAudiencePolicy::Project(project) => {
-            DelegationAudience::Project(project.clone())
-        }
+        RootDelegationAudiencePolicy::Fleet(fleet) => DelegationAudience::Fleet(*fleet),
     }
 }
 

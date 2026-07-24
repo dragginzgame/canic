@@ -8,10 +8,17 @@ use canic_core::{
         IcChainKeyBatchSignatureProofV1, IssuerProof, IssuerProofAlgorithm, IssuerProofBinding,
         RootProof,
     },
-    ids::CanisterRole,
+    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey},
 };
 use criterion::Criterion;
 use std::hint::black_box;
+
+fn fleet() -> FleetKey {
+    FleetKey {
+        network: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([1; 32]),
+    }
+}
 
 #[cfg(all(
     feature = "auth-root-canister-sig-create",
@@ -108,7 +115,7 @@ fn sample_delegated_token() -> DelegatedToken {
         cert_hash: [8; 32],
         issued_at_ns: 120_000_000_000,
         expires_at_ns: 180_000_000_000,
-        aud: DelegationAudience::Project("test".to_string()),
+        aud: DelegationAudience::Fleet(fleet()),
         grants: vec![
             grant("project_hub", &["read", "upload"]),
             grant("project_instance", &["read"]),
@@ -159,7 +166,7 @@ fn sample_chain_key_root_proof() -> RootProof {
             issuer_proof_binding_hash: [7; 32],
             issuer_proof_binding: IssuerProofBinding::IcCanisterSignatureV1 { seed_hash: [4; 32] },
             max_token_ttl_ns: 120_000_000_000,
-            audience: DelegationAudience::Project("test".to_string()),
+            audience: DelegationAudience::Fleet(fleet()),
             grants: vec![
                 grant("project_hub", &["read", "upload"]),
                 grant("project_instance", &["read"]),
@@ -197,7 +204,7 @@ fn sample_cert() -> DelegationCert {
         not_before_ns: 100_000_000_000,
         expires_at_ns: 700_000_000_000,
         max_token_ttl_ns: 120_000_000_000,
-        aud: DelegationAudience::Project("test".to_string()),
+        aud: DelegationAudience::Fleet(fleet()),
         grants: vec![
             grant("project_hub", &["read", "upload"]),
             grant("project_instance", &["read", "write"]),

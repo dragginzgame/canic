@@ -43,7 +43,7 @@ use crate::{
         ActiveDelegationProofStatus, ChainKeyAlgorithm, ChainKeyKeyId, DelegatedToken,
         DelegationCert, RootKeyPolicyV1, RootProof,
     },
-    ids::{BuildNetwork, CanisterRole},
+    ids::{BuildNetwork, CanisterRole, FleetKey},
     ops::{
         auth::{AuthScopeError, AuthValidationError},
         config::ConfigOps,
@@ -52,6 +52,7 @@ use crate::{
             env::EnvOps,
             metrics::delegated_auth::{DelegatedAuthMetricReason, DelegatedAuthMetrics},
         },
+        storage::{StorageOpsError, fleet_activation::FleetActivationOps},
     },
 };
 use error::{

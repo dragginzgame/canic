@@ -1,6 +1,7 @@
 pub use crate::__internal::core::ids::{
-    AccessMetricKind, BuildNetwork, CanisterRole, EndpointCall, EndpointCallKind, EndpointId,
-    IntentResourceKey, SubnetSlotId, SystemMetricKind, cap,
+    AccessMetricKind, BuildNetwork, CanisterRole, CanonicalNetworkId, EndpointCall,
+    EndpointCallKind, EndpointId, FleetId, FleetKey, IntentResourceKey, SubnetSlotId,
+    SystemMetricKind, cap,
 };
 
 #[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]

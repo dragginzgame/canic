@@ -204,7 +204,7 @@ fn prepare_scenario(
                 &setup.pic,
                 issuer_pid,
                 subject,
-                DelegationAudience::Project("test".to_string()),
+                DelegationAudience::Fleet(test_fleet()),
                 vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
                 10_000_000_000,
             );
@@ -337,7 +337,7 @@ fn execute_delegated_token_prepare(setup: &root::harness::RootSetup, prepared: &
                     ttl_ns: 60_000_000_000,
                 }),
                 subject,
-                aud: DelegationAudience::Project("test".to_string()),
+                aud: DelegationAudience::Fleet(test_fleet()),
                 grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
                 ttl_ns: 10_000_000_000,
                 ext: None,
@@ -378,7 +378,7 @@ fn upsert_delegation_issuer(setup: &root::harness::RootSetup, issuer_pid: Princi
             (RootIssuerPolicyUpsertRequest {
                 issuer_pid,
                 enabled: true,
-                allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
+                allowed_audiences: vec![DelegationAudience::Fleet(test_fleet())],
                 allowed_grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
                 max_cert_ttl_ns: 60_000_000_000,
                 refresh_after_ratio_bps: 8_000,
@@ -398,7 +398,7 @@ fn upsert_delegation_renewal_template(setup: &root::harness::RootSetup, issuer_p
             (RootIssuerRenewalTemplateUpsertRequest {
                 issuer_pid,
                 enabled: true,
-                aud: DelegationAudience::Project("test".to_string()),
+                aud: DelegationAudience::Fleet(test_fleet()),
                 grants: vec![role_grant(TEST, vec![cap::VERIFY.to_string()])],
                 cert_ttl_ns: 60_000_000_000,
             },),

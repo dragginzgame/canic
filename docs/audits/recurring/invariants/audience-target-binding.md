@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-AUTH-AUDIENCE-001`
-- Method version: `2`
+- Method version: `3`
 - Disposition: `revise`
 - Owner: signed audience, runtime target, and local-role grant binding
 - Kind/profile: security `invariant`
@@ -21,27 +21,26 @@ Ensure tokens and grants are accepted only in their intended audience/target exe
 
 ## Risk Model / Invariant
 
-A token containing an audience or target binding claim must be rejected unless that claim matches the current runtime execution context.
+A token containing an audience or target binding claim must be rejected unless
+that claim matches the immutable protected Fleet identity.
 
 Canonical form:
 
-`token.aud` (or equivalent audience/target field) must include the current runtime target.
+`token.aud` must equal the current `FleetActivation` binding.
 
 Audience/target binding must be enforced by the canonical verifier or by a verifier stage executed before authorization.
 
-Runtime context may include:
+The canonical delegated-token runtime context contains:
 
-- current canister principal
-- configured trusted root canister principal
-- service identifier
-- RPC target
-- execution environment identifier
+- canonical network identity
+- generated Fleet ID
+- local canister role for grant selection
 
 ### Invariant
 
-Delegated credentials must be bound to the target canister via the audience
-(`aud`) claim and verified before any authorization or capability evaluation
-occurs.
+Delegated credentials must be bound to the exact network-qualified Fleet via
+the audience (`aud`) claim and verified before any authorization or capability
+evaluation occurs.
 
 ## Why This Matters
 
@@ -51,7 +50,7 @@ Without audience/target binding, a valid token may be replayed across services o
 
 | Failure | Impact |
 | --- | --- |
-| audience not checked | cross-canister token replay |
+| audience not checked | cross-Fleet token replay |
 | issuer not validated | forged delegation acceptance |
 | subject not bound | privilege escalation |
 | verification occurs after policy | confused-deputy risk |
@@ -70,7 +69,7 @@ Order must be enforced before handler execution:
 ## Run This Audit After
 
 - token/grant claim schema changes
-- service routing changes
+- Fleet activation identity changes
 - capability scope model changes
 - verifier pipeline refactors
 
@@ -106,12 +105,13 @@ Confirm:
 
 ### 2. Verify Runtime Context Binding
 
-Confirm verifier logic compares audience/target claims against the current runtime execution context before authorization or business logic.
+Confirm verifier logic compares audience/target claims against the protected
+Fleet activation identity before authorization or business logic.
 
 Examples:
 
-- delegated grant audience includes target canister
-- service scope matches expected service
+- delegated-token audience equals the protected Fleet
+- root issuer policies and renewal templates name only the protected Fleet
 - issuer/target relationship is validated where required
 - active root delegation proof install binds the proof certificate issuer to
   the current signer canister before storing active proof state
@@ -134,8 +134,9 @@ Cross-reference result against the Expiry / Replay / Single-Use Invariant.
 
 ### 5. Test Expectations
 
-- valid token for audience A used in audience B => rejection
-- valid token for wrong target canister => rejection
+- valid token for Fleet A used in Fleet B => rejection
+- issuer policy or renewal template for another Fleet => rejection before
+  mutation
 - valid token for correct audience/target => success
 - active delegation proof for issuer A installed on issuer B => rejection
 - active delegation proof signed by unexpected root => rejection
@@ -155,12 +156,13 @@ git log --name-only -n 20 -- crates/
 
 | File / Module | Struct / Function | Reason | Risk Contribution |
 | --- | --- | --- | --- |
-| `ops/auth/delegated/audience.rs` | `validate_audience_shape`, `audience_subset`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | delegated-token audience shape, subset, local runtime matching, grant subset, and local-role grant lookup | High |
+| `ops/auth/delegated/audience.rs` | `audience_subset`, `audience_accepted`, `role_grants_subset`, `scopes_for_role` | delegated-token Fleet subset, protected-Fleet matching, grant subset, and local-role grant lookup | High |
 | `ops/auth/delegated/verify.rs` | `verify_audience_and_grants` | delegated-token cert/claim audience, local verifier, grant subset, and scope checks | High |
 | `ops/auth/delegated/prepare.rs` | `prepare_delegated_token` | rejects delegated-token audience expansion against the active issuer certificate | High |
 | `ops/auth/delegated/active_proof.rs` | `install_active_delegation_proof` | binds active proof cert issuer to the local signer canister and verifies trusted root proof before storage | High |
 | `ops/auth/delegation/active.rs` | `install_active_delegation_proof` | supplies current canister/root verifier context before persisting active proof | High |
-| `domain/policy/auth/root_provisioning.rs` | `validate_root_delegation_proof_prepare_policy` | root issuer registry policy enforces issuer, enabled state, allowed audiences, allowed grants, TTL, and refresh policy before root proof batch prepare | High |
+| `domain/policy/pure/auth/root_provisioning.rs` | Fleet-binding and root proof policy validators | root issuer admission enforces the protected Fleet, issuer, enabled state, allowed grants, TTL, and refresh policy before mutation or proof preparation | High |
+| `workflow/runtime/auth/root_issuer/mod.rs` | issuer policy and renewal-template upsert | resolves the protected Fleet and applies pure admission before mutation | High |
 | `ops/auth/delegation/chain_key_batch.rs` | `build_chain_key_batch_leaf`, `prepare_due_chain_key_root_delegation_batch` | maps root renewal templates into root issuer policy decisions before preparing canonical chain-key batch leaves | High |
 | `ops/auth/delegated/chain_key.rs` | `verify_cert_leaf_binding` | rejects root proofs whose signed leaf audience/grants/issuer binding do not exactly match the embedded delegation cert | High |
 | `ops/auth/verify/attestation.rs` | `verify_role_attestation_claims` | role-attestation subject, timing, audience, subnet, and epoch checks | High |
@@ -168,7 +170,7 @@ git log --name-only -n 20 -- crates/
 | `workflow/rpc/capability/proof.rs` | `verify_capability_hash_binding`, structural proof helpers | test-visible target hash verification and runtime structural proof checks | Medium |
 | `workflow/rpc/capability/verifier.rs` | `verify_root_capability_proof` | active proof-mode routing; current runtime accepts structural proof mode only | Medium |
 | `workflow/rpc/capability/root.rs` | `response_capability_v1_root` | validates envelopes, verifies structural proof mode, then dispatches root capability requests | Medium |
-| `dto/auth.rs`, `dto/capability/proof.rs` | delegated claim structs | audience and target field definitions | Medium |
+| `dto/auth`, `dto/capability/proof.rs` | delegated claim structs | Fleet audience and capability target field definitions | Medium |
 
 If none are detected in a given run, state: No structural hotspots detected in this run.
 
@@ -191,7 +193,8 @@ Pressure score guidance:
 - audience field present but not enforced in verifier
 - service/target checks applied only in non-canonical path
 - fallback path accepts token without audience/target comparison
-- audience claim compared against caller rather than runtime service/target context
+- audience claim compared against caller or ambient canister/subnet metadata
+  rather than the protected Fleet binding
 
 ## Severity
 

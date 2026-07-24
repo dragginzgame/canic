@@ -28,7 +28,7 @@ use canic::{
 };
 use canic_testing_internal::{
     canister,
-    pic::{create_user_shard, role_grant},
+    pic::{create_user_shard, managed_test_init_identity, role_grant},
 };
 use canic_tests::root::{
     RootSetupProfile,
@@ -43,6 +43,10 @@ const TEST_FLEET_CHAIN_KEY_PUBLIC_KEY_HEX: &str =
     "02f1a0a900c4b9d53ff5ec024c0e37e7a54174c6ae1d0a77312aebea349adc0b7a";
 const SECOND_NS: u64 = 1_000_000_000;
 const TC: u128 = 1_000_000_000_000;
+
+fn test_fleet() -> canic::ids::FleetKey {
+    managed_test_init_identity().fleet.fleet
+}
 
 #[test]
 fn delegated_auth_chain_key_management_public_key_matches_test_fleet_trust_anchor() {
@@ -576,7 +580,7 @@ fn upsert_root_issuer_policy(setup: &RootSetup, issuer_pid: Principal) {
         (RootIssuerPolicyUpsertRequest {
             issuer_pid,
             enabled: true,
-            allowed_audiences: vec![DelegationAudience::Project("test".to_string())],
+            allowed_audiences: vec![DelegationAudience::Fleet(test_fleet())],
             allowed_grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
             max_cert_ttl_ns: 60 * SECOND_NS,
             refresh_after_ratio_bps: 8_000,
@@ -599,7 +603,7 @@ fn set_root_issuer_renewal_template(setup: &RootSetup, issuer_pid: Principal, en
             (RootIssuerRenewalTemplateUpsertRequest {
                 issuer_pid,
                 enabled,
-                aud: DelegationAudience::Project("test".to_string()),
+                aud: DelegationAudience::Fleet(test_fleet()),
                 grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
                 cert_ttl_ns: 60 * SECOND_NS,
             },),
@@ -844,7 +848,7 @@ fn issue_delegated_token_once(
     token_ttl_ns: u64,
     request_nonce: u64,
 ) -> Result<DelegatedToken, Error> {
-    let aud = DelegationAudience::Project("test".to_string());
+    let aud = DelegationAudience::Fleet(test_fleet());
     let grants = vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])];
     let prepared: Result<DelegatedTokenPrepareResponse, Error> = setup.pic.update_call_as_or_panic(
         issuer_pid,
@@ -890,7 +894,7 @@ fn delegated_token_prepare_request(
             request_nonce,
         )),
         subject,
-        aud: DelegationAudience::Project("test".to_string()),
+        aud: DelegationAudience::Fleet(test_fleet()),
         grants: vec![role_grant(canister::TEST, vec![cap::VERIFY.to_string()])],
         ttl_ns: token_ttl_ns,
         ext: None,

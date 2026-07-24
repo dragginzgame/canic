@@ -1,3 +1,4 @@
+use crate::ids::FleetKey;
 use crate::storage::prelude::*;
 
 ///
@@ -32,9 +33,7 @@ pub struct DelegatedSessionBootstrapBindingRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum DelegationAudienceRecord {
-    Canister(Principal),
-    CanicSubnet(Principal),
-    Project(String),
+    Fleet(FleetKey),
 }
 
 ///

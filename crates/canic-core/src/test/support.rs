@@ -8,11 +8,19 @@ use crate::{
         DiagnosticsCanisterConfig, MetricsCanisterConfig, ShardPool, ShardPoolPolicy,
         ShardingConfig, StandardsCanisterConfig,
     },
-    ids::{CanisterRole, SubnetSlotId},
+    ids::{CanisterRole, CanonicalNetworkId, FleetId, FleetKey, SubnetSlotId},
     ops::runtime::env::EnvOps,
     storage::stable::env::{EnvData, EnvRecord},
     test::config::ConfigTestBuilder,
 };
+
+#[must_use]
+pub fn fleet_key(byte: u8) -> FleetKey {
+    FleetKey {
+        network: CanonicalNetworkId::public_ic(),
+        fleet_id: FleetId::from_generated_bytes([byte.saturating_add(1); 32]),
+    }
+}
 
 pub fn init_sharding_test_config() {
     let mut sharding = ShardingConfig::default();

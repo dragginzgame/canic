@@ -5,6 +5,7 @@
 
 use crate::{
     cdk::types::Principal,
+    ids::FleetKey,
     model::auth::{
         RootDelegatedRoleGrantPolicy, RootDelegationAudiencePolicy, RootIssuerRenewalTemplate,
     },
@@ -29,19 +30,14 @@ pub(in crate::ops::auth::delegation) fn renewal_template_fingerprint(
 
 fn hash_renewal_policy_audience(hasher: &mut Sha256, audience: &RootDelegationAudiencePolicy) {
     match audience {
-        RootDelegationAudiencePolicy::Canister(canister) => {
-            hash_renewal_bytes(hasher, b"canister");
-            hash_renewal_principal(hasher, *canister);
-        }
-        RootDelegationAudiencePolicy::CanicSubnet(subnet) => {
-            hash_renewal_bytes(hasher, b"canic_subnet");
-            hash_renewal_principal(hasher, *subnet);
-        }
-        RootDelegationAudiencePolicy::Project(project) => {
-            hash_renewal_bytes(hasher, b"project");
-            hash_renewal_bytes(hasher, project.as_bytes());
-        }
+        RootDelegationAudiencePolicy::Fleet(fleet) => hash_renewal_fleet(hasher, *fleet),
     }
+}
+
+fn hash_renewal_fleet(hasher: &mut Sha256, fleet: FleetKey) {
+    hash_renewal_bytes(hasher, b"fleet");
+    hash_renewal_bytes(hasher, fleet.network.as_bytes());
+    hash_renewal_bytes(hasher, fleet.fleet_id.as_bytes());
 }
 
 fn hash_renewal_policy_grants(hasher: &mut Sha256, grants: &[RootDelegatedRoleGrantPolicy]) {

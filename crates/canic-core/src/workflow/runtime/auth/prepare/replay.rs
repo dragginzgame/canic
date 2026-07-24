@@ -133,17 +133,10 @@ pub(super) fn token_prepare_replay_payload_hash(
 
 fn hash_delegation_audience(hasher: &mut ReplayPayloadHasher, aud: &DelegationAudience) {
     match aud {
-        DelegationAudience::Canister(canister) => {
-            hasher.hash_str("canister");
-            hasher.hash_principal(canister);
-        }
-        DelegationAudience::CanicSubnet(subnet) => {
-            hasher.hash_str("canic_subnet");
-            hasher.hash_principal(subnet);
-        }
-        DelegationAudience::Project(project) => {
-            hasher.hash_str("project");
-            hasher.hash_str(project);
+        DelegationAudience::Fleet(fleet) => {
+            hasher.hash_str("fleet");
+            hasher.hash_bytes(fleet.network.as_bytes());
+            hasher.hash_bytes(fleet.fleet_id.as_bytes());
         }
     }
 }
@@ -406,7 +399,7 @@ mod tests {
                 cert_hash: [4; 32],
                 issued_at_ns: 100,
                 expires_at_ns: 200,
-                aud: DelegationAudience::Canister(p(5)),
+                aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
                 grants: Vec::new(),
                 nonce: [6; 16],
                 ext: None,
