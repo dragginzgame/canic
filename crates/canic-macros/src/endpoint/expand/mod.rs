@@ -89,6 +89,7 @@ pub fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) -> Toke
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
+            ::canic::__internal::core::dispatch::preflight_endpoint(#call_ident);
             #access_stage
             #dispatch_call
         }

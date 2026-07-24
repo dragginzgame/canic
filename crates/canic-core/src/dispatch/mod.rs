@@ -7,12 +7,12 @@
 //! - Ensure runtime memory bootstrap readiness at endpoint boundary
 //! - Enter and exit endpoint performance tracking
 //! - Invoke the supplied handler closure
+//! - Enforce the protected Fleet-activation phase before application dispatch
 //! - Preserve synchronous vs asynchronous execution semantics
 //!
-//! This module intentionally contains **no business logic**, **no policy
-//! enforcement**, and **no orchestration**. It exists solely to adapt endpoint
-//! functions to shared cross-cutting concerns (currently runtime bootstrap
-//! readiness plus performance tracking).
+//! This module contains no activation policy itself. It delegates the
+//! cross-cutting phase decision to the runtime workflow before invoking the
+//! endpoint handler.
 //!
 //! **DO NOT MERGE INTO WORKFLOW.**
 //!
@@ -21,7 +21,7 @@
 //! - call application `ops` beyond minimal runtime bootstrap readiness
 //! - call `storage`
 //! - perform sequencing or lifecycle coordination
-//! - enforce access, domain, or policy rules
+//! - duplicate activation or access policy
 //!
 //! All application behavior belongs in `api` or `workflow`, not here.
 
@@ -40,10 +40,41 @@ fn ensure_memory_bootstrap() {
     }
 }
 
-/// Dispatch a synchronous query endpoint.
-pub fn dispatch_query<R>(call: EndpointCall, f: impl FnOnce() -> R) -> R {
+fn enter_endpoint() {
     ensure_memory_bootstrap();
     perf::enter_endpoint();
+}
+
+/// Enforce cross-cutting endpoint prerequisites before access evaluation.
+pub fn preflight_endpoint(call: EndpointCall) {
+    ensure_memory_bootstrap();
+    enforce_fleet_activation_fence(call);
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), expect(clippy::missing_const_for_fn))]
+fn enforce_fleet_activation_fence(call: EndpointCall) {
+    #[cfg(target_arch = "wasm32")]
+    if let Err(error) =
+        crate::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_endpoint_allowed(
+            call,
+        )
+    {
+        panic!(
+            "Fleet activation fence rejected endpoint {}: {error}",
+            call.endpoint.name
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = call;
+        let _ = crate::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_endpoint_allowed;
+    }
+}
+
+/// Dispatch a synchronous query endpoint.
+pub fn dispatch_query<R>(call: EndpointCall, f: impl FnOnce() -> R) -> R {
+    enter_endpoint();
     let res = f();
     perf::exit_endpoint(call);
 
@@ -55,8 +86,7 @@ pub async fn dispatch_query_async<R, F>(call: EndpointCall, f: impl FnOnce() -> 
 where
     F: Future<Output = R>,
 {
-    ensure_memory_bootstrap();
-    perf::enter_endpoint();
+    enter_endpoint();
     let res = f().await;
     perf::exit_endpoint(call);
 
@@ -65,8 +95,7 @@ where
 
 /// Dispatch a synchronous update endpoint.
 pub fn dispatch_update<R>(call: EndpointCall, f: impl FnOnce() -> R) -> R {
-    ensure_memory_bootstrap();
-    perf::enter_endpoint();
+    enter_endpoint();
     let res = f();
     perf::exit_endpoint(call);
 
@@ -78,8 +107,7 @@ pub async fn dispatch_update_async<R, F>(call: EndpointCall, f: impl FnOnce() ->
 where
     F: Future<Output = R>,
 {
-    ensure_memory_bootstrap();
-    perf::enter_endpoint();
+    enter_endpoint();
     let res = f().await;
     perf::exit_endpoint(call);
 

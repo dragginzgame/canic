@@ -131,7 +131,7 @@ async fn blob_storage_cashier_mock_set_gateway_list_trap(
     Ok(())
 }
 
-#[ic_cdk::update(name = "account_balance_get_v1")]
+#[canic_update(internal, public, name = "account_balance_get_v1")]
 async fn account_balance_get_v1(
     request: BlobStorageCashierAccountBalanceGetRequest,
 ) -> BlobStorageCashierAccountBalanceGetResult {
@@ -164,7 +164,7 @@ async fn account_balance_get_v1(
     })
 }
 
-#[ic_cdk::update(name = "account_top_up_v1")]
+#[canic_update(internal, public, name = "account_top_up_v1")]
 async fn account_top_up_v1(
     request: Option<BlobStorageCashierAccountTopUpRequest>,
 ) -> BlobStorageCashierAccountTopUpResult {
@@ -218,7 +218,7 @@ async fn account_top_up_v1(
     })
 }
 
-#[ic_cdk::update(name = "storage_gateway_principal_list_v1")]
+#[canic_update(internal, public, name = "storage_gateway_principal_list_v1")]
 async fn storage_gateway_principal_list_v1() -> Vec<Principal> {
     if let Some(message) = GATEWAY_LIST_TRAP.with_borrow(Clone::clone) {
         trap(message);

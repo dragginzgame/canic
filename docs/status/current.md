@@ -14,12 +14,15 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.11`.
-- The latest published release is `v0.99.11` at
-  `417a3ab61cd58fd70acd504cb8bb1b71550f899b`.
-- The `v0.99.11` source tree is
-  `a242566e5f353cd6399dcd8c0a4bbf7b4763c071`. Its Cargo.lock SHA-256 is
-  `9e62a91bab978fcbf344158a4feb6b9896aeec1265ecca429712745849f89e66`.
+- The workspace package version is `0.99.12`.
+- The latest published release is `v0.99.12` at
+  `b1c8a92ec517fa59b384b96b80160de481216917`.
+- The `v0.99.12` source tree is
+  `d90bfb867e76a59917e821bf6150a32152f48056`. Its Cargo.lock SHA-256 is
+  `d3473831d1a1948e20b62048a3584ab1bb303b94453eb11ec880e2ebec71087c`.
+- Released `0.99.12` connects fresh root installation to the sole activation
+  authority, reconciles exact `Prepared` installs and stops durably at
+  `RootInstalled` without publishing the unfinished Fleet as operational.
 - Released `0.99.11` adds the sole controller-only Fleet-activation status
   query on every maintained runtime without mutating protected state or
   making `Prepared` operational.
@@ -1197,7 +1200,7 @@ evidence, and fails closed on absent or contradictory state. This observation
 surface is deliberately non-mutating: it does not initialize ID 21, activate,
 start timers or make `Prepared` operational.
 
-The open `0.99.12` batch connects that protected owner to host recovery.
+Released `0.99.12` connects that protected owner to host recovery.
 Fresh install publishes `Planned` before root resolution, uses only
 `CurrentRootInstallIdentity`, atomically initializes the root as `Prepared`,
 reconciles a lost install response through exact module and activation-status
@@ -1207,11 +1210,21 @@ installed-state and install-specific promotion path cannot publish this
 unfinished Fleet as operational. Root init schedules no timers, bootstrap or
 application hook, and the legacy bootstrap-resume endpoint requires `Active`.
 
-The batch deliberately stops at `RootInstalled` with a typed
+That batch deliberately stops at `RootInstalled` with a typed
 continuation-required result. Supplied deployment-plan release-build
 admission, non-root preparation, current cascades and credentials, final
 activation, installed Fleet state and catalog commitment remain the next
 bounded work.
+
+The open `0.99.13` batch closes the installed root's `Prepared` endpoint
+boundary before adding those mutations. Every managed macro endpoint now
+preflights ID 21 before access evaluation; a `Prepared` root admits only its
+exact controller activation-status query, while absent or invalid protected
+root state fails closed. The repository's one managed raw-CDK fixture now
+uses `canic_update` without changing its external protocol, and a structural
+gate rejects future raw query/update bypasses in managed packages. Non-root
+preparation and its role-specific recovery allowlist remain the next bounded
+activation work.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish
