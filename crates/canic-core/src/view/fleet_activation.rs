@@ -14,4 +14,5 @@ use crate::dto::fleet_activation::FleetActivationStatusResponse;
 pub struct FleetActivationTransition {
     pub status: FleetActivationStatusResponse,
     pub transitioned: bool,
+    pub application_init_args: Option<Vec<u8>>,
 }

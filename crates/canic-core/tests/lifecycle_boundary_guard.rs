@@ -101,6 +101,37 @@ fn root_init_stays_prepared_without_scheduling_bootstrap_or_application_hooks() 
     }
 }
 
+#[test]
+fn root_post_upgrade_schedules_services_and_hooks_only_when_active() {
+    let macro_source = read_source("crates/canic/src/macros/start.rs");
+    let root = macro_section(
+        &macro_source,
+        "macro_rules! __canic_root_lifecycle_core",
+        "// Run the optional init block from a lifecycle timer",
+    );
+    let post_upgrade = function_body(root, "post_upgrade");
+    assert!(
+        post_upgrade.contains("let active =")
+            && post_upgrade.contains("if active {")
+            && post_upgrade.contains("schedule_post_upgrade_root_bootstrap();")
+            && post_upgrade.contains("canic_upgrade().await;"),
+        "root post-upgrade must gate bootstrap and application hooks on Active"
+    );
+
+    let runtime_source = read_source("crates/canic-core/src/workflow/runtime/root.rs");
+    let runtime = function_body(
+        &runtime_source,
+        "post_upgrade_root_canister_after_memory_init",
+    );
+    assert!(
+        runtime.contains("FleetActivationOps::status(true)")
+            && runtime.contains("if active {")
+            && runtime.contains("RuntimeWorkflow::start_all_root()")
+            && runtime.contains("Ok(active)"),
+        "root runtime restoration must gate service startup on protected Active state"
+    );
+}
+
 struct FunctionRef {
     path: &'static str,
     function: &'static str,

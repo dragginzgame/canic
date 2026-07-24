@@ -66,24 +66,27 @@ impl LifecycleApi {
     }
 
     /// Delegate root post-upgrade runtime restore to the current core implementation.
+    #[must_use]
     pub fn post_upgrade_root_canister_before_bootstrap(
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
         embedded_wasm_store_bootstrap_release_set: &'static [EmbeddedRootBootstrapEntry],
-    ) {
+    ) -> bool {
         crate::api::template::WasmStoreBootstrapApi::register_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
         crate::runtime::install::register_template_module_source_resolver();
-        canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
-            config,
-            config_source,
-            config_path,
-        );
+        let active =
+            canic_core::api::lifecycle::root::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
+                config,
+                config_source,
+                config_path,
+            );
         crate::api::template::WasmStoreBootstrapApi::log_embedded_root_wasm_store_release_set(
             embedded_wasm_store_bootstrap_release_set,
         );
+        active
     }
 
     /// Delegate root post-upgrade bootstrap scheduling to the current core implementation.

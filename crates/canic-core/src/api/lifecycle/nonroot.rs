@@ -15,6 +15,7 @@ impl LifecycleApi {
     pub fn init_nonroot_canister_before_bootstrap(
         role: CanisterRole,
         payload: CanisterInitPayload,
+        application_init_args: Option<Vec<u8>>,
         config: ConfigModel,
         config_source: &str,
         config_path: &str,
@@ -22,6 +23,7 @@ impl LifecycleApi {
         lifecycle::init::nonroot::init_nonroot_canister_before_bootstrap(
             role,
             payload,
+            application_init_args,
             config,
             config_source,
             config_path,

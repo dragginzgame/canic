@@ -190,9 +190,9 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         .expect("managed root lifecycle macro");
 
     assert!(
-        nonroot.contains("__CANIC_PREPARED_APPLICATION_INIT_ARGS")
+        nonroot.contains("fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>)")
             && nonroot.contains("canic_install(args).await;"),
-        "managed non-root activation must retain and deliver its application init bytes"
+        "managed non-root activation must receive durable init bytes from its transition"
     );
     assert!(
         root.contains("canic_setup().await;") && root.contains("canic_install().await;"),
@@ -206,18 +206,23 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         "root and non-root activation adapters must each suppress duplicate hook scheduling"
     );
 
-    for relative in [
-        "crates/canic/src/macros/endpoints/nonroot.rs",
-        "crates/canic/src/macros/endpoints/root.rs",
-    ] {
-        let path = workspace.join(relative);
-        let endpoints = fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
-        assert!(
-            endpoints.contains("__canic_schedule_prepared_activation_init();"),
-            "{relative} must hand successful activation to the lifecycle adapter"
-        );
-    }
+    let nonroot_path = workspace.join("crates/canic/src/macros/endpoints/nonroot.rs");
+    let nonroot_endpoints = fs::read_to_string(&nonroot_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", nonroot_path.display()));
+    assert!(
+        nonroot_endpoints.contains(
+            "__canic_schedule_prepared_activation_init(transition.application_init_args);"
+        ),
+        "managed non-root activation must hand durable init bytes to the lifecycle adapter"
+    );
+
+    let root_path = workspace.join("crates/canic/src/macros/endpoints/root.rs");
+    let root_endpoints = fs::read_to_string(&root_path)
+        .unwrap_or_else(|error| panic!("read {}: {error}", root_path.display()));
+    assert!(
+        root_endpoints.contains("__canic_schedule_prepared_activation_init();"),
+        "managed root activation must hand success to the lifecycle adapter"
+    );
 }
 
 #[test]

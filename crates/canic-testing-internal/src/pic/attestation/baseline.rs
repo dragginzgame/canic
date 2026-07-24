@@ -138,3 +138,58 @@ fn install_root_canister(pic: &Pic, wasm: Vec<u8>) -> Principal {
         .label("role_attestation_root"),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candid::encode_one;
+    use canic::{
+        Error,
+        dto::fleet_activation::{FleetActivationPhase, FleetActivationStatusResponse},
+        protocol::CANIC_FLEET_ACTIVATION_STATUS,
+    };
+    use std::time::Duration;
+
+    #[test]
+    fn prepared_root_upgrade_does_not_run_runtime_or_application_continuations() {
+        let root_wasm = build_test_root_wasm();
+        let pic = build_pic();
+        let root_id = install_root_canister(&pic, root_wasm.clone());
+        assert_prepared(&pic, root_id);
+
+        pic.wait_out_install_code_rate_limit(Duration::from_mins(5));
+        pic.upgrade_canister(
+            root_id,
+            root_wasm,
+            encode_one(()).expect("encode root upgrade"),
+            None,
+        )
+        .expect("upgrade Prepared root");
+        pic.advance_time(Duration::from_secs(1));
+        pic.tick();
+        assert_prepared(&pic, root_id);
+
+        activate_test_fleet(&pic, root_id);
+        wait_for_ready_canister(&pic, root_id, 240);
+        pic.tick();
+
+        let executions: Result<u64, Error> = pic
+            .query_call(root_id, "root_upgrade_hook_executions", ())
+            .expect("query root upgrade hook count");
+        assert_eq!(
+            executions.expect("root upgrade hook count"),
+            0,
+            "Prepared root upgrade must not run the application upgrade hook"
+        );
+    }
+
+    fn assert_prepared(pic: &Pic, root_id: Principal) {
+        let status: Result<FleetActivationStatusResponse, Error> = pic
+            .query_call(root_id, CANIC_FLEET_ACTIVATION_STATUS, ())
+            .expect("query root activation status");
+        assert_eq!(
+            status.expect("root activation status").phase,
+            FleetActivationPhase::Prepared
+        );
+    }
+}

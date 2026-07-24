@@ -43,6 +43,7 @@ use crate::{
 pub fn init_nonroot_canister(
     canister_role: CanisterRole,
     payload: CanisterInitPayload,
+    application_init_args: Option<Vec<u8>>,
 ) -> Result<(), InternalError> {
     let CanisterInitPayload {
         fleet,
@@ -62,6 +63,7 @@ pub fn init_nonroot_canister(
         install_id,
         release_build_id,
         embedded_release_build_id,
+        application_init_args,
     )
     .map_err(crate::ops::storage::StorageOpsError::from)?;
 

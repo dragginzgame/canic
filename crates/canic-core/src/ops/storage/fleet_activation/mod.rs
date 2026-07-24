@@ -84,7 +84,7 @@ impl FleetActivationOps {
             },
             embedded_release_build_id,
         )?;
-        initialize_prepared(prepared)
+        initialize_prepared(prepared, None)
     }
 
     pub(crate) fn initialize_nonroot_prepared(
@@ -92,6 +92,7 @@ impl FleetActivationOps {
         install_id: [u8; 32],
         release_build_id: ReleaseBuildId,
         embedded_release_build_id: ReleaseBuildId,
+        application_init_args: Option<Vec<u8>>,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
         let prepared = prepare_nonroot_install(
             NonrootInstallIdentity {
@@ -101,7 +102,7 @@ impl FleetActivationOps {
             },
             embedded_release_build_id,
         )?;
-        initialize_prepared(prepared)
+        initialize_prepared(prepared, application_init_args)
     }
 
     #[must_use]
@@ -147,7 +148,10 @@ impl FleetActivationOps {
         credential_manifest: FleetCredentialManifest,
     ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
         let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
-        let FleetActivationStateRecord::Prepared { identity, evidence } = &mut record.state else {
+        let FleetActivationStateRecord::Prepared {
+            identity, evidence, ..
+        } = &mut record.state
+        else {
             return Self::status(true);
         };
         if credential.generation == 0
@@ -221,7 +225,9 @@ impl FleetActivationOps {
     ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
         let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
         let (identity, evidence) = match &mut record.state {
-            FleetActivationStateRecord::Prepared { identity, evidence } => (identity, evidence),
+            FleetActivationStateRecord::Prepared {
+                identity, evidence, ..
+            } => (identity, evidence),
             FleetActivationStateRecord::Active {
                 identity, evidence, ..
             } => {
@@ -261,12 +267,26 @@ impl FleetActivationOps {
         activated_at_ns: u64,
     ) -> Result<FleetActivationTransition, FleetActivationOpsError> {
         let mut record = FleetActivation::get().ok_or(FleetActivationOpsError::NotInitialized)?;
-        let (identity, evidence) = match &record.state {
-            FleetActivationStateRecord::Prepared { identity, evidence }
-            | FleetActivationStateRecord::Active {
+        let (identity, evidence, application_init_args) = match &record.state {
+            FleetActivationStateRecord::Prepared {
+                identity,
+                evidence,
+                application_init_args,
+            } => (
+                identity.clone(),
+                evidence.clone(),
+                application_init_args.clone(),
+            ),
+            FleetActivationStateRecord::Active {
                 identity, evidence, ..
-            } => (identity.clone(), evidence.clone()),
+            } => (identity.clone(), evidence.clone(), None),
         };
+        if is_root && application_init_args.is_some() {
+            return Err(FleetActivationOpsError::InvalidRecord {
+                reason: "root Fleet activation retains non-root application init arguments"
+                    .to_string(),
+            });
+        }
         if identity.operation_id != request.operation_id
             || evidence.credential.as_ref() != Some(&credential_dto_to_record(request.credential))
         {
@@ -300,6 +320,7 @@ impl FleetActivationOps {
             return Ok(FleetActivationTransition {
                 status: Self::status(is_root)?,
                 transitioned: false,
+                application_init_args: None,
             });
         }
 
@@ -314,6 +335,7 @@ impl FleetActivationOps {
         Ok(FleetActivationTransition {
             status: Self::status(is_root)?,
             transitioned: true,
+            application_init_args,
         })
     }
 
@@ -325,6 +347,7 @@ impl FleetActivationOps {
 
 fn initialize_prepared(
     prepared: PreparedFleetActivation,
+    application_init_args: Option<Vec<u8>>,
 ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
     let record = FleetActivationRecord {
         state: FleetActivationStateRecord::Prepared {
@@ -337,6 +360,7 @@ fn initialize_prepared(
                 cascade: None,
                 credential: None,
             },
+            application_init_args,
         },
         prepared_state_snapshot_hash: None,
         prepared_topology_snapshot_hash: None,
@@ -521,6 +545,7 @@ mod tests {
                     cascade: None,
                     credential: None,
                 },
+            application_init_args: None,
         } = stored.state
         else {
             panic!("root init must store an empty Prepared state")
@@ -557,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    fn nonroot_init_commits_the_exact_empty_prepared_identity_once() {
+    fn nonroot_init_commits_identity_empty_evidence_and_application_args_once() {
         FleetActivationOps::reset_for_tests();
         let release_build_id = release_build(32);
         let root_input = input(release_build_id);
@@ -566,6 +591,7 @@ mod tests {
             root_input.install_id,
             root_input.release_build_id,
             release_build_id,
+            Some(vec![33, 34]),
         )
         .expect("initialize non-root Prepared");
         let stored = FleetActivationOps::snapshot()
@@ -580,8 +606,9 @@ mod tests {
                     cascade: None,
                     credential: None,
                 },
+                application_init_args: Some(ref args),
                 ..
-            }
+            } if args == &[33, 34]
         ));
 
         FleetActivationOps::reset_for_tests();
@@ -600,6 +627,7 @@ mod tests {
                 root_input.install_id,
                 root_input.release_build_id,
                 embedded,
+                None,
             ),
             Err(FleetActivationOpsError::Admission(
                 PrepareFleetActivationError::ReleaseBuildMismatch { .. }
@@ -672,6 +700,31 @@ mod tests {
         ));
         assert!(matches!(
             FleetActivationOps::status(false),
+            Err(FleetActivationOpsError::InvalidRecord { .. })
+        ));
+
+        FleetActivationOps::reset_for_tests();
+    }
+
+    #[test]
+    fn root_status_rejects_nonroot_application_init_arguments() {
+        FleetActivationOps::reset_for_tests();
+        let release_build_id = release_build(20);
+        FleetActivationOps::initialize_root_prepared(input(release_build_id), release_build_id)
+            .expect("initialize Prepared");
+        let mut data = FleetActivationOps::snapshot();
+        let FleetActivationStateRecord::Prepared {
+            application_init_args,
+            ..
+        } = &mut data.record.as_mut().expect("record").state
+        else {
+            panic!("expected Prepared")
+        };
+        *application_init_args = Some(vec![21]);
+        FleetActivation::import(data);
+
+        assert!(matches!(
+            FleetActivationOps::status(true),
             Err(FleetActivationOpsError::InvalidRecord { .. })
         ));
 
@@ -795,6 +848,7 @@ mod tests {
             root_input.install_id,
             root_input.release_build_id,
             release_build_id,
+            Some(vec![35, 36]),
         )
         .expect("initialize non-root Prepared");
         FleetActivationOps::record_applied_state_snapshot([36; 32]).expect("record state evidence");
@@ -832,11 +886,13 @@ mod tests {
             crate::dto::fleet_activation::FleetActivationPhase::Active
         );
         assert_eq!(first.status.activated_at_ns, Some(39));
+        assert_eq!(first.application_init_args, Some(vec![35, 36]));
 
         let replay =
             FleetActivationOps::activate(request, false, 40).expect("replay exact activation");
         assert!(!replay.transitioned);
         assert_eq!(replay.status.activated_at_ns, Some(39));
+        assert_eq!(replay.application_init_args, None);
 
         FleetActivationOps::reset_for_tests();
     }
@@ -851,6 +907,7 @@ mod tests {
             root_input.install_id,
             root_input.release_build_id,
             release_build_id,
+            None,
         )
         .expect("initialize non-root Prepared");
         FleetActivationOps::record_applied_state_snapshot([42; 32]).expect("record state evidence");

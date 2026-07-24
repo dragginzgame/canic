@@ -14,15 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.15`.
-- The latest published release is `v0.99.15` at
-  `74b2493ecaa3f7fda520acb81fb0381dc0f02fd1`.
-- The `v0.99.15` source tree is
-  `c7dacdb082c0acfd740e01031c1bebc87880b6b4`. Its Cargo.lock SHA-256 is
-  `71ba1eec55648d2d9a73dcf57631bf3310c082fccb1c9509270a8a5df6f1dfcd`.
-- The open `0.99.16` draft completes the one-member Directory/Placement
-  Binding hard cut and the protected fresh-install activation path without
-  changing package versions.
+- The workspace package version is `0.99.16`.
+- The latest published release is `v0.99.16` at
+  `e30c2cff5b58d8affcca62e4f1e92e2a6074480d`.
+- The `v0.99.16` source tree is
+  `8c3930490e9d125d15a1be63a98e2d8668cf3f33`. Its Cargo.lock SHA-256 is
+  `1212e2a90bc3a6db8ad944a2267174a7259fc240b84db5271047827ef4555e45`.
+- The open `0.99.17` draft keeps Prepared roots inert across upgrade and gives
+  non-root application init bytes one durable activation owner.
+- Released `0.99.16` completes the one-member Directory/Placement Binding
+  hard cut and the protected fresh-install activation path.
 - Released `0.99.15` hard-cuts installed Fleet state across Candid, runtime,
   access, storage and cascade authorities.
 - Released `0.99.14` gives every managed non-root one exact Fleet-bound
@@ -1252,7 +1253,7 @@ state cascade's other two fields are now `fleet_directory` and
 field-label alias remains. Stable allocation 18 retains its number but uses
 the reinstall-only Fleet-state contract.
 
-The open `0.99.16` draft completes the next one-member runtime boundary.
+Released `0.99.16` completes the next one-member runtime boundary.
 Fleet/Subnet Directory envelopes carry protected Fleet/source-root provenance
 and exact decode/page bounds; keyed placement is named Placement Binding; and
 fresh managed installation performs the controller prepare/resume protocol,
@@ -1266,6 +1267,15 @@ The three controller-only template staging updates remain available while the
 root is Prepared so it can assemble the exact managed inventory; the former
 root bootstrap-resume endpoint is removed rather than retained as a competing
 activation path.
+
+The open `0.99.17` draft closes the two lifecycle gaps found by the focused
+post-release start-macro audit. Root post-upgrade now mirrors non-root phase
+gating: synchronous invariants restore in both phases, while runtime services,
+bootstrap and application upgrade hooks start only for `Active`. Non-root
+application init bytes move from transient heap state into the protected
+ID-21 `Prepared` record and leave that record only through the first exact
+activation transition. This is a reinstall-only record hard cut with no
+pre-0.99.17 decoder or migration path.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish

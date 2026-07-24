@@ -14,6 +14,11 @@ use canic::{
     prelude::*,
 };
 use sha2::{Digest, Sha256};
+use std::cell::Cell;
+
+thread_local! {
+    static UPGRADE_HOOK_EXECUTIONS: Cell<u64> = const { Cell::new(0) };
+}
 
 canic::start!(
     init = {
@@ -23,7 +28,14 @@ canic::start!(
 
 async fn canic_setup() {}
 async fn canic_install() {}
-async fn canic_upgrade() {}
+async fn canic_upgrade() {
+    UPGRADE_HOOK_EXECUTIONS.set(UPGRADE_HOOK_EXECUTIONS.get().saturating_add(1));
+}
+
+#[canic_query(public)]
+async fn root_upgrade_hook_executions() -> Result<u64, Error> {
+    Ok(UPGRADE_HOOK_EXECUTIONS.get())
+}
 
 #[canic_update(public)]
 async fn root_verify_role_attestation(
