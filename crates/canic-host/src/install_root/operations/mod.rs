@@ -3,6 +3,7 @@ mod manifest;
 mod phase;
 mod preparation;
 
+pub use activation::InstallRootModuleVerificationError;
 pub(super) use activation::{
     EnsureRootCyclesOperation, InstallRootWasmOperation, ResumeBootstrapOperation,
     WaitRootReadyOperation,

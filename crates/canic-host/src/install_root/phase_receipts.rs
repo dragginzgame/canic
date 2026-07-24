@@ -62,6 +62,11 @@ pub(super) struct CompletedInstallPhase {
     pub(super) role_names: Vec<String>,
 }
 
+pub(super) struct CompletedInstallOperation {
+    pub(super) duration: Duration,
+    pub(super) receipt_path: PathBuf,
+}
+
 pub(super) fn write_completed_install_phase_receipt(
     receipt_scope: InstallReceiptScope<'_>,
     completed: CompletedInstallPhase,
@@ -206,14 +211,29 @@ impl InstallReceiptScope<'_> {
         self,
         operation: &impl InstallPhaseOperation,
     ) -> Result<Duration, Box<dyn std::error::Error>> {
-        self.run_phase(
+        self.run_operation_with_receipt(operation, None)
+            .map(|completed| completed.duration)
+    }
+
+    pub(super) fn run_operation_with_receipt(
+        self,
+        operation: &impl InstallPhaseOperation,
+        root_principal: Option<&str>,
+    ) -> Result<CompletedInstallOperation, Box<dyn std::error::Error>> {
+        let attempted_evidence = operation.evidence();
+        self.run_phase_with_receipt(
             operation.phase(),
             operation.attempted_action(),
-            operation.evidence(),
-            || operation.execute(),
+            attempted_evidence,
+            root_principal,
+            || {
+                operation.execute()?;
+                operation.verified_evidence()
+            },
         )
     }
 
+    #[cfg(test)]
     pub(super) fn run_phase(
         self,
         phase: InstallPhaseLabel,
@@ -221,29 +241,52 @@ impl InstallReceiptScope<'_> {
         evidence: Vec<String>,
         run: impl FnOnce() -> Result<(), Box<dyn std::error::Error>>,
     ) -> Result<Duration, Box<dyn std::error::Error>> {
+        let verified_evidence = evidence.clone();
+        self.run_phase_with_receipt(phase, attempted_action, evidence, None, || {
+            run()?;
+            Ok(verified_evidence)
+        })
+        .map(|completed| completed.duration)
+    }
+
+    fn run_phase_with_receipt(
+        self,
+        phase: InstallPhaseLabel,
+        attempted_action: &str,
+        attempted_evidence: Vec<String>,
+        root_principal: Option<&str>,
+        run: impl FnOnce() -> Result<Vec<String>, Box<dyn std::error::Error>>,
+    ) -> Result<CompletedInstallOperation, Box<dyn std::error::Error>> {
         let started_at = current_unix_timestamp_label()?;
         let started = Instant::now();
         match run() {
-            Ok(()) => {
+            Ok(verified_evidence) => {
                 let duration = started.elapsed();
-                let receipt = self.with_execution_context(install_deployment_truth_phase_receipt(
-                    self.check,
-                    phase,
-                    started_at,
-                    Some(current_unix_timestamp_label()?),
-                    attempted_action,
-                    ObservationStatusV1::Observed,
-                    evidence,
-                ));
-                self.write_receipt(&receipt)?;
-                Ok(duration)
+                let mut receipt =
+                    self.with_execution_context(install_deployment_truth_phase_receipt(
+                        self.check,
+                        phase,
+                        started_at,
+                        Some(current_unix_timestamp_label()?),
+                        attempted_action,
+                        ObservationStatusV1::Observed,
+                        verified_evidence,
+                    ));
+                if let Some(root_principal) = root_principal {
+                    receipt.root_principal = Some(root_principal.to_string());
+                }
+                let receipt_path = self.write_receipt(&receipt)?;
+                Ok(CompletedInstallOperation {
+                    duration,
+                    receipt_path,
+                })
             }
             Err(err) => {
                 if let Err(receipt_write) = self.write_failed_phase_receipt(
                     phase,
                     started_at,
                     attempted_action,
-                    evidence,
+                    attempted_evidence,
                     err.as_ref(),
                 ) {
                     return Err(Box::new(InstallPhaseFailureError {

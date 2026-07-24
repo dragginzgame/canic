@@ -1,3 +1,4 @@
+use super::fleet_activation_journal::admit_root_install_receipt;
 use super::operations::{
     EnsureRootCyclesOperation, InstallPhaseLabel, InstallRootWasmOperation,
     ResumeBootstrapOperation, WaitRootReadyOperation,
@@ -32,8 +33,11 @@ pub(super) fn run_root_activation_phases(
         root_canister_id,
         root_wasm,
         build_context.local_replica.as_ref(),
-    );
-    timings.install_root = receipt_scope.run_operation(&install_operation)?;
+    )?;
+    let completed_root_install =
+        receipt_scope.run_operation_with_receipt(&install_operation, Some(root_canister_id))?;
+    timings.install_root = completed_root_install.duration;
+    admit_root_install_receipt(&completed_root_install.receipt_path)?;
     let pre_bootstrap_funding = EnsureRootCyclesOperation::new(
         receipt_scope.icp_root,
         receipt_scope.environment,

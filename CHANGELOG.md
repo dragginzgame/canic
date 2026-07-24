@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.99.md](docs/changelog/0.99.md)
 
+- `0.99.10` makes successful root installation mean an independently observed
+  exact module match and persists the canonical verified receipt required by
+  fresh-install recovery; command success alone can no longer advance the
+  maintained install flow.
+
 - `0.99.9` establishes the Canister-side Fleet-activation authority: qualified
   builds embed their non-circular release identity, every managed runtime owns
   stable allocation 21, and exact root input can initialize one protected

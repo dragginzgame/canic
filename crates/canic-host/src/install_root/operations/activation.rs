@@ -4,33 +4,57 @@ use super::super::commands::{
 use super::super::readiness::wait_for_root_ready;
 use super::super::root_cycles::ensure_local_root_min_cycles;
 use super::phase::{InstallPhaseLabel, InstallPhaseOperation};
-use crate::icp::LocalReplicaTarget;
+use crate::icp::{IcpCanisterStatusReport, IcpCli, LocalReplicaTarget};
 use crate::release_set::{LOCAL_ROOT_MIN_READY_CYCLES, resume_root_bootstrap};
-use std::path::{Path, PathBuf};
+use sha2::{Digest, Sha256};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+use thiserror::Error as ThisError;
+
+/// Typed failure while proving the module installed on the root Canister.
+#[derive(Debug, ThisError)]
+pub enum InstallRootModuleVerificationError {
+    /// ICP status returned no installed module identity.
+    #[error("installed root status does not contain a module hash")]
+    Missing,
+
+    /// ICP status returned a value that is not one 32-byte hexadecimal digest.
+    #[error("installed root status contains an invalid module hash: {observed}")]
+    Invalid { observed: String },
+
+    /// The installed module identity differs from the exact Wasm supplied to ICP.
+    #[error("installed root module hash {observed} does not match expected Wasm hash {expected}")]
+    Mismatch { expected: String, observed: String },
+}
 
 pub(in crate::install_root) struct InstallRootWasmOperation<'a> {
     icp_root: &'a Path,
     environment: &'a str,
     root_canister_id: &'a str,
     root_wasm: PathBuf,
+    expected_module_hash: [u8; 32],
     local_replica: Option<&'a LocalReplicaTarget>,
 }
 
 impl<'a> InstallRootWasmOperation<'a> {
-    pub(in crate::install_root) const fn new(
+    pub(in crate::install_root) fn new(
         icp_root: &'a Path,
         environment: &'a str,
         root_canister_id: &'a str,
         root_wasm: PathBuf,
         local_replica: Option<&'a LocalReplicaTarget>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let expected_module_hash = Sha256::digest(fs::read(&root_wasm)?).into();
+        Ok(Self {
             icp_root,
             environment,
             root_canister_id,
             root_wasm,
+            expected_module_hash,
             local_replica,
-        }
+        })
     }
 }
 
@@ -47,6 +71,10 @@ impl InstallPhaseOperation for InstallRootWasmOperation<'_> {
         vec![
             format!("root_canister:{}", self.root_canister_id),
             format!("root_wasm:{}", self.root_wasm.display()),
+            format!(
+                "expected_module_hash:{}",
+                module_hash_text(self.expected_module_hash)
+            ),
         ]
     }
 
@@ -59,6 +87,90 @@ impl InstallPhaseOperation for InstallRootWasmOperation<'_> {
             self.local_replica,
         )
     }
+
+    fn verified_evidence(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let report = IcpCli::new("icp", Some(self.environment.to_string()))
+            .with_cwd(self.icp_root)
+            .with_local_replica(self.local_replica.cloned())
+            .canister_status_report(self.root_canister_id)?;
+        verified_root_module_evidence(
+            self.root_canister_id,
+            &self.root_wasm,
+            self.expected_module_hash,
+            &report,
+        )
+        .map_err(Into::into)
+    }
+}
+
+fn verified_root_module_evidence(
+    root_canister_id: &str,
+    root_wasm: &Path,
+    expected_module_hash: [u8; 32],
+    report: &IcpCanisterStatusReport,
+) -> Result<Vec<String>, InstallRootModuleVerificationError> {
+    let observed_text = report
+        .module_hash
+        .as_deref()
+        .ok_or(InstallRootModuleVerificationError::Missing)?;
+    let observed_module_hash = parse_module_hash(observed_text).ok_or_else(|| {
+        InstallRootModuleVerificationError::Invalid {
+            observed: observed_text.to_string(),
+        }
+    })?;
+    if observed_module_hash != expected_module_hash {
+        return Err(InstallRootModuleVerificationError::Mismatch {
+            expected: module_hash_text(expected_module_hash),
+            observed: module_hash_text(observed_module_hash),
+        });
+    }
+
+    Ok(vec![
+        format!("root_canister:{root_canister_id}"),
+        format!("root_wasm:{}", root_wasm.display()),
+        format!(
+            "expected_module_hash:{}",
+            module_hash_text(expected_module_hash)
+        ),
+        format!(
+            "observed_module_hash:{}",
+            module_hash_text(observed_module_hash)
+        ),
+    ])
+}
+
+fn parse_module_hash(value: &str) -> Option<[u8; 32]> {
+    let value = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+        .unwrap_or(value);
+    if value.len() != 64 {
+        return None;
+    }
+    let mut bytes = [0; 32];
+    for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        bytes[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
+    }
+    Some(bytes)
+}
+
+const fn hex_nibble(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn module_hash_text(bytes: [u8; 32]) -> String {
+    bytes
+        .iter()
+        .fold(String::with_capacity(64), |mut text, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(text, "{byte:02x}");
+            text
+        })
 }
 
 pub(in crate::install_root) struct EnsureRootCyclesOperation<'a> {
@@ -233,4 +345,63 @@ fn reinstall_root_wasm(
     install.args(["--args", &root_init_args(root_wasm)?]);
     add_icp_environment_target(&mut install, environment, local_replica);
     run_command(&mut install)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn status(module_hash: Option<String>) -> IcpCanisterStatusReport {
+        IcpCanisterStatusReport {
+            id: "aaaaa-aa".to_string(),
+            name: Some("root".to_string()),
+            status: "running".to_string(),
+            settings: None,
+            module_hash,
+            memory_size: None,
+            cycles: None,
+            reserved_cycles: None,
+            idle_cycles_burned_per_day: None,
+        }
+    }
+
+    #[test]
+    fn root_module_postcondition_records_only_an_exact_observed_hash() {
+        let expected = [0xab; 32];
+        let evidence = verified_root_module_evidence(
+            "aaaaa-aa",
+            Path::new("/tmp/root.wasm"),
+            expected,
+            &status(Some(format!("0x{}", module_hash_text(expected)))),
+        )
+        .expect("exact installed module");
+
+        assert_eq!(
+            evidence,
+            [
+                "root_canister:aaaaa-aa".to_string(),
+                "root_wasm:/tmp/root.wasm".to_string(),
+                format!("expected_module_hash:{}", module_hash_text(expected)),
+                format!("observed_module_hash:{}", module_hash_text(expected)),
+            ]
+        );
+        assert!(matches!(
+            verified_root_module_evidence(
+                "aaaaa-aa",
+                Path::new("/tmp/root.wasm"),
+                expected,
+                &status(None),
+            ),
+            Err(InstallRootModuleVerificationError::Missing)
+        ));
+        assert!(matches!(
+            verified_root_module_evidence(
+                "aaaaa-aa",
+                Path::new("/tmp/root.wasm"),
+                expected,
+                &status(Some(module_hash_text([0xcd; 32]))),
+            ),
+            Err(InstallRootModuleVerificationError::Mismatch { .. })
+        ));
+    }
 }

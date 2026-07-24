@@ -14,12 +14,16 @@ Historical detail is archived at:
 
 ## Current Release
 
-- The workspace package version is `0.99.8`.
-- The latest published release is `v0.99.8` at
-  `87f8cc12222abcd3e81add57ce8205277d6ebefc`.
-- The `v0.99.8` source tree is
-  `3bdfee09151ea3d39ba80f36f21bbbd22ef203c8`. Its Cargo.lock SHA-256 is
-  `bb8f43634a3f1b1b105cb6bdbac908eb09cb382a0c92ed95f6293f63747f8ace`.
+- The workspace package version is `0.99.9`.
+- The latest published release is `v0.99.9` at
+  `0f9443840725a7f79190d1f323d72a21fdd01d58`.
+- The `v0.99.9` source tree is
+  `502c0df3dd3342a068e343a557e7612cb3ed979a`. Its Cargo.lock SHA-256 is
+  `c966d3e1d764d5d26dbad1efe7fd04ac5199e843f2d00c0b0d223d6011cdb002`.
+- Released `0.99.9` establishes the protected Canister-side activation owner,
+  embeds the exact release-build identity in qualified Wasms and assigns
+  stable ID 21 to every managed runtime without switching the live root
+  boundary prematurely.
 - Released `0.99.8` admits only canonical verified root-install receipts and
   advances the fresh-install journal monotonically from `Planned` to
   `RootInstalled`; the live installer remains deliberately unwired.
@@ -1165,24 +1169,32 @@ command family, and discovery fallback do not survive. Live
 install/deployment behavior and runtime topology authorities remain for their
 explicit later slices.
 
-The open `0.99.9` batch establishes the protected Canister-side activation
-owner without switching the live root boundary prematurely. Qualified builds
-now embed their exact non-circular `ReleaseBuildId`; every managed runtime
-selects stable ID 21; and one absent-or-present store owns the bounded
+Released `0.99.9` establishes the protected Canister-side activation owner
+without switching the live root boundary prematurely. Qualified builds embed
+their exact non-circular `ReleaseBuildId`; every managed runtime selects stable
+ID 21; and one absent-or-present store owns the bounded
 `FleetActivationRecord`. Exact `CurrentRootInstallIdentity` admission checks
 the supplied ID against the embedded Wasm identity and can commit one
 empty-evidence `Prepared` record. There is no `Unbound` sentinel, overwrite
 path or second Fleet binding.
 
-The next bounded batch connects this owner to root lifecycle and host recovery
-atomically: replace `PrimeWithModuleHash` on both sides, publish `Planned`
-before root resolution, install the root directly into `Prepared`, observe
-the exact installed module hash, persist its canonical receipt and advance
-`RootInstalled`. The current macro and maintained installer remain paired on
-their old input until that complete handoff is ready, so `0.99.9` does not
-publish an uninstallable intermediate Wasm. Supplied deployment-plan
-release-build admission, later activation phases, installed Fleet state and
-final catalog commitment remain after that prerequisite.
+The open `0.99.10` batch closes the root-install observation prerequisite.
+Command success is followed by the maintained ICP status query and an exact
+expected/observed module-hash match. The one receipt owner returns its durable
+canonical path, records the exact root principal and postcondition, and passes
+that file through the existing strict journal admission before bootstrap can
+continue. Missing, malformed or mismatched live evidence fails with a typed
+cause; attempted evidence is not mislabeled observed.
+
+The next bounded batch connects the protected Canister owner to host recovery
+without creating a contradictory half-cut. It must publish `Planned` before
+root resolution, replace `PrimeWithModuleHash` on both sides, install the root
+into `Prepared`, advance the exact receipt to `RootInstalled`, and ensure the
+existing completion path cannot publish `Prepared` as operational. The current
+macro and installer remain paired on their old root input until that complete
+handoff is ready. Supplied deployment-plan release-build admission, later
+activation phases, installed Fleet state and final catalog commitment remain
+after that prerequisite.
 
 Do not inspect or edit the stale local Toko repository, change Cargo package
 versions outside the maintainer-owned release flow, or commit, tag, publish
